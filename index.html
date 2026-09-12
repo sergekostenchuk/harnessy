@@ -5,12 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Чат Claude</title>
 <style>
-  :root { color-scheme: light dark; --bg:#f6f6f4; --fg:#1b1b1b; --muted:#6b6b6b; --me:#dfe9ff; --ai:#ffffff; --line:#dcdcd7; --accent:#3b6cff; --err:#b3261e; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --me:#243a6b; --ai:#222222; --line:#333; --accent:#7b9cff; --err:#ff8a80; } }
+  :root { color-scheme: light dark; --bg:#f6f6f4; --fg:#1b1b1b; --muted:#6b6b6b; --me:#dfe9ff; --ai:#ffffff; --line:#dcdcd7; --accent:#3b6cff; --err:#b3261e; --side:#efefec; --active:#dde4f5; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --me:#243a6b; --ai:#222222; --line:#333; --accent:#7b9cff; --err:#ff8a80; --side:#1d1d1d; --active:#2a3654; } }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; height:100vh; display:flex; flex-direction:column; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; height:100vh; display:flex; }
+  aside { width:260px; flex:none; background:var(--side); border-right:1px solid var(--line); display:flex; flex-direction:column; }
+  aside .top { padding:10px; border-bottom:1px solid var(--line); }
+  aside button { width:100%; }
+  #list { flex:1; overflow:auto; padding:6px; }
+  .item { padding:8px 10px; border-radius:8px; cursor:pointer; margin-bottom:2px; }
+  .item:hover { background:var(--active); opacity:.9; }
+  .item.active { background:var(--active); }
+  .item .t { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item .d { font-size:11px; color:var(--muted); }
+  #wrap { flex:1; min-width:0; display:flex; flex-direction:column; }
   header { display:flex; gap:10px; align-items:center; padding:10px 14px; border-bottom:1px solid var(--line); }
-  header h1 { font-size:16px; margin:0 auto 0 0; font-weight:600; }
+  header h1 { font-size:16px; margin:0 auto 0 0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   select, button { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); }
   button.primary { background:var(--accent); color:#fff; border-color:transparent; }
   button:disabled { opacity:.5; }
@@ -29,28 +39,34 @@
 </style>
 </head>
 <body>
-<header>
-  <h1>Чат Claude по подписке</h1>
-  <select id="model" title="Модель"></select>
-  <button id="new" title="Начать новый разговор">Новый чат</button>
-</header>
-<div id="banner"></div>
-<main id="log"></main>
-<footer>
-  <div class="row">
-    <textarea id="input" placeholder="Сообщение… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
-    <button id="send" class="primary">Отправить</button>
-  </div>
-  <div id="status"></div>
-</footer>
+<aside>
+  <div class="top"><button id="new" class="primary">Новый чат</button></div>
+  <div id="list"></div>
+</aside>
+<div id="wrap">
+  <header>
+    <h1 id="title">Чат Claude по подписке</h1>
+    <select id="model" title="Модель"></select>
+  </header>
+  <div id="banner"></div>
+  <main id="log"></main>
+  <footer>
+    <div class="row">
+      <textarea id="input" placeholder="Сообщение… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
+      <button id="send" class="primary">Отправить</button>
+    </div>
+    <div id="status"></div>
+  </footer>
+</div>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
-  const log = $('log'), input = $('input'), sendBtn = $('send'), modelSel = $('model'), banner = $('banner'), status = $('status');
+  const log = $('log'), input = $('input'), sendBtn = $('send'), modelSel = $('model'), banner = $('banner'), status = $('status'), list = $('list'), title = $('title');
   const KEY = 'simple-claude-chat';
-  let state = { sessionId: null, model: null, messages: [] };
-  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && Array.isArray(s.messages)) state = s; } catch {}
+  let state = { sessionId: null, model: null };
+  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s) state = { sessionId: s.sessionId || null, model: s.model || null }; } catch {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
+  let busy = false;
 
   function add(role, text) {
     const d = document.createElement('div');
@@ -67,12 +83,53 @@
     log.appendChild(d);
     log.scrollTop = log.scrollHeight;
   }
-  function render() {
-    log.innerHTML = '';
-    for (const m of state.messages) add(m.role, m.text);
-  }
   function setStatus(t) { status.textContent = t; }
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  }
 
+  // ---- список разговоров ----
+  async function loadList() {
+    const r = await fetch('/api/sessions');
+    const { sessions } = await r.json();
+    list.innerHTML = '';
+    for (const s of sessions) {
+      const el = document.createElement('div');
+      el.className = 'item' + (s.id === state.sessionId ? ' active' : '');
+      el.innerHTML = '<div class="t"></div><div class="d"></div>';
+      el.querySelector('.t').textContent = s.title || '(без названия)';
+      el.querySelector('.d').textContent = fmtDate(s.updated) + ' · ' + s.count + ' сообщ.';
+      el.onclick = () => { if (!busy) openSession(s.id, s.title); };
+      list.appendChild(el);
+    }
+    if (!sessions.length) { const e = document.createElement('div'); e.className = 'item d'; e.style.color = 'var(--muted)'; e.textContent = 'Разговоров пока нет'; list.appendChild(e); }
+  }
+
+  async function openSession(id, t) {
+    const r = await fetch('/api/sessions/' + id);
+    if (!r.ok) { meta('Не удалось открыть разговор', true); return; }
+    const { messages } = await r.json();
+    state.sessionId = id; save();
+    log.innerHTML = '';
+    for (const m of messages) add(m.role, m.text);
+    title.textContent = t || 'Разговор';
+    setStatus('Сессия ' + id.slice(0, 8) + ' · продолжение');
+    [...list.children].forEach((el) => el.classList.remove('active'));
+    await loadList();
+    input.focus();
+  }
+
+  function newChat() {
+    state.sessionId = null; save();
+    log.innerHTML = '';
+    title.textContent = 'Новый разговор';
+    setStatus('Новый чат: первое сообщение создаст разговор');
+    [...list.children].forEach((el) => el.classList.remove('active'));
+    input.focus();
+  }
+
+  // ---- статус и модели ----
   async function loadStatus() {
     const r = await fetch('/api/status');
     const s = await r.json();
@@ -90,18 +147,20 @@
         (s.auth && s.auth.error ? ' (' + s.auth.error + ')' : '');
     } else {
       banner.style.display = 'none';
-      setStatus('Вход: ' + (s.auth.authMethod || 'подписка') + ' · сессии: ' + s.workDir);
     }
+    return s;
   }
 
+  // ---- отправка ----
   async function send() {
     const text = input.value.trim();
-    if (!text) return;
+    if (!text || busy) return;
     input.value = '';
-    sendBtn.disabled = true;
-    state.model = modelSel.value;
-    state.messages.push({ role: 'me', text }); save();
+    busy = true; sendBtn.disabled = true;
+    state.model = modelSel.value; save();
+    const isNew = !state.sessionId;
     add('me', text);
+    if (isNew) title.textContent = text.replace(/\s+/g, ' ').slice(0, 60);
     const box = add('ai', '');
     let acc = '';
     try {
@@ -124,13 +183,13 @@
           const ev = JSON.parse(line.slice(6));
           if (ev.type === 'delta') { acc += ev.text; box.textContent = acc; log.scrollTop = log.scrollHeight; }
           else if (ev.type === 'done') {
-            state.sessionId = ev.sessionId || state.sessionId;
+            state.sessionId = ev.sessionId || state.sessionId; save();
             const u = ev.usage || {};
             meta(`${ev.model} · ${((ev.durationMs || 0) / 1000).toFixed(1)} с · токены вход ${u.input ?? '—'} / выход ${u.output ?? '—'}` + (u.cacheRead ? ` / кэш ${u.cacheRead}` : ''));
             setStatus('Сессия ' + (state.sessionId || '').slice(0, 8) + ' · ' + ev.model);
           }
           else if (ev.type === 'error') {
-            if (ev.sessionId) state.sessionId = ev.sessionId;
+            if (ev.sessionId) { state.sessionId = ev.sessionId; save(); }
             meta('Ошибка: ' + ev.message, true);
             setStatus('Ошибка');
           }
@@ -139,9 +198,9 @@
     } catch (e) {
       meta('Ошибка: ' + e.message, true);
     } finally {
-      if (acc) state.messages.push({ role: 'ai', text: acc }); else box.remove();
-      save();
-      sendBtn.disabled = false;
+      if (!acc) box.remove();
+      busy = false; sendBtn.disabled = false;
+      loadList().catch(() => {});
       input.focus();
     }
   }
@@ -149,12 +208,23 @@
   sendBtn.onclick = send;
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
   modelSel.onchange = () => { state.model = modelSel.value; save(); };
-  $('new').onclick = () => { state = { sessionId: null, model: modelSel.value, messages: [] }; save(); render(); setStatus('Новый чат'); input.focus(); };
+  $('new').onclick = newChat;
 
-  render();
-  loadStatus().catch(e => { banner.style.display = 'block'; banner.textContent = 'Сервер не отвечает: ' + e.message; });
-  if (state.sessionId) setStatus('Сессия ' + state.sessionId.slice(0, 8) + ' (продолжение)');
-  input.focus();
+  (async () => {
+    try {
+      await loadStatus();
+      await loadList();
+      if (state.sessionId) {
+        const cur = [...list.children].find((el) => el.classList.contains('active'));
+        await openSession(state.sessionId, cur ? cur.querySelector('.t').textContent : null);
+      } else {
+        newChat();
+      }
+    } catch (e) {
+      banner.style.display = 'block'; banner.textContent = 'Сервер не отвечает: ' + e.message;
+    }
+    input.focus();
+  })();
 })();
 </script>
 </body>

@@ -17,6 +17,8 @@ const PORT = Number(process.env.PORT || 3777);
 // Рабочая папка для сессий CLI. Специально ВНЕ домашней папки: иначе Claude Code
 // подхватил бы /Users/kostenchuksergey/CLAUDE.md и все его инструкции в чат.
 const WORK_DIR = process.env.CHAT_WORK_DIR || '/Users/Shared/simple-claude-chat';
+// Куда Claude Code пишет журналы сессий для этой рабочей папки: один .jsonl на разговор.
+const SESSIONS_DIR = path.join(process.env.HOME || '', '.claude', 'projects', WORK_DIR.replace(/[\/.]/g, '-'));
 
 const MODELS = [
   { id: 'claude-sonnet-5', label: 'Sonnet 5' },
@@ -28,6 +30,7 @@ const DEFAULT_MODEL = MODELS[0].id;
 const SYSTEM_PROMPT =
   'Ты ассистент в простом чате. Отвечай на языке собеседника, по существу. ' +
   'Инструментов, доступа к файлам и к интернету у тебя в этом чате нет.';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ---------- где лежит claude ----------
 function findClaude() {
@@ -67,6 +70,65 @@ function authStatus() {
   } catch {
     return { loggedIn: false, error: (r.stderr || r.stdout || 'нет ответа').trim().slice(0, 300) };
   }
+}
+
+// ---------- журналы сессий: список разговоров и их реплики ----------
+function textOf(content) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content.filter((b) => b && b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('');
+}
+
+// Читает .jsonl сессии → [{role:'me'|'ai', text, ts}]. Подряд идущие записи
+// ассистента (thinking, text, text) склеиваются в один ответ.
+function parseSession(file) {
+  const messages = [];
+  let ai = null;
+  let raw;
+  try { raw = fs.readFileSync(file, 'utf8'); } catch { return messages; }
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue;
+    let r;
+    try { r = JSON.parse(line); } catch { continue; }
+    if (r.isMeta) continue;
+    const m = r.message || {};
+    if (r.type === 'user' && m.role === 'user') {
+      if (ai && ai.text) messages.push(ai);
+      ai = null;
+      const text = textOf(m.content);
+      if (text) messages.push({ role: 'me', text, ts: r.timestamp || null });
+    } else if (r.type === 'assistant' && m.role === 'assistant') {
+      const text = textOf(m.content);
+      if (!ai) ai = { role: 'ai', text: '', ts: r.timestamp || null };
+      ai.text += text;
+    }
+  }
+  if (ai && ai.text) messages.push(ai);
+  return messages;
+}
+
+function listSessions() {
+  let names = [];
+  try { names = fs.readdirSync(SESSIONS_DIR).filter((n) => n.endsWith('.jsonl')); } catch { return []; }
+  const out = [];
+  for (const n of names) {
+    const id = n.slice(0, -6);
+    if (!UUID_RE.test(id)) continue;
+    const file = path.join(SESSIONS_DIR, n);
+    let mtime = 0;
+    try { mtime = fs.statSync(file).mtimeMs; } catch { continue; }
+    const messages = parseSession(file);
+    if (!messages.length) continue;
+    const first = messages.find((m) => m.role === 'me') || messages[0];
+    out.push({
+      id,
+      title: first.text.replace(/\s+/g, ' ').slice(0, 60),
+      count: messages.length,
+      updated: new Date(mtime).toISOString(),
+    });
+  }
+  out.sort((a, b) => (a.updated < b.updated ? 1 : -1));
+  return out;
 }
 
 // ---------- один ход чата ----------
@@ -123,7 +185,6 @@ function runTurn({ message, model, sessionId }, send) {
             sessionId: finalSessionId,
             model,
             durationMs: ev.duration_ms,
-            costUsd: ev.total_cost_usd,
             usage: ev.usage ? {
               input: ev.usage.input_tokens,
               output: ev.usage.output_tokens,
@@ -155,6 +216,10 @@ function readBody(req, limit = 1_000_000) {
     req.on('error', reject);
   });
 }
+function json(res, code, obj) {
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(obj));
+}
 
 const INDEX = path.join(__dirname, 'index.html');
 
@@ -167,18 +232,26 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === 'GET' && url.pathname === '/api/status') {
-      const auth = authStatus();
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ claudeBin: CLAUDE_BIN, workDir: WORK_DIR, models: MODELS, defaultModel: DEFAULT_MODEL, auth }));
-      return;
+      return json(res, 200, { claudeBin: CLAUDE_BIN, workDir: WORK_DIR, sessionsDir: SESSIONS_DIR, models: MODELS, defaultModel: DEFAULT_MODEL, auth: authStatus() });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/sessions') {
+      return json(res, 200, { sessions: listSessions() });
+    }
+    const one = req.method === 'GET' && url.pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})$/i);
+    if (one) {
+      const id = one[1];
+      if (!UUID_RE.test(id)) return json(res, 400, { error: 'неверный id' });
+      const file = path.join(SESSIONS_DIR, id + '.jsonl');
+      if (!fs.existsSync(file)) return json(res, 404, { error: 'сессии нет' });
+      return json(res, 200, { id, messages: parseSession(file) });
     }
     if (req.method === 'POST' && url.pathname === '/api/chat') {
-      if (!CLAUDE_BIN) { res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ error: 'claude не найден; задай CLAUDE_BIN' })); return; }
+      if (!CLAUDE_BIN) return json(res, 500, { error: 'claude не найден; задай CLAUDE_BIN' });
       const body = JSON.parse(await readBody(req) || '{}');
       const message = String(body.message || '').trim();
       const model = MODELS.some((m) => m.id === body.model) ? body.model : DEFAULT_MODEL;
-      const sessionId = typeof body.sessionId === 'string' && /^[0-9a-f-]{36}$/i.test(body.sessionId) ? body.sessionId : null;
-      if (!message) { res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ error: 'пустое сообщение' })); return; }
+      const sessionId = typeof body.sessionId === 'string' && UUID_RE.test(body.sessionId) ? body.sessionId : null;
+      if (!message) return json(res, 400, { error: 'пустое сообщение' });
 
       res.writeHead(200, {
         'Content-Type': 'text/event-stream; charset=utf-8',
@@ -194,15 +267,16 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('нет такого пути');
   } catch (e) {
-    if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ error: e.message }));
+    if (!res.headersSent) return json(res, 500, { error: e.message });
+    res.end();
   }
 });
 
 fs.mkdirSync(WORK_DIR, { recursive: true });
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[chat] http://localhost:${PORT}`);
-  console.log(`[chat] claude: ${CLAUDE_BIN || 'НЕ НАЙДЕН'}  сессии: ${WORK_DIR}`);
+  console.log(`[chat] claude: ${CLAUDE_BIN || 'НЕ НАЙДЕН'}`);
+  console.log(`[chat] журналы разговоров: ${SESSIONS_DIR}`);
   const a = authStatus();
   console.log(`[chat] вход по подписке: ${a.loggedIn ? 'да (' + (a.authMethod || '') + ')' : 'НЕТ — выполни в Терминале: claude login'}`);
 });
