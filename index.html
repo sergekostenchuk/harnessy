@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чат Claude</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f6f4; --fg:#1b1b1b; --muted:#6b6b6b; --me:#dfe9ff; --ai:#ffffff; --line:#dcdcd7; --accent:#3b6cff; --err:#b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --me:#243a6b; --ai:#222222; --line:#333; --accent:#7b9cff; --err:#ff8a80; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; height:100vh; display:flex; flex-direction:column; }
+  header { display:flex; gap:10px; align-items:center; padding:10px 14px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0 auto 0 0; font-weight:600; }
+  select, button { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); }
+  button.primary { background:var(--accent); color:#fff; border-color:transparent; }
+  button:disabled { opacity:.5; }
+  #banner { display:none; padding:10px 14px; background:#fff3cd; color:#5c4400; border-bottom:1px solid #e6d9a3; }
+  #banner code { background:rgba(0,0,0,.08); padding:2px 5px; border-radius:4px; }
+  main { flex:1; overflow:auto; padding:16px 14px; }
+  .msg { max-width:900px; margin:0 auto 12px; padding:10px 14px; border-radius:12px; white-space:pre-wrap; word-wrap:break-word; }
+  .me { background:var(--me); }
+  .ai { background:var(--ai); border:1px solid var(--line); }
+  .meta { max-width:900px; margin:-6px auto 14px; font-size:12px; color:var(--muted); }
+  .error { color:var(--err); }
+  footer { border-top:1px solid var(--line); padding:10px 14px; }
+  .row { max-width:900px; margin:0 auto; display:flex; gap:8px; align-items:flex-end; }
+  textarea { flex:1; min-height:44px; max-height:200px; resize:vertical; font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--ai); color:var(--fg); }
+  #status { max-width:900px; margin:6px auto 0; font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Чат Claude по подписке</h1>
+  <select id="model" title="Модель"></select>
+  <button id="new" title="Начать новый разговор">Новый чат</button>
+</header>
+<div id="banner"></div>
+<main id="log"></main>
+<footer>
+  <div class="row">
+    <textarea id="input" placeholder="Сообщение… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
+    <button id="send" class="primary">Отправить</button>
+  </div>
+  <div id="status"></div>
+</footer>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const log = $('log'), input = $('input'), sendBtn = $('send'), modelSel = $('model'), banner = $('banner'), status = $('status');
+  const KEY = 'simple-claude-chat';
+  let state = { sessionId: null, model: null, messages: [] };
+  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && Array.isArray(s.messages)) state = s; } catch {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
+
+  function add(role, text) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + (role === 'me' ? 'me' : 'ai');
+    d.textContent = text;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+    return d;
+  }
+  function meta(text, isErr) {
+    const d = document.createElement('div');
+    d.className = 'meta' + (isErr ? ' error' : '');
+    d.textContent = text;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+  function render() {
+    log.innerHTML = '';
+    for (const m of state.messages) add(m.role, m.text);
+  }
+  function setStatus(t) { status.textContent = t; }
+
+  async function loadStatus() {
+    const r = await fetch('/api/status');
+    const s = await r.json();
+    modelSel.innerHTML = '';
+    for (const m of s.models) {
+      const o = document.createElement('option');
+      o.value = m.id; o.textContent = m.label;
+      modelSel.appendChild(o);
+    }
+    modelSel.value = state.model && s.models.some(m => m.id === state.model) ? state.model : s.defaultModel;
+    state.model = modelSel.value; save();
+    if (!s.auth || !s.auth.loggedIn) {
+      banner.style.display = 'block';
+      banner.innerHTML = 'Вход по подписке не выполнен. Открой Терминал и выполни <code>claude login</code>, затем обнови страницу.' +
+        (s.auth && s.auth.error ? ' (' + s.auth.error + ')' : '');
+    } else {
+      banner.style.display = 'none';
+      setStatus('Вход: ' + (s.auth.authMethod || 'подписка') + ' · сессии: ' + s.workDir);
+    }
+  }
+
+  async function send() {
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    sendBtn.disabled = true;
+    state.model = modelSel.value;
+    state.messages.push({ role: 'me', text }); save();
+    add('me', text);
+    const box = add('ai', '');
+    let acc = '';
+    try {
+      const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, model: state.model, sessionId: state.sessionId }) });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + r.status)); }
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      setStatus('Модель думает…');
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n\n')) >= 0) {
+          const frame = buf.slice(0, i); buf = buf.slice(i + 2);
+          const line = frame.split('\n').find(l => l.startsWith('data: '));
+          if (!line) continue;
+          const ev = JSON.parse(line.slice(6));
+          if (ev.type === 'delta') { acc += ev.text; box.textContent = acc; log.scrollTop = log.scrollHeight; }
+          else if (ev.type === 'done') {
+            state.sessionId = ev.sessionId || state.sessionId;
+            const u = ev.usage || {};
+            meta(`${ev.model} · ${((ev.durationMs || 0) / 1000).toFixed(1)} с · токены вход ${u.input ?? '—'} / выход ${u.output ?? '—'}` + (u.cacheRead ? ` / кэш ${u.cacheRead}` : ''));
+            setStatus('Сессия ' + (state.sessionId || '').slice(0, 8) + ' · ' + ev.model);
+          }
+          else if (ev.type === 'error') {
+            if (ev.sessionId) state.sessionId = ev.sessionId;
+            meta('Ошибка: ' + ev.message, true);
+            setStatus('Ошибка');
+          }
+        }
+      }
+    } catch (e) {
+      meta('Ошибка: ' + e.message, true);
+    } finally {
+      if (acc) state.messages.push({ role: 'ai', text: acc }); else box.remove();
+      save();
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  sendBtn.onclick = send;
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+  modelSel.onchange = () => { state.model = modelSel.value; save(); };
+  $('new').onclick = () => { state = { sessionId: null, model: modelSel.value, messages: [] }; save(); render(); setStatus('Новый чат'); input.focus(); };
+
+  render();
+  loadStatus().catch(e => { banner.style.display = 'block'; banner.textContent = 'Сервер не отвечает: ' + e.message; });
+  if (state.sessionId) setStatus('Сессия ' + state.sessionId.slice(0, 8) + ' (продолжение)');
+  input.focus();
+})();
+</script>
+</body>
+</html>
