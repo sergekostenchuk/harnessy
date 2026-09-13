@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "chat", "runtimeExecutable": ".venv/bin/python", "runtimeArgs": ["-m", "app.server"], "port": 3777 }
+    { "name": "harness", "url": "http://localhost:3777" },
+    { "name": "chat", "runtimeExecutable": ".venv/bin/python", "runtimeArgs": ["-m", "app.server"], "port": 3777, "autoPort": false }
   ]
 }
