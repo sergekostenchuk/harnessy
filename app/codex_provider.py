@@ -33,8 +33,9 @@ CHAT_INSTRUCTIONS = ("Это простой чат. Отвечай на язык
 def team_note(pane: Pane, registry: Registry) -> str:
     others = ", ".join(f"{o.id} — {o.label} ({o.vendor})" for o in registry.others(pane.id))
     return (f"Ты работаешь в папке проекта: {pane.cwd}. В этой же папке параллельно могут работать агенты из других окон: {others}. "
-            "Им можно написать инструментом send_to и получить ответ, а read_pane читает их разговор; пользуйся этим, когда "
-            "владелец просит передать, спросить или поручить что-то соседу. Соседи не видят твоей переписки: пиши им полный текст. "
+            "Связь с ними только инструментами: send — отправить запись и не ждать, ask — спросить и дождаться ответа, "
+            "read_pane — прочитать их разговор. Записи от соседей приходят входящим сообщением с номером #seq: отвечай на них "
+            "send с reply_to. Соседи не видят твоей переписки: пиши им полный текст. "
             "Перед правкой смотри актуальное состояние файла, чужие изменения не переписывай, коммиты делай только если попросили. "
             "В конце ответа кратко перечисли, что сделал и какие файлы изменил.")
 
@@ -175,6 +176,10 @@ class CodexProvider:
         started = time.time()
         handle = await thread.turn(message)
         pane.interrupt = handle.interrupt
+
+        async def steer(text: str) -> None:
+            await handle.steer(text)
+        pane.steer = steer
         text = ""
         usage: dict = {}
         items_text: list[str] = []

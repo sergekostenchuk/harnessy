@@ -54,7 +54,13 @@ class Pane:
     seen: dict[str, int] = field(default_factory=dict)      # сколько реплик соседа уже показано в сводке
     approvals: dict[str, Approval] = field(default_factory=dict)
     interrupt: Callable[[], Awaitable[None]] | None = None
+    steer: Callable[[str], Awaitable[None]] | None = None    # прямая инструкция в идущий ход
     tokens: dict = field(default_factory=dict)
+    turn_records: list = field(default_factory=list)          # записи, доставленные текущим ходом
+    replied: set = field(default_factory=set)                 # seq записей, на которые этот ход ответил явно
+    asking: set = field(default_factory=set)                  # кому окно сейчас задаёт вопрос через ask
+    nudged: set = field(default_factory=set)                  # review-request, по которым уже напоминали
+    awaiting: dict = field(default_factory=dict)              # review-request без вердикта: seq -> запись
 
     # ---- события в окно (SSE) ----
     def publish(self, ev: dict) -> None:
@@ -74,6 +80,9 @@ class Pane:
             "cwd": self.cwd, "sessionId": self.session_id, "digest": self.digest, "busy": self.busy,
             "touched": self.touched, "pendingApprovals": len(self.approvals),
         }
+
+    def persist(self) -> dict:
+        return {"model": self.model, "mode": self.mode, "cwd": self.cwd, "sessionId": self.session_id, "digest": self.digest}
 
     # ---- запросы разрешений ----
     async def ask_approval(self, title: str, detail: str) -> bool:

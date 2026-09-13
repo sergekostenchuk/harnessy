@@ -18,7 +18,7 @@ HOME = os.path.expanduser("~")
 CLAUDE_BIN = next((p for p in [os.environ.get("CLAUDE_BIN", ""), f"{HOME}/.local/bin/claude", f"{HOME}/.claude/local/claude",
                                "/opt/homebrew/bin/claude", "/usr/local/bin/claude"] if p and os.path.exists(p)), None)
 
-PEER_TOOLS = ["mcp__panes__send_to", "mcp__panes__read_pane"]
+PEER_TOOLS = ["mcp__panes__send", "mcp__panes__ask", "mcp__panes__read_pane"]
 # Инструменты для работы в папке. Без Agent/SendMessage/ListAgents/ToolSearch: связь с окнами только через send_to.
 WORK_TOOLS = ["Read", "Edit", "Write", "MultiEdit", "Bash", "Glob", "Grep", "WebFetch", "WebSearch", "NotebookEdit"]
 SAFE_BASH = ["Bash(git:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(pwd)", "Bash(find:*)", "Bash(grep:*)", "Bash(rg:*)",
@@ -30,9 +30,9 @@ SYSTEM_CHAT = ("Ты ассистент в простом чате. Отвеча
 
 def peer_note(pane: Pane, registry: Registry) -> str:
     others = ", ".join(f"{o.id} — {o.label} ({o.vendor})" for o in registry.others(pane.id))
-    return (f" Рядом работают другие окна чата: {others}. Им можно написать ТОЛЬКО инструментом send_to и получить ответ, "
-            "а инструментом read_pane прочитать их разговор; пользуйся этим, когда владелец просит передать, спросить "
-            "или поручить что-то соседу. Соседи не видят твоей переписки: пиши им полный текст.")
+    return (f" Рядом работают другие окна чата: {others}. Связь с ними ТОЛЬКО инструментами: send — отправить запись "
+            "и не ждать, ask — спросить и дождаться ответа, read_pane — прочитать их разговор. Записи от соседей приходят "
+            "тебе входящим сообщением с номером #seq: отвечай на них send с reply_to. Соседи не видят твоей переписки: пиши им полный текст.")
 
 
 def team_note(pane: Pane, registry: Registry) -> str:
@@ -122,6 +122,10 @@ class ClaudeProvider:
         streamed = False
         async with ClaudeSDKClient(options=opts) as client:
             pane.interrupt = client.interrupt
+
+            async def steer(text: str) -> None:
+                await client.query(text)
+            pane.steer = steer
             await client.query(message)
             async for m in client.receive_response():
                 if isinstance(m, StreamEvent):
