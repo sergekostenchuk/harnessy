@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Чат Claude</title>
 <style>
-  :root { color-scheme: light dark; --bg:#f6f6f4; --fg:#1b1b1b; --muted:#6b6b6b; --me:#dfe9ff; --ai:#ffffff; --line:#dcdcd7; --accent:#3b6cff; --err:#b3261e; --tool:#5a5a5a; --toolbg:#ecece8; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --me:#243a6b; --ai:#222222; --line:#333; --accent:#7b9cff; --err:#ff8a80; --tool:#b0b0b0; --toolbg:#1f1f1f; } }
+  :root { color-scheme: light dark; --bg:#f6f6f4; --fg:#1b1b1b; --muted:#6b6b6b; --me:#dfe9ff; --ai:#ffffff; --peer:#efe4ff; --line:#dcdcd7; --accent:#3b6cff; --err:#b3261e; --tool:#5a5a5a; --toolbg:#ecece8; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --me:#243a6b; --ai:#222222; --peer:#3a2a5a; --line:#333; --accent:#7b9cff; --err:#ff8a80; --tool:#b0b0b0; --toolbg:#1f1f1f; } }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; height:100vh; display:flex; flex-direction:column; }
   #top { display:flex; gap:8px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
@@ -22,12 +22,16 @@
   .pane { flex:1; min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--line); }
   .pane:last-child { border-right:none; }
   .pane header { display:flex; gap:6px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .pane header .name { color:var(--muted); font-size:12px; }
   .pane header .conv { flex:1; min-width:120px; }
   .pane main { flex:1; overflow:auto; padding:12px 10px; }
   .msg { margin:0 0 10px; padding:9px 12px; border-radius:12px; white-space:pre-wrap; word-wrap:break-word; }
   .me { background:var(--me); }
   .ai { background:var(--ai); border:1px solid var(--line); }
+  .peer { background:var(--peer); }
+  .peer b { font-weight:600; color:var(--muted); font-size:12px; display:block; margin-bottom:4px; }
   .tool { margin:-4px 0 8px; padding:3px 10px; font-size:12px; color:var(--tool); background:var(--toolbg); border-radius:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tool.reply { white-space:pre-wrap; max-height:120px; overflow:auto; }
   .meta { margin:-4px 0 12px; font-size:12px; color:var(--muted); }
   .error { color:var(--err); }
   .pane footer { border-top:1px solid var(--line); padding:8px 10px; }
@@ -48,7 +52,8 @@
 <script>
 (() => {
   const KEY = 'simple-claude-chat-v2';
-  let cfg = null;                 // /api/status
+  const NAMES = { left: 'левое окно', right: 'правое окно' };
+  let cfg = null;
   let state = { cwd: null, panes: [{}, {}] };
   try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && Array.isArray(s.panes) && s.panes.length === 2) state = s; } catch {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
@@ -59,12 +64,14 @@
   function fmtDate(iso) { const d = new Date(iso); return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
 
   class Pane {
-    constructor(idx) {
-      this.idx = idx;
+    constructor(idx, id) {
+      this.idx = idx; this.id = id;
       this.s = state.panes[idx];
       this.busy = false;
+      this.box = null;
       const root = el('div', 'pane');
       const header = el('header');
+      header.appendChild(el('span', 'name', NAMES[id]));
       this.model = el('select'); this.model.title = 'Модель';
       this.mode = el('select'); this.mode.title = 'Доступ к папке';
       this.conv = el('select', 'conv'); this.conv.title = 'Разговор';
@@ -87,26 +94,59 @@
       this.mode.value = cfg.modes.some(m => m.id === this.s.mode) ? this.s.mode : cfg.defaultMode;
       this.s.model = this.model.value; this.s.mode = this.mode.value; save();
 
-      this.model.onchange = () => { this.s.model = this.model.value; save(); };
-      this.mode.onchange = () => { this.s.mode = this.mode.value; save(); this.setStatus('Режим: ' + this.mode.selectedOptions[0].text); };
+      this.model.onchange = () => { this.s.model = this.model.value; save(); this.report(); };
+      this.mode.onchange = () => { this.s.mode = this.mode.value; save(); this.report(); this.setStatus('Режим: ' + this.modeLabel()); };
       this.conv.onchange = () => { const id = this.conv.value; if (id) this.open(id); else this.newChat(); };
       this.newBtn.onclick = () => this.newChat();
       this.sendBtn.onclick = () => this.send();
       this.input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); } });
-    }
-    setStatus(t) { this.status.textContent = t; }
-    add(role, text) { const d = el('div', 'msg ' + (role === 'me' ? 'me' : 'ai'), text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; return d; }
-    meta(text, isErr) { const d = el('div', 'meta' + (isErr ? ' error' : ''), text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; }
-    toolLine(text, isErr) { const d = el('div', 'tool' + (isErr ? ' error' : ''), text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; }
 
+      // события от сервера: ходы, пришедшие от соседнего окна
+      this.es = new EventSource('/api/events/' + id);
+      this.es.onmessage = (m) => { try { this.handle(JSON.parse(m.data), true); } catch {} };
+    }
+    modeLabel() { return this.mode.selectedOptions[0] ? this.mode.selectedOptions[0].text : ''; }
+    setStatus(t) { this.status.textContent = t; }
+    setBusy(b) { this.busy = b; this.sendBtn.disabled = b; }
+    add(role, text) { const d = el('div', 'msg ' + role, text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; return d; }
+    meta(text, isErr) { const d = el('div', 'meta' + (isErr ? ' error' : ''), text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; }
+    toolLine(text, cls) { const d = el('div', 'tool' + (cls ? ' ' + cls : ''), text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; }
+    async report() {
+      try { await fetch('/api/panes/' + this.id, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: this.s.model, mode: this.s.mode, cwd: state.cwd, sessionId: this.s.sessionId || null }) }); } catch {}
+    }
+    // Общий разбор событий хода: и своего (через fetch), и пришедшего от соседа (через EventSource).
+    handle(ev, fromPeer) {
+      if (ev.type === 'relayStart') {
+        this.setBusy(true); this.box = null;
+        const d = this.add('peer', ''); d.appendChild(el('b', null, 'Сообщение от ' + (NAMES[ev.from] || 'соседа'))); d.appendChild(document.createTextNode(ev.text));
+        this.log.scrollTop = this.log.scrollHeight;
+        this.setStatus('Отвечает на сообщение соседа…');
+      } else if (ev.type === 'delta') {
+        if (!this.box) this.box = this.add('ai', '');
+        this.box.textContent += ev.text; this.log.scrollTop = this.log.scrollHeight;
+      } else if (ev.type === 'tool') { this.box = null; this.toolLine('▸ ' + (ev.name === 'mcp__panes__send_to_other' ? 'сообщение соседу' : ev.name) + (ev.detail ? ': ' + ev.detail : '')); }
+      else if (ev.type === 'toolError') { this.box = null; this.toolLine('✕ ' + ev.text, 'error'); }
+      else if (ev.type === 'peerReply') { this.box = null; this.toolLine('↩ ответ соседа: ' + ev.text, 'reply'); }
+      else if (ev.type === 'done') {
+        this.box = null;
+        this.s.sessionId = ev.sessionId || this.s.sessionId; save();
+        const u = ev.usage || {};
+        this.meta(`${ev.model} · ${((ev.durationMs || 0) / 1000).toFixed(1)} с · токены вход ${u.input ?? '—'} / выход ${u.output ?? '—'}` + (u.cacheRead ? ` / кэш ${u.cacheRead}` : ''));
+        this.setStatus('Сессия ' + (this.s.sessionId || '').slice(0, 8) + ' · ' + ev.model + ' · ' + this.modeLabel());
+        if (fromPeer) { this.setBusy(false); this.report(); refreshLists().catch(() => {}); }
+      } else if (ev.type === 'error') {
+        this.box = null;
+        if (ev.sessionId) { this.s.sessionId = ev.sessionId; save(); }
+        this.meta('Ошибка: ' + ev.message, true); this.setStatus('Ошибка');
+        if (fromPeer) { this.setBusy(false); this.report(); }
+      }
+    }
     async refreshList(sessions) {
       const cur = this.s.sessionId || '';
       this.conv.innerHTML = '';
       const o0 = el('option', null, '— новый разговор —'); o0.value = ''; this.conv.appendChild(o0);
-      for (const s of sessions) {
-        const o = el('option', null, s.title + ' · ' + fmtDate(s.updated) + ' · ' + s.count);
-        o.value = s.id; this.conv.appendChild(o);
-      }
+      for (const s of sessions) { const o = el('option', null, s.title + ' · ' + fmtDate(s.updated) + ' · ' + s.count); o.value = s.id; this.conv.appendChild(o); }
       this.conv.value = sessions.some(s => s.id === cur) ? cur : '';
       if (!this.conv.value && cur) { this.s.sessionId = null; save(); }
     }
@@ -114,18 +154,18 @@
       const r = await fetch('/api/sessions/' + id + '?cwd=' + encodeURIComponent(state.cwd));
       if (!r.ok) { this.meta('Не удалось открыть разговор', true); return; }
       const { messages } = await r.json();
-      this.s.sessionId = id; save();
-      this.log.innerHTML = '';
+      this.s.sessionId = id; save(); this.report();
+      this.log.innerHTML = ''; this.box = null;
       for (const m of messages) this.add(m.role, m.text);
       this.conv.value = id;
       this.setStatus('Сессия ' + id.slice(0, 8) + ' · продолжение');
       this.input.focus();
     }
     newChat() {
-      this.s.sessionId = null; save();
-      this.log.innerHTML = '';
+      this.s.sessionId = null; save(); this.report();
+      this.log.innerHTML = ''; this.box = null;
       this.conv.value = '';
-      this.setStatus('Новый разговор · ' + this.mode.selectedOptions[0].text);
+      this.setStatus('Новый разговор · ' + this.modeLabel());
       this.input.focus();
     }
     async send() {
@@ -133,13 +173,11 @@
       if (!text || this.busy) return;
       if (!state.cwd) { this.meta('Сначала укажи папку проекта сверху', true); return; }
       this.input.value = '';
-      this.busy = true; this.sendBtn.disabled = true;
-      this.add('me', text);
-      let box = null;      // текущий пузырь ответа; после вызова инструмента текст идёт новым пузырём
-      let acc = '';
+      this.setBusy(true);
+      this.add('me', text); this.box = null;
       try {
         const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, model: this.s.model, mode: this.s.mode, cwd: state.cwd, sessionId: this.s.sessionId }) });
+          body: JSON.stringify({ pane: this.id, message: text, model: this.s.model, mode: this.s.mode, cwd: state.cwd, sessionId: this.s.sessionId }) });
         if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + r.status)); }
         const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
         this.setStatus('Модель работает…');
@@ -151,31 +189,16 @@
           while ((i = buf.indexOf('\n\n')) >= 0) {
             const frame = buf.slice(0, i); buf = buf.slice(i + 2);
             const line = frame.split('\n').find(l => l.startsWith('data: '));
-            if (!line) continue;
-            const ev = JSON.parse(line.slice(6));
-            if (ev.type === 'delta') {
-              if (!box) box = this.add('ai', '');
-              acc += ev.text; box.textContent += ev.text; this.log.scrollTop = this.log.scrollHeight;
-            }
-            else if (ev.type === 'tool') { box = null; this.toolLine('▸ ' + ev.name + (ev.detail ? ': ' + ev.detail : '')); }
-            else if (ev.type === 'toolError') { box = null; this.toolLine('✕ ' + ev.text, true); }
-            else if (ev.type === 'done') {
-              this.s.sessionId = ev.sessionId || this.s.sessionId; save();
-              const u = ev.usage || {};
-              this.meta(`${ev.model} · ${((ev.durationMs || 0) / 1000).toFixed(1)} с · токены вход ${u.input ?? '—'} / выход ${u.output ?? '—'}` + (u.cacheRead ? ` / кэш ${u.cacheRead}` : ''));
-              this.setStatus('Сессия ' + (this.s.sessionId || '').slice(0, 8) + ' · ' + ev.model + ' · ' + this.mode.selectedOptions[0].text);
-            }
-            else if (ev.type === 'error') {
-              if (ev.sessionId) { this.s.sessionId = ev.sessionId; save(); }
-              this.meta('Ошибка: ' + ev.message, true); this.setStatus('Ошибка');
-            }
+            if (line) this.handle(JSON.parse(line.slice(6)), false);
           }
         }
       } catch (e) {
         this.meta('Ошибка: ' + e.message, true);
       } finally {
         for (const b of this.log.querySelectorAll('.ai')) if (!b.textContent) b.remove();
-        this.busy = false; this.sendBtn.disabled = false;
+        this.box = null;
+        this.setBusy(false);
+        this.report();
         refreshLists().catch(() => {});
         this.input.focus();
       }
@@ -199,6 +222,7 @@
     $info.className = 'status';
     $info.textContent = 'Журналы: ' + d.sessionsDir + (d.hasClaudeMd ? ' · в папке есть CLAUDE.md, он попадёт в контекст' : '');
     if (changed) for (const p of panes) p.newChat();
+    for (const p of panes) p.report();
     await refreshLists();
     if (!changed && !silent) for (const p of panes) if (p.s.sessionId) await p.open(p.s.sessionId);
     return true;
@@ -213,7 +237,7 @@
         $banner.style.display = 'block';
         $banner.innerHTML = 'Вход по подписке не выполнен. Открой Терминал и выполни <code>claude login</code>, затем обнови страницу.';
       }
-      panes.push(new Pane(0), new Pane(1));
+      panes.push(new Pane(0, 'left'), new Pane(1, 'right'));
       const ok = await applyCwd(state.cwd || cfg.defaultDir, true);
       if (!ok) await applyCwd(cfg.defaultDir, true);
       for (const p of panes) if (p.s.sessionId) await p.open(p.s.sessionId); else p.newChat();
