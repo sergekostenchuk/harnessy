@@ -5,225 +5,221 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Чат Claude</title>
 <style>
-  :root { color-scheme: light dark; --bg:#f6f6f4; --fg:#1b1b1b; --muted:#6b6b6b; --me:#dfe9ff; --ai:#ffffff; --line:#dcdcd7; --accent:#3b6cff; --err:#b3261e; --side:#efefec; --active:#dde4f5; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --me:#243a6b; --ai:#222222; --line:#333; --accent:#7b9cff; --err:#ff8a80; --side:#1d1d1d; --active:#2a3654; } }
+  :root { color-scheme: light dark; --bg:#f6f6f4; --fg:#1b1b1b; --muted:#6b6b6b; --me:#dfe9ff; --ai:#ffffff; --line:#dcdcd7; --accent:#3b6cff; --err:#b3261e; --tool:#5a5a5a; --toolbg:#ecece8; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --me:#243a6b; --ai:#222222; --line:#333; --accent:#7b9cff; --err:#ff8a80; --tool:#b0b0b0; --toolbg:#1f1f1f; } }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; height:100vh; display:flex; }
-  aside { width:260px; flex:none; background:var(--side); border-right:1px solid var(--line); display:flex; flex-direction:column; }
-  aside .top { padding:10px; border-bottom:1px solid var(--line); }
-  aside button { width:100%; }
-  #list { flex:1; overflow:auto; padding:6px; }
-  .item { padding:8px 10px; border-radius:8px; cursor:pointer; margin-bottom:2px; }
-  .item:hover { background:var(--active); opacity:.9; }
-  .item.active { background:var(--active); }
-  .item .t { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .item .d { font-size:11px; color:var(--muted); }
-  #wrap { flex:1; min-width:0; display:flex; flex-direction:column; }
-  header { display:flex; gap:10px; align-items:center; padding:10px 14px; border-bottom:1px solid var(--line); }
-  header h1 { font-size:16px; margin:0 auto 0 0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  select, button { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; height:100vh; display:flex; flex-direction:column; }
+  #top { display:flex; gap:8px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  #top label { color:var(--muted); }
+  #cwd { flex:1; min-width:280px; font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); }
+  select, button, input { font:inherit; }
+  select, button { padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); max-width:220px; }
   button.primary { background:var(--accent); color:#fff; border-color:transparent; }
   button:disabled { opacity:.5; }
-  #banner { display:none; padding:10px 14px; background:#fff3cd; color:#5c4400; border-bottom:1px solid #e6d9a3; }
+  #banner { display:none; padding:8px 12px; background:#fff3cd; color:#5c4400; border-bottom:1px solid #e6d9a3; }
   #banner code { background:rgba(0,0,0,.08); padding:2px 5px; border-radius:4px; }
-  main { flex:1; overflow:auto; padding:16px 14px; }
-  .msg { max-width:900px; margin:0 auto 12px; padding:10px 14px; border-radius:12px; white-space:pre-wrap; word-wrap:break-word; }
+  #panes { flex:1; display:flex; min-height:0; }
+  .pane { flex:1; min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--line); }
+  .pane:last-child { border-right:none; }
+  .pane header { display:flex; gap:6px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .pane header .conv { flex:1; min-width:120px; }
+  .pane main { flex:1; overflow:auto; padding:12px 10px; }
+  .msg { margin:0 0 10px; padding:9px 12px; border-radius:12px; white-space:pre-wrap; word-wrap:break-word; }
   .me { background:var(--me); }
   .ai { background:var(--ai); border:1px solid var(--line); }
-  .meta { max-width:900px; margin:-6px auto 14px; font-size:12px; color:var(--muted); }
+  .tool { margin:-4px 0 8px; padding:3px 10px; font-size:12px; color:var(--tool); background:var(--toolbg); border-radius:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .meta { margin:-4px 0 12px; font-size:12px; color:var(--muted); }
   .error { color:var(--err); }
-  footer { border-top:1px solid var(--line); padding:10px 14px; }
-  .row { max-width:900px; margin:0 auto; display:flex; gap:8px; align-items:flex-end; }
-  textarea { flex:1; min-height:44px; max-height:200px; resize:vertical; font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:var(--ai); color:var(--fg); }
-  #status { max-width:900px; margin:6px auto 0; font-size:12px; color:var(--muted); }
+  .pane footer { border-top:1px solid var(--line); padding:8px 10px; }
+  .row { display:flex; gap:6px; align-items:flex-end; }
+  textarea { flex:1; min-height:40px; max-height:200px; resize:vertical; font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--ai); color:var(--fg); }
+  .status { margin-top:4px; font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 </style>
 </head>
 <body>
-<aside>
-  <div class="top"><button id="new" class="primary">Новый чат</button></div>
-  <div id="list"></div>
-</aside>
-<div id="wrap">
-  <header>
-    <h1 id="title">Чат Claude по подписке</h1>
-    <select id="model" title="Модель"></select>
-  </header>
-  <div id="banner"></div>
-  <main id="log"></main>
-  <footer>
-    <div class="row">
-      <textarea id="input" placeholder="Сообщение… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
-      <button id="send" class="primary">Отправить</button>
-    </div>
-    <div id="status"></div>
-  </footer>
+<div id="top">
+  <label for="cwd">Папка проекта</label>
+  <input id="cwd" placeholder="/полный/путь/к/папке">
+  <button id="applyCwd">Применить</button>
+  <span id="cwdInfo" class="status"></span>
 </div>
+<div id="banner"></div>
+<div id="panes"></div>
 <script>
 (() => {
-  const $ = (id) => document.getElementById(id);
-  const log = $('log'), input = $('input'), sendBtn = $('send'), modelSel = $('model'), banner = $('banner'), status = $('status'), list = $('list'), title = $('title');
-  const KEY = 'simple-claude-chat';
-  let state = { sessionId: null, model: null };
-  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s) state = { sessionId: s.sessionId || null, model: s.model || null }; } catch {}
+  const KEY = 'simple-claude-chat-v2';
+  let cfg = null;                 // /api/status
+  let state = { cwd: null, panes: [{}, {}] };
+  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && Array.isArray(s.panes) && s.panes.length === 2) state = s; } catch {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
-  let busy = false;
+  const $cwd = document.getElementById('cwd'), $info = document.getElementById('cwdInfo'), $banner = document.getElementById('banner');
+  const panes = [];
 
-  function add(role, text) {
-    const d = document.createElement('div');
-    d.className = 'msg ' + (role === 'me' ? 'me' : 'ai');
-    d.textContent = text;
-    log.appendChild(d);
-    log.scrollTop = log.scrollHeight;
-    return d;
-  }
-  function meta(text, isErr) {
-    const d = document.createElement('div');
-    d.className = 'meta' + (isErr ? ' error' : '');
-    d.textContent = text;
-    log.appendChild(d);
-    log.scrollTop = log.scrollHeight;
-  }
-  function setStatus(t) { status.textContent = t; }
-  function fmtDate(iso) {
-    const d = new Date(iso);
-    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  }
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function fmtDate(iso) { const d = new Date(iso); return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
 
-  // ---- список разговоров ----
-  async function loadList() {
-    const r = await fetch('/api/sessions');
-    const { sessions } = await r.json();
-    list.innerHTML = '';
-    for (const s of sessions) {
-      const el = document.createElement('div');
-      el.className = 'item' + (s.id === state.sessionId ? ' active' : '');
-      el.innerHTML = '<div class="t"></div><div class="d"></div>';
-      el.querySelector('.t').textContent = s.title || '(без названия)';
-      el.querySelector('.d').textContent = fmtDate(s.updated) + ' · ' + s.count + ' сообщ.';
-      el.onclick = () => { if (!busy) openSession(s.id, s.title); };
-      list.appendChild(el);
+  class Pane {
+    constructor(idx) {
+      this.idx = idx;
+      this.s = state.panes[idx];
+      this.busy = false;
+      const root = el('div', 'pane');
+      const header = el('header');
+      this.model = el('select'); this.model.title = 'Модель';
+      this.mode = el('select'); this.mode.title = 'Доступ к папке';
+      this.conv = el('select', 'conv'); this.conv.title = 'Разговор';
+      this.newBtn = el('button', null, 'Новый');
+      header.append(this.model, this.mode, this.conv, this.newBtn);
+      this.log = el('main');
+      const footer = el('footer');
+      const row = el('div', 'row');
+      this.input = el('textarea'); this.input.placeholder = 'Сообщение… (Enter — отправить, Shift+Enter — новая строка)';
+      this.sendBtn = el('button', 'primary', 'Отправить');
+      row.append(this.input, this.sendBtn);
+      this.status = el('div', 'status');
+      footer.append(row, this.status);
+      root.append(header, this.log, footer);
+      document.getElementById('panes').appendChild(root);
+
+      for (const m of cfg.models) { const o = el('option', null, m.label); o.value = m.id; this.model.appendChild(o); }
+      for (const m of cfg.modes) { const o = el('option', null, m.label); o.value = m.id; this.mode.appendChild(o); }
+      this.model.value = cfg.models.some(m => m.id === this.s.model) ? this.s.model : cfg.defaultModel;
+      this.mode.value = cfg.modes.some(m => m.id === this.s.mode) ? this.s.mode : cfg.defaultMode;
+      this.s.model = this.model.value; this.s.mode = this.mode.value; save();
+
+      this.model.onchange = () => { this.s.model = this.model.value; save(); };
+      this.mode.onchange = () => { this.s.mode = this.mode.value; save(); this.setStatus('Режим: ' + this.mode.selectedOptions[0].text); };
+      this.conv.onchange = () => { const id = this.conv.value; if (id) this.open(id); else this.newChat(); };
+      this.newBtn.onclick = () => this.newChat();
+      this.sendBtn.onclick = () => this.send();
+      this.input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); } });
     }
-    if (!sessions.length) { const e = document.createElement('div'); e.className = 'item d'; e.style.color = 'var(--muted)'; e.textContent = 'Разговоров пока нет'; list.appendChild(e); }
-  }
+    setStatus(t) { this.status.textContent = t; }
+    add(role, text) { const d = el('div', 'msg ' + (role === 'me' ? 'me' : 'ai'), text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; return d; }
+    meta(text, isErr) { const d = el('div', 'meta' + (isErr ? ' error' : ''), text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; }
+    toolLine(text, isErr) { const d = el('div', 'tool' + (isErr ? ' error' : ''), text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; }
 
-  async function openSession(id, t) {
-    const r = await fetch('/api/sessions/' + id);
-    if (!r.ok) { meta('Не удалось открыть разговор', true); return; }
-    const { messages } = await r.json();
-    state.sessionId = id; save();
-    log.innerHTML = '';
-    for (const m of messages) add(m.role, m.text);
-    title.textContent = t || 'Разговор';
-    setStatus('Сессия ' + id.slice(0, 8) + ' · продолжение');
-    [...list.children].forEach((el) => el.classList.remove('active'));
-    await loadList();
-    input.focus();
-  }
-
-  function newChat() {
-    state.sessionId = null; save();
-    log.innerHTML = '';
-    title.textContent = 'Новый разговор';
-    setStatus('Новый чат: первое сообщение создаст разговор');
-    [...list.children].forEach((el) => el.classList.remove('active'));
-    input.focus();
-  }
-
-  // ---- статус и модели ----
-  async function loadStatus() {
-    const r = await fetch('/api/status');
-    const s = await r.json();
-    modelSel.innerHTML = '';
-    for (const m of s.models) {
-      const o = document.createElement('option');
-      o.value = m.id; o.textContent = m.label;
-      modelSel.appendChild(o);
+    async refreshList(sessions) {
+      const cur = this.s.sessionId || '';
+      this.conv.innerHTML = '';
+      const o0 = el('option', null, '— новый разговор —'); o0.value = ''; this.conv.appendChild(o0);
+      for (const s of sessions) {
+        const o = el('option', null, s.title + ' · ' + fmtDate(s.updated) + ' · ' + s.count);
+        o.value = s.id; this.conv.appendChild(o);
+      }
+      this.conv.value = sessions.some(s => s.id === cur) ? cur : '';
+      if (!this.conv.value && cur) { this.s.sessionId = null; save(); }
     }
-    modelSel.value = state.model && s.models.some(m => m.id === state.model) ? state.model : s.defaultModel;
-    state.model = modelSel.value; save();
-    if (!s.auth || !s.auth.loggedIn) {
-      banner.style.display = 'block';
-      banner.innerHTML = 'Вход по подписке не выполнен. Открой Терминал и выполни <code>claude login</code>, затем обнови страницу.' +
-        (s.auth && s.auth.error ? ' (' + s.auth.error + ')' : '');
-    } else {
-      banner.style.display = 'none';
+    async open(id) {
+      const r = await fetch('/api/sessions/' + id + '?cwd=' + encodeURIComponent(state.cwd));
+      if (!r.ok) { this.meta('Не удалось открыть разговор', true); return; }
+      const { messages } = await r.json();
+      this.s.sessionId = id; save();
+      this.log.innerHTML = '';
+      for (const m of messages) this.add(m.role, m.text);
+      this.conv.value = id;
+      this.setStatus('Сессия ' + id.slice(0, 8) + ' · продолжение');
+      this.input.focus();
     }
-    return s;
-  }
-
-  // ---- отправка ----
-  async function send() {
-    const text = input.value.trim();
-    if (!text || busy) return;
-    input.value = '';
-    busy = true; sendBtn.disabled = true;
-    state.model = modelSel.value; save();
-    const isNew = !state.sessionId;
-    add('me', text);
-    if (isNew) title.textContent = text.replace(/\s+/g, ' ').slice(0, 60);
-    const box = add('ai', '');
-    let acc = '';
-    try {
-      const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, model: state.model, sessionId: state.sessionId }) });
-      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + r.status)); }
-      const reader = r.body.getReader();
-      const dec = new TextDecoder();
-      let buf = '';
-      setStatus('Модель думает…');
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        let i;
-        while ((i = buf.indexOf('\n\n')) >= 0) {
-          const frame = buf.slice(0, i); buf = buf.slice(i + 2);
-          const line = frame.split('\n').find(l => l.startsWith('data: '));
-          if (!line) continue;
-          const ev = JSON.parse(line.slice(6));
-          if (ev.type === 'delta') { acc += ev.text; box.textContent = acc; log.scrollTop = log.scrollHeight; }
-          else if (ev.type === 'done') {
-            state.sessionId = ev.sessionId || state.sessionId; save();
-            const u = ev.usage || {};
-            meta(`${ev.model} · ${((ev.durationMs || 0) / 1000).toFixed(1)} с · токены вход ${u.input ?? '—'} / выход ${u.output ?? '—'}` + (u.cacheRead ? ` / кэш ${u.cacheRead}` : ''));
-            setStatus('Сессия ' + (state.sessionId || '').slice(0, 8) + ' · ' + ev.model);
-          }
-          else if (ev.type === 'error') {
-            if (ev.sessionId) { state.sessionId = ev.sessionId; save(); }
-            meta('Ошибка: ' + ev.message, true);
-            setStatus('Ошибка');
+    newChat() {
+      this.s.sessionId = null; save();
+      this.log.innerHTML = '';
+      this.conv.value = '';
+      this.setStatus('Новый разговор · ' + this.mode.selectedOptions[0].text);
+      this.input.focus();
+    }
+    async send() {
+      const text = this.input.value.trim();
+      if (!text || this.busy) return;
+      if (!state.cwd) { this.meta('Сначала укажи папку проекта сверху', true); return; }
+      this.input.value = '';
+      this.busy = true; this.sendBtn.disabled = true;
+      this.add('me', text);
+      let box = null;      // текущий пузырь ответа; после вызова инструмента текст идёт новым пузырём
+      let acc = '';
+      try {
+        const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, model: this.s.model, mode: this.s.mode, cwd: state.cwd, sessionId: this.s.sessionId }) });
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + r.status)); }
+        const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
+        this.setStatus('Модель работает…');
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n\n')) >= 0) {
+            const frame = buf.slice(0, i); buf = buf.slice(i + 2);
+            const line = frame.split('\n').find(l => l.startsWith('data: '));
+            if (!line) continue;
+            const ev = JSON.parse(line.slice(6));
+            if (ev.type === 'delta') {
+              if (!box) box = this.add('ai', '');
+              acc += ev.text; box.textContent += ev.text; this.log.scrollTop = this.log.scrollHeight;
+            }
+            else if (ev.type === 'tool') { box = null; this.toolLine('▸ ' + ev.name + (ev.detail ? ': ' + ev.detail : '')); }
+            else if (ev.type === 'toolError') { box = null; this.toolLine('✕ ' + ev.text, true); }
+            else if (ev.type === 'done') {
+              this.s.sessionId = ev.sessionId || this.s.sessionId; save();
+              const u = ev.usage || {};
+              this.meta(`${ev.model} · ${((ev.durationMs || 0) / 1000).toFixed(1)} с · токены вход ${u.input ?? '—'} / выход ${u.output ?? '—'}` + (u.cacheRead ? ` / кэш ${u.cacheRead}` : ''));
+              this.setStatus('Сессия ' + (this.s.sessionId || '').slice(0, 8) + ' · ' + ev.model + ' · ' + this.mode.selectedOptions[0].text);
+            }
+            else if (ev.type === 'error') {
+              if (ev.sessionId) { this.s.sessionId = ev.sessionId; save(); }
+              this.meta('Ошибка: ' + ev.message, true); this.setStatus('Ошибка');
+            }
           }
         }
+      } catch (e) {
+        this.meta('Ошибка: ' + e.message, true);
+      } finally {
+        for (const b of this.log.querySelectorAll('.ai')) if (!b.textContent) b.remove();
+        this.busy = false; this.sendBtn.disabled = false;
+        refreshLists().catch(() => {});
+        this.input.focus();
       }
-    } catch (e) {
-      meta('Ошибка: ' + e.message, true);
-    } finally {
-      if (!acc) box.remove();
-      busy = false; sendBtn.disabled = false;
-      loadList().catch(() => {});
-      input.focus();
     }
   }
 
-  sendBtn.onclick = send;
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
-  modelSel.onchange = () => { state.model = modelSel.value; save(); };
-  $('new').onclick = newChat;
+  async function refreshLists() {
+    if (!state.cwd) return;
+    const r = await fetch('/api/sessions?cwd=' + encodeURIComponent(state.cwd));
+    if (!r.ok) return;
+    const { sessions } = await r.json();
+    for (const p of panes) await p.refreshList(sessions);
+  }
+  async function applyCwd(newCwd, silent) {
+    const r = await fetch('/api/dir?cwd=' + encodeURIComponent(newCwd));
+    const d = await r.json();
+    if (!d.ok) { $info.textContent = d.error; $info.className = 'status error'; return false; }
+    const changed = state.cwd !== d.cwd;
+    state.cwd = d.cwd; save();
+    $cwd.value = d.cwd;
+    $info.className = 'status';
+    $info.textContent = 'Журналы: ' + d.sessionsDir + (d.hasClaudeMd ? ' · в папке есть CLAUDE.md, он попадёт в контекст' : '');
+    if (changed) for (const p of panes) p.newChat();
+    await refreshLists();
+    if (!changed && !silent) for (const p of panes) if (p.s.sessionId) await p.open(p.s.sessionId);
+    return true;
+  }
+  document.getElementById('applyCwd').onclick = () => applyCwd($cwd.value.trim());
+  $cwd.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyCwd($cwd.value.trim()); });
 
   (async () => {
     try {
-      await loadStatus();
-      await loadList();
-      if (state.sessionId) {
-        const cur = [...list.children].find((el) => el.classList.contains('active'));
-        await openSession(state.sessionId, cur ? cur.querySelector('.t').textContent : null);
-      } else {
-        newChat();
+      cfg = await (await fetch('/api/status')).json();
+      if (!cfg.auth || !cfg.auth.loggedIn) {
+        $banner.style.display = 'block';
+        $banner.innerHTML = 'Вход по подписке не выполнен. Открой Терминал и выполни <code>claude login</code>, затем обнови страницу.';
       }
+      panes.push(new Pane(0), new Pane(1));
+      const ok = await applyCwd(state.cwd || cfg.defaultDir, true);
+      if (!ok) await applyCwd(cfg.defaultDir, true);
+      for (const p of panes) if (p.s.sessionId) await p.open(p.s.sessionId); else p.newChat();
     } catch (e) {
-      banner.style.display = 'block'; banner.textContent = 'Сервер не отвечает: ' + e.message;
+      $banner.style.display = 'block'; $banner.textContent = 'Сервер не отвечает: ' + e.message;
     }
-    input.focus();
   })();
 })();
 </script>
