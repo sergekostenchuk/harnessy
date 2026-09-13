@@ -5,36 +5,66 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Харнесс</title>
 <style>
-  :root { color-scheme: light dark; --bg:#f6f6f4; --fg:#1b1b1b; --muted:#6b6b6b; --me:#dfe9ff; --ai:#ffffff; --peer:#efe4ff; --line:#dcdcd7; --accent:#3b6cff; --err:#b3261e; --tool:#5a5a5a; --toolbg:#ecece8; --ask:#fff3cd; --askfg:#5c4400; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --me:#243a6b; --ai:#222222; --peer:#3a2a5a; --line:#333; --accent:#7b9cff; --err:#ff8a80; --tool:#b0b0b0; --toolbg:#1f1f1f; --ask:#4a3d12; --askfg:#ffe9a8; } }
+  :root { color-scheme: light dark; --bg:#f6f6f4; --fg:#1b1b1b; --muted:#6b6b6b; --me:#dfe9ff; --ai:#ffffff; --peer:#efe4ff; --line:#dcdcd7; --accent:#3b6cff; --err:#b3261e; --ok:#1d7a3e; --okbg:#e3f3e8; --tool:#5a5a5a; --toolbg:#ecece8; --ask:#fff3cd; --askfg:#5c4400; --side:#f0f0ec; --sel:#e4e9ff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --me:#243a6b; --ai:#222222; --peer:#3a2a5a; --line:#333; --accent:#7b9cff; --err:#ff8a80; --ok:#7fd49a; --okbg:#1e3a28; --tool:#b0b0b0; --toolbg:#1f1f1f; --ask:#4a3d12; --askfg:#ffe9a8; --side:#1b1b1b; --sel:#26325a; } }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; height:100vh; display:flex; flex-direction:column; }
-  #top { display:flex; gap:8px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
-  #top label { color:var(--muted); }
-  #cwd { flex:1; min-width:280px; font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); }
-  select, button, input { font:inherit; }
-  select, button { padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); max-width:200px; }
+  select, button, input, textarea { font:inherit; }
+  select, button, input { padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); }
+  button { cursor:pointer; }
   button.primary { background:var(--accent); color:#fff; border-color:transparent; }
   button.danger { color:var(--err); }
-  button:disabled { opacity:.5; }
-  #banner { display:none; padding:8px 12px; background:var(--ask); color:var(--askfg); border-bottom:1px solid var(--line); }
+  button.icon { padding:2px 8px; }
+  button:disabled { opacity:.5; cursor:default; }
+  .hidden { display:none !important; }
+
+  #top { display:flex; gap:8px; align-items:center; padding:6px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  #top .lbl { color:var(--muted); font-size:12px; }
+  #cwd { width:250px; }
+  #cwdInfo { font-size:12px; color:var(--muted); }
+  #cwdInfo.error { color:var(--err); }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .chip { font-size:12px; padding:2px 9px; border-radius:999px; border:1px solid var(--line); background:var(--ai); white-space:nowrap; }
+  .chip.accepted { border-color:var(--accent); }
+  .chip.merged { background:var(--okbg); color:var(--ok); border-color:transparent; }
+  #askCount { background:var(--ask); color:var(--askfg); border-color:transparent; cursor:pointer; font-weight:600; }
+  #spacer { flex:1; }
+  #banner { display:none; padding:8px 12px; background:var(--ask); color:var(--askfg); border-bottom:1px solid var(--line); font-size:13px; }
   #banner code { background:rgba(0,0,0,.08); padding:2px 5px; border-radius:4px; }
-  #owner { display:none; padding:6px 12px; border-bottom:1px solid var(--line); font-size:13px; background:var(--peer); }
-  #owner .o { margin:2px 0; }
-  #panes { flex:1; display:flex; min-height:0; }
-  .pane { flex:1; min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--line); }
+
+  #body { flex:1; display:flex; min-height:0; }
+  #team { width:200px; flex:none; border-right:1px solid var(--line); background:var(--side); display:flex; flex-direction:column; overflow:auto; }
+  #team h3, #right h3 { margin:0; padding:10px 12px 6px; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+  .seat { display:flex; align-items:center; gap:8px; padding:7px 10px 7px 9px; cursor:pointer; border-left:3px solid transparent; user-select:none; }
+  .seat:hover { background:var(--toolbg); }
+  .seat.open { background:var(--sel); border-left-color:var(--accent); }
+  .seat .dot { width:9px; height:9px; border-radius:50%; background:var(--line); flex:none; }
+  .seat.busy .dot { background:var(--accent); animation:pulse 1.2s infinite; }
+  .seat.ask .dot { background:#e0a800; animation:none; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
+  .seat .t { flex:1; min-width:0; }
+  .seat .n { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .seat .r { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .seat .b { font-size:11px; white-space:nowrap; padding:0 6px; border-radius:999px; }
+  .seat .b.q { background:var(--me); }
+  .seat .b.a { background:var(--ask); color:var(--askfg); }
+  #teamOps { padding:8px 12px; font-size:12px; color:var(--muted); display:flex; gap:10px; }
+  #teamOps a { color:var(--accent); cursor:pointer; }
+
+  #center { flex:1; display:flex; min-width:0; overflow-x:auto; }
+  #empty { margin:auto; color:var(--muted); text-align:center; padding:20px; max-width:420px; }
+  .pane { flex:1 0 340px; min-width:340px; display:flex; flex-direction:column; border-right:1px solid var(--line); min-height:0; }
   .pane:last-child { border-right:none; }
-  .pane.collapsed { flex:0 0 34px; overflow:hidden; }
-  .pane.collapsed header > *:not(.name):not(.pend), .pane.collapsed main, .pane.collapsed footer { display:none; }
-  .pane.collapsed header { flex-direction:column; align-items:flex-start; padding:8px 4px; height:100%; }
-  .pane.collapsed header .name { writing-mode:vertical-rl; transform:rotate(180deg); white-space:nowrap; }
-  .pane.collapsed header .pend { writing-mode:vertical-rl; transform:rotate(180deg); }
-  .pane header { display:flex; gap:6px; align-items:center; padding:6px 8px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
-  .pane header .name { font-weight:600; font-size:12px; }
-  .pane header .pend { font-size:11px; color:var(--muted); }
-  .pane header .conv { flex:1; min-width:100px; }
-  .pane header label.chk { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:4px; }
-  .pane main { flex:1; overflow:auto; padding:10px 8px; }
+  .pane header { display:flex; gap:6px; align-items:center; padding:6px 10px; border-bottom:1px solid var(--line); }
+  .pane header .name { font-weight:600; font-size:13px; white-space:nowrap; }
+  .pane header .sub { font-size:11px; color:var(--muted); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pane header .pend { font-size:11px; color:var(--muted); white-space:nowrap; }
+  .pane .settings { display:none; gap:6px; align-items:center; padding:6px 10px; border-bottom:1px solid var(--line); flex-wrap:wrap; background:var(--toolbg); }
+  .pane .settings.on { display:flex; }
+  .pane .settings select { max-width:180px; }
+  .pane .settings .conv { flex:1; min-width:140px; max-width:none; }
+  .pane .settings label.chk { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:4px; }
+  .pane main { flex:1; overflow:auto; padding:10px; }
   .msg { margin:0 0 10px; padding:9px 12px; border-radius:12px; white-space:pre-wrap; word-wrap:break-word; }
   .me { background:var(--me); }
   .me.pending { opacity:.6; }
@@ -48,79 +78,212 @@
   .error { color:var(--err); }
   .ask { margin:0 0 10px; padding:10px 12px; border-radius:10px; background:var(--ask); color:var(--askfg); border:1px solid var(--line); }
   .ask .t { font-weight:600; margin-bottom:4px; }
-  .ask .d { white-space:pre-wrap; font-size:13px; margin-bottom:8px; word-wrap:break-word; }
+  .ask .d { white-space:pre-wrap; font-size:13px; margin-bottom:8px; word-wrap:break-word; max-height:160px; overflow:auto; }
   .ask.resolved { opacity:.6; }
-  .pane footer { border-top:1px solid var(--line); padding:8px; }
-  .row { display:flex; gap:6px; align-items:flex-end; }
+  .pane footer { border-top:1px solid var(--line); padding:8px 10px; display:flex; flex-direction:column; gap:6px; }
+  .row { display:flex; gap:6px; align-items:center; }
+  .row .sp { flex:1; }
   .row select.kind { max-width:110px; }
-  textarea { flex:1; min-height:40px; max-height:200px; resize:vertical; font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--ai); color:var(--fg); }
+  .row input.thread { width:84px; padding:5px 6px; }
+  textarea { width:100%; min-height:44px; max-height:200px; resize:vertical; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--ai); color:var(--fg); }
   .status { margin-top:4px; font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  #right { width:270px; flex:none; border-left:1px solid var(--line); background:var(--side); display:flex; flex-direction:column; min-height:0; }
+  #asks { padding:0 10px; flex:none; max-height:45%; overflow:auto; }
+  #asks .ask { font-size:12px; }
+  #asks .none { font-size:12px; color:var(--muted); padding:0 2px 6px; }
+  #inbox { flex:1; overflow:auto; padding:0 10px 10px; }
+  .in { margin:0 0 8px; padding:8px 10px; border-radius:10px; background:var(--ai); border:1px solid var(--line); font-size:12px; }
+  .in .h { color:var(--muted); margin-bottom:3px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .in .k { padding:0 6px; border-radius:999px; background:var(--peer); color:var(--fg); }
+  .in .k.escalation, .in .k.rejected, .in .k.blocker { background:var(--ask); color:var(--askfg); }
+  .in .k.status { background:var(--okbg); color:var(--ok); }
+  .in .x { white-space:pre-wrap; word-wrap:break-word; max-height:6.5em; overflow:hidden; cursor:pointer; }
+  .in .x.full { max-height:none; }
   #journal { display:none; max-height:30vh; overflow:auto; border-top:1px solid var(--line); padding:6px 12px; font:12px/1.4 ui-monospace, Menlo, monospace; background:var(--toolbg); }
   #journal .r { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 </style>
 </head>
 <body>
 <div id="top">
-  <label for="cwd">Папка проекта</label>
+  <span class="lbl">Папка</span>
   <input id="cwd" placeholder="/полный/путь/к/папке">
   <button id="applyCwd">Применить</button>
-  <span id="cwdInfo" class="status"></span>
+  <span id="cwdInfo"></span>
+  <span id="threads" class="chips" title="Треды: раунд, балл, принято, слито"></span>
+  <span id="spacer"></span>
+  <span id="askCount" class="chip hidden" title="Карточки, которые ждут твоего решения"></span>
+  <button id="rightBtn" title="Показать или скрыть записи владельцу">Владельцу</button>
   <button id="journalBtn" title="Журнал линии .harness/state/channel.ndjson">Журнал</button>
 </div>
 <div id="banner"></div>
-<div id="owner"></div>
-<div id="panes"></div>
+<div id="body">
+  <nav id="team">
+    <h3>Команда</h3>
+    <div id="seats"></div>
+    <div id="teamOps"><a id="openAll">все</a><a id="closeAll">никого</a></div>
+  </nav>
+  <section id="center">
+    <div id="empty">Выбери места слева. Каждое открывается своим окном: сколько угодно окон, в любом наборе. Набор запоминается.</div>
+  </section>
+  <aside id="right">
+    <h3>Ждут решения</h3>
+    <div id="asks"></div>
+    <h3>Записи владельцу</h3>
+    <div id="inbox"></div>
+  </aside>
+</div>
 <div id="journal"></div>
 <script>
 (() => {
-  const KEY = 'harness-ui-v1';
+  const KEY = 'harness-ui-v2';
   let cfg = null;
-  let state = { cwd: null, panes: {} };
-  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.panes) state = s; } catch {}
+  let state = { cwd: null, panes: {}, open: null, right: true };
+  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.panes) state = Object.assign(state, s); } catch {}
+  if (!state.open) { try { const old = JSON.parse(localStorage.getItem('harness-ui-v1') || 'null'); if (old && old.panes) state.panes = old.panes; } catch {} }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
-  const $cwd = document.getElementById('cwd'), $info = document.getElementById('cwdInfo'), $banner = document.getElementById('banner');
-  const $owner = document.getElementById('owner'), $journal = document.getElementById('journal');
+  const $ = (id) => document.getElementById(id);
+  const $cwd = $('cwd'), $info = $('cwdInfo'), $banner = $('banner'), $threads = $('threads'), $askCount = $('askCount');
+  const $seats = $('seats'), $center = $('center'), $empty = $('empty'), $right = $('right'), $asks = $('asks'), $inbox = $('inbox'), $journal = $('journal');
   const panes = {};
   const LABEL = { owner: 'владелец', harness: 'харнесс' };
   const labelOf = (id) => (panes[id] && panes[id].label) || LABEL[id] || id;
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const fmtDate = (t) => { const d = new Date(t > 1e12 ? t : t * 1000); return isNaN(d) ? '' : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); };
+  const hm = (ts) => { const t = new Date(ts); return isNaN(t) ? '' : t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); };
   const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const recHead = (r) => `#${r.seq} · ${r.kind} · от ${labelOf(r.from)}` + (r.thread ? ` · тред ${r.thread}` : '') + (r.reply_to != null ? ` · ответ на #${r.reply_to}` : '');
+  const vendorName = (v) => v === 'codex' ? 'Codex' : 'Claude';
+  const modelLabel = (vendor, id) => { const m = ((cfg && cfg.models[vendor]) || []).find(x => x.id === id); return m ? m.label : (id || ''); };
+
+  // ---- открытые окна: владелец сам выбирает, сколько и какие ----
+  const isOpen = (id) => (state.open || []).includes(id);
+  function setOpen(id, on) {
+    const cur = state.open || [];
+    if (on && !cur.includes(id)) state.open = cur.concat([id]);
+    if (!on) state.open = cur.filter(x => x !== id);
+    save(); layout();
+  }
+  function layout() {
+    for (const p of Object.values(panes)) if (p.root.parentNode) p.root.remove();
+    const ids = (state.open || []).filter(id => panes[id]);
+    for (const id of ids) $center.appendChild(panes[id].root);
+    $empty.classList.toggle('hidden', ids.length > 0);
+    for (const id of ids) panes[id].scroll();
+    teamRefresh();
+  }
+  function teamRefresh() {
+    for (const p of Object.values(panes)) {
+      const r = p.row; if (!r) continue;
+      r.classList.toggle('open', isOpen(p.id));
+      r.classList.toggle('busy', !!p.busy);
+      r.classList.toggle('ask', p.asks.size > 0);
+      r.querySelector('.r').textContent = vendorName(p.vendor) + ' · ' + modelLabel(p.vendor, p.s.model) + (p.busy ? ' · думает…' : '');
+      const q = r.querySelector('.b.q'); q.textContent = p.pending ? String(p.pending) : ''; q.classList.toggle('hidden', !p.pending);
+      const a = r.querySelector('.b.a'); a.classList.toggle('hidden', p.asks.size === 0);
+    }
+  }
+  function seatRow(p) {
+    const r = el('div', 'seat'); r.title = 'Открыть или закрыть окно';
+    r.appendChild(el('span', 'dot'));
+    const t = el('div', 't'); t.append(el('div', 'n', p.label + (p.role && p.role !== p.id ? ' · ' + p.role : '')), el('div', 'r', '')); r.appendChild(t);
+    r.appendChild(el('span', 'b q hidden', ''));
+    const a = el('span', 'b a hidden', 'карточка'); a.title = 'Ждёт твоего решения'; r.appendChild(a);
+    r.onclick = () => setOpen(p.id, !isOpen(p.id));
+    return r;
+  }
+  $('openAll').onclick = () => { state.open = Object.keys(panes); save(); layout(); };
+  $('closeAll').onclick = () => { state.open = []; save(); layout(); };
+
+  // ---- правая колонка: карточки и записи владельцу ----
+  function setRight(on) { state.right = on; save(); $right.classList.toggle('hidden', !on); }
+  $('rightBtn').onclick = () => setRight($right.classList.contains('hidden'));
+  $askCount.onclick = () => { setRight(true); $asks.scrollIntoView(); };
+  function asksRefresh() {
+    $asks.innerHTML = ''; let n = 0;
+    for (const p of Object.values(panes)) for (const a of p.asks.values()) {
+      n++;
+      const c = el('div', 'ask');
+      c.appendChild(el('div', 't', p.label + ': ' + a.title));
+      c.appendChild(el('div', 'd', (a.detail || '').slice(0, 600)));
+      const b = el('div', 'btns');
+      const ok = el('button', 'primary', 'Разрешить'); const no = el('button', null, 'Отказать');
+      ok.onclick = () => post('/api/approve', { pane: p.id, id: a.id, decision: 'allow' });
+      no.onclick = () => post('/api/approve', { pane: p.id, id: a.id, decision: 'deny' });
+      const go = el('button', null, 'в окно'); go.title = 'Открыть это окно'; go.onclick = () => setOpen(p.id, true);
+      b.append(ok, document.createTextNode(' '), no, document.createTextNode(' '), go);
+      c.appendChild(b); $asks.appendChild(c);
+    }
+    if (!n) $asks.appendChild(el('div', 'none', 'ничего не ждёт'));
+    $askCount.textContent = 'ждут решения: ' + n; $askCount.classList.toggle('hidden', !n);
+    teamRefresh();
+  }
+  function inboxAdd(r, prepend) {
+    const d = el('div', 'in');
+    const h = el('div', 'h');
+    h.append(el('span', 'k ' + r.kind, r.kind), el('span', null, '#' + r.seq + ' от ' + labelOf(r.from)));
+    if (r.thread) h.appendChild(el('span', null, 'тред ' + r.thread));
+    h.appendChild(el('span', null, hm(r.ts)));
+    const x = el('div', 'x', r.text || ''); x.onclick = () => x.classList.toggle('full');
+    d.append(h, x);
+    if (prepend) $inbox.prepend(d); else $inbox.appendChild(d);
+    while ($inbox.children.length > 100) $inbox.lastChild.remove();
+  }
+  async function inboxInit() {
+    try {
+      const d = await (await fetch('/api/journal?limit=200')).json();
+      $inbox.innerHTML = '';
+      for (const r of d.records.slice().reverse()) if ((r.to || []).includes('owner') && r.from !== 'owner') inboxAdd(r, false);
+      renderThreads(d.threads);
+    } catch {}
+  }
+  function renderThreads(th) {
+    $threads.innerHTML = '';
+    for (const [k, t] of Object.entries(th || {})) {
+      const c = el('span', 'chip' + (t.merged ? ' merged' : (t.accepted ? ' accepted' : '')),
+        `${k} · р.${t.rounds}` + (t.lastScore != null ? ` · ${t.lastScore}` : '') + (t.merged ? ` · слито ${String(t.merged).slice(0, 7)}` : (t.accepted ? ' · принято' : '')));
+      c.title = (t.sha ? 'SHA ' + t.sha : 'без SHA') + (t.merged ? '\nслито как ' + t.merged : '');
+      $threads.appendChild(c);
+    }
+  }
 
   class Pane {
     constructor(info) {
-      this.id = info.id; this.vendor = info.vendor; this.label = info.label;
+      this.id = info.id; this.vendor = info.vendor; this.label = info.label; this.role = info.role; this.branch = info.branch;
       this.s = state.panes[this.id] || (state.panes[this.id] = {});
-      this.busy = false; this.box = null; this.recEls = {};
+      this.busy = false; this.pending = 0; this.box = null; this.recEls = {}; this.asks = new Map();
       const root = el('div', 'pane');
       const header = el('header');
-      this.name = el('span', 'name', this.label + (info.role && info.role !== this.id ? ' · ' + info.role : '') + ' · ' + (this.vendor === 'codex' ? 'Codex' : 'Claude'));
-      this.name.title = 'Свернуть / развернуть окно'; this.name.style.cursor = 'pointer';
-      this.name.onclick = () => this.toggle();
-      header.appendChild(this.name);
-      this.pend = el('span', 'pend', ''); header.appendChild(this.pend);
+      this.name = el('span', 'name', this.label + (this.role && this.role !== this.id ? ' · ' + this.role : ''));
+      this.sub = el('span', 'sub', '');
+      this.pend = el('span', 'pend', '');
+      const gear = el('button', 'icon', '⚙'); gear.title = 'Модель, доступ, разговор, сводка';
+      const close = el('button', 'icon', '×'); close.title = 'Закрыть окно (место продолжает работать)';
+      header.append(this.name, this.sub, this.pend, gear, close);
+      const settings = el('div', 'settings');
       this.model = el('select'); this.model.title = 'Модель';
       this.mode = el('select'); this.mode.title = 'Доступ к папке';
       this.conv = el('select', 'conv'); this.conv.title = 'Разговор';
       this.newBtn = el('button', null, 'Новый');
       const chk = el('label', 'chk'); this.digest = el('input'); this.digest.type = 'checkbox'; chk.append(this.digest, document.createTextNode('сводка соседей'));
-      header.append(this.model, this.mode, this.conv, this.newBtn, chk);
+      settings.append(this.model, this.mode, this.conv, this.newBtn, chk);
+      gear.onclick = () => settings.classList.toggle('on');
+      close.onclick = () => setOpen(this.id, false);
       this.log = el('main');
       const footer = el('footer'); const row = el('div', 'row');
       this.kind = el('select', 'kind'); this.kind.title = 'Вид записи';
-      for (const k of ['task', 'question', 'note', 'decision', 'resume', 'stop']) { const o = el('option', null, k); o.value = k; this.kind.appendChild(o); }
-      this.input = el('textarea'); this.input.placeholder = 'Сообщение… (Enter — в очередь, Shift+Enter — новая строка)';
+      for (const k of (cfg.ownerKinds || ['task', 'question', 'note', 'decision', 'resume', 'stop'])) { const o = el('option', null, k); o.value = k; this.kind.appendChild(o); }
+      this.thread = el('input', 'thread'); this.thread.placeholder = 'тред'; this.thread.title = 'Тред: пусто — для task заведётся новый';
+      this.input = el('textarea'); this.input.placeholder = 'Сообщение… (Enter — отправить, Shift+Enter — новая строка)';
       this.sendBtn = el('button', 'primary', 'Отправить');
-      this.steerBtn = el('button', null, 'Вмешаться'); this.steerBtn.title = 'Прямая инструкция в идущий ход'; this.steerBtn.disabled = true;
-      this.stopBtn = el('button', 'danger', 'Стоп'); this.stopBtn.disabled = true;
-      row.append(this.kind, this.input, this.sendBtn, this.steerBtn, this.stopBtn);
+      this.steerBtn = el('button', 'hidden', 'Вмешаться'); this.steerBtn.title = 'Прямая инструкция в идущий ход';
+      this.stopBtn = el('button', 'danger hidden', 'Стоп');
+      row.append(this.kind, this.thread, el('span', 'sp'), this.steerBtn, this.stopBtn, this.sendBtn);
       this.status = el('div', 'status');
-      footer.append(row, this.status);
-      root.append(header, this.log, footer);
+      footer.append(this.input, row, this.status);
+      root.append(header, settings, this.log, footer);
       this.root = root;
-      document.getElementById('panes').appendChild(root);
-      if (this.s.collapsed) this.toggle(true);
+      this.row = seatRow(this); $seats.appendChild(this.row);
 
       for (const m of cfg.models[this.vendor] || []) { const o = el('option', null, m.label); o.value = m.id; this.model.appendChild(o); }
       for (const m of cfg.modes) { const o = el('option', null, m.label); o.value = m.id; this.mode.appendChild(o); }
@@ -131,9 +294,10 @@
       this.s.model = this.model.value; this.s.mode = this.mode.value; this.s.digest = this.digest.checked; save();
       if (info.touched) this.adopt(info);
       this.setPending(info.pending || 0);
+      this.updateSub();
 
-      this.model.onchange = () => { this.s.model = this.model.value; save(); this.report(); };
-      this.mode.onchange = () => { this.s.mode = this.mode.value; save(); this.report(); this.setStatus('Режим: ' + this.modeLabel()); };
+      this.model.onchange = () => { this.s.model = this.model.value; save(); this.report(); this.updateSub(); };
+      this.mode.onchange = () => { this.s.mode = this.mode.value; save(); this.report(); this.updateSub(); this.setStatus('Режим: ' + this.modeLabel()); };
       this.digest.onchange = () => { this.s.digest = this.digest.checked; save(); this.report(); };
       this.conv.onchange = () => { const id = this.conv.value; if (id) this.open(id); else this.newChat(); };
       this.newBtn.onclick = () => this.newChat();
@@ -142,26 +306,21 @@
       this.stopBtn.onclick = () => post('/api/interrupt', { pane: this.id });
       this.input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); } });
 
-      this.es = new EventSource('/api/events/' + this.id);
-      this.es.onmessage = (m) => { try { this.handle(JSON.parse(m.data)); } catch {} };
-      this.es.onopen = () => { if (state.cwd && !this.adoptedOnce && !info.touched) this.report(); this.adoptedOnce = true; };
+      this.touched = !!info.touched;
     }
     adopt(st) {
       if (st.model && [...this.model.options].some(o => o.value === st.model)) { this.model.value = st.model; this.s.model = st.model; }
       if (st.mode && [...this.mode.options].some(o => o.value === st.mode)) { this.mode.value = st.mode; this.s.mode = st.mode; }
       if (typeof st.digest === 'boolean') { this.digest.checked = st.digest; this.s.digest = st.digest; }
       if ('sessionId' in st && st.sessionId !== this.s.sessionId) { this.s.sessionId = st.sessionId || null; if (this.conv) this.conv.value = this.s.sessionId || ''; }
-      save();
-    }
-    toggle(force) {
-      const on = force != null ? force : !this.root.classList.contains('collapsed');
-      this.root.classList.toggle('collapsed', on);
-      this.s.collapsed = on; save();
+      if (st.branch !== undefined) this.branch = st.branch;
+      save(); this.updateSub();
     }
     modeLabel() { return this.mode.selectedOptions[0] ? this.mode.selectedOptions[0].text : ''; }
+    updateSub() { this.sub.textContent = vendorName(this.vendor) + ' · ' + modelLabel(this.vendor, this.s.model) + ' · ' + this.modeLabel() + ' · ' + (this.branch ? 'ветка ' + this.branch : 'корень'); teamRefresh(); }
     setStatus(t) { this.status.textContent = t; }
-    setPending(n) { this.pend.textContent = n ? `очередь: ${n}` : ''; }
-    setBusy(b) { this.busy = b; this.stopBtn.disabled = !b; this.steerBtn.disabled = !b; }
+    setPending(n) { this.pending = n || 0; this.pend.textContent = n ? `очередь: ${n}` : ''; teamRefresh(); }
+    setBusy(b) { this.busy = b; this.stopBtn.classList.toggle('hidden', !b); this.steerBtn.classList.toggle('hidden', !b); teamRefresh(); }
     scroll() { this.log.scrollTop = this.log.scrollHeight; }
     add(role, text) { const d = el('div', 'msg ' + role, text); this.log.appendChild(d); this.scroll(); return d; }
     meta(text, isErr) { const d = el('div', 'meta' + (isErr ? ' error' : ''), text); this.log.appendChild(d); this.scroll(); }
@@ -187,7 +346,7 @@
           const old = this.recEls[r.seq];
           if (r.from === 'owner') {
             if (old) { old.classList.remove('pending'); const q = old.querySelector('.q'); if (q) q.textContent = q.textContent.replace(' · в очереди', ''); }
-            else { const d = this.add('me', ''); d.appendChild(el('span', 'q', `#${r.seq} · ${r.kind}`)); d.appendChild(document.createTextNode(r.text)); }
+            else { const d = this.add('me', ''); d.appendChild(el('span', 'q', `#${r.seq} · ${r.kind}` + (r.thread ? ` · тред ${r.thread}` : ''))); d.appendChild(document.createTextNode(r.text)); }
           } else {
             if (old) old.remove();
             const d = this.add('peer', ''); d.appendChild(el('b', null, recHead(r))); d.appendChild(document.createTextNode(r.text)); this.scroll();
@@ -209,9 +368,12 @@
       else if (ev.type === 'toolError') { this.box = null; this.toolLine('✕ ' + ev.text, 'error'); }
       else if (ev.type === 'peerReply') { this.box = null; this.toolLine('↩ ответ ' + labelOf(ev.from) + (ev.seq ? ` (#${ev.seq})` : '') + ': ' + ev.text, 'reply'); }
       else if (ev.type === 'note') { this.toolLine('ⓘ ' + ev.text); }
-      else if (ev.type === 'approval') { this.box = null; this.askCard(ev); }
-      else if (ev.type === 'approvalResolved') { const c = this.log.querySelector('[data-ask="' + ev.id + '"]'); if (c) { c.classList.add('resolved'); c.querySelector('.btns').textContent = ev.decision === 'allow' ? 'разрешено' : (ev.decision === 'deny' ? 'отказано' : 'время вышло, отказано'); } }
-      else if (ev.type === 'done') {
+      else if (ev.type === 'approval') { this.box = null; this.asks.set(ev.id, ev); asksRefresh(); this.askCard(ev); }
+      else if (ev.type === 'approvalResolved') {
+        this.asks.delete(ev.id); asksRefresh();
+        const c = this.log.querySelector('[data-ask="' + ev.id + '"]');
+        if (c) { c.classList.add('resolved'); c.querySelector('.btns').textContent = ev.decision === 'allow' ? 'разрешено' : (ev.decision === 'deny' ? 'отказано' : 'время вышло, отказано'); }
+      } else if (ev.type === 'done') {
         this.box = null;
         this.s.sessionId = ev.sessionId || this.s.sessionId; save();
         const u = ev.usage || {};
@@ -230,6 +392,7 @@
       }
     }
     askCard(ev) {
+      if (this.log.querySelector('[data-ask="' + ev.id + '"]')) return;
       const c = el('div', 'ask'); c.dataset.ask = ev.id;
       c.appendChild(el('div', 't', ev.title));
       c.appendChild(el('div', 'd', ev.detail || ''));
@@ -255,15 +418,15 @@
       this.s.sessionId = id; save(); this.report();
       this.log.innerHTML = ''; this.box = null;
       for (const m of messages) this.add(m.role, m.text);
+      for (const a of this.asks.values()) this.askCard(a);
       this.conv.value = id;
       this.setStatus('Сессия ' + id.slice(0, 8) + ' · продолжение');
-      this.input.focus();
     }
     newChat() {
       this.s.sessionId = null; save(); this.report();
       this.log.innerHTML = ''; this.box = null; this.conv.value = '';
+      for (const a of this.asks.values()) this.askCard(a);
       this.setStatus('Новый разговор · ' + this.modeLabel());
-      this.input.focus();
     }
     async send() {
       const text = this.input.value.trim();
@@ -271,8 +434,12 @@
       if (!state.cwd) { this.meta('Сначала укажи папку проекта сверху', true); return; }
       this.input.value = '';
       try {
-        const r = await post('/api/chat', { pane: this.id, message: text, kind: this.kind.value, model: this.s.model, mode: this.s.mode, sessionId: this.s.sessionId, digest: this.digest.checked });
-        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + r.status)); }
+        const body = { pane: this.id, message: text, kind: this.kind.value, model: this.s.model, mode: this.s.mode, sessionId: this.s.sessionId, digest: this.digest.checked };
+        const th = this.thread.value.trim(); if (th) body.thread = th;
+        const r = await post('/api/chat', body);
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+        if (this.kind.value === 'task' && d.thread && !th) this.thread.value = d.thread;
         if (this.kind.value === 'stop') this.kind.value = 'task';
       } catch (e) { this.meta('Ошибка: ' + e.message, true); }
     }
@@ -298,53 +465,50 @@
   async function applyCwd(newCwd) {
     const r = await post('/api/project', { path: newCwd });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.ok) { $info.textContent = d.error || ('HTTP ' + r.status); $info.className = 'status error'; return false; }
+    if (!r.ok || !d.ok) { $info.textContent = d.error || ('HTTP ' + r.status); $info.className = 'error'; return false; }
     state.cwd = d.project; save();
     $cwd.value = d.project;
-    $info.className = 'status';
-    $info.textContent = 'линия .harness в этой папке';
+    $info.className = '';
+    $info.textContent = 'линия .harness здесь';
     if (d.changed) { location.reload(); return true; }
     await refreshLists();
     journalRefresh(true);
     return true;
   }
-  document.getElementById('applyCwd').onclick = () => applyCwd($cwd.value.trim());
+  $('applyCwd').onclick = () => applyCwd($cwd.value.trim());
   $cwd.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyCwd($cwd.value.trim()); });
 
-  // ---- журнал линии ----
+  // ---- журнал линии и треды ----
   let journalOpen = false, journalTimer = null;
-  document.getElementById('journalBtn').onclick = () => { journalOpen = !journalOpen; $journal.style.display = journalOpen ? 'block' : 'none'; if (journalOpen) journalRefresh(true); };
+  $('journalBtn').onclick = () => { journalOpen = !journalOpen; $journal.style.display = journalOpen ? 'block' : 'none'; if (journalOpen) journalRefresh(true); };
   function journalRefresh(force) {
-    if (!journalOpen && !force) return;
     clearTimeout(journalTimer);
     journalTimer = setTimeout(async () => {
       try {
-        const d = await (await fetch('/api/journal?limit=120')).json();
+        const d = await (await fetch('/api/journal?limit=' + (journalOpen ? 120 : 1))).json();
+        renderThreads(d.threads);
+        if (!journalOpen && !force) return;
         $journal.innerHTML = '';
-        const th = d.threads || {};
-        const keys = Object.keys(th);
-        if (keys.length) $journal.appendChild(el('div', 'r', 'Треды: ' + keys.map(k => `${k}: раунд ${th[k].rounds}` + (th[k].lastScore != null ? `, балл ${th[k].lastScore}` : '') + (th[k].accepted ? ', принято' : '') + (th[k].sha ? ` ${String(th[k].sha).slice(0, 8)}` : '') + (th[k].merged ? ` → слито ${String(th[k].merged).slice(0, 8)}` : '')).join(' · ')));
         for (const r of d.records.slice().reverse()) {
-          const t = new Date(r.ts); const hm = isNaN(t) ? '' : t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-          $journal.appendChild(el('div', 'r', `#${r.seq} ${hm} ${labelOf(r.from)} → ${(r.to || []).map(labelOf).join(',')} · ${r.kind}` + (r.thread ? ` · ${r.thread}` : '') + (r.reply_to != null ? ` · ↩#${r.reply_to}` : '') + ': ' + String(r.text || '').replace(/\s+/g, ' ').slice(0, 140)));
+          $journal.appendChild(el('div', 'r', `#${r.seq} ${hm(r.ts)} ${labelOf(r.from)} → ${(r.to || []).map(labelOf).join(',')} · ${r.kind}` + (r.thread ? ` · ${r.thread}` : '') + (r.reply_to != null ? ` · ↩#${r.reply_to}` : '') + ': ' + String(r.text || '').replace(/\s+/g, ' ').slice(0, 140)));
         }
       } catch {}
     }, 400);
   }
 
-  // ---- записи владельцу: эскалации, отказы, отчёты ----
-  const ownerEs = new EventSource('/api/events/owner');
-  ownerEs.onmessage = (m) => {
-    try {
-      const ev = JSON.parse(m.data);
-      if (ev.type !== 'owner') return;
-      const r = ev.record;
-      $owner.style.display = 'block';
-      const d = el('div', 'o', `⚑ #${r.seq} ${r.kind} от ${labelOf(r.from)}` + (r.thread ? ` · тред ${r.thread}` : '') + ': ' + r.text);
-      $owner.prepend(d);
-      while ($owner.children.length > 5) $owner.lastChild.remove();
-    } catch {}
-  };
+  // ---- один поток событий на всю страницу: браузер держит не больше шести соединений на адрес ----
+  function connectEvents() {
+    const es = new EventSource('/api/events/all');
+    es.onmessage = (m) => {
+      try {
+        const ev = JSON.parse(m.data);
+        if (ev.pane === 'owner') { if (ev.type === 'owner') { inboxAdd(ev.record, true); journalRefresh(); } return; }
+        const p = panes[ev.pane]; if (p) p.handle(ev);
+      } catch {}
+    };
+    es.onopen = () => { for (const p of Object.values(panes)) { if (state.cwd && !p.adoptedOnce && !p.touched) p.report(); p.adoptedOnce = true; } };
+    return es;
+  }
 
   (async () => {
     try {
@@ -354,10 +518,19 @@
       if (!cfg.auth.codex || !cfg.auth.codex.loggedIn) warn.push('Codex: вход не выполнен — в Терминале <code>codex login</code>');
       for (const e of (cfg.lineErrors || [])) warn.push('Линия: ' + e);
       if (warn.length) { $banner.style.display = 'block'; $banner.innerHTML = warn.join(' · '); }
+      state.cwd = cfg.project; $cwd.value = cfg.project; $info.textContent = 'линия .harness здесь';
       for (const info of cfg.panes) panes[info.id] = new Pane(info);
-      state.cwd = cfg.project; save(); $cwd.value = cfg.project; $info.textContent = 'линия .harness в этой папке';
+      connectEvents();
+      if (!state.open) state.open = panes.orchestrator ? ['orchestrator'] : (cfg.panes[0] ? [cfg.panes[0].id] : []);
+      state.open = state.open.filter(id => panes[id]);
+      save();
+      setRight(state.right !== false);
+      renderThreads(cfg.threads);
+      layout();
+      asksRefresh();
       await refreshLists();
       for (const p of Object.values(panes)) if (p.s.sessionId) await p.open(p.s.sessionId); else p.newChat();
+      inboxInit();
       document.title = 'Харнесс' + (cfg.auth.codex && cfg.auth.codex.email ? ' · ' + cfg.auth.codex.email : '');
     } catch (e) {
       $banner.style.display = 'block'; $banner.textContent = 'Сервер не отвечает: ' + e.message;

@@ -109,6 +109,17 @@ class Pane:
         return True
 
 
+class TaggedSubscriber:
+    """Подписчик-переходник для общего потока: помечает событие именем окна и кладёт в одну очередь страницы.
+    Браузер держит не больше шести соединений на адрес, а мест семь плюс владелец — потому поток один."""
+
+    def __init__(self, queue: asyncio.Queue, pane_id: str):
+        self.queue, self.pane_id = queue, pane_id
+
+    def put_nowait(self, ev: dict) -> None:
+        self.queue.put_nowait({**ev, "pane": self.pane_id})       # QueueFull пробрасывается — издатель отпишет нас сам
+
+
 class Registry:
     """Окна линии, построенные из мест манифеста."""
 

@@ -19,7 +19,7 @@ from .claude_provider import CLAUDE_BIN, ClaudeProvider, child_env
 from .codex_provider import CodexProvider
 from .evidence import check_report, resolve_evidence
 from .journal import KINDS, REPLY_KIND, Journal, JournalError
-from .panes import MODES, Pane, Registry
+from .panes import MODES, Pane, Registry, TaggedSubscriber
 from .policy import Policy, PolicyError
 from .team import Team, TeamError, ensure_line, load_team
 
@@ -590,18 +590,30 @@ class App:
         return web.json_response({"ok": True, "pane": p.settings()})
 
     async def events(self, request):
+        """Поток событий: `all` — одно соединение на страницу со всеми окнами и владельцем (событие несёт `pane`),
+        иначе поток одного окна. Браузер держит не больше шести соединений на адрес, потому страница берёт `all`."""
         pid = request.match_info["id"]
-        p = self.owner if pid == OWNER else self.registry.get(pid)
-        if not p:
-            return web.json_response({"error": "нет окна"}, status=404)
+        if pid == "all":
+            sources = {OWNER: self.owner, **{p.id: p for p in self.registry.panes.values()}}
+        else:
+            p = self.owner if pid == OWNER else self.registry.get(pid)
+            if not p:
+                return web.json_response({"error": "нет окна"}, status=404)
+            sources = {pid: p}
         resp = web.StreamResponse(headers={"Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
         await resp.prepare(request)
-        q: asyncio.Queue = asyncio.Queue(maxsize=2000)
-        p.subscribers.add(q)
+        q: asyncio.Queue = asyncio.Queue(maxsize=4000)
+        subs = {sid: (TaggedSubscriber(q, sid) if pid == "all" else q) for sid in sources}
+        for sid, src in sources.items():
+            src.subscribers.add(subs[sid])
         try:
             await resp.write(b": ok\n\n")
-            for a in list(p.approvals.values()):
-                await resp.write(f"data: {json.dumps({'type': 'approval', 'id': a.id, 'title': a.title, 'detail': a.detail}, ensure_ascii=False)}\n\n".encode())
+            for sid, src in sources.items():
+                for a in list(src.approvals.values()):
+                    ev = {"type": "approval", "id": a.id, "title": a.title, "detail": a.detail}
+                    if pid == "all":
+                        ev["pane"] = sid
+                    await resp.write(f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode())
             while True:
                 try:
                     ev = await asyncio.wait_for(q.get(), 15)
@@ -611,7 +623,8 @@ class App:
         except (ConnectionResetError, asyncio.CancelledError, RuntimeError):
             pass
         finally:
-            p.subscribers.discard(q)
+            for sid, src in sources.items():
+                src.subscribers.discard(subs[sid])
         return resp
 
     async def chat(self, request):
