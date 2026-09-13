@@ -1,11 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    {
-      "name": "chat",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["server.mjs"],
-      "port": 3777
-    }
+    { "name": "chat", "runtimeExecutable": ".venv/bin/python", "runtimeArgs": ["-m", "app.server"], "port": 3777 }
   ]
 }

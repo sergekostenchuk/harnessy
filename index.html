@@ -3,28 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Чат Claude</title>
+<title>Чат Claude + Codex</title>
 <style>
-  :root { color-scheme: light dark; --bg:#f6f6f4; --fg:#1b1b1b; --muted:#6b6b6b; --me:#dfe9ff; --ai:#ffffff; --peer:#efe4ff; --line:#dcdcd7; --accent:#3b6cff; --err:#b3261e; --tool:#5a5a5a; --toolbg:#ecece8; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --me:#243a6b; --ai:#222222; --peer:#3a2a5a; --line:#333; --accent:#7b9cff; --err:#ff8a80; --tool:#b0b0b0; --toolbg:#1f1f1f; } }
+  :root { color-scheme: light dark; --bg:#f6f6f4; --fg:#1b1b1b; --muted:#6b6b6b; --me:#dfe9ff; --ai:#ffffff; --peer:#efe4ff; --line:#dcdcd7; --accent:#3b6cff; --err:#b3261e; --tool:#5a5a5a; --toolbg:#ecece8; --ask:#fff3cd; --askfg:#5c4400; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --me:#243a6b; --ai:#222222; --peer:#3a2a5a; --line:#333; --accent:#7b9cff; --err:#ff8a80; --tool:#b0b0b0; --toolbg:#1f1f1f; --ask:#4a3d12; --askfg:#ffe9a8; } }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; height:100vh; display:flex; flex-direction:column; }
   #top { display:flex; gap:8px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
   #top label { color:var(--muted); }
   #cwd { flex:1; min-width:280px; font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); }
   select, button, input { font:inherit; }
-  select, button { padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); max-width:220px; }
+  select, button { padding:5px 8px; border:1px solid var(--line); border-radius:8px; background:var(--ai); color:var(--fg); max-width:200px; }
   button.primary { background:var(--accent); color:#fff; border-color:transparent; }
+  button.danger { color:var(--err); }
   button:disabled { opacity:.5; }
-  #banner { display:none; padding:8px 12px; background:#fff3cd; color:#5c4400; border-bottom:1px solid #e6d9a3; }
+  #banner { display:none; padding:8px 12px; background:var(--ask); color:var(--askfg); border-bottom:1px solid var(--line); }
   #banner code { background:rgba(0,0,0,.08); padding:2px 5px; border-radius:4px; }
   #panes { flex:1; display:flex; min-height:0; }
   .pane { flex:1; min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--line); }
   .pane:last-child { border-right:none; }
-  .pane header { display:flex; gap:6px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
-  .pane header .name { color:var(--muted); font-size:12px; }
-  .pane header .conv { flex:1; min-width:120px; }
-  .pane main { flex:1; overflow:auto; padding:12px 10px; }
+  .pane header { display:flex; gap:6px; align-items:center; padding:6px 8px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .pane header .name { font-weight:600; font-size:12px; }
+  .pane header .conv { flex:1; min-width:100px; }
+  .pane header label.chk { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:4px; }
+  .pane main { flex:1; overflow:auto; padding:10px 8px; }
   .msg { margin:0 0 10px; padding:9px 12px; border-radius:12px; white-space:pre-wrap; word-wrap:break-word; }
   .me { background:var(--me); }
   .ai { background:var(--ai); border:1px solid var(--line); }
@@ -34,7 +36,11 @@
   .tool.reply { white-space:pre-wrap; max-height:120px; overflow:auto; }
   .meta { margin:-4px 0 12px; font-size:12px; color:var(--muted); }
   .error { color:var(--err); }
-  .pane footer { border-top:1px solid var(--line); padding:8px 10px; }
+  .ask { margin:0 0 10px; padding:10px 12px; border-radius:10px; background:var(--ask); color:var(--askfg); border:1px solid var(--line); }
+  .ask .t { font-weight:600; margin-bottom:4px; }
+  .ask .d { white-space:pre-wrap; font-size:13px; margin-bottom:8px; word-wrap:break-word; }
+  .ask.resolved { opacity:.6; }
+  .pane footer { border-top:1px solid var(--line); padding:8px; }
   .row { display:flex; gap:6px; align-items:flex-end; }
   textarea { flex:1; min-height:40px; max-height:200px; resize:vertical; font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--ai); color:var(--fg); }
   .status { margin-top:4px; font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -51,107 +57,136 @@
 <div id="panes"></div>
 <script>
 (() => {
-  const KEY = 'simple-claude-chat-v2';
-  const NAMES = { left: 'левое окно', right: 'правое окно' };
+  const KEY = 'simple-claude-chat-v3';
   let cfg = null;
-  let state = { cwd: null, panes: [{}, {}] };
-  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && Array.isArray(s.panes) && s.panes.length === 2) state = s; } catch {}
+  let state = { cwd: null, panes: {} };
+  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s && s.panes) state = s; } catch {}
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
   const $cwd = document.getElementById('cwd'), $info = document.getElementById('cwdInfo'), $banner = document.getElementById('banner');
-  const panes = [];
-
-  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-  function fmtDate(iso) { const d = new Date(iso); return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
+  const panes = {};
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const fmtDate = (t) => { const d = new Date(t > 1e12 ? t : t * 1000); return isNaN(d) ? '' : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); };
+  const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
   class Pane {
-    constructor(idx, id) {
-      this.idx = idx; this.id = id;
-      this.s = state.panes[idx];
-      this.busy = false;
-      this.box = null;
+    constructor(info) {
+      this.id = info.id; this.vendor = info.vendor; this.label = info.label;
+      this.s = state.panes[this.id] || (state.panes[this.id] = {});
+      this.busy = false; this.box = null;
       const root = el('div', 'pane');
       const header = el('header');
-      header.appendChild(el('span', 'name', NAMES[id]));
+      header.appendChild(el('span', 'name', this.label + ' · ' + (this.vendor === 'codex' ? 'Codex' : 'Claude')));
       this.model = el('select'); this.model.title = 'Модель';
       this.mode = el('select'); this.mode.title = 'Доступ к папке';
       this.conv = el('select', 'conv'); this.conv.title = 'Разговор';
       this.newBtn = el('button', null, 'Новый');
-      header.append(this.model, this.mode, this.conv, this.newBtn);
+      const chk = el('label', 'chk'); this.digest = el('input'); this.digest.type = 'checkbox'; chk.append(this.digest, document.createTextNode('видит соседей'));
+      header.append(this.model, this.mode, this.conv, this.newBtn, chk);
       this.log = el('main');
-      const footer = el('footer');
-      const row = el('div', 'row');
+      const footer = el('footer'); const row = el('div', 'row');
       this.input = el('textarea'); this.input.placeholder = 'Сообщение… (Enter — отправить, Shift+Enter — новая строка)';
       this.sendBtn = el('button', 'primary', 'Отправить');
-      row.append(this.input, this.sendBtn);
+      this.stopBtn = el('button', 'danger', 'Стоп'); this.stopBtn.disabled = true;
+      row.append(this.input, this.sendBtn, this.stopBtn);
       this.status = el('div', 'status');
       footer.append(row, this.status);
       root.append(header, this.log, footer);
       document.getElementById('panes').appendChild(root);
 
-      for (const m of cfg.models) { const o = el('option', null, m.label); o.value = m.id; this.model.appendChild(o); }
+      for (const m of cfg.models[this.vendor] || []) { const o = el('option', null, m.label); o.value = m.id; this.model.appendChild(o); }
       for (const m of cfg.modes) { const o = el('option', null, m.label); o.value = m.id; this.mode.appendChild(o); }
-      this.model.value = cfg.models.some(m => m.id === this.s.model) ? this.s.model : cfg.defaultModel;
-      this.mode.value = cfg.modes.some(m => m.id === this.s.mode) ? this.s.mode : cfg.defaultMode;
-      this.s.model = this.model.value; this.s.mode = this.mode.value; save();
+      const models = cfg.models[this.vendor] || [];
+      this.model.value = models.some(m => m.id === this.s.model) ? this.s.model : info.model;
+      this.mode.value = cfg.modes.some(m => m.id === this.s.mode) ? this.s.mode : info.mode;
+      this.digest.checked = this.s.digest != null ? !!this.s.digest : !!info.digest;
+      this.s.model = this.model.value; this.s.mode = this.mode.value; this.s.digest = this.digest.checked; save();
 
       this.model.onchange = () => { this.s.model = this.model.value; save(); this.report(); };
       this.mode.onchange = () => { this.s.mode = this.mode.value; save(); this.report(); this.setStatus('Режим: ' + this.modeLabel()); };
+      this.digest.onchange = () => { this.s.digest = this.digest.checked; save(); this.report(); };
       this.conv.onchange = () => { const id = this.conv.value; if (id) this.open(id); else this.newChat(); };
       this.newBtn.onclick = () => this.newChat();
       this.sendBtn.onclick = () => this.send();
+      this.stopBtn.onclick = () => post('/api/interrupt', { pane: this.id });
       this.input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); } });
 
-      // события от сервера: ходы, пришедшие от соседнего окна
-      this.es = new EventSource('/api/events/' + id);
-      this.es.onmessage = (m) => { try { this.handle(JSON.parse(m.data), true); } catch {} };
+      // Сервер — источник истины по окну, если он уже что-то о нём знает (touched); иначе, после его
+      // перезапуска, страница отдаёт ему свои сохранённые настройки.
+      if (info.touched) this.adopt(info);
+      this.es = new EventSource('/api/events/' + this.id);
+      this.es.onmessage = (m) => { try { this.handle(JSON.parse(m.data)); } catch {} };
+      this.es.onopen = () => { if (state.cwd && !this.adoptedOnce) { this.report(); } this.adoptedOnce = true; };
+    }
+    adopt(st) {
+      // принять состояние окна от сервера (после чужого хода, сообщения соседа или в другом браузере)
+      if (st.model && [...this.model.options].some(o => o.value === st.model)) { this.model.value = st.model; this.s.model = st.model; }
+      if (st.mode && [...this.mode.options].some(o => o.value === st.mode)) { this.mode.value = st.mode; this.s.mode = st.mode; }
+      if (typeof st.digest === 'boolean') { this.digest.checked = st.digest; this.s.digest = st.digest; }
+      if ('sessionId' in st && st.sessionId !== this.s.sessionId) { this.s.sessionId = st.sessionId || null; if (this.conv) this.conv.value = this.s.sessionId || ''; }
+      if (st.cwd && st.cwd !== state.cwd) { state.cwd = st.cwd; $cwd.value = st.cwd; }
+      save();
     }
     modeLabel() { return this.mode.selectedOptions[0] ? this.mode.selectedOptions[0].text : ''; }
     setStatus(t) { this.status.textContent = t; }
-    setBusy(b) { this.busy = b; this.sendBtn.disabled = b; }
-    add(role, text) { const d = el('div', 'msg ' + role, text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; return d; }
-    meta(text, isErr) { const d = el('div', 'meta' + (isErr ? ' error' : ''), text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; }
-    toolLine(text, cls) { const d = el('div', 'tool' + (cls ? ' ' + cls : ''), text); this.log.appendChild(d); this.log.scrollTop = this.log.scrollHeight; }
+    setBusy(b) { this.busy = b; this.sendBtn.disabled = b; this.stopBtn.disabled = !b; }
+    scroll() { this.log.scrollTop = this.log.scrollHeight; }
+    add(role, text) { const d = el('div', 'msg ' + role, text); this.log.appendChild(d); this.scroll(); return d; }
+    meta(text, isErr) { const d = el('div', 'meta' + (isErr ? ' error' : ''), text); this.log.appendChild(d); this.scroll(); }
+    toolLine(text, cls) { const d = el('div', 'tool' + (cls ? ' ' + cls : ''), text); this.log.appendChild(d); this.scroll(); }
     async report() {
-      try { await fetch('/api/panes/' + this.id, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: this.s.model, mode: this.s.mode, cwd: state.cwd, sessionId: this.s.sessionId || null }) }); } catch {}
+      try { await post('/api/panes/' + this.id, { model: this.s.model, mode: this.s.mode, cwd: state.cwd, sessionId: this.s.sessionId || null, digest: this.digest.checked }); } catch {}
     }
-    // Общий разбор событий хода: и своего (через fetch), и пришедшего от соседа (через EventSource).
-    handle(ev, fromPeer) {
+    handle(ev) {
       if (ev.type === 'relayStart') {
         this.setBusy(true); this.box = null;
-        const d = this.add('peer', ''); d.appendChild(el('b', null, 'Сообщение от ' + (NAMES[ev.from] || 'соседа'))); d.appendChild(document.createTextNode(ev.text));
-        this.log.scrollTop = this.log.scrollHeight;
+        const d = this.add('peer', ''); d.appendChild(el('b', null, 'Сообщение от ' + (ev.from || 'соседа'))); d.appendChild(document.createTextNode(ev.text)); this.scroll();
         this.setStatus('Отвечает на сообщение соседа…');
       } else if (ev.type === 'delta') {
         if (!this.box) this.box = this.add('ai', '');
-        this.box.textContent += ev.text; this.log.scrollTop = this.log.scrollHeight;
-      } else if (ev.type === 'tool') { this.box = null; this.toolLine('▸ ' + (ev.name === 'mcp__panes__send_to_other' ? 'сообщение соседу' : ev.name) + (ev.detail ? ': ' + ev.detail : '')); }
+        this.box.textContent += ev.text; this.scroll();
+      } else if (ev.type === 'tool') { this.box = null; this.toolLine('▸ ' + ev.name + (ev.detail ? ': ' + ev.detail : '')); }
       else if (ev.type === 'toolError') { this.box = null; this.toolLine('✕ ' + ev.text, 'error'); }
-      else if (ev.type === 'peerReply') { this.box = null; this.toolLine('↩ ответ соседа: ' + ev.text, 'reply'); }
+      else if (ev.type === 'peerReply') { this.box = null; this.toolLine('↩ ответ окна ' + (ev.from || '') + ': ' + ev.text, 'reply'); }
+      else if (ev.type === 'note') { this.toolLine('ⓘ ' + ev.text); }
+      else if (ev.type === 'approval') { this.box = null; this.askCard(ev); }
+      else if (ev.type === 'approvalResolved') { const c = this.log.querySelector('[data-ask="' + ev.id + '"]'); if (c) { c.classList.add('resolved'); c.querySelector('.btns').textContent = ev.decision === 'allow' ? 'разрешено' : (ev.decision === 'deny' ? 'отказано' : 'время вышло, отказано'); } }
       else if (ev.type === 'done') {
         this.box = null;
         this.s.sessionId = ev.sessionId || this.s.sessionId; save();
         const u = ev.usage || {};
         this.meta(`${ev.model} · ${((ev.durationMs || 0) / 1000).toFixed(1)} с · токены вход ${u.input ?? '—'} / выход ${u.output ?? '—'}` + (u.cacheRead ? ` / кэш ${u.cacheRead}` : ''));
         this.setStatus('Сессия ' + (this.s.sessionId || '').slice(0, 8) + ' · ' + ev.model + ' · ' + this.modeLabel());
-        if (fromPeer) { this.setBusy(false); this.report(); refreshLists().catch(() => {}); }
       } else if (ev.type === 'error') {
         this.box = null;
         if (ev.sessionId) { this.s.sessionId = ev.sessionId; save(); }
         this.meta('Ошибка: ' + ev.message, true); this.setStatus('Ошибка');
-        if (fromPeer) { this.setBusy(false); this.report(); }
+      } else if (ev.type === 'state') {
+        this.setBusy(!!ev.busy);
+        this.adopt(ev);
+        refreshLists().catch(() => {});
       }
+    }
+    askCard(ev) {
+      const c = el('div', 'ask'); c.dataset.ask = ev.id;
+      c.appendChild(el('div', 't', ev.title));
+      c.appendChild(el('div', 'd', ev.detail || ''));
+      const btns = el('div', 'btns');
+      const ok = el('button', 'primary', 'Разрешить'); const no = el('button', null, 'Отказать');
+      ok.onclick = () => post('/api/approve', { pane: this.id, id: ev.id, decision: 'allow' });
+      no.onclick = () => post('/api/approve', { pane: this.id, id: ev.id, decision: 'deny' });
+      btns.append(ok, document.createTextNode(' '), no);
+      c.appendChild(btns);
+      this.log.appendChild(c); this.scroll();
     }
     async refreshList(sessions) {
       const cur = this.s.sessionId || '';
       this.conv.innerHTML = '';
       const o0 = el('option', null, '— новый разговор —'); o0.value = ''; this.conv.appendChild(o0);
-      for (const s of sessions) { const o = el('option', null, s.title + ' · ' + fmtDate(s.updated) + ' · ' + s.count); o.value = s.id; this.conv.appendChild(o); }
+      for (const s of sessions) { const o = el('option', null, s.title + (s.updated ? ' · ' + fmtDate(s.updated) : '')); o.value = s.id; this.conv.appendChild(o); }
       this.conv.value = sessions.some(s => s.id === cur) ? cur : '';
-      if (!this.conv.value && cur) { this.s.sessionId = null; save(); }
     }
     async open(id) {
-      const r = await fetch('/api/sessions/' + id + '?cwd=' + encodeURIComponent(state.cwd));
+      const r = await fetch('/api/sessions/' + id + '?pane=' + this.id + '&cwd=' + encodeURIComponent(state.cwd));
       if (!r.ok) { this.meta('Не удалось открыть разговор', true); return; }
       const { messages } = await r.json();
       this.s.sessionId = id; save(); this.report();
@@ -163,8 +198,7 @@
     }
     newChat() {
       this.s.sessionId = null; save(); this.report();
-      this.log.innerHTML = ''; this.box = null;
-      this.conv.value = '';
+      this.log.innerHTML = ''; this.box = null; this.conv.value = '';
       this.setStatus('Новый разговор · ' + this.modeLabel());
       this.input.focus();
     }
@@ -175,42 +209,25 @@
       this.input.value = '';
       this.setBusy(true);
       this.add('me', text); this.box = null;
+      this.setStatus('Модель работает…');
       try {
-        const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pane: this.id, message: text, model: this.s.model, mode: this.s.mode, cwd: state.cwd, sessionId: this.s.sessionId }) });
+        const r = await post('/api/chat', { pane: this.id, message: text, model: this.s.model, mode: this.s.mode, cwd: state.cwd, sessionId: this.s.sessionId, digest: this.digest.checked });
         if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + r.status)); }
-        const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
-        this.setStatus('Модель работает…');
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          let i;
-          while ((i = buf.indexOf('\n\n')) >= 0) {
-            const frame = buf.slice(0, i); buf = buf.slice(i + 2);
-            const line = frame.split('\n').find(l => l.startsWith('data: '));
-            if (line) this.handle(JSON.parse(line.slice(6)), false);
-          }
-        }
       } catch (e) {
-        this.meta('Ошибка: ' + e.message, true);
-      } finally {
-        for (const b of this.log.querySelectorAll('.ai')) if (!b.textContent) b.remove();
-        this.box = null;
-        this.setBusy(false);
-        this.report();
-        refreshLists().catch(() => {});
-        this.input.focus();
+        this.meta('Ошибка: ' + e.message, true); this.setBusy(false);
       }
     }
   }
 
   async function refreshLists() {
     if (!state.cwd) return;
-    const r = await fetch('/api/sessions?cwd=' + encodeURIComponent(state.cwd));
-    if (!r.ok) return;
-    const { sessions } = await r.json();
-    for (const p of panes) await p.refreshList(sessions);
+    await Promise.all(Object.values(panes).map(async (p) => {
+      try {
+        const r = await fetch('/api/sessions?pane=' + p.id + '&cwd=' + encodeURIComponent(state.cwd));
+        const d = await r.json();
+        await p.refreshList(d.sessions || []);
+      } catch {}
+    }));
   }
   async function applyCwd(newCwd, silent) {
     const r = await fetch('/api/dir?cwd=' + encodeURIComponent(newCwd));
@@ -220,11 +237,10 @@
     state.cwd = d.cwd; save();
     $cwd.value = d.cwd;
     $info.className = 'status';
-    $info.textContent = 'Журналы: ' + d.sessionsDir + (d.hasClaudeMd ? ' · в папке есть CLAUDE.md, он попадёт в контекст' : '');
-    if (changed) for (const p of panes) p.newChat();
-    for (const p of panes) p.report();
+    $info.textContent = (d.hasClaudeMd ? 'в папке есть CLAUDE.md' : '') + (d.hasAgentsMd ? (d.hasClaudeMd ? ', ' : '') + 'есть AGENTS.md' : '') || 'папка принята';
+    if (changed) for (const p of Object.values(panes)) p.newChat();
+    for (const p of Object.values(panes)) p.report();
     await refreshLists();
-    if (!changed && !silent) for (const p of panes) if (p.s.sessionId) await p.open(p.s.sessionId);
     return true;
   }
   document.getElementById('applyCwd').onclick = () => applyCwd($cwd.value.trim());
@@ -233,14 +249,16 @@
   (async () => {
     try {
       cfg = await (await fetch('/api/status')).json();
-      if (!cfg.auth || !cfg.auth.loggedIn) {
-        $banner.style.display = 'block';
-        $banner.innerHTML = 'Вход по подписке не выполнен. Открой Терминал и выполни <code>claude login</code>, затем обнови страницу.';
-      }
-      panes.push(new Pane(0, 'left'), new Pane(1, 'right'));
+      const warn = [];
+      if (!cfg.auth.claude || !cfg.auth.claude.loggedIn) warn.push('Claude: вход не выполнен — в Терминале <code>claude login</code>');
+      if (!cfg.auth.codex || !cfg.auth.codex.loggedIn) warn.push('Codex: вход не выполнен — в Терминале <code>codex login</code>' + (cfg.auth.codex && cfg.auth.codex.error ? ' (' + cfg.auth.codex.error + ')' : ''));
+      if (warn.length) { $banner.style.display = 'block'; $banner.innerHTML = warn.join(' · '); }
+      for (const info of cfg.panes) panes[info.id] = new Pane(info);
       const ok = await applyCwd(state.cwd || cfg.defaultDir, true);
       if (!ok) await applyCwd(cfg.defaultDir, true);
-      for (const p of panes) if (p.s.sessionId) await p.open(p.s.sessionId); else p.newChat();
+      for (const p of Object.values(panes)) if (p.s.sessionId) await p.open(p.s.sessionId); else p.newChat();
+      const acc = cfg.auth.codex || {};
+      document.title = 'Чат Claude + Codex' + (acc.email ? ' · ' + acc.email : '');
     } catch (e) {
       $banner.style.display = 'block'; $banner.textContent = 'Сервер не отвечает: ' + e.message;
     }
