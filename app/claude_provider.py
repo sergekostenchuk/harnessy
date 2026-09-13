@@ -41,6 +41,14 @@ def team_note(pane: Pane, registry: Registry) -> str:
             "попросили. В конце ответа кратко перечисли, что сделал и какие файлы изменил." + peer_note(pane, registry))
 
 
+def path_rules(pane: Pane) -> list[str]:
+    """Правила разрешений Claude Code: правки без вопросов только в write_paths места."""
+    out = []
+    for p in pane.write_paths:
+        out += [f"Edit({p}/**)", f"Write({p}/**)", f"MultiEdit({p}/**)"]
+    return out
+
+
 DIGEST_MARK = "\n---\nСообщение тебе:\n"
 
 
@@ -83,22 +91,34 @@ class ClaudeProvider:
         )
         allowed = list(PEER_TOOLS)
         mode = pane.mode
+        role = (self.bridge.app.role_note(pane) if getattr(self.bridge, "app", None) else "").strip()
+        role_block = (role + "\n\n") if role else ""
+        note = role_block + team_note(pane, self.registry)
+        edit_tools = ["Edit", "Write", "MultiEdit"] if pane.write_paths else []
+        if pane.write_paths:
+            allowed += path_rules(pane)
         if mode == "chat":
-            kw.update(tools=[], permission_mode="default", system_prompt=SYSTEM_CHAT + peer_note(pane, self.registry))
+            kw.update(tools=[], permission_mode="default", system_prompt=role_block + SYSTEM_CHAT + peer_note(pane, self.registry))
         elif mode == "read":
-            kw.update(tools=["Read", "Glob", "Grep"], permission_mode="default",
-                      system_prompt={"type": "preset", "preset": "claude_code",
-                                     "append": team_note(pane, self.registry) + " Только читай и анализируй, правок не делай."})
+            kw.update(tools=["Read", "Glob", "Grep"] + edit_tools, permission_mode="default", can_use_tool=self._asker(pane),
+                      system_prompt={"type": "preset", "preset": "claude_code", "append": note + " Только читай и анализируй, правок не делай."})
+        elif mode == "check":
+            allowed += SAFE_BASH
+            kw.update(tools=["Read", "Glob", "Grep", "Bash"] + edit_tools, permission_mode="default", can_use_tool=self._asker(pane),
+                      system_prompt={"type": "preset", "preset": "claude_code", "append": note + " Проверяй прогоном: команды разрешены, правки кода — нет."})
+        elif mode == "web":
+            kw.update(tools=["Read", "Glob", "Grep", "WebFetch", "WebSearch"] + edit_tools, permission_mode="default", can_use_tool=self._asker(pane),
+                      system_prompt={"type": "preset", "preset": "claude_code", "append": note + " Интернет разрешён; каждый факт с источником."})
         elif mode == "ask":
             kw.update(tools=WORK_TOOLS, permission_mode="default", can_use_tool=self._asker(pane),
-                      system_prompt={"type": "preset", "preset": "claude_code", "append": team_note(pane, self.registry)})
+                      system_prompt={"type": "preset", "preset": "claude_code", "append": note})
         elif mode == "edit":
             allowed += SAFE_BASH
             kw.update(tools=WORK_TOOLS, permission_mode="acceptEdits", can_use_tool=self._asker(pane),
-                      system_prompt={"type": "preset", "preset": "claude_code", "append": team_note(pane, self.registry)})
+                      system_prompt={"type": "preset", "preset": "claude_code", "append": note})
         else:  # all
             kw.update(tools=WORK_TOOLS, permission_mode="bypassPermissions", extra_args={"dangerously-skip-permissions": None},
-                      system_prompt={"type": "preset", "preset": "claude_code", "append": team_note(pane, self.registry)})
+                      system_prompt={"type": "preset", "preset": "claude_code", "append": note})
         kw["allowed_tools"] = allowed
         return ClaudeAgentOptions(**kw)
 

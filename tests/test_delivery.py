@@ -1,8 +1,10 @@
-"""Доставка: очередь на окно, автоход, страховка автоответа, ask, восстановление."""
+"""Доставка и политика: очередь на место, автоход, страховка автоответа, ask, owner-ack,
+границы вердиктов, наблюдение, восстановление. Места — из шаблона team.yaml."""
 import asyncio
 import os
 import tempfile
 import unittest
+from pathlib import Path
 
 os.environ["HARNESS_NO_LAST"] = "1"
 
@@ -17,7 +19,7 @@ class FakeProvider:
         self.calls = []
         self.gate = None
         self.reply = lambda pane, msg: f"ответ {pane.id}"
-        self.on_turn = None          # async def (app, pane, msg): действия «агента» во время хода
+        self.on_turn = None
 
     async def run_turn(self, pane, message, depth=0):
         self.calls.append((pane.id, message))
@@ -34,21 +36,28 @@ class FakeProvider:
     async def session_messages(self, cwd, sid):
         return []
 
+    async def close(self):
+        pass
 
-async def settle(app, rounds=20):
-    """Дать циклам доставки доработать."""
+
+async def settle(app, rounds=40):
     for _ in range(rounds):
         await asyncio.sleep(0.01)
         if all(t.done() for t in app.pumps.values()) and not any(p.busy for p in app.registry.panes.values()):
             break
 
 
-def make_app(tmpdir):
+async def make_app(tmpdir):
     app = App()
     app.fake = FakeProvider()
+    app.codex = app.fake                      # чтобы open_project не трогал настоящий Codex
+    await app.open_project(tmpdir)
     app.registry.providers = {"claude": app.fake, "codex": app.fake}
-    app.open_project(tmpdir)
     return app
+
+
+def calls_of(app, seat):
+    return [c for c in app.fake.calls if c[0] == seat]
 
 
 class DeliveryTests(unittest.TestCase):
@@ -61,52 +70,63 @@ class DeliveryTests(unittest.TestCase):
     def run_async(self, coro):
         return asyncio.run(coro)
 
+    def test_line_is_created_from_templates_and_seats_exist(self):
+        async def go():
+            app = await make_app(self.tmp.name)
+            h = Path(self.tmp.name) / ".harness"
+            self.assertTrue((h / "team.yaml").exists() and (h / "comms-policy.yaml").exists() and (h / "roles" / "executor.md").exists())
+            self.assertEqual(set(app.registry.ids), {"assistant", "orchestrator", "architect", "executor", "reviewer", "tester", "researcher"})
+            self.assertEqual(app.registry.get("reviewer").role, "reviewer")
+            self.assertEqual(app.line_errors, [])
+            note = app.role_note(app.registry.get("executor"))
+            self.assertIn("Роль: исполнитель", note)
+            self.assertIn("reviewer (ревьюер): review-request", note)
+        self.run_async(go())
+
     def test_owner_message_runs_turn_and_advances_cursor(self):
         async def go():
-            app = make_app(self.tmp.name)
-            app.post("owner", ["left"], "task", "привет")
+            app = await make_app(self.tmp.name)
+            app.post("owner", ["executor"], "task", "привет")
             await settle(app)
-            self.assertEqual(app.fake.calls, [("left", "привет")])          # одиночная запись владельца — как есть
-            self.assertEqual(app.journal.cursors["left"], 1)
-            self.assertEqual([m["role"] for m in app.registry.get("left").transcript], ["me", "ai"])
+            self.assertEqual(calls_of(app, "executor"), [("executor", "привет")])
+            self.assertEqual(app.journal.cursors["executor"], 1)
+            self.assertEqual([m["role"] for m in app.registry.get("executor").transcript], ["me", "ai"])
         self.run_async(go())
 
     def test_queue_while_busy_then_one_turn_for_all(self):
         async def go():
-            app = make_app(self.tmp.name)
+            app = await make_app(self.tmp.name)
             app.fake.gate = asyncio.Event()
-            app.post("owner", ["left"], "task", "первое")
+            app.post("owner", ["executor"], "task", "первое")
             await asyncio.sleep(0.02)
-            self.assertTrue(app.registry.get("left").busy)
-            app.post("owner", ["left"], "task", "второе")
-            app.post("right", ["left"], "question", "третье", thread="T1")
-            self.assertEqual(len(app.journal.pending_for("left")), 2)
+            self.assertTrue(app.registry.get("executor").busy)
+            app.post("owner", ["executor"], "task", "второе")
+            app.post("reviewer", ["executor"], "question", "третье", thread="T1")
+            self.assertEqual(len(app.journal.pending_for("executor")), 2)
             app.fake.gate.set()
             app.fake.gate = None
             await settle(app)
-            left_calls = [c for c in app.fake.calls if c[0] == "left"]
-            self.assertEqual(len(left_calls), 2)
-            second = left_calls[1][1]
+            ex = calls_of(app, "executor")
+            self.assertEqual(len(ex), 2)
+            second = ex[1][1]
             self.assertIn("Входящие записи: 2", second)
             self.assertIn("второе", second)
-            self.assertIn("#3 · question · от правое окно · тред T1", second)
-            # страховка: на question от right ушёл автоответ, на task владельца — нет
+            self.assertIn("#3 · question · от ревьюер · тред T1", second)
             answers = [r for r in app.journal.read() if r["kind"] == "answer"]
             self.assertEqual(len(answers), 1)
-            self.assertEqual((answers[0]["reply_to"], answers[0]["to"], answers[0]["origin"]), (3, ["right"], "auto"))
-            self.assertEqual(answers[0]["thread"], "T1")
+            self.assertEqual((answers[0]["reply_to"], answers[0]["to"], answers[0]["origin"], answers[0]["thread"]), (3, ["reviewer"], "auto", "T1"))
         self.run_async(go())
 
     def test_explicit_reply_suppresses_auto_reply(self):
         async def go():
-            app = make_app(self.tmp.name)
+            app = await make_app(self.tmp.name)
 
             async def agent(pane, msg):
-                if pane.id == "right":
+                if pane.id == "architect":
                     q = [r for r in pane.turn_records if r["kind"] == "question"][0]
-                    app.post("right", ["left"], "answer", "сам отвечаю", reply_to=q["seq"])
+                    app.post("architect", ["executor"], "answer", "сам отвечаю", reply_to=q["seq"])
             app.fake.on_turn = agent
-            app.post("left", ["right"], "question", "сколько будет 2+2?")
+            app.post("executor", ["architect"], "question", "какой контракт у модуля?")
             await settle(app)
             answers = [r for r in app.journal.read() if r["kind"] == "answer"]
             self.assertEqual(len(answers), 1)
@@ -116,75 +136,155 @@ class DeliveryTests(unittest.TestCase):
 
     def test_ask_waits_for_reply_and_refuses_cycles(self):
         async def go():
-            app = make_app(self.tmp.name)
-            left, right = app.registry.get("left"), app.registry.get("right")
+            app = await make_app(self.tmp.name)
+            ex, ar = app.registry.get("executor"), app.registry.get("architect")
 
             async def agent(pane, msg):
-                if pane.id == "right":
+                if pane.id == "architect":
                     q = [r for r in pane.turn_records if r["kind"] == "question"][0]
-                    with self.assertRaises(RuntimeError):            # встречный ask — взаимное ожидание
-                        await app.ask(right, "left", "а ты кто?", None)
-                    app.post("right", ["left"], "answer", "четыре", reply_to=q["seq"])
+                    with self.assertRaises(RuntimeError):
+                        await app.ask(ar, "executor", "а ты кто?", None)
+                    app.post("architect", ["executor"], "answer", "четыре", reply_to=q["seq"])
             app.fake.on_turn = agent
-            reply = await app.ask(left, "right", "сколько будет 2+2?", "T2")
-            self.assertEqual(reply["text"], "четыре")
-            self.assertEqual(reply["thread"], "T2")
-            self.assertEqual(left.asking, set())
+            reply = await app.ask(ex, "architect", "сколько будет 2+2?", "T2")
+            self.assertEqual((reply["text"], reply["thread"]), ("четыре", "T2"))
+            self.assertEqual(ex.asking, set())
             await settle(app)
         self.run_async(go())
 
-    def test_verdict_validation_and_nudge_then_escalation(self):
+    def test_policy_denies_task_from_reviewer_and_records_rejection(self):
         async def go():
-            app = make_app(self.tmp.name)
+            app = await make_app(self.tmp.name)
             with self.assertRaises(JournalError) as cm:
-                app.post("right", ["left"], "verdict", "плохо", reply_to=None, score=5, round_=1)
+                app.post("reviewer", ["executor"], "task", "сделай так")
+            self.assertEqual(cm.exception.code, "policy_denied")
+            self.assertIn("reviewer может писать executor только", str(cm.exception))
+            rej = [r for r in app.journal.read() if r["kind"] == "rejected"]
+            self.assertEqual(len(rej), 1)
+            self.assertEqual(rej[0]["to"], ["owner"])
+            self.assertEqual(app.journal.pending_for("executor"), [])
+            r = await app.bridge.do_send("tester", {"to": "executor", "kind": "task", "text": "x"})
+            self.assertEqual((r["ok"], r["code"]), (False, "policy_denied"))
+            ok = await app.bridge.do_send("assistant", {"to": "executor", "kind": "task", "text": "от имени владельца"})
+            self.assertTrue(ok["ok"])
+            await settle(app)
+        self.run_async(go())
+
+    def test_observe_policy_limits_read_pane(self):
+        async def go():
+            app = await make_app(self.tmp.name)
+            app.registry.get("executor").record("ai", "секрет исполнителя")
+            self.assertTrue(app.bridge.do_read("reviewer", {"pane": "executor"})["ok"])
+            self.assertTrue(app.bridge.do_read("orchestrator", {"pane": "researcher"})["ok"])
+            denied = app.bridge.do_read("executor", {"pane": "reviewer"})
+            self.assertEqual((denied["ok"], denied["code"]), (False, "policy_denied"))
+            denied2 = app.bridge.do_read("researcher", {"pane": "executor"})
+            self.assertFalse(denied2["ok"])
+            ex, rv = app.registry.get("executor"), app.registry.get("reviewer")
+            rv.digest = True
+            self.assertIn("секрет исполнителя", app.registry.build_digest(rv))
+            ex.digest = True
+            rv.record("ai", "секрет ревьюера")
+            self.assertEqual(app.registry.build_digest(ex), "")
+        self.run_async(go())
+
+    def test_verdict_rules_bounds_and_acceptance(self):
+        async def go():
+            app = await make_app(self.tmp.name)
+            with self.assertRaises(JournalError) as cm:
+                app.post("reviewer", ["executor"], "verdict", "плохо", reply_to=None, score=5, round_=1)
             self.assertEqual(cm.exception.code, "reply_to_required")
-            rr = app.post("left", ["right"], "review-request", "проверь abc123", thread="M-7", evidence=["abc123"])
+            rr = app.post("executor", ["reviewer"], "review-request", "проверь abc123", thread="M-7", evidence=["abc123"])
             with self.assertRaises(JournalError):
-                app.post("right", ["left"], "verdict", "плохо", reply_to=rr["seq"], score=11, round_=1)
-            app.fake.reply = lambda pane, msg: "посмотрел, всё норм"       # ревьюер «забыл» вердикт
+                app.post("reviewer", ["executor"], "verdict", "плохо", reply_to=rr["seq"], score=11, round_=1)
+            q = app.post("executor", ["reviewer"], "question", "как дела?", thread="M-7")
+            with self.assertRaises(JournalError) as cm:
+                app.post("reviewer", ["executor"], "verdict", "плохо", reply_to=q["seq"], score=5, round_=1)
+            self.assertEqual(cm.exception.code, "policy_denied")
+            with self.assertRaises(JournalError) as cm:
+                app.post("reviewer", ["executor"], "verdict", "плохо", reply_to=rr["seq"], score=5, round_=4)
+            self.assertIn("max_rounds", str(cm.exception))
+            app.fake.reply = lambda pane, msg: "посмотрел, всё норм"
             await settle(app)
             notes = [r for r in app.journal.read() if r["kind"] == "note" and r["from"] == "harness"]
-            self.assertEqual(len(notes), 1)                                # напоминание один раз
+            self.assertEqual(len(notes), 1)
             await settle(app)
             esc = [r for r in app.journal.read() if r["kind"] == "escalation"]
             self.assertEqual(len(esc), 1)
             self.assertIn("owner", esc[0]["to"])
-            good = app.post("right", ["left"], "verdict", "9/10", reply_to=rr["seq"], score=9, round_=1)
-            self.assertEqual((good["thread"], good["score"], good["round"]), ("M-7", 9, 1))
+            low = app.post("reviewer", ["executor"], "verdict", "7/10", reply_to=rr["seq"], score=7, round_=1)
+            self.assertFalse(low["accepted"])
+            good = app.post("reviewer", ["executor"], "verdict", "9/10", reply_to=rr["seq"], score=9, round_=2)
+            self.assertEqual((good["thread"], good["score"], good["round"], good["accepted"]), ("M-7", 9, 2, True))
+            await settle(app)
+            statuses = [r for r in app.journal.read() if r["kind"] == "status" and r["from"] == "harness"]
+            self.assertEqual(len(statuses), 2)
+            self.assertIn("принято", statuses[-1]["text"])
+            self.assertEqual(statuses[-1]["to"], ["orchestrator"])
+            self.assertEqual(app.threads["M-7"]["accepted"], True)
+            rr2 = app.post("executor", ["reviewer"], "review-request", "проверь def456", thread="M-8")
+            app.post("reviewer", ["executor"], "verdict", "3/10", reply_to=rr2["seq"], score=3, round_=3)
+            esc = [r for r in app.journal.read() if r["kind"] == "escalation" and r.get("thread") == "M-8"]
+            self.assertEqual(len(esc), 1)
+            await settle(app)
+        self.run_async(go())
+
+    def test_owner_ack_route_holds_record_until_approved(self):
+        async def go():
+            app = await make_app(self.tmp.name)
+            pol = Path(self.tmp.name) / ".harness" / "comms-policy.yaml"
+            text = pol.read_text("utf-8").replace("version: 1", "version: 2")
+            needle = "  - from: tester\n    to: [executor, orchestrator, owner]\n    kinds: [report, question, answer, note, escalation]"
+            self.assertIn(needle, text)
+            pol.write_text(text.replace(needle, needle + "\n    trigger: owner-ack"), "utf-8")
+            os.utime(pol, (os.path.getmtime(pol) + 5, os.path.getmtime(pol) + 5))
+            rec = app.post("tester", ["executor"], "report", "тесты падают")
+            self.assertEqual(rec.get("ack"), "pending")
+            self.assertEqual(app.policy.version, 2)
+            self.assertEqual(len([r for r in app.journal.read() if r["kind"] == "policy"]), 1)
+            await asyncio.sleep(0.02)
+            self.assertEqual(app.journal.pending_for("executor"), [])
+            tester = app.registry.get("tester")
+            self.assertEqual(len(tester.approvals), 1)
+            tester.resolve_approval(next(iter(tester.approvals)), True)
+            await settle(app)
+            self.assertTrue(any("тесты падают" in c[1] for c in calls_of(app, "executor")))
+            acks = [r for r in app.journal.read() if r["kind"] == "ack"]
+            self.assertEqual((len(acks), acks[0]["reply_to"]), (1, rec["seq"]))
         self.run_async(go())
 
     def test_reply_to_zero_means_none_and_protocol_is_not_a_target(self):
         async def go():
-            app = make_app(self.tmp.name)
-            r = await app.bridge.do_send("left", {"to": "right", "kind": "note", "text": "x", "reply_to": 0})
+            app = await make_app(self.tmp.name)
+            r = await app.bridge.do_send("executor", {"to": "orchestrator", "kind": "note", "text": "x", "reply_to": 0})
             self.assertTrue(r["ok"])
             self.assertIsNone(app.journal.get(r["seq"])["reply_to"])
             with self.assertRaises(JournalError) as cm:
-                app.post("left", ["right"], "answer", "y", reply_to=0)
+                app.post("executor", ["orchestrator"], "answer", "y", reply_to=0)
             self.assertEqual(cm.exception.code, "reply_to_missing")
             await settle(app)
         self.run_async(go())
 
     def test_restart_restores_panes_and_delivers_pending(self):
         async def go():
-            app = make_app(self.tmp.name)
-            app.registry.update(app.registry.get("left"), {"model": "claude-haiku-4-5-20251001", "mode": "read", "sessionId": None}, lambda p: True)
-            app.registry.get("left").session_id = "11111111-1111-1111-1111-111111111111"
+            app = await make_app(self.tmp.name)
+            ex = app.registry.get("executor")
+            app.registry.update(ex, {"mode": "read", "sessionId": None}, lambda p: True)
+            ex.session_id = "11111111-1111-1111-1111-111111111111"
             app.save_panes()
-            app.fake.gate = asyncio.Event()                                # ход не заканчивается…
-            app.post("owner", ["left"], "task", "первое")
+            app.fake.gate = asyncio.Event()
+            app.post("owner", ["executor"], "task", "первое")
             await asyncio.sleep(0.02)
-            app.post("owner", ["left"], "task", "второе")                  # …второе ждёт в очереди
+            app.post("owner", ["executor"], "task", "второе")
             for t in app.pumps.values():
                 t.cancel()
-            app2 = make_app(self.tmp.name)                                 # перезапуск
-            left = app2.registry.get("left")
-            self.assertEqual((left.model, left.mode, left.session_id), ("claude-haiku-4-5-20251001", "read", "11111111-1111-1111-1111-111111111111"))
+            app2 = await make_app(self.tmp.name)
+            ex2 = app2.registry.get("executor")
+            self.assertEqual((ex2.mode, ex2.session_id), ("read", "11111111-1111-1111-1111-111111111111"))
             for p in app2.registry.panes.values():
                 app2.kick(p)
             await settle(app2)
-            self.assertEqual(app2.fake.calls, [("left", "второе")])       # недоставленное дошло, доставленное не повторилось
+            self.assertEqual(calls_of(app2, "executor"), [("executor", "второе")])
         self.run_async(go())
 
 

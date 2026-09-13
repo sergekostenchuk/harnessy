@@ -8,7 +8,7 @@ import fs from 'node:fs';
 const PANE_ID = process.env.PANE_ID || 'codex';
 const APP_URL = process.env.APP_URL || 'http://127.0.0.1:3777';
 const LOG = process.env.PANE_MCP_LOG || '/tmp/pane-mcp.log';
-const PANES = { left: 'левое окно (Claude)', right: 'правое окно (Claude)', codex: 'окно Codex' };
+const PANES = Object.fromEntries((process.env.SEATS || 'left:левое окно;right:правое окно;codex:окно Codex').split(';').filter(Boolean).map((s) => { const i = s.indexOf(':'); return i > 0 ? [s.slice(0, i), s.slice(i + 1)] : [s, s]; }));
 const others = Object.keys(PANES).filter((k) => k !== PANE_ID);
 const KINDS = ['task', 'status', 'question', 'answer', 'review-request', 'verdict', 'blocker', 'escalation', 'note', 'stop', 'resume', 'digest', 'proposal', 'decision', 'report'];
 

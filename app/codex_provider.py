@@ -33,8 +33,8 @@ CHAT_INSTRUCTIONS = ("Это простой чат. Отвечай на язык
 def team_note(pane: Pane, registry: Registry) -> str:
     others = ", ".join(f"{o.id} — {o.label} ({o.vendor})" for o in registry.others(pane.id))
     return (f"Ты работаешь в папке проекта: {pane.cwd}. В этой же папке параллельно могут работать агенты из других окон: {others}. "
-            "Связь с ними только инструментами: send — отправить запись и не ждать, ask — спросить и дождаться ответа, "
-            "read_pane — прочитать их разговор. Записи от соседей приходят входящим сообщением с номером #seq: отвечай на них "
+            "Связь с ними только инструментами MCP-сервера panes (не командами оболочки): send — отправить запись и не ждать, "
+            "ask — спросить и дождаться ответа, read_pane — прочитать их разговор. Записи от соседей приходят входящим сообщением с номером #seq: отвечай на них "
             "send с reply_to. Соседи не видят твоей переписки: пиши им полный текст. "
             "Перед правкой смотри актуальное состояние файла, чужие изменения не переписывай, коммиты делай только если попросили. "
             "В конце ответа кратко перечисли, что сделал и какие файлы изменил.")
@@ -44,6 +44,8 @@ def mode_params(mode: str) -> tuple[str, str]:
     """(sandbox, approvalPolicy) по режиму окна."""
     if mode in ("chat", "read"):
         return "read-only", "never"
+    if mode in ("check", "web"):
+        return "read-only", "on-request"      # команды и чтение свободно, запись — карточкой
     if mode in ("ask", "edit"):
         return "workspace-write", "on-request"
     return "danger-full-access", "never"
@@ -74,6 +76,7 @@ class CodexProvider:
         self.clients: dict[str, tuple[AsyncCodex, str]] = {}   # pane id -> (client, cwd)
         self.list_clients: dict[str, AsyncCodex] = {}          # cwd -> client только для списков и чтения тредов
         self.depth: dict[str, int] = {}
+        self.role_note = None                                  # callable(pane) -> str, ставит сервер
         self.models_cache: list[dict] | None = None
         self.account_cache: dict | None = None
 
@@ -89,10 +92,11 @@ class CodexProvider:
 
     def overrides(self, pane: Pane) -> tuple[str, ...]:
         node, script = self.bridge_cmd
+        seats = ";".join(f"{p.id}:{p.label}" for p in self.registry.panes.values()).replace('"', "")
         ov = list(BASE_OVERRIDES) + [f"mcp_servers.{k}.enabled=false" for k in self.user_mcp_servers() if k not in ("panes", "sol-spark-router")] + [
             f'mcp_servers.panes.command="{node}"',
             f'mcp_servers.panes.args=["{script}"]',
-            f'mcp_servers.panes.env={{PANE_ID="{pane.id}",APP_URL="{self.app_url}"}}',
+            f'mcp_servers.panes.env={{PANE_ID="{pane.id}",APP_URL="{self.app_url}",SEATS="{seats}"}}',
         ]
         py = f"{SPARK_ROUTER_DIR}/.venv/bin/python"
         srv = f"{SPARK_ROUTER_DIR}/server.py"
@@ -157,11 +161,14 @@ class CodexProvider:
     async def _thread(self, pane: Pane, codex: AsyncCodex) -> AsyncThread:
         sandbox, policy = mode_params(pane.mode)
         params = {"cwd": pane.cwd, "model": pane.model, "approvalPolicy": policy, "sandbox": sandbox}
+        role = (self.role_note(pane) if self.role_note else "").strip()
+        role_block = (role + "\n\n") if role else ""
         if pane.mode == "chat":
-            params["developerInstructions"] = CHAT_INSTRUCTIONS
+            params["developerInstructions"] = role_block + CHAT_INSTRUCTIONS
         else:
-            params["developerInstructions"] = team_note(pane, self.registry) + (
-                " Только читай и анализируй, правок не делай." if pane.mode == "read" else "")
+            tail = {"read": " Только читай и анализируй, правок не делай.", "check": " Проверяй прогоном: команды разрешены, правки кода — нет.",
+                    "web": " Интернет разрешён; каждый факт с источником."}.get(pane.mode, "")
+            params["developerInstructions"] = role_block + team_note(pane, self.registry) + tail
         if pane.session_id:
             resp = await codex._client.request("thread/resume", {"threadId": pane.session_id, **params}, response_model=ThreadResumeResponse)
         else:

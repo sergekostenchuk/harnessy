@@ -1,5 +1,5 @@
-"""Сервер харнесса: окна над одной папкой проекта, журнал линии в `.harness/state`,
-очередь входящих на окно и автоход, инструменты связи между окнами.
+"""Сервер харнесса: места из манифеста команды над одной папкой проекта, журнал линии,
+очередь входящих и автоход, политика связи, инструменты связи между окнами.
 Запуск: .venv/bin/python -m app.server  →  http://localhost:3777"""
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import logging
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 from aiohttp import web
@@ -18,7 +17,9 @@ from .bridge import Bridge
 from .claude_provider import CLAUDE_BIN, ClaudeProvider, child_env
 from .codex_provider import CodexProvider
 from .journal import KINDS, REPLY_KIND, Journal, JournalError
-from .panes import MODES, PANE_IDS, PANE_LABEL, Pane, Registry
+from .panes import MODES, Pane, Registry
+from .policy import Policy, PolicyError
+from .team import Team, TeamError, ensure_line, load_team
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = int(os.environ.get("PORT", "3777"))
@@ -31,10 +32,12 @@ CLAUDE_MODELS = [
     {"id": "claude-opus-5", "label": "Opus 5"}, {"id": "claude-haiku-4-5-20251001", "label": "Haiku 4.5"},
 ]
 ASK_TIMEOUT_SEC = 30 * 60
+ACK_TIMEOUT_SEC = 24 * 60 * 60
 MAX_ASK_DEPTH = 3
 OWNER = "owner"
 HARNESS = "harness"
 FROM_LABEL = {OWNER: "владелец", HARNESS: "харнесс"}
+OWNER_KINDS = ("task", "question", "note", "stop", "resume", "decision")
 
 
 def valid_dir(p) -> bool:
@@ -53,17 +56,23 @@ def claude_auth() -> dict:
 
 class App:
     def __init__(self):
-        self.registry = Registry(DEFAULT_DIR, {"claude": CLAUDE_MODELS, "codex": [{"id": "gpt-5.6-sol", "label": "gpt-5.6-sol"}]})
+        self.models = {"claude": CLAUDE_MODELS, "codex": [{"id": "gpt-5.6-sol", "label": "gpt-5.6-sol"}]}
+        self.registry = Registry(DEFAULT_DIR, self.models, [])
         self.bridge = Bridge(self.registry)
         self.bridge.app = self
         self.claude = ClaudeProvider(self.registry, self.bridge)
         self.codex = CodexProvider(self.registry, APP_URL, [NODE, str(ROOT / "bin" / "pane-mcp.mjs")])
+        self.codex.role_note = self.role_note
         self.registry.providers = {"claude": self.claude, "codex": self.codex}
-        self.owner = Pane(id=OWNER, vendor="human", label="владелец", model="")   # только для событий владельцу
+        self.owner = Pane(id=OWNER, vendor="human", label="владелец", model="")
         self.journal: Journal | None = None
+        self.team: Team | None = None
+        self.policy: Policy | None = None
+        self.line_errors: list[str] = []
         self.project_dir: str | None = None
         self.pumps: dict[str, asyncio.Task] = {}
         self.waiting: dict[int, asyncio.Future] = {}
+        self.threads: dict[str, dict] = {}
 
     def provider(self, pane: Pane):
         return self.registry.providers[pane.vendor]
@@ -72,72 +81,219 @@ class App:
         p = self.registry.get(seat)
         return p.label if p else FROM_LABEL.get(seat, seat)
 
+    def role_of(self, seat: str) -> str:
+        return self.registry.role_of(seat)
+
     # ---------- линия проекта ----------
-    def open_project(self, path: str) -> None:
+    async def open_project(self, path: str) -> None:
+        for t in self.pumps.values():
+            t.cancel()
+        self.pumps.clear()
+        await self.codex.close()
+        harness_dir = ensure_line(path)
+        self.line_errors = []
+        try:
+            self.team = load_team(harness_dir)
+            seats = list(self.team.seats.values())
+        except TeamError as e:
+            self.team, seats = None, []
+            self.line_errors.append(str(e))
+        try:
+            self.policy = Policy(harness_dir / "comms-policy.yaml")
+        except PolicyError as e:
+            self.policy = None
+            self.line_errors.append(str(e))
         self.project_dir = path
         self.journal = Journal(path)
+        self.registry = Registry(path, self.models, seats)
+        self.registry.policy = self.policy
+        self.registry.providers = {"claude": self.claude, "codex": self.codex}
+        self.bridge.registry = self.registry
+        self.claude.registry = self.registry
+        self.codex.registry = self.registry
         saved = self.journal.load_panes()
         for p in self.registry.panes.values():
-            p.cwd = path
-            p.transcript.clear(); p.seen.clear(); p.nudged.clear()
             st = saved.get(p.id) or {}
             if st:
                 self.registry.update(p, {"model": st.get("model"), "mode": st.get("mode"), "sessionId": st.get("sessionId"), "digest": st.get("digest")}, valid_dir)
                 p.touched = True
+        self.threads = {}
+        for r in self.journal.read(limit=0):
+            if r.get("kind") == "verdict" and r.get("thread"):
+                self._note_verdict(r, announce=False)
         if not os.environ.get("HARNESS_NO_LAST"):
             try:
                 LAST_PROJECT_FILE.write_text(path, encoding="utf-8")
             except OSError:
                 pass
-        print(f"[harness] линия: {path} · журнал {self.journal.channel} · записей {self.journal.last_seq}", flush=True)
+        print(f"[harness] линия: {path} · мест {len(seats)} · политика v{self.policy.version if self.policy else '—'} · записей {self.journal.last_seq}"
+              + (f" · ошибки: {'; '.join(self.line_errors)}" if self.line_errors else ""), flush=True)
 
     def save_panes(self) -> None:
         if self.journal:
             self.journal.save_panes({pid: p.persist() for pid, p in self.registry.panes.items()})
 
-    # ---------- журнал и доставка ----------
+    def role_note(self, pane: Pane) -> str:
+        """Инструкции роли и её маршруты — в системный промпт места."""
+        parts = []
+        if self.team and pane.id in self.team.seats:
+            text = self.team.instructions_for(self.team.seats[pane.id]).strip()
+            if text:
+                parts.append(text)
+        if self.policy:
+            parts.append(self.policy.summary_for(pane.role, {p.id: p.role for p in self.registry.panes.values()},
+                                                 {p.id: p.label for p in self.registry.panes.values()}))
+        if pane.write_paths:
+            parts.append("Правки файлов тебе разрешены только в: " + ", ".join(pane.write_paths) + ". Остальное — только чтение.")
+        return "\n\n".join(parts)
+
+    def _reload_policy_if_changed(self) -> None:
+        if self.policy is None:
+            return
+        try:
+            if self.policy.maybe_reload():
+                rec = self.journal.append(sender=HARNESS, to=["*"], kind="policy", text=f"политика связи перечитана: версия {self.policy.version}", policy=self.policy.version)
+                self.owner.publish({"type": "owner", "record": rec})
+        except PolicyError as e:
+            self.line_errors = [str(e)]
+            print(f"[harness] политика не перечитана: {e}", file=sys.stderr, flush=True)
+
+    # ---------- журнал, политика, доставка ----------
     def post(self, sender: str, to, kind: str, text: str, thread=None, reply_to=None, evidence=None,
              score=None, round_=None, origin=None) -> dict:
-        """Положить запись в журнал и разбудить адресатов. Единственная точка записи для агентов и владельца."""
+        """Единственная точка записи для агентов и владельца: проверка политики, журнал, доставка."""
         if isinstance(to, str):
             to = [to]
         to = list(to or [])
         if "*" in to:
-            to = [p for p in PANE_IDS if p != sender] + ([OWNER] if sender != OWNER else [])
+            to = [p for p in self.registry.ids if p != sender] + ([OWNER] if sender != OWNER else [])
         for t in to:
             if t != OWNER and not self.registry.get(t):
-                raise JournalError("to_unknown", f"нет такого окна: {t}; есть {', '.join(PANE_IDS)} и owner")
+                raise JournalError("to_unknown", f"нет такого окна: {t}; есть {', '.join(self.registry.ids)} и owner")
             if t == sender:
                 raise JournalError("self_addressed", "запись самому себе не нужна")
         if kind == "verdict":
-            if score is None or not isinstance(score, int) or not (0 <= score <= 10):
+            if score is None or isinstance(score, bool) or not isinstance(score, int) or not (0 <= score <= 10):
                 raise JournalError("score_invalid", "verdict требует score — целое от 0 до 10")
-            if round_ is None or not isinstance(round_, int) or round_ < 1:
+            if round_ is None or isinstance(round_, bool) or not isinstance(round_, int) or round_ < 1:
                 raise JournalError("round_invalid", "verdict требует round — целое от 1")
             if reply_to is None:
                 raise JournalError("reply_to_required", "verdict — только ответ на review-request (reply_to)")
+        target_rec = None
         if reply_to is not None:
-            target = self.journal.get(reply_to)
-            if target is None or target.get("kind") in ("protocol", "policy"):
+            target_rec = self.journal.get(reply_to)
+            if target_rec is None or target_rec.get("kind") in ("protocol", "policy", "ack", "rejected"):
                 raise JournalError("reply_to_missing", f"нет записи #{reply_to}, на которую можно ответить")
-        rec = self.journal.append(sender=sender, to=to, kind=kind, text=text, thread=thread, reply_to=reply_to,
-                                  evidence=evidence, score=score, round=round_, origin=origin)
+        # --- политика связи ---
+        self._reload_policy_if_changed()
+        pending_ack = False
+        bounds: dict = {}
+        if sender not in (OWNER, HARNESS):
+            if self.policy is None:
+                self._reject(sender, to, kind, "политика связи не читается — записи агентов не проходят")
+                raise JournalError("policy_denied", "политика связи не читается; исправь comms-policy.yaml")
+            for t in to:
+                dec = self.policy.check_send(self.role_of(sender), self.role_of(t), kind)
+                if not dec.allow:
+                    self._reject(sender, to, kind, dec.reason)
+                    raise JournalError("policy_denied", dec.reason)
+                trig = dec.trigger or ""
+                if trig.startswith("reply-to:"):
+                    need = trig.split(":", 1)[1]
+                    if target_rec is None or target_rec.get("kind") != need or target_rec.get("from") != t:
+                        reason = f"политика v{self.policy.version}: {kind} от {self.role_of(sender)} — только ответ на {need} от {self.role_of(t)} (reply_to)"
+                        self._reject(sender, to, kind, reason)
+                        raise JournalError("policy_denied", reason)
+                if dec.pending:
+                    pending_ack = True
+                bounds = dec.bounds or bounds
+        if kind == "verdict" and bounds.get("max_rounds") and round_ > int(bounds["max_rounds"]):
+            reason = f"раунд {round_} больше max_rounds={bounds['max_rounds']} треда {thread or target_rec.get('thread')}; эскалируй владельцу"
+            self._reject(sender, to, kind, reason)
+            raise JournalError("policy_denied", reason)
+        extra = {}
+        if kind == "verdict":
+            extra["accepted"] = bool(bounds.get("accept_score") is not None and score >= int(bounds["accept_score"]))
+            extra["bounds"] = bounds or None
+        if pending_ack:
+            extra["ack"] = "pending"
+        rec = self.journal.append(sender=sender, to=to, kind=kind, text=text, thread=thread, reply_to=reply_to, evidence=evidence,
+                                  policy=self.policy.version if self.policy else 0, score=score, round=round_, origin=origin, **extra)
         src = self.registry.get(sender)
         if src:
             src.publish({"type": "sent", "record": rec})
             if reply_to is not None:
                 src.replied.add(reply_to)
-        for t in to:
+        if pending_ack:
+            self.owner.publish({"type": "owner", "record": rec})
+            asyncio.get_running_loop().create_task(self._await_ack(rec, src))
+            return rec
+        self._deliver(rec)
+        if kind == "verdict":
+            self._note_verdict(rec, announce=True)
+        return rec
+
+    def _deliver(self, rec: dict) -> None:
+        for t in rec["to"]:
             if t == OWNER:
                 self.owner.publish({"type": "owner", "record": rec})
             else:
                 p = self.registry.get(t)
-                p.publish({"type": "queued", "record": rec, "pending": len(self.journal.pending_for(t))})
-                self.kick(p)
-        fut = self.waiting.get(reply_to) if reply_to is not None else None
+                if p:
+                    p.publish({"type": "queued", "record": rec, "pending": len(self.journal.pending_for(t))})
+                    self.kick(p)
+        fut = self.waiting.get(rec.get("reply_to")) if rec.get("reply_to") is not None else None
         if fut and not fut.done():
             fut.set_result(rec)
-        return rec
+
+    def _reject(self, sender: str, to: list, kind: str, reason: str) -> None:
+        try:
+            rec = self.journal.append(sender=HARNESS, to=[OWNER], kind="rejected", text=f"{sender} → {', '.join(to)} {kind}: {reason}",
+                                      policy=self.policy.version if self.policy else 0)
+            self.owner.publish({"type": "owner", "record": rec})
+            src = self.registry.get(sender)
+            if src:
+                src.publish({"type": "toolError", "text": f"политика: {reason}"})
+        except JournalError:
+            pass
+
+    async def _await_ack(self, rec: dict, src: Pane | None) -> None:
+        """Триггер owner-ack: запись лежит в журнале, но не доставляется, пока владелец не подтвердит."""
+        pane = src or self.owner
+        allow = await pane.ask_approval(f"Подтвердить отправку #{rec['seq']} {rec['kind']} → {', '.join(self.label_of(t) for t in rec['to'])}?",
+                                        rec["text"][:600], timeout=ACK_TIMEOUT_SEC)
+        if allow:
+            self.journal.append(sender=OWNER, to=[rec["from"]], kind="ack", text=f"подтверждено #{rec['seq']}", reply_to=rec["seq"],
+                                policy=self.policy.version if self.policy else 0)
+            self.journal.mark_acked(rec["seq"])
+            self._deliver(rec)
+        else:
+            self.journal.append(sender=HARNESS, to=[OWNER], kind="rejected", text=f"#{rec['seq']} {rec['kind']} от {rec['from']} отклонено владельцем", reply_to=rec["seq"])
+            if src:
+                self.post(HARNESS, [src.id], "note", f"Запись #{rec['seq']} ({rec['kind']}) владелец не подтвердил, она не доставлена.", thread=rec.get("thread"), origin="ack")
+
+    def _note_verdict(self, rec: dict, announce: bool) -> None:
+        th = rec.get("thread")
+        if not th:
+            return
+        st = self.threads.setdefault(th, {"rounds": 0, "accepted": False, "lastScore": None})
+        st["rounds"] = max(st["rounds"], int(rec.get("round") or 0))
+        st["lastScore"] = rec.get("score")
+        st["accepted"] = st["accepted"] or bool(rec.get("accepted"))
+        if not announce:
+            return
+        b = rec.get("bounds") or {}
+        mx = b.get("max_rounds")
+        line = (f"Тред {th}: вердикт #{rec['seq']} от {self.label_of(rec['from'])}, балл {rec.get('score')}, раунд {rec.get('round')}"
+                + (f" из {mx}" if mx else "") + (" — принято." if rec.get("accepted") else " — не принято."))
+        orchestrators = [p.id for p in self.registry.panes.values() if p.role == "orchestrator" and p.id != rec["from"]]
+        try:
+            if orchestrators:
+                self.post(HARNESS, orchestrators, "status", line, thread=th, origin="verdict")
+            if not rec.get("accepted") and mx and int(rec.get("round") or 0) >= int(mx):
+                self.post(HARNESS, [OWNER] + orchestrators, "escalation", f"Тред {th}: раунды ревью исчерпаны ({mx}), веха не принята. Нужно решение владельца.", thread=th, origin="verdict")
+        except JournalError as e:
+            print(f"[harness] статус вердикта не записан: {e}", file=sys.stderr, flush=True)
 
     def kick(self, pane: Pane) -> None:
         t = self.pumps.get(pane.id)
@@ -146,7 +302,6 @@ class App:
         self.pumps[pane.id] = asyncio.get_running_loop().create_task(self.pump(pane))
 
     async def pump(self, pane: Pane) -> None:
-        """Доставка: пока окно свободно и есть входящие — один ход на все накопившиеся записи."""
         while not pane.busy:
             recs = self.journal.pending_for(pane.id)
             if not recs:
@@ -165,7 +320,8 @@ class App:
 
     def render_inbox(self, recs: list[dict], pane: Pane) -> str:
         if len(recs) == 1 and recs[0]["from"] == OWNER and recs[0]["kind"] in ("task", "note", "question"):
-            return recs[0]["text"]
+            r = recs[0]
+            return r["text"] + (f"\n\n(тред {r['thread']})" if r.get("thread") and r["kind"] == "task" else "")
         lines = [f"Входящие записи: {len(recs)}."]
         for r in recs:
             head = f"[#{r['seq']} · {r['kind']} · от {self.label_of(r['from'])}"
@@ -173,6 +329,8 @@ class App:
                 head += f" · тред {r['thread']}"
             if r.get("reply_to") is not None:
                 head += f" · ответ на #{r['reply_to']}"
+            if r.get("score") is not None:
+                head += f" · балл {r['score']}, раунд {r.get('round')}"
             lines.append(head + "]\n" + r["text"])
         lines.append("Как отвечать: на question — send kind=answer с reply_to=<seq>; на task — send kind=status; на review-request — "
                      "send kind=verdict с score и round. Если не ответишь сам, твой итоговый текст уйдёт автоматически как ответ "
@@ -180,7 +338,6 @@ class App:
         return "\n\n".join(lines)
 
     def after_turn(self, pane: Pane, records: list[dict], text: str) -> None:
-        """Страховка после хода: автоответы на question и task соседей, напоминание и эскалация по вердиктам."""
         for r in records or []:
             if r["from"] in (OWNER, HARNESS) or r["seq"] in pane.replied:
                 continue
@@ -271,13 +428,18 @@ class App:
 
     async def status(self, request):
         info = await self.codex.info()
-        self.registry.models["codex"] = info["models"]
+        self.models["codex"] = info["models"]
+        self.registry.models = self.models
         for p in self.registry.panes.values():
             if p.vendor == "codex" and not any(m["id"] == p.model for m in info["models"]) and info["models"]:
                 p.model = info["models"][0]["id"]
         return web.json_response({
-            "project": self.project_dir, "defaultDir": DEFAULT_DIR, "models": self.registry.models, "modes": MODES, "kinds": KINDS,
+            "project": self.project_dir, "defaultDir": DEFAULT_DIR, "models": self.models, "modes": MODES, "kinds": KINDS,
+            "ownerKinds": list(OWNER_KINDS), "lineErrors": self.line_errors,
+            "policy": {"version": self.policy.version if self.policy else None, "path": str(self.policy.path) if self.policy else None},
+            "team": {"path": str(self.team.harness_dir / "team.yaml") if self.team else None, "integrationBranch": self.team.integration_branch if self.team else None},
             "panes": [{**p.settings(), "pending": len(self.journal.pending_for(p.id))} for p in self.registry.panes.values()],
+            "threads": self.threads,
             "auth": {"claude": claude_auth(), "codex": info["account"]},
             "journal": {"lastSeq": self.journal.last_seq, "path": str(self.journal.channel)},
         })
@@ -286,31 +448,30 @@ class App:
         cwd = request.query.get("cwd", "")
         if not valid_dir(cwd):
             return web.json_response({"ok": False, "error": f"папки нет или это не папка: {cwd}"}, status=400)
-        return web.json_response({"ok": True, "cwd": cwd, "hasClaudeMd": os.path.exists(os.path.join(cwd, "CLAUDE.md")),
-                                  "hasAgentsMd": os.path.exists(os.path.join(cwd, "AGENTS.md")), "hasHarness": os.path.isdir(os.path.join(cwd, ".harness"))})
+        return web.json_response({"ok": True, "cwd": cwd, "hasHarness": os.path.isdir(os.path.join(cwd, ".harness"))})
 
     async def project_set(self, request):
         body = await request.json()
         path = str(body.get("path") or "")
         if not valid_dir(path):
             return web.json_response({"ok": False, "error": f"папки нет или это не папка: {path}"}, status=400)
-        if path == self.project_dir:
+        if path == self.project_dir and not body.get("reload"):
             return web.json_response({"ok": True, "project": path, "changed": False})
         if any(p.busy for p in self.registry.panes.values()):
             return web.json_response({"ok": False, "error": "идёт ход: смени папку, когда все окна свободны"}, status=409)
-        self.open_project(path)
+        await self.open_project(path)
         for p in self.registry.panes.values():
             self.kick(p)
-        return web.json_response({"ok": True, "project": path, "changed": True, "panes": [p.settings() for p in self.registry.panes.values()]})
+        return web.json_response({"ok": True, "project": path, "changed": True, "lineErrors": self.line_errors,
+                                  "panes": [p.settings() for p in self.registry.panes.values()]})
 
     async def pane_set(self, request):
         p = self.registry.get(request.match_info["id"])
         if not p:
             return web.json_response({"error": "нет окна"}, status=404)
         body = await request.json()
-        body.pop("cwd", None)    # папка задаётся линией, не окном
-        changed = self.registry.update(p, body, valid_dir)
-        if changed:
+        body.pop("cwd", None)
+        if self.registry.update(p, body, valid_dir):
             self.save_panes()
         return web.json_response({"ok": True, "pane": p.settings()})
 
@@ -340,7 +501,6 @@ class App:
         return resp
 
     async def chat(self, request):
-        """Сообщение владельца окну: запись в журнал и в очередь; идущий ход не прерывается."""
         body = await request.json()
         p = self.registry.get(str(body.get("pane") or ""))
         if not p:
@@ -352,10 +512,11 @@ class App:
         kind = str(body.get("kind") or "task")
         if not message:
             return web.json_response({"error": "пустое сообщение"}, status=400)
-        if kind not in ("task", "question", "note", "stop", "resume", "decision"):
-            return web.json_response({"error": f"владелец пишет виды task, question, note, stop, resume, decision; получено {kind}"}, status=400)
+        if kind not in OWNER_KINDS:
+            return web.json_response({"error": f"владелец пишет виды {', '.join(OWNER_KINDS)}; получено {kind}"}, status=400)
+        thread = body.get("thread") or (f"T{self.journal.last_seq + 1}" if kind == "task" else None)
         try:
-            rec = self.post(OWNER, [p.id], kind, message, thread=body.get("thread") or None)
+            rec = self.post(OWNER, [p.id], kind, message, thread=thread)
         except JournalError as e:
             return web.json_response({"ok": False, "code": e.code, "error": str(e)}, status=400)
         if kind == "stop" and p.busy and p.interrupt:
@@ -363,10 +524,9 @@ class App:
                 await p.interrupt()
             except Exception as e:  # noqa: BLE001
                 print(f"[harness] stop {p.id}: {e}", file=sys.stderr, flush=True)
-        return web.json_response({"ok": True, "seq": rec["seq"], "queued": p.busy})
+        return web.json_response({"ok": True, "seq": rec["seq"], "queued": p.busy, "thread": rec.get("thread")})
 
     async def steer(self, request):
-        """Прямая инструкция владельца в идущий ход. Если хода нет — обычная запись в очередь."""
         body = await request.json()
         p = self.registry.get(str(body.get("pane") or ""))
         text = str(body.get("text") or "").strip()
@@ -375,7 +535,7 @@ class App:
         if not text:
             return web.json_response({"error": "пустое сообщение"}, status=400)
         if p.busy and p.steer:
-            rec = self.journal.append(sender=OWNER, to=[p.id], kind="note", text=text, origin="steer")
+            rec = self.journal.append(sender=OWNER, to=[p.id], kind="note", text=text, origin="steer", policy=self.policy.version if self.policy else 0)
             self.journal.advance(p.id, rec["seq"])
             p.record("me", text)
             try:
@@ -384,12 +544,13 @@ class App:
                 return web.json_response({"ok": False, "error": f"вмешаться не удалось: {str(e)[:200]}"})
             p.publish({"type": "steered", "record": rec})
             return web.json_response({"ok": True, "seq": rec["seq"], "steered": True})
-        rec = self.post(OWNER, [p.id], "task", text)
+        rec = self.post(OWNER, [p.id], "task", text, thread=f"T{self.journal.last_seq + 1}")
         return web.json_response({"ok": True, "seq": rec["seq"], "steered": False})
 
     async def approve(self, request):
         body = await request.json()
-        p = self.registry.get(str(body.get("pane") or ""))
+        pid = str(body.get("pane") or "")
+        p = self.owner if pid == OWNER else self.registry.get(pid)
         if not p:
             return web.json_response({"error": "нет окна"}, status=404)
         ok = p.resolve_approval(str(body.get("id") or ""), body.get("decision") == "allow")
@@ -412,7 +573,7 @@ class App:
         return web.json_response({"ok": False, "error": "нечего прерывать"})
 
     async def sessions(self, request):
-        p = self.registry.get(request.query.get("pane", "left"))
+        p = self.registry.get(request.query.get("pane", ""))
         if not p:
             return web.json_response({"error": "нет окна"}, status=400)
         try:
@@ -421,7 +582,7 @@ class App:
             return web.json_response({"sessions": [], "error": str(e)[:300]})
 
     async def session_one(self, request):
-        p = self.registry.get(request.query.get("pane", "left"))
+        p = self.registry.get(request.query.get("pane", ""))
         sid = request.match_info["id"]
         if not p:
             return web.json_response({"error": "нет окна"}, status=400)
@@ -456,7 +617,7 @@ class App:
 
     async def pane_transcript(self, request):
         r = self.bridge.do_read(request.query.get("from", ""), {"pane": request.query.get("pane", ""), "last_n": request.query.get("last", "20")})
-        return web.json_response(r, status=200 if r.get("ok") else 404)
+        return web.json_response(r, status=200 if r.get("ok") else 403)
 
     async def journal_read(self, request):
         try:
@@ -465,7 +626,7 @@ class App:
         except ValueError:
             since, limit = 0, 100
         recs = self.journal.read(since=since, limit=limit, thread=request.query.get("thread") or None)
-        return web.json_response({"records": recs, "lastSeq": self.journal.last_seq, "cursors": self.journal.cursors})
+        return web.json_response({"records": recs, "lastSeq": self.journal.last_seq, "cursors": self.journal.cursors, "threads": self.threads})
 
     def routes(self, app: web.Application):
         app.router.add_get("/", self.index)
@@ -498,7 +659,7 @@ def main():
     core.routes(app)
 
     async def on_startup(_):
-        core.open_project(start_dir)
+        await core.open_project(start_dir)
         asyncio.create_task(core.codex.info())
         for p in core.registry.panes.values():
             core.kick(p)

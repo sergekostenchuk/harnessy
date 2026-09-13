@@ -1,0 +1,111 @@
+"""Манифест команды линии: `<проект>/.harness/team.yaml` и инструкции ролей `roles/*.md`.
+При первом открытии папки шаблоны из `templates/` копируются в `.harness/` (никогда не перезаписываются)."""
+from __future__ import annotations
+
+import re
+import shutil
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(__file__).resolve().parent.parent
+TEMPLATES = ROOT / "templates"
+VENDORS = ("claude", "codex")
+MODE_IDS = ("chat", "read", "check", "web", "ask", "edit", "all")
+SEAT_ID_RE = re.compile(r"^[a-z][a-z0-9_-]{0,30}$")
+RESERVED_IDS = ("owner", "harness", "all", "*")
+
+
+class TeamError(ValueError):
+    pass
+
+
+@dataclass
+class Seat:
+    id: str
+    role: str
+    label: str
+    vendor: str
+    model: str
+    mode: str = "chat"
+    digest: bool = False
+    write_paths: list = field(default_factory=list)
+    instructions: str | None = None    # путь к файлу инструкций роли
+
+
+@dataclass
+class Team:
+    version: int
+    project: str
+    integration_branch: str
+    seats: dict[str, Seat]
+    harness_dir: Path
+
+    def role_of(self, seat_id: str) -> str | None:
+        s = self.seats.get(seat_id)
+        return s.role if s else None
+
+    def instructions_for(self, seat: Seat) -> str:
+        if seat.instructions:
+            p = Path(seat.instructions)
+            if not p.is_absolute():
+                p = self.harness_dir / p
+            try:
+                return p.read_text("utf-8")
+            except OSError:
+                return ""
+        return ""
+
+
+def ensure_line(project_dir: str) -> Path:
+    """Создать `.harness/` с шаблонами, если чего-то нет. Существующие файлы не трогаем."""
+    h = Path(project_dir) / ".harness"
+    (h / "roles").mkdir(parents=True, exist_ok=True)
+    (h / "state").mkdir(exist_ok=True)
+    for name in ("team.yaml", "comms-policy.yaml"):
+        if not (h / name).exists():
+            shutil.copyfile(TEMPLATES / name, h / name)
+    for src in (TEMPLATES / "roles").glob("*.md"):
+        dst = h / "roles" / src.name
+        if not dst.exists():
+            shutil.copyfile(src, dst)
+    return h
+
+
+def load_team(harness_dir: Path) -> Team:
+    path = harness_dir / "team.yaml"
+    try:
+        data = yaml.safe_load(path.read_text("utf-8")) or {}
+    except (OSError, yaml.YAMLError) as e:
+        raise TeamError(f"team.yaml не читается: {e}") from e
+    if not isinstance(data, dict) or not isinstance(data.get("seats"), dict) or not data["seats"]:
+        raise TeamError("team.yaml: нужен раздел seats с хотя бы одним местом")
+    seats: dict[str, Seat] = {}
+    for sid, raw in data["seats"].items():
+        sid = str(sid)
+        if not SEAT_ID_RE.match(sid) or sid in RESERVED_IDS:
+            raise TeamError(f"team.yaml: недопустимое имя места «{sid}» (латиница, цифры, - и _; не owner/harness/all)")
+        if not isinstance(raw, dict):
+            raise TeamError(f"team.yaml: место {sid} должно быть таблицей")
+        role = str(raw.get("role") or sid)
+        vendor = str(raw.get("vendor") or "")
+        if vendor not in VENDORS:
+            raise TeamError(f"team.yaml: у места {sid} вендор «{vendor}», допустимы {', '.join(VENDORS)}")
+        mode = str(raw.get("mode") or "chat")
+        if mode not in MODE_IDS:
+            raise TeamError(f"team.yaml: у места {sid} режим «{mode}», допустимы {', '.join(MODE_IDS)}")
+        model = str(raw.get("model") or "")
+        if not model:
+            raise TeamError(f"team.yaml: у места {sid} не задана модель")
+        wp = raw.get("write_paths") or []
+        if not isinstance(wp, list) or not all(isinstance(x, str) and x and not x.startswith("/") and ".." not in x for x in wp):
+            raise TeamError(f"team.yaml: write_paths у места {sid} — список относительных путей без ..")
+        instr = raw.get("instructions")
+        if instr is None:
+            cand = harness_dir / "roles" / f"{role}.md"
+            instr = str(cand) if cand.exists() else None
+        seats[sid] = Seat(id=sid, role=role, label=str(raw.get("label") or sid), vendor=vendor, model=model, mode=mode,
+                          digest=bool(raw.get("digest", False)), write_paths=[x.rstrip("/") for x in wp], instructions=instr)
+    return Team(version=int(data.get("version") or 1), project=str(data.get("project") or ""),
+                integration_branch=str(data.get("integration_branch") or "main"), seats=seats, harness_dir=harness_dir)

@@ -62,6 +62,9 @@ class Bridge:
         to = str(args.get("pane") or "")
         if to == sender or not self.registry.get(to):
             return {"ok": False, "code": "pane_unknown", "error": f"нет такого окна: {to}"}
+        if not self.registry.can_observe(sender, to):
+            return {"ok": False, "code": "policy_denied",
+                    "error": f"политика: роль {self.registry.role_of(sender)} не наблюдает разговоры роли {self.registry.role_of(to)}"}
         n = args.get("last_n") or 20
         try:
             n = max(1, min(100, int(n)))

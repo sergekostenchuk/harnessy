@@ -1,5 +1,5 @@
-"""Реестр окон: настройки, занятость, подписчики событий, запросы разрешений,
-стенограмма для сводки соседям и передача сообщений между окнами."""
+"""Реестр окон (мест): настройки, занятость, подписчики событий, запросы разрешений,
+стенограмма для сводки соседям. Окна строятся из манифеста команды team.yaml."""
 from __future__ import annotations
 
 import asyncio
@@ -8,11 +8,6 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
-PANE_LABEL = {"left": "левое окно", "right": "правое окно", "codex": "окно Codex"}
-PANE_VENDOR = {"left": "claude", "right": "claude", "codex": "codex"}
-PANE_IDS = list(PANE_LABEL)
-
-MAX_RELAY_DEPTH = 3
 APPROVAL_TIMEOUT_SEC = 15 * 60
 DIGEST_MAX_CHARS = 6000
 DIGEST_ITEM_CHARS = 700
@@ -21,6 +16,8 @@ DIGEST_ITEM_CHARS = 700
 MODES = [
     {"id": "chat", "label": "Только чат"},
     {"id": "read", "label": "Чтение папки"},
+    {"id": "check", "label": "Чтение и команды"},
+    {"id": "web", "label": "Чтение и интернет"},
     {"id": "ask", "label": "Спрашивать"},
     {"id": "edit", "label": "Правки без вопросов"},
     {"id": "all", "label": "Всё без вопросов"},
@@ -45,24 +42,26 @@ class Pane:
     model: str
     mode: str = "chat"
     cwd: str = ""
+    role: str = ""
+    write_paths: list = field(default_factory=list)
     session_id: str | None = None
     digest: bool = False
     busy: bool = False
-    touched: bool = False                                   # сервер уже знает настройки/ход окна (после старта)
+    touched: bool = False
+    collapsed: bool = False
     subscribers: set[asyncio.Queue] = field(default_factory=set)
     transcript: list[dict] = field(default_factory=list)   # {role: me|ai|peer, text, ts}
     seen: dict[str, int] = field(default_factory=dict)      # сколько реплик соседа уже показано в сводке
     approvals: dict[str, Approval] = field(default_factory=dict)
     interrupt: Callable[[], Awaitable[None]] | None = None
-    steer: Callable[[str], Awaitable[None]] | None = None    # прямая инструкция в идущий ход
+    steer: Callable[[str], Awaitable[None]] | None = None
     tokens: dict = field(default_factory=dict)
-    turn_records: list = field(default_factory=list)          # записи, доставленные текущим ходом
-    replied: set = field(default_factory=set)                 # seq записей, на которые этот ход ответил явно
-    asking: set = field(default_factory=set)                  # кому окно сейчас задаёт вопрос через ask
-    nudged: set = field(default_factory=set)                  # review-request, по которым уже напоминали
-    awaiting: dict = field(default_factory=dict)              # review-request без вердикта: seq -> запись
+    turn_records: list = field(default_factory=list)
+    replied: set = field(default_factory=set)
+    asking: set = field(default_factory=set)
+    nudged: set = field(default_factory=set)
+    awaiting: dict = field(default_factory=dict)
 
-    # ---- события в окно (SSE) ----
     def publish(self, ev: dict) -> None:
         for q in list(self.subscribers):
             try:
@@ -76,23 +75,22 @@ class Pane:
 
     def settings(self) -> dict:
         return {
-            "id": self.id, "vendor": self.vendor, "label": self.label, "model": self.model, "mode": self.mode,
-            "cwd": self.cwd, "sessionId": self.session_id, "digest": self.digest, "busy": self.busy,
+            "id": self.id, "vendor": self.vendor, "label": self.label, "role": self.role, "model": self.model, "mode": self.mode,
+            "cwd": self.cwd, "sessionId": self.session_id, "digest": self.digest, "busy": self.busy, "writePaths": self.write_paths,
             "touched": self.touched, "pendingApprovals": len(self.approvals),
         }
 
     def persist(self) -> dict:
-        return {"model": self.model, "mode": self.mode, "cwd": self.cwd, "sessionId": self.session_id, "digest": self.digest}
+        return {"model": self.model, "mode": self.mode, "sessionId": self.session_id, "digest": self.digest}
 
-    # ---- запросы разрешений ----
-    async def ask_approval(self, title: str, detail: str) -> bool:
+    async def ask_approval(self, title: str, detail: str, timeout: float = APPROVAL_TIMEOUT_SEC) -> bool:
         """Показать карточку в окне и дождаться решения владельца. Таймаут = отказ."""
         loop = asyncio.get_running_loop()
         a = Approval(id=uuid.uuid4().hex[:12], pane=self.id, title=title, detail=detail, future=loop.create_future())
         self.approvals[a.id] = a
         self.publish({"type": "approval", "id": a.id, "title": title, "detail": detail})
         try:
-            return bool(await asyncio.wait_for(a.future, APPROVAL_TIMEOUT_SEC))
+            return bool(await asyncio.wait_for(a.future, timeout))
         except asyncio.TimeoutError:
             self.publish({"type": "approvalResolved", "id": a.id, "decision": "timeout"})
             return False
@@ -109,22 +107,38 @@ class Pane:
 
 
 class Registry:
-    def __init__(self, default_cwd: str, models: dict[str, list[dict]]):
+    """Окна линии, построенные из мест манифеста."""
+
+    def __init__(self, default_cwd: str, models: dict[str, list[dict]], seats: list | None = None):
         self.default_cwd = default_cwd
-        self.models = models  # vendor -> [{id,label}]
+        self.models = models
         self.panes: dict[str, Pane] = {}
-        for pid in PANE_IDS:
-            vendor = PANE_VENDOR[pid]
-            first = models[vendor][0]["id"] if models.get(vendor) else ""
-            self.panes[pid] = Pane(id=pid, vendor=vendor, label=PANE_LABEL[pid], model=first, cwd=default_cwd,
-                                   digest=(vendor == "codex"))
-        self.providers: dict[str, Any] = {}   # vendor -> provider
+        self.providers: dict[str, Any] = {}
+        self.policy = None      # app.policy.Policy, ставит сервер
+        for s in seats or []:
+            self.panes[s.id] = Pane(id=s.id, vendor=s.vendor, label=s.label, model=s.model, mode=s.mode, cwd=default_cwd,
+                                    role=s.role, write_paths=list(s.write_paths), digest=bool(s.digest))
+
+    @property
+    def ids(self) -> list[str]:
+        return list(self.panes)
 
     def get(self, pid: str) -> Pane | None:
         return self.panes.get(pid)
 
     def others(self, pid: str) -> list[Pane]:
         return [p for k, p in self.panes.items() if k != pid]
+
+    def role_of(self, seat: str) -> str:
+        if seat == "owner":
+            return "owner"
+        p = self.panes.get(seat)
+        return p.role if p else seat
+
+    def can_observe(self, viewer: str, target: str) -> bool:
+        if self.policy is None:
+            return True
+        return self.policy.can_observe(self.role_of(viewer), self.role_of(target))
 
     def update(self, p: Pane, body: dict, valid_dir: Callable[[str], bool]) -> bool:
         """Настройки от страницы. Во время хода ничего не меняем: страница не может перебить идущий ход."""
@@ -153,20 +167,21 @@ class Registry:
             p.digest = bool(body.get("digest"))
         return True
 
-    # ---- сводка «что нового у соседей» ----
     def build_digest(self, p: Pane) -> str:
+        """Что нового у соседей с прошлого хода — только у тех, кого роль вправе наблюдать."""
         if not p.digest:
             return ""
         parts: list[str] = []
         total = 0
         for o in self.others(p.id):
+            if not self.can_observe(p.id, o.id):
+                continue
             start = p.seen.get(o.id, 0)
             new = o.transcript[start:]
             p.seen[o.id] = len(o.transcript)
             if not new:
                 continue
-            head = f"[{o.label} · {o.vendor} · {o.model} · режим {o.mode}]"
-            lines = [head]
+            lines = [f"[{o.id} · {o.label} · {o.vendor} · {o.model} · режим {o.mode}]"]
             for m in new:
                 who = {"me": "владелец", "ai": "агент", "peer": "сосед"}.get(m["role"], m["role"])
                 t = m["text"].strip().replace("\r", "")
@@ -190,8 +205,8 @@ class Registry:
             return f"нет окна {pid}"
         msgs = p.transcript[-last_n:] if last_n > 0 else p.transcript
         if not msgs:
-            return f"{p.label}: разговор пуст"
-        out = [f"{p.label} · {p.vendor} · {p.model} · режим {p.mode} · последние {len(msgs)} реплик"]
+            return f"{p.id} ({p.label}): разговор пуст"
+        out = [f"{p.id} · {p.label} · {p.vendor} · {p.model} · режим {p.mode} · последние {len(msgs)} реплик"]
         for m in msgs:
             who = {"me": "владелец", "ai": "агент", "peer": "сосед"}.get(m["role"], m["role"])
             out.append(f"{who}: {m['text'][:2000]}")

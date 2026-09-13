@@ -22,7 +22,7 @@ KINDS = [
     "task", "status", "question", "answer", "review-request", "verdict", "blocker", "escalation",
     "note", "stop", "resume", "digest", "proposal", "decision", "report",
 ]
-SYSTEM_KINDS = ["protocol", "rejected", "policy"]
+SYSTEM_KINDS = ["protocol", "rejected", "policy", "ack"]
 REPLY_KIND = {"question": "answer", "task": "status", "review-request": "verdict"}
 
 PROTOCOL_TEXT = (
@@ -64,6 +64,7 @@ class Journal:
         self._lock = threading.Lock()
         self._records: list[dict] = []
         self.cursors: dict[str, int] = {}
+        self.acked: set[int] = set()
         self._load()
 
     # ---------- загрузка и запись ----------
@@ -75,9 +76,12 @@ class Journal:
                     if not line:
                         continue
                     try:
-                        self._records.append(json.loads(line))
+                        rec = json.loads(line)
                     except json.JSONDecodeError:
                         continue
+                    self._records.append(rec)
+                    if rec.get("kind") == "ack" and rec.get("reply_to") is not None:
+                        self.acked.add(int(rec["reply_to"]))
         if not self._records:
             self._write({
                 "seq": 0, "id": new_id(), "ts": now_iso(), "from": "harness", "to": ["*"], "kind": "protocol",
@@ -135,7 +139,7 @@ class Journal:
                 "seq": self.last_seq + 1, "id": new_id(), "ts": now_iso(), "from": sender, "to": to, "kind": kind,
                 "thread": thread, "reply_to": reply_to, "text": text, "evidence": evidence, "policy": policy,
             }
-            for k in ("score", "round", "origin"):
+            for k in ("score", "round", "origin", "accepted", "bounds", "ack"):
                 if extra.get(k) is not None:
                     rec[k] = extra[k]
             self._write(rec)
@@ -163,11 +167,16 @@ class Journal:
         return [r for r in self._records if r.get("reply_to") == seq]
 
     # ---------- доставка ----------
+    def mark_acked(self, seq: int) -> None:
+        self.acked.add(int(seq))
+
     def pending_for(self, seat: str) -> list[dict]:
         cur = self.cursors.get(seat, 0)
         out = []
         for r in self._records:
             if r["seq"] <= cur or r.get("kind") in SYSTEM_KINDS or r.get("from") == seat:
+                continue
+            if r.get("ack") == "pending" and r["seq"] not in self.acked:
                 continue
             if seat in r.get("to", []) or "*" in r.get("to", []):
                 out.append(r)
