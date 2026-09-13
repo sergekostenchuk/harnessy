@@ -32,6 +32,7 @@ class Seat:
     digest: bool = False
     write_paths: list = field(default_factory=list)
     instructions: str | None = None    # путь к файлу инструкций роли
+    worktree: str | None = None        # относительный путь worktree места (ветка seat/<id>)
 
 
 @dataclass
@@ -41,6 +42,7 @@ class Team:
     integration_branch: str
     seats: dict[str, Seat]
     harness_dir: Path
+    merge_roles: list = field(default_factory=lambda: ["orchestrator"])
 
     def role_of(self, seat_id: str) -> str | None:
         s = self.seats.get(seat_id)
@@ -101,11 +103,18 @@ def load_team(harness_dir: Path) -> Team:
         wp = raw.get("write_paths") or []
         if not isinstance(wp, list) or not all(isinstance(x, str) and x and not x.startswith("/") and ".." not in x for x in wp):
             raise TeamError(f"team.yaml: write_paths у места {sid} — список относительных путей без ..")
+        wt = raw.get("worktree")
+        if wt is not None and (not isinstance(wt, str) or not wt or wt.startswith("/") or ".." in wt):
+            raise TeamError(f"team.yaml: worktree у места {sid} — относительный путь внутри проекта")
         instr = raw.get("instructions")
         if instr is None:
             cand = harness_dir / "roles" / f"{role}.md"
             instr = str(cand) if cand.exists() else None
         seats[sid] = Seat(id=sid, role=role, label=str(raw.get("label") or sid), vendor=vendor, model=model, mode=mode,
-                          digest=bool(raw.get("digest", False)), write_paths=[x.rstrip("/") for x in wp], instructions=instr)
+                          digest=bool(raw.get("digest", False)), write_paths=[x.rstrip("/") for x in wp], instructions=instr,
+                          worktree=(wt.rstrip("/") if wt else None))
+    mr = data.get("merge_roles", ["orchestrator"])
+    if not isinstance(mr, list) or not all(isinstance(x, str) for x in mr):
+        raise TeamError("team.yaml: merge_roles — список ролей")
     return Team(version=int(data.get("version") or 1), project=str(data.get("project") or ""),
-                integration_branch=str(data.get("integration_branch") or "main"), seats=seats, harness_dir=harness_dir)
+                integration_branch=str(data.get("integration_branch") or "main"), seats=seats, harness_dir=harness_dir, merge_roles=mr)

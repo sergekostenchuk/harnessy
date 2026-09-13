@@ -60,6 +60,13 @@ def calls_of(app, seat):
     return [c for c in app.fake.calls if c[0] == seat]
 
 
+def report(root, thread, rnd):
+    d = Path(root, ".harness", "evidence", thread, f"r{rnd}")
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "report.md").write_text("# Ran\nтесты\n# Skipped\n—\n# Planned\n—\n# Manual\n—\n", "utf-8")
+    return f".harness/evidence/{thread}/r{rnd}/report.md"
+
+
 class DeliveryTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -77,7 +84,7 @@ class DeliveryTests(unittest.TestCase):
             self.assertTrue((h / "team.yaml").exists() and (h / "comms-policy.yaml").exists() and (h / "roles" / "executor.md").exists())
             self.assertEqual(set(app.registry.ids), {"assistant", "orchestrator", "architect", "executor", "reviewer", "tester", "researcher"})
             self.assertEqual(app.registry.get("reviewer").role, "reviewer")
-            self.assertEqual(app.line_errors, [])
+            self.assertTrue(all("не git" in e for e in app.line_errors), app.line_errors)   # tmp не под git: worktree нет, это не ошибка
             note = app.role_note(app.registry.get("executor"))
             self.assertIn("Роль: исполнитель", note)
             self.assertIn("reviewer (ревьюер): review-request", note)
@@ -195,14 +202,15 @@ class DeliveryTests(unittest.TestCase):
                 app.post("reviewer", ["executor"], "verdict", "плохо", reply_to=None, score=5, round_=1)
             self.assertEqual(cm.exception.code, "reply_to_required")
             rr = app.post("executor", ["reviewer"], "review-request", "проверь abc123", thread="M-7", evidence=["abc123"])
+            ev1 = report(self.tmp.name, "M-7", 1)
             with self.assertRaises(JournalError):
-                app.post("reviewer", ["executor"], "verdict", "плохо", reply_to=rr["seq"], score=11, round_=1)
+                app.post("reviewer", ["executor"], "verdict", "плохо", reply_to=rr["seq"], score=11, round_=1, evidence=[ev1])
             q = app.post("executor", ["reviewer"], "question", "как дела?", thread="M-7")
             with self.assertRaises(JournalError) as cm:
-                app.post("reviewer", ["executor"], "verdict", "плохо", reply_to=q["seq"], score=5, round_=1)
+                app.post("reviewer", ["executor"], "verdict", "плохо", reply_to=q["seq"], score=5, round_=1, evidence=[ev1])
             self.assertEqual(cm.exception.code, "policy_denied")
             with self.assertRaises(JournalError) as cm:
-                app.post("reviewer", ["executor"], "verdict", "плохо", reply_to=rr["seq"], score=5, round_=4)
+                app.post("reviewer", ["executor"], "verdict", "плохо", reply_to=rr["seq"], score=5, round_=4, evidence=[ev1])
             self.assertIn("max_rounds", str(cm.exception))
             app.fake.reply = lambda pane, msg: "посмотрел, всё норм"
             await settle(app)
@@ -212,9 +220,9 @@ class DeliveryTests(unittest.TestCase):
             esc = [r for r in app.journal.read() if r["kind"] == "escalation"]
             self.assertEqual(len(esc), 1)
             self.assertIn("owner", esc[0]["to"])
-            low = app.post("reviewer", ["executor"], "verdict", "7/10", reply_to=rr["seq"], score=7, round_=1)
+            low = app.post("reviewer", ["executor"], "verdict", "7/10", reply_to=rr["seq"], score=7, round_=1, evidence=[ev1])
             self.assertFalse(low["accepted"])
-            good = app.post("reviewer", ["executor"], "verdict", "9/10", reply_to=rr["seq"], score=9, round_=2)
+            good = app.post("reviewer", ["executor"], "verdict", "9/10", reply_to=rr["seq"], score=9, round_=2, evidence=[report(self.tmp.name, "M-7", 2)])
             self.assertEqual((good["thread"], good["score"], good["round"], good["accepted"]), ("M-7", 9, 2, True))
             await settle(app)
             statuses = [r for r in app.journal.read() if r["kind"] == "status" and r["from"] == "harness"]
@@ -223,7 +231,7 @@ class DeliveryTests(unittest.TestCase):
             self.assertEqual(statuses[-1]["to"], ["orchestrator"])
             self.assertEqual(app.threads["M-7"]["accepted"], True)
             rr2 = app.post("executor", ["reviewer"], "review-request", "проверь def456", thread="M-8")
-            app.post("reviewer", ["executor"], "verdict", "3/10", reply_to=rr2["seq"], score=3, round_=3)
+            app.post("reviewer", ["executor"], "verdict", "3/10", reply_to=rr2["seq"], score=3, round_=3, evidence=[report(self.tmp.name, "M-8", 3)])
             esc = [r for r in app.journal.read() if r["kind"] == "escalation" and r.get("thread") == "M-8"]
             self.assertEqual(len(esc), 1)
             await settle(app)

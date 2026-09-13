@@ -321,6 +321,9 @@
       try {
         const d = await (await fetch('/api/journal?limit=120')).json();
         $journal.innerHTML = '';
+        const th = d.threads || {};
+        const keys = Object.keys(th);
+        if (keys.length) $journal.appendChild(el('div', 'r', 'Треды: ' + keys.map(k => `${k}: раунд ${th[k].rounds}` + (th[k].lastScore != null ? `, балл ${th[k].lastScore}` : '') + (th[k].accepted ? ', принято' : '') + (th[k].sha ? ` ${String(th[k].sha).slice(0, 8)}` : '') + (th[k].merged ? ` → слито ${String(th[k].merged).slice(0, 8)}` : '')).join(' · ')));
         for (const r of d.records.slice().reverse()) {
           const t = new Date(r.ts); const hm = isNaN(t) ? '' : t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
           $journal.appendChild(el('div', 'r', `#${r.seq} ${hm} ${labelOf(r.from)} → ${(r.to || []).map(labelOf).join(',')} · ${r.kind}` + (r.thread ? ` · ${r.thread}` : '') + (r.reply_to != null ? ` · ↩#${r.reply_to}` : '') + ': ' + String(r.text || '').replace(/\s+/g, ' ').slice(0, 140)));

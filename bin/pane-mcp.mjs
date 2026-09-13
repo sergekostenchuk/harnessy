@@ -20,14 +20,20 @@ const TOOLS = [
     name: 'send',
     description:
       `Отправить запись другому окну и продолжить работу, не дожидаясь ответа. Окна: ${others.map((k) => `${k} — ${PANES[k]}`).join('; ')}; owner — владелец. ` +
-      `Виды записей: ${KINDS.join(', ')}. Ответ на чужую question — kind=answer с reply_to, на task — status, на review-request — verdict с score (0..10) и round. ` +
+      `Виды записей: ${KINDS.join(', ')}. Ответ на чужую question — kind=answer с reply_to, на task — status, на review-request — verdict с score (0..10), round и evidence=[путь к отчёту]. review-request обязан нести sha коммита. ` +
       'Адресат получит запись следующим ходом. Пиши полный самодостаточный текст: адресат не видит твоей переписки.',
     inputSchema: { type: 'object', properties: {
       to: { type: 'string', description: 'Окно-адресат (left, right, codex, owner), можно несколько через запятую' },
       kind: { type: 'string', enum: KINDS }, text: { type: 'string' }, thread: { type: 'string', description: 'Тред (задача, веха)' },
       reply_to: { type: 'integer', description: 'seq записи, на которую отвечаешь' }, evidence: { type: 'array', items: { type: 'string' } },
-      score: { type: 'integer', minimum: 0, maximum: 10 }, round: { type: 'integer', minimum: 1 } },
+      score: { type: 'integer', minimum: 0, maximum: 10 }, round: { type: 'integer', minimum: 1 },
+      sha: { type: 'string', description: 'SHA коммита — обязателен у review-request' } },
       required: ['to', 'kind', 'text'], additionalProperties: false },
+  },
+  {
+    name: 'merge',
+    description: 'Слить принятый коммит в интеграционную ветку проекта. Пройдёт только SHA с принятым вердиктом; корень проекта должен быть на интеграционной ветке и чистым. Право — по merge_roles манифеста.',
+    inputSchema: { type: 'object', properties: { sha: { type: 'string' }, message: { type: 'string' } }, required: ['sha'], additionalProperties: false },
   },
   {
     name: 'ask',
@@ -65,6 +71,11 @@ async function callTool(name, args) {
       const { d } = await post('/api/ask', { from: PANE_ID, ...args });
       if (!d.ok) return err('Ответа нет: ' + (d.error || 'неизвестная ошибка'));
       return ok(d.reply || '(пустой ответ)');
+    }
+    if (name === 'merge') {
+      const { d } = await post('/api/merge', { from: PANE_ID, ...args });
+      if (!d.ok) return err('Слияние отклонено: ' + (d.error || 'неизвестная ошибка'));
+      return ok(`Слито: ${String(d.sha).slice(0, 12)} → ${String(d.mergeSha).slice(0, 12)} в ${d.branch}.`);
     }
     if (name === 'read_pane') {
       const r = await fetch(APP_URL + '/api/pane_transcript?from=' + PANE_ID + '&pane=' + encodeURIComponent(args.pane || '') + '&last=' + Number(args.last_n || 20));

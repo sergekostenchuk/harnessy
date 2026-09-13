@@ -13,9 +13,11 @@ from pathlib import Path
 
 from aiohttp import web
 
+from . import gitops
 from .bridge import Bridge
 from .claude_provider import CLAUDE_BIN, ClaudeProvider, child_env
 from .codex_provider import CodexProvider
+from .evidence import check_report, resolve_evidence
 from .journal import KINDS, REPLY_KIND, Journal, JournalError
 from .panes import MODES, Pane, Registry
 from .policy import Policy, PolicyError
@@ -73,6 +75,17 @@ class App:
         self.pumps: dict[str, asyncio.Task] = {}
         self.waiting: dict[int, asyncio.Future] = {}
         self.threads: dict[str, dict] = {}
+        self.repo_root: str | None = None
+        self.codex.writable_roots = self._writable_roots
+
+    def _writable_roots(self, pane: Pane) -> list[str]:
+        """Что Codex может писать сверх своей папки: .git проекта (коммиты из worktree) и папку свидетельств."""
+        if not self.repo_root:
+            return []
+        roots = [os.path.join(self.repo_root, ".harness", "evidence")]
+        if pane.worktree:
+            roots.insert(0, os.path.join(self.repo_root, ".git"))
+        return roots
 
     def provider(self, pane: Pane):
         return self.registry.providers[pane.vendor]
@@ -111,6 +124,24 @@ class App:
         self.bridge.registry = self.registry
         self.claude.registry = self.registry
         self.codex.registry = self.registry
+        # git и worktree мест
+        self.repo_root = gitops.repo_root(path) if gitops.is_repo(path) else None
+        wanted = [s for s in seats if s.worktree]
+        if wanted and not self.repo_root:
+            self.line_errors.append("папка проекта не git-репозиторий: worktree не созданы, все места работают в корне")
+        elif self.repo_root:
+            os.makedirs(os.path.join(self.repo_root, ".harness", "evidence"), exist_ok=True)
+            for pat in (".harness/state/", ".harness/evidence/", ".harness/digests/", ".harness/logs/"):
+                gitops.ensure_exclude(self.repo_root, pat)   # состояние линии вне git; манифест, политика и роли — в git
+            for sd in wanted:
+                wt, note = gitops.ensure_worktree(self.repo_root, sd.id, sd.worktree, self.team.integration_branch)
+                pane = self.registry.get(sd.id)
+                if wt:
+                    pane.cwd = wt
+                    pane.worktree = wt
+                    pane.branch = f"seat/{sd.id}"
+                else:
+                    self.line_errors.append(f"{sd.id}: {note}")
         saved = self.journal.load_panes()
         for p in self.registry.panes.values():
             st = saved.get(p.id) or {}
@@ -121,6 +152,12 @@ class App:
         for r in self.journal.read(limit=0):
             if r.get("kind") == "verdict" and r.get("thread"):
                 self._note_verdict(r, announce=False)
+            elif r.get("kind") == "status" and r.get("origin") == "merge" and r.get("thread"):
+                st = self.threads.setdefault(r["thread"], {"rounds": 0, "accepted": True, "lastScore": None, "sha": r.get("sha"), "merged": None})
+                merged = r.get("merged")
+                if not merged and self.repo_root and st.get("sha") and self.team:      # записи до появления поля: истина в git
+                    merged = gitops.merge_commit_for(self.repo_root, st["sha"], self.team.integration_branch)
+                st["merged"] = merged or st.get("merged")
         if not os.environ.get("HARNESS_NO_LAST"):
             try:
                 LAST_PROJECT_FILE.write_text(path, encoding="utf-8")
@@ -145,6 +182,20 @@ class App:
                                                  {p.id: p.label for p in self.registry.panes.values()}))
         if pane.write_paths:
             parts.append("Правки файлов тебе разрешены только в: " + ", ".join(pane.write_paths) + ". Остальное — только чтение.")
+        where = [f"Корень проекта: {self.project_dir}."]
+        if self.team:
+            where.append(f"Интеграционная ветка: {self.team.integration_branch}.")
+        if pane.worktree:
+            where.append(f"Твоя рабочая папка: {pane.worktree} — worktree на ветке {pane.branch}; корень проекта и чужие worktree не трогай.")
+        else:
+            where.append("Ты работаешь в корне проекта.")
+        if self.repo_root:
+            where.append(f"Отчёты ревью и тестов: {self.project_dir}/.harness/evidence/<тред>/r<раунд>/report.md с разделами Ran, Skipped, Planned, Manual.")
+            if self.team and pane.role in self.team.merge_roles:
+                where.append("Слияние принятых вех — только инструментом merge с SHA принятого вердикта.")
+        else:
+            where.append("Папка не под git: worktree, sha и слияние недоступны.")
+        parts.append(" ".join(where))
         return "\n\n".join(parts)
 
     def _reload_policy_if_changed(self) -> None:
@@ -160,7 +211,7 @@ class App:
 
     # ---------- журнал, политика, доставка ----------
     def post(self, sender: str, to, kind: str, text: str, thread=None, reply_to=None, evidence=None,
-             score=None, round_=None, origin=None) -> dict:
+             score=None, round_=None, origin=None, sha=None, merged=None) -> dict:
         """Единственная точка записи для агентов и владельца: проверка политики, журнал, доставка."""
         if isinstance(to, str):
             to = [to]
@@ -184,6 +235,38 @@ class App:
             target_rec = self.journal.get(reply_to)
             if target_rec is None or target_rec.get("kind") in ("protocol", "policy", "ack", "rejected"):
                 raise JournalError("reply_to_missing", f"нет записи #{reply_to}, на которую можно ответить")
+        evidence = list(evidence or [])
+        if sender not in (OWNER, HARNESS):
+            if kind == "review-request":
+                if self.repo_root:
+                    if not sha:
+                        raise JournalError("sha_required", "review-request обязан нести sha коммита вехи (git rev-parse HEAD в своей ветке)")
+                    full = gitops.resolve_sha(self.repo_root, str(sha))
+                    if not full:
+                        raise JournalError("sha_unknown", f"коммита {sha} нет в репозитории проекта; закоммить и пришли настоящий SHA")
+                    sha = full
+            if kind == "verdict":
+                if not evidence:
+                    raise JournalError("evidence_required", "verdict без отчёта не принимается: положи report.md в .harness/evidence/<тред>/r<раунд>/ и укажи путь в evidence")
+                ok_report = None
+                for e in evidence:
+                    path = resolve_evidence(self.project_dir, e)
+                    if path is None:
+                        raise JournalError("evidence_outside", f"путь свидетельства вне проекта: {e}")
+                    err = check_report(path)
+                    if err is None:
+                        ok_report = path
+                    elif not path.exists():
+                        raise JournalError("evidence_missing", err)
+                if ok_report is None:
+                    raise JournalError("evidence_contract", check_report(resolve_evidence(self.project_dir, evidence[0])))
+                if target_rec is not None and target_rec.get("sha"):
+                    sha = target_rec["sha"]
+            if kind == "report":
+                for e in evidence:
+                    path = resolve_evidence(self.project_dir, e)
+                    if path is None or not path.exists():
+                        raise JournalError("evidence_missing", f"файла свидетельства нет: {e}")
         # --- политика связи ---
         self._reload_policy_if_changed()
         pending_ack = False
@@ -218,7 +301,7 @@ class App:
         if pending_ack:
             extra["ack"] = "pending"
         rec = self.journal.append(sender=sender, to=to, kind=kind, text=text, thread=thread, reply_to=reply_to, evidence=evidence,
-                                  policy=self.policy.version if self.policy else 0, score=score, round=round_, origin=origin, **extra)
+                                  policy=self.policy.version if self.policy else 0, score=score, round=round_, origin=origin, sha=sha, merged=merged, **extra)
         src = self.registry.get(sender)
         if src:
             src.publish({"type": "sent", "record": rec})
@@ -276,10 +359,12 @@ class App:
         th = rec.get("thread")
         if not th:
             return
-        st = self.threads.setdefault(th, {"rounds": 0, "accepted": False, "lastScore": None})
+        st = self.threads.setdefault(th, {"rounds": 0, "accepted": False, "lastScore": None, "sha": None, "merged": None})
         st["rounds"] = max(st["rounds"], int(rec.get("round") or 0))
         st["lastScore"] = rec.get("score")
-        st["accepted"] = st["accepted"] or bool(rec.get("accepted"))
+        if rec.get("accepted"):
+            st["accepted"] = True
+            st["sha"] = rec.get("sha") or st.get("sha")
         if not announce:
             return
         b = rec.get("bounds") or {}
@@ -294,6 +379,33 @@ class App:
                 self.post(HARNESS, [OWNER] + orchestrators, "escalation", f"Тред {th}: раунды ревью исчерпаны ({mx}), веха не принята. Нужно решение владельца.", thread=th, origin="verdict")
         except JournalError as e:
             print(f"[harness] статус вердикта не записан: {e}", file=sys.stderr, flush=True)
+
+    async def merge(self, sender: str, sha: str, message: str = "") -> dict:
+        """Слить в интеграционную ветку только то, что принято вердиктом: аттестация = равенство SHA."""
+        role = self.role_of(sender)
+        allowed = set((self.team.merge_roles if self.team else ["orchestrator"]) + ["owner"])
+        if role not in allowed:
+            raise JournalError("policy_denied", f"слияние разрешено ролям {', '.join(sorted(allowed))}, а не {role}")
+        if not self.repo_root:
+            raise JournalError("no_repo", "папка проекта не под git")
+        full = gitops.resolve_sha(self.repo_root, sha or "")
+        if not full:
+            raise JournalError("sha_unknown", f"коммита {sha} нет в репозитории")
+        accepted = [r for r in self.journal.read(limit=0) if r.get("kind") == "verdict" and r.get("accepted") and r.get("sha") == full]
+        if not accepted:
+            raise JournalError("not_accepted", f"у коммита {full[:12]} нет принятого вердикта; сливать можно только принятое")
+        v = accepted[-1]
+        th = v.get("thread") or "без треда"
+        res = await asyncio.to_thread(gitops.merge_into, self.repo_root, full, self.team.integration_branch, message or f"merge {th}: {full[:12]} (вердикт #{v['seq']}, балл {v.get('score')})")
+        if not res.get("ok"):
+            raise JournalError("merge_failed", res.get("error", "слияние не прошло"))
+        st = self.threads.setdefault(th, {"rounds": 0, "accepted": True, "lastScore": v.get("score"), "sha": full, "merged": None})
+        st["merged"] = res["mergeSha"]
+        orchestrators = [p.id for p in self.registry.panes.values() if p.role == "orchestrator" and p.id != sender]
+        self.post(HARNESS, [OWNER] + orchestrators, "status",
+                  f"Тред {th}: коммит {full[:12]} слит в {self.team.integration_branch} как {res['mergeSha'][:12]} ({self.label_of(sender)}).",
+                  thread=th, origin="merge", sha=full, merged=res["mergeSha"])
+        return {"ok": True, "sha": full, "mergeSha": res["mergeSha"], "branch": self.team.integration_branch, "thread": th}
 
     def kick(self, pane: Pane) -> None:
         t = self.pumps.get(pane.id)
@@ -437,7 +549,9 @@ class App:
             "project": self.project_dir, "defaultDir": DEFAULT_DIR, "models": self.models, "modes": MODES, "kinds": KINDS,
             "ownerKinds": list(OWNER_KINDS), "lineErrors": self.line_errors,
             "policy": {"version": self.policy.version if self.policy else None, "path": str(self.policy.path) if self.policy else None},
-            "team": {"path": str(self.team.harness_dir / "team.yaml") if self.team else None, "integrationBranch": self.team.integration_branch if self.team else None},
+            "team": {"path": str(self.team.harness_dir / "team.yaml") if self.team else None, "integrationBranch": self.team.integration_branch if self.team else None,
+                     "mergeRoles": self.team.merge_roles if self.team else []},
+            "repo": self.repo_root,
             "panes": [{**p.settings(), "pending": len(self.journal.pending_for(p.id))} for p in self.registry.panes.values()],
             "threads": self.threads,
             "auth": {"claude": claude_auth(), "codex": info["account"]},
@@ -615,6 +729,14 @@ class App:
         r = await self.bridge.do_ask(sender, body)
         return web.json_response(r, status=200 if r.get("ok") else 409)
 
+    async def api_merge(self, request):
+        body = await request.json()
+        sender = str(body.get("from") or "")
+        if sender != OWNER and not self.registry.get(sender):
+            return web.json_response({"ok": False, "error": f"неизвестный отправитель {sender}"}, status=400)
+        r = await self.bridge.do_merge(sender, body)
+        return web.json_response(r, status=200 if r.get("ok") else 409)
+
     async def pane_transcript(self, request):
         r = self.bridge.do_read(request.query.get("from", ""), {"pane": request.query.get("pane", ""), "last_n": request.query.get("last", "20")})
         return web.json_response(r, status=200 if r.get("ok") else 403)
@@ -643,6 +765,7 @@ class App:
         app.router.add_get("/api/sessions/{id}", self.session_one)
         app.router.add_post("/api/send", self.api_send)
         app.router.add_post("/api/ask", self.api_ask)
+        app.router.add_post("/api/merge", self.api_merge)
         app.router.add_get("/api/pane_transcript", self.pane_transcript)
         app.router.add_get("/api/journal", self.journal_read)
 

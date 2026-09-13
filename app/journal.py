@@ -139,7 +139,7 @@ class Journal:
                 "seq": self.last_seq + 1, "id": new_id(), "ts": now_iso(), "from": sender, "to": to, "kind": kind,
                 "thread": thread, "reply_to": reply_to, "text": text, "evidence": evidence, "policy": policy,
             }
-            for k in ("score", "round", "origin", "accepted", "bounds", "ack"):
+            for k in ("score", "round", "origin", "accepted", "bounds", "ack", "sha", "merged"):
                 if extra.get(k) is not None:
                     rec[k] = extra[k]
             self._write(rec)

@@ -40,12 +40,13 @@ def team_note(pane: Pane, registry: Registry) -> str:
             "В конце ответа кратко перечисли, что сделал и какие файлы изменил.")
 
 
-def mode_params(mode: str) -> tuple[str, str]:
-    """(sandbox, approvalPolicy) по режиму окна."""
+def mode_params(mode: str, has_worktree: bool = False) -> tuple[str, str]:
+    """(sandbox, approvalPolicy) по режиму окна. У места со своим worktree режим проверок
+    получает запись в песочнице: checkout SHA и запуск тестов пишут в дерево."""
     if mode in ("chat", "read"):
         return "read-only", "never"
     if mode in ("check", "web"):
-        return "read-only", "on-request"      # команды и чтение свободно, запись — карточкой
+        return ("workspace-write" if has_worktree and mode == "check" else "read-only"), "on-request"
     if mode in ("ask", "edit"):
         return "workspace-write", "on-request"
     return "danger-full-access", "never"
@@ -98,6 +99,11 @@ class CodexProvider:
             f'mcp_servers.panes.args=["{script}"]',
             f'mcp_servers.panes.env={{PANE_ID="{pane.id}",APP_URL="{self.app_url}",SEATS="{seats}"}}',
         ]
+        roots = getattr(self, "writable_roots", None)
+        if roots and callable(roots):
+            extra = roots(pane)
+            if extra:
+                ov.append("sandbox_workspace_write.writable_roots=[" + ",".join(f'"{r}"' for r in extra) + "]")
         py = f"{SPARK_ROUTER_DIR}/.venv/bin/python"
         srv = f"{SPARK_ROUTER_DIR}/server.py"
         if os.path.exists(py) and os.path.exists(srv):
@@ -159,7 +165,7 @@ class CodexProvider:
         return codex
 
     async def _thread(self, pane: Pane, codex: AsyncCodex) -> AsyncThread:
-        sandbox, policy = mode_params(pane.mode)
+        sandbox, policy = mode_params(pane.mode, bool(pane.worktree))
         params = {"cwd": pane.cwd, "model": pane.model, "approvalPolicy": policy, "sandbox": sandbox}
         role = (self.role_note(pane) if self.role_note else "").strip()
         role_block = (role + "\n\n") if role else ""

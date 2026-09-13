@@ -21,8 +21,8 @@ CLAUDE_BIN = next((p for p in [os.environ.get("CLAUDE_BIN", ""), f"{HOME}/.local
 PEER_TOOLS = ["mcp__panes__send", "mcp__panes__ask", "mcp__panes__read_pane"]
 # Инструменты для работы в папке. Без Agent/SendMessage/ListAgents/ToolSearch: связь с окнами только через send_to.
 WORK_TOOLS = ["Read", "Edit", "Write", "MultiEdit", "Bash", "Glob", "Grep", "WebFetch", "WebSearch", "NotebookEdit"]
-SAFE_BASH = ["Bash(git:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(pwd)", "Bash(find:*)", "Bash(grep:*)", "Bash(rg:*)",
-             "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(npm test:*)", "Bash(npm run:*)", "Bash(node:*)", "Bash(python3:*)"]
+SAFE_BASH = ["Bash(git:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(pwd)", "Bash(find:*)", "Bash(grep:*)", "Bash(rg:*)", "Bash(mkdir:*)",
+             "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(od:*)", "Bash(diff:*)", "Bash(npm test:*)", "Bash(npm run:*)", "Bash(node:*)", "Bash(python3:*)"]
 
 SYSTEM_CHAT = ("Ты ассистент в простом чате. Отвечай на языке собеседника, по существу. "
                "Доступа к файлам и к интернету у тебя в этом чате нет.")
@@ -41,11 +41,15 @@ def team_note(pane: Pane, registry: Registry) -> str:
             "попросили. В конце ответа кратко перечисли, что сделал и какие файлы изменил." + peer_note(pane, registry))
 
 
-def path_rules(pane: Pane) -> list[str]:
-    """Правила разрешений Claude Code: правки без вопросов только в write_paths места."""
+def path_rules(pane: Pane, project_dir: str | None = None) -> list[str]:
+    """Правила разрешений Claude Code: правки без вопросов только в write_paths места
+    и в папке свидетельств проекта (отчёты ревью и тестов); пути write_paths — от рабочей папки места."""
     out = []
     for p in pane.write_paths:
         out += [f"Edit({p}/**)", f"Write({p}/**)", f"MultiEdit({p}/**)"]
+    if project_dir:
+        ev = f"//{project_dir.lstrip('/')}/.harness/evidence/**"
+        out += [f"Edit({ev})", f"Write({ev})", f"MultiEdit({ev})"]
     return out
 
 
@@ -94,9 +98,9 @@ class ClaudeProvider:
         role = (self.bridge.app.role_note(pane) if getattr(self.bridge, "app", None) else "").strip()
         role_block = (role + "\n\n") if role else ""
         note = role_block + team_note(pane, self.registry)
-        edit_tools = ["Edit", "Write", "MultiEdit"] if pane.write_paths else []
-        if pane.write_paths:
-            allowed += path_rules(pane)
+        project_dir = getattr(getattr(self.bridge, "app", None), "project_dir", None)
+        edit_tools = ["Edit", "Write", "MultiEdit"]          # запись разрешена только по правилам ниже, остальное — карточкой
+        allowed += path_rules(pane, project_dir)
         if mode == "chat":
             kw.update(tools=[], permission_mode="default", system_prompt=role_block + SYSTEM_CHAT + peer_note(pane, self.registry))
         elif mode == "read":

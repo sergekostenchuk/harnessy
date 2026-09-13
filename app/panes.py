@@ -44,6 +44,8 @@ class Pane:
     cwd: str = ""
     role: str = ""
     write_paths: list = field(default_factory=list)
+    worktree: str | None = None       # абсолютный путь worktree, если у места своя ветка
+    branch: str | None = None
     session_id: str | None = None
     digest: bool = False
     busy: bool = False
@@ -77,6 +79,7 @@ class Pane:
         return {
             "id": self.id, "vendor": self.vendor, "label": self.label, "role": self.role, "model": self.model, "mode": self.mode,
             "cwd": self.cwd, "sessionId": self.session_id, "digest": self.digest, "busy": self.busy, "writePaths": self.write_paths,
+            "worktree": self.worktree, "branch": self.branch,
             "touched": self.touched, "pendingApprovals": len(self.approvals),
         }
 

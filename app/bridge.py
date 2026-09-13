@@ -36,7 +36,7 @@ class Bridge:
             rec = self.app.post(
                 sender=sender, to=to, kind=str(args.get("kind") or ""), text=str(args.get("text") or ""),
                 thread=args.get("thread") or None, reply_to=(int(args["reply_to"]) or None) if args.get("reply_to") not in (None, "") else None,
-                evidence=args.get("evidence") or [], score=args.get("score"), round_=args.get("round"),
+                evidence=args.get("evidence") or [], score=args.get("score"), round_=args.get("round"), sha=args.get("sha") or None,
             )
         except JournalError as e:
             return {"ok": False, "code": e.code, "error": str(e)}
@@ -57,6 +57,12 @@ class Bridge:
         except RuntimeError as e:
             return {"ok": False, "code": "ask_failed", "error": str(e)}
         return {"ok": True, "reply": reply.get("text", ""), "seq": reply.get("seq")}
+
+    async def do_merge(self, sender: str, args: dict) -> dict:
+        try:
+            return await self.app.merge(sender, str(args.get("sha") or ""), str(args.get("message") or ""))
+        except JournalError as e:
+            return {"ok": False, "code": e.code, "error": str(e)}
 
     def do_read(self, sender: str, args: dict) -> dict:
         to = str(args.get("pane") or "")
@@ -81,9 +87,10 @@ class Bridge:
         @tool("send",
               f"Отправить запись другому окну и продолжить работу, не дожидаясь ответа. Окна: {names}; owner — владелец. "
               f"Виды записей: {', '.join(KINDS)}. Ответ на чужую question — kind=answer с reply_to, на task — status, "
-              "на review-request — verdict с score (0..10) и round. Адресат получит запись следующим ходом. "
+              "на review-request — verdict с score (0..10), round и evidence=[путь к отчёту]. review-request обязан нести sha коммита. "
+              "Адресат получит запись следующим ходом. "
               "Пиши полный самодостаточный текст: адресат не видит твоей переписки.",
-              {"to": str, "kind": str, "text": str, "thread": str, "reply_to": int, "evidence": list, "score": int, "round": int})
+              {"to": str, "kind": str, "text": str, "thread": str, "reply_to": int, "evidence": list, "score": int, "round": int, "sha": str})
         async def send(args: dict) -> dict:
             r = await bridge.do_send(pane.id, args)
             if not r.get("ok"):
@@ -108,4 +115,13 @@ class Bridge:
                 return tool_error(r.get("error"))
             return tool_text(r["text"])
 
-        return create_sdk_mcp_server(name="panes", version="0.3.0", tools=[send, ask, read_pane])
+        @tool("merge", "Слить принятый коммит в интеграционную ветку проекта. Пройдёт только SHA, у которого есть принятый вердикт; "
+              "корень проекта должен быть на интеграционной ветке и без незакоммиченных правок. Право слияния — по merge_roles манифеста.",
+              {"sha": str, "message": str})
+        async def merge(args: dict) -> dict:
+            r = await bridge.do_merge(pane.id, args)
+            if not r.get("ok"):
+                return tool_error(f"Слияние отклонено: {r.get('error')}")
+            return tool_text(f"Слито: {r['sha'][:12]} → {r['mergeSha'][:12]} в {r['branch']}.")
+
+        return create_sdk_mcp_server(name="panes", version="0.4.0", tools=[send, ask, read_pane, merge])
