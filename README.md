@@ -15,7 +15,7 @@
 ## Запуск
 
 ```bash
-cd /Users/kostenchuksergey/projects/simple-claude-chat
+cd /Users/kostenchuksergey/HARNESS
 ./run.sh            # = .venv/bin/python -m app.server
 ```
 
