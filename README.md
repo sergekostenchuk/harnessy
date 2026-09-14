@@ -23,6 +23,17 @@ cd /Users/kostenchuksergey/HARNESS
 Пересоздать окружение: `python3 -m venv .venv && ./.venv/bin/pip install openai-codex claude-agent-sdk aiohttp`.
 Тесты: `./.venv/bin/python -m unittest discover -s tests -t .`
 
+Сервер лучше держать в tmux, тогда он переживает закрытие окон Claude Code и Терминала:
+
+```bash
+bin/serve.sh            # запустить в отсоединённой сессии tmux «harness»
+bin/serve.sh attach     # посмотреть экран сервера, выход Ctrl-b d
+bin/serve.sh restart    # перезапустить после правок кода сервера
+bin/serve.sh stop       # остановить
+```
+
+Журнал сервера копится в `logs/server.log`.
+
 Вход, один раз, в Терминале: `claude login` для Claude, `codex login` для Codex.
 Жёлтая полоса вверху страницы говорит, у кого вход не выполнен.
 

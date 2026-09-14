@@ -6,3 +6,4 @@ __pycache__
 .harness/evidence/
 .harness/digests/
 .harness/logs/
+logs/
