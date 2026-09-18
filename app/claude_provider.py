@@ -89,7 +89,7 @@ class ClaudeProvider:
     # ---- параметры хода по режиму ----
     def options(self, pane: Pane) -> ClaudeAgentOptions:
         kw: dict = dict(
-            cwd=pane.cwd, model=pane.model, setting_sources=[], strict_mcp_config=True,
+            cwd=pane.cwd, model=pane.model or None, setting_sources=[], strict_mcp_config=True,
             include_partial_messages=True, env=child_env(), cli_path=CLAUDE_BIN,
             mcp_servers={"panes": self.bridge.sdk_server(pane)}, resume=pane.session_id,
         )

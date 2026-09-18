@@ -108,6 +108,7 @@ class App:
         try:
             self.team = load_team(harness_dir)
             seats = list(self.team.seats.values())
+            self.line_errors.extend(self.team.warnings)
         except TeamError as e:
             self.team, seats = None, []
             self.line_errors.append(str(e))

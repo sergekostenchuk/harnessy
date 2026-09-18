@@ -81,7 +81,14 @@ class TeamTests(unittest.TestCase):
             h = ensure_line(tmp)
             f = h / "team.yaml"
             base = f.read_text("utf-8")
+            # Вендор, которого 3777 не ведёт (так бывает в команде, записанной воркбенчем): место пропущено с предупреждением,
+            # остальная команда работает. Все места чужие — отказ.
             f.write_text(base.replace("vendor: codex", "vendor: gemini"), "utf-8")
+            t = load_team(h)
+            self.assertNotIn("architect", t.seats)
+            self.assertIn("assistant", t.seats)
+            self.assertTrue(any("architect" in w and "gemini" in w for w in t.warnings), t.warnings)
+            f.write_text(base.replace("vendor: codex", "vendor: kimi").replace("vendor: claude", "vendor: qwen"), "utf-8")
             with self.assertRaises(TeamError):
                 load_team(h)
             f.write_text(base.replace("mode: ask", "mode: yolo"), "utf-8")
@@ -96,6 +103,21 @@ class TeamTests(unittest.TestCase):
             f.write_text("seats: {}\n", "utf-8")
             with self.assertRaises(TeamError):
                 load_team(h)
+
+    def test_empty_model_is_vendor_default(self):
+        """Воркбенч пишет «модель по умолчанию» пустым полем: команда грузится, окно получает первую модель вендора."""
+        from app.panes import Registry
+        with tempfile.TemporaryDirectory() as tmp:
+            h = ensure_line(tmp)
+            f = h / "team.yaml"
+            f.write_text(f.read_text("utf-8").replace("model: claude-sonnet-5", "model: null"), "utf-8")
+            t = load_team(h)
+            self.assertEqual(t.seats["assistant"].model, "")
+            self.assertEqual(t.warnings, [])
+            reg = Registry(tmp, {"claude": [{"id": "claude-sonnet-5"}, {"id": "claude-opus-5"}], "codex": [{"id": "gpt-5.6-sol"}]}, list(t.seats.values()))
+            self.assertEqual(reg.panes["assistant"].model, "claude-sonnet-5")
+            self.assertEqual(reg.panes["architect"].model, "gpt-6-astra", "заданная модель не подменяется")
+
 
 
 if __name__ == "__main__":

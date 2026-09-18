@@ -167,6 +167,8 @@ class CodexProvider:
     async def _thread(self, pane: Pane, codex: AsyncCodex) -> AsyncThread:
         sandbox, policy = mode_params(pane.mode, bool(pane.worktree))
         params = {"cwd": pane.cwd, "model": pane.model, "approvalPolicy": policy, "sandbox": sandbox}
+        if not pane.model:
+            params.pop("model")          # модель не задана — модель Codex по умолчанию
         role = (self.role_note(pane) if self.role_note else "").strip()
         role_block = (role + "\n\n") if role else ""
         if pane.mode == "chat":

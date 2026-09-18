@@ -130,7 +130,9 @@ class Registry:
         self.providers: dict[str, Any] = {}
         self.policy = None      # app.policy.Policy, ставит сервер
         for s in seats or []:
-            self.panes[s.id] = Pane(id=s.id, vendor=s.vendor, label=s.label, model=s.model, mode=s.mode, cwd=default_cwd,
+            # Пустая модель в манифесте — «модель вендора по умолчанию» (так пишет воркбенч): первая из списка вендора.
+            model = s.model or next((m["id"] for m in models.get(s.vendor, []) if m.get("id")), "")
+            self.panes[s.id] = Pane(id=s.id, vendor=s.vendor, label=s.label, model=model, mode=s.mode, cwd=default_cwd,
                                     role=s.role, write_paths=list(s.write_paths), digest=bool(s.digest))
 
     @property
