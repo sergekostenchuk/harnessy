@@ -133,20 +133,46 @@
         <div class="aft" style="margin-top:370px"><span class="orb"></span><div><div class="t">после хода · под ответом</div><p>Готово: три класса дефектов разобраны, отчёт в evidence/…</p><div class="cst">расход: 0,05 % недельной квоты claude · 12 400 токенов · 41 с</div></div></div>
       </div></div>
     </section>
+
+    <!-- ── C′ ─────────────────────────────────────────── -->
+    <section class="vr">
+      <div class="abt"><h2><small>вариант C′ · итог после ревью codex-ux (№3458)</small>Сверху — где и кто; снизу — права, модель, усилие</h2>
+        <p>Основа — C. Поправки ревьюера: <b>права — только снизу</b> (в харнессе «режим» и «права» — один параметр, второго переключателя не рисуем); включённые режимы (поиск, думать, субагенты) — <b>наверх</b>, рядом с ролью; <b>усилие — отдельный чип</b> с подписью, варианты — для выбранной модели; размышления — внутри меню модели; у роли убраны сведения о соседях, вместо «пока через файл команды» — «Создание места пока недоступно», подробности — в ⓘ; в корне «＋» — только названия действий, без пояснений справа. Раскрыто меню <b>«Модель»</b> из A.</p>
+        <div class="pmap"><span>верх</span><div>папка/комната · роль · включённые режимы</div><span>низ</span><div>＋ · права · модель · усилие · ⓘ · отправка</div><span>пока</span><div>усилие и размышления — «недоступно: харнесс не передаёт», пока не допишем передачу в адаптеры</div></div></div>
+      <div class="st8" style="min-height:560px"><div class="cmpz">
+        <div class="rw tp"><span class="cp"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><b>OMG</b><i>▾</i></span><span class="cp"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>оркестратор<i>▾</i></span><span class="cp onn"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>Поиск <i>×</i></span></div>
+        <div class="box"><div class="atc"><span class="cp onn"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/></svg>TASK-PLAN.md <i>×</i></span></div>
+          <div class="inp">Написать сообщение…</div>
+          <div class="btm"><span class="pls">＋</span><span class="cp"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Правки без вопросов<i>▾</i></span><span class="spc"></span><span class="cp ac"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/></svg><b>Claude · Sonnet 5</b><i>▾</i></span><span class="cp"><svg viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg>Усилие: среднее<i>▾</i></span><span class="nfo">i</span><span class="snd"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div>
+        </div>
+        <div class="mn" style="right:150px;top:150px;min-width:330px">
+          <div class="mhd">модель <span class="r">подписки и роутер</span></div>
+          <div class="it vd"><span class="cv">⌄</span>Claude <small>подписка Max</small></div>
+          <div class="it sb sl">Sonnet 5 <span class="chk">✓</span></div><div class="it sb">Opus 5</div><div class="it sb">Fable 5.1</div><div class="it sb">Haiku 4.5 <small>экономная</small></div>
+          <div class="it vd"><span class="cv">›</span>Codex <small>подписка ChatGPT</small></div>
+          <div class="it vd"><span class="cv">›</span>Через роутер Codex <small>облачные</small></div>
+          <div class="spr"></div>
+          <div class="mhd">размышления · Sonnet 5</div>
+          <div class="lv"><span>выкл</span><span class="onn">адаптивно</span><span>вкл · 8k</span></div>
+          <div class="it ds" style="height:auto;padding:6px 10px;white-space:normal;font-size:11.5px">Усилие и размышления пока недоступны: харнесс не передаёт их месту. Появятся после доработки адаптеров.</div>
+        </div>
+        <span class="nt" style="left:2px;top:-14px">итог: где · кто · режимы — сверху; права · модель · усилие — снизу</span>
+      </div></div>
+    </section>
   </div>
 
   <div class="cmpr">
     <table>
-      <tr><th></th><th>A · как в Codex</th><th>B · как в DeepSeek</th><th>C · сводный</th></tr>
-      <tr><td>над полем</td><td>папка · компьютер · рабочее дерево</td><td>папка · <b>роль</b> · <b>режим прав</b></td><td>папка/комната · <b>роль</b> · <b>права</b></td></tr>
-      <tr><td>под полем</td><td>＋ · права · модель+усилие · ⓘ</td><td>＋ · компьютер · <b>усилие</b> · модель+размышления</td><td>＋ · включённые режимы · модель · <b>усилие</b> · ⓘ</td></tr>
-      <tr><td>меню модели</td><td colspan="3">во всех трёх одинаково: вендор раскрывается в список моделей (Claude · подписка Max → Sonnet 5, Opus 5, Fable 5.1, Haiku 4.5; Codex · подписка ChatGPT → GPT-6 Astra …; через роутер → Kimi, GLM, DeepSeek, Qwen); усилие и размышления — у выбранной модели, только если место их передаёт</td></tr>
-      <tr><td>роль в команде</td><td>в шапке (собеседник)</td><td>чип сверху, меню с занятостью и свободным номером</td><td>чип сверху + пункт в «＋»</td></tr>
-      <tr><td>подсказки</td><td>ⓘ</td><td>внутри «＋»</td><td>ⓘ</td></tr>
-      <tr><td>расход</td><td colspan="3">только после хода, под ответом: процент квоты провайдера, токены, время; нет учёта — «расход недоступен»; прогноза до отправки нет нигде</td></tr>
-      <tr><td>чем хорош</td><td>знакомо по Codex; один ярус сверху</td><td>роль и режим видны до отправки, как просил владелец</td><td>то же, что B, плюс «＋» по структуре ревьюера и чистый ⓘ</td></tr>
+      <tr><th></th><th>A · как в Codex</th><th>B · как в DeepSeek</th><th>C · сводный</th><th>C′ · итог</th></tr>
+      <tr><td>над полем</td><td>папка · компьютер · рабочее дерево</td><td>папка · <b>роль</b> · <b>режим прав</b></td><td>папка/комната · <b>роль</b> · <b>права</b></td><td><b>папка/комната · роль · включённые режимы</b></td></tr>
+      <tr><td>под полем</td><td>＋ · права · модель+усилие · ⓘ</td><td>＋ · компьютер · <b>усилие</b> · модель+размышления</td><td>＋ · включённые режимы · модель · <b>усилие</b> · ⓘ</td><td>＋ · <b>права</b> · модель · <b>усилие</b> · ⓘ</td></tr>
+      <tr><td>меню модели</td><td colspan="4">во всех трёх одинаково: вендор раскрывается в список моделей (Claude · подписка Max → Sonnet 5, Opus 5, Fable 5.1, Haiku 4.5; Codex · подписка ChatGPT → GPT-6 Astra …; через роутер → Kimi, GLM, DeepSeek, Qwen); усилие и размышления — у выбранной модели, только если место их передаёт</td></tr>
+      <tr><td>роль в команде</td><td>в шапке (собеседник)</td><td>чип сверху, меню с занятостью и свободным номером</td><td>чип сверху + пункт в «＋»</td><td>чип сверху; занятость как в B, без сведений о соседях</td></tr>
+      <tr><td>подсказки</td><td>ⓘ</td><td>внутри «＋»</td><td>ⓘ</td><td>ⓘ (и «создание места недоступно» — там же)</td></tr>
+      <tr><td>расход</td><td colspan="4">только после хода, под ответом: процент квоты провайдера, токены, время; нет учёта — «расход недоступен»; прогноза до отправки нет нигде</td></tr>
+      <tr><td>чем хорош</td><td>знакомо по Codex; один ярус сверху</td><td>роль и режим видны до отправки, как просил владелец</td><td>то же, что B, плюс «＋» по структуре ревьюера и чистый ⓘ</td><td>выполняет уточнение владельца буквально и замечания ревьюера</td></tr>
     </table>
   </div>
-  <div class="cap"><span>22 · поле ввода · A как в Codex · B как в DeepSeek · C сводный · меню модели с вендорами · роль с занятостью · расход после хода</span><span>1280 × —</span></div>
+  <div class="cap"><span>22 · поле ввода · A как в Codex · B как в DeepSeek · C сводный · C′ итог после ревью · меню модели с вендорами · роль с занятостью · расход после хода</span><span>1280 × —</span></div>
 </div>
 </body></html>
