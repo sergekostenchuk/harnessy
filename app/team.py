@@ -70,9 +70,10 @@ def ensure_line(project_dir: str) -> Path:
     h = Path(project_dir) / ".harness"
     (h / "roles").mkdir(parents=True, exist_ok=True)
     (h / "state").mkdir(exist_ok=True)
-    for name in ("team.yaml", "comms-policy.yaml"):
-        if not (h / name).exists():
-            shutil.copyfile(TEMPLATES / name, h / name)
+    if not (h / "team.yaml").exists():
+        shutil.copyfile(TEMPLATES / "team-empty.yaml", h / "team.yaml")   # новая папка — без ролей (слово владельца 07.10.2026); полная команда — templates/team.yaml
+    if not (h / "comms-policy.yaml").exists():
+        shutil.copyfile(TEMPLATES / "comms-policy.yaml", h / "comms-policy.yaml")
     for src in (TEMPLATES / "roles").glob("*.md"):
         dst = h / "roles" / src.name
         if not dst.exists():
@@ -86,8 +87,8 @@ def load_team(harness_dir: Path) -> Team:
         data = yaml.safe_load(path.read_text("utf-8")) or {}
     except (OSError, yaml.YAMLError) as e:
         raise TeamError(f"team.yaml не читается: {e}") from e
-    if not isinstance(data, dict) or not isinstance(data.get("seats"), dict) or not data["seats"]:
-        raise TeamError("team.yaml: нужен раздел seats с хотя бы одним местом")
+    if not isinstance(data, dict) or not isinstance(data.get("seats"), dict):
+        raise TeamError("team.yaml: нужен раздел seats (таблица мест; может быть пустой)")
     seats: dict[str, Seat] = {}
     warnings: list[str] = []
     for sid, raw in data["seats"].items():
@@ -118,7 +119,7 @@ def load_team(harness_dir: Path) -> Team:
         seats[sid] = Seat(id=sid, role=role, label=str(raw.get("label") or sid), vendor=vendor, model=model, mode=mode,
                           digest=bool(raw.get("digest", False)), write_paths=[x.rstrip("/") for x in wp], instructions=instr,
                           worktree=(wt.rstrip("/") if wt else None))
-    if not seats:
+    if not seats and data["seats"]:
         raise TeamError("team.yaml: нет ни одного места, которое здесь можно вести" + (f" ({'; '.join(warnings)})" if warnings else ""))
     mr = data.get("merge_roles", ["orchestrator"])
     if not isinstance(mr, list) or not all(isinstance(x, str) for x in mr):

@@ -58,6 +58,7 @@ class Pane:
     interrupt: Callable[[], Awaitable[None]] | None = None
     steer: Callable[[str], Awaitable[None]] | None = None
     tokens: dict = field(default_factory=dict)
+    carry: str = ""                                          # прежний разговор, который войдёт в следующее сообщение (переезд «без папки» → папка)
     turn_records: list = field(default_factory=list)
     replied: set = field(default_factory=set)
     asking: set = field(default_factory=set)
@@ -84,7 +85,7 @@ class Pane:
         }
 
     def persist(self) -> dict:
-        return {"model": self.model, "mode": self.mode, "sessionId": self.session_id, "digest": self.digest}
+        return {"model": self.model, "mode": self.mode, "sessionId": self.session_id, "digest": self.digest, "vendor": self.vendor}
 
     async def ask_approval(self, title: str, detail: str, timeout: float = APPROVAL_TIMEOUT_SEC) -> bool:
         """Показать карточку в окне и дождаться решения владельца. Таймаут = отказ."""
@@ -165,6 +166,13 @@ class Registry:
         known = self.models.get(p.vendor, [])
         if isinstance(model, str) and model and (any(m["id"] == model for m in known) or (p.vendor == "codex" and len(known) <= 1)):
             p.model = model
+        elif isinstance(model, str) and model:
+            # модель другого вендора: место переходит к нему (слово владельца 07.10.2026 — любая модель из каталога доступна любому месту);
+            # разговор с прежним вендором продолжить нельзя — сессия начинается заново, лента остаётся
+            other = next((v for v, ms in self.models.items() if v in self.providers and any(m["id"] == model for m in ms)), None)
+            if other and other != p.vendor:
+                p.vendor, p.model, p.session_id = other, model, None
+                p.interrupt = p.steer = None
         mode = body.get("mode")
         if mode in MODE_IDS:
             p.mode = mode

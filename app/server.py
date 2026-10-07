@@ -19,9 +19,9 @@ from .claude_provider import CLAUDE_BIN, ClaudeProvider, child_env
 from .codex_provider import CodexProvider
 from .evidence import check_report, resolve_evidence
 from .journal import KINDS, REPLY_KIND, Journal, JournalError
-from .panes import MODES, Pane, Registry, TaggedSubscriber
+from .panes import MODE_IDS, MODES, Pane, Registry, TaggedSubscriber
 from .policy import Policy, PolicyError
-from .team import Team, TeamError, ensure_line, load_team
+from .team import Seat, Team, TeamError, ensure_line, load_team
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = int(os.environ.get("PORT", "3777"))
@@ -43,6 +43,12 @@ OWNER = "owner"
 HARNESS = "harness"
 FROM_LABEL = {OWNER: "владелец", HARNESS: "харнесс"}
 OWNER_KINDS = ("task", "question", "note", "stop", "resume", "decision")
+# Разговор без роли и роли по ходу (слово владельца 07.10.2026): место «room» вне манифеста; роли назначаются разговорам,
+# новое место дописывается в team.yaml с моделью разговора; известные папки — в PROJECTS_FILE.
+ROOM_ID = "room"
+ROLE_CATALOG = [("orchestrator", "оркестратор", False), ("assistant", "ассистент", False), ("architect", "архитектор", False),
+                ("executor", "воркер", True), ("reviewer", "ревьюер", True), ("tester", "тестер", False), ("researcher", "ресёрчер", False)]
+PROJECTS_FILE = Path(os.path.expanduser("~/.harness-projects.json"))
 
 
 def valid_dir(p) -> bool:
@@ -147,8 +153,13 @@ class App:
                 else:
                     self.line_errors.append(f"{sd.id}: {note}")
         saved = self.journal.load_panes()
+        if isinstance(saved.get(ROOM_ID), dict) and saved[ROOM_ID].get("model"):
+            self._make_room(saved[ROOM_ID].get("model"), saved[ROOM_ID].get("mode") or "read", vendor=saved[ROOM_ID].get("vendor"), quiet=True)
+        self._remember_project(path)
         for p in self.registry.panes.values():
             st = saved.get(p.id) or {}
+            if st.get("vendor") in self.registry.providers and st.get("vendor") != p.vendor:
+                p.vendor = st["vendor"]      # место сменило вендора через выбор модели — восстановить до применения модели
             if st:
                 self.registry.update(p, {"model": st.get("model"), "mode": st.get("mode"), "sessionId": st.get("sessionId"), "digest": st.get("digest")}, valid_dir)
                 p.touched = True
@@ -517,6 +528,10 @@ class App:
         pane.publish({"type": "state", **pane.settings()})
         try:
             digest = self.registry.build_digest(pane)
+            if pane.carry:
+                message = f"Прежний разговор (был без папки, продолжается здесь):\n{pane.carry}\n\n---\nНовое сообщение:\n{message}"
+                pane.carry = ""
+                pane.publish({"type": "note", "text": "в сообщение добавлен прежний разговор"})
             full = f"{digest}\n\n---\nСообщение тебе:\n{message}" if digest else message
             if digest:
                 pane.publish({"type": "note", "text": f"в сообщение добавлена сводка соседей ({len(digest)} символов)"})
@@ -557,6 +572,7 @@ class App:
                      "mergeRoles": self.team.merge_roles if self.team else []},
             "repo": self.repo_root,
             "panes": [{**p.settings(), "pending": len(self.journal.pending_for(p.id))} for p in self.registry.panes.values()],
+            "roleCatalog": [{"role": r, "label": l, "multi": m} for r, l, m in ROLE_CATALOG],
             "threads": self.threads,
             "auth": {"claude": claude_auth(), "codex": info["account"]},
             "journal": {"lastSeq": self.journal.last_seq, "path": str(self.journal.channel)},
@@ -592,6 +608,195 @@ class App:
         if self.registry.update(p, body, valid_dir):
             self.save_panes()
         return web.json_response({"ok": True, "pane": p.settings()})
+
+    # ---------- папки, комната, роли по ходу ----------
+    def _remember_project(self, path: str) -> None:
+        try:
+            known = json.loads(PROJECTS_FILE.read_text("utf-8")) if PROJECTS_FILE.exists() else []
+        except (OSError, json.JSONDecodeError):
+            known = []
+        if path not in known:
+            known.append(path)
+            try:
+                PROJECTS_FILE.write_text(json.dumps(known, ensure_ascii=False, indent=1), encoding="utf-8")
+            except OSError:
+                pass
+
+    def _vendor_of(self, model: str) -> str | None:
+        return next((v for v, ms in self.models.items() if v in self.registry.providers and any(m["id"] == model for m in ms)), None)
+
+    def _make_room(self, model: str, mode: str, vendor: str | None = None, quiet: bool = False) -> Pane | None:
+        vendor = vendor or self._vendor_of(model)
+        if not vendor or mode not in MODE_IDS:
+            return None
+        old = self.registry.panes.get(ROOM_ID)
+        keep = old is not None and old.vendor == vendor and old.model == model
+        room = Pane(id=ROOM_ID, vendor=vendor, label="без роли", model=model, mode=mode, cwd=self.project_dir, role="room")
+        if keep:
+            room.session_id, room.transcript, room.carry = old.session_id, old.transcript, old.carry
+        elif old is not None:
+            room.transcript, room.carry = old.transcript, old.carry
+        if ROOM_ID in self.pumps:
+            self.pumps.pop(ROOM_ID).cancel()
+        self.registry.panes[ROOM_ID] = room
+        if not quiet:
+            self.kick(room)
+            self.save_panes()
+        return room
+
+    def _transcript_text(self, pane: Pane, limit: int = 12000) -> str:
+        parts = []
+        for m in pane.transcript:
+            who = "Владелец" if m["role"] == "me" else ("Ответ" if m["role"] == "ai" else "Сосед")
+            parts.append(f"{who}: {m['text'].strip()}")
+        text = "\n\n".join(parts)
+        return text if len(text) <= limit else "…" + text[-limit:]
+
+    async def api_projects(self, request):
+        try:
+            known = json.loads(PROJECTS_FILE.read_text("utf-8")) if PROJECTS_FILE.exists() else []
+        except (OSError, json.JSONDecodeError):
+            known = []
+        out = []
+        for path in dict.fromkeys([self.project_dir, *known]):
+            if not valid_dir(path):
+                continue
+            n = None
+            tf = os.path.join(path, ".harness", "team.yaml")
+            if path == self.project_dir:
+                n = sum(1 for p in self.registry.panes.values() if p.id != ROOM_ID)
+            elif os.path.exists(tf):
+                try:
+                    import yaml
+                    d = yaml.safe_load(open(tf, encoding="utf-8")) or {}
+                    n = len(d.get("seats") or {})
+                except Exception:  # noqa: BLE001
+                    n = None
+            out.append({"path": path, "name": os.path.basename(path.rstrip("/")) or path, "hasTeam": os.path.exists(tf), "seats": n, "git": gitops.is_repo(path), "current": path == self.project_dir})
+        return web.json_response({"current": self.project_dir, "projects": out})
+
+    async def project_create(self, request):
+        body = await request.json()
+        path = os.path.expanduser(str(body.get("path") or "").strip())
+        if not path or not os.path.isabs(path) or len(path) > 400:
+            return web.json_response({"ok": False, "error": "нужен абсолютный путь папки"}, status=400)
+        if any(p.busy for p in self.registry.panes.values()):
+            return web.json_response({"ok": False, "error": "идёт ход: создай папку, когда все окна свободны"}, status=409)
+        created = not os.path.isdir(path)
+        try:
+            os.makedirs(path, exist_ok=True)
+        except OSError as e:
+            return web.json_response({"ok": False, "error": f"не удалось создать папку: {e}"}, status=400)
+        git_done = False
+        if body.get("git", True) and not gitops.is_repo(path):
+            code, _, err = gitops.run(["init", "-q"], path)
+            git_done = code == 0
+            if code != 0:
+                return web.json_response({"ok": False, "error": f"git init: {err.strip()[:200]}"}, status=400)
+        ensure_line(path)
+        await self.open_project(path)
+        return web.json_response({"ok": True, "project": path, "created": created, "git": git_done or gitops.is_repo(path), "seats": sum(1 for p in self.registry.panes.values() if p.id != ROOM_ID)})
+
+    async def room_set(self, request):
+        body = await request.json()
+        model = str(body.get("model") or "").strip()
+        if not model or not self._vendor_of(model):
+            return web.json_response({"ok": False, "error": "модель не из каталога"}, status=400)
+        old = self.registry.panes.get(ROOM_ID)
+        if old and old.busy:
+            return web.json_response({"ok": False, "error": "разговор без роли сейчас отвечает"}, status=409)
+        mode = "read" if body.get("folder", True) else "chat"
+        room = self._make_room(model, mode)
+        if not room:
+            return web.json_response({"ok": False, "error": "не удалось создать разговор без роли"}, status=400)
+        return web.json_response({"ok": True, "pane": room.settings()})
+
+    async def assign_role(self, request):
+        body = await request.json()
+        role = str(body.get("role") or "")
+        room = self.registry.panes.get(ROOM_ID)
+        cat = next((c for c in ROLE_CATALOG if c[0] == role), None)
+        if not cat:
+            return web.json_response({"ok": False, "error": f"неизвестная роль {role}"}, status=400)
+        if not room or not room.model:
+            return web.json_response({"ok": False, "error": "нет разговора без роли — назначать нечему"}, status=400)
+        if room.busy:
+            return web.json_response({"ok": False, "error": "разговор сейчас отвечает — назначьте роль после ответа"}, status=409)
+        if self.team is None:
+            return web.json_response({"ok": False, "error": "команда папки не читается: " + "; ".join(self.line_errors)}, status=400)
+        same = [p for p in self.registry.panes.values() if p.role == role and p.id != ROOM_ID]
+        if same and not cat[2]:
+            return web.json_response({"ok": False, "error": f"роль «{cat[1]}» в этой папке уже занята ({same[0].label}) — передайте контекст"}, status=409)
+        n = len(same) + 1
+        sid = role if n == 1 else f"{role}{n}"
+        label = cat[1] if n == 1 else f"{cat[1]} {n}"
+        tf = self.team.harness_dir / "team.yaml"
+        try:
+            import yaml
+            d = yaml.safe_load(tf.read_text("utf-8")) or {}
+            seats = d.get("seats") or {}
+            if sid in seats:
+                return web.json_response({"ok": False, "error": f"место {sid} уже есть в team.yaml"}, status=409)
+            seats[sid] = {"role": role, "label": label, "vendor": room.vendor, "model": room.model, "mode": room.mode, "digest": False}
+            d["seats"] = seats
+            tf.write_text("# Манифест команды линии. Места добавляются и из чата («Назначить роль»); комментарии при этом не сохраняются.\n"
+                          + yaml.safe_dump(d, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            return web.json_response({"ok": False, "error": f"team.yaml не записан: {e}"}, status=400)
+        seat = Seat(id=sid, role=role, label=label, vendor=room.vendor, model=room.model, mode=room.mode, write_paths=[], worktree=None, digest=False)
+        self.team.seats[sid] = seat
+        pane = Pane(id=sid, vendor=room.vendor, label=label, model=room.model, mode=room.mode, cwd=self.project_dir, role=role)
+        pane.session_id, pane.transcript, pane.carry = room.session_id, list(room.transcript), room.carry
+        room.session_id, room.transcript, room.carry = None, [], ""
+        self.registry.panes[sid] = pane
+        self.kick(pane)
+        self.save_panes()
+        return web.json_response({"ok": True, "pane": pane.settings(), "team": str(tf)})
+
+    async def handoff(self, request):
+        body = await request.json()
+        to = str(body.get("to") or "")
+        room = self.registry.panes.get(ROOM_ID)
+        target = self.registry.get(to)
+        if not room or not room.transcript:
+            return web.json_response({"ok": False, "error": "передавать нечего: разговор без роли пуст"}, status=400)
+        if not target or to == ROOM_ID:
+            return web.json_response({"ok": False, "error": "нет такого места"}, status=404)
+        text = "Контекст разговора владельца без роли — продолжи работу по нему:\n\n" + self._transcript_text(room)
+        try:
+            rec = self.post(OWNER, [to], "task", text, thread=f"T{self.journal.last_seq + 1}")
+        except JournalError as e:
+            return web.json_response({"ok": False, "code": e.code, "error": str(e)}, status=400)
+        return web.json_response({"ok": True, "seq": rec["seq"], "to": target.settings()})
+
+    async def room_move(self, request):
+        body = await request.json()
+        path = os.path.expanduser(str(body.get("path") or "").strip())
+        room = self.registry.panes.get(ROOM_ID)
+        if not room or not room.model:
+            return web.json_response({"ok": False, "error": "нет разговора без роли"}, status=400)
+        if any(p.busy for p in self.registry.panes.values()):
+            return web.json_response({"ok": False, "error": "идёт ход: переезд, когда все окна свободны"}, status=409)
+        if body.get("create"):
+            if not path or not os.path.isabs(path):
+                return web.json_response({"ok": False, "error": "нужен абсолютный путь папки"}, status=400)
+            os.makedirs(path, exist_ok=True)
+            if body.get("git", True) and not gitops.is_repo(path):
+                code, _, err = gitops.run(["init", "-q"], path)
+                if code != 0:
+                    return web.json_response({"ok": False, "error": f"git init: {err.strip()[:200]}"}, status=400)
+            ensure_line(path)
+        if not valid_dir(path):
+            return web.json_response({"ok": False, "error": f"папки нет: {path}"}, status=400)
+        vendor, model, carry = room.vendor, room.model, (room.carry + "\n\n" if room.carry else "") + self._transcript_text(room)
+        transcript = list(room.transcript)
+        await self.open_project(path)
+        new = self._make_room(model, "read", vendor=vendor)
+        if not new:
+            return web.json_response({"ok": False, "error": "разговор без роли не создан в новой папке"}, status=400)
+        new.transcript, new.carry, new.session_id = transcript, carry if transcript else "", None   # сессия модели привязана к папке — контекст поедет текстом в следующем сообщении
+        self.save_panes()
+        return web.json_response({"ok": True, "project": path, "pane": new.settings(), "carried": bool(transcript)})
 
     async def events(self, request):
         """Поток событий: `all` — одно соединение на страницу со всеми окнами и владельцем (событие несёт `pane`),
@@ -785,6 +990,12 @@ class App:
         app.router.add_post("/api/merge", self.api_merge)
         app.router.add_get("/api/pane_transcript", self.pane_transcript)
         app.router.add_get("/api/journal", self.journal_read)
+        app.router.add_get("/api/projects", self.api_projects)
+        app.router.add_post("/api/project/create", self.project_create)
+        app.router.add_post("/api/room", self.room_set)
+        app.router.add_post("/api/room/move", self.room_move)
+        app.router.add_post("/api/assign", self.assign_role)
+        app.router.add_post("/api/handoff", self.handoff)
         if SITE_DIR.is_dir():
             app.router.add_static("/sketches", SITE_DIR, show_index=False)
 
