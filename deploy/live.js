@@ -98,7 +98,7 @@
     if(!r||!r.ok){ H.cur=null; S.chat.push({role:'ai',html:'<p>Харнесс не принял сообщение: '+esc((r&&r.error)||'нет связи')+'</p>',t:now(),src:'err'}); save(); render(); return; }
     if(r.queued) toast('Место занято — сообщение встало в очередь'); }
   function applyStatus(st){ H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.roleCatalog=st.roleCatalog||[]; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator;
-    if(PAGE==='new'&&!S.ui.switched){ S.ui.pane='room'; S.ui.fresh=true; save(); }   // стартовый экран — всегда чистый свитчер: без роли · новый чат (слово владельца 08.10)
+    if(PAGE==='new'){ if(!S.ui.switched){ S.ui.pane='room'; S.ui.fresh=true; } S.ui.switched=false; save(); }   // стартовый экран — всегда чистый свитчер: без роли · новый чат; пометка переключения живёт один переход (слово владельца 08.10)
     if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); }
   async function refreshChats(){ try{ const r=await api('/api/chats'); H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } }
   async function refreshStatus(){ let st=null; try{ st=await api('/api/status'); }catch(e){} if(st&&Array.isArray(st.panes)){ applyStatus(st); await refreshChats(); hStatus(); if(window.CX) CX.render(); } return st; }
