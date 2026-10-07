@@ -46,7 +46,7 @@ async function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { if (!url.startsWith(ORIGIN)) { shell.openExternal(url); return { action: 'deny' }; } return { action: 'allow' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(ORIGIN) && !url.startsWith('data:')) { e.preventDefault(); shell.openExternal(url); } });
   win.webContents.on('page-title-updated', e => e.preventDefault());     // в заголовке окна всегда «Harnessy»
-  if (process.env.HARNESSY_SHOT) win.webContents.on('did-finish-load', () => setTimeout(async () => {   // кадр окна в файл — для проверки без доступа к экрану
+  if (process.env.HARNESSY_SHOT) win.webContents.once('did-finish-load', () => setTimeout(async () => {   // кадр окна в файл — для проверки без доступа к экрану; ОДИН раз: иначе любая следующая страница перезапишет кадр (урок 07.10)
     try { fs.writeFileSync(process.env.HARNESSY_SHOT, (await win.webContents.capturePage()).toPNG()); log('кадр: ' + process.env.HARNESSY_SHOT); } catch (e) { log('кадр не снят: ' + e.message); } }, 1800));
   const ok = await ensureHarness(log);
   await win.loadURL(ok ? START : offline('За 20 секунд сервер не поднялся.'));
