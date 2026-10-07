@@ -309,3 +309,10 @@ html[data-proto][data-page="chat"] .live-selbar { width:auto; max-width:760px; m
 .live-menu.la.multi .ck { position:absolute; left:9px; top:50%; width:11px; height:11px; margin-top:-6px; border:1px solid var(--line2); border-radius:3px; }
 .live-menu.la.multi .on .ck { background:#c27a34; border-color:#c27a34; }
 .live-menu.la .ft { display:flex; gap:6px; padding:8px 4px 2px; cursor:default; } .live-menu.la .ft:hover { background:none; }
+
+/* боковая панель: чаты по ролям, «без роли», папка в шапке */
+.ps-chat .s { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; color:var(--ink3); font-size:11.5px; } .ps-chat .s.one { color:var(--ink2); font-size:12px; } .ps-chat:hover .s.one { color:var(--ink); }
+.ps-chat.role .t { flex:none; max-width:48%; overflow:hidden; text-overflow:ellipsis; color:var(--ink2); } .ps-chat.role:hover .t, .ps-chat.role.act .t { color:var(--ink); }
+.ps-chat.hdr { height:20px; margin-top:3px; padding-left:17px; color:var(--ink3); font:9.5px var(--mono); letter-spacing:.08em; text-transform:uppercase; cursor:default; } .ps-chat.hdr:hover { background:transparent; } .ps-chat.hdr i { display:none; }
+.ps-chat.busy i { background:#c27a34; box-shadow:0 0 0 3px rgba(194,122,52,.18); }
+aside.side.ps .ps-proj { cursor:pointer; } aside.side.ps .ps-head { position:relative; } aside.side.ps .ps-head .live-menu.la { left:0; right:0; min-width:0; top:calc(100% - 4px); white-space:normal; } aside.side.ps .ps-head .live-menu.la div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

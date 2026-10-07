@@ -38,20 +38,19 @@
     ['проект',[['doc','Документ стадии',''],['art','Артефакты','3'],['mem','Память проекта',''],['res','Ресёрч','']],'proj'],
     ['команда',[['swarm','Стая агентов','6 мест'],['sens','Датчики',''],['spend','Расход',''],['conn','Подключения и лимиты','']]],
     ['прочее',[['log','Журнал',''],['set','Настройки',''],['away','Уйти · окно · поиск','']]]];
-  const PROJECTS=[['OMG','◆ 2',1],['HARNESS','спит'],['Принтер Brother','']];
-  const ico=k=>'<svg viewBox="0 0 24 24">'+(IC[k]||XI[k]||'')+'</svg>';
+  const ico=k=>'<svg viewBox="0 0 24 24">'+(IC[k]||XI[k]||'')+'</svg>'; window.psIcon=ico;   // рабочий слой рисует строки проектов той же иконкой
   const FOLD_KEY='harnessy-side-fold', foldOpen=f=>{ try{ return localStorage.getItem(FOLD_KEY+':'+f)==='1'; }catch(e){ return false; } };
   const limit=(name,p)=>{ const n=24, on=Math.round(p/100*n), warn=p>=90; return '<div class="row"><span>'+name+'</span><b'+(warn?' class="warn"':'')+'>'+p+' %</b></div><div class="ticks'+(warn?' warn':'')+'">'+Array.from({length:n},(_,i)=>'<i'+(i<on?' class="on"':'')+'></i>').join('')+'</div>'; };   // прогресс тиками, как велит дизайн-код; ≥90 % — предупреждение, не сбой
   function sideHTML(){ const rail=side==='rail';
     const item=([k,t,m,badge])=>'<div class="nav'+(k===KEY?' on':'')+'" data-go="'+k+'" title="'+t+'">'+ico(k)+(rail?'':'<span class="t">'+t+'</span>'+(m?'<span class="m">'+m+'</span>':''))+(badge?'<span class="b">2</span>':'')+'</div>';
-    const head='<div class="ps-head"><span class="logo" data-go="new" title="Новый чат"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></span>'+(rail?'':'<b class="ps-proj" title="Проект — переключение появится позже">OMG <i>▾</i></b>')+
+    const head='<div class="ps-head"><span class="logo" data-go="new" title="Новый чат"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></span>'+(rail?'':'<b class="ps-proj" title="Папка проекта">Harnessy <i>▾</i></b>')+
       '<span class="col" data-col title="'+(rail?'Развернуть панель':'Свернуть панель')+'">'+(rail?'⟩':'⟨')+'</span></div>';
     const top=rail?'<div class="nav search" title="Найти · ⌘K">'+ico('find')+'</div>':'<div class="newbtn'+(KEY==='new'?' on':'')+'" data-go="new">'+ico('new')+'Новый чат<kbd>⌘N</kbd></div><div class="search">'+ico('find')+'Найти…<kbd>⌘K</kbd></div>';
     const groups=GROUPS.map(([g,items,fold])=>{ if(rail) return '<i class="ps-sep"></i>'+items.map(item).join('');
       if(!fold) return '<div class="grp">'+g+'</div>'+items.map(item).join('');
       const open=foldOpen(fold)||items.some(([k])=>k===KEY);
       return '<div class="grp fold" data-fold="'+fold+'" title="'+(open?'Свернуть':'Развернуть')+'">'+g+'<span class="chev">'+(open?'⌄':'›')+'</span></div><div class="ps-fold'+(open?'':' off')+'" data-fold-body="'+fold+'">'+items.map(item).join('')+'</div>'; }).join('');
-    const proj=rail?'':'<div class="grp">проекты<span class="chev">⌄</span></div>'+PROJECTS.map(([n,m,on])=>'<div class="nav ps-p'+(on?' on':'')+'" title="'+n+'">'+ico('folder')+'<span class="t">'+n+'</span>'+(m?'<span class="m">'+m+'</span>':'')+'</div>').join('');
+    const proj=rail?'':'<div class="grp">проекты<span class="chev">⌄</span></div><div class="ps-projects"><div class="ps-chat more">папки — из движка</div></div>';   // список папок заполняет рабочий слой (live.js) из /api/projects
     const foot=rail?'<div class="ps-foot"><div class="nav" data-go="profile" title="Профиль"><span class="av">S<i></i></span></div></div>'
       :'<div class="ps-foot"><div class="limits" data-go="conn" title="Подключения и лимиты"><div class="cap">использовано</div>'+limit('Claude · неделя',62)+limit('Codex · 5 часов',94)+'</div>'+
        '<div class="user" data-go="profile" title="Профиль"><span class="av">S<i></i></span><div>Serge<small>9616166@gmail.com</small></div><span class="chev">⌄</span></div></div>';
