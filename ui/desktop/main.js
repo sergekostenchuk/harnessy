@@ -6,7 +6,7 @@ const fs = require('fs'), os = require('os'), path = require('path');
 
 const START = process.env.HARNESSY_URL || 'http://localhost:3777/sketches/proto/10-new-chat.html';
 const ORIGIN = new URL(START).origin;
-const HARNESS = process.env.HARNESS_DIR || path.join(os.homedir(), 'HARNESS');
+const HARNESS = process.env.HARNESS_DIR || path.join(__dirname, '..', '..', 'core');   // один корень ~/Harnessy/{core,ui}
 const DARK = '#0a0a0b';
 
 app.setName('Harnessy');

@@ -28,9 +28,9 @@ PORT = int(os.environ.get("PORT", "3777"))
 APP_URL = f"http://127.0.0.1:{PORT}"
 DEFAULT_DIR = os.environ.get("CHAT_WORK_DIR", "/Users/Shared/simple-claude-chat")
 LAST_PROJECT_FILE = Path(os.path.expanduser("~/.harness-last-project"))
-# Прототип Harnessy (экраны-скетчи из ~/REPORTS/workbench-design, сборка deploy/build.py) отдаётся с того же адреса, что и API:
+# Прототип Harnessy (экраны из ../ui, сборка ui/deploy/build.py) отдаётся с того же адреса, что и API:
 # страницы под /sketches/ ходят в /api/* без CORS. Переопределить папку — HARNESSY_SITE; нет папки — маршрута нет.
-SITE_DIR = Path(os.path.expanduser(os.environ.get("HARNESSY_SITE", "~/REPORTS/workbench-design/deploy/out/site/sketches")))
+SITE_DIR = Path(os.path.expanduser(os.environ["HARNESSY_SITE"])) if os.environ.get("HARNESSY_SITE") else ROOT.parent / "ui" / "deploy" / "out" / "site" / "sketches"   # окно лежит рядом: ~/Harnessy/{core,ui}
 NODE = os.environ.get("NODE_BIN") or next((p for p in [os.path.expanduser("~/.local/bin/node"), "/opt/homebrew/bin/node", "/usr/local/bin/node"] if os.path.exists(p)), "node")
 CLAUDE_MODELS = [
     {"id": "claude-sonnet-5", "label": "Sonnet 5"}, {"id": "claude-fable-5-1", "label": "Fable 5.1"},

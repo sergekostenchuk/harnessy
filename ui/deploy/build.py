@@ -7,7 +7,7 @@
      (3) кладёт рядом design-system.html;
      (4) копирует набор скетчей sketches/disarto и собирает из него ПРОТОТИП ИЗ НОВЫХ ЭКРАНОВ (out/site/sketches/proto, режим proto.css/proto.js);
          корень сайта открывает его, прежний прототип остаётся по адресу /sketches/harness-classic.html.
-Где: ~/REPORTS/workbench-design/deploy/ → out/site/. Заливка: deploy.sh.
+Где: ~/Harnessy/ui/deploy/ → out/site/. Заливка: deploy.sh.
 Зачем: правки эскиза делаются в мастере, серверная копия всегда выводится из него — ручных патчей больше нет.
 """
 import re, shutil, sys
