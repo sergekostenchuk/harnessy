@@ -122,7 +122,9 @@
       const send=()=>{ const v=ta.value.trim(); if(!v){ ta.focus(); return; } ta.value=''; ta.style.height=''; onSend(v); };
       ta.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){ e.preventDefault(); send(); } });
       ta.addEventListener('input',()=>{ ta.style.height='auto'; ta.style.height=Math.min(160,ta.scrollHeight)+'px'; });
-      const go=box.querySelector('.go'); if(go){ go.style.cursor='pointer'; go.title='Отправить'; go.addEventListener('click',send); } });
+      const go=box.querySelector('.go'); if(go){ go.style.cursor='pointer'; go.title='Отправить'; go.addEventListener('click',send); }
+      const snd=box.querySelector('.send'); if(snd&&!snd.querySelector('.live-kbd')) snd.insertAdjacentHTML('afterbegin','<span class="live-kbd" title="Отправить — Enter, перенос строки — Shift+Enter">Enter · отправить &nbsp;·&nbsp; ⇧Enter · перенос</span>');   // ревью UX 07.10 п.5: подсказка у главного действия
+      if(PAGE==='new'){ const st=box.closest('.main')&&box.closest('.main').querySelector('.starts'); if(st) ta.addEventListener('input',()=>st.classList.toggle('live-hidden',!!ta.value.trim())); } });   // п.2: быстрые старты уступают место тексту
     if(S.draft&&cols().length){ document.querySelectorAll('.live-in').forEach(ta=>ta.value=S.draft); S.draft=null; save(); const f=document.querySelector('.frame.cur .live-in'); if(f) setTimeout(()=>{ f.focus(); f.setSelectionRange(f.value.length,f.value.length); },60); }
     document.querySelectorAll('.starts .st').forEach(s=>{ s.style.cursor='pointer'; s.addEventListener('click',()=>{ const ta=document.querySelector('.frame.cur .live-in')||document.querySelector('.live-in'); const b=s.querySelector('b'); if(ta&&b){ ta.value=b.textContent.trim(); ta.focus(); } }); });
     if(PAGE==='new'&&S.first){ document.querySelectorAll('.box .bar2').forEach(bar=>{ const ch=bar.querySelectorAll('.chip'), setT=(c,x)=>{ if(!c) return; const tn=[...c.childNodes].find(n=>n.nodeType===3&&n.textContent.trim()); if(tn) tn.textContent=x; }; setT(ch[0],S.first.place); setT(ch[1],S.first.model+' · усилие среднее'); }); }
@@ -652,6 +654,12 @@
       else if(/^Отправить снимок|^Показать агенту его же снимок/.test(lab)){ const w=document.querySelector('.panel .win.on b'), name=w?w.textContent.trim():'окно'; S.chat.push({role:'me',text:'Показываю окно: '+name,t:now()}); S.chat.push({role:'ai',html:'<p>В прототипе снимок окна не делается. Настоящий агент описал бы, что видит в «'+esc(name)+'», и сверил бы со своими данными.</p>',t:now()}); S.chat=S.chat.slice(-40); save(); log('чат','Показано окно: '+name); render(); toast('Окно «'+esc(name)+'» добавлено в разговор'); } },true);
   }
 
+  // ── стартовый экран: подсказки о правилах — только первые три запуска, дальше по ссылке (ревью UX 07.10 п.1)
+  if(PAGE==='new'){ S.ui.newVisits=(S.ui.newVisits||0)+1; save();
+    document.querySelectorAll('.frame.cur .hints, .frame:first-of-type .hints').forEach(h=>{ if(h.previousElementSibling&&h.previousElementSibling.classList.contains('live-how')) return;
+      const a=document.createElement('a'); a.className='live-note live-how'; a.textContent='ⓘ как это устроено'; a.title='Папка или комната · чат → план · что видно'; h.before(a);
+      const show=S.ui.newVisits<=3; h.classList.toggle('live-hidden',!show); a.classList.toggle('on',show);
+      a.addEventListener('click',()=>{ const v=h.classList.toggle('live-hidden'); a.classList.toggle('on',!v); }); }); }
   // ── запуск
   composer(); restoreUI(); wireSearch(); refresh();
   hConnect().finally(()=>{ if(cols().length){ if(S.pending){ const q=S.pending.text; S.pending=null; S.chat.push({role:'me',text:q,t:now()}); save(); render(); reply(q); } else render(); } });

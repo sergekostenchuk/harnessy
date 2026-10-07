@@ -39,7 +39,7 @@
 </style></head>
 <body><div class="sheet">
   <h1>Harnessy · скетч 10 · новый чат · сайдбар развёрнут / свёрнут</h1>
-  <p class="sub">Пустой лист без «кабины»: знак, вопрос, одно поле с чипами (папка · модель и усилие · права · файл), три быстрых старта, три подсказки о правилах, недавние. Сверху — «Пока вас не было», если есть что решать. Рядом с кнопкой отправки всегда цена хода. <a href="index.html">← все скетчи</a></p>
+  <p class="sub">Пустой лист без «кабины»: знак, вопрос, одно поле с чипами (папка · модель и усилие · права · файл), три быстрых старта (в прототипе — без описаний, прячутся при вводе), три подсказки о правилах (в прототипе — только первые три запуска, дальше по «ⓘ как это устроено»), недавние. Сверху — «Пока вас не было», если есть что решать. Рядом с кнопкой отправки — цена хода в долях недели Claude и подсказка клавиш. Лимиты подписок — только в блоке боковой панели (ревью UX 07.10: «Codex 94 %» показывался трижды). <a href="index.html">← все скетчи</a></p>
 
   <!-- кадр 1: сайдбар развёрнут -->
   <div class="frame"><div class="app wide">
@@ -73,7 +73,7 @@
         <div class="ret"><span class="pill acc">◆ 2 ждут вас</span><span>Пока вас не было: <b>подпись M0</b> и <b>лимит Codex у воркера 2</b> · 40 мин</span><span class="btn sm">Открыть</span></div>
         <div class="mark"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
         <h2>Чем займёмся?</h2>
-        <p class="lead">Спросите или поручите. Ничего не начнётся без вас: сначала понимание, потом действие.</p>
+        <p class="lead">Задайте вопрос или поручите задачу.</p>
         <div class="box">
           <div class="in">Например: <b>«что сейчас делает команда?»</b> · <b>«посмотри HARNESS и оцени из 10»</b> · <b>«почини развилку D8.4d»</b></div>
           <div class="bar2">
@@ -81,13 +81,13 @@
             <span class="chip model"><span class="dot"></span>Claude · Sonnet · усилие среднее<span class="chev">▾</span></span>
             <span class="chip"><svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>только читает папку<span class="chev">▾</span></span>
             <span class="chip"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>файл или снимок</span>
-            <span class="send"><span class="est">ход ≈ 0,05 % · оценка</span><span class="go"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></span>
+            <span class="send"><span class="est">≈ 0,05 % недели Claude · оценка</span><span class="go"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></span>
           </div>
         </div>
         <div class="starts">
-          <div class="st"><small>состояние</small><b>Что сейчас делает команда?</b>кто работает, кто ждёт, что упало — одной страницей</div>
-          <div class="st"><small>план</small><b>Собери план из этого разговора</b>задачи, зависимости, цена — черновик до «Утвердить»</div>
-          <div class="st"><small>проверка</small><b>Проверь лимиты и даты оплат</b>Claude, Codex, Qwen — что кончится первым</div>
+          <div class="st"><small>состояние</small><b>Что сейчас делает команда?</b><span class="d">кто работает, кто ждёт, что упало — одной страницей</span></div>
+          <div class="st"><small>план</small><b>Собери план из этого разговора</b><span class="d">задачи, зависимости, цена — черновик до «Утвердить»</span></div>
+          <div class="st"><small>проверка</small><b>Проверь лимиты и даты оплат</b><span class="d">Claude, Codex, Qwen — что кончится первым</span></div>
         </div>
         <div class="hints">
           <div><b>Папка или комната.</b>В папке агент читает проект; без папки — комната для быстрых дел, без памяти проекта.</div>
@@ -95,7 +95,7 @@
           <div><b>Всё видно.</b>Кто работает, над чем и чего ждёт — в «Сейчас»; цена хода — под полем ввода.</div>
         </div>
         <div class="recent"><span>недавние:</span><span class="chip">Оркестратор · H1.5 и прогон</span><span class="chip">Карта проекта</span><span class="chip">Ресёрчер · очередь у Devin</span><span class="chip">Принтер Brother · вчера</span></div>
-        <div class="status"><span>папка omg · 1 846 файлов · индекс 2 мин назад</span><span>claude 62 % · codex 94 %</span><span><span class="kbd">⌘K</span> команды · <span class="kbd">⌘N</span> новый чат</span></div>
+        <div class="status"><span>папка omg · 1 846 файлов · индекс 2 мин назад</span><span><span class="kbd">⌘K</span> команды · <span class="kbd">⌘N</span> новый чат</span></div>
       </div>
     </section>
   </div><div class="cap"><span>10 · новый чат · сайдбар развёрнут · «пока вас не было» · быстрые старты</span><span>1280 × 860</span></div></div>
@@ -125,15 +125,15 @@
             <span class="chip" style="border-color:rgba(194,122,52,.5);color:var(--ink)"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg>без папки → выбрать<span class="chev">▾</span></span>
             <span class="chip model"><span class="dot"></span>Opus · усилие высокое<span class="chev">▾</span></span>
             <span class="chip"><svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>только читает<span class="chev">▾</span></span>
-            <span class="send"><span class="est">ход ≈ 0,4 % · оценка</span><span class="go" style="background:var(--accent)"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></span>
+            <span class="send"><span class="est">≈ 0,4 % недели Claude · оценка</span><span class="go" style="background:var(--accent)"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></span>
           </div>
         </div>
         <div class="starts">
-          <div class="st" style="border-color:var(--accent)"><small>подсказка · по тексту</small><b>Это про папку HARNESS</b>подключить ~/HARNESS к этому чату? Агент прочитает проект перед ответом</div>
-          <div class="st"><small>модель</small><b>Opus — дорого для чтения</b>оценку «из 10» дешевле сделать на Sonnet, придумывать — Opus</div>
-          <div class="st"><small>права</small><b>Только читает</b>ничего не изменит и не запустит без вашего «да»</div>
+          <div class="st" style="border-color:var(--accent)"><small>подсказка · по тексту</small><b>Это про папку HARNESS</b><span class="d">подключить ~/HARNESS к этому чату? Агент прочитает проект перед ответом</span></div>
+          <div class="st"><small>модель</small><b>Opus — дорого для чтения</b><span class="d">оценку «из 10» дешевле сделать на Sonnet, придумывать — Opus</span></div>
+          <div class="st"><small>права</small><b>Только читает</b><span class="d">ничего не изменит и не запустит без вашего «да»</span></div>
         </div>
-        <div class="status"><span>комната · без папки</span><span>claude 62 % · codex 94 %</span><span><span class="kbd">⌘K</span> команды</span></div>
+        <div class="status"><span>комната · без папки</span><span><span class="kbd">⌘K</span> команды</span></div>
       </div>
     </section>
   </div><div class="cap"><span>10b · новый чат · рейка · набран текст — подсказки по тексту (папка, модель, права)</span><span>1280 × 860</span></div></div>

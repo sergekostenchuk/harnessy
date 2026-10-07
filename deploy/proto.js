@@ -33,20 +33,27 @@
 
   // ── боковая панель: одна и та же на всех экранах (слово владельца 07.10.2026) — широкая со списком разделов, ⟨ сворачивает в рейку; выбор запоминается
   const XI={new:'<path d="M12 5v14M5 12h14"/>',find:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',conn:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',away:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',folder:'<path d="M3 7h6l2 2h10v10H3z"/>'};
-  const GROUPS=[['работа',[['now','Сейчас','',1],['chat','Чат','3'],['plan','План · карта','87 · L1'],['doc','Документ стадии',''],['art','Артефакты','3'],['mem','Память проекта',''],['res','Ресёрч','']]],
-    ['команда',[['swarm','Стая агентов','6 мест'],['sens','Датчики',''],['spend','Расход','<span class="bad">Codex 94%</span>'],['conn','Подключения и лимиты','']]],
+  // «проект» — подробности, свёрнуты по умолчанию (ревью UX 07.10: не должны спорить с «Чатом» и «Сейчас»); раскрываются сами, если открыт их экран
+  const GROUPS=[['работа',[['now','Сейчас','',1],['chat','Чат','3'],['plan','План · карта','87 · L1']]],
+    ['проект',[['doc','Документ стадии',''],['art','Артефакты','3'],['mem','Память проекта',''],['res','Ресёрч','']],'proj'],
+    ['команда',[['swarm','Стая агентов','6 мест'],['sens','Датчики',''],['spend','Расход',''],['conn','Подключения и лимиты','']]],
     ['прочее',[['log','Журнал',''],['set','Настройки',''],['away','Уйти · окно · поиск','']]]];
   const PROJECTS=[['OMG','◆ 2',1],['HARNESS','спит'],['Принтер Brother','']];
   const ico=k=>'<svg viewBox="0 0 24 24">'+(IC[k]||XI[k]||'')+'</svg>';
+  const FOLD_KEY='harnessy-side-fold', foldOpen=f=>{ try{ return localStorage.getItem(FOLD_KEY+':'+f)==='1'; }catch(e){ return false; } };
+  const limit=(name,p)=>{ const n=24, on=Math.round(p/100*n), warn=p>=90; return '<div class="row"><span>'+name+'</span><b'+(warn?' class="warn"':'')+'>'+p+' %</b></div><div class="ticks'+(warn?' warn':'')+'">'+Array.from({length:n},(_,i)=>'<i'+(i<on?' class="on"':'')+'></i>').join('')+'</div>'; };   // прогресс тиками, как велит дизайн-код; ≥90 % — предупреждение, не сбой
   function sideHTML(){ const rail=side==='rail';
     const item=([k,t,m,badge])=>'<div class="nav'+(k===KEY?' on':'')+'" data-go="'+k+'" title="'+t+'">'+ico(k)+(rail?'':'<span class="t">'+t+'</span>'+(m?'<span class="m">'+m+'</span>':''))+(badge?'<span class="b">2</span>':'')+'</div>';
     const head='<div class="ps-head"><span class="logo" data-go="new" title="Новый чат"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></span>'+(rail?'':'<b class="ps-proj" title="Проект — переключение появится позже">OMG <i>▾</i></b>')+
       '<span class="col" data-col title="'+(rail?'Развернуть панель':'Свернуть панель')+'">'+(rail?'⟩':'⟨')+'</span></div>';
     const top=rail?'<div class="nav search" title="Найти · ⌘K">'+ico('find')+'</div>':'<div class="newbtn'+(KEY==='new'?' on':'')+'" data-go="new">'+ico('new')+'Новый чат<kbd>⌘N</kbd></div><div class="search">'+ico('find')+'Найти…<kbd>⌘K</kbd></div>';
-    const groups=GROUPS.map(([g,items])=>(rail?'<i class="ps-sep"></i>':'<div class="grp">'+g+'</div>')+items.map(item).join('')).join('');
+    const groups=GROUPS.map(([g,items,fold])=>{ if(rail) return '<i class="ps-sep"></i>'+items.map(item).join('');
+      if(!fold) return '<div class="grp">'+g+'</div>'+items.map(item).join('');
+      const open=foldOpen(fold)||items.some(([k])=>k===KEY);
+      return '<div class="grp fold" data-fold="'+fold+'" title="'+(open?'Свернуть':'Развернуть')+'">'+g+'<span class="chev">'+(open?'⌄':'›')+'</span></div><div class="ps-fold'+(open?'':' off')+'" data-fold-body="'+fold+'">'+items.map(item).join('')+'</div>'; }).join('');
     const proj=rail?'':'<div class="grp">проекты<span class="chev">⌄</span></div>'+PROJECTS.map(([n,m,on])=>'<div class="nav ps-p'+(on?' on':'')+'" title="'+n+'">'+ico('folder')+'<span class="t">'+n+'</span>'+(m?'<span class="m">'+m+'</span>':'')+'</div>').join('');
     const foot=rail?'<div class="ps-foot"><div class="nav" data-go="profile" title="Профиль"><span class="av">S<i></i></span></div></div>'
-      :'<div class="ps-foot"><div class="limits" data-go="conn" title="Подключения и лимиты"><div class="row"><span>Claude · неделя</span><b>62%</b></div><div class="bar"><i style="width:62%"></i></div><div class="row"><span>Codex · 5 часов</span><b class="bad">94%</b></div><div class="bar"><i class="warn" style="width:94%"></i></div></div>'+
+      :'<div class="ps-foot"><div class="limits" data-go="conn" title="Подключения и лимиты"><div class="cap">использовано</div>'+limit('Claude · неделя',62)+limit('Codex · 5 часов',94)+'</div>'+
        '<div class="user" data-go="profile" title="Профиль"><span class="av">S<i></i></span><div>Serge<small>9616166@gmail.com</small></div><span class="chev">⌄</span></div></div>';
     return head+top+'<div class="ps-scroll">'+groups+proj+'</div>'+foot; }
   function renderSide(){ document.querySelectorAll('aside.side').forEach(a=>{ const ob=a.querySelector('.nav[data-go="now"] .b'), keep=ob?{t:ob.textContent,d:ob.style.display}:null;   // счётчик «ждут вас» ведёт рабочий слой — не терять при перерисовке
@@ -55,6 +62,7 @@
   renderSide();
   document.addEventListener('click',e=>{ const a=e.target.closest('aside.side'); if(!a) return;
     if(e.target.closest('[data-col]')){ toggleSide(); return; }
+    const fd=e.target.closest('.grp.fold'); if(fd){ const f=fd.dataset.fold, open=!foldOpen(f); try{ localStorage.setItem(FOLD_KEY+':'+f,open?'1':'0'); }catch(x){} renderSide(); dispatchEvent(new Event('resize')); return; }
     const g=e.target.closest('[data-go]'); if(!g) return; const k=g.dataset.go;
     if(k==='profile'){ if(KEY==='set'&&frames[1]) show(1); else location.href=PAGES.set+'#f2'; return; }
     if(k===KEY){ if(frames.length>1&&cur) show(0); return; }
@@ -70,7 +78,7 @@
     const dr=document.createElement('nav'); dr.className='m-drawer';
     dr.innerHTML='<div class="m-h"><i><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></i>Harnessy<span data-mx>×</span></div>'+item('new','Новый чат','p')+
       '<div class="m-g">работа</div>'+item('now','Сейчас','2')+item('chat','Чат')+item('plan','План · карта')+item('doc','Документ стадии')+item('art','Артефакты')+item('mem','Память проекта')+item('res','Ресёрч')+
-      '<div class="m-g">команда</div>'+item('swarm','Стая агентов')+item('sens','Датчики')+item('spend','Расход','94 %')+item('conn','Подключения и лимиты')+
+      '<div class="m-g">команда</div>'+item('swarm','Стая агентов')+item('sens','Датчики')+item('spend','Расход')+item('conn','Подключения и лимиты')+
       '<div class="m-g">прочее</div>'+item('log','Журнал')+item('set','Настройки')+item('away','Уйти · окно · поиск')+
       '<div class="m-f"><a href="../disarto/'+FILE+'">этот экран листом, с пояснениями ↗</a><a href="../disarto/index.html">все скетчи ↗</a></div>';
     document.body.append(btn,bg,dr);
