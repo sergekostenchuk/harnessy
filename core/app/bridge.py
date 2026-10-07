@@ -64,6 +64,25 @@ class Bridge:
         except JournalError as e:
             return {"ok": False, "code": e.code, "error": str(e)}
 
+    async def do_assign_role(self, sender: str, args: dict) -> dict:
+        """Назначить роль из хода агента. Алгоритм: только место с ролью orchestrator; только внутри хода, начатого записью владельца
+        (в turn_records есть from=owner) — иначе отказ. Инициатор пишется в журнал ссылкой на запись поручения."""
+        src = self.registry.get(sender)
+        if src is None:
+            return {"ok": False, "code": "sender_unknown", "error": f"нет окна {sender}"}
+        if src.role != "orchestrator":
+            return {"ok": False, "code": "policy_denied", "error": "назначать роли может только оркестратор (по поручению владельца)"}
+        owner_recs = [r for r in (src.turn_records or []) if r.get("from") == "owner"]
+        if not owner_recs:
+            return {"ok": False, "code": "no_mandate", "error": "назначение роли — только в ходе, начатом поручением владельца; в этом ходе записи владельца нет"}
+        seq = owner_recs[-1].get("seq")
+        try:
+            pane, chat = self.app.create_seat(str(args.get("role") or ""), str(args.get("model") or ""), str(args.get("mode") or "read"),
+                                              by=f"оркестратор ({sender}) по поручению владельца №{seq}", how=f"оркестратором по поручению владельца №{seq}")
+        except ValueError as e:
+            return {"ok": False, "code": "refused", "error": str(e)}
+        return {"ok": True, "pane": pane.id, "label": pane.label, "model": pane.model, "mode": pane.mode, "mandate": seq}
+
     def do_read(self, sender: str, args: dict) -> dict:
         to = str(args.get("pane") or "")
         if to == sender or not self.registry.get(to):
@@ -124,4 +143,14 @@ class Bridge:
                 return tool_error(f"Слияние отклонено: {r.get('error')}")
             return tool_text(f"Слито: {r['sha'][:12]} → {r['mergeSha'][:12]} в {r['branch']}.")
 
-        return create_sdk_mcp_server(name="panes", version="0.4.0", tools=[send, ask, read_pane, merge])
+        @tool("assign_role", "Назначить в команду папки новую роль (orchestrator, assistant, architect, executor, reviewer, tester, researcher). "
+              "Пройдёт только у оркестратора и только в ходе, начатом поручением владельца; новая роль получит вводную от харнесса. "
+              "Модель — по умолчанию модель разговора без роли или первая Claude; режим прав: chat, read, check, web, ask, edit, all.",
+              {"role": str, "model": str, "mode": str})
+        async def assign_role(args: dict) -> dict:
+            r = await bridge.do_assign_role(pane.id, args)
+            if not r.get("ok"):
+                return tool_error(f"Отказ: {r.get('error')}")
+            return tool_text(f"Назначена роль «{r['label']}» ({r['pane']}, {r['model']}, {r['mode']}) по поручению №{r['mandate']}; вводная отправлена.")
+
+        return create_sdk_mcp_server(name="panes", version="0.5.0", tools=[send, ask, read_pane, merge, assign_role])

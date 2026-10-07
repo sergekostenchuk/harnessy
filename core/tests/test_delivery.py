@@ -2,6 +2,7 @@
 границы вердиктов, наблюдение, восстановление. Места — из шаблона team.yaml."""
 import asyncio
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ os.environ["HARNESS_NO_LAST"] = "1"
 
 from app.journal import JournalError
 from app.server import App
+from app.team import TEMPLATES
 
 
 class FakeProvider:
@@ -47,7 +49,18 @@ async def settle(app, rounds=40):
             break
 
 
+def full_team(root):
+    """Тесты доставки/политики идут на полной команде из templates/team.yaml.
+    Новая папка сама по себе ролей не получает (слово владельца 07.10.2026) — шаблон кладём явно."""
+    h = Path(root) / ".harness"
+    h.mkdir(parents=True, exist_ok=True)
+    if not (h / "team.yaml").exists():
+        shutil.copyfile(TEMPLATES / "team.yaml", h / "team.yaml")
+    return h
+
+
 async def make_app(tmpdir):
+    full_team(tmpdir)
     app = App()
     app.fake = FakeProvider()
     app.codex = app.fake                      # чтобы open_project не трогал настоящий Codex
@@ -109,7 +122,8 @@ class DeliveryTests(unittest.TestCase):
             self.assertTrue(app.registry.get("executor").busy)
             app.post("owner", ["executor"], "task", "второе")
             app.post("reviewer", ["executor"], "question", "третье", thread="T1")
-            self.assertEqual(len(app.journal.pending_for("executor")), 2)
+            # «первое» ещё в ходу и тоже не доставлено: курсор сдвигается после успешного хода, а не до (07.10.2026)
+            self.assertEqual(len(app.journal.pending_for("executor")), 3)
             app.fake.gate.set()
             app.fake.gate = None
             await settle(app)
@@ -292,7 +306,12 @@ class DeliveryTests(unittest.TestCase):
             for p in app2.registry.panes.values():
                 app2.kick(p)
             await settle(app2)
-            self.assertEqual(calls_of(app2, "executor"), [("executor", "второе")])
+            # ход, прерванный остановкой процесса, доставленным не считается: «первое» уходит заново вместе со «вторым»
+            calls = calls_of(app2, "executor")
+            self.assertEqual(len(calls), 1)
+            self.assertIn("Входящие записи: 2", calls[0][1])
+            self.assertIn("первое", calls[0][1])
+            self.assertIn("второе", calls[0][1])
         self.run_async(go())
 
 

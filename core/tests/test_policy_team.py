@@ -1,10 +1,11 @@
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
 from app.policy import Policy, PolicyError
-from app.team import TeamError, ensure_line, load_team
+from app.team import TEMPLATES, TeamError, ensure_line, load_team
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -66,6 +67,8 @@ class TeamTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             h = ensure_line(tmp)
             self.assertTrue((h / "team.yaml").exists() and (h / "roles" / "reviewer.md").exists())
+            self.assertEqual(load_team(h).seats, {})                      # новая папка — без ролей (слово владельца 07.10.2026)
+            shutil.copyfile(TEMPLATES / "team.yaml", h / "team.yaml")      # дальше — полная команда из шаблона
             (h / "roles" / "executor.md").write_text("МОЯ ПРАВКА", "utf-8")
             ensure_line(tmp)                                           # повторный вызов не затирает
             self.assertEqual((h / "roles" / "executor.md").read_text("utf-8"), "МОЯ ПРАВКА")
@@ -80,6 +83,7 @@ class TeamTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             h = ensure_line(tmp)
             f = h / "team.yaml"
+            shutil.copyfile(TEMPLATES / "team.yaml", f)
             base = f.read_text("utf-8")
             # Вендор, которого 3777 не ведёт (так бывает в команде, записанной воркбенчем): место пропущено с предупреждением,
             # остальная команда работает. Все места чужие — отказ.
@@ -101,8 +105,7 @@ class TeamTests(unittest.TestCase):
             with self.assertRaises(TeamError):
                 load_team(h)
             f.write_text("seats: {}\n", "utf-8")
-            with self.assertRaises(TeamError):
-                load_team(h)
+            self.assertEqual(load_team(h).seats, {})                      # пустая команда допустима: роли назначает движок
 
     def test_empty_model_is_vendor_default(self):
         """Воркбенч пишет «модель по умолчанию» пустым полем: команда грузится, окно получает первую модель вендора."""
@@ -110,6 +113,7 @@ class TeamTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             h = ensure_line(tmp)
             f = h / "team.yaml"
+            shutil.copyfile(TEMPLATES / "team.yaml", f)
             f.write_text(f.read_text("utf-8").replace("model: claude-sonnet-5", "model: null"), "utf-8")
             t = load_team(h)
             self.assertEqual(t.seats["assistant"].model, "")

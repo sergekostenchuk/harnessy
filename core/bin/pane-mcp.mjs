@@ -41,6 +41,11 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { to: { type: 'string', enum: others }, text: { type: 'string' }, thread: { type: 'string' } }, required: ['to', 'text'], additionalProperties: false },
   },
   {
+    name: 'assign_role',
+    description: 'Назначить в команду папки новую роль (orchestrator, assistant, architect, executor, reviewer, tester, researcher). Пройдёт только у оркестратора и только в ходе, начатом поручением владельца; новая роль получит вводную от харнесса.',
+    inputSchema: { type: 'object', properties: { role: { type: 'string' }, model: { type: 'string' }, mode: { type: 'string', enum: ['chat', 'read', 'check', 'web', 'ask', 'edit', 'all'] } }, required: ['role'], additionalProperties: false },
+  },
+  {
     name: 'read_pane',
     description: `Прочитать последние реплики разговора в другом окне (${others.join(', ')}).`,
     inputSchema: { type: 'object', properties: { pane: { type: 'string', enum: others }, last_n: { type: 'integer', minimum: 1, maximum: 100 } }, required: ['pane'], additionalProperties: false },
@@ -76,6 +81,11 @@ async function callTool(name, args) {
       const { d } = await post('/api/merge', { from: PANE_ID, ...args });
       if (!d.ok) return err('Слияние отклонено: ' + (d.error || 'неизвестная ошибка'));
       return ok(`Слито: ${String(d.sha).slice(0, 12)} → ${String(d.mergeSha).slice(0, 12)} в ${d.branch}.`);
+    }
+    if (name === 'assign_role') {
+      const { d } = await post('/api/assign_role', { from: PANE_ID, ...args });
+      if (!d.ok) return err('Отказ: ' + (d.error || 'неизвестная ошибка'));
+      return ok(`Назначена роль «${d.label}» (${d.pane}, ${d.model}, ${d.mode}) по поручению №${d.mandate}; вводная отправлена.`);
     }
     if (name === 'read_pane') {
       const r = await fetch(APP_URL + '/api/pane_transcript?from=' + PANE_ID + '&pane=' + encodeURIComponent(args.pane || '') + '&last=' + Number(args.last_n || 20));

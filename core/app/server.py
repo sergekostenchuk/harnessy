@@ -923,7 +923,11 @@ class App:
         pane.session_id, pane.transcript, pane.carry = room.session_id, list(room.transcript), room.carry
         room.session_id, room.transcript, room.carry = None, [], ""
         self.registry.panes[sid] = pane
-        self._send_onboarding(pane, "из разговора без роли (разговор продолжается в этой роли)")
+        try:
+            self.post(HARNESS, [OWNER], "status", f"Назначена роль «{label}» ({sid}, {room.model}, {room.mode}) разговору без роли — инициатор: владелец (интерфейс).", origin="assign")
+        except JournalError as e:
+            print(f"[harness] запись о назначении {sid} не легла в журнал: {e}", file=sys.stderr, flush=True)
+        self._send_onboarding(pane, "владельцем из разговора без роли (разговор продолжается в этой роли)")
         self.kick(pane)
         self.save_panes()
         return web.json_response({"ok": True, "pane": pane.settings(), "team": str(tf)})
@@ -975,54 +979,75 @@ class App:
         self._send_onboarding(p, "при первом открытии чата роли")
         return web.json_response({"ok": True, "sent": True})
 
-    async def seat_create(self, request):
-        """Назначить роль, которой в папке ещё нет (слово владельца 08.10): новое место в team.yaml без разговора — чат начнётся с него.
-        Модель — из запроса, иначе модель разговора без роли, иначе первая Claude; сменить можно сразу в строке ввода."""
-        body = await request.json()
-        role = str(body.get("role") or "")
+    def create_seat(self, role: str, model: str = "", mode: str = "read", by: str = "владелец", how: str = "из меню собеседника") -> tuple:
+        """Алгоритм назначения роли (единственный путь для всех вызовов): проверка каталога и занятости → место в team.yaml →
+        чат → запись инициатора в журнал (origin=assign) → вводная роли (origin=onboarding). Кто вправе вызвать — решает вызывающий слой:
+        HTTP-интерфейс = владелец; инструмент assign_role = оркестратор в ходе по поручению владельца (проверяет мост). Остальным пути нет."""
         cat = next((c for c in ROLE_CATALOG if c[0] == role), None)
         if not cat:
-            return web.json_response({"ok": False, "error": f"неизвестная роль {role}"}, status=400)
+            raise ValueError(f"неизвестная роль {role}")
         if self.team is None:
-            return web.json_response({"ok": False, "error": "команда папки не читается: " + "; ".join(self.line_errors)}, status=400)
+            raise ValueError("команда папки не читается: " + "; ".join(self.line_errors))
         same = [p for p in self.registry.panes.values() if p.role == role and p.id != ROOM_ID]
         if same and not cat[2]:
-            return web.json_response({"ok": False, "error": f"роль «{cat[1]}» в этой папке уже есть ({same[0].label})"}, status=409)
-        model = str(body.get("model") or "").strip()
+            raise ValueError(f"роль «{cat[1]}» в этой папке уже есть ({same[0].label})")
+        model = (model or "").strip()
         room = self.registry.panes.get(ROOM_ID)
         if not model:
             model = (room.model if room and room.model else "") or next((m["id"] for m in self.models.get("claude", []) if m.get("id")), "")
         vendor = self._vendor_of(model)
         if not vendor:
-            return web.json_response({"ok": False, "error": "модель не из каталога"}, status=400)
-        mode = str(body.get("mode") or "read")
+            raise ValueError("модель не из каталога")
         if mode not in MODE_IDS:
             mode = "read"
         n = len(same) + 1
         sid = role if n == 1 else f"{role}{n}"
         label = cat[1] if n == 1 else f"{cat[1]} {n}"
         tf = self.team.harness_dir / "team.yaml"
+        instr = f"roles/{role}.md" if (self.team.harness_dir / "roles" / f"{role}.md").exists() else None
         try:
             import yaml
             d = yaml.safe_load(tf.read_text("utf-8")) or {}
             seats = d.get("seats") or {}
             if sid in seats:
-                return web.json_response({"ok": False, "error": f"место {sid} уже есть в team.yaml"}, status=409)
-            instr = f"roles/{role}.md" if (self.team.harness_dir / "roles" / f"{role}.md").exists() else None
+                raise ValueError(f"место {sid} уже есть в team.yaml")
             seats[sid] = {"role": role, "label": label, "vendor": vendor, "model": model, "mode": mode, "digest": False, **({"instructions": instr} if instr else {})}
             d["seats"] = seats
             tf.write_text("# Манифест команды линии. Места добавляются и из чата («Назначить роль»); комментарии при этом не сохраняются.\n"
                           + yaml.safe_dump(d, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        except ValueError:
+            raise
         except Exception as e:  # noqa: BLE001
-            return web.json_response({"ok": False, "error": f"team.yaml не записан: {e}"}, status=400)
+            raise ValueError(f"team.yaml не записан: {e}") from e
         self.team.seats[sid] = Seat(id=sid, role=role, label=label, vendor=vendor, model=model, mode=mode, write_paths=[], worktree=None, digest=False, instructions=instr)
         pane = Pane(id=sid, vendor=vendor, label=label, model=model, mode=mode, cwd=self.project_dir, role=role)
         self.registry.panes[sid] = pane
         c = self._new_chat(pane)
-        self._send_onboarding(pane, "из меню собеседника")
+        try:
+            self.post(HARNESS, [OWNER], "status", f"Назначена роль «{label}» ({sid}, {model}, {mode}) — инициатор: {by}.", origin="assign")
+        except JournalError as e:
+            print(f"[harness] запись о назначении {sid} не легла в журнал: {e}", file=sys.stderr, flush=True)
+        self._send_onboarding(pane, how)
         self.kick(pane)
         self.save_panes()
+        return pane, c
+
+    async def seat_create(self, request):
+        """Назначить роль, которой в папке ещё нет — вызов владельца из интерфейса."""
+        body = await request.json()
+        try:
+            pane, c = self.create_seat(str(body.get("role") or ""), str(body.get("model") or ""), str(body.get("mode") or "read"),
+                                       by="владелец (интерфейс)", how="владельцем из меню собеседника")
+        except ValueError as e:
+            msg = str(e)
+            return web.json_response({"ok": False, "error": msg}, status=409 if "уже есть" in msg else 400)
         return web.json_response({"ok": True, "pane": pane.settings(), "chat": self._chat_meta(c)})
+
+    async def api_assign_role(self, request):
+        """Инструмент assign_role для мест Codex (через bin/pane-mcp.mjs) — проверки те же, что у встроенного инструмента Claude."""
+        body = await request.json()
+        r = await self.bridge.do_assign_role(str(body.get("from") or ""), body)
+        return web.json_response(r, status=200 if r.get("ok") else 403)
 
     async def handoff(self, request):
         """Передать контекст месту текстом: явный text (выбранные владельцем реплики с промптом) или весь разговор места from (по умолчанию «без роли»).
@@ -1282,6 +1307,7 @@ class App:
         app.router.add_post("/api/assign", self.assign_role)
         app.router.add_post("/api/seats", self.seat_create)
         app.router.add_post("/api/onboard", self.onboard)
+        app.router.add_post("/api/assign_role", self.api_assign_role)
         app.router.add_post("/api/handoff", self.handoff)
         app.router.add_get("/api/chats", self.chats_list)
         app.router.add_get("/api/chats/{id}", self.chat_get)
