@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""auth.py — вход на harness.autoiflow.com: Telegram · GitHub · (Google · почта — когда появятся ключи).
+"""auth.py — вход на Harnessy (адрес сайта — BASE_URL, с 07.10.2026 https://harnessy.ai): Telegram · GitHub · (Google · почта — когда появятся ключи).
 
 Что: HTTP-сервис за nginx (auth_request). Одна база пользователей (SQLite), несколько «дверей» (identities),
 допуск новых пользователей владельцем — кнопками в Telegram-боте или на /auth/admin. Все события — в NDJSON.
@@ -26,7 +26,12 @@ from email.message import EmailMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 E = os.environ.get
-BASE_URL = E("BASE_URL", "https://harness.autoiflow.com").rstrip("/")
+BASE_URL = E("BASE_URL", "https://harnessy.ai").rstrip("/")
+HOST = urllib.parse.urlparse(BASE_URL).hostname or "harnessy.ai"                 # имя сайта в текстах писем и бота
+# Адреса возврата OAuth. В консолях GitHub и Google зарегистрирован старый домен; nginx старого домена передаёт
+# /auth/<github|google>/callback со строкой запроса на новый — cookie состояния там, обмен кода идёт с тем же redirect_uri.
+# Когда владелец заменит адреса в консолях — убрать OAUTH_BASE из env, и возвраты пойдут напрямую на BASE_URL.
+OAUTH_BASE = E("OAUTH_BASE", BASE_URL).rstrip("/")
 BOT_TOKEN, BOT_NAME = E("BOT_TOKEN", ""), E("BOT_NAME", "")
 GH_ID, GH_SECRET = E("GITHUB_CLIENT_ID", ""), E("GITHUB_CLIENT_SECRET", "")
 GG_ID, GG_SECRET = E("GOOGLE_CLIENT_ID", ""), E("GOOGLE_CLIENT_SECRET", "")
@@ -262,7 +267,7 @@ def code_hash(email, code):
 
 
 def notify_owners_pending(user, provider, who):
-    text = (f"Новый пользователь ждёт допуска на harness.autoiflow.com\n"
+    text = (f"Новый пользователь ждёт допуска на {HOST}\n"
             f"{user['name'] or '—'} · {user['email'] or 'без почты'} · через {provider}: {who}\nid {user['id']}")
     kb = {"inline_keyboard": [[{"text": "✅ Допустить", "callback_data": f"allow:{user['id']}"}, {"text": "⛔ Отклонить", "callback_data": f"block:{user['id']}"}]]}
     for key in owner_tg_ids():
@@ -589,7 +594,7 @@ class H(BaseHTTPRequestHandler):
         finally:
             c.close()
         link = f"{BASE_URL}/auth/email/link?" + urllib.parse.urlencode({"email": email, "code": code})
-        text = (f"Код входа на harness.autoiflow.com: {code}\n\nВведите его на странице входа или откройте ссылку:\n{link}\n\n"
+        text = (f"Код входа на {HOST}: {code}\n\nВведите его на странице входа или откройте ссылку:\n{link}\n\n"
                 f"Код действует 10 минут. Если вы не запрашивали вход — просто не отвечайте на письмо.\nЗапрос с IP {self._ip()}.")
         try:
             send_mail(email, f"{code} — код входа в Harnessy", text)
@@ -637,11 +642,17 @@ class H(BaseHTTPRequestHandler):
         if not (BOT_NAME and BOT_TOKEN):
             return self._page(503, "Telegram", "<h1>Telegram не настроен</h1>")
         nxt = self._next(q)
-        nonce, code = secrets.token_urlsafe(24), f"{secrets.randbelow(9000) + 1000}"
+        prev = self._tg_nonce()   # повторное открытие двери — тот же код: кнопка «Войти» в уже пришедшем сообщении бота остаётся в силе (ловушка двойного старта, 07.10.2026)
         c = db()
         try:
             c.execute("DELETE FROM tg_login WHERE created < ?", (int(time.time()) - 900,))
-            c.execute("INSERT INTO tg_login(nonce,created,code,ip,ua,nxt) VALUES(?,?,?,?,?,?)", (nonce, int(time.time()), code, self._ip(), self._ua(), nxt))
+            r = c.execute("SELECT nonce, code FROM tg_login WHERE nonce=?", (prev,)).fetchone() if prev else None
+            if r:
+                nonce, code = r["nonce"], r["code"]
+                c.execute("UPDATE tg_login SET nxt=? WHERE nonce=?", (nxt, nonce))
+            else:
+                nonce, code = secrets.token_urlsafe(24), f"{secrets.randbelow(9000) + 1000}"
+                c.execute("INSERT INTO tg_login(nonce,created,code,ip,ua,nxt) VALUES(?,?,?,?,?,?)", (nonce, int(time.time()), code, self._ip(), self._ua(), nxt))
             c.commit()
         finally:
             c.close()
@@ -702,11 +713,11 @@ class H(BaseHTTPRequestHandler):
         if prov == "github":
             if not (GH_ID and GH_SECRET):
                 return self._page(503, "GitHub", "<h1>GitHub не настроен</h1>")
-            url = "https://github.com/login/oauth/authorize?" + urllib.parse.urlencode({"client_id": GH_ID, "redirect_uri": f"{BASE_URL}/auth/github/callback", "scope": "read:user user:email", "state": st, "allow_signup": "true"})
+            url = "https://github.com/login/oauth/authorize?" + urllib.parse.urlencode({"client_id": GH_ID, "redirect_uri": f"{OAUTH_BASE}/auth/github/callback", "scope": "read:user user:email", "state": st, "allow_signup": "true"})
         else:
             if not (GG_ID and GG_SECRET):
                 return self._page(503, "Google", "<h1>Google не настроен</h1>")
-            url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode({"client_id": GG_ID, "redirect_uri": f"{BASE_URL}/auth/google/callback", "response_type": "code", "scope": "openid email profile", "state": st, "prompt": "select_account"})
+            url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode({"client_id": GG_ID, "redirect_uri": f"{OAUTH_BASE}/auth/google/callback", "response_type": "code", "scope": "openid email profile", "state": st, "prompt": "select_account"})
         return self._send(302, "", extra=[("Location", url), ("Set-Cookie", f"{STATE_COOKIE}={st}; Path=/auth; Max-Age=600; Secure; HttpOnly; SameSite=Lax")])
 
     def _check_state(self, q):
@@ -720,7 +731,7 @@ class H(BaseHTTPRequestHandler):
         if nxt is None or "code" not in q:
             log_event({"event": "login", "result": "bad-state", "provider": "github", "ip": self._ip(), "detail": q.get("error", "")})
             return self._page(400, "GitHub", "<h1>Сессия входа устарела</h1><p><a href='/auth/login'>Начать заново</a></p>")
-        tok = http_json("https://github.com/login/oauth/access_token", {"client_id": GH_ID, "client_secret": GH_SECRET, "code": q["code"], "redirect_uri": f"{BASE_URL}/auth/github/callback"})
+        tok = http_json("https://github.com/login/oauth/access_token", {"client_id": GH_ID, "client_secret": GH_SECRET, "code": q["code"], "redirect_uri": f"{OAUTH_BASE}/auth/github/callback"})
         at = tok.get("access_token")
         if not at:
             log_event({"event": "login", "result": "token-error", "provider": "github", "detail": str(tok)[:200], "ip": self._ip()})
@@ -741,7 +752,7 @@ class H(BaseHTTPRequestHandler):
         if nxt is None or "code" not in q:
             log_event({"event": "login", "result": "bad-state", "provider": "google", "ip": self._ip(), "detail": q.get("error", "")})
             return self._page(400, "Google", "<h1>Сессия входа устарела</h1><p><a href='/auth/login'>Начать заново</a></p>")
-        tok = http_json("https://oauth2.googleapis.com/token", {"client_id": GG_ID, "client_secret": GG_SECRET, "code": q["code"], "grant_type": "authorization_code", "redirect_uri": f"{BASE_URL}/auth/google/callback"})
+        tok = http_json("https://oauth2.googleapis.com/token", {"client_id": GG_ID, "client_secret": GG_SECRET, "code": q["code"], "grant_type": "authorization_code", "redirect_uri": f"{OAUTH_BASE}/auth/google/callback"})
         idt = tok.get("id_token")
         if not idt:
             log_event({"event": "login", "result": "token-error", "provider": "google", "detail": str(tok)[:200], "ip": self._ip()})
@@ -852,9 +863,9 @@ class H(BaseHTTPRequestHandler):
                 c.close()
             if r and not r["confirmed"]:
                 kb = {"inline_keyboard": [[{"text": "✅ Войти", "callback_data": f"tglogin:{nonce}"}]]}
-                tg_api("sendMessage", chat_id=msg["chat"]["id"], text=f"Вход на harness.autoiflow.com\nКод в браузере: {r['code']}\nIP {r['ip']}\n\nЕсли это вы и код совпадает — нажмите «Войти».", reply_markup=kb)
+                tg_api("sendMessage", chat_id=msg["chat"]["id"], text=f"Вход на {HOST}\nКод в браузере: {r['code']}\nIP {r['ip']}\n\nЕсли это вы и код совпадает — нажмите «Войти».", reply_markup=kb)
             else:
-                tg_api("sendMessage", chat_id=msg["chat"]["id"], text=f"Это бот входа на harness.autoiflow.com. Ваш Telegram ID: {frm.get('id')}. Войти: {BASE_URL}/auth/login")
+                tg_api("sendMessage", chat_id=msg["chat"]["id"], text=f"Это бот входа на {HOST}. Ваш Telegram ID: {frm.get('id')}. Войти: {BASE_URL}/auth/login")
         return self._send(200, "ok", "text/plain")
 
 
