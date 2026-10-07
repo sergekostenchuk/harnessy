@@ -1,6 +1,6 @@
 /* proto.js — режим прототипа для экранов-скетчей (включается атрибутом <html data-proto>, его ставит сборка).
    Что делает: (1) экран на всё окно: кадр 1280×860 растягивается, в окне меньше — уменьшается целиком;
-   (2) единая рабочая навигация: рейка и боковая панель ведут на экраны; «⟨ / ⟩» сворачивает и разворачивает панель;
+   (2) единая боковая панель на всех экранах: «Новый чат», поиск, разделы по группам, проекты, лимиты, профиль; «⟨ / ⟩» сворачивает в рейку;
    (3) сбоку ссылка на тот же экран с пояснениями (лист-скетч). Исходники скетчей не меняются. */
 (function(){
   if(!document.documentElement.hasAttribute('data-proto')) return;
@@ -12,6 +12,7 @@
   const KEY=Object.keys(PAGES).find(k=>PAGES[k]===FILE)||'';
   document.documentElement.dataset.page=KEY;
 
+  const SIDE_KEY='harnessy-side'; let side='wide'; try{ if(localStorage.getItem(SIDE_KEY)==='rail') side='rail'; }catch(e){} document.documentElement.dataset.side=side;
   // ── кадры и размер
   const frames=[...document.querySelectorAll('.frame')]; let cur=0, K=1;
   const box=f=>f&&f.querySelector(':scope > .app, :scope > .stage');
@@ -22,36 +23,43 @@
       document.querySelectorAll('.main').forEach(x=>x.classList.toggle('m-notop',!x.querySelector(':scope > .top'))); frames.forEach(f=>{ const el=box(f); if(el&&!el.querySelector('.main')) el.classList.add('m-notop'); }); mobileNav(); mobileDefaults(); }
     else document.documentElement.classList.remove('m-open');
     return m; }
-  function fit(){ if(mode()) return; const f=frames[cur], el=box(f); if(!el) return; const dh=el.classList.contains('stage')?640:860, vw=innerWidth, vh=innerHeight;
-    K=Math.max(.62,Math.min(1,vw/1280,vh/dh)); const w=Math.max(1280,vw/K), h=Math.max(dh,vh/K);
+  const BW=el=>el.querySelector('aside.side')&&side!=='rail'?1452:1280;   // с широкой панелью кадр шире на её 172px, чтобы полотна не сжимались
+  function fit(){ if(mode()) return; const f=frames[cur], el=box(f); if(!el) return; const dh=el.classList.contains('stage')?640:860, vw=innerWidth, vh=innerHeight, bw=BW(el);
+    K=Math.max(.62,Math.min(1,vw/bw,vh/dh)); const w=Math.max(bw,vw/K), h=Math.max(dh,vh/K);
     el.style.width=w+'px'; el.style.height=h+'px'; el.style.transform=K<1?'scale('+K+')':'none';
     f.style.width=(w*K)+'px'; f.style.height=(h*K)+'px'; document.body.style.overflow=(w*K>vw+1||h*K>vh+1)?'auto':'hidden'; }
   function show(i){ cur=Math.max(0,Math.min(frames.length-1,i)); frames.forEach((f,j)=>f.classList.toggle('cur',j===cur)); fit();
     const b=document.querySelector('.proto-back'); if(b){ b.style.display=frames[cur]&&frames[cur].querySelector('aside.side')?'none':''; b.textContent=cur>0?'← назад':'← новый чат'; } }
 
-  // ── навигация
-  const wide=frames.some(f=>f.querySelector('aside .ws'));      // у экрана есть развёрнутая боковая панель
-  const shared=!!document.querySelector('link[href="style.css"]');
-  function railHTML(){ const nav=(k,inner,tip,extra)=>'<div class="nav'+(k===KEY?' on':'')+'" data-go="'+k+'" title="'+tip+'"'+(extra||'')+'>'+inner+'</div>';
-    return '<div class="logo" data-go="new" title="Новый чат"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>'+
-      (wide?'<div class="nav" data-col title="Развернуть панель" style="font:13px var(--mono)">⟩</div>':'')+
-      TOP.map(k=>nav(k,'<svg viewBox="0 0 24 24">'+IC[k]+'</svg>'+(k==='now'?'<span class="b">2</span>':''),TIP[k])).join('')+
-      '<div class="foot">'+nav('set','<svg viewBox="0 0 24 24">'+IC.set+'</svg>','Настройки')+nav('conn','<span class="ring"><i></i></span>','Подключения и лимиты')+
-      '<div class="nav" data-go="profile" title="Профиль"><span class="av">S<i></i></span></div></div>'; }
-  const TEXT=[[/^Новый чат/,'new'],[/^Найти/,'away'],[/^Чат/,'chat'],[/^План/,'plan'],[/^Стая/,'swarm'],[/^Расход/,'spend'],[/^Журнал/,'log'],[/^Сейчас/,'now'],
-    [/^Оркестратор/,'chat'],[/^Карта проекта/,'plan'],[/^Рес[её]рчер/,'res'],[/^Артефакты/,'art'],[/^OMG/,'now'],[/^HARNESS/,'chat'],
-    [/^Уйти/,'away'],[/^Настройки/,'set'],[/Claude\s*·\s*неделя/,'conn'],[/Serge/,'profile']];
-  document.querySelectorAll('aside.side').forEach(a=>{
-    if(a.querySelector('.ws')||!shared){     // развёрнутая панель (или экран со своими стилями): оживляем пункты по подписи
-      a.querySelectorAll('.newbtn, .search, .nav, .conv, .limits, .user, .logo').forEach(el=>{ if(el.dataset.go||el.closest('.ws')) return; const tx=el.textContent.replace(/\s+/g,' ').trim(), m=TEXT.find(q=>q[0].test(tx)); if(m) el.dataset.go=m[1]; else if(el.title){ const t=TEXT.find(q=>q[0].test(el.title)); if(t) el.dataset.go=t[1]; } });
-    } else a.innerHTML=railHTML();             // рейка: одна и та же на всех экранах
-  });
-  document.addEventListener('click',e=>{ const a=e.target.closest('aside'); if(!a) return;
-    if(e.target.closest('[data-col], .col')&&frames.length>1){ show(cur?0:1); return; }
+  // ── боковая панель: одна и та же на всех экранах (слово владельца 07.10.2026) — широкая со списком разделов, ⟨ сворачивает в рейку; выбор запоминается
+  const XI={new:'<path d="M12 5v14M5 12h14"/>',find:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',conn:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',away:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',folder:'<path d="M3 7h6l2 2h10v10H3z"/>'};
+  const GROUPS=[['работа',[['now','Сейчас','',1],['chat','Чат','3'],['plan','План · карта','87 · L1'],['doc','Документ стадии',''],['art','Артефакты','3'],['mem','Память проекта',''],['res','Ресёрч','']]],
+    ['команда',[['swarm','Стая агентов','6 мест'],['sens','Датчики',''],['spend','Расход','<span class="bad">Codex 94%</span>'],['conn','Подключения и лимиты','']]],
+    ['прочее',[['log','Журнал',''],['set','Настройки',''],['away','Уйти · окно · поиск','']]]];
+  const PROJECTS=[['OMG','◆ 2',1],['HARNESS','спит'],['Принтер Brother','']];
+  const ico=k=>'<svg viewBox="0 0 24 24">'+(IC[k]||XI[k]||'')+'</svg>';
+  function sideHTML(){ const rail=side==='rail';
+    const item=([k,t,m,badge])=>'<div class="nav'+(k===KEY?' on':'')+'" data-go="'+k+'" title="'+t+'">'+ico(k)+(rail?'':'<span class="t">'+t+'</span>'+(m?'<span class="m">'+m+'</span>':''))+(badge?'<span class="b">2</span>':'')+'</div>';
+    const head='<div class="ps-head"><span class="logo" data-go="new" title="Новый чат"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></span>'+(rail?'':'<b class="ps-proj" title="Проект — переключение появится позже">OMG <i>▾</i></b>')+
+      '<span class="col" data-col title="'+(rail?'Развернуть панель':'Свернуть панель')+'">'+(rail?'⟩':'⟨')+'</span></div>';
+    const top=rail?'<div class="nav search" title="Найти · ⌘K">'+ico('find')+'</div>':'<div class="newbtn'+(KEY==='new'?' on':'')+'" data-go="new">'+ico('new')+'Новый чат<kbd>⌘N</kbd></div><div class="search">'+ico('find')+'Найти…<kbd>⌘K</kbd></div>';
+    const groups=GROUPS.map(([g,items])=>(rail?'<i class="ps-sep"></i>':'<div class="grp">'+g+'</div>')+items.map(item).join('')).join('');
+    const proj=rail?'':'<div class="grp">проекты<span class="chev">⌄</span></div>'+PROJECTS.map(([n,m,on])=>'<div class="nav ps-p'+(on?' on':'')+'" title="'+n+'">'+ico('folder')+'<span class="t">'+n+'</span>'+(m?'<span class="m">'+m+'</span>':'')+'</div>').join('');
+    const foot=rail?'<div class="ps-foot"><div class="nav" data-go="profile" title="Профиль"><span class="av">S<i></i></span></div></div>'
+      :'<div class="ps-foot"><div class="limits" data-go="conn" title="Подключения и лимиты"><div class="row"><span>Claude · неделя</span><b>62%</b></div><div class="bar"><i style="width:62%"></i></div><div class="row"><span>Codex · 5 часов</span><b class="bad">94%</b></div><div class="bar"><i class="warn" style="width:94%"></i></div></div>'+
+       '<div class="user" data-go="profile" title="Профиль"><span class="av">S<i></i></span><div>Serge<small>9616166@gmail.com</small></div><span class="chev">⌄</span></div></div>';
+    return head+top+'<div class="ps-scroll">'+groups+proj+'</div>'+foot; }
+  function renderSide(){ document.querySelectorAll('aside.side').forEach(a=>{ const ob=a.querySelector('.nav[data-go="now"] .b'), keep=ob?{t:ob.textContent,d:ob.style.display}:null;   // счётчик «ждут вас» ведёт рабочий слой — не терять при перерисовке
+      a.classList.add('ps'); a.classList.toggle('rail',side==='rail'); a.innerHTML=sideHTML(); if(keep){ const nb=a.querySelector('.nav[data-go="now"] .b'); nb.textContent=keep.t; nb.style.display=keep.d; } }); }
+  function toggleSide(){ side=side==='rail'?'wide':'rail'; try{ localStorage.setItem(SIDE_KEY,side); }catch(e){} document.documentElement.dataset.side=side; renderSide(); fit(); dispatchEvent(new Event('resize')); }
+  renderSide();
+  document.addEventListener('click',e=>{ const a=e.target.closest('aside.side'); if(!a) return;
+    if(e.target.closest('[data-col]')){ toggleSide(); return; }
     const g=e.target.closest('[data-go]'); if(!g) return; const k=g.dataset.go;
     if(k==='profile'){ if(KEY==='set'&&frames[1]) show(1); else location.href=PAGES.set+'#f2'; return; }
     if(k===KEY){ if(frames.length>1&&cur) show(0); return; }
     if(PAGES[k]){ e.preventDefault(); e.stopPropagation(); location.href=PAGES[k]; } },true);
+  addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&!e.altKey&&e.key.toLowerCase()==='n'&&KEY!=='new'){ e.preventDefault(); location.href=PAGES.new; } });
 
   // ── навигация телефона: кнопка ☰ и выдвижная панель со всеми экранами
   function mobileNav(){ if(document.querySelector('.m-btn')) return;

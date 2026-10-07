@@ -197,3 +197,39 @@ html[data-proto] #p-acts .btn, html[data-proto] #p-opts .tog, html[data-proto] #
 .live-ask small { display:block; color:var(--ink2); font-size:12px; margin:4px 0 8px; white-space:pre-wrap; } .live-ask.done { opacity:.55; border-color:var(--line2); }
 .live-pick { cursor:pointer; margin-left:4px; color:var(--ink2); } .st .live-menu { left:0; right:auto; top:calc(100% + 8px); } .live-menu small { color:var(--ink3); font-size:11px; }
 .top .st.live-busy i { animation:live-t 1s steps(2) infinite; }
+/* ── единая боковая панель (07.10.2026): широкая со списком разделов на всех экранах, ⟨ сворачивает в рейку */
+html[data-proto]:not([data-side="rail"]) .frame > .app { grid-template-columns:232px minmax(0,1fr) !important; }
+html[data-proto][data-side="rail"] .frame > .app { grid-template-columns:60px minmax(0,1fr) !important; }
+aside.side.ps { display:flex; flex-direction:column; align-items:stretch; gap:2px; padding:12px 10px; background:var(--panel); border-right:1px solid var(--line); overflow:hidden; }
+aside.side.ps .ps-head { display:flex; align-items:center; gap:8px; padding:2px 4px 10px; }
+aside.side.ps .ps-head .logo { width:26px; height:26px; margin:0; display:grid; place-items:center; border-radius:8px; background:var(--raised); border:1px solid var(--line2); cursor:pointer; flex:none; }
+aside.side.ps .ps-head .logo svg { width:14px; height:14px; fill:none; stroke:var(--gold,#dcb866); stroke-width:1.8; stroke-linecap:round; }
+aside.side.ps .ps-proj { font-weight:500; font-size:13px; color:var(--ink); white-space:nowrap; } aside.side.ps .ps-proj i { font-style:normal; color:var(--ink3); font-size:11px; margin-left:3px; }
+aside.side.ps .col { margin-left:auto; color:var(--ink3); cursor:pointer; font:13px var(--mono); padding:2px 6px; border-radius:6px; } aside.side.ps .col:hover { color:var(--ink); background:var(--raised); }
+aside.side.ps .newbtn { display:flex; align-items:center; gap:8px; height:34px; padding:0 10px; border-radius:var(--rs,9px); background:var(--raised); border:1px solid var(--line2); color:var(--ink); font-weight:500; font-size:13px; margin-bottom:6px; cursor:pointer; }
+aside.side.ps .newbtn.on, aside.side.ps .newbtn:hover { border-color:rgba(194,122,52,.5); }
+aside.side.ps .newbtn svg, aside.side.ps .search svg, aside.side.ps .nav svg { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+aside.side.ps kbd { margin-left:auto; font:10px var(--mono); color:var(--ink3); border:1px solid var(--line2); border-radius:4px; padding:1px 5px; }
+aside.side.ps .search { display:flex; align-items:center; gap:8px; height:32px; padding:0 10px; border:1px solid var(--line2); border-radius:var(--rs,9px); color:var(--ink3); background:var(--bg); margin-bottom:4px; font-size:12.5px; cursor:pointer; }
+aside.side.ps .ps-scroll { flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:1px; scrollbar-width:none; } aside.side.ps .ps-scroll::-webkit-scrollbar { display:none; }
+aside.side.ps .grp { font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); padding:8px 9px 2px; display:flex; } aside.side.ps .grp .chev { margin-left:auto; font-size:9px; }
+aside.side.ps .nav { position:relative; width:auto; height:28px; display:flex; align-items:center; gap:9px; padding:0 9px; border-radius:var(--rs,9px); color:var(--ink2); font-size:13px; cursor:pointer; white-space:nowrap; flex:none; }
+aside.side.ps .nav:hover, aside.side.ps .nav.on { background:var(--raised); color:var(--ink); } aside.side.ps .nav.on svg { stroke:var(--accent); }
+aside.side.ps .nav .t { overflow:hidden; text-overflow:ellipsis; }
+aside.side.ps .nav .m { margin-left:auto; font:10px var(--mono); color:var(--ink3); } aside.side.ps .bad { color:var(--bad); }
+aside.side.ps .nav .b { position:static; margin-left:auto; min-width:18px; height:18px; border-radius:9px; background:var(--bad-fill,#a3304b); color:#fff; font:500 10px/18px var(--mono); text-align:center; padding:0 5px; }
+aside.side.ps .ps-foot { padding-top:8px; display:flex; flex-direction:column; gap:6px; }
+aside.side.ps .limits { padding:9px 10px; border:1px solid var(--line2); border-radius:var(--rs,9px); background:var(--raised); cursor:pointer; }
+aside.side.ps .limits .row { display:flex; justify-content:space-between; font-size:11.5px; color:var(--ink2); margin-bottom:4px; } aside.side.ps .limits .row b { font:500 11px var(--mono); color:var(--ink); }
+aside.side.ps .limits .bar { height:3px; border-radius:2px; background:var(--line2); margin-bottom:7px; overflow:hidden; } aside.side.ps .limits .bar:last-child { margin-bottom:0; }
+aside.side.ps .limits .bar i { display:block; height:100%; background:var(--ok); } aside.side.ps .limits .bar i.warn { background:var(--bad-fill,#a3304b); }
+aside.side.ps .user { display:flex; align-items:center; gap:9px; padding:7px 8px; border:1px solid var(--line2); border-radius:var(--rs,9px); background:var(--raised); cursor:pointer; }
+aside.side.ps .user div { line-height:1.2; font-size:13px; color:var(--ink); } aside.side.ps .user small { display:block; color:var(--ink3); font-size:10.5px; } aside.side.ps .user .chev { margin-left:auto; color:var(--ink3); font-size:11px; }
+aside.side.ps .av { width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,#3a3a40,#1b1b1e); border:1px solid var(--line2); display:grid; place-items:center; font:500 11px var(--mono); color:var(--ink); position:relative; flex:none; }
+aside.side.ps .av i { position:absolute; right:-1px; bottom:-1px; width:8px; height:8px; border-radius:50%; background:var(--ok); border:2px solid var(--panel); }
+aside.side.ps.rail { align-items:center; padding:12px 8px; }
+aside.side.ps.rail .ps-head { padding:0 0 6px; flex-direction:column; gap:6px; } aside.side.ps.rail .col { margin:0; }
+aside.side.ps.rail .nav { width:40px; height:40px; justify-content:center; padding:0; gap:0; } aside.side.ps.rail .nav svg { width:18px; height:18px; }
+aside.side.ps.rail .nav .b { position:absolute; top:4px; right:4px; margin:0; min-width:16px; height:16px; font-size:9.5px; line-height:16px; padding:0 4px; }
+aside.side.ps.rail .ps-sep { display:block; width:24px; height:1px; background:var(--line); margin:5px auto; flex:none; }
+aside.side.ps.rail .ps-scroll { align-items:center; } aside.side.ps.rail .search { width:40px; height:40px; justify-content:center; padding:0; margin:0 0 2px; border:0; background:transparent; }
