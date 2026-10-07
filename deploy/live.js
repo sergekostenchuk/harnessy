@@ -65,7 +65,8 @@
   const paneName=p=>p?p.label.charAt(0).toUpperCase()+p.label.slice(1):'';
   function pickPane(){ let p=H.panes.find(x=>x.id===(S.ui.pane||'')); if(!p&&S.ui.pane==='room'){ H.pane=null; return; }   // «без роли» выбрано, комнаты ещё нет — модель предстоит выбрать
     if(!p){ const b=document.querySelector('.frame .top b'); const lab=((b&&b.textContent)||'').split('·')[0].trim().toLowerCase(); p=H.panes.find(x=>x.label.toLowerCase()===lab)||H.panes.find(x=>x.id!=='room'&&x.vendor==='claude')||H.panes.find(x=>x.id!=='room')||H.panes[0]; } H.pane=p||null; }
-  function hStatus(){ if(PAGE!=='chat') return; const p=H.pane; document.querySelectorAll('.frame .top .st').forEach(s=>{ if(!p) return;
+  function hStatus(){ if(PAGE!=='chat') return; const p=H.pane; if(H.on) document.querySelectorAll('.frame .top > b').forEach(b=>b.textContent=(p?(p.id==='room'?'Без роли':paneName(p)):'Без роли')+' · '+((H.project||'').split('/').filter(Boolean).pop()||'папка'));
+    document.querySelectorAll('.frame .top .st').forEach(s=>{ if(!p) return;
       s.innerHTML='<i></i>'+(H.cur?'думает':'подключено')+' · '+esc(p.label)+' · '+esc(p.model)+' · '+esc(p.mode)+' <span class="live-pick" title="Выбрать место">▾</span>'; s.classList.toggle('live-busy',!!H.cur); });
     if(!p&&H.on) document.querySelectorAll('.frame .top .st').forEach(s=>{ s.innerHTML='<i></i>подключено · без роли · модель не выбрана <span class="live-pick" title="Выбрать место">▾</span>'; }); }
   function pickMenu(st){ document.querySelectorAll('.st .live-menu').forEach(m=>m.remove()); const m=document.createElement('div'); m.className='live-menu'; st.style.position='relative';
@@ -81,7 +82,7 @@
   function drawLive(){ if(!H.on) return; cols().forEach(c=>{ c.querySelectorAll('.live-cur, .live-ask').forEach(x=>x.remove()); if(H.cur) c.insertAdjacentHTML('beforeend',curHTML()); Object.values(H.asks).forEach(a=>c.insertAdjacentHTML('beforeend',askHTML(a))); }); hStatus(); if(H.cur||Object.keys(H.asks).length) scrollEnd(); }
   function finish(ev){ const c=H.cur; H.cur=null;
     if(c&&(c.text||c.tools.length)){ const u=ev&&ev.usage; S.chat.push({role:'ai',html:c.tools.map(toolLine).join('')+md(c.text),text:c.text,t:now(),src:'live',who:H.pane.id==='room'?'Без роли':paneName(H.pane),pane:H.pane.id,nf:!!(S.cx&&S.cx.noFolder),model:(ev&&ev.model)||H.pane.model,cost:u?{i:u.input,o:u.output,c:u.cacheRead,ms:ev.durationMs}:null}); S.chat=S.chat.slice(-40); save(); }
-    if(ev&&ev.type==='error'){ S.chat.push({role:'ai',html:'<p>'+esc(ev.text||ev.error||'ошибка')+'</p>',t:now(),src:'err'}); save(); } render(); }
+    if(ev&&ev.type==='error'){ const msg=ev.message||ev.text||ev.error||'ошибка'; S.chat.push({role:'ai',html:'<p>'+esc(msg)+'</p>'+(/not supported|unsupported|недоступн/i.test(msg)?'<p class="live-hint">Эта модель недоступна на подписке — выберите другую в чипе модели.</p>':''),t:now(),src:'err'}); save(); } render(); }
   function hEvent(ev){ const t=ev.type, cur=()=>H.cur||(H.cur={text:'',tools:[]});
     if(t==='delta'){ cur().text+=ev.text||''; drawLive(); }
     else if(t==='tool'){ cur().tools.push({text:'▸ '+ev.name+(ev.detail?': '+ev.detail:'')}); drawLive(); }
@@ -120,10 +121,29 @@
   const actsLine=(m,i)=>{ if(m.src!=='live') return ''; const a=['<span data-la="copy" data-i="'+i+'">копировать</span>'];
     if(m.pane==='room'){ if(m.nf) a.push('<span data-la="mkdir" data-i="'+i+'">создать папку и git</span>','<span data-la="move" data-i="'+i+'">перейти в папку…</span>'); else a.push('<span data-la="assign" data-i="'+i+'">назначить роль</span>','<span data-la="handoff" data-i="'+i+'">передать контекст</span>'); }
     return '<div class="live-acts">'+a.join('<i>·</i>')+'</div>'; };
-  const bubble=(m,i)=>m.role==='me'?'<div class="me live-msg">'+esc(m.text)+'</div>':'<div class="ai live-msg"><span class="orb"></span><div><div class="thought">'+(m.src==='live'?esc(m.who||'')+' · '+esc(m.model||'')+' · ':m.src==='err'?'ошибка · ':'прототип · ответ по сценарию · ')+hhmm(m.t)+'</div>'+m.html+costLine(m)+actsLine(m,i)+'</div></div>';
+  const ckBox=(m,i)=>SEL&&(m.role==='me'||m.src==='live')?'<label class="live-ck"><input type="checkbox" data-ck="'+i+'"'+(SEL.checked.has(i)?' checked':'')+'></label>':'';
+  const bubble=(m,i)=>m.role==='me'?'<div class="me live-msg">'+ckBox(m,i)+esc(m.text)+'</div>':'<div class="ai live-msg">'+ckBox(m,i)+'<span class="orb"></span><div><div class="thought">'+(m.src==='live'?esc(m.who||'')+' · '+esc(m.model||'')+' · ':m.src==='err'?'ошибка · ':'прототип · ответ по сценарию · ')+hhmm(m.t)+'</div>'+m.html+costLine(m)+actsLine(m,i)+'</div></div>';
   const cols=()=>document.querySelectorAll('.feed .col');
   function scrollEnd(){ document.querySelectorAll('.feed').forEach(f=>f.scrollTop=f.scrollHeight); if(document.documentElement.hasAttribute('data-m')) window.scrollTo(0,document.documentElement.scrollHeight); }
-  function render(){ cols().forEach(c=>{ c.querySelectorAll('.live-msg, .live-sep').forEach(x=>x.remove()); if(S.chat.length) c.insertAdjacentHTML('beforeend','<div class="live-sep">'+(H.on?'ваш разговор · через харнесс':'ваш разговор в прототипе')+' · <a data-clear>очистить</a></div>'+S.chat.map(bubble).join('')); }); drawLive(); if(S.chat.length) scrollEnd(); }
+  function render(){ cols().forEach(c=>{ c.querySelectorAll('.live-msg, .live-sep').forEach(x=>x.remove()); c.classList.toggle('live-demo-off',!S.ui.demo);
+      c.insertAdjacentHTML('beforeend','<div class="live-sep">'+(S.chat.length?(H.on?'ваш разговор · через харнесс':'ваш разговор в прототипе')+' · <a data-clear>очистить</a> · ':'разговор пуст · ')+'<a data-demo>'+(S.ui.demo?'скрыть пример':'пример разговора')+'</a></div>'+S.chat.map(bubble).join('')); }); selBar(); drawLive(); if(S.chat.length) scrollEnd(); }
+  document.addEventListener('click',e=>{ if(e.target.closest('[data-demo]')){ S.ui.demo=!S.ui.demo; save(); render(); } });
+  // ── переключение собеседника с контекстом: чекбоксы у реплик, промпт, передача текстом (между моделями и вендорами переносится только текст)
+  let SEL=null;
+  const plain=m=>m.text||String(m.html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  function selStart(to){ const idx=S.chat.map((m,i)=>i).filter(i=>S.chat[i].role==='me'||S.chat[i].src==='live'); if(!idx.length){ toast('Передавать нечего — разговор пуст'); return; } SEL={to,checked:new Set(idx)}; render(); }
+  function selBar(){ document.querySelectorAll('.live-selbar').forEach(x=>x.remove()); if(!SEL) return; const to=(H.panes||[]).find(p=>p.id===SEL.to); if(!to){ SEL=null; return; } const from=H.pane?(H.pane.id==='room'?'разговора без роли':paneName(H.pane)):'разговора без роли';
+    document.querySelectorAll('.frame .box').forEach(box=>{ const bar=document.createElement('div'); bar.className='live-selbar';
+      bar.innerHTML='<div class="t">передать контекст → <b>'+esc(paneName(to))+'</b> · выбрано <b class="n">'+SEL.checked.size+'</b> · отметьте реплики галочками</div><input class="live-f" value="'+esc('Прочитай контекст чата от '+from+' и жди команду.')+'"><div class="acts"><span class="btn sm p" data-sel="go">Передать и переключиться</span><span class="btn sm ghost" data-sel="all">Все</span><span class="btn sm ghost" data-sel="none">Ничего</span><span class="btn sm ghost" data-sel="cancel">Отмена</span></div>';
+      const top=box.previousElementSibling&&box.previousElementSibling.classList.contains('cx-top')?box.previousElementSibling:box; top.before(bar); }); }
+  document.addEventListener('click',async e=>{ const ck=e.target.closest('[data-ck]'); if(ck&&SEL){ const i=+ck.dataset.ck; if(ck.checked) SEL.checked.add(i); else SEL.checked.delete(i); document.querySelectorAll('.live-selbar .n').forEach(n=>n.textContent=SEL.checked.size); return; }
+    const sb=e.target.closest('[data-sel]'); if(!sb||!SEL) return; const k=sb.dataset.sel;
+    if(k==='cancel'){ SEL=null; render(); return; }
+    if(k==='all'||k==='none'){ SEL.checked=new Set(k==='all'?S.chat.map((m,i)=>i).filter(i=>S.chat[i].role==='me'||S.chat[i].src==='live'):[]); render(); return; }
+    if(k==='go'){ const to=SEL.to, bar=sb.closest('.live-selbar'), prompt=(bar.querySelector('input').value||'').trim(); const picked=[...SEL.checked].sort((a,b)=>a-b).map(i=>S.chat[i]); if(!picked.length){ toast('Ничего не выбрано'); return; }
+      const body=picked.map(m=>(m.role==='me'?'Владелец':(m.who||'Ответ'))+': '+plain(m)).join('\n\n'); const text=(prompt?prompt+'\n\n':'')+'--- контекст чата ---\n'+body;
+      let r=null; try{ r=await api('/api/handoff',{to,text,kind:'note'}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
+      const tp=(H.panes||[]).find(p=>p.id===to); SEL=null; S.ui.pane=to; save(); pickPane(); hStatus(); if(window.CX) CX.render(); render(); log('чат','Контекст передан: '+(tp?paneName(tp):to)+' · '+picked.length+' реплик'); toast('Контекст передан: '+esc(tp?paneName(tp):to)+' · '+picked.length+' реплик · запись №'+r.seq+' — собеседник переключён'); } });
   // меню действий под ответом: роли и папки — настоящие вызовы харнесса
   function laMenu(anchor,title,items,onPick){ document.querySelectorAll('.live-menu.la').forEach(m=>m.remove()); const m=document.createElement('div'); m.className='live-menu la'; anchor.style.position='relative';
     m.innerHTML='<div class="h">'+title+'</div>'+(items.length?items.map((it,i)=>'<div data-k="'+i+'"'+(it.dis?' class="dis"':'')+'>'+it.t+(it.r?' <small>'+it.r+'</small>':'')+'</div>').join(''):'<div class="dis">нечего предложить</div>'); anchor.appendChild(m);
@@ -694,5 +714,5 @@
   hConnect().finally(()=>{ if(cols().length){ if(S.pending){ const q=S.pending.text; S.pending=null; S.chat.push({role:'me',text:q,t:now()}); save(); render(); reply(q); } else render(); } });
   addEventListener('resize',()=>{ wireSearch(); badges(); });
   addEventListener('storage',()=>{ load(); refresh(); if(cols().length) render(); if(window.CX) CX.render(); });
-  window.LIVE={get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus};   // для cx.js (поле ввода)
+  window.LIVE={get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,selStart};   // для cx.js (поле ввода)
 })();

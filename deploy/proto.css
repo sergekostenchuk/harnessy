@@ -283,3 +283,13 @@ html[data-m] .cx-pop { position:fixed; left:12px !important; right:12px; width:a
 .live-menu.la div.dis { color:var(--ink3); cursor:default; } .live-menu.la small { color:var(--ink3); font:10px var(--mono); margin-left:8px; } .live-menu.la .live-f { height:32px; margin:4px 4px 6px; width:calc(100% - 8px); }
 .cx-chip.empty { border-style:dashed; } .cx-chip.empty b { color:var(--ink2); font-weight:400; }
 .cx-path { font:12px var(--mono); }
+/* живая лента без нарисованного примера; чекбоксы и панель передачи контекста */
+html[data-proto] .feed .col.live-demo-off > :not(.live-msg):not(.live-sep):not(.live-cur):not(.live-ask) { display:none !important; }
+.live-sep a[data-demo] { color:var(--ink3); }
+.live-ck { display:inline-flex; align-items:center; margin-right:8px; vertical-align:middle; } .live-ck input { width:14px; height:14px; accent-color:var(--accent); cursor:pointer; margin:0; }
+.ai.live-msg .live-ck { position:absolute; left:-26px; top:4px; } .ai.live-msg { position:relative; }
+.live-selbar { width:min(760px,100%); margin:0 0 8px; padding:10px 12px; border:1px solid rgba(194,122,52,.5); border-radius:12px; background:var(--accent-soft); display:grid; gap:8px; }
+html[data-proto][data-page="chat"] .live-selbar { width:100%; }
+.live-selbar .t { font:10.5px var(--mono); letter-spacing:.05em; text-transform:uppercase; color:var(--ink2); } .live-selbar .t b { color:var(--ink); font-weight:500; }
+.live-selbar .live-f { margin:0; height:34px; background:var(--panel); } .live-selbar .acts { display:flex; gap:6px; flex-wrap:wrap; }
+.live-hint { font-size:12px; color:var(--ink3); margin:4px 0 0; }
