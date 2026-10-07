@@ -108,8 +108,9 @@
     if(!cid){ if(LOADED!==null){ S.chat=[]; save(); } LOADED=cid||'none'; render(); return; }
     let r=null; try{ r=await api('/api/chats/'+cid); }catch(e){} if(!r||!r.messages){ return; }
     const who=p.id==='room'?'Без роли':paneName(p);
-    S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:'live',who:m.role==='peer'?'сосед':who,pane:p.id,model:r.chat.model||p.model,html:md(m.text),text:m.text,t:(m.ts||0)*1000}).slice(-80);
-    LOADED=cid; save(); render(); }
+    S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:'live',who:m.role==='peer'?(/^\[от харнесс\]/.test(m.text)?'харнесс · вводная':'сосед'):who,pane:p.id,model:r.chat.model||p.model,html:md(m.text.replace(/^\[от [^\]]+\]\s*/,'')),text:m.text,t:(m.ts||0)*1000}).slice(-80);
+    LOADED=cid; save(); render();
+    if(p.id!=='room'&&!r.messages.length){ try{ const o=await api('/api/onboard',{pane:p.id}); if(o&&o.sent){ H.cur={text:'',tools:[]}; drawLive(); toast('Роль получает вводную: кто она, где, с кем работает'); } }catch(e){} } }   // роль без вводной получает её при первом открытии чата (правило движка)
   async function hConnect(){ if(PAGE!=='chat'&&PAGE!=='new') return; let st=null; try{ st=await api('/api/status'); }catch(e){} if(!st||!Array.isArray(st.panes)||!st.panes.length) return;
     H.on=true; applyStatus(st); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
     await refreshChats();
@@ -160,7 +161,7 @@
     if(k==='all'||k==='none'){ SEL.checked=new Set(k==='all'?S.chat.map((m,i)=>i).filter(i=>S.chat[i].role==='me'||S.chat[i].src==='live'):[]); render(); return; }
     if(k==='go'){ const to=SEL.to, bar=sb.closest('.live-selbar'), prompt=(bar.querySelector('input').value||'').trim(); const picked=[...SEL.checked].sort((a,b)=>a-b).map(i=>S.chat[i]); if(!picked.length){ toast('Ничего не выбрано'); return; }
       const body=picked.map(m=>(m.role==='me'?'Владелец':(m.who||'Ответ'))+': '+plain(m)).join('\n\n'); const text=(prompt?prompt+'\n\n':'')+'--- контекст чата ---\n'+body;
-      let r=null; try{ r=await api('/api/handoff',{to,text,kind:'note'}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
+      let r=null; try{ r=await api('/api/handoff',{to,text,kind:'note',from:H.pane?H.pane.id:'room'}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
       const tp=(H.panes||[]).find(p=>p.id===to); SEL=null; S.ui.pane=to; save(); pickPane(); hStatus(); if(window.CX) CX.render(); await loadChat(); log('чат','Контекст передан: '+(tp?paneName(tp):to)+' · '+picked.length+' реплик'); toast('Контекст передан: '+esc(tp?paneName(tp):to)+' · '+picked.length+' реплик · запись №'+r.seq+' — собеседник переключён'); } });
   // меню действий под ответом: роли и папки — настоящие вызовы харнесса
   function laMenu(anchor,title,items,onPick){ document.querySelectorAll('.live-menu.la').forEach(m=>m.remove()); const m=document.createElement('div'); m.className='live-menu la'; anchor.style.position='relative';

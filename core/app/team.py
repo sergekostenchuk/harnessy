@@ -54,15 +54,13 @@ class Team:
         return s.role if s else None
 
     def instructions_for(self, seat: Seat) -> str:
-        if seat.instructions:
-            p = Path(seat.instructions)
-            if not p.is_absolute():
-                p = self.harness_dir / p
-            try:
-                return p.read_text("utf-8")
-            except OSError:
-                return ""
-        return ""
+        p = Path(seat.instructions) if seat.instructions else self.harness_dir / "roles" / f"{seat.role}.md"   # без явного пути — файл роли в папке
+        if not p.is_absolute():
+            p = self.harness_dir / p
+        try:
+            return p.read_text("utf-8")
+        except OSError:
+            return ""
 
 
 def ensure_line(project_dir: str) -> Path:

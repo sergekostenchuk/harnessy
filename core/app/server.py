@@ -678,7 +678,7 @@ class App:
             c["transcript"], c["sessionId"], c["model"], c["vendor"], c["carry"] = p.transcript, p.session_id, p.model, p.vendor, p.carry
             if not c.get("title"):
                 first = next((m["text"] for m in p.transcript if m["role"] == "me"), "")
-                c["title"] = first.strip().split("\n")[0][:60]
+                c["title"] = first.strip().split("\n")[0][:60] or ("вводная роли" if any(m["role"] == "peer" and m["text"].startswith("[от харнесс]") for m in p.transcript) else "")
         try:
             self.journal._save_json(self._chats_path(), self.chats)
         except Exception as e:  # noqa: BLE001
@@ -910,13 +910,14 @@ class App:
             seats = d.get("seats") or {}
             if sid in seats:
                 return web.json_response({"ok": False, "error": f"место {sid} уже есть в team.yaml"}, status=409)
-            seats[sid] = {"role": role, "label": label, "vendor": room.vendor, "model": room.model, "mode": room.mode, "digest": False}
+            instr = f"roles/{role}.md" if (self.team.harness_dir / "roles" / f"{role}.md").exists() else None
+            seats[sid] = {"role": role, "label": label, "vendor": room.vendor, "model": room.model, "mode": room.mode, "digest": False, **({"instructions": instr} if instr else {})}
             d["seats"] = seats
             tf.write_text("# Манифест команды линии. Места добавляются и из чата («Назначить роль»); комментарии при этом не сохраняются.\n"
                           + yaml.safe_dump(d, allow_unicode=True, sort_keys=False), encoding="utf-8")
         except Exception as e:  # noqa: BLE001
             return web.json_response({"ok": False, "error": f"team.yaml не записан: {e}"}, status=400)
-        seat = Seat(id=sid, role=role, label=label, vendor=room.vendor, model=room.model, mode=room.mode, write_paths=[], worktree=None, digest=False)
+        seat = Seat(id=sid, role=role, label=label, vendor=room.vendor, model=room.model, mode=room.mode, write_paths=[], worktree=None, digest=False, instructions=instr)
         self.team.seats[sid] = seat
         pane = Pane(id=sid, vendor=room.vendor, label=label, model=room.model, mode=room.mode, cwd=self.project_dir, role=role)
         pane.session_id, pane.transcript, pane.carry = room.session_id, list(room.transcript), room.carry
@@ -958,6 +959,22 @@ class App:
         except JournalError as e:
             print(f"[harness] вводная {pane.id} не записана: {e}", file=sys.stderr, flush=True)
 
+    def _onboarded(self, pane_id: str) -> bool:
+        return any(r.get("from") == HARNESS and pane_id in (r.get("to") or []) and r.get("origin") == "onboarding" for r in self.journal.read(limit=0))
+
+    async def onboard(self, request):
+        """Вводная роли, которая её ещё не получала (место из team.yaml или созданное до появления вводных). Повторно не шлётся."""
+        body = await request.json()
+        p = self.registry.get(str(body.get("pane") or ""))
+        if not p or p.id == ROOM_ID:
+            return web.json_response({"ok": False, "error": "нет такого места или это разговор без роли"}, status=404)
+        if self._onboarded(p.id):
+            return web.json_response({"ok": True, "already": True})
+        if p.busy:
+            return web.json_response({"ok": False, "error": "место сейчас отвечает"}, status=409)
+        self._send_onboarding(p, "при первом открытии чата роли")
+        return web.json_response({"ok": True, "sent": True})
+
     async def seat_create(self, request):
         """Назначить роль, которой в папке ещё нет (слово владельца 08.10): новое место в team.yaml без разговора — чат начнётся с него.
         Модель — из запроса, иначе модель разговора без роли, иначе первая Claude; сменить можно сразу в строке ввода."""
@@ -991,13 +1008,14 @@ class App:
             seats = d.get("seats") or {}
             if sid in seats:
                 return web.json_response({"ok": False, "error": f"место {sid} уже есть в team.yaml"}, status=409)
-            seats[sid] = {"role": role, "label": label, "vendor": vendor, "model": model, "mode": mode, "digest": False}
+            instr = f"roles/{role}.md" if (self.team.harness_dir / "roles" / f"{role}.md").exists() else None
+            seats[sid] = {"role": role, "label": label, "vendor": vendor, "model": model, "mode": mode, "digest": False, **({"instructions": instr} if instr else {})}
             d["seats"] = seats
             tf.write_text("# Манифест команды линии. Места добавляются и из чата («Назначить роль»); комментарии при этом не сохраняются.\n"
                           + yaml.safe_dump(d, allow_unicode=True, sort_keys=False), encoding="utf-8")
         except Exception as e:  # noqa: BLE001
             return web.json_response({"ok": False, "error": f"team.yaml не записан: {e}"}, status=400)
-        self.team.seats[sid] = Seat(id=sid, role=role, label=label, vendor=vendor, model=model, mode=mode, write_paths=[], worktree=None, digest=False)
+        self.team.seats[sid] = Seat(id=sid, role=role, label=label, vendor=vendor, model=model, mode=mode, write_paths=[], worktree=None, digest=False, instructions=instr)
         pane = Pane(id=sid, vendor=vendor, label=label, model=model, mode=mode, cwd=self.project_dir, role=role)
         self.registry.panes[sid] = pane
         c = self._new_chat(pane)
@@ -1019,9 +1037,9 @@ class App:
             return web.json_response({"ok": False, "error": "нет такого места"}, status=404)
         if kind not in ("task", "note", "question"):
             return web.json_response({"ok": False, "error": f"вид {kind} не годится: task, note или question"}, status=400)
+        if not src or not src.transcript:
+            return web.json_response({"ok": False, "error": "передавать нечего: чат-источник пуст"}, status=400)   # правило движка (08.10): из пустого чата контекст не передаётся
         if not text:
-            if not src or not src.transcript:
-                return web.json_response({"ok": False, "error": "передавать нечего: разговор пуст"}, status=400)
             text = "Контекст разговора владельца — продолжи работу по нему:\n\n" + self._transcript_text(src)
         if len(text) > 60000:
             text = text[:60000] + "\n…(обрезано)"
@@ -1263,6 +1281,7 @@ class App:
         app.router.add_post("/api/room/move", self.room_move)
         app.router.add_post("/api/assign", self.assign_role)
         app.router.add_post("/api/seats", self.seat_create)
+        app.router.add_post("/api/onboard", self.onboard)
         app.router.add_post("/api/handoff", self.handoff)
         app.router.add_get("/api/chats", self.chats_list)
         app.router.add_get("/api/chats/{id}", self.chat_get)
