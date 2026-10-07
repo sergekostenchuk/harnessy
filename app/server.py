@@ -7,7 +7,7 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
+import secrets, subprocess, time
 import sys
 from pathlib import Path
 
@@ -67,6 +67,7 @@ def claude_auth() -> dict:
 
 class App:
     def __init__(self):
+        self.chats = {"chats": {}, "active": {}}      # чаты мест: <папка>/.harness/state/chats.json (слово владельца 08.10.2026)
         self.models = {"claude": CLAUDE_MODELS, "codex": [{"id": "gpt-5.6-sol", "label": "gpt-5.6-sol"}]}
         self.registry = Registry(DEFAULT_DIR, self.models, [])
         self.bridge = Bridge(self.registry)
@@ -163,6 +164,7 @@ class App:
             if st:
                 self.registry.update(p, {"model": st.get("model"), "mode": st.get("mode"), "sessionId": st.get("sessionId"), "digest": st.get("digest")}, valid_dir)
                 p.touched = True
+        self._load_chats()
         self.threads = {}
         for r in self.journal.read(limit=0):
             if r.get("kind") == "verdict" and r.get("thread"):
@@ -184,6 +186,7 @@ class App:
     def save_panes(self) -> None:
         if self.journal:
             self.journal.save_panes({pid: p.persist() for pid, p in self.registry.panes.items()})
+            self._sync_chats()
 
     def role_note(self, pane: Pane) -> str:
         """Инструкции роли и её маршруты — в системный промпт места."""
@@ -451,6 +454,7 @@ class App:
                 pane.publish({"type": "note", "text": f"{len(work)} запис{'ь' if len(work) == 1 else 'и'} остались в очереди и уйдут со следующим ходом"})
                 return
             self.journal.advance(pane.id, recs[-1]["seq"])
+            self.save_panes()
 
     def render_inbox(self, recs: list[dict], pane: Pane) -> str:
         if len(recs) == 1 and recs[0]["from"] == OWNER and recs[0]["kind"] in ("task", "note", "question"):
@@ -580,6 +584,7 @@ class App:
             "repo": self.repo_root,
             "panes": [{**p.settings(), "pending": len(self.journal.pending_for(p.id))} for p in self.registry.panes.values()],
             "roleCatalog": [{"role": r, "label": l, "multi": m} for r, l, m in ROLE_CATALOG],
+            "activeChats": self.chats.get("active", {}), "hasOrchestrator": any(p.role == "orchestrator" for p in self.registry.panes.values()),
             "threads": self.threads,
             "auth": {"claude": claude_auth(), "codex": info["account"]},
             "journal": {"lastSeq": self.journal.last_seq, "path": str(self.journal.channel)},
@@ -617,6 +622,152 @@ class App:
             if self.journal.pending_for(p.id):
                 self.kick(p)          # в очереди есть записи (например, после отказа прежней модели) — отдать их новой
         return web.json_response({"ok": True, "pane": p.settings()})
+
+    # ---------- чаты мест ----------
+    def _chats_path(self) -> Path:
+        return Path(self.project_dir) / ".harness" / "state" / "chats.json"
+
+    def _load_chats(self) -> None:
+        try:
+            self.chats = json.loads(self._chats_path().read_text("utf-8"))
+        except (OSError, json.JSONDecodeError):
+            self.chats = {}
+        self.chats = {"chats": dict(self.chats.get("chats") or {}), "active": dict(self.chats.get("active") or {})}
+        for pid, cid in list(self.chats["active"].items()):
+            p, c = self.registry.get(pid), self.chats["chats"].get(cid)
+            if not p or not c:
+                self.chats["active"].pop(pid, None)
+                continue
+            p.session_id = c.get("sessionId")
+            p.transcript = list(c.get("transcript") or [])
+            p.carry = c.get("carry") or ""
+            if c.get("vendor") in self.registry.providers:
+                p.vendor = c["vendor"]
+            if c.get("model"):
+                p.model = c["model"]
+
+    def _new_chat(self, pane: Pane, carry: str = "", adopt: bool = False) -> dict:
+        """Новый чат места. adopt — взять в чат то, что у места уже есть (лента, сессия); иначе место начинает с чистого листа."""
+        cid = f"c{int(time.time() * 1000):x}{secrets.token_hex(2)}"
+        c = {"id": cid, "pane": pane.id, "title": "", "created": int(time.time()), "closed": None, "model": pane.model, "vendor": pane.vendor,
+             "sessionId": pane.session_id if adopt else None, "transcript": pane.transcript if adopt else [], "carry": (pane.carry if adopt else "") or carry}
+        self.chats["chats"][cid] = c
+        self.chats["active"][pane.id] = cid
+        if not adopt:
+            pane.session_id, pane.transcript, pane.carry, pane.seen = None, c["transcript"], carry, {}
+        return c
+
+    def _active_chat(self, pane: Pane, create: bool = True) -> dict | None:
+        c = self.chats["chats"].get(self.chats["active"].get(pane.id, ""))
+        if c is None and create:
+            c = self._new_chat(pane, adopt=True)
+        return c
+
+    def _chat_meta(self, c: dict) -> dict:
+        p = self.registry.get(c["pane"])
+        tr = c.get("transcript") or []
+        return {"id": c["id"], "pane": c["pane"], "label": p.label if p else c["pane"], "role": p.role if p else None, "title": c.get("title") or "",
+                "created": c["created"], "closed": c.get("closed"), "model": c.get("model"), "vendor": c.get("vendor"), "messages": len(tr),
+                "last": int(tr[-1]["ts"]) if tr and tr[-1].get("ts") else c["created"], "active": self.chats["active"].get(c["pane"]) == c["id"]}
+
+    def _sync_chats(self) -> None:
+        for p in self.registry.panes.values():
+            c = self._active_chat(p, create=bool(p.transcript or p.session_id))
+            if not c:
+                continue
+            c["transcript"], c["sessionId"], c["model"], c["vendor"], c["carry"] = p.transcript, p.session_id, p.model, p.vendor, p.carry
+            if not c.get("title"):
+                first = next((m["text"] for m in p.transcript if m["role"] == "me"), "")
+                c["title"] = first.strip().split("\n")[0][:60]
+        try:
+            self.journal._save_json(self._chats_path(), self.chats)
+        except Exception as e:  # noqa: BLE001
+            print(f"[harness] chats.json не записан: {e}", file=sys.stderr, flush=True)
+
+    def _close_chat(self, pane: Pane, carry: str) -> str:
+        """Закрыть активный чат места. Возвращает текст контекста для следующего чата (carry=text) или пусто."""
+        c = self._active_chat(pane, create=False)
+        if not c:
+            return ""
+        self._sync_chats()
+        text = ""
+        if carry == "text" and c["transcript"]:
+            text = f"Контекст прежнего чата «{pane.label}»" + (f" ({c['title']})" if c.get("title") else "") + ", для сведения:\n\n" + self._transcript_text(pane)
+        c["closed"] = int(time.time())
+        return text
+
+    async def chats_list(self, request):
+        self._sync_chats()
+        out = sorted((self._chat_meta(c) for c in self.chats["chats"].values()), key=lambda x: -x["last"])
+        return web.json_response({"active": self.chats["active"], "chats": out})
+
+    async def chat_get(self, request):
+        c = self.chats["chats"].get(request.match_info["id"])
+        if not c:
+            return web.json_response({"error": "нет такого чата"}, status=404)
+        self._sync_chats()
+        return web.json_response({"chat": self._chat_meta(c), "messages": c.get("transcript") or []})
+
+    async def chats_new(self, request):
+        """Новый чат места. У роли один активный чат: прежний закрывается, его контекст уходит в новый текстом или выжимкой (ход модели) — или никак.
+        У «без роли» чаты параллельные: прежний остаётся."""
+        body = await request.json()
+        p = self.registry.get(str(body.get("pane") or ""))
+        carry = str(body.get("carry") or "text")
+        if not p:
+            return web.json_response({"ok": False, "error": "нет такого места"}, status=404)
+        if p.busy:
+            return web.json_response({"ok": False, "error": "место сейчас отвечает — дождитесь ответа"}, status=409)
+        if carry not in ("text", "summary", "none"):
+            return web.json_response({"ok": False, "error": "carry: text, summary или none"}, status=400)
+        carry_text = ""
+        if p.id == ROOM_ID:
+            self._sync_chats()
+        else:
+            old = self._active_chat(p, create=False)
+            if old and carry == "summary" and old.get("transcript"):
+                try:
+                    summary = await self.run_turn(p, "Напиши краткую выжимку этого разговора для передачи в новый чат той же роли: что решено, что сделано, открытые вопросы, чего ждёт владелец. Коротко, списком, без вступления.", origin="summary")
+                except Exception as e:  # noqa: BLE001
+                    return web.json_response({"ok": False, "error": f"выжимка не получилась: {str(e)[:200]}"}, status=400)
+                self._sync_chats()
+                old["closed"] = int(time.time())
+                carry_text = f"Выжимка прежнего чата «{p.label}»" + (f" ({old.get('title')})" if old.get("title") else "") + ":\n\n" + (summary or "").strip()
+            else:
+                carry_text = self._close_chat(p, carry)
+        c = self._new_chat(p, carry_text)
+        self.save_panes()
+        return web.json_response({"ok": True, "chat": self._chat_meta(c), "pane": p.settings(), "carried": bool(carry_text)})
+
+    async def chats_open(self, request):
+        """Открыть чат: он становится активным у своего места; у роли текущий активный закрывается (контекст — текстом, если carry=text)."""
+        body = await request.json()
+        c = self.chats["chats"].get(str(body.get("chat") or ""))
+        carry = str(body.get("carry") or "text")
+        if not c:
+            return web.json_response({"ok": False, "error": "нет такого чата"}, status=404)
+        p = self.registry.get(c["pane"])
+        if not p:
+            return web.json_response({"ok": False, "error": "место этого чата больше не существует"}, status=404)
+        if p.busy:
+            return web.json_response({"ok": False, "error": "место сейчас отвечает — дождитесь ответа"}, status=409)
+        cur = self._active_chat(p, create=False)
+        if cur and cur["id"] == c["id"]:
+            return web.json_response({"ok": True, "chat": self._chat_meta(c), "pane": p.settings(), "already": True})
+        carry_text = "" if p.id == ROOM_ID else self._close_chat(p, carry)
+        c["closed"] = None
+        self.chats["active"][p.id] = c["id"]
+        p.session_id = c.get("sessionId")
+        p.transcript = c["transcript"] if isinstance(c.get("transcript"), list) else []
+        c["transcript"] = p.transcript
+        p.carry = ((c.get("carry") or "") + ("\n\n" + carry_text if carry_text else "")).strip()
+        p.seen = {}
+        if c.get("vendor") in self.registry.providers:
+            p.vendor = c["vendor"]
+        if c.get("model"):
+            p.model = c["model"]
+        self.save_panes()
+        return web.json_response({"ok": True, "chat": self._chat_meta(c), "pane": p.settings(), "carried": bool(carry_text)})
 
     # ---------- папки, комната, роли по ходу ----------
     def _remember_project(self, path: str) -> None:
@@ -735,7 +886,19 @@ class App:
             return web.json_response({"ok": False, "error": "команда папки не читается: " + "; ".join(self.line_errors)}, status=400)
         same = [p for p in self.registry.panes.values() if p.role == role and p.id != ROOM_ID]
         if same and not cat[2]:
-            return web.json_response({"ok": False, "error": f"роль «{cat[1]}» в этой папке уже занята ({same[0].label}) — передайте контекст"}, status=409)
+            target = same[0]
+            if target.busy:
+                return web.json_response({"ok": False, "error": f"«{target.label}» сейчас отвечает — назначьте после ответа"}, status=409)
+            carry_text = self._close_chat(target, "text")              # прежний чат роли закрыт, его контекст — в новый (правило 4)
+            c = self._new_chat(target, carry_text)
+            target.transcript = list(room.transcript); c["transcript"] = target.transcript
+            target.session_id = room.session_id if room.vendor == target.vendor else None
+            target.vendor, target.model = room.vendor, room.model          # чат несёт свою модель
+            self._sync_chats()
+            room.session_id, room.transcript, room.carry = None, [], ""
+            self._new_chat(room)
+            self.save_panes()
+            return web.json_response({"ok": True, "pane": target.settings(), "chat": self._chat_meta(c), "replaced": True})
         n = len(same) + 1
         sid = role if n == 1 else f"{role}{n}"
         label = cat[1] if n == 1 else f"{cat[1]} {n}"
@@ -869,8 +1032,13 @@ class App:
         if kind not in OWNER_KINDS:
             return web.json_response({"error": f"владелец пишет виды {', '.join(OWNER_KINDS)}; получено {kind}"}, status=400)
         thread = body.get("thread") or (f"T{self.journal.last_seq + 1}" if kind == "task" else None)
+        direct = bool(body.get("direct"))
+        has_orch = any(x.role == "orchestrator" for x in self.registry.panes.values())
+        if has_orch and p.role not in ("orchestrator", "room") and not direct:
+            # чаты ролей владелец читает свободно; писать роли мимо оркестратора — только явным действием, которое ложится в журнал
+            return web.json_response({"ok": False, "needDirect": True, "error": f"«{p.label}» — не оркестратор: обращение напрямую требует явного подтверждения"}, status=409)
         try:
-            rec = self.post(OWNER, [p.id], kind, message, thread=thread)
+            rec = self.post(OWNER, [p.id], kind, message, thread=thread, origin=("direct" if direct else None))
         except JournalError as e:
             return web.json_response({"ok": False, "code": e.code, "error": str(e)}, status=400)
         if kind == "stop" and p.busy and p.interrupt:
@@ -1014,6 +1182,10 @@ class App:
         app.router.add_post("/api/room/move", self.room_move)
         app.router.add_post("/api/assign", self.assign_role)
         app.router.add_post("/api/handoff", self.handoff)
+        app.router.add_get("/api/chats", self.chats_list)
+        app.router.add_get("/api/chats/{id}", self.chat_get)
+        app.router.add_post("/api/chats/new", self.chats_new)
+        app.router.add_post("/api/chats/open", self.chats_open)
         if SITE_DIR.is_dir():
             app.router.add_static("/sketches", SITE_DIR, show_index=False)
 
