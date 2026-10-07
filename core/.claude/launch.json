@@ -1,0 +1,47 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "harness",
+      "url": "http://localhost:3777"
+    },
+    {
+      "name": "chat",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": [
+        "-m",
+        "app.server"
+      ],
+      "port": 3777,
+      "autoPort": false
+    },
+    {
+      "name": "workbench-demo",
+      "runtimeExecutable": "/Users/kostenchuksergey/.hermes/node/bin/npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "/Users/kostenchuksergey/ASVP/UI/asvh-workbench"
+      ],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "workbench-chat-demo",
+      "runtimeExecutable": "/Users/kostenchuksergey/.hermes/node/bin/npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "/Users/kostenchuksergey/ASVP/UI/asvh-workbench/.worktrees/chat-1a",
+        "--",
+        "--port",
+        "3011",
+        "--strictPort"
+      ],
+      "port": 3011,
+      "autoPort": false
+    }
+  ]
+}
