@@ -1,0 +1,10 @@
+{
+  "name": "harnessy-desktop",
+  "productName": "Harnessy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Оболочка Harnessy: окно вокруг прототипа, который отдаёт харнесс ~/HARNESS (:3777)",
+  "main": "main.js",
+  "scripts": { "start": "electron ." },
+  "devDependencies": { "electron": "^44.4.1" }
+}
