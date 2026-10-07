@@ -433,17 +433,24 @@ class App:
             recs = self.journal.pending_for(pane.id)
             if not recs:
                 return
-            self.journal.advance(pane.id, recs[-1]["seq"])
             pane.publish({"type": "delivered", "records": recs})
-            for r in recs:
-                pane.record("me" if r["from"] == OWNER else "peer", r["text"] if r["from"] == OWNER else f"[от {self.label_of(r['from'])}] {r['text']}")
             work = [r for r in recs if r["kind"] not in ("stop",)]
             if not work:
+                self.journal.advance(pane.id, recs[-1]["seq"])
                 continue
+            n = len(pane.transcript)
+            for r in recs:
+                pane.record("me" if r["from"] == OWNER else "peer", r["text"] if r["from"] == OWNER else f"[от {self.label_of(r['from'])}] {r['text']}")
             try:
                 await self.run_turn(pane, self.render_inbox(work, pane), origin="inbox", records=work)
             except Exception as e:  # noqa: BLE001
+                # Ход не состоялся (модель отказала, папки нет, прервано): записи НЕ считаются прочитанными — уйдут со следующим ходом
+                # (после смены модели или нового сообщения); реплики из ленты места убираем, чтобы при повторе не задвоились. Урок 07.10.2026.
+                del pane.transcript[n:]
                 print(f"[harness] {pane.id}: {e}", file=sys.stderr, flush=True)
+                pane.publish({"type": "note", "text": f"{len(work)} запис{'ь' if len(work) == 1 else 'и'} остались в очереди и уйдут со следующим ходом"})
+                return
+            self.journal.advance(pane.id, recs[-1]["seq"])
 
     def render_inbox(self, recs: list[dict], pane: Pane) -> str:
         if len(recs) == 1 and recs[0]["from"] == OWNER and recs[0]["kind"] in ("task", "note", "question"):
@@ -607,6 +614,8 @@ class App:
         body.pop("cwd", None)
         if self.registry.update(p, body, valid_dir):
             self.save_panes()
+            if self.journal.pending_for(p.id):
+                self.kick(p)          # в очереди есть записи (например, после отказа прежней модели) — отдать их новой
         return web.json_response({"ok": True, "pane": p.settings()})
 
     # ---------- папки, комната, роли по ходу ----------
