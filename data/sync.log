@@ -631,3 +631,6 @@ sqlite3.OperationalError: unable to open database file
 (Use `node --trace-warnings ...` to show where the warning was created)
 2026-10-08 00:06:48 map.json 799640 байт · dev-timeline.json 960555 байт
 2026-10-08 00:07:36 залито на NL99 за 52 с
+Traceback (most recent call last):
+  File "<stdin>", line 4, in <module>
+sqlite3.OperationalError: unable to open database file
