@@ -1,8 +1,12 @@
 .DS_Store
 ._*
-out/
-*.pyc
 __pycache__/
-desktop/logs/
-data/
-sketches/disarto-shots/ref-composer-menus/
+*.pyc
+# окно
+ui/deploy/out/
+ui/data/
+ui/desktop/logs/
+ui/sketches/disarto-shots/ref-composer-menus/
+# движок
+core/.venv/
+core/logs/
