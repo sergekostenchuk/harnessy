@@ -63,9 +63,11 @@
         return '<p>'+par.replace(/\n/g,'<br>')+'</p>'; }).join(''); });
     return out.replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>').replace(/`([^`\n]+)`/g,'<code>$1</code>'); }
   const paneName=p=>p?p.label.charAt(0).toUpperCase()+p.label.slice(1):'';
-  function pickPane(){ let p=H.panes.find(x=>x.id===(S.ui.pane||'')); if(!p){ const b=document.querySelector('.frame .top b'); const lab=((b&&b.textContent)||'').split('·')[0].trim().toLowerCase(); p=H.panes.find(x=>x.label.toLowerCase()===lab)||H.panes.find(x=>x.vendor==='claude')||H.panes[0]; } H.pane=p||null; }
+  function pickPane(){ let p=H.panes.find(x=>x.id===(S.ui.pane||'')); if(!p&&S.ui.pane==='room'){ H.pane=null; return; }   // «без роли» выбрано, комнаты ещё нет — модель предстоит выбрать
+    if(!p){ const b=document.querySelector('.frame .top b'); const lab=((b&&b.textContent)||'').split('·')[0].trim().toLowerCase(); p=H.panes.find(x=>x.label.toLowerCase()===lab)||H.panes.find(x=>x.id!=='room'&&x.vendor==='claude')||H.panes.find(x=>x.id!=='room')||H.panes[0]; } H.pane=p||null; }
   function hStatus(){ if(PAGE!=='chat') return; const p=H.pane; document.querySelectorAll('.frame .top .st').forEach(s=>{ if(!p) return;
-      s.innerHTML='<i></i>'+(H.cur?'думает':'подключено')+' · '+esc(p.label)+' · '+esc(p.model)+' · '+esc(p.mode)+' <span class="live-pick" title="Выбрать место">▾</span>'; s.classList.toggle('live-busy',!!H.cur); }); }
+      s.innerHTML='<i></i>'+(H.cur?'думает':'подключено')+' · '+esc(p.label)+' · '+esc(p.model)+' · '+esc(p.mode)+' <span class="live-pick" title="Выбрать место">▾</span>'; s.classList.toggle('live-busy',!!H.cur); });
+    if(!p&&H.on) document.querySelectorAll('.frame .top .st').forEach(s=>{ s.innerHTML='<i></i>подключено · без роли · модель не выбрана <span class="live-pick" title="Выбрать место">▾</span>'; }); }
   function pickMenu(st){ document.querySelectorAll('.st .live-menu').forEach(m=>m.remove()); const m=document.createElement('div'); m.className='live-menu'; st.style.position='relative';
     m.innerHTML=H.panes.map(p=>'<div data-pane="'+p.id+'"'+(H.pane&&p.id===H.pane.id?' class="on"':'')+'>'+esc(p.label)+' <small>· '+esc(p.vendor)+' · '+esc(p.model)+'</small></div>').join(''); st.appendChild(m);
     const off=e=>{ if(!m.contains(e.target)){ m.remove(); document.removeEventListener('click',off,true); } }; setTimeout(()=>document.addEventListener('click',off,true),0); }
@@ -78,7 +80,7 @@
   const askHTML=a=>'<div class="live-msg live-ask'+(a.done?' done':'')+'" data-ask="'+a.id+'"><b>'+esc(a.title)+'</b><small>'+esc(a.detail||'')+'</small>'+(a.done?'<span class="mono">'+(a.done==='allow'?'разрешено':a.done==='deny'?'отказано':'время вышло')+'</span>':'<div class="act"><span class="btn sm p" data-approve="allow">Разрешить</span><span class="btn sm ghost" data-approve="deny">Отказать</span></div>')+'</div>';
   function drawLive(){ if(!H.on) return; cols().forEach(c=>{ c.querySelectorAll('.live-cur, .live-ask').forEach(x=>x.remove()); if(H.cur) c.insertAdjacentHTML('beforeend',curHTML()); Object.values(H.asks).forEach(a=>c.insertAdjacentHTML('beforeend',askHTML(a))); }); hStatus(); if(H.cur||Object.keys(H.asks).length) scrollEnd(); }
   function finish(ev){ const c=H.cur; H.cur=null;
-    if(c&&(c.text||c.tools.length)){ const u=ev&&ev.usage; S.chat.push({role:'ai',html:c.tools.map(toolLine).join('')+md(c.text),t:now(),src:'live',who:paneName(H.pane),model:(ev&&ev.model)||H.pane.model,cost:u?{i:u.input,o:u.output,c:u.cacheRead,ms:ev.durationMs}:null}); S.chat=S.chat.slice(-40); save(); }
+    if(c&&(c.text||c.tools.length)){ const u=ev&&ev.usage; S.chat.push({role:'ai',html:c.tools.map(toolLine).join('')+md(c.text),text:c.text,t:now(),src:'live',who:H.pane.id==='room'?'Без роли':paneName(H.pane),pane:H.pane.id,nf:!!(S.cx&&S.cx.noFolder),model:(ev&&ev.model)||H.pane.model,cost:u?{i:u.input,o:u.output,c:u.cacheRead,ms:ev.durationMs}:null}); S.chat=S.chat.slice(-40); save(); }
     if(ev&&ev.type==='error'){ S.chat.push({role:'ai',html:'<p>'+esc(ev.text||ev.error||'ошибка')+'</p>',t:now(),src:'err'}); save(); } render(); }
   function hEvent(ev){ const t=ev.type, cur=()=>H.cur||(H.cur={text:'',tools:[]});
     if(t==='delta'){ cur().text+=ev.text||''; drawLive(); }
@@ -91,8 +93,10 @@
   async function ask(q){ if(!H.cur){ H.cur={text:'',tools:[]}; drawLive(); } let r=null; try{ r=await api('/api/chat',{pane:H.pane.id,message:q,kind:'question'}); }catch(e){}
     if(!r||!r.ok){ H.cur=null; S.chat.push({role:'ai',html:'<p>Харнесс не принял сообщение: '+esc((r&&r.error)||'нет связи')+'</p>',t:now(),src:'err'}); save(); render(); return; }
     if(r.queued) toast('Место занято — сообщение встало в очередь'); }
+  function applyStatus(st){ H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.roleCatalog=st.roleCatalog||[]; pickPane(); }
+  async function refreshStatus(){ let st=null; try{ st=await api('/api/status'); }catch(e){} if(st&&Array.isArray(st.panes)){ applyStatus(st); hStatus(); if(window.CX) CX.render(); } return st; }
   async function hConnect(){ if(PAGE!=='chat'&&PAGE!=='new') return; let st=null; try{ st=await api('/api/status'); }catch(e){} if(!st||!Array.isArray(st.panes)||!st.panes.length) return;
-    H.on=true; H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; pickPane(); if(!H.pane){ H.on=false; return; }
+    H.on=true; applyStatus(st); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
     if(PAGE==='chat'){ if(H.pane.busy) H.cur={text:'',tools:[]};
       const es=new EventSource('/api/events/all'); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
       hStatus(); }
@@ -113,11 +117,37 @@
   const fmtN=n=>n==null?null:String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,' ');
   const costLine=m=>{ if(m.src!=='live') return ''; const c=m.cost; if(!c||(c.i==null&&c.o==null)) return '<div class="live-cost">расход недоступен</div>';
     const tot=(c.i||0)+(c.o||0); return '<div class="live-cost">расход: '+fmtN(tot)+' токенов · вход '+fmtN(c.i||0)+' · выход '+fmtN(c.o||0)+(c.c?' · кэш '+fmtN(c.c):'')+(c.ms?' · '+(c.ms>=60000?Math.round(c.ms/60000)+' мин':Math.round(c.ms/1000)+' с'):'')+'</div>'; };   // только учёт харнесса; доли квоты нет — не рисуем
-  const bubble=m=>m.role==='me'?'<div class="me live-msg">'+esc(m.text)+'</div>':'<div class="ai live-msg"><span class="orb"></span><div><div class="thought">'+(m.src==='live'?esc(m.who||'')+' · '+esc(m.model||'')+' · ':m.src==='err'?'ошибка · ':'прототип · ответ по сценарию · ')+hhmm(m.t)+'</div>'+m.html+costLine(m)+'</div></div>';
+  const actsLine=(m,i)=>{ if(m.src!=='live') return ''; const a=['<span data-la="copy" data-i="'+i+'">копировать</span>'];
+    if(m.pane==='room'){ if(m.nf) a.push('<span data-la="mkdir" data-i="'+i+'">создать папку и git</span>','<span data-la="move" data-i="'+i+'">перейти в папку…</span>'); else a.push('<span data-la="assign" data-i="'+i+'">назначить роль</span>','<span data-la="handoff" data-i="'+i+'">передать контекст</span>'); }
+    return '<div class="live-acts">'+a.join('<i>·</i>')+'</div>'; };
+  const bubble=(m,i)=>m.role==='me'?'<div class="me live-msg">'+esc(m.text)+'</div>':'<div class="ai live-msg"><span class="orb"></span><div><div class="thought">'+(m.src==='live'?esc(m.who||'')+' · '+esc(m.model||'')+' · ':m.src==='err'?'ошибка · ':'прототип · ответ по сценарию · ')+hhmm(m.t)+'</div>'+m.html+costLine(m)+actsLine(m,i)+'</div></div>';
   const cols=()=>document.querySelectorAll('.feed .col');
   function scrollEnd(){ document.querySelectorAll('.feed').forEach(f=>f.scrollTop=f.scrollHeight); if(document.documentElement.hasAttribute('data-m')) window.scrollTo(0,document.documentElement.scrollHeight); }
   function render(){ cols().forEach(c=>{ c.querySelectorAll('.live-msg, .live-sep').forEach(x=>x.remove()); if(S.chat.length) c.insertAdjacentHTML('beforeend','<div class="live-sep">'+(H.on?'ваш разговор · через харнесс':'ваш разговор в прототипе')+' · <a data-clear>очистить</a></div>'+S.chat.map(bubble).join('')); }); drawLive(); if(S.chat.length) scrollEnd(); }
-  function reply(q){ if(H.on&&H.pane){ ask(q); return; } cols().forEach(c=>c.insertAdjacentHTML('beforeend','<div class="ai live-msg live-typing"><span class="orb"></span><div><div class="thought">думает…</div></div></div>')); scrollEnd();
+  // меню действий под ответом: роли и папки — настоящие вызовы харнесса
+  function laMenu(anchor,title,items,onPick){ document.querySelectorAll('.live-menu.la').forEach(m=>m.remove()); const m=document.createElement('div'); m.className='live-menu la'; anchor.style.position='relative';
+    m.innerHTML='<div class="h">'+title+'</div>'+(items.length?items.map((it,i)=>'<div data-k="'+i+'"'+(it.dis?' class="dis"':'')+'>'+it.t+(it.r?' <small>'+it.r+'</small>':'')+'</div>').join(''):'<div class="dis">нечего предложить</div>'); anchor.appendChild(m);
+    m.addEventListener('click',e=>{ const d=e.target.closest('[data-k]'); if(!d||d.classList.contains('dis')) return; m.remove(); onPick(items[+d.dataset.k]); });
+    const off=e=>{ if(!m.contains(e.target)){ m.remove(); document.removeEventListener('click',off,true); } }; setTimeout(()=>document.addEventListener('click',off,true),0); }
+  function laPath(anchor,title,def,onOk){ document.querySelectorAll('.live-menu.la').forEach(m=>m.remove()); const m=document.createElement('div'); m.className='live-menu la'; anchor.style.position='relative';
+    m.innerHTML='<div class="h">'+title+'</div><input class="live-f" placeholder="/Users/…/имя-папки" value="'+esc(def||'')+'"><div data-ok>Создать и перейти</div>'; anchor.appendChild(m); const inp=m.querySelector('input'); setTimeout(()=>{ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); },0);
+    const go=()=>{ const v=inp.value.trim(); if(!v) return; m.remove(); onOk(v); }; m.querySelector('[data-ok]').addEventListener('click',go); inp.addEventListener('keydown',e=>{ if(e.key==='Enter') go(); if(e.key==='Escape') m.remove(); });
+    const off=e=>{ if(!m.contains(e.target)){ m.remove(); document.removeEventListener('click',off,true); } }; setTimeout(()=>document.addEventListener('click',off,true),0); }
+  document.addEventListener('click',async e=>{ const la=e.target.closest('[data-la]'); if(!la) return; e.stopPropagation(); const m=S.chat[+la.dataset.i]; if(!m) return; const kind=la.dataset.la, anchor=la.closest('.live-acts');
+    if(kind==='copy'){ try{ await navigator.clipboard.writeText(m.text||la.closest('.ai').innerText); toast('Скопировано'); }catch(x){ toast('Не удалось скопировать'); } return; }
+    if(!H.on) { toast('Харнесс не подключён'); return; }
+    if(kind==='assign'){ const taken=(H.panes||[]).filter(p=>p.id!=='room'); const items=(H.roleCatalog||[]).map(r=>{ const n=taken.filter(p=>p.role===r.role).length; const busy=n>0&&!r.multi; return {t:esc(r.label)+(n>0&&r.multi?' '+(n+1):''),r:busy?'занята · передайте контекст':(n?'ещё одно место':'свободна'),dis:busy,role:r.role}; });
+      laMenu(anchor,'назначить роль разговору',items,async it=>{ let r=null; try{ r=await api('/api/assign',{role:it.role}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
+        S.ui.pane=r.pane.id; save(); await refreshStatus(); S.chat.forEach(x=>{ if(x.pane==='room'&&x.src==='live'){ x.pane=r.pane.id; x.who=paneName(r.pane); } }); save(); render(); log('настройка','Роль назначена: '+r.pane.label+' · '+r.pane.model); toast('Роль назначена: '+esc(r.pane.label)+' — разговор продолжается от её имени'); }); return; }
+    if(kind==='handoff'){ const items=(H.panes||[]).filter(p=>p.id!=='room').map(p=>({t:esc(paneName(p)),r:esc(p.model)+(p.busy?' · отвечает':''),id:p.id}));
+      laMenu(anchor,'передать контекст',items,async it=>{ let r=null; try{ r=await api('/api/handoff',{to:it.id}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; } log('чат','Контекст передан: '+it.t); toast('Контекст передан: '+it.t+' · запись №'+r.seq); }); return; }
+    if(kind==='mkdir'){ const def=(H.project||'').replace(/\/[^/]*$/,'/')+'novyi-proekt'; laPath(anchor,'создать папку и git',def,async path=>{ let r=null; try{ r=await api('/api/room/move',{path,create:true,git:true}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
+        if(S.cx) S.cx.noFolder=false; S.ui.pane='room'; save(); await refreshStatus(); S.chat.forEach(x=>{ if(x.pane==='room') x.nf=false; }); save(); render(); log('настройка','Разговор переехал в новую папку '+path.split('/').pop()); toast('Папка создана с git, разговор переехал: '+esc(path.split('/').pop())+(r.carried?' · прежний разговор уйдёт следующим сообщением':'')); }); return; }
+    if(kind==='move'){ let pr=null; try{ pr=await api('/api/projects'); }catch(x){} const items=((pr&&pr.projects)||[]).map(p=>({t:esc(p.name),r:(p.seats==null?'?':p.seats)+' ролей'+(p.git?' · git':''),path:p.path}));
+      laMenu(anchor,'перейти с разговором в папку',items,async it=>{ let r=null; try{ r=await api('/api/room/move',{path:it.path}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
+        if(S.cx) S.cx.noFolder=false; S.ui.pane='room'; save(); await refreshStatus(); S.chat.forEach(x=>{ if(x.pane==='room') x.nf=false; }); save(); render(); log('настройка','Разговор переехал в папку '+it.t); toast('Разговор переехал: '+it.t+(r.carried?' · прежний разговор уйдёт следующим сообщением':'')); }); return; } });
+  function reply(q){ if(H.on&&!H.pane){ cols().forEach(c=>c.insertAdjacentHTML('beforeend','<div class="ai live-msg"><span class="orb"></span><div><div class="thought">без роли · модель не выбрана</div><p>Выберите модель в строке ввода — тогда отправлю.</p></div></div>')); scrollEnd(); S.draft=q; save(); return; }
+    if(H.on&&H.pane){ ask(q); return; } cols().forEach(c=>c.insertAdjacentHTML('beforeend','<div class="ai live-msg live-typing"><span class="orb"></span><div><div class="thought">думает…</div></div></div>')); scrollEnd();
     setTimeout(()=>{ S.chat.push({role:'ai',html:answer(q),t:now()}); S.chat=S.chat.slice(-40); save(); render(); },850); }
   function onSend(v){ log('чат','Вопрос: '+v.slice(0,90));
     if(!cols().length){ S.pending={text:v,t:now()}; save(); location.href='01-chat.html'; return; }
@@ -664,5 +694,5 @@
   hConnect().finally(()=>{ if(cols().length){ if(S.pending){ const q=S.pending.text; S.pending=null; S.chat.push({role:'me',text:q,t:now()}); save(); render(); reply(q); } else render(); } });
   addEventListener('resize',()=>{ wireSearch(); badges(); });
   addEventListener('storage',()=>{ load(); refresh(); if(cols().length) render(); if(window.CX) CX.render(); });
-  window.LIVE={get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md};   // для cx.js (поле ввода)
+  window.LIVE={get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus};   // для cx.js (поле ввода)
 })();
