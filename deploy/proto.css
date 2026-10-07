@@ -245,7 +245,7 @@ html[data-proto][data-page="new"] .starts .st { gap:4px; padding:10px 13px; }
 html[data-m] .live-kbd { display:none; }
 /* ── поле ввода C′ (скетч 22, ревью №3454/№3458): верх папка·роль·режимы; вложения; низ ＋·права·модель·усилие·ⓘ·отправка */
 .cx-top { display:flex; align-items:center; gap:6px; flex-wrap:wrap; width:min(760px,100%); margin:0 0 8px; }
-html[data-proto][data-page="chat"] .cx-top { width:100%; }
+html[data-proto][data-page="chat"] .cx-top { width:auto; max-width:760px; margin:0 auto 8px; }   /* над полем, по его ширине и центру (.box: max-width 760, margin auto) */
 .cx-att { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 8px; }
 .cx-bot { display:flex; align-items:center; gap:6px; flex-wrap:wrap; } .cx-sp { flex:1; }
 .cx-chip { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 9px; border:1px solid var(--line2); border-radius:999px; background:var(--panel); color:var(--ink2); font-size:12px; white-space:nowrap; cursor:pointer; max-width:280px; }
@@ -289,7 +289,7 @@ html[data-proto] .feed .col.live-demo-off > :not(.live-msg):not(.live-sep):not(.
 .live-ck { display:inline-flex; align-items:center; margin-right:8px; vertical-align:middle; } .live-ck input { width:14px; height:14px; accent-color:var(--accent); cursor:pointer; margin:0; }
 .ai.live-msg .live-ck { position:absolute; left:-26px; top:4px; } .ai.live-msg { position:relative; }
 .live-selbar { width:min(760px,100%); margin:0 0 8px; padding:10px 12px; border:1px solid rgba(194,122,52,.5); border-radius:12px; background:var(--accent-soft); display:grid; gap:8px; }
-html[data-proto][data-page="chat"] .live-selbar { width:100%; }
+html[data-proto][data-page="chat"] .live-selbar { width:auto; max-width:760px; margin:0 auto 8px; }
 .live-selbar .t { font:10.5px var(--mono); letter-spacing:.05em; text-transform:uppercase; color:var(--ink2); } .live-selbar .t b { color:var(--ink); font-weight:500; }
 .live-selbar .live-f { margin:0; height:34px; background:var(--panel); } .live-selbar .acts { display:flex; gap:6px; flex-wrap:wrap; }
 .live-hint { font-size:12px; color:var(--ink3); margin:4px 0 0; }
