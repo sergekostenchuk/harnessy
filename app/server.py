@@ -897,6 +897,7 @@ class App:
             self._sync_chats()
             room.session_id, room.transcript, room.carry = None, [], ""
             self._new_chat(room)
+            self._send_onboarding(target, "из разговора без роли (разговор продолжается в этой роли)")
             self.save_panes()
             return web.json_response({"ok": True, "pane": target.settings(), "chat": self._chat_meta(c), "replaced": True})
         n = len(same) + 1
@@ -921,9 +922,41 @@ class App:
         pane.session_id, pane.transcript, pane.carry = room.session_id, list(room.transcript), room.carry
         room.session_id, room.transcript, room.carry = None, [], ""
         self.registry.panes[sid] = pane
+        self._send_onboarding(pane, "из разговора без роли (разговор продолжается в этой роли)")
         self.kick(pane)
         self.save_panes()
         return web.json_response({"ok": True, "pane": pane.settings(), "team": str(tf)})
+
+    def _onboarding(self, pane: Pane, how: str) -> str:
+        """Вводная назначенной роли: кто она, что делает, где, когда и кем назначена, кто уже в команде и с кем по политике говорит (слово владельца 08.10.2026)."""
+        proj = os.path.basename(self.project_dir.rstrip("/")) or self.project_dir
+        when = time.strftime("%d.%m.%Y %H:%M")
+        lines = [f"Ты назначен(а) ролью «{pane.label}» в проекте «{proj}» — папка {self.project_dir}"
+                 + (f", git, интеграционная ветка {self.team.integration_branch}" if self.repo_root and self.team else ", без git") + f". Назначил владелец {when} {how}."]
+        instr = ""
+        if self.team and pane.id in self.team.seats:
+            instr = self.team.instructions_for(self.team.seats[pane.id]).strip()
+        if instr:
+            lines.append("Что делаешь (инструкции роли):\n" + (instr if len(instr) <= 1500 else instr[:1500] + "\n…(полный текст — в .harness/roles)"))
+        else:
+            lines.append("Инструкций роли в папке пока нет — действуй по общим правилам роли и по командам владельца или оркестратора.")
+        lines.append(f"Твоя модель: {pane.model}; права: {next((m['label'] for m in MODES if m['id'] == pane.mode), pane.mode)}.")
+        team = [f"{p.label} · {p.model} · {next((m['label'] for m in MODES if m['id'] == p.mode), p.mode)}" + (" — ведёт обмен и говорит с владельцем" if p.role == "orchestrator" else "")
+                for p in self.registry.panes.values() if p.id not in (pane.id, ROOM_ID)]
+        lines.append("Кто уже в команде папки: " + ("; ".join(team) if team else "пока никого — ты первая роль") + ".")
+        if self.policy:
+            summary = self.policy.summary_for(pane.role, {p.id: p.role for p in self.registry.panes.values()}, {p.id: p.label for p in self.registry.panes.values()}).strip()
+            if summary:
+                lines.append("С кем и как взаимодействуешь (политика обмена):\n" + summary)
+        lines.append(f"Файл обмена ролей: {self.project_dir}/.harness/state/channel.ndjson — все записи «кто → кому · вид · текст».")
+        lines.append("Прочитай и ответь одной-двумя фразами: кто ты и что готов(а) делать. Задач пока нет — жди команду.")
+        return "\n\n".join(lines)
+
+    def _send_onboarding(self, pane: Pane, how: str) -> None:
+        try:
+            self.post(HARNESS, [pane.id], "note", self._onboarding(pane, how), origin="onboarding")
+        except JournalError as e:
+            print(f"[harness] вводная {pane.id} не записана: {e}", file=sys.stderr, flush=True)
 
     async def seat_create(self, request):
         """Назначить роль, которой в папке ещё нет (слово владельца 08.10): новое место в team.yaml без разговора — чат начнётся с него.
@@ -968,6 +1001,7 @@ class App:
         pane = Pane(id=sid, vendor=vendor, label=label, model=model, mode=mode, cwd=self.project_dir, role=role)
         self.registry.panes[sid] = pane
         c = self._new_chat(pane)
+        self._send_onboarding(pane, "из меню собеседника")
         self.kick(pane)
         self.save_panes()
         return web.json_response({"ok": True, "pane": pane.settings(), "chat": self._chat_meta(c)})
