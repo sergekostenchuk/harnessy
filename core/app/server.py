@@ -1049,30 +1049,52 @@ class App:
         r = await self.bridge.do_assign_role(str(body.get("from") or ""), body)
         return web.json_response(r, status=200 if r.get("ok") else 403)
 
+    def _handoff_prompt(self, src: Pane) -> str:
+        who = "разговора без роли" if src.id == ROOM_ID else src.label
+        return f"Прочитай контекст чата от {who} и жди команду."
+
     async def handoff(self, request):
-        """Передать контекст месту текстом: явный text (выбранные владельцем реплики с промптом) или весь разговор места from (по умолчанию «без роли»).
+        """Передать контекст чата другому месту или нескольким — текстом; владелец остаётся в своём чате.
+        Правила движка (слово владельца 08.10.2026):
+          · источник пуст → отказ;
+          · в источнике не больше одного ответа модели и text не задан → уходит весь разговор с типовым промптом, без выбора;
+          · два и более ответов и text не задан → 409 needSelection: окно даёт выбор реплик и правку промпта;
+          · одна запись всем адресатам (origin=handoff); в чате-источнике — запись харнесса «контекст передан…».
         Между моделями и вендорами переносится только текст — память модели остаётся у прежнего места."""
         body = await request.json()
-        to = str(body.get("to") or "")
+        raw = body.get("to") or []
+        ids = list(dict.fromkeys(str(x).strip() for x in (raw if isinstance(raw, list) else [raw]) if str(x or "").strip()))
         src_id = str(body.get("from") or ROOM_ID)
-        kind = str(body.get("kind") or "task")
+        kind = str(body.get("kind") or "note")
         text = str(body.get("text") or "").strip()
-        src, target = self.registry.get(src_id), self.registry.get(to)
-        if not target or to == src_id:
+        src = self.registry.get(src_id)
+        targets = [self.registry.get(i) for i in ids]
+        if not ids or any(t is None for t in targets):
             return web.json_response({"ok": False, "error": "нет такого места"}, status=404)
+        if src_id in ids:
+            return web.json_response({"ok": False, "error": "чат не может передать контекст сам себе"}, status=400)
         if kind not in ("task", "note", "question"):
             return web.json_response({"ok": False, "error": f"вид {kind} не годится: task, note или question"}, status=400)
         if not src or not src.transcript:
-            return web.json_response({"ok": False, "error": "передавать нечего: чат-источник пуст"}, status=400)   # правило движка (08.10): из пустого чата контекст не передаётся
+            return web.json_response({"ok": False, "error": "передавать нечего: чат-источник пуст"}, status=400)   # правило движка (08.10): из пустого чата контекст не предлагается и не передаётся
+        answers = sum(1 for m in src.transcript if m.get("role") == "ai")
         if not text:
-            text = "Контекст разговора владельца — продолжи работу по нему:\n\n" + self._transcript_text(src)
+            if answers >= 2:
+                return web.json_response({"ok": False, "needSelection": True, "answers": answers,
+                                          "error": f"в чате {answers} ответа(ов) модели — выберите, что передать"}, status=409)
+            text = self._handoff_prompt(src) + "\n\n--- контекст чата ---\n" + self._transcript_text(src)
         if len(text) > 60000:
             text = text[:60000] + "\n…(обрезано)"
+        names = ", ".join(t.label for t in targets)
         try:
-            rec = self.post(OWNER, [to], kind, text, thread=(f"T{self.journal.last_seq + 1}" if kind == "task" else None))
+            rec = self.post(OWNER, ids, kind, text, thread=(f"T{self.journal.last_seq + 1}" if kind == "task" else None), origin="handoff")
         except JournalError as e:
             return web.json_response({"ok": False, "code": e.code, "error": str(e)}, status=400)
-        return web.json_response({"ok": True, "seq": rec["seq"], "to": target.settings(), "chars": len(text)})
+        src.record("peer", f"[от харнесс] контекст передан: {names} · запись №{rec['seq']}")
+        src.publish({"type": "note", "text": f"контекст передан: {names} · запись №{rec['seq']}"})
+        self.save_panes()
+        return web.json_response({"ok": True, "seq": rec["seq"], "to": [t.settings() for t in targets], "names": names,
+                                  "chars": len(text), "answers": answers})
 
     async def room_move(self, request):
         body = await request.json()

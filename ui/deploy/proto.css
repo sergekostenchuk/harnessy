@@ -303,3 +303,9 @@ html[data-proto][data-page="chat"] .live-selbar { width:auto; max-width:760px; m
 .ps-chat:hover { background:var(--raised); color:var(--ink); } .ps-chat i { position:absolute; left:17px; width:6px; height:6px; border-radius:50%; background:var(--line2); } .ps-chat.act i { background:var(--ok); }
 .ps-chat .t { overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0; } .ps-chat .m { font:9.5px var(--mono); color:var(--ink3); flex:none; } .ps-chat.more { color:var(--ink3); cursor:default; } .ps-chat.more:hover { background:transparent; }
 .recent .ps-chat { display:inline-flex; height:26px; padding:0 9px 0 20px; border:1px solid var(--line2); border-radius:7px; background:var(--raised); } .recent .ps-chat i { left:8px; } .recent .ps-chat small { color:var(--ink3); font:9.5px var(--mono); margin-left:4px; }
+
+/* меню с несколькими адресатами (передать контекст в чат/чаты) */
+.live-menu.la.multi div[data-k] { position:relative; padding-left:28px; }
+.live-menu.la.multi .ck { position:absolute; left:9px; top:50%; width:11px; height:11px; margin-top:-6px; border:1px solid var(--line2); border-radius:3px; }
+.live-menu.la.multi .on .ck { background:#c27a34; border-color:#c27a34; }
+.live-menu.la .ft { display:flex; gap:6px; padding:8px 4px 2px; cursor:default; } .live-menu.la .ft:hover { background:none; }
