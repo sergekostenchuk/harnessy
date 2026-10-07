@@ -73,7 +73,7 @@
     m.innerHTML=H.panes.map(p=>'<div data-pane="'+p.id+'"'+(H.pane&&p.id===H.pane.id?' class="on"':'')+'>'+esc(p.label)+' <small>· '+esc(p.vendor)+' · '+esc(p.model)+'</small></div>').join(''); st.appendChild(m);
     const off=e=>{ if(!m.contains(e.target)){ m.remove(); document.removeEventListener('click',off,true); } }; setTimeout(()=>document.addEventListener('click',off,true),0); }
   document.addEventListener('click',e=>{ const pk=e.target.closest('.live-pick'); if(pk&&H.on){ e.stopPropagation(); pickMenu(pk.closest('.st')); return; }
-    const it=e.target.closest('.live-menu [data-pane]'); if(it){ S.ui.pane=it.dataset.pane; save(); pickPane(); hStatus(); it.closest('.live-menu').remove(); toast('Собеседник: '+esc(paneName(H.pane))+' · '+esc(H.pane.model)); if(window.CX) CX.render(); return; }
+    const it=e.target.closest('.live-menu [data-pane]'); if(it){ S.ui.pane=it.dataset.pane; save(); pickPane(); hStatus(); it.closest('.live-menu').remove(); toast('Собеседник: '+esc(paneName(H.pane))+' · '+esc(H.pane.model)); if(window.CX) CX.render(); loadChat(); return; }
     const ap=e.target.closest('[data-approve]'); if(ap&&H.pane){ const id=ap.closest('.live-ask').dataset.ask; api('/api/approve',{pane:H.pane.id,id,decision:ap.dataset.approve}); return; }
     if(e.target.closest('.live-stop')&&H.pane){ api('/api/interrupt',{pane:H.pane.id}); toast('Остановлено'); } });
   const toolLine=t=>'<div class="live-tool'+(t.err?' err':'')+'">'+esc(t.text)+'</div>';
@@ -91,16 +91,29 @@
     else if(t==='approvalResolved'){ const a=H.asks[ev.id]; if(a){ a.done=ev.decision; drawLive(); setTimeout(()=>{ delete H.asks[ev.id]; drawLive(); },2500); } }
     else if(t==='done'){ finish(ev); log('чат','Ответ: '+paneName(H.pane)+' · '+((ev.model)||H.pane.model)); }
     else if(t==='error'){ finish(ev); } }
-  async function ask(q){ if(!H.cur){ H.cur={text:'',tools:[]}; drawLive(); } let r=null; try{ r=await api('/api/chat',{pane:H.pane.id,message:q,kind:'question'}); }catch(e){}
+  const isDirect=()=>!!(S.ui.direct&&H.pane&&S.ui.direct[H.pane.id]);
+  async function ask(q){ if(!H.cur){ H.cur={text:'',tools:[]}; drawLive(); } let r=null; try{ r=await api('/api/chat',{pane:H.pane.id,message:q,kind:'question',direct:isDirect()}); }catch(e){}
+    if(r&&r.needDirect){ H.cur=null; S.chat.pop(); S.draft=q; save(); render();   // чат роли читается свободно; писать мимо оркестратора — явно, с записью в журнал
+      cols().forEach(c=>c.insertAdjacentHTML('beforeend','<div class="ai live-msg live-direct"><span class="orb"></span><div><div class="thought">обращение к роли напрямую</div><p>«'+esc(paneName(H.pane))+'» — не оркестратор. По умолчанию с ролями говорит оркестратор, вы их чаты читаете. Написать напрямую — явное действие, оно запишется в журнал линии.</p><div class="act"><span class="btn sm p" data-direct="on">Обратиться напрямую к «'+esc(paneName(H.pane))+'»</span><span class="btn sm ghost" data-direct="orch">Написать оркестратору</span></div></div></div>')); scrollEnd(); return; }
     if(!r||!r.ok){ H.cur=null; S.chat.push({role:'ai',html:'<p>Харнесс не принял сообщение: '+esc((r&&r.error)||'нет связи')+'</p>',t:now(),src:'err'}); save(); render(); return; }
     if(r.queued) toast('Место занято — сообщение встало в очередь'); }
-  function applyStatus(st){ H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.roleCatalog=st.roleCatalog||[]; pickPane(); }
-  async function refreshStatus(){ let st=null; try{ st=await api('/api/status'); }catch(e){} if(st&&Array.isArray(st.panes)){ applyStatus(st); hStatus(); if(window.CX) CX.render(); } return st; }
+  function applyStatus(st){ H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.roleCatalog=st.roleCatalog||[]; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; pickPane(); }
+  async function refreshChats(){ try{ const r=await api('/api/chats'); H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } }
+  async function refreshStatus(){ let st=null; try{ st=await api('/api/status'); }catch(e){} if(st&&Array.isArray(st.panes)){ applyStatus(st); await refreshChats(); hStatus(); if(window.CX) CX.render(); } return st; }
+  // лента активного чата — из харнесса (один источник правды для Electron, браузера и сервера); цена хода у старых реплик неизвестна
+  let LOADED=null;
+  async function loadChat(){ if(!H.on||PAGE!=='chat') return; const p=H.pane, cid=p?(H.active||{})[p.id]:null;
+    if(!cid){ if(LOADED!==null){ S.chat=[]; save(); } LOADED=cid||'none'; render(); return; }
+    let r=null; try{ r=await api('/api/chats/'+cid); }catch(e){} if(!r||!r.messages){ return; }
+    const who=p.id==='room'?'Без роли':paneName(p);
+    S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:'live',who:m.role==='peer'?'сосед':who,pane:p.id,model:r.chat.model||p.model,html:md(m.text),text:m.text,t:(m.ts||0)*1000}).slice(-80);
+    LOADED=cid; save(); render(); }
   async function hConnect(){ if(PAGE!=='chat'&&PAGE!=='new') return; let st=null; try{ st=await api('/api/status'); }catch(e){} if(!st||!Array.isArray(st.panes)||!st.panes.length) return;
     H.on=true; applyStatus(st); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
-    if(PAGE==='chat'){ if(H.pane.busy) H.cur={text:'',tools:[]};
+    await refreshChats();
+    if(PAGE==='chat'){ if(H.pane&&H.pane.busy) H.cur={text:'',tools:[]};
       const es=new EventSource('/api/events/all'); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
-      hStatus(); }
+      hStatus(); await loadChat(); }
     if(window.CX) CX.render(); }
 
   // ── чат: настоящее поле ввода; разговор хранится; ответы — по сценарию и так и подписаны (или от настоящей модели через мост)
@@ -128,6 +141,9 @@
   function render(){ cols().forEach(c=>{ c.querySelectorAll('.live-msg, .live-sep').forEach(x=>x.remove()); c.classList.toggle('live-demo-off',!S.ui.demo);
       c.insertAdjacentHTML('beforeend','<div class="live-sep">'+(S.chat.length?(H.on?'ваш разговор · через харнесс':'ваш разговор в прототипе')+' · <a data-clear>очистить</a> · ':'разговор пуст · ')+'<a data-demo>'+(S.ui.demo?'скрыть пример':'пример разговора')+'</a></div>'+S.chat.map(bubble).join('')); }); selBar(); drawLive(); if(S.chat.length) scrollEnd(); }
   document.addEventListener('click',e=>{ if(e.target.closest('[data-demo]')){ S.ui.demo=!S.ui.demo; save(); render(); } });
+  document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]'); if(!d||!H.pane) return; const q=S.draft||''; document.querySelectorAll('.live-direct').forEach(x=>x.remove());
+    if(d.dataset.direct==='on'){ S.ui.direct=S.ui.direct||{}; S.ui.direct[H.pane.id]=true; save(); log('чат','Обращение напрямую к «'+paneName(H.pane)+'», минуя оркестратора'); toast('Напрямую к «'+esc(paneName(H.pane))+'» — записано в журнал'); if(window.CX) CX.render(); if(q){ S.draft=null; S.chat.push({role:'me',text:q,t:now()}); save(); render(); ask(q); } return; }
+    if(d.dataset.direct==='orch'){ const o=(H.panes||[]).find(p=>p.role==='orchestrator'); if(o){ S.ui.pane=o.id; save(); pickPane(); hStatus(); if(window.CX) CX.render(); loadChat().then(()=>{ if(q){ S.draft=null; S.chat.push({role:'me',text:q,t:now()}); save(); render(); ask(q); } }); } } });
   // ── переключение собеседника с контекстом: чекбоксы у реплик, промпт, передача текстом (между моделями и вендорами переносится только текст)
   let SEL=null;
   const plain=m=>m.text||String(m.html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
@@ -143,7 +159,7 @@
     if(k==='go'){ const to=SEL.to, bar=sb.closest('.live-selbar'), prompt=(bar.querySelector('input').value||'').trim(); const picked=[...SEL.checked].sort((a,b)=>a-b).map(i=>S.chat[i]); if(!picked.length){ toast('Ничего не выбрано'); return; }
       const body=picked.map(m=>(m.role==='me'?'Владелец':(m.who||'Ответ'))+': '+plain(m)).join('\n\n'); const text=(prompt?prompt+'\n\n':'')+'--- контекст чата ---\n'+body;
       let r=null; try{ r=await api('/api/handoff',{to,text,kind:'note'}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
-      const tp=(H.panes||[]).find(p=>p.id===to); SEL=null; S.ui.pane=to; save(); pickPane(); hStatus(); if(window.CX) CX.render(); render(); log('чат','Контекст передан: '+(tp?paneName(tp):to)+' · '+picked.length+' реплик'); toast('Контекст передан: '+esc(tp?paneName(tp):to)+' · '+picked.length+' реплик · запись №'+r.seq+' — собеседник переключён'); } });
+      const tp=(H.panes||[]).find(p=>p.id===to); SEL=null; S.ui.pane=to; save(); pickPane(); hStatus(); if(window.CX) CX.render(); await loadChat(); log('чат','Контекст передан: '+(tp?paneName(tp):to)+' · '+picked.length+' реплик'); toast('Контекст передан: '+esc(tp?paneName(tp):to)+' · '+picked.length+' реплик · запись №'+r.seq+' — собеседник переключён'); } });
   // меню действий под ответом: роли и папки — настоящие вызовы харнесса
   function laMenu(anchor,title,items,onPick){ document.querySelectorAll('.live-menu.la').forEach(m=>m.remove()); const m=document.createElement('div'); m.className='live-menu la'; anchor.style.position='relative';
     m.innerHTML='<div class="h">'+title+'</div>'+(items.length?items.map((it,i)=>'<div data-k="'+i+'"'+(it.dis?' class="dis"':'')+'>'+it.t+(it.r?' <small>'+it.r+'</small>':'')+'</div>').join(''):'<div class="dis">нечего предложить</div>'); anchor.appendChild(m);
@@ -158,7 +174,7 @@
     if(!H.on) { toast('Харнесс не подключён'); return; }
     if(kind==='assign'){ const taken=(H.panes||[]).filter(p=>p.id!=='room'); const items=(H.roleCatalog||[]).map(r=>{ const n=taken.filter(p=>p.role===r.role).length; const busy=n>0&&!r.multi; return {t:esc(r.label)+(n>0&&r.multi?' '+(n+1):''),r:busy?'занята · передайте контекст':(n?'ещё одно место':'свободна'),dis:busy,role:r.role}; });
       laMenu(anchor,'назначить роль разговору',items,async it=>{ let r=null; try{ r=await api('/api/assign',{role:it.role}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
-        S.ui.pane=r.pane.id; save(); await refreshStatus(); S.chat.forEach(x=>{ if(x.pane==='room'&&x.src==='live'){ x.pane=r.pane.id; x.who=paneName(r.pane); } }); save(); render(); log('настройка','Роль назначена: '+r.pane.label+' · '+r.pane.model); toast('Роль назначена: '+esc(r.pane.label)+' — разговор продолжается от её имени'); }); return; }
+        S.ui.pane=r.pane.id; save(); await refreshStatus(); await loadChat(); log('настройка','Роль назначена: '+r.pane.label+' · '+r.pane.model); toast('Роль назначена: '+esc(r.pane.label)+' — разговор продолжается от её имени'); }); return; }
     if(kind==='handoff'){ const items=(H.panes||[]).filter(p=>p.id!=='room').map(p=>({t:esc(paneName(p)),r:esc(p.model)+(p.busy?' · отвечает':''),id:p.id}));
       laMenu(anchor,'передать контекст',items,async it=>{ let r=null; try{ r=await api('/api/handoff',{to:it.id}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; } log('чат','Контекст передан: '+it.t); toast('Контекст передан: '+it.t+' · запись №'+r.seq); }); return; }
     if(kind==='mkdir'){ const def=(H.project||'').replace(/\/[^/]*$/,'/')+'novyi-proekt'; laPath(anchor,'создать папку и git',def,async path=>{ let r=null; try{ r=await api('/api/room/move',{path,create:true,git:true}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
@@ -714,5 +730,5 @@
   hConnect().finally(()=>{ if(cols().length){ if(S.pending){ const q=S.pending.text; S.pending=null; S.chat.push({role:'me',text:q,t:now()}); save(); render(); reply(q); } else render(); } });
   addEventListener('resize',()=>{ wireSearch(); badges(); });
   addEventListener('storage',()=>{ load(); refresh(); if(cols().length) render(); if(window.CX) CX.render(); });
-  window.LIVE={get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,selStart};   // для cx.js (поле ввода)
+  window.LIVE={get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,selStart};   // для cx.js (поле ввода)
 })();
