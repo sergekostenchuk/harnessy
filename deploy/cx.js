@@ -1,0 +1,120 @@
+/* cx.js — поле ввода Harnessy по варианту C′ (скетч 22; ревью codex-ux №3454, №3458; слово владельца 07.10.2026).
+   Сверху — папка · роль · включённые режимы; над полем — вложения; снизу — ＋ · права · модель · усилие · ⓘ · отправка.
+   Значения — от выбранного места харнесса (LIVE.H); смена прав и модели применяется к месту через /api/panes/<id>.
+   Подсказки — в ⓘ. Прогноза расхода нет: факт показывает live.js под ответом. Подключается сборкой после live.js. */
+(function(){
+  if(!document.documentElement.hasAttribute('data-proto')||!window.LIVE) return;
+  const L=window.LIVE, PAGE=document.documentElement.dataset.page||''; if(PAGE!=='new'&&PAGE!=='chat') return;
+  const esc=L.esc, H=L.H, S=()=>L.S;
+  function cx(){ const s=S(); if(!s.cx) s.cx={folder:'OMG',rights:null,model:null,modes:{},att:[],conn:{}}; return s.cx; }
+  const I={folder:'<path d="M3 7h6l2 2h10v10H3z"/>',role:'<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',model:'<circle cx="12" cy="12" r="4"/>',bolt:'<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',up:'<path d="M12 19V5M5 12l7-7 7 7"/>',search:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',think:'<path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5V16h8v-2.5A6 6 0 0012 3z"/>',sub:'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/>',file:'<path d="M7 3h7l4 4v14H7z"/>',shot:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/>',src:'<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/>',tools:'<path d="M4 7h16M4 12h16M4 17h10"/>',cmd:'<path d="M5 12h14M12 5l7 7-7 7"/>',mac:'<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 20h8"/>',tree:'<path d="M6 3v18M6 9c0 3 6 3 6 6M18 3v6a3 3 0 01-3 3"/>',back:'<path d="M15 6l-6 6 6 6"/>'};
+  const svg=k=>'<svg viewBox="0 0 24 24">'+(I[k]||'')+'</svg>';
+  const MODES_UI={search:['Поиск','search'],think:['Думать','think'],sub:['Субагенты','sub']};
+  const seat=()=>H.on?H.pane:null;
+  const modeLabel=id=>{ const m=(H.modes||[]).find(x=>x.id===id); return m?m.label:(id||'права не заданы'); };
+  const allModels=()=>{ const out=[]; Object.entries(H.models||{}).forEach(([v,ms])=>(ms||[]).forEach(m=>out.push(Object.assign({vendor:v},m)))); return out; };
+  const modelLabel=id=>{ const m=allModels().find(x=>x.id===id); return m?m.label:(id||'модель не выбрана'); };
+  const vendorGroups=()=>{ const cl=(H.models&&H.models.claude)||[], co=(H.models&&H.models.codex)||[];
+    return [{key:'claude',vendor:'claude',title:'Claude',sub:'подписка Max',models:cl},{key:'codex',vendor:'codex',title:'Codex',sub:'подписка ChatGPT',models:co.filter(m=>/^gpt-/.test(m.id))},{key:'router',vendor:'codex',title:'Через роутер Codex',sub:'облачные модели',models:co.filter(m=>!/^gpt-/.test(m.id))}]; };
+  const chip=(k,ico,text,o)=>{ o=o||{}; return '<span class="cx-chip'+(o.cls?' '+o.cls:'')+'" data-cx="'+k+'" title="'+esc(o.title||'')+'">'+svg(ico)+'<b>'+esc(text)+'</b><i>▾</i></span>'; };
+
+  // ── строка: верх над .box, вложения внутри перед полем, низ вместо нарисованной .bar2
+  function build(box){ if(!box.__cx||box.__cxBuilt) return; box.__cxBuilt=true;
+    const top=document.createElement('div'); top.className='cx-top'; box.before(top);
+    const att=document.createElement('div'); att.className='cx-att'; box.insertBefore(att, box.querySelector('.in'));
+    const bar=box.querySelector('.bar2'), bot=document.createElement('div'); bot.className='cx-bot'; if(bar) bar.replaceWith(bot); else box.appendChild(bot); }
+  function render(box){ const c=cx(), p=seat(), top=box.previousElementSibling, bot=box.querySelector('.cx-bot'), att=box.querySelector('.cx-att'); if(!top||!bot) return;
+    const folder=p?((H.project||'').split('/').pop()||'проект'):(c.folder==='room'?'Комната':(c.folder||'OMG'));
+    const role=p?L.paneName(p):'роль не назначена', rights=p?modeLabel(p.mode):modeLabel(c.rights), model=p?modelLabel(p.model):modelLabel(c.model);
+    top.innerHTML=chip('folder','folder',folder,{title:p?'Папка проекта харнесса: '+(H.project||''):'Проект или комната'})+chip('role','role',role,{title:'Роль в команде · кому пишете'})+
+      Object.keys(c.modes).filter(k=>c.modes[k]&&MODES_UI[k]).map(k=>'<span class="cx-chip on" data-cx="tools" title="Включено для сообщения · ＋ → Инструменты">'+svg(MODES_UI[k][1])+'<b>'+MODES_UI[k][0]+'</b><i class="x" data-cx-off="'+k+'" title="Выключить">×</i></span>').join('');
+    att.innerHTML=c.att.map((a,i)=>'<span class="cx-chip on" title="'+esc(a.name)+'">'+svg(a.kind)+'<b>'+esc(a.name)+'</b><i class="x" data-cx-att="'+i+'" title="Убрать">×</i></span>').join(''); att.style.display=c.att.length?'':'none';
+    bot.innerHTML='<span class="cx-plus" data-cx="plus" title="Добавить и настроить">＋</span>'+chip('rights','lock',rights,{title:'Права · применяются к месту'})+'<span class="cx-sp"></span>'+
+      chip('model','model',model,{cls:'acc',title:'Модель: вендор → модель'})+chip('effort','bolt','Усилие: —',{cls:'dim',title:'Усилие пока недоступно: харнесс не передаёт его месту'})+
+      '<span class="cx-info" data-cx="info" title="Информация: клавиши, примеры, права, расход">i</span><span class="cx-go" data-cx="go" title="Отправить · Enter">'+svg('up')+'</span>';
+    if(box.__cx.ta) box.__cx.ta.placeholder=p?'Написать: '+L.paneName(p)+'…':'Написать сообщение…'; }
+  function renderAll(){ document.querySelectorAll('.box').forEach(b=>{ if(b.__cx){ build(b); render(b); } }); }
+
+  // ── всплывающая панель: одна, от чипа; поле внизу — открывается вверх; внутри переходы с «Назад»
+  let pop=null, stack=[];
+  function close(){ if(pop){ pop.remove(); pop=null; stack=[]; } }
+  function place(anchor){ const m=anchor.closest('.main')||document.body, r=anchor.getBoundingClientRect(), mr=m.getBoundingClientRect(), s=(mr.width/m.offsetWidth)||1;
+    const l=(r.left-mr.left)/s, t=(r.top-mr.top)/s, w=r.width/s, h=r.height/s, mw=m.offsetWidth, mh=m.offsetHeight, pw=pop.offsetWidth, ph=pop.offsetHeight;
+    let left=l; if(l+pw>mw-12) left=Math.max(12,l+w-pw); let top=t-8-ph; if(top<12) top=Math.min(mh-ph-12,t+h+8);
+    pop.style.left=left+'px'; pop.style.top=Math.max(12,top)+'px'; }
+  function open(anchor,k){ close(); const m=anchor.closest('.main')||document.body; pop=document.createElement('div'); pop.className='cx-pop'; m.appendChild(pop); pop.__anchor=anchor; stack=[k]; draw(); }
+  function nav(k){ stack.push(k); draw(); } function back(){ stack.pop(); draw(); }
+  function draw(){ if(!pop) return; const k=stack[stack.length-1]; pop.innerHTML=(stack.length>1?'<div class="cx-hd back" data-cx-back>'+svg('back')+'<span>'+esc(TITLES[k]||'')+'</span></div>':'')+VIEWS[k](); place(pop.__anchor);
+    const f=pop.querySelector('input.cx-find'); if(f){ f.addEventListener('input',()=>filter(f)); setTimeout(()=>f.focus(),0); } }
+  function filter(inp){ const q=inp.value.trim().toLowerCase(); pop.querySelectorAll('[data-q]').forEach(el=>{ el.style.display=!q||el.dataset.q.toLowerCase().includes(q)?'':'none'; }); if(q) pop.querySelectorAll('.cx-grp').forEach(g=>g.classList.add('open')); }
+  document.addEventListener('click',e=>{ if(pop&&!pop.contains(e.target)&&!e.target.closest('[data-cx]')) close(); },true);
+  addEventListener('keydown',e=>{ if(e.key==='Escape'&&pop) close(); });
+
+  const TITLES={folder:'Проект или комната',role:'Роль в команде',rights:'Права',model:'Модель',effort:'Усилие',plus:'Добавить и настроить',files:'Файлы и папки',shot:'Снимок экрана',sources:'Другие источники',tools:'Инструменты и субагенты',cmds:'Команды и навыки',info:'Информация'};
+  const hd=(t,r)=>'<div class="cx-hd"><span>'+t+'</span>'+(r?'<small>'+r+'</small>':'')+'</div>';
+  const row=(html,o)=>{ o=o||{}; return '<div class="cx-row'+(o.on?' on':'')+(o.dis?' dis':'')+'"'+(o.a||'')+(o.q?' data-q="'+esc(o.q)+'"':'')+(o.title?' title="'+esc(o.title)+'"':'')+'>'+html+(o.on?'<span class="ck">✓</span>':'')+(o.r?'<small>'+o.r+'</small>':'')+'</div>'; };
+  const note=t=>'<div class="cx-note">'+t+'</div>';
+  const tog=(k,on)=>'<span class="cx-tog'+(on?' on':'')+'" data-cx-tog="'+k+'" title="'+(on?'Выключить':'Включить')+'"></span>';
+  const VIEWS={
+    folder(){ const p=seat(), c=cx();
+      if(p) return hd('Проект или комната','место «'+esc(L.paneName(p))+'»')+row(svg('folder')+'<b>'+esc(H.project||'—')+'</b>',{on:true,title:H.project||''})+note('Папка задана проекту харнесса; сменить — в его настройках (/api/project). Комната без папки у места недоступна.')+hd('Где выполняется')+row(svg('mac')+'этот Mac',{on:true})+row(svg('tree')+'рабочее дерево',{dis:true,r:'у места нет своей ветки'});
+      return hd('Проект или комната')+['OMG','HARNESS','Принтер Brother'].map(f=>row(svg('folder')+esc(f),{on:c.folder===f,a:' data-cx-folder="'+f+'"'})).join('')+row(svg('src')+'Комната — без папки',{on:c.folder==='room',a:' data-cx-folder="room"'})+row('＋ Добавить папку…',{dis:true,r:'в прототипе'})+hd('Где выполняется')+row(svg('mac')+'этот Mac',{on:true})+row(svg('tree')+'рабочее дерево',{dis:true,r:'по месту'}); },
+    role(){ const panes=H.panes||[], cur=seat(), next=roles=>panes.filter(p=>roles.includes(p.role)).length+1;
+      return hd('Роль в команде',H.on?'команда · '+panes.length+' мест':'харнесс не подключён')+panes.map(p=>row(svg('role')+'<b>'+esc(L.paneName(p))+'</b>'+(p.busy?' <em class="cx-busy">отвечает</em>':''),{on:!!cur&&p.id===cur.id,a:' data-cx-seat="'+p.id+'"',q:p.label+' '+p.model,r:esc(modelLabel(p.model))})).join('')+
+        hd('Новые места')+row(svg('role')+'Воркер '+next(['executor','worker']),{dis:true,r:'создание пока недоступно'})+row(svg('role')+'Ревьюер '+next(['reviewer']),{dis:true,r:'создание пока недоступно'})+note('Места задаются файлом команды харнесса. Подробности — в ⓘ.'); },
+    rights(){ const p=seat(), c=cx(), cur=p?p.mode:c.rights; return hd('Права',p?'применяются к месту «'+esc(L.paneName(p))+'»':'к первому сообщению')+(H.modes||[]).map(m=>row(svg('lock')+'<b>'+esc(m.label)+'</b>',{on:m.id===cur,a:' data-cx-mode="'+m.id+'"',r:m.id})).join('')+(H.on?'':note('Список прав появится, когда харнесс подключён.')); },
+    model(){ const p=seat(), c=cx(), cur=p?p.model:c.model, sv=p?p.vendor:null;
+      return hd('Модель',p?'место «'+esc(L.paneName(p))+'» · '+esc(sv):'')+row(svg('bolt')+'Усилие',{dis:true,r:'пока недоступно: харнесс не передаёт'})+'<input class="cx-find" placeholder="Найти модель…">'+
+        vendorGroups().map(g=>{ const ok=!sv||g.vendor===sv, open=(ok&&g.models.some(m=>m.id===cur))||(!cur&&g.key==='claude');
+          return '<div class="cx-grp'+(open?' open':'')+(ok?'':' dis')+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+g.title+'</b><small>'+g.sub+(ok?'':' · недоступно для места на '+esc(sv))+'</small><em>'+g.models.length+'</em></div><div class="cx-sub">'+g.models.map(m=>row(esc(m.label),{on:m.id===cur,a:ok?' data-cx-model="'+m.id+'"':'',dis:!ok,q:m.label+' '+m.id})).join('')+'</div></div>'; }).join('')+
+        hd('Размышления','для выбранной модели')+'<div class="cx-seg dis"><span>выкл</span><span class="on">адаптивно</span><span>вкл</span></div>'+note('Усилие и размышления пока недоступны: харнесс не передаёт их месту. Появятся после доработки адаптеров.'); },
+    effort(){ return hd('Усилие')+['низкое','среднее','высокое','очень высокое','максимум'].map(x=>row(x,{dis:true})).join('')+note('Пока недоступно: харнесс не передаёт усилие месту. Варианты — для выбранной модели.'); },
+    plus(){ return '<input class="cx-find" placeholder="Найти действие или источник…">'+hd('добавить контекст')+row(svg('file')+'Файлы и папки…',{a:' data-cx-nav="files"',q:'файлы папки фото'})+row(svg('shot')+'Снимок экрана…',{a:' data-cx-nav="shot"',q:'снимок экрана'})+row(svg('src')+'Другие источники…',{a:' data-cx-nav="sources"',q:'чаты вкладки страницы сайты приложения источники'})+
+        hd('настроить запрос')+row(svg('folder')+'Проект или комната…',{a:' data-cx-nav="folder"',q:'проект комната папка компьютер дерево'})+row(svg('model')+'Модель и мышление…',{a:' data-cx-nav="model"',q:'модель усилие размышления вендор'})+row(svg('tools')+'Инструменты и субагенты…',{a:' data-cx-nav="tools"',q:'инструменты субагенты поиск думать коннекторы плагины приложения'})+row(svg('role')+'Назначить в команде…',{a:' data-cx-nav="role"',q:'роль команда оркестратор воркер ревьюер'})+
+        hd('действия')+row(svg('cmd')+'Команды и навыки…',{a:' data-cx-nav="cmds"',q:'цель план слэш команды навык эскиз сайт'}); },
+    files(){ return hd('Файлы и папки')+row(svg('file')+'Выбрать файлы с этого Mac…',{a:' data-cx-pick="file"'})+row(svg('folder')+'Добавить папку как материал…',{a:' data-cx-pick="dir"'})+note('Вложение — материал к сообщению; рабочую папку чата оно не меняет. В прототипе передаются только имена.'); },
+    shot(){ return hd('Снимок экрана')+row(svg('shot')+'Весь экран',{a:' data-cx-shot="экран"'})+row(svg('shot')+'Окно',{a:' data-cx-shot="окно"'})+row(svg('shot')+'Область…',{a:' data-cx-shot="область"'})+note('В прототипе снимок не делается — во вложения добавляется отметка.'); },
+    sources(){ const F=['Чаты','Вкладки браузера','Страницы','Сайты','Приложения']; const R=[['Поиск оптимизации памяти','чат · ChatGPT'],['Давление в шинах ГЛС 2023','чат · ChatGPT'],['Jeanneau Sea Loft 480 — walkthrough','вкладка · youtube.com'],['sergekostenchuk/ai-connection-guard','вкладка · github.com'],['Руководство по работе со страницами','страница'],['Volnami — 6 концептов','сайт']];
+      return '<input class="cx-find" placeholder="Найти источник…">'+'<div class="cx-filters">'+F.map((f,i)=>'<span class="'+(i===0?'on':'')+'">'+f+'</span>').join('')+'</div>'+R.map(r=>row(svg('src')+'<b>'+esc(r[0])+'</b>',{a:' data-cx-src="'+esc(r[0])+'"',q:r[0]+' '+r[1],r:r[1]})).join('')+note('Образец: настоящие источники придут из подключений. Выбранное — во вложениях.'); },
+    tools(){ const c=cx(); const CONN=['45telega','Claude in Chrome','context7','exa','filesystem','github','pencil','perplexity-pro','postgres','qdrant-memory','sequential-thinking','ssh-server','threads-mcp'], PLUG=['PDF Viewer','Miro','Design','Engineering','Product Management'], APPS=['Браузер','Компьютер','Code Review','Visualize'];
+      return hd('Субагенты')+row(svg('sub')+'<b>По правилам проекта</b>'+tog('mode:sub',!!c.modes.sub),{r:'чтение — экономные модели'})+note('Правка на один запрос политику команды не меняет. Экономная модель — из настроенных, по типу задачи.')+
+        hd('Режимы этого сообщения')+row(svg('search')+'Поиск в интернете'+tog('mode:search',!!c.modes.search))+row(svg('think')+'Думать дольше'+tog('mode:think',!!c.modes.think))+
+        hd('Коннекторы','для этого чата')+CONN.map(n=>row(esc(n)+tog('conn:'+n,c.conn[n]!==false),{q:n})).join('')+hd('Плагины')+PLUG.map(n=>row(esc(n)+tog('plug:'+n,!!c.conn['plug:'+n]),{q:n})).join('')+hd('Приложения')+APPS.map(n=>row(esc(n)+tog('app:'+n,!!c.conn['app:'+n]),{q:n})).join('')+row('Подключить агента…',{dis:true,r:'позже'})+note('Установка, авторизация и общее управление — в Настройках.'); },
+    cmds(){ return '<input class="cx-find" placeholder="Найти команду…">'+[['Цель…','поставить цель, к которой двигаться'],['Режим планирования','сначала план, потом действия'],['Слэш-команды…','/ — список команд'],['Записать навык','сохранить ход как навык'],['Нарисовать эскиз','эскиз для обсуждения'],['Создать сайт','из материалов чата']].map(x=>row(svg('cmd')+'<b>'+x[0]+'</b>',{a:' data-cx-cmd="'+esc(x[0])+'"',q:x[0]+' '+x[1],r:x[1]})).join(''); },
+    info(){ const p=seat(); return hd('Клавиши')+'<div class="cx-kv"><span>Enter</span><b>отправить</b><span>⇧ Enter</span><b>перенос строки</b><span>⌘K</span><b>команды и поиск</b><span>⌘N</span><b>новый чат</b><span>⌘\\</span><b>панель</b><span>Esc</span><b>закрыть</b></div>'+
+        hd('Примеры запросов')+['Что сейчас делает команда?','Собери план из этого разговора','Проверь лимиты и даты оплат'].map(t=>row(esc(t),{a:' data-cx-fill="'+esc(t)+'"'})).join('')+
+        hd('Как это устроено')+'<div class="cx-txt"><b>Папка или комната.</b> В папке агент читает проект; без папки — комната для быстрых дел, без памяти проекта.<br><b>Чат → План.</b> Когда разговор вырастет, агент предложит собрать план; переключить можно и сразу.<br><b>Всё видно.</b> Кто работает, над чем и чего ждёт — в «Сейчас»; расход хода — под ответом.</div>'+
+        hd('Права')+'<div class="cx-txt">'+((H.modes||[]).map(m=>'<b>'+esc(m.label)+'</b> — '+esc(m.id)).join('<br>')||'появятся, когда харнесс подключён')+'</div>'+
+        hd('Расход')+'<div class="cx-txt">Показывается после хода под ответом: токены и время по учёту харнесса. Доля недельной квоты появится, когда будет её учёт. Прогноза до отправки нет.</div>'+
+        hd('Команда')+'<div class="cx-txt">Места и роли задаются файлом команды харнесса; создание места из чата пока недоступно.'+(p?' Сейчас собеседник — «'+esc(L.paneName(p))+'».':'')+'</div>'; }
+  };
+
+  // ── действия
+  document.addEventListener('click',async e=>{ const c=cx();
+    const off=e.target.closest('[data-cx-off]'); if(off){ e.stopPropagation(); c.modes[off.dataset.cxOff]=false; L.save(); renderAll(); return; }
+    const rm=e.target.closest('[data-cx-att]'); if(rm){ e.stopPropagation(); c.att.splice(+rm.dataset.cxAtt,1); L.save(); renderAll(); return; }
+    const ch=e.target.closest('[data-cx]'); if(ch&&!e.target.closest('.cx-pop')){ const k=ch.dataset.cx; if(k==='go'){ const box=ch.closest('.box'); if(box&&box.__cx) box.__cx.send(); return; } if(ch.classList.contains('dim')){ open(ch,'effort'); return; } open(ch,k); return; }
+    if(!pop||!pop.contains(e.target)) return;
+    if(e.target.closest('[data-cx-back]')){ back(); return; }
+    const nv=e.target.closest('[data-cx-nav]'); if(nv){ nav(nv.dataset.cxNav); return; }
+    const grp=e.target.closest('[data-cx-grp]'); if(grp){ grp.parentElement.classList.toggle('open'); place(pop.__anchor); return; }
+    const tg=e.target.closest('[data-cx-tog]'); if(tg){ const kv=tg.dataset.cxTog.split(':'), kind=kv[0], name=kv.slice(1).join(':'); if(kind==='mode') c.modes[name]=!c.modes[name]; else if(kind==='conn') c.conn[name]=(c.conn[name]===false); else c.conn[kind+':'+name]=!c.conn[kind+':'+name]; L.save(); draw(); renderAll(); return; }
+    const fd=e.target.closest('[data-cx-folder]'); if(fd){ c.folder=fd.dataset.cxFolder; L.save(); L.log('настройка','Проект: '+(c.folder==='room'?'комната без папки':c.folder)); draw(); renderAll(); return; }
+    const st=e.target.closest('[data-cx-seat]'); if(st){ const p=(H.panes||[]).find(x=>x.id===st.dataset.cxSeat); if(p){ S().ui.pane=p.id; L.save(); L.pickPane(); L.hStatus(); L.toast('Собеседник: '+esc(L.paneName(p))+' · '+esc(modelLabel(p.model))); draw(); renderAll(); } return; }
+    const md=e.target.closest('[data-cx-mode]'); if(md){ await setSeat({mode:md.dataset.cxMode},'Права места'); return; }
+    const mo=e.target.closest('[data-cx-model]'); if(mo){ await setSeat({model:mo.dataset.cxModel},'Модель места'); return; }
+    const pk=e.target.closest('[data-cx-pick]'); if(pk){ pick(pk.dataset.cxPick); return; }
+    const sh=e.target.closest('[data-cx-shot]'); if(sh){ c.att.push({kind:'shot',name:'снимок · '+sh.dataset.cxShot+' · '+new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}); L.save(); renderAll(); close(); L.toast('Отметка снимка добавлена во вложения'); return; }
+    const sr=e.target.closest('[data-cx-src]'); if(sr){ c.att.push({kind:'src',name:sr.dataset.cxSrc}); L.save(); renderAll(); close(); return; }
+    const cm=e.target.closest('[data-cx-cmd]'); if(cm){ close(); if(/Слэш/.test(cm.dataset.cxCmd)) L.openPal(); else L.toast('«'+esc(cm.dataset.cxCmd)+'» — в прототипе пока отметка'); return; }
+    const fl=e.target.closest('[data-cx-fill]'); if(fl){ const ta=document.querySelector('.frame.cur .live-in')||document.querySelector('.live-in'); if(ta){ ta.value=fl.dataset.cxFill; ta.dispatchEvent(new Event('input')); ta.focus(); } close(); return; }
+    const flt=e.target.closest('.cx-filters span'); if(flt){ flt.parentElement.querySelectorAll('span').forEach(x=>x.classList.toggle('on',x===flt)); return; } });
+  async function setSeat(patch,what){ const p=seat(), c=cx();
+    if(!p){ if(patch.mode) c.rights=patch.mode; if(patch.model) c.model=patch.model; L.save(); draw(); renderAll(); return; }
+    let r=null; try{ r=await L.api('/api/panes/'+p.id,patch); }catch(e){} if(!r||!r.ok){ L.toast('Харнесс не принял: '+esc((r&&r.error)||'нет связи')); return; }
+    Object.assign(p,r.pane); const i=(H.panes||[]).findIndex(x=>x.id===p.id); if(i>=0) H.panes[i]=p;
+    const val=patch.mode?modeLabel(patch.mode):modelLabel(patch.model); L.log('настройка',what+' «'+L.paneName(p)+'»: '+val); L.toast(what+' «'+esc(L.paneName(p))+'»: '+esc(val)); L.hStatus(); draw(); renderAll(); }
+  function pick(kind){ const inp=document.createElement('input'); inp.type='file'; if(kind==='dir') inp.webkitdirectory=true; else inp.multiple=true; inp.style.display='none'; document.body.appendChild(inp);
+    inp.addEventListener('change',()=>{ const c=cx(), fs=[...inp.files]; if(kind==='dir'&&fs.length){ const d=(fs[0].webkitRelativePath||'').split('/')[0]||'папка'; c.att.push({kind:'folder',name:d+' · '+fs.length+' файлов'}); } else fs.slice(0,8).forEach(f=>c.att.push({kind:'file',name:f.name})); L.save(); renderAll(); inp.remove(); }); inp.click(); close(); }
+  window.CX={render:renderAll,close}; renderAll();
+})();

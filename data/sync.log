@@ -606,3 +606,8 @@ sqlite3.OperationalError: unable to open database file
 (Use `node --trace-warnings ...` to show where the warning was created)
 2026-10-07 21:35:50 map.json 798958 байт · dev-timeline.json 956769 байт
 2026-10-07 21:36:00 залито на NL99 за 14 с
+2026-10-07 22:06:01 копия базы: 221769728 байт
+(node:1755) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-07 22:06:04 map.json 798958 байт · dev-timeline.json 958440 байт
+2026-10-07 22:06:13 залито на NL99 за 13 с

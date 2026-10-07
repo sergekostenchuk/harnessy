@@ -184,12 +184,13 @@ def build_proto():
     ic = app_js[i:app_js.index("const TOP=", i)].rstrip()          # значки рейки — те же, что в скетчах
     shutil.copy(HERE / "proto.css", dst / "proto.css")
     shutil.copy(HERE / "live.js", dst / "live.js")                    # рабочий слой: состояние, решения, чат, поиск
+    shutil.copy(HERE / "cx.js", dst / "cx.js")                        # поле ввода C′: папка · роль · режимы / ＋ · права · модель · усилие · ⓘ
     (dst / "proto.js").write_text(rep((HERE / "proto.js").read_text(encoding="utf-8"), "/*IC*/", ic), encoding="utf-8")
     for stem, title in PROTO_PAGES.items():
         t = (src / f"{stem}.html").read_text(encoding="utf-8")
         t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto>')
         t = rep(t, "</head>", '<link rel="stylesheet" href="proto.css"></head>')
-        t = rep(t, "</body>", '<script src="proto.js"></script>\n<script src="live.js"></script>\n</body>')
+        t = rep(t, "</body>", '<script src="proto.js"></script>\n<script src="live.js"></script>\n<script src="cx.js"></script>\n</body>')
         t = re.sub(r"<title>.*?</title>", f"<title>Harnessy · {title}</title>", t, count=1, flags=re.S)
         (dst / f"{stem}.html").write_text(t, encoding="utf-8")
     (dst / "index.html").write_text(LAUNCH, encoding="utf-8")
