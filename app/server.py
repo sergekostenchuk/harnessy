@@ -754,20 +754,29 @@ class App:
         return web.json_response({"ok": True, "pane": pane.settings(), "team": str(tf)})
 
     async def handoff(self, request):
+        """Передать контекст месту текстом: явный text (выбранные владельцем реплики с промптом) или весь разговор места from (по умолчанию «без роли»).
+        Между моделями и вендорами переносится только текст — память модели остаётся у прежнего места."""
         body = await request.json()
         to = str(body.get("to") or "")
-        room = self.registry.panes.get(ROOM_ID)
-        target = self.registry.get(to)
-        if not room or not room.transcript:
-            return web.json_response({"ok": False, "error": "передавать нечего: разговор без роли пуст"}, status=400)
-        if not target or to == ROOM_ID:
+        src_id = str(body.get("from") or ROOM_ID)
+        kind = str(body.get("kind") or "task")
+        text = str(body.get("text") or "").strip()
+        src, target = self.registry.get(src_id), self.registry.get(to)
+        if not target or to == src_id:
             return web.json_response({"ok": False, "error": "нет такого места"}, status=404)
-        text = "Контекст разговора владельца без роли — продолжи работу по нему:\n\n" + self._transcript_text(room)
+        if kind not in ("task", "note", "question"):
+            return web.json_response({"ok": False, "error": f"вид {kind} не годится: task, note или question"}, status=400)
+        if not text:
+            if not src or not src.transcript:
+                return web.json_response({"ok": False, "error": "передавать нечего: разговор пуст"}, status=400)
+            text = "Контекст разговора владельца — продолжи работу по нему:\n\n" + self._transcript_text(src)
+        if len(text) > 60000:
+            text = text[:60000] + "\n…(обрезано)"
         try:
-            rec = self.post(OWNER, [to], "task", text, thread=f"T{self.journal.last_seq + 1}")
+            rec = self.post(OWNER, [to], kind, text, thread=(f"T{self.journal.last_seq + 1}" if kind == "task" else None))
         except JournalError as e:
             return web.json_response({"ok": False, "code": e.code, "error": str(e)}, status=400)
-        return web.json_response({"ok": True, "seq": rec["seq"], "to": target.settings()})
+        return web.json_response({"ok": True, "seq": rec["seq"], "to": target.settings(), "chars": len(text)})
 
     async def room_move(self, request):
         body = await request.json()
