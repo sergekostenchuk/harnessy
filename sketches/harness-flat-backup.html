@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0f0f10; --panel:#161617; --panel2:#1c1c1e; --raised:#232326; --line:#2a2a2e; --line2:#333338;
+    --ink:#ececee; --ink2:#a7a7ad; --ink3:#6f6f76;
+    --accent:#e2b65b; --accent-ink:#1a1a1a; --accent-soft:rgba(226,182,91,.12);
+    --ok:#5fb87a; --ok-soft:rgba(95,184,122,.14); --bad:#e0655f; --bad-soft:rgba(224,101,95,.14); --run:#7aa2ff; --run-soft:rgba(122,162,255,.14); --violet:#a78bfa;
+    --r:12px; --rs:8px; --font:"Inter",-apple-system,"Helvetica Neue",Arial,sans-serif; --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+  }
+  [data-theme="light"] { --bg:#f4f3f0; --panel:#fbfaf8; --panel2:#fff; --raised:#fff; --line:#e6e3dd; --line2:#d9d5cd; --ink:#1c1b19; --ink2:#5f5d58; --ink3:#9a978f; --accent:#b8862a; --accent-soft:rgba(184,134,42,.12); }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:#09090a; }
+  body { font:14px/1.5 var(--font); color:var(--ink); padding:0; margin:0; -webkit-font-smoothing:antialiased; }
+  .tabs { display:flex; gap:4px; margin-left:12px; } .tabs button { background:var(--raised); color:var(--ink2); border:1px solid var(--line2); border-radius:7px; padding:3px 9px; font:12px var(--font); cursor:pointer; } .tabs button.on { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .intro { max-width:1240px; margin:0 auto 14px; color:#b8b8be; font-size:14px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  .intro h1 { font-size:18px; color:#fff; margin:0; font-weight:600; }
+  .intro .sw { margin-left:auto; display:flex; gap:6px; }
+  .intro button { background:#1c1c1e; color:#ddd; border:1px solid #333; border-radius:8px; padding:5px 10px; font:12px var(--font); cursor:pointer; }
+  .intro button.on { background:#e2b65b; color:#1a1a1a; border-color:#e2b65b; }
+
+  .app { width:100vw; height:100vh; background:var(--bg); display:grid; grid-template-rows:36px 1fr; overflow:hidden; }
+  .title { display:flex; align-items:center; gap:8px; padding:0 14px; background:var(--panel); border-bottom:1px solid var(--line); font-size:12px; color:var(--ink3); }
+  .tl { display:flex; gap:7px; margin-right:10px; } .tl i { width:11px; height:11px; border-radius:50%; display:block; }
+  .tl i:nth-child(1){background:#ff5f57}.tl i:nth-child(2){background:#febc2e}.tl i:nth-child(3){background:#28c840}
+  .title .path { color:var(--ink2); } .title .path b { color:var(--ink); font-weight:500; }
+  .title .mid { margin:0 auto; display:flex; gap:12px; align-items:center; }
+  .pill { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:2px 10px; font-size:12px; background:var(--raised); color:var(--ink2); border:1px solid var(--line2); white-space:nowrap; }
+  .pill.need { background:var(--accent-soft); color:var(--accent); border-color:transparent; font-weight:500; }
+  .pill .m { font-family:var(--mono); font-size:11px; }
+  .meter { width:52px; height:5px; border-radius:3px; background:var(--line2); position:relative; overflow:hidden; display:inline-block; vertical-align:middle; }
+  .meter i { position:absolute; inset:0; width:61%; background:var(--ink3); }
+
+  .body { display:grid; grid-template-columns:232px 1fr; min-height:0; }
+  .side { background:var(--panel); border-right:1px solid var(--line); padding:12px 10px; display:flex; flex-direction:column; gap:3px; overflow:auto; }
+  .side > * { flex:none; }
+  .ws { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:var(--rs); font-weight:600; font-size:13px; }
+  .ws .av { width:22px; height:22px; border-radius:7px; background:linear-gradient(135deg,#e2b65b,#c98a3a); color:#1a1a1a; font-size:11px; display:grid; place-items:center; font-weight:700; }
+  .srch { margin:6px 0 10px; border:1px solid var(--line2); border-radius:var(--rs); padding:6px 10px; color:var(--ink3); font-size:13px; background:var(--panel2); display:flex; gap:8px; align-items:center; }
+  .srch kbd { margin-left:auto; font:11px var(--mono); color:var(--ink3); }
+  .nav { display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:var(--rs); color:var(--ink2); font-size:13px; cursor:pointer; }
+  .nav:hover { background:var(--panel2); } .nav.on { background:var(--raised); color:var(--ink); }
+  .nav .ic { width:16px; text-align:center; color:var(--ink3); font-size:13px; }
+  .nav .b { margin-left:auto; font:11px var(--mono); color:var(--accent); background:var(--accent-soft); border-radius:999px; padding:1px 7px; }
+  .nav .w { margin-left:auto; font-size:11px; color:var(--ink3); }
+  .nav .w.bad { color:var(--bad); }
+  .sec { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); padding:12px 10px 4px; }
+  .proj { padding:6px 10px; border-radius:var(--rs); font-size:13px; display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .proj:hover { background:var(--panel2); } .proj.on { background:var(--raised); }
+  .proj .st { margin-left:auto; font-size:11px; color:var(--ink3); } .proj .st.need { color:var(--accent); }
+  .conv { padding:5px 10px 5px 30px; font-size:13px; color:var(--ink2); border-radius:var(--rs); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+  .conv:hover { background:var(--panel2); } .conv.on { color:var(--ink); background:var(--raised); }
+  .side .foot { margin-top:auto; border-top:1px solid var(--line); padding-top:8px; }
+
+  .main { display:grid; grid-template-rows:auto 1fr auto; min-height:0; position:relative; }
+  .status { display:flex; align-items:center; gap:10px; padding:9px 20px; border-bottom:1px solid var(--line); font-size:13px; color:var(--ink2); }
+  .status .where { color:var(--ink); font-weight:500; } .status .sp { flex:1; }
+  .content { overflow:auto; padding:18px 22px; }
+  .wrap { max-width:760px; margin:0 auto; }
+  h2.s { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); margin:20px 0 10px; font-weight:600; display:flex; align-items:center; gap:8px; }
+  h2.s:first-child { margin-top:0; } h2.s .cnt { font:11px var(--mono); color:var(--ink3); }
+  .card { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; margin-bottom:10px; }
+  .card.need { border-color:rgba(226,182,91,.45); background:linear-gradient(0deg,var(--accent-soft),var(--accent-soft)),var(--panel2); }
+  .card .who { font-size:12px; color:var(--ink2); display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .card .who .age { margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--accent); }
+  .card .q { font-size:15px; font-weight:500; color:var(--ink); line-height:1.4; }
+  .card .why { color:var(--ink2); font-size:13px; margin:6px 0 10px; } .card .why b { color:var(--ink); font-weight:500; }
+  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line2); background:var(--raised); color:var(--ink); border-radius:9px; padding:6px 12px; font-size:13px; cursor:pointer; }
+  .btn.p { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:500; } .btn.g { background:transparent; } .btn.sm { padding:4px 10px; font-size:12px; }
+  .hint { font-size:12px; color:var(--ink3); margin-top:8px; }
+  .row { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--rs); background:var(--panel2); margin-bottom:6px; font-size:13px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--ink3); flex:none; display:inline-block; }
+  .dot.run { background:var(--run); box-shadow:0 0 0 3px var(--run-soft); } .dot.ok { background:var(--ok); } .dot.need { background:var(--accent); } .dot.bad { background:var(--bad); }
+  .row .nm { font-weight:500; min-width:120px; } .row .wd { color:var(--ink2); } .row .age { margin-left:auto; font:11px var(--mono); color:var(--ink3); }
+  .state { font-size:12px; padding:1px 8px; border-radius:999px; background:var(--raised); color:var(--ink2); white-space:nowrap; }
+  .state.run { color:var(--run); background:var(--run-soft); } .state.need { color:var(--accent); background:var(--accent-soft); } .state.bad { color:var(--bad); background:var(--bad-soft); } .state.ok { color:var(--ok); background:var(--ok-soft); }
+  .recap { background:var(--panel2); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:var(--r); padding:14px 16px; font-size:14px; line-height:1.6; margin-bottom:16px; }
+  .recap a { color:var(--accent); text-decoration:none; }
+  .msg { display:flex; gap:12px; margin-bottom:18px; }
+  .msg .av { width:28px; height:28px; border-radius:50%; background:var(--raised); display:grid; place-items:center; font-size:12px; color:var(--ink2); flex:none; font-weight:600; }
+  .msg.me .av { background:var(--accent); color:var(--accent-ink); }
+  .msg .t { font-size:15px; line-height:1.55; } .msg .meta { font-size:12px; color:var(--ink3); margin-top:6px; display:flex; gap:10px; } .msg .meta a { color:var(--ink2); text-decoration:underline dotted; }
+  .sugg { display:flex; gap:8px; margin-top:10px; }
+
+  /* ПЛАН: карта */
+  .plan { display:grid; grid-template-columns:1fr 320px; gap:14px; }
+  .stages { display:flex; gap:5px; margin-bottom:12px; }
+  .stg { flex:1; border:1px solid var(--line); border-radius:10px; padding:7px 9px; background:var(--panel2); font-size:11px; color:var(--ink3); position:relative; }
+  .stg b { display:block; color:var(--ink2); font-weight:500; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .stg .pb { height:3px; border-radius:2px; background:var(--line2); margin-top:6px; overflow:hidden; } .stg .pb i { display:block; height:100%; background:var(--ok); }
+  .stg.d { border-color:rgba(95,184,122,.35); } .stg.d b { color:var(--ok); }
+  .stg.n { border-color:var(--accent); background:var(--accent-soft); } .stg.n b { color:var(--ink); } .stg.n .pb i { background:var(--accent); }
+  .map { position:relative; background:radial-gradient(circle at 1px 1px, #26262a 1px, transparent 1px) 0 0/22px 22px, var(--panel2); border:1px solid var(--line); border-radius:var(--r); height:400px; overflow:hidden; }
+  .cv { position:absolute; left:0; top:0; transform-origin:0 0; }
+  .map svg, .swarm svg { position:absolute; inset:0; width:100%; height:100%; }
+  .map svg path { fill:none; stroke:#3b3b41; stroke-width:1.5; } .map svg path.hot { stroke:var(--accent); stroke-width:2; }
+  .node { position:absolute; width:168px; background:var(--raised); border:1px solid var(--line2); border-radius:10px; padding:8px 10px; font-size:12px; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.35); }
+  .node .st { font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); margin-bottom:2px; display:flex; justify-content:space-between; }
+  .node b { display:block; font-weight:600; color:var(--ink); font-size:13px; margin-bottom:4px; }
+  .node .ln { color:var(--ink2); font-size:11px; display:flex; gap:6px; align-items:center; }
+  .node .pb { height:3px; background:var(--line2); border-radius:2px; margin-top:7px; overflow:hidden; } .node .pb i { display:block; height:100%; background:var(--ok); }
+  .node.done { border-color:rgba(95,184,122,.4); } .node.done .pb i { background:var(--ok); }
+  .node.run { border-color:rgba(122,162,255,.5); } .node.run .pb i { background:var(--run); }
+  .node.need { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft), 0 10px 24px rgba(0,0,0,.45); } .node.need .pb i { background:var(--accent); }
+  .node.bad { border-color:rgba(224,101,95,.5); } .node.bad .pb i { background:var(--bad); }
+  .node.sel { outline:2px solid var(--run); }
+  .node .badge { position:absolute; top:-9px; right:8px; font-size:10px; border-radius:999px; padding:1px 7px; background:var(--run); color:#0f0f10; font-weight:600; }
+  .node .badge.need { background:var(--accent); } .node .badge.ok { background:var(--ok); }
+  .map .tools { position:absolute; right:10px; top:10px; display:flex; gap:4px; }
+  .map .tools span { background:var(--panel); border:1px solid var(--line2); border-radius:6px; padding:2px 8px; font-size:11px; color:var(--ink2); }
+  .tl2 { margin-top:12px; background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:10px 12px; }
+  .tl2 .bar { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--ink2); }
+  .tl2 .track { flex:1; height:28px; position:relative; }
+  .tl2 .track i { position:absolute; bottom:4px; width:3px; border-radius:1px; background:#3a3a40; }
+  .tl2 .track i.ok { background:var(--ok); } .tl2 .track i.bad { background:var(--bad); } .tl2 .track i.need { background:var(--accent); }
+  .tl2 .track .cur { position:absolute; top:0; bottom:0; width:2px; background:var(--run); left:78%; }
+  .tl2 .track .cur:after { content:"сейчас 19:58"; position:absolute; top:-2px; left:6px; font:10px var(--mono); color:var(--run); white-space:nowrap; }
+  .tl2 .days { display:flex; justify-content:space-between; font:10px var(--mono); color:var(--ink3); margin-top:4px; padding:0 0 0 70px; }
+  .side2 { display:flex; flex-direction:column; gap:10px; }
+  .prog { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:12px 14px; }
+  .prog h4 { margin:0 0 8px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); font-weight:600; }
+  .kpi { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .kpi div { background:var(--raised); border-radius:8px; padding:8px 10px; }
+  .kpi .v { font:500 18px/1.1 var(--font); color:var(--ink); } .kpi .l { font-size:11px; color:var(--ink3); margin-top:2px; }
+  .kpi .v.ok { color:var(--ok); } .kpi .v.bad { color:var(--bad); } .kpi .v.acc { color:var(--accent); }
+  .bars { margin-top:10px; font-size:12px; color:var(--ink2); }
+  .bars div { display:flex; align-items:center; gap:8px; margin:4px 0; } .bars .lb { width:92px; color:var(--ink3); }
+  .bars .b { flex:1; height:6px; background:var(--line2); border-radius:3px; overflow:hidden; } .bars .b i { display:block; height:100%; background:var(--ink3); }
+  .bars .b i.ok { background:var(--ok); } .bars .b i.bad { background:var(--bad); } .bars .b i.run { background:var(--run); }
+  .spark { height:36px; display:flex; align-items:flex-end; gap:2px; margin-top:6px; }
+  .spark i { flex:1; background:var(--ink3); border-radius:1px 1px 0 0; opacity:.6; } .spark i.hi { background:var(--bad); opacity:1; }
+  .insp .pass { display:grid; grid-template-columns:72px 1fr; gap:5px 10px; font-size:12px; }
+  .insp dt { font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink3); padding-top:2px; } .insp dd { margin:0; color:var(--ink2); }
+  .insp dd.w { color:var(--bad); }
+
+  /* КОМАНДА: стая */
+  .team { display:grid; grid-template-columns:1fr 320px; gap:14px; }
+  .swarm { position:relative; height:calc(100vh - 230px) !important; min-height:470px; background:radial-gradient(circle at 1px 1px, #26262a 1px, transparent 1px) 0 0/22px 22px, var(--panel2); border:1px solid var(--line); border-radius:var(--r); height:470px; overflow:hidden; }
+  .swarm svg { position:absolute; inset:0; width:100%; height:100%; } .swarm svg path { fill:none; stroke:#3b3b41; stroke-width:1.5; } .swarm svg path.hot { stroke:var(--accent); stroke-width:2; stroke-dasharray:4 4; }
+  .seat { position:absolute; width:200px; background:var(--raised); border:1px solid var(--line2); border-radius:10px; padding:10px 12px 9px; font-size:12px; box-shadow:0 6px 18px rgba(0,0,0,.35); }
+  .seat .role { position:absolute; top:-10px; left:10px; font-size:10px; border-radius:999px; padding:2px 8px; background:var(--violet); color:#0f0f10; font-weight:600; }
+  .seat .role.o { background:var(--accent); } .seat .role.r { background:var(--ok); } .seat .role.w { background:var(--run); } .seat .role.s { background:#8e8e93; }
+  .seat b { display:block; font-weight:600; color:var(--ink); font-size:13px; margin:2px 0 3px; }
+  .seat .ln { color:var(--ink2); font-size:11px; margin-top:2px; } .seat .ln .m { font-family:var(--mono); }
+  .seat .st { margin-top:6px; display:flex; align-items:center; gap:6px; }
+  .seat.need { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); } .seat.bad { border-color:rgba(224,101,95,.5); } .seat.run { border-color:rgba(122,162,255,.4); }
+  .roles { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:12px 14px; font-size:12px; }
+  .roles h4 { margin:0 0 8px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); font-weight:600; }
+  .roles .rr { display:grid; grid-template-columns:86px 1fr; gap:6px; align-items:center; padding:6px 0; border-bottom:1px solid var(--line); }
+  .roles .rr:last-child { border-bottom:0; }
+  .roles .sel { border:1px solid var(--line2); background:var(--raised); border-radius:7px; padding:3px 8px; color:var(--ink2); display:flex; align-items:center; gap:6px; }
+  .roles .sel .m { margin-left:auto; font:10px var(--mono); color:var(--ink3); }
+
+  /* ПРОВАЙДЕРЫ */
+  .acc { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; margin-bottom:10px; display:grid; grid-template-columns:150px 1fr 200px; gap:14px; align-items:center; }
+  .acc .nm { font-weight:600; font-size:14px; } .acc .nm small { display:block; font-weight:400; color:var(--ink3); font-size:11px; margin-top:2px; }
+  .acc .lim { font-size:12px; color:var(--ink2); }
+  .acc .lim .l { display:flex; align-items:center; gap:8px; margin:3px 0; } .acc .lim .lb { width:92px; color:var(--ink3); }
+  .acc .lim .b { flex:1; height:6px; background:var(--line2); border-radius:3px; overflow:hidden; } .acc .lim .b i { display:block; height:100%; background:var(--ink3); }
+  .acc .lim .b i.warn { background:var(--accent); } .acc .lim .b i.bad { background:var(--bad); } .acc .lim .b i.ok { background:var(--ok); }
+  .acc .lim .v { font:11px var(--mono); color:var(--ink2); width:150px; }
+  .acc .meta { font-size:12px; color:var(--ink2); } .acc .meta div { margin:2px 0; } .acc .meta b { color:var(--ink); font-weight:500; }
+  .acc .meta .bad { color:var(--bad); }
+  .fc { background:var(--bad-soft); border:1px solid rgba(224,101,95,.35); border-radius:var(--r); padding:10px 14px; font-size:13px; margin-bottom:12px; }
+  .fc b { font-weight:600; }
+
+  .comp { padding:12px 22px 14px; border-top:1px solid var(--line); background:var(--bg); }
+  .comp .box { max-width:760px; margin:0 auto; background:var(--panel2); border:1px solid var(--line2); border-radius:14px; padding:12px 14px 10px; }
+  .comp .in { color:var(--ink3); font-size:15px; min-height:26px; }
+  .comp .bar { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
+  .chip { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--ink2); background:var(--raised); border:1px solid var(--line2); border-radius:999px; padding:3px 10px; }
+  .comp .cost { font:11px var(--mono); color:var(--ink3); margin-left:auto; }
+  .comp .send { display:flex; gap:6px; align-items:center; } .send .go { width:30px; height:30px; border-radius:50%; background:var(--accent); color:var(--accent-ink); display:grid; place-items:center; font-weight:700; }
+
+  .live { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; }
+  .livebar { display:flex; align-items:center; gap:10px; padding:7px 12px; border-bottom:1px solid var(--line); font-size:12px; color:var(--ink2); }
+  .livebar .m { font-family:var(--mono); font-size:11px; color:var(--ink3); } .livebar .sp { flex:1; } .livebar a { color:var(--accent); text-decoration:none; }
+  .live iframe { display:block; width:100%; height:calc(100vh - 290px); min-height:480px; border:0; background:#0f0f10; }
+  .stg.n { border-color:var(--accent); } .stg.p { border-color:rgba(167,139,250,.5); } .stg.p b { color:var(--violet); }
+  .set { display:grid; grid-template-columns:210px 1fr; gap:16px; max-width:1040px; margin:0 auto; }
+  .subnav div { padding:7px 10px; border-radius:var(--rs); color:var(--ink2); font-size:13px; cursor:pointer; } .subnav div.on { background:var(--raised); color:var(--ink); } .subnav .note { font-size:11px; color:var(--ink3); line-height:1.5; margin-top:12px; cursor:default; } .subnav .note b { color:var(--ink2); font-weight:500; }
+  .sg { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; margin-bottom:12px; }
+  .sg h4 { margin:0 0 2px; font-size:14px; font-weight:600; } .sgd { font-size:12px; color:var(--ink3); margin-bottom:10px; }
+  .opt { display:grid; grid-template-columns:1fr 1.2fr; gap:12px; padding:10px 0; border-top:1px solid var(--line); align-items:start; font-size:13px; }
+  .opt b { font-weight:500; display:block; } .opt small { color:var(--ink3); font-size:11px; display:block; margin-top:2px; }
+  .seg { display:inline-flex; border:1px solid var(--line2); border-radius:8px; overflow:hidden; flex-wrap:wrap; } .seg span { padding:4px 10px; font-size:12px; color:var(--ink2); border-right:1px solid var(--line2); } .seg span:last-child { border-right:0; } .seg span.on { background:var(--accent); color:var(--accent-ink); font-weight:500; }
+  .list label { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--ink2); margin:4px 0; } .list a { color:var(--accent); text-decoration:none; }
+  .tg { width:28px; height:16px; border-radius:999px; background:var(--line2); position:relative; flex:none; display:inline-block; } .tg:after { content:""; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#fff; } .tg.on { background:var(--ok); } .tg.on:after { left:14px; }
+  .tbl { font-size:12px; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-top:6px; } .tbl .th, .tbl .tr { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:8px; padding:6px 10px; border-top:1px solid var(--line); } .tbl .th { border-top:0; color:var(--ink3); background:var(--raised); font-size:11px; } .tbl .tr span { color:var(--ink2); } .tbl .tr b { color:var(--ink); font-weight:500; }
+  .sg:last-child .tbl .tr { grid-template-columns:1fr 3fr; }
+  .rcpt { margin-top:10px; font-size:11px; color:var(--ok); display:flex; align-items:center; }
+
+  .newbtn { display:flex; align-items:center; gap:8px; margin:4px 0 8px; padding:8px 12px; border-radius:10px; background:var(--accent); color:var(--accent-ink); font-weight:600; font-size:13px; cursor:pointer; }
+  .newbtn kbd { margin-left:auto; font:11px var(--mono); opacity:.7; }
+  .nc { max-width:720px; margin:6vh auto 0; text-align:center; }
+  .nc-logo { width:44px; height:44px; border-radius:12px; margin:0 auto 16px; background:linear-gradient(135deg,#e2b65b,#c98a3a); color:#1a1a1a; display:grid; place-items:center; font-weight:700; font-size:18px; }
+  .nc h1 { font-size:26px; font-weight:600; margin:0 0 6px; } .nc p { color:var(--ink2); margin:0 0 22px; font-size:14px; }
+  .nc-box { text-align:left; background:var(--panel2); border:1px solid var(--line2); border-radius:16px; padding:14px 16px 10px; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+  .nc-in { color:var(--ink3); font-size:15px; min-height:52px; line-height:1.5; }
+  .nc-box .bar { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
+  .chip.pick { border-color:var(--accent); color:var(--ink); }
+  .nc-hints { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:22px; text-align:left; font-size:12px; color:var(--ink3); }
+  .nc-hints b { display:block; color:var(--ink2); font-weight:500; margin-bottom:2px; }
+  .nc-wait { margin-top:22px; padding:10px 14px; border:1px dashed rgba(226,182,91,.5); border-radius:12px; font-size:13px; color:var(--ink2); display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
+  .nc-wait a { color:var(--accent); text-decoration:none; }
+  .nc-recent { margin-top:16px; font-size:12px; color:var(--ink3); } .nc-recent a { color:var(--ink2); text-decoration:none; }
+  .app.nochat .comp { display:none; }
+
+  .res { display:grid; grid-template-columns:1fr 320px; gap:14px; max-width:1180px; margin:0 auto; }
+  .rq { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:12px 16px; margin-bottom:6px; }
+  .rq-h { display:flex; align-items:center; gap:10px; font-size:15px; margin-bottom:8px; } .rq-h b { font-weight:600; }
+  .rq-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:5px 0; font-size:12px; border-top:1px solid var(--line); }
+  .rq-row .lb { width:80px; color:var(--ink3); } .muted { color:var(--ink3); font-size:12px; }
+  .rq .b { height:6px; background:var(--line2); border-radius:3px; overflow:hidden; } .rq .b i { display:block; height:100%; background:var(--ok); }
+  .rc { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:12px 16px; margin-bottom:10px; }
+  .rc.ok { border-color:rgba(95,184,122,.35); } .rc.run { border-color:rgba(122,162,255,.35); }
+  .rc-h { display:flex; align-items:center; gap:10px; margin-bottom:8px; } .rc-h b { font-size:14px; font-weight:600; flex:1; }
+  .ver { font-size:11px; color:var(--ink3); } .ver.ok { color:var(--ok); } .ver.bad { color:var(--bad); }
+  .rc-g { display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; font-size:13px; color:var(--ink2); }
+  .rc-g label, .rc-s label { display:block; font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); margin-bottom:2px; }
+  .rc-s { margin-top:8px; font-size:13px; color:var(--ink); } .rc-a { display:flex; gap:6px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+  .src { display:inline-block; font-size:11px; color:var(--ink2); background:var(--raised); border:1px solid var(--line2); border-radius:999px; padding:0 8px; margin:1px 2px 1px 0; }
+  .cmp { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; font-size:12px; }
+  .cmp .th, .cmp .tr { display:grid; grid-template-columns:2.2fr 1fr 1fr 1fr 1.2fr; gap:8px; padding:7px 12px; border-top:1px solid var(--line); } .cmp .th { border-top:0; background:var(--raised); color:var(--ink3); font-size:11px; }
+  .cmp .y { color:var(--ok); } .cmp .n { color:var(--ink3); } .cmp .w { color:var(--accent); }
+  .rl { display:flex; justify-content:space-between; gap:8px; font-size:12px; padding:5px 0; border-top:1px solid var(--line); } .rl a { color:var(--ink); text-decoration:none; } .rl span { color:var(--ink3); white-space:nowrap; }
+
+  .rl2 { display:grid; grid-template-columns:1fr 320px; gap:14px; max-width:1240px; margin:0 auto; }
+  .rt { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:12px 16px; }
+  .rt-h { display:flex; align-items:center; gap:12px; flex-wrap:wrap; } .rt-h b { font-size:15px; font-weight:600; }
+  .warn { margin-top:10px; background:var(--bad-soft); border:1px solid rgba(224,101,95,.35); border-radius:10px; padding:8px 12px; font-size:13px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .rtab { margin-top:12px; background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; font-size:12px; }
+  .rtab .th, .rtab .tr { display:grid; grid-template-columns:1.6fr 1fr 0.9fr 1.3fr 1fr 0.7fr 0.8fr 0.6fr; gap:8px; padding:9px 12px; border-top:1px solid var(--line); align-items:center; }
+  .rtab .th { border-top:0; background:var(--raised); color:var(--ink3); font-size:11px; }
+  .rtab .tr.bad { background:var(--bad-soft); } .rtab .tr.add { color:var(--ink2); cursor:pointer; }
+  .rtab small { display:block; color:var(--ink3); font-size:11px; font-weight:400; }
+  .rtab .role { font-size:12px; border-radius:999px; padding:2px 8px; color:#0f0f10; font-weight:600; display:inline-block; }
+  .rtab .role small { color:var(--ink3); font-weight:400; display:block; padding:2px 0 0; }
+  .rtab .role { background:transparent; color:var(--ink); padding:0; } .rtab .role.o::before, .rtab .role.w::before, .rtab .role.r::before, .rtab .role.s::before { content:""; display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+  .rtab .role.o::before { background:var(--accent); } .rtab .role.w::before { background:var(--run); } .rtab .role.r::before { background:var(--ok); } .rtab .role.s::before { background:#8e8e93; }
+  .acc { font-style:normal; display:inline-block; border:1px solid var(--line2); border-radius:7px; padding:1px 7px; background:var(--raised); } .acc.bad { border-color:rgba(224,101,95,.6); }
+  .seg.sm span { padding:2px 7px; font-size:11px; } .hl { color:var(--accent); font-weight:500; }
+  .pol { display:grid; gap:6px; margin-top:8px; font-size:13px; color:var(--ink2); } .pol .role { font-size:11px; border-radius:999px; padding:1px 8px; color:#0f0f10; font-weight:600; } .pol .role.o { background:var(--accent); } .pol .role.w { background:var(--run); } .pol .role.r { background:var(--ok); } .pol .role.s { background:#8e8e93; }
+  .sign { margin-top:12px; background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:12px 16px; display:flex; gap:24px; align-items:center; font-size:13px; flex-wrap:wrap; }
+  .cat { display:grid; grid-template-columns:90px 1fr auto; gap:8px; align-items:center; padding:6px 0; border-top:1px solid var(--line); font-size:12px; } .cat b { font-weight:500; } .cat span { color:var(--ink3); }
+
+  .dc { display:grid; grid-template-columns:1fr 320px; gap:14px; max-width:1240px; margin:0 auto; }
+  .ftabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:6px; } .ftabs span { padding:5px 11px; border-radius:8px; font-size:13px; color:var(--ink2); border:1px solid transparent; } .ftabs span.on { background:var(--raised); color:var(--ink); border-color:var(--line2); } .ftabs span b { font-weight:600; color:var(--ink); } .ftabs .acc2 { color:var(--accent); }
+  .kind { font-size:11px; border-radius:999px; padding:1px 8px; background:var(--raised); color:var(--ink2); border:1px solid var(--line2); }
+  .drow { display:grid; grid-template-columns:90px 1.4fr 1.8fr 110px auto; gap:10px; align-items:center; padding:9px 12px; border:1px solid var(--line); border-radius:var(--rs); background:var(--panel2); margin-bottom:6px; font-size:12px; }
+  .drow .w { color:var(--ink); } .drow .src2 { color:var(--ink2); } .drow .src2 b { color:var(--ink); font-weight:500; } .drow .st { font-size:12px; color:var(--ink2); } .drow .st.ok { color:var(--ok); } .drow .st.bad { color:var(--bad); } .drow.bad { border-color:rgba(224,101,95,.4); } .drow .acts { display:flex; gap:4px; } .drow a { color:var(--accent); text-decoration:none; }
+  .hb { display:flex; gap:8px; align-items:center; background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:10px 14px; font-size:13px; color:var(--ink2); margin-bottom:6px; } .hb b { color:var(--ink); }
+  .sil { display:grid; grid-template-columns:110px 110px 1fr; gap:10px; align-items:center; padding:7px 12px; border:1px solid var(--line); border-radius:var(--rs); background:var(--panel2); margin-bottom:5px; font-size:12px; color:var(--ink2); } .sil b { color:var(--ink); font-weight:500; } .sil.need { border-color:rgba(226,182,91,.45); } .sil.bad { border-color:rgba(224,101,95,.4); }
+  .stab { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; font-size:12px; }
+  .stab .th, .stab .tr { display:grid; grid-template-columns:1.3fr 0.9fr 2fr 0.8fr 1.1fr 0.9fr 0.7fr 0.6fr; gap:8px; padding:8px 12px; border-top:1px solid var(--line); align-items:center; color:var(--ink2); } .stab .th { border-top:0; background:var(--raised); color:var(--ink3); font-size:11px; } .stab .tr b { color:var(--ink); font-weight:500; } .stab .t2 { color:var(--ink3); } .stab .tr.off { opacity:.55; } .stab a { color:var(--accent); text-decoration:none; }
+  .stab .th:has(+ .d5), .stab .d5 { grid-template-columns:2fr 1fr 1.2fr 0.8fr 0.6fr; }
+
+  .mrow { display:grid; grid-template-columns:2.4fr 0.8fr 1.2fr 0.9fr auto; gap:10px; align-items:center; padding:8px 12px; border:1px solid var(--line); border-radius:var(--rs); background:var(--panel2); margin-bottom:5px; font-size:12px; }
+  .mrow .mt { color:var(--ink); } .mrow .sc { color:var(--ink3); } .mrow .src2 { color:var(--ink2); } .mrow .src2 b { color:var(--ink); font-weight:500; } .mrow .st { color:var(--ink2); } .mrow .st.ok { color:var(--ok); } .mrow .st.bad { color:var(--bad); } .mrow.bad { border-color:rgba(224,101,95,.4); }
+  .mrow .acts { display:flex; gap:8px; } .mrow a { color:var(--accent); text-decoration:none; font-size:12px; }
+  .imp { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; font-size:12px; }
+  .imp .th, .imp .tr { display:grid; grid-template-columns:2.4fr 0.7fr 0.7fr 0.7fr 0.9fr auto; gap:8px; padding:8px 12px; border-top:1px solid var(--line); align-items:center; color:var(--ink2); } .imp .th { border-top:0; background:var(--raised); color:var(--ink3); font-size:11px; }
+  .imp .ok-t { color:var(--ok); } .imp .y { color:var(--accent); } .imp .w2 { color:var(--bad); } .imp .tr.warn2 { display:block; background:var(--bad-soft); color:var(--ink); }
+
+  .art { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:12px 16px; margin-bottom:10px; } .art.ok { border-color:rgba(95,184,122,.35); }
+  .art-h { display:flex; align-items:center; gap:10px; margin-bottom:8px; } .art-h b { font-size:14px; font-weight:600; flex:1; }
+  .art-g { display:grid; grid-template-columns:1fr 1fr; gap:6px 16px; font-size:12px; color:var(--ink2); } .art-g label { display:block; font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); margin-bottom:1px; }
+  .path2 { font-family:var(--mono); font-size:11px; color:var(--ink2); } .ok-t { color:var(--ok); } .w2 { color:var(--bad); } .art-g a { color:var(--accent); text-decoration:none; }
+  .arow { display:grid; grid-template-columns:110px 1.6fr 1.4fr 1fr auto; gap:10px; align-items:center; padding:8px 12px; border:1px solid var(--line); border-radius:var(--rs); background:var(--panel2); margin-bottom:5px; font-size:12px; }
+  .arow .w { color:var(--ink); } .arow .src2 { color:var(--ink2); } .arow .st { color:var(--ink2); } .arow .st.ok { color:var(--ok); } .arow .st.bad { color:var(--bad); } .arow .acts { display:flex; gap:8px; } .arow a { color:var(--accent); text-decoration:none; }
+  .screen { display:none; height:100%; } .screen.on { display:block; }
+  .legend { max-width:1240px; margin:16px auto 0; color:#b8b8be; font-size:13px; }
+  .legend h3 { color:#fff; font-size:14px; margin:14px 0 6px; } .legend ol { padding-left:20px; margin:0; } .legend li { margin:4px 0; } .legend b { color:#e2b65b; font-weight:500; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="title">
+    <div class="tl"><i></i><i></i><i></i></div>
+    <span class="path"><b>OMG</b> › План › Блоки (L1)</span>
+    <div class="mid">
+      <span class="pill need">◆ 2 ждут вас <span class="m">· 40 мин</span></span>
+      <span class="pill" id="pillProg">до рубежа <span class="m">…</span></span>
+      <span class="pill">⟳ 3 · <span class="m" style="color:var(--bad)">▲ 1</span></span>
+      <span class="pill">Claude <span class="meter"><i></i></span> <span class="m">61 %</span> · Codex <span class="m" style="color:var(--bad)">94 %</span></span>
+      <span class="pill">с визита <span class="m">+3 / ↺1</span></span>
+    </div>
+    <span class="tabs"><button data-s="new">Новый</button><button data-s="now">Сейчас</button><button data-s="chat">Чат</button><button class="on" data-s="plan">План</button><button data-s="res">Ресёрч</button><button data-s="team">Команда</button><button data-s="roles">Роли</button><button data-s="dec">Решения</button><button data-s="sens">Датчики</button><button data-s="prov">Провайдеры</button><button data-s="art">Артефакты</button><button data-s="mem">Память</button><button data-s="set">Настройки</button><button id="theme">☾</button></span>
+  </div>
+  <div class="body">
+    <aside class="side">
+      <div class="ws"><span class="av">S</span>Serge <span style="margin-left:auto;color:var(--ink3);font-weight:400">⌄</span></div>
+      <div class="newbtn" data-s="new">＋ Новый чат <kbd>⌘N</kbd></div>
+      <div class="srch">🔍 Найти разговор, задачу, решение… <kbd>⌘K</kbd></div>
+      <div class="nav" data-s="now"><span class="ic">◆</span>Сейчас <span class="b">2</span></div>
+      <div class="nav" data-s="team"><span class="ic">◎</span>Команда <span class="w">6 мест</span></div>
+      <div class="nav" data-s="prov"><span class="ic">◔</span>Провайдеры <span class="w bad">Codex 94 %</span></div>
+      <div class="nav" data-s="dec"><span class="ic">✓</span>Решения <span class="b">2</span></div>
+      <div class="sec">Проекты</div>
+      <div class="proj on"><span>OMG</span><span class="st need">◆ 2 · L1</span></div>
+      <div class="conv" data-s="chat">Оркестратор · H1.5 и прогон</div>
+      <div class="conv on" data-s="plan">Карта проекта</div>
+      <div class="conv">Ревьюер · три тестовых пути</div>
+      <div class="conv">Воркер Sonnet · тесты H1.5</div>
+      <div class="conv" data-s="res">Ресёрчер · очередь решений у Devin</div>
+      <div class="proj"><span>Табло агентов</span><span class="st need">◆ 1 · L0</span></div>
+      <div class="proj"><span>HARNESS</span><span class="st">спит</span></div>
+      <div class="sec">Комнаты</div>
+      <div class="proj"><span>Принтер Brother</span><span class="st">вчера</span></div>
+      <div class="proj" data-s="new" style="color:var(--ink3)"><span>+ Новый разговор без папки</span></div>
+      <div class="foot">
+        <div class="nav" data-s="sens"><span class="ic">◉</span>Датчики <span class="w" style="color:var(--ok)">● все живы</span></div>
+        <div class="nav" data-s="mem"><span class="ic">◌</span>Память <span class="w">90 записей</span></div>
+        <div class="nav" data-s="set"><span class="ic">≡</span>Настройки</div>
+      </div>
+    </aside>
+
+    <section class="main">
+      <div class="status"><span class="where" id="where">OMG › План › Блоки (L1) · карта</span><span class="sp"></span><span id="next">следующий отчёт воркера в 20:15 · прогон: шаг 6 из 9</span></div>
+
+      <div class="content">
+        <!-- НОВЫЙ ЧАТ -->
+        <div class="screen" id="s-new">
+          <div class="nc">
+            <div class="nc-logo">H</div>
+            <h1>Чем займёмся?</h1>
+            <p>Спросите или поручите. Ничего не начнётся без вас: сначала понимание, потом действие.</p>
+            <div class="nc-box">
+              <div class="nc-in" contenteditable="false">Например: «что сейчас делает команда?» · «посмотри HARNESS и оцени из 10» · «почини развилку D8.4d»</div>
+              <div class="bar">
+                <span class="chip pick">📁 в папке: OMG ⌄</span><span class="chip">Claude · Sonnet · усилие среднее ⌄</span><span class="chip">только читает папку ⌄</span><span class="chip" style="opacity:.7">＋ файл или снимок</span>
+                <span class="cost">ход ≈ 0,05 % · оценка</span><span class="send"><span class="go">↑</span></span>
+              </div>
+            </div>
+            <div class="nc-hints">
+              <div><b>Папка или комната.</b> В папке — агент читает проект; без папки — комната для быстрых дел, без памяти проекта.</div>
+              <div><b>Чат → План.</b> Когда разговор вырастет, агент предложит собрать план; переключить можно и сразу.</div>
+              <div><b>Всё видно.</b> Кто работает, над чем и чего ждёт — в «Сейчас»; цена хода — под полем ввода.</div>
+            </div>
+            <div class="nc-wait"><span class="pill need">◆ 2 ждут вас</span> Пока вас не было, ревьюер задал вопрос по H1.5 и Codex встал на лимите. <a href="#" data-s="now">Открыть «Сейчас» →</a></div>
+            <div class="nc-recent"><span>Недавние:</span> <a href="#">Оркестратор · H1.5 и прогон</a> · <a href="#">Ревьюер · три тестовых пути</a> · <a href="#">Принтер Brother</a></div>
+          </div>
+        </div>
+
+        <!-- СЕЙЧАС -->
+        <div class="screen wrap" id="s-now">
+          <div class="recap"><b>Пока вас не было</b> (с 02:10) — влиты две задачи, обе проверены; до рубежа осталось 9 из 96. Codex упёрся в лимит в 06:12 и стоял три часа: это у провайдера, сам не продолжит. Два вопроса ждут вас. Потрачено 7 % недели — на 2 % больше плана из-за трёх кругов ревью по D8.4e. <a href="#">Подробно</a></div>
+          <h2 class="s">Ждёт вас <span class="cnt">2</span></h2>
+          <div class="card need"><div class="who"><span>Ревьюер</span><span>·</span><span>OMG › L1 › H1.5 › ревью, круг 2</span><span class="age">40 мин</span></div><div class="q">Добавлять три тестовых пути старого правила?</div><div class="why"><b>Да, все три</b> — ещё около часа воркера, риск по сроку. <b>Только один</b> — быстрее, но дыра в проверке адресов.</div><span class="btn p">Да, все три</span> <span class="btn">Только один</span> <span class="btn g">Объясни</span><div class="hint">Пока вы решаете: ревьюер спит, воркер работает над другим.</div></div>
+          <div class="card need"><div class="who"><span>Исполнитель Codex</span><span>·</span><span>OMG › L1 › D8.4e</span><span class="age">8 мин</span></div><div class="q">Codex стоит на лимите до 19:58. Продолжить D8.4e на Sonnet?</div><div class="why"><b>Да</b> — продолжит сейчас, другая модель, тот же договор. <b>Ждать</b> — 46 минут простоя.</div><span class="btn p">Продолжить на Sonnet</span> <span class="btn">Ждать 19:58</span></div>
+          <h2 class="s">Идёт <span class="cnt">3</span></h2>
+          <div class="row"><span class="dot run"></span><span class="nm">Воркер Sonnet</span><span class="state run">Идёт</span><span class="wd">H1.5 · пишет тесты · отчёт 20:15</span><span class="age">12 мин</span></div>
+          <div class="row"><span class="dot run"></span><span class="nm">Тестер</span><span class="state run">Идёт</span><span class="wd">прогон · шаг 6 из 9</span><span class="age">31 мин</span></div>
+          <div class="row"><span class="dot run"></span><span class="nm">Ресёрчер</span><span class="state run">Идёт</span><span class="wd">как Devin показывает очередь решений · 4 из 8 источников</span><span class="age">6 мин</span></div>
+          <h2 class="s">Готово к проверке <span class="cnt">1</span></h2>
+          <div class="row"><span class="dot ok"></span><span class="nm">E2.2</span><span class="state ok">Готово к проверке</span><span class="wd">воркер Fable · 3206 тестов зелёные · <a href="#" style="color:var(--ink2)">как проверено</a></span><span class="btn sm" style="margin-left:auto">Открыть</span></div>
+        </div>
+
+        <!-- ЧАТ -->
+        <div class="screen wrap" id="s-chat">
+          <div class="msg me"><div class="av">S</div><div><div class="t">посмотри HARNESS и скажи, можно ли на нём сделать табло всех агентов. оценка из 10</div></div></div>
+          <div class="msg"><div class="av">О</div><div><div class="t">Можно. Там уже есть места команды, очередь решений и журнал — табло ляжет сверху без переделки сервера. <b>8 из 10</b>: не хватает слов состояния у мест и возраста у вопросов.</div><div class="meta"><span>1 мин 10 с</span><a href="#">что читал: README, index.html</a><span>0,05 % недели</span></div></div></div>
+          <div class="msg me"><div class="av">S</div><div><div class="t">ок, делаем</div></div></div>
+          <div class="msg"><div class="av">О</div><div><div class="t">Чтобы делать, нужен план: стадии, кто работает, что считать готовым. Начнём с дискавери — ничего не стартует без вашей подписи.</div><div class="sugg"><span class="btn p">Собрать план</span><span class="btn">Ещё поговорим</span></div></div></div>
+        </div>
+
+        <!-- ПЛАН: ЖИВАЯ КАРТА -->
+        <div class="screen on" id="s-plan">
+          <div class="plan">
+            <div>
+              <div class="stages" id="ladder"><div class="stg"><b>лестница</b>загружаю из map.json…</div></div>
+              <div class="live">
+                <div class="livebar"><span class="dot run"></span><span>OM-VIEW · живая карта проекта OMG</span><span class="m" id="liveMeta">выгрузка …</span><span class="sp"></span><a href="http://localhost:3000/#/om-map" target="_blank">открыть отдельно ↗</a></div>
+                <iframe src="http://localhost:3000/#/om-map?embed" title="OM-VIEW" loading="lazy"></iframe>
+              </div>
+            </div>
+            <div class="side2">
+              <div class="prog"><h4>Прогресс · <span id="msTitle" style="text-transform:none;letter-spacing:0;color:var(--ink2)">рубеж</span></h4>
+                <div class="kpi"><div><div class="v ok" id="kMerged">—</div><div class="l">задач влито</div></div><div><div class="v acc" id="kRemain">—</div><div class="l">до рубежа</div></div><div><div class="v" id="kRounds">—</div><div class="l">кругов ревью на задачу</div></div><div><div class="v bad" id="kReturn">—</div><div class="l">вердиктов «вернуть»</div></div></div>
+                <div class="bars" id="bars"></div>
+                <div style="font-size:11px;color:var(--ink3);margin-top:8px" id="delta">считаю дельту…</div>
+              </div>
+              <div class="prog"><h4>Влито по дням · 14 дней</h4><div class="spark" id="spark"></div><div style="font-size:11px;color:var(--ink3);margin-top:4px" id="sparkNote"></div></div>
+              <div class="prog"><h4>Расход карты OM</h4><div class="kpi" id="spendK"></div><div class="bars" id="spendBars"></div></div>
+              <div class="prog"><h4>В работе сейчас</h4><div id="inWork" style="font-size:12px;color:var(--ink2);line-height:1.7"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- РЕСЁРЧ -->
+        <div class="screen" id="s-res">
+          <div class="res">
+            <div>
+              <div class="rq">
+                <div class="rq-h"><span class="state run">Идёт</span><b>Как лидеры показывают очередь решений для человека</b><span class="chip">для стадии: Концепция (L0)</span></div>
+                <div class="rq-row"><span class="lb">Что нужно</span><span class="seg"><span>что это</span><span class="on">как делают другие</span><span>рынок</span><span>применить к нам</span></span></div>
+                <div class="rq-row"><span class="lb">Глубина</span><span class="seg"><span>быстрый взгляд · 3 источника</span><span class="on">обычно · до 8</span><span>глубоко · до 20</span></span><span class="muted">сейчас: 4 из 8 прочитано · следующий отчёт через 5 мин</span></div>
+                <div class="rq-row"><span class="lb">Источники</span><span class="chip">документация вендоров</span><span class="chip">статьи 2025–26</span><span class="chip">ваши заметки · 43</span><span class="chip" style="opacity:.6">+ файл / ссылка</span><span class="muted">пересказ без ссылки — не считается</span></div>
+                <div class="rq-row"><span class="lb">Бюджет</span><div class="b" style="flex:0 0 120px"><i class="ok" style="width:40%"></i></div><span class="muted">0,4 % из 1 % недели · счёт</span><span class="muted">·</span><span class="muted">результат → документ стадии, раздел «Что исследовано»</span></div>
+              </div>
+
+              <h2 class="s">Карточки <span class="cnt">3</span><span style="margin-left:auto"><span class="btn sm g">Сравнить</span> <span class="btn sm g">Свести ответы инструментов</span></span></h2>
+              <div class="rc ok">
+                <div class="rc-h"><b>Claude Code · фоновые агенты: три состояния</b><span class="state ok">Готово</span><span class="ver ok">подтверждено · 2 источника</span></div>
+                <div class="rc-g">
+                  <div><label>Что это</label>У фоновых агентов три слова: «нужен ввод», «работает», «готово»; список агентов группируется по этим словам.</div>
+                  <div><label>Как применить</label>Та же тройка для мест команды плюс возраст ожидания; группы в «Сейчас» вместо ленты.</div>
+                  <div><label>Польза нам</label>Снимает «ты здесь?» — каждая четвёртая ваша реплика.</div>
+                  <div><label>Достоверность</label><span class="src">docs.claude.com · agent view · 2026-03</span> <span class="src">блог Anthropic · 2026-05</span> · противоречий нет</div>
+                </div>
+                <div class="rc-s"><label>Коротко</label>Берём слова и группировку; добавляем возраст — у них его нет.</div>
+                <div class="rc-a"><span class="btn p sm">Применить к проекту → «Что исследовано»</span><span class="btn sm">Уточнить</span><span class="btn sm g">Отклонить</span><span class="muted" style="margin-left:auto">1 мин 40 с · 0,15 % · Haiku</span></div>
+              </div>
+              <div class="rc run">
+                <div class="rc-h"><b>Devin и Factory · очередь решений</b><span class="state run">Идёт · 6 мин</span><span class="ver">прочитано 4 из 8</span></div>
+                <div class="rc-g">
+                  <div><label>Что это</label>Devin принимает задачи из Slack/Jira и открывает PR; вопросы к человеку — в тред задачи. <span class="src">cognition.ai · 2026-02</span></div>
+                  <div><label>Как применить</label><span class="muted">пока нет — дочитывает Factory</span></div>
+                  <div><label>Польза нам</label><span class="muted">—</span></div>
+                  <div><label>Достоверность</label><span class="ver">1 утверждение подтверждено · 2 не проверены</span></div>
+                </div>
+                <div class="rc-s"><label>Уже найдено</label>Ни у кого нет возраста ожидания и последствий ответа — это наше.</div>
+                <div class="rc-a"><span class="btn sm g">■ Стоп</span><span class="btn sm g">Углубить до 20</span><span class="muted" style="margin-left:auto">следующий отчёт через 5 мин</span></div>
+              </div>
+              <div class="rc" style="opacity:.75">
+                <div class="rc-h"><b>Как показывать стоимость долгой работы</b><span class="state">В очереди</span><span class="ver">после текущей</span></div>
+              </div>
+
+              <h2 class="s">Сведение ответов из других инструментов <span class="cnt">Perplexity · NotebookLM · DeepSeek</span></h2>
+              <div class="cmp">
+                <div class="th"><span>Утверждение</span><span>Perplexity</span><span>NotebookLM</span><span>DeepSeek</span><span>Итог</span></div>
+                <div class="tr"><span>У Claude Code три состояния фоновых агентов</span><span class="y">✓ со ссылкой</span><span class="y">✓</span><span class="n">— не нашёл</span><span class="ver ok">подтверждено</span></div>
+                <div class="tr"><span>Devin показывает возраст ожидания решения</span><span class="n">✗ не упоминает</span><span class="n">✗</span><span class="w">«да», без ссылки</span><span class="ver bad">не подтверждено</span></div>
+                <div class="tr"><span>Factory группирует задачи по «чей ход»</span><span class="w">частично</span><span class="n">—</span><span class="y">✓ docs</span><span class="ver">проверить · 1 источник</span></div>
+              </div>
+              <div class="muted" style="font-size:11px;margin-top:6px">Вставьте ответы из других инструментов — харнесс разложит их по утверждениям и покажет, где они расходятся. Текст ответов не хранится вне проекта.</div>
+            </div>
+            <div class="side2">
+              <div class="prog"><h4>Это исследование</h4>
+                <div class="kpi"><div><div class="v ok">1</div><div class="l">карточка готова</div></div><div><div class="v" style="color:var(--run)">1</div><div class="l">идёт · 4 из 8</div></div><div><div class="v">1</div><div class="l">в очереди</div></div><div><div class="v">0,4 %</div><div class="l">из 1 % недели</div></div></div>
+                <div class="hint">Следующий отчёт через 5 мин. Можно уйти — результат ляжет в документ стадии и в «Сейчас».</div>
+              </div>
+              <div class="prog insp"><h4>Паспорт · ресёрч</h4>
+                <dl class="pass"><dt>Где</dt><dd>Табло агентов › Концепция (L0) › ресёрч</dd><dt>Что</dt><dd>3 вопроса; 1 готов, 1 идёт, 1 в очереди</dd><dt>Зачем</dt><dd>не изобретать словарь состояний с нуля</dd><dt>Когда</dt><dd>идёт 6 мин · обычно 10–15</dd><dt>Ожидаем</dt><dd>карточки из 5 полей, применимые к стадии</dd><dt>Успех</dt><dd>карточка принята и применена</dd><dt>Провал</dt><dd>простыня без ответа; пересказ без ссылки</dd><dt>Риски</dt><dd class="w">выдумывание → только со ссылкой и датой</dd></dl>
+              </div>
+              <div class="prog"><h4>Прошлые исследования · поиск по объекту</h4>
+                <div class="rl"><a href="#">DeepSeek Harness</a><span>29.09 · 5 карточек · применено 2</span></div>
+                <div class="rl"><a href="#">Hermes Bots / Trajectory</a><span>21.09 · 3 карточки</span></div>
+                <div class="rl"><a href="#">TypeSafe Jev</a><span>20.09 · 4 карточки · применено 1</span></div>
+                <div class="rl"><a href="#">Model router (видео)</a><span>04.10 · 1 карточка</span></div>
+                <div class="hint">Ищется по объекту и утверждению, а не по названию чата — «не могу найти нашу беседу» закрыто.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- КОМАНДА: СТАЯ -->
+        <div class="screen" id="s-team">
+          <div class="team">
+            <div>
+              <div class="swarm">
+                <div class="cv" data-w="900" data-h="470">
+                <svg viewBox="0 0 900 470" preserveAspectRatio="none">
+                  <path d="M250 120 C 320 120, 320 60, 380 60"/><path d="M250 120 C 320 120, 320 180, 380 180"/><path d="M250 120 C 320 120, 320 300, 380 300"/>
+                  <path d="M580 60 C 640 60, 640 120, 700 120"/><path class="hot" d="M700 150 C 640 150, 640 330, 580 330"/><path d="M580 180 C 640 180, 640 270, 700 270"/>
+                  <path d="M250 120 C 300 120, 300 400, 380 400"/>
+                </svg>
+                <div class="tools" style="position:absolute;right:10px;top:10px;display:flex;gap:4px"><span class="chip">стая</span><span class="chip" style="opacity:.6">таблица</span></div>
+                <div class="seat run" style="left:50px;top:84px"><span class="role o">оркестратор</span><b>Fable · Claude</b><div class="ln">подписка Max · усилие высокое</div><div class="st"><span class="state run">Ждёт прогон</span><span style="font:11px var(--mono);color:var(--ink3)">31 мин</span></div><div class="ln" style="margin-top:4px">сейчас: ждёт тестера по H1.5 · жив</div></div>
+                <div class="seat run" style="left:380px;top:24px"><span class="role w">воркер 1</span><b>Sonnet · Claude</b><div class="ln">подписка Max · правит сам</div><div class="st"><span class="state run">Идёт</span><span style="font:11px var(--mono);color:var(--ink3)">12 мин</span></div><div class="ln" style="margin-top:4px">сейчас: H1.5 · тесты · отчёт 20:15</div></div>
+                <div class="seat bad" style="left:380px;top:144px"><span class="role w">воркер 2</span><b>GPT-5.6 · Codex</b><div class="ln">подписка Plus · worktree</div><div class="st"><span class="state bad">Приостановлено</span><span style="font:11px var(--mono);color:var(--ink3)">8 мин</span></div><div class="ln" style="margin-top:4px">лимит до 19:58 · сам не продолжит</div></div>
+                <div class="seat" style="left:380px;top:264px"><span class="role s">ресёрчер</span><b>DeepSeek-V4 · API</b><div class="ln">ключ API · $0,02 сегодня</div><div class="st"><span class="state run">Идёт</span><span style="font:11px var(--mono);color:var(--ink3)">6 мин</span></div><div class="ln" style="margin-top:4px">сейчас: очередь решений у Devin · 4/8</div></div>
+                <div class="seat run" style="left:380px;top:364px"><span class="role s">тестер</span><b>spark · Codex</b><div class="ln">подписка Plus · только чтение</div><div class="st"><span class="state run">Прогон</span><span style="font:11px var(--mono);color:var(--ink3)">шаг 6/9</span></div></div>
+                <div class="seat need" style="left:700px;top:84px"><span class="role r">ревьюер</span><b>Opus · Claude</b><div class="ln">подписка Max · порог 9</div><div class="st"><span class="state need">Ждёт вас</span><span style="font:11px var(--mono);color:var(--accent)">40 мин</span></div><div class="ln" style="margin-top:4px">вопрос: три тестовых пути? → <b style="color:var(--accent);font-weight:500">решить</b></div></div>
+                <div class="seat" style="left:700px;top:234px"><span class="role s">хранитель</span><b>Kimi K2 · своё окно</b><div class="ln">только наблюдаем · данные из журнала</div><div class="st"><span class="state">Тихо 2 ч</span><span style="font:11px var(--mono);color:var(--ink3)">нет данных</span></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="side2">
+              <div class="roles"><h4>Роли и места</h4>
+                <div class="rr"><span>оркестратор</span><span class="sel">Claude · Fable <span class="m">Max · 61 %</span></span></div>
+                <div class="rr"><span>воркер 1</span><span class="sel">Claude · Sonnet <span class="m">Max</span></span></div>
+                <div class="rr"><span>воркер 2</span><span class="sel" style="border-color:rgba(224,101,95,.5)">Codex · GPT-5.6 <span class="m" style="color:var(--bad)">94 %</span></span></div>
+                <div class="rr"><span>ревьюер</span><span class="sel">Claude · Opus <span class="m">Max</span></span></div>
+                <div class="rr"><span>ресёрчер</span><span class="sel">DeepSeek · API <span class="m">$12,40</span></span></div>
+                <div class="rr"><span>тестер</span><span class="sel">Codex · spark <span class="m">Plus</span></span></div>
+                <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap"><span class="btn sm p" data-s="roles">Состав и роли</span><span class="btn sm" data-s="roles">+ место</span><span class="btn sm g">Стоп всем</span></div>
+                <div class="hint">У роли — права и папка; смена вендора или модели прав не меняет. Если у аккаунта кончается лимит — предложит запасной: «воркер 2 → Sonnet».</div>
+              </div>
+              <div class="prog"><h4>Кто кого ждёт</h4>
+                <div class="bars"><div><span class="lb">вас</span><div class="b"><i class="ok" style="width:100%;background:var(--accent)"></i></div><span>ревьюер · 40 мин</span></div><div><span class="lb">лимит</span><div class="b"><i class="bad" style="width:100%"></i></div><span>воркер 2 · до 19:58</span></div><div><span class="lb">прогон</span><div class="b"><i class="run" style="width:66%"></i></div><span>оркестратор · 6/9</span></div></div>
+                <div class="hint">Самый дорогой простой сейчас — ваш ответ ревьюеру: за ним слияние H1.5 и рубеж.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- РОЛИ: СОСТАВ КОМАНДЫ -->
+        <div class="screen" id="s-roles">
+          <div class="rl2">
+            <div>
+              <div class="rt">
+                <div class="rt-h"><b>Состав команды · OMG</b><span class="seg"><span>шаблон HARNESS · 7 мест</span><span class="on">текущая OMG · 6 мест</span><span>свой</span></span><span class="muted">изменения не действуют, пока состав не подписан</span></div>
+                <div class="warn"><b>⚠ Два места на Codex Plus при 94 %</b> — воркер 2 и тестер встанут вместе через ~15 ч. Предложено: воркер 2 → Claude Sonnet (запасной), тестер — оставить. <span class="btn sm">Принять предложение</span></div>
+              </div>
+              <div class="rtab">
+                <div class="th"><span>Роль</span><span>Аккаунт</span><span>Модель · усилие</span><span>Права</span><span>Где правит</span><span>Читает</span><span>Запасной</span><span>Доля</span></div>
+                <div class="tr"><span class="role o">оркестратор<small>ведёт процесс: задачи, вопросы, стоп, решения; сливает вехи</small></span><span><i class="acc">Claude Max</i><small>61 %</small></span><span>Fable<small>высокое</small></span><span class="seg sm"><span>всё</span><span>стоп</span><span class="on">сообщать</span></span><span>везде</span><span>всех</span><span>Opus</span><span>8,4 %<small>нед.</small></span></div>
+                <div class="tr"><span class="role w">воркер 1<small>код по заданиям; сдаёт ревьюеру и тестеру</small></span><span><i class="acc">Claude Max</i><small>61 %</small></span><span>Sonnet<small>среднее</small></span><span class="seg sm"><span>всё</span><span class="on">стоп</span><span>сообщать</span></span><span>своя рабочая копия</span><span>никого</span><span>—</span><span>0,6 %<small>день</small></span></div>
+                <div class="tr bad"><span class="role w">воркер 2<small>код по заданиям</small></span><span><i class="acc bad">Codex Plus</i><small style="color:var(--bad)">94 %</small></span><span>GPT-5.6<small>среднее</small></span><span class="seg sm"><span>всё</span><span class="on">стоп</span><span>сообщать</span></span><span>своя рабочая копия</span><span>никого</span><span class="hl">Sonnet ⌄</span><span>—</span></div>
+                <div class="tr"><span class="role r">ревьюер<small>вердикт с баллом и кругом; порог 9, до 3 кругов</small></span><span><i class="acc">Claude Max</i><small>61 %</small></span><span>Opus<small>высокое</small></span><span class="seg sm"><span>всё</span><span>стоп</span><span class="on">только чтение</span></span><span>нет</span><span>воркеров</span><span>Kimi K2</span><span>0,9 %<small>день</small></span></div>
+                <div class="tr"><span class="role s">ресёрчер<small>факты с источниками, интернет</small></span><span><i class="acc">DeepSeek API</i><small>$12,40</small></span><span>V4<small>среднее</small></span><span class="seg sm"><span>всё</span><span>стоп</span><span class="on">чтение + сеть</span></span><span>docs/research</span><span>никого</span><span>Haiku</span><span>$0,18<small>день</small></span></div>
+                <div class="tr"><span class="role s">тестер<small>независимые прогоны и отчёты</small></span><span><i class="acc">Codex Plus</i><small>94 %</small></span><span>spark<small>низкое</small></span><span class="seg sm"><span>всё</span><span>стоп</span><span class="on">чтение + команды</span></span><span>tests</span><span>воркеров</span><span>Sonnet</span><span>0,3 %<small>день</small></span></div>
+                <div class="tr add"><span>＋ добавить место</span><span class="muted">из каталога справа: архитектор, хранитель, ассистент, наблюдатель…</span></div>
+              </div>
+              <div class="rt" style="margin-top:12px">
+                <div class="rt-h"><b>Как они связаны</b><span class="muted">политика связи · из шаблона, правится</span></div>
+                <div class="pol">
+                  <div><span class="role o">оркестратор</span> → всем: задача · вопрос · стоп · решение</div>
+                  <div><span class="role w">воркер</span> → ревьюеру и тестеру: запрос на ревью (с номером сдачи)</div>
+                  <div><span class="role r">ревьюер</span> → воркеру: вердикт <b>только в ответ</b> на запрос; оркестратору — статус круга</div>
+                  <div><span class="role s">ресёрчер</span> → оркестратору: карточки; задач не ставит</div>
+                  <div><b>Вам</b> — только: запрос решения · стоп-случай · эскалация после 3 кругов · «готово к проверке»</div>
+                </div>
+              </div>
+              <div class="sign">
+                <div><b>Смета на стадию L1</b><br><span class="muted">≈ 4–6 % недели Claude · ≈ 2 % Codex · ≈ $1 DeepSeek — оценка по трём прошлым стадиям</span></div>
+                <div><b>Что вы увидите</b><br><span class="muted">стая в «Команде», слова состояния у мест, вопросы — в «Сейчас» с возрастом</span></div>
+                <div style="margin-left:auto;display:flex;gap:8px;align-items:center"><span class="btn g">Сохранить как шаблон</span><span class="btn p">Подписать состав</span></div>
+              </div>
+            </div>
+            <div class="side2">
+              <div class="prog"><h4>Каталог ролей</h4>
+                <div class="cat"><b>архитектор</b><span>документы решений, ответы на вопросы; задач не ставит · чтение + команды · правит docs</span><span class="btn sm g">＋</span></div>
+                <div class="cat"><b>хранитель</b><span>проверяет каждую стадию и коммит до ревьюера · только чтение</span><span class="btn sm g">＋</span></div>
+                <div class="cat"><b>ассистент</b><span>говорит с вами по-человечески, читает всех, ничего не подтверждает · чтение</span><span class="btn sm g">＋</span></div>
+                <div class="cat"><b>наблюдатель</b><span>пересказ канала без модели — проекция, не агент · бесплатно</span><span class="btn sm g">＋</span></div>
+                <div class="cat"><b>своя роль</b><span>инструкция файлом, права, папка, маршруты</span><span class="btn sm g">＋</span></div>
+                <div class="hint">Права идут за ролью, не за моделью: сменили вендора — права те же. Два места с одной ролью равноправны.</div>
+              </div>
+              <div class="prog"><h4>Аккаунты под рукой</h4>
+                <div class="bars"><div><span class="lb">Claude Max</span><div class="b"><i style="width:61%;background:var(--accent)"></i></div><span>61 % · 3 места</span></div><div><span class="lb">Codex Plus</span><div class="b"><i class="bad" style="width:94%"></i></div><span>94 % · 2 места</span></div><div><span class="lb">DeepSeek API</span><div class="b"><i class="ok" style="width:38%"></i></div><span>$12,40 · 1</span></div><div><span class="lb">Alibaba</span><div class="b"><i class="ok" style="width:62%"></i></div><span>38 M · свободен</span></div></div>
+                <div class="hint">Назначить свободный аккаунт — перетащите на роль или выберите в столбце «Аккаунт».</div>
+              </div>
+              <div class="prog insp"><h4>Паспорт · состав</h4>
+                <dl class="pass"><dt>Где</dt><dd>OMG › Команда › состав</dd><dt>Что</dt><dd>6 мест, 2 аккаунта на лимите</dd><dt>Зачем</dt><dd>закрыть L1 без простоев</dd><dt>Когда</dt><dd>действует после подписи</dd><dt>Ожидаем</dt><dd>смета ≈ 4–6 % недели</dd><dt>Риски</dt><dd class="w">Codex встанет через ~15 ч</dd></dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- РЕШЕНИЯ -->
+        <div class="screen" id="s-dec">
+          <div class="dc">
+            <div>
+              <div class="ftabs"><span class="on">Открытые <b>2</b></span><span>Отвеченные <b>14</b> за неделю</span><span>Отложенные <b>1</b></span><span>Снятые <b>3</b></span><span class="acc2">От вашего имени <b>4</b> · ночь 03.10</span></div>
+              <h2 class="s">Открытые <span class="cnt">старейшее 40 мин</span></h2>
+              <div class="card need"><div class="who"><span class="kind">развилка</span><span>Ревьюер · Opus</span><span>·</span><span>OMG › L1 › H1.5 › ревью, круг 2</span><span class="age">40 мин</span></div>
+                <div class="q">Добавлять три тестовых пути старого правила?</div>
+                <div class="why"><b>Да, все три</b> — ещё ~1 ч воркера, риск по сроку · <b>Только один</b> — быстрее, дыра в проверке адресов. Рекомендация ревьюера: все три (основание: прошлые возвраты того же класса — 3).</div>
+                <span class="btn p">Да, все три</span> <span class="btn">Только один</span> <span class="btn g">Отложить до 20:15</span> <span class="btn g">Объясни</span>
+                <div class="hint">Если не ответить: ревьюер спит, H1.5 не сольётся, рубеж сдвинется. Ответ запишется как <b>ваше решение · кнопкой</b>.</div></div>
+              <div class="card need"><div class="who"><span class="kind">стоп-случай</span><span>Исполнитель · Codex</span><span>·</span><span>OMG › L1 › D8.4e</span><span class="age">8 мин</span></div>
+                <div class="q">Продолжить D8.4e на Sonnet вместо Codex (лимит до 19:58)?</div>
+                <div class="why">Смена модели у места — стоп-случай по вашим правилам: заместитель на ночь не решает. <b>Да</b> — тот же договор, другая модель. <b>Ждать</b> — 46 мин простоя.</div>
+                <span class="btn p">Продолжить на Sonnet</span> <span class="btn">Ждать 19:58</span></div>
+
+              <h2 class="s">От вашего имени · правила ночи 03.10 <span class="cnt">4 · подтвердите или оспорьте</span></h2>
+              <div class="drow"><span class="kind">развилка</span><span class="w">D8.4d · круг 4 · вариант А</span><span class="src2">заместитель Fable · по правилу «класс дефекта повторился → вариант ревьюера» · 03:12</span><span class="st ok">влита 05:41</span><span class="acts"><span class="btn sm g">Подтвердить</span><span class="btn sm g">Оспорить</span></span></div>
+              <div class="drow"><span class="kind">подпись</span><span class="w">E2.2 · принять после 2 круга</span><span class="src2">заместитель · «вердикт ≥ 9 и прогон зелёный» · 04:30</span><span class="st ok">принята</span><span class="acts"><span class="btn sm g">Подтвердить</span><span class="btn sm g">Оспорить</span></span></div>
+              <div class="drow bad"><span class="kind">вывод</span><span class="w">«граф не обязателен» · снято требование</span><span class="src2"><b style="color:var(--bad)">источник не найден</b> · оркестратор сослался на вас, вашей реплики нет</span><span class="st bad">приписано?</span><span class="acts"><span class="btn sm">Это моё</span><span class="btn sm g">Не моё — вернуть</span></span></div>
+
+              <h2 class="s">Отвеченные · неделя <span class="cnt">14 · медиана ответа 48 с</span></h2>
+              <div class="drow"><span class="kind">шлюз</span><span class="w">Концепция (L0) → Блоки (L1)</span><span class="src2"><b>вы</b> · кнопкой · 21:40 · 30.09</span><span class="st ok">перешли</span><span class="acts"><a href="#">след →</a></span></div>
+              <div class="drow"><span class="kind">стоп-случай</span><span class="w">push в om/module · 3 коммита</span><span class="src2"><b>вы</b> · текстом «да, лей» · 23:14 · 01.10</span><span class="st ok">выполнено</span><span class="acts"><a href="#">след →</a></span></div>
+              <div class="drow"><span class="kind">развилка</span><span class="w">Q2 · за рубеж, потом типами</span><span class="src2"><b>вы</b> · кнопкой · 18:25 · 29.09 · с рекомендацией ревьюера</span><span class="st">отложено за рубеж</span><span class="acts"><a href="#">след →</a></span></div>
+              <div class="muted" style="font-size:11px;margin-top:6px">Каждое решение хранит дословный след: кто, когда, каким каналом (кнопка / текст / заместитель по правилу). «Решение владельца» без вашей реплики помечается «приписано?».</div>
+            </div>
+            <div class="side2">
+              <div class="prog"><h4>Решения · неделя</h4>
+                <div class="kpi"><div><div class="v acc">2</div><div class="l">открытых · старейшее 40 мин</div></div><div><div class="v">48 с</div><div class="l">медиана вашего ответа</div></div><div><div class="v ok">0</div><div class="l">закрыто пустыми / по тайм-ауту</div></div><div><div class="v bad">1</div><div class="l">приписано? — проверить</div></div></div>
+                <div class="bars"><div><span class="lb">вы · кнопкой</span><div class="b"><i class="ok" style="width:64%"></i></div><span>9</span></div><div><span class="lb">вы · текстом</span><div class="b"><i class="ok" style="width:21%"></i></div><span>3</span></div><div><span class="lb">заместитель</span><div class="b"><i class="run" style="width:28%"></i></div><span>4</span></div><div><span class="lb">без следа</span><div class="b"><i class="bad" style="width:7%"></i></div><span>1</span></div></div>
+                <div class="hint">Раньше: 6 из 22 карточек закрывались пустыми или по тайм-ауту; 58 % «решений владельца» — кнопка на текст оркестратора. Теперь вопрос — объект: не истекает, помнит, кто и как ответил.</div>
+              </div>
+              <div class="prog insp"><h4>Паспорт · решения</h4>
+                <dl class="pass"><dt>Где</dt><dd>все проекты · 2 открытых в OMG</dd><dt>Что</dt><dd>развилка и стоп-случай ждут вас</dd><dt>Зачем</dt><dd>без них H1.5 и D8.4e стоят</dd><dt>Когда</dt><dd>40 мин и 8 мин</dd><dt>Ожидаем</dt><dd>два ответа → слияние и продолжение</dd><dt>Риски</dt><dd class="w">рубеж сдвинется на день</dd></dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ДАТЧИКИ -->
+        <div class="screen" id="s-sens">
+          <div class="dc">
+            <div>
+              <div class="hb"><span class="dot ok"></span><b>Харнесс жив</b><span>· процесс 6 д 3 ч · база обновлена 4 мин назад · выгрузка карты 04:44 · канал: последняя запись 2 мин назад, очередь 0 · Telegram не подключён</span></div>
+              <h2 class="s">Тип тишины у мест сейчас <span class="cnt">одна причина на место</span></h2>
+              <div class="sil"><span class="state run">Идёт</span><b>воркер 1</b><span>работает · 12 мин · следующий отчёт 20:15</span></div>
+              <div class="sil"><span class="state">Ждёт прогон</span><b>оркестратор</b><span>молчит по решению: ждёт тестера · 31 мин · жив (пульс 2 мин назад)</span></div>
+              <div class="sil need"><span class="state need">Ждёт вас</span><b>ревьюер</b><span>не может продолжить без вашего ответа · 40 мин</span></div>
+              <div class="sil bad"><span class="state bad">Лимит</span><b>воркер 2</b><span>не может работать · Codex до 19:58 · сам не продолжит · зона: провайдер</span></div>
+              <div class="sil"><span class="state">Нет сигнала</span><b>хранитель Kimi</b><span>окно вендора, журнал не менялся 2 ч · жив ли — неизвестно</span></div>
+
+              <h2 class="s">Вахты и сторожа <span class="cnt">5 вахт · 3 сторожа</span><span style="margin-left:auto"><span class="btn sm g">＋ сторож</span><span class="btn sm g">＋ вахта</span></span></h2>
+              <div class="stab">
+                <div class="th"><span>Датчик</span><span>Тип</span><span>Что сторожит</span><span>Интервал</span><span>Последнее</span><span>Состояние</span><span>Цена / день</span><span></span></div>
+                <div class="tr"><span><b>Ревью пришло</b></span><span class="t2">сторож</span><span>канал: verdict к моим задачам → будит оркестратора</span><span>по событию</span><span>19:12 · вердикт №2628</span><span class="state ok">жив</span><span>0</span><span><a href="#">пробное</a></span></div>
+                <div class="tr"><span><b>Пульс оркестратора</b></span><span class="t2">сторож</span><span>нет хода > 10 мин при открытых задачах</span><span>10 мин</span><span>2 мин назад</span><span class="state ok">жив</span><span>0</span><span><a href="#">журнал</a></span></div>
+                <div class="tr"><span><b>Живость мест</b></span><span class="t2">сторож</span><span>процесс каждого места; смена слова → «нет сигнала»</span><span>15 с</span><span>сейчас</span><span class="state ok">жив</span><span>0</span><span><a href="#">журнал</a></span></div>
+                <div class="tr"><span><b>Лимит-радар</b></span><span class="t2">сторож</span><span>окна Claude/Codex, прогноз «кончится раньше сброса»</span><span>3 мин</span><span>1 мин назад</span><span class="state ok">жив</span><span>0</span><span><a href="#">журнал</a></span></div>
+                <div class="tr"><span><b>Прогон завершён</b></span><span class="t2">вахта · Sonnet</span><span>backend-runs → пересказ итога оркестратору</span><span>по событию</span><span>19:40 · шаг 5/9</span><span class="state ok">жива</span><span>0,1 %</span><span><a href="#">пробное</a></span></div>
+                <div class="tr"><span><b>Дайджест к возвращению</b></span><span class="t2">вахта · Sonnet</span><span>окно 06–13 → один абзац «пока вас не было»</span><span>13:00</span><span>сегодня 13:00</span><span class="state ok">жива</span><span>0,05 %</span><span><a href="#">пробное</a></span></div>
+                <div class="tr"><span><b>Хук Stop · Devin</b></span><span class="t2">вахта</span><span>после хода Devin → запись в канал</span><span>по событию</span><span>вчера 09:10</span><span class="state">спит · задач нет</span><span>0</span><span><a href="#">журнал</a></span></div>
+                <div class="tr off"><span><b>Наблюдатель /loop</b></span><span class="t2">вахта · Opus</span><span>пересказ канала раз в 5 мин</span><span>5 мин</span><span>остановлен 01.10</span><span class="state">заменён проекцией</span><span><s>$3,1</s> → 0</span><span><a href="#">включить</a></span></div>
+              </div>
+              <div class="muted" style="font-size:11px;margin-top:6px">Сторож — скрипт без модели, бесплатно; вахта — будит модель и стоит денег. Правило: сначала сторож, вахта — только где нужен пересказ. Пульс и keepalive никогда не будят вас.</div>
+
+              <h2 class="s">Доставка <span class="cnt">кому что доходит</span></h2>
+              <div class="stab">
+                <div class="th"><span>Канал</span><span>Состояние</span><span>Последнее</span><span>Недоставлено</span><span></span></div>
+                <div class="tr d5"><span>Канал команды (channel.ndjson)</span><span class="state ok">жив</span><span>2 мин назад · №3091</span><span>0</span><span><a href="#">открыть</a></span></div>
+                <div class="tr d5"><span>Системные уведомления macOS</span><span class="state ok">включены</span><span>19:12 · «ждёт вас»</span><span>—</span><span><a href="#">пробное</a></span></div>
+                <div class="tr d5"><span>Меню-бар «◆ 2 · 61 %»</span><span class="state ok">жив</span><span>сейчас</span><span>—</span><span></span></div>
+                <div class="tr d5"><span>Telegram</span><span class="state">не подключён</span><span>—</span><span>—</span><span><a href="#">подключить</a></span></div>
+              </div>
+            </div>
+            <div class="side2">
+              <div class="prog"><h4>Цена наблюдения · день</h4>
+                <div class="kpi"><div><div class="v ok">0,15 %</div><div class="l">недели · 2 вахты</div></div><div><div class="v">0</div><div class="l">сторожа · бесплатно</div></div></div>
+                <div class="bars"><div><span class="lb">было</span><div class="b"><i class="bad" style="width:100%"></i></div><span>$3,1/день</span></div><div><span class="lb">стало</span><div class="b"><i class="ok" style="width:5%"></i></div><span>≈ $0,15</span></div></div>
+                <div class="hint">Наблюдатель на модели стоил $425 за 137 ч — дороже воркера. Проекция без модели даёт те же слова состояния бесплатно.</div>
+              </div>
+              <div class="prog"><h4>Сбои за 24 ч</h4>
+                <div class="sil bad" style="margin:0 0 6px"><span class="state bad">Лимит</span><b>Codex</b><span>06:12 · стоял 3 ч · провайдер</span></div>
+                <div class="sil" style="margin:0 0 6px"><span class="state">Сжатие</span><b>воркер 1</b><span>05:20 · контекст сжат · восстановлен по памятке · не проверено</span></div>
+                <div class="hint">Один сбой не должен гасить и работу, и датчик: сторожа живут отдельно от мест.</div>
+              </div>
+              <div class="prog insp"><h4>Паспорт · датчики</h4>
+                <dl class="pass"><dt>Где</dt><dd>все проекты</dd><dt>Что</dt><dd>5 вахт, 3 сторожа, 4 канала</dd><dt>Зачем</dt><dd>тишина — с именем и сроком</dd><dt>Когда</dt><dd>последняя проверка: сейчас</dd><dt>Риски</dt><dd class="w">Kimi — нет сигнала 2 ч</dd></dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- АРТЕФАКТЫ -->
+        <div class="screen" id="s-art">
+          <div class="dc">
+            <div>
+              <div class="ftabs"><span class="on">Все <b>47</b></span><span>Документы стадий <b>6</b></span><span>Сдачи кода <b>23</b></span><span>Отчёты проверок <b>9</b></span><span>Карточки ресёрча <b>5</b></span><span>Макеты и медиа <b>3</b></span><span>Для внешних <b>1</b></span><span style="margin-left:auto;color:var(--ink3)">поиск по артефактам ⌘F</span></div>
+
+              <h2 class="s">Готово к проверке <span class="cnt">3 · закрепите после проверки</span></h2>
+              <div class="art ok">
+                <div class="art-h"><span class="kind">сдача кода</span><b>E2.2 · отказы по таблице видов строк</b><span class="state ok">Готово к проверке</span><span class="muted">v3 · 2 версии назад возврат</span></div>
+                <div class="art-g">
+                  <div><label>Где лежит</label><span class="path2">om/module · рабочая копия claude-fable-e22 · снимок 64ec135</span></div>
+                  <div><label>Происхождение</label>воркер Fable · задание №2098 · на базе 0382bd9 · 29.09 04:30</div>
+                  <div><label>Доказательство</label><span class="src">3206 / 3206 тестов · прогон 19:40</span> <span class="src">отчёт ревьюера · круг 2 · 9/10</span></div>
+                  <div><label>Наружу</label><span class="ok-t">можно</span> · секретов нет · личного нет</div>
+                </div>
+                <div class="rc-a"><span class="btn p sm">Закрепить → влить в om/module</span><span class="btn sm">Открыть дифф</span><span class="btn sm g">Вернуть</span><span class="muted" style="margin-left:auto">после «закрепить» — слово «Пройдено»</span></div>
+              </div>
+              <div class="art">
+                <div class="art-h"><span class="kind">документ стадии</span><b>Блоки (L1) · документ стадии</b><span class="state ok">Готово к проверке</span><span class="muted">4 из 6 разделов проверены</span></div>
+                <div class="art-g">
+                  <div><label>Где лежит</label><span class="path2">OMG/PREPARATIONS/OM-DESIGN/stages/L1.md</span></div>
+                  <div><label>Происхождение</label>оркестратор · из дискавери и концепции · ваша подпись 21:40 · 30.09</div>
+                  <div><label>Доказательство</label><span class="src">ревьюер · 8,5/10 · не хватает рисков по зонам</span></div>
+                  <div><label>Наружу</label><span class="w2">нет</span> · содержит пути к вашим папкам</div>
+                </div>
+                <div class="rc-a"><span class="btn sm">Открыть</span><span class="btn sm g">Доделать риски</span><span class="btn sm g">История · 7 версий</span></div>
+              </div>
+              <div class="art">
+                <div class="art-h"><span class="kind">макет</span><b>Harness · эскиз v3 (карта + настройки)</b><span class="state ok">Готово к проверке</span><span class="muted">живая ссылка</span></div>
+                <div class="art-g">
+                  <div><label>Где лежит</label><span class="path2">~/REPORTS/workbench-design/sketches/harness.html</span> · <a href="#">открыть живьём ↗</a></div>
+                  <div><label>Происхождение</label>воркер карты (Fable) · по вашим оценкам 7 → 8 → 9 · 04.10</div>
+                  <div><label>Доказательство</label><span class="src">снимки экранов · 9</span> <span class="src">ваша оценка 9/10</span></div>
+                  <div><label>Наружу</label><span class="ok-t">можно</span> · проверить: имена сессий</div>
+                </div>
+                <div class="rc-a"><span class="btn p sm">Закрепить версию</span><span class="btn sm">Сравнить с v2</span><span class="btn sm g">Поделиться → витрина</span></div>
+              </div>
+
+              <h2 class="s">Недавние <span class="cnt">проверенные и закреплённые</span></h2>
+              <div class="arow"><span class="kind">сдача кода</span><span class="w">D8.4d · допуск в M + проекция с тремя исходами</span><span class="src2">воркер Fable · №2141 · 30.09 02:14</span><span class="st ok">Закреплено · 479b307</span><span class="acts"><a href="#">дифф</a><a href="#">отчёт</a></span></div>
+              <div class="arow"><span class="kind">отчёт проверки</span><span class="w">T48 · ревью, круг 2 · принять</span><span class="src2">ревьюер Sonnet · №2628 · 02.10</span><span class="st ok">Проверено</span><span class="acts"><a href="#">открыть</a></span></div>
+              <div class="arow"><span class="kind">карточка ресёрча</span><span class="w">Claude Code · три состояния фоновых агентов</span><span class="src2">ресёрчер · 2 источника · 04.10</span><span class="st ok">Применено → L1 «Что исследовано»</span><span class="acts"><a href="#">открыть</a></span></div>
+              <div class="arow"><span class="kind">медиа</span><span class="w">Рендеры дома · 4 файла</span><span class="src2">Antigravity · заказ клиента · 24.09</span><span class="st bad">лежит в чужой папке · 3 места</span><span class="acts"><a href="#">собрать в проект</a></span></div>
+              <div class="arow"><span class="kind">для внешних</span><span class="w">Витрина проекта · «где проект, что сделано, что дальше»</span><span class="src2">ассистент · для подписчиков · обновляется с рубежом</span><span class="st">устарела · рубеж закрыт 30.09</span><span class="acts"><a href="#">обновить</a><a href="#">проверить на секреты</a></span></div>
+              <div class="arow"><span class="kind">документ стадии</span><span class="w">Концепция (L0)</span><span class="src2">оркестратор · ваша подпись · 21.09</span><span class="st ok">Пройдено</span><span class="acts"><a href="#">открыть</a></span></div>
+            </div>
+            <div class="side2">
+              <div class="prog"><h4>Артефакты · OMG</h4>
+                <div class="kpi"><div><div class="v acc">3</div><div class="l">готово к проверке</div></div><div><div class="v ok">31</div><div class="l">закреплено</div></div><div><div class="v bad">2</div><div class="l">не там, где должны</div></div><div><div class="v">1</div><div class="l">для внешних · устарела</div></div></div>
+                <div class="bars"><div><span class="lb">черновик</span><div class="b"><i style="width:15%"></i></div><span>7</span></div><div><span class="lb">к проверке</span><div class="b"><i style="width:6%;background:var(--accent)"></i></div><span>3</span></div><div><span class="lb">проверено</span><div class="b"><i class="run" style="width:13%"></i></div><span>6</span></div><div><span class="lb">закреплено</span><div class="b"><i class="ok" style="width:66%"></i></div><span>31</span></div></div>
+                <div class="hint">«Закрепить» — сразу после доказательства: коммит, версия, пин. 50 % вашей радости — «работает и я это вижу», и 12 из 54 раз следом — «закрепи».</div>
+              </div>
+              <div class="prog"><h4>Витрина для внешних</h4>
+                <div class="sil" style="margin:0 0 6px"><span class="state">Устарела</span><b>страница проекта</b><span>последнее обновление 28.09 · рубеж закрыт 30.09</span></div>
+                <div class="hint">Что внутри: где проект · что сделано · что дальше · без жаргона. Перед публикацией — проход на секреты и личное (последний: чисто). Ссылка только для чтения, модель не будит.</div>
+                <span class="btn sm">Обновить и проверить</span>
+              </div>
+              <div class="prog insp"><h4>Паспорт · артефакты</h4>
+                <dl class="pass"><dt>Где</dt><dd>OMG · 47 артефактов</dd><dt>Что</dt><dd>3 ждут вашей проверки</dd><dt>Зачем</dt><dd>«готово» видно, а не рассказано</dd><dt>Когда</dt><dd>последний: сегодня 04:50</dd><dt>Риски</dt><dd class="w">4 медиафайла в чужих папках</dd></dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ПАМЯТЬ -->
+        <div class="screen" id="s-mem">
+          <div class="dc">
+            <div>
+              <div class="ftabs"><span class="on">Везде <b>24</b></span><span>Проект OMG <b>58</b></span><span>Этот разговор <b>8</b></span><span>Комнаты <b>0</b> · без памяти</span><span class="acc2">Конфликты <b>2</b></span><span style="margin-left:auto;color:var(--ink3)">поиск по памяти ⌘F</span></div>
+              <div class="hb"><span class="dot ok"></span><b>Что агенты знают сейчас</b><span>· оркестратор получает 24 правила + 31 факт о проекте + 5 памяток (≈ 6,1 K токенов на старте хода) · <a href="#" style="color:var(--accent);text-decoration:none">показать, как видит оркестратор</a></span></div>
+
+              <h2 class="s">Правила · как работать <span class="cnt">24 везде · 9 в проекте</span><span style="margin-left:auto"><span class="btn sm g">＋ правило</span></span></h2>
+              <div class="mrow"><span class="mt">Отвечать по-русски, без жаргона; машинное имя — в скобках в конце</span><span class="sc">везде</span><span class="src2"><b>вы</b> · 29.09</span><span class="st ok">действует</span><span class="acts"><a href="#">править</a><a href="#">выкл</a></span></div>
+              <div class="mrow"><span class="mt">«Готово» — только «готово к проверке», с доказательством; «пройдено» ставит проверка</span><span class="sc">везде</span><span class="src2"><b>вы</b> · 30.09</span><span class="st ok">действует</span><span class="acts"><a href="#">править</a><a href="#">выкл</a></span></div>
+              <div class="mrow"><span class="mt">Чтение и проверка — Sonnet; придумывать — Opus; Fable беречь</span><span class="sc">проект OMG</span><span class="src2"><b>вы</b> · 01.10 · текстом</span><span class="st ok">действует</span><span class="acts"><a href="#">править</a><a href="#">везде</a></span></div>
+              <div class="mrow bad"><span class="mt">Никаких агентов без названной цены и вашего «да»</span><span class="sc">везде</span><span class="src2"><b>вы</b> · 01.10</span><span class="st bad">противоречит</span><span class="acts"><a href="#">разрешить</a></span></div>
+              <div class="mrow bad" style="margin-top:-4px"><span class="mt" style="padding-left:14px;color:var(--ink2)">↳ «Можешь запускать столько агентов, сколько нужно, экономно и с умом»</span><span class="sc">везде</span><span class="src2"><b>вы</b> · 04.10 · новее</span><span class="st">предложено: новое заменяет старое</span><span class="acts"><a href="#">принять</a><a href="#">оставить оба</a></span></div>
+              <div class="mrow"><span class="mt">Не трогать src/ui/test; ничего не ставить в ~/OMG; базу — только копией в режиме чтения</span><span class="sc">проект OMG</span><span class="src2">оркестратор · 29.09 · задание №2038</span><span class="st">после перезапуска</span><span class="acts"><a href="#">править</a><a href="#">выкл</a></span></div>
+
+              <h2 class="s">Факты · о вас и о проекте <span class="cnt">61</span></h2>
+              <div class="mrow"><span class="mt">Единица расхода для вас — процент недели, не токены</span><span class="sc">везде</span><span class="src2">вывод из журналов · 30.09 · 3 свидетельства</span><span class="st ok">действует</span><span class="acts"><a href="#">источники</a></span></div>
+              <div class="mrow"><span class="mt">Рубеж OMG закрыт 30.09 19:02 · om/module fb51a59 · дальше — живой проход «автономное знание»</span><span class="sc">проект OMG</span><span class="src2">оркестратор · 30.09 · подтверждено git</span><span class="st ok">действует</span><span class="acts"><a href="#">обновить</a></span></div>
+              <div class="mrow"><span class="mt">Ночь — рабочее время; окно отсутствия 06–13 МСК</span><span class="sc">везде</span><span class="src2">вывод из журналов · 4 среза</span><span class="st">проверить с вами</span><span class="acts"><a href="#">да</a><a href="#">нет</a></span></div>
+              <div class="mrow"><span class="mt">Эскиз Harness: оценка 9/10 · просили карту как в OM-VIEW, настройки, ресёрч, роли, датчики, решения, память</span><span class="sc">этот разговор</span><span class="src2">этот разговор · 04.10</span><span class="st ok">действует</span><span class="acts"><a href="#">в проект</a></span></div>
+
+              <h2 class="s">Памятки восстановления <span class="cnt">5 · вместо RESTORE-промптов</span></h2>
+              <div class="mrow"><span class="mt">Состояние после перезагрузки 30.09 19:35: рубеж закрыт, в работе Kimi PREFLIGHT и Devin FLAKY, лимит 98 %</span><span class="sc">проект OMG</span><span class="src2">оркестратор · 30.09 · файл отчёта</span><span class="st">устарело · 4 дня</span><span class="acts"><a href="#">обновить</a><a href="#">в архив</a></span></div>
+              <div class="mrow"><span class="mt">Как снять копию базы без остановки: Python sqlite3.backup в режиме чтения; CLI .backup отказывает</span><span class="sc">проект OMG</span><span class="src2">этот разговор · 04.10 · проверено</span><span class="st ok">действует</span><span class="acts"><a href="#">в правила</a></span></div>
+
+              <h2 class="s">Перенести из других харнессов <span class="cnt">правила в N копиях → одна память</span></h2>
+              <div class="imp">
+                <div class="th"><span>Источник</span><span>Найдено</span><span>Совпало</span><span>Новое</span><span>Противоречит</span><span></span></div>
+                <div class="tr"><span>Claude Code · ~/CLAUDE.md, memory/*.md</span><span>117</span><span class="ok-t">88</span><span class="y">21</span><span class="w2">8</span><span><span class="btn sm">Разобрать</span></span></div>
+                <div class="tr"><span>Codex · AGENTS.md, config.toml, ~/.agents/skills</span><span>43</span><span class="ok-t">30</span><span class="y">9</span><span class="w2">4</span><span><span class="btn sm">Разобрать</span></span></div>
+                <div class="tr"><span>Kimi · Hermes · memories</span><span>26</span><span class="ok-t">12</span><span class="y">14</span><span class="w2">0</span><span><span class="btn sm">Разобрать</span></span></div>
+                <div class="tr warn2"><span colspan="6">⚠ В ~/CLAUDE.md и памяти Hermes найдены ключи и пароли — в память не переносятся; предложено вынести в «Провайдеры и ключи» и удалить из файлов. <span class="btn sm">Показать 5 мест</span></span></div>
+              </div>
+            </div>
+            <div class="side2">
+              <div class="prog"><h4>Память · сводка</h4>
+                <div class="kpi"><div><div class="v">90</div><div class="l">записей · 24 везде</div></div><div><div class="v bad">2</div><div class="l">конфликта</div></div><div><div class="v">6,1 K</div><div class="l">токенов на старте хода</div></div><div><div class="v ok">0</div><div class="l">«ты помнишь?» за неделю</div></div></div>
+                <div class="hint">Раньше: «ты помнишь…» — 79 раз в Codex, RESTORE-промпты файлами, правила в трёх копиях по харнессам. Теперь память — список с источником, областью и датой; агенты читают его, а не чат.</div>
+              </div>
+              <div class="prog"><h4>Области</h4>
+                <div class="bars"><div><span class="lb">везде</span><div class="b"><i style="width:27%;background:var(--accent)"></i></div><span>24</span></div><div><span class="lb">проект OMG</span><div class="b"><i class="run" style="width:64%"></i></div><span>58</span></div><div><span class="lb">разговор</span><div class="b"><i style="width:9%"></i></div><span>8</span></div><div><span class="lb">комнаты</span><div class="b"><i style="width:0"></i></div><span>без памяти</span></div></div>
+                <div class="hint">Запись из разговора можно поднять в проект или «везде» одной кнопкой; комнаты ничего не запоминают.</div>
+              </div>
+              <div class="prog insp"><h4>Паспорт · память</h4>
+                <dl class="pass"><dt>Где</dt><dd>все проекты · проект OMG</dd><dt>Что</dt><dd>90 записей, 2 конфликта, 1 устарела</dd><dt>Зачем</dt><dd>чтобы не объяснять заново после сжатия и перезапуска</dd><dt>Когда</dt><dd>последнее изменение: 04.10 04:50</dd><dt>Риски</dt><dd class="w">ключи в файлах правил</dd></dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ПРОВАЙДЕРЫ -->
+        <div class="screen" id="s-prov">
+          <div style="max-width:900px;margin:0 auto">
+            <div class="fc">⚠ <b>Codex кончится раньше сброса:</b> при темпе 25 M входных токенов в день подписка Plus упрётся в 100 % около 15:00 завтра, сброс — сб 19:58. Варианты: перевести воркера 2 на Sonnet сейчас · снизить усилие · ждать. <span class="btn sm" style="margin-left:8px">Перевести на Sonnet</span></div>
+            <h2 class="s">Подписки</h2>
+            <div class="acc"><div class="nm">Claude Max<small>Anthropic · подписка · 3 места</small></div>
+              <div class="lim"><div class="l"><span class="lb">неделя · все</span><div class="b"><i class="warn" style="width:61%"></i></div><span class="v">61 % · сброс пт 23:00</span></div><div class="l"><span class="lb">неделя · Fable</span><div class="b"><i style="width:2%"></i></div><span class="v">2 %</span></div><div class="l"><span class="lb">5 часов</span><div class="b"><i style="width:15%"></i></div><span class="v">15 % · сброс 02:10</span></div></div>
+              <div class="meta"><div>оплата: <b>15.10</b> · $200/мес</div><div>данные: <b>1 мин назад</b> · счёт</div><div>на ролях: оркестратор, воркер 1, ревьюер</div></div></div>
+            <div class="acc"><div class="nm">Codex Plus<small>OpenAI · подписка · 2 места</small></div>
+              <div class="lim"><div class="l"><span class="lb">неделя</span><div class="b"><i class="bad" style="width:94%"></i></div><span class="v">94 % · сброс сб 19:58</span></div><div class="l"><span class="lb">5 часов</span><div class="b"><i class="warn" style="width:70%"></i></div><span class="v">70 % · сброс 21:30</span></div></div>
+              <div class="meta"><div>оплата: <b>09.10</b> · $20/мес</div><div>данные: <b>3 мин назад</b> · из rate_limits</div><div>на ролях: воркер 2, тестер · <span class="bad">воркер 2 приостановлен</span></div></div></div>
+            <h2 class="s">Ключи API</h2>
+            <div class="acc"><div class="nm">DeepSeek API<small>ключ ••••7f2a · по счёту</small></div>
+              <div class="lim"><div class="l"><span class="lb">остаток</span><div class="b"><i class="ok" style="width:62%"></i></div><span class="v">$12,40 из $20</span></div><div class="l"><span class="lb">сегодня</span><div class="b"><i style="width:3%"></i></div><span class="v">$0,18 · 0,9 M токенов</span></div></div>
+              <div class="meta"><div>пополнение: <b>вручную</b> · при $2 предупредить</div><div>данные: <b>5 мин назад</b></div><div>на ролях: ресёрчер</div></div></div>
+            <div class="acc"><div class="nm">Alibaba Token Plan<small>Qwen / GLM · пакет токенов</small></div>
+              <div class="lim"><div class="l"><span class="lb">остаток</span><div class="b"><i class="ok" style="width:38%"></i></div><span class="v">38 M из 100 M · до 20.10</span></div><div class="l"><span class="lb">сегодня</span><div class="b"><i style="width:1%"></i></div><span class="v">0 · не назначен</span></div></div>
+              <div class="meta"><div>сгорает: <b>20.10</b></div><div>данные: <b>12 мин назад</b></div><div>на ролях: — · <a href="#" style="color:var(--accent)">назначить</a></div></div></div>
+            <div class="acc" style="grid-template-columns:150px 1fr;border-style:dashed;color:var(--ink3)"><div class="nm" style="color:var(--ink2)">+ Подключить</div><div class="meta">подписка (вход в приложении вендора) · ключ API (поле с маской, не в чат) · локальный CLI (Kimi, Devin — только наблюдаем)</div></div>
+            <h2 class="s">Расход по ролям · неделя</h2>
+            <div class="prog" style="max-width:900px"><div class="bars"><div><span class="lb">оркестратор</span><div class="b"><i class="warn" style="width:60%;background:var(--accent)"></i></div><span>1,2 %/день · 8,4 % нед.</span></div><div><span class="lb">ревьюер</span><div class="b"><i style="width:45%"></i></div><span>0,9 %/день</span></div><div><span class="lb">воркер 1</span><div class="b"><i class="run" style="width:30%"></i></div><span>0,6 %/день</span></div><div><span class="lb">тестер</span><div class="b"><i style="width:15%"></i></div><span>0,3 %/день</span></div><div><span class="lb">ресёрчер</span><div class="b"><i class="ok" style="width:5%"></i></div><span>$0,18/день</span></div></div><div class="hint">Самое дорогое — оркестратор на Fable: 8,4 % недели. Цена правильного результата по L1: 7,2 % недели за 7 влитых задач ≈ 1 % на задачу.</div></div>
+          </div>
+        </div>
+        <!-- НАСТРОЙКИ -->
+        <div class="screen" id="s-set">
+          <div class="set">
+            <div class="subnav">
+              <div class="on">Разрешения и стоп-случаи</div><div>Уведомления и отсутствие</div><div>Бюджет и выключатель</div><div>Память и правила</div><div>Провайдеры и ключи</div><div>Роли и места</div><div>Датчики</div><div>Внешний вид</div><div>Данные и экспорт</div>
+              <div class="note">Правило всех настроек: у каждой — видно, <b>где действует</b> (этот разговор · проект · везде) и <b>когда применилось</b> (квитанция). Ключи и пароли — только здесь, никогда в ленте.</div>
+            </div>
+            <div class="setc">
+              <div class="sg"><h4>Разрешения и стоп-случаи</h4><div class="sgd">Что агент может делать сам, где обязан спросить, что запрещено всегда. Задаётся на роль, не на модель: смена вендора прав не меняет.</div>
+                <div class="opt"><div><b>Свобода по умолчанию для новой роли</b><small>можно переопределить у каждого места</small></div><div class="seg"><span>спрашивать всё</span><span class="on">спрашивать стоп-случаи</span><span>только сообщать</span></div></div>
+                <div class="opt"><div><b>Стоп-случаи — всегда спрашивают вас</b><small>даже при «только сообщать»; заместитель на ночь их не подтверждает</small></div><div class="list"><label><i class="tg on"></i>снос или перезапись данных вне рабочей копии</label><label><i class="tg on"></i>расход больше <b>5 %</b> недели за один ход</label><label><i class="tg on"></i>секреты, ключи, доступы</label><label><i class="tg on"></i>необратимое наружу: push, публикация, платёж, письмо</label><label><i class="tg on"></i>выход за папку проекта</label><label><i class="tg"></i>установка ПО на машину</label></div></div>
+                <div class="opt"><div><b>Кто может подтверждать</b></div><div class="seg"><span class="on">только вы</span><span>заместитель на ночь — по правилам ухода</span></div></div>
+                <div class="rcpt">✓ применено везде · 04.10 04:50 · действует со следующего хода каждой роли</div>
+              </div>
+              <div class="sg"><h4>Уведомления и отсутствие</h4><div class="sgd">Три уровня. Будить имеет право только то, что срочно, требует действия и ещё не видно.</div>
+                <div class="tbl"><div class="th"><span>Событие</span><span>Присутствуете</span><span>Отсутствуете</span><span>Канал</span></div>
+                  <div class="tr"><span><b>Нужно ваше решение</b> · стоп-случай или стоит весь прогон</span><span>жёлтая рамка</span><span>будит через 60 с</span><span>система · меню-бар · Telegram</span></div>
+                  <div class="tr"><span><b>Нужно ваше решение</b> · обычное</span><span>счётчик</span><span>дайджест</span><span>меню-бар</span></div>
+                  <div class="tr"><span><b>Сорвалось</b> · зона провайдера или сети</span><span>красная строка</span><span>будит, если сам не продолжит</span><span>система · Telegram</span></div>
+                  <div class="tr"><span><b>Готово к проверке</b></span><span>тихо</span><span>дайджест</span><span>меню-бар</span></div>
+                  <div class="tr"><span><b>Пульс, keepalive, «идёт»</b></span><span>никогда</span><span>никогда</span><span>—</span></div></div>
+                <div class="opt"><div><b>Окно отсутствия</b><small>в нём ничего не будит; к концу окна — один дайджест «пока вас не было»</small></div><div class="seg"><span class="on">06:00–13:00 МСК</span><span>задать</span><span>выключить</span></div></div>
+                <div class="opt"><div><b>Каналы</b></div><div class="list"><label><i class="tg on"></i>системные уведомления macOS</label><label><i class="tg on"></i>меню-бар: «◆ 2 · 61 %» как в CodexLimitBar</label><label><i class="tg"></i>Telegram — <a href="#">подключить</a> (только чтение состояния и ответ на запрос решения)</label></div></div>
+                <div class="rcpt">✓ применено везде · 04.10 04:50</div>
+              </div>
+              <div class="sg"><h4>Бюджет и выключатель</h4><div class="sgd">Единица — процент недели у подписок, доллары и токены у ключей. У каждого числа видно: счёт или оценка, и возраст.</div>
+                <div class="opt"><div><b>Предупреждать при</b></div><div class="seg"><span>70 %</span><span class="on">80 %</span><span>90 %</span></div></div>
+                <div class="opt"><div><b>Аварийный выключатель недели</b><small>сейчас: <span style="color:var(--bad)">порог не задан</span> — открыто с 21.09</small></div><div class="seg"><span>95 % · сигнал</span><span>95 % · ограничитель</span><span class="on">не задан</span></div></div>
+                <div class="opt"><div><b>Смета перед запуском команды</b><small>диапазон «≈ 4–6 % недели на стадию», требует подписи</small></div><div class="seg"><span class="on">требовать</span><span>только показывать</span></div></div>
+                <div class="opt"><div><b>Запасной аккаунт при лимите</b><small>предложить перевод роли на другой аккаунт, не продолжать молча</small></div><div class="seg"><span class="on">предлагать</span><span>переводить сам</span><span>ждать сброса</span></div></div>
+                <div class="rcpt">изменено · ещё не применено — <span class="btn sm p" style="margin-left:6px">Применить везде</span></div>
+              </div>
+              <div class="sg"><h4>Память и правила</h4><div class="sgd">Что агенты знают о вас и проекте. Правило — строка с источником и областью; перенос между харнессами — одной кнопкой, а не копиями файлов.</div>
+                <div class="tbl"><div class="th"><span>Правило</span><span>Область</span><span>Источник</span><span>Применено</span></div>
+                  <div class="tr"><span>Отвечать по-русски, без жаргона; код в скобках в конце</span><span>везде</span><span>вы · 29.09</span><span>✓</span></div>
+                  <div class="tr"><span>«Готово» — только «готово к проверке» с доказательством</span><span>везде</span><span>вы · 30.09</span><span>✓</span></div>
+                  <div class="tr"><span>Чтение и проверка — Sonnet; придумывать — Opus</span><span>проект OMG</span><span>вы · 01.10</span><span>✓</span></div>
+                  <div class="tr"><span>Не трогать src/ui/test; ничего не ставить в ~/OMG</span><span>проект OMG</span><span>оркестратор · 29.09</span><span>после перезапуска</span></div></div>
+                <div class="opt"><div><b>Перенести правила</b><small>из CLAUDE.md, AGENTS.md, config.toml, памяти Kimi — с показом, что совпало, что противоречит</small></div><div class="seg"><span>из Claude Code</span><span>из Codex</span><span>из Kimi / Hermes</span></div></div>
+                <div class="opt"><div><b>Режим без запоминания</b><small>для комнат и чужих папок</small></div><div class="seg"><span>включён</span><span class="on">выключен</span></div></div>
+              </div>
+              <div class="sg"><h4>Остальные разделы</h4>
+                <div class="tbl"><div class="tr"><span><b>Провайдеры и ключи</b></span><span colspan="3">подписки и ключи API; ключ вводится в поле с маской и никогда не попадает в ленту; возраст данных и «обновить»</span></div>
+                  <div class="tr"><span><b>Роли и места</b></span><span>шаблон команды: роль → права → папка → аккаунт по умолчанию; запасной аккаунт</span></div>
+                  <div class="tr"><span><b>Датчики</b></span><span>интервал проверки живости (15 с без обращения к модели); вахты и сторожа; цена срабатываний; «пробное срабатывание»</span></div>
+                  <div class="tr"><span><b>Внешний вид</b></span><span>тема: как в системе / тёмная / светлая; плотность; размер шрифта до 200 %; монохром и дальтонизм — состояние словом и формой; без постоянной анимации</span></div>
+                  <div class="tr"><span><b>Данные и экспорт</b></span><span>где лежит база харнесса; что из журналов вендоров читается; экспорт разговоров и решений; удаление комнаты</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="comp"><div class="box"><div class="in" id="ph">Написать оркестратору о карте…</div><div class="bar"><span id="chips"><span class="chip">@ оркестратор ⌄</span><span class="chip">Fable · высокое ⌄</span><span class="chip">правит сам ⌄</span></span><span class="cost" id="cost">ход ≈ 0,3 % · оценка</span><span class="send"><span class="btn sm g">■ Стоп</span><span class="go">↑</span></span></div></div></div>
+    </section>
+  </div>
+</div>
+
+<script>
+  const screens = {
+    now:{where:'Сейчас · все проекты',next:'следующий отчёт воркера в 20:15',ph:'Написать оркестратору…'},
+    chat:{where:'Табло агентов › Чат · Claude Sonnet',next:'ничего не идёт в фоне',ph:'Сообщение…'},
+    plan:{where:'OMG › План · живая карта OM-VIEW',next:'данные из выгрузки — см. возраст в строке карты',ph:'Написать оркестратору о карте…'},
+    team:{where:'OMG › Команда · 6 мест',next:'ждёт вас: ревьюер 40 мин · воркер 2 на лимите до 19:58',ph:'Написать команде…'},
+    prov:{where:'Провайдеры · 4 аккаунта',next:'Codex: 94 %, кончится раньше сброса',ph:'Спросить про расход…'},
+    new:{where:'Новый чат',next:'выберите папку или комнату — и пишите',ph:''},
+    res:{where:'Табло агентов › Ресёрч · Концепция (L0)',next:'идёт 1 из 3 · следующий отчёт через 5 мин · бюджет 0,4 % из 1 %',ph:'Задать вопрос ресёрчеру… (@ресёрчер · Haiku · чтение + интернет · вопрос ≈ 0,2 %)'},
+    roles:{where:'OMG › Команда › состав и роли',next:'состав не подписан · 2 места на аккаунте с лимитом 94 %',ph:'Спросить про роль или место…'},
+    dec:{where:'Решения · все проекты',next:'2 открытых · старейшее 40 мин · 1 без следа источника',ph:'Спросить про решение…'},
+    sens:{where:'Датчики · все проекты',next:'харнесс жив · Kimi: нет сигнала 2 ч',ph:'Спросить про датчик…'},
+    art:{where:'OMG › Артефакты',next:'3 готово к проверке · витрина устарела · 4 файла не там',ph:'Спросить про артефакт…'},
+    mem:{where:'Память · все проекты',next:'2 конфликта · 1 памятка устарела · ключи в файлах правил',ph:'Спросить, что агент помнит…'},
+    set:{where:'Настройки',next:'каждая настройка — с областью и квитанцией применения',ph:'Спросить про настройку…'},
+  };
+  const CH={now:['@ оркестратор ⌄','Fable · высокое ⌄','правит сам ⌄','ход ≈ 0,3 % · оценка'],chat:['@ Claude ⌄','Sonnet · среднее ⌄','только читает папку ⌄','ход ≈ 0,05 % · оценка'],plan:['@ оркестратор ⌄','Fable · высокое ⌄','правит документы сам ⌄','ход ≈ 0,3 % · оценка'],res:['@ ресёрчер ⌄','Haiku · интернет ⌄','чтение + интернет ⌄','вопрос ≈ 0,2 % · оценка'],team:['@ всем ⌄','в очередь ⌄','',''],prov:['@ ассистент ⌄','Sonnet ⌄','','ход ≈ 0,05 %'],set:['@ ассистент ⌄','Sonnet ⌄','',''],roles:['@ ассистент ⌄','Sonnet ⌄','',''],dec:['@ ассистент ⌄','Sonnet ⌄','',''],sens:['@ ассистент ⌄','Sonnet ⌄','',''],mem:['@ ассистент ⌄','Sonnet ⌄','',''],art:['@ ассистент ⌄','Sonnet ⌄','','']};
+  function show(s){const c=CH[s]||CH.now;document.getElementById('chips').innerHTML=c.slice(0,3).filter(Boolean).map(x=>'<span class="chip">'+x+'</span>').join('');document.getElementById('cost').textContent=c[3]||'';document.querySelector('.app').classList.toggle('nochat',s==='new');document.querySelectorAll('.screen').forEach(e=>e.classList.toggle('on',e.id==='s-'+s));document.querySelectorAll('.tabs button[data-s]').forEach(b=>b.classList.toggle('on',b.dataset.s===s));document.getElementById('where').textContent=screens[s].where;document.getElementById('next').textContent=screens[s].next;document.getElementById('ph').textContent=screens[s].ph;}
+  function fit(){document.querySelectorAll('.cv').forEach(cv=>{const p=cv.parentElement,w=+cv.dataset.w,h=+cv.dataset.h,s=Math.min(1,p.clientWidth/w);cv.style.width=w+'px';cv.style.height=h+'px';cv.style.transform='scale('+s+')';if(!p.classList.contains('swarm'))p.style.height=Math.round(h*s)+'px';});}
+  window.addEventListener('resize',fit);
+  document.querySelectorAll('[data-s]').forEach(el=>el.addEventListener('click',()=>{show(el.dataset.s);requestAnimationFrame(fit);}));
+  requestAnimationFrame(fit);
+
+  const fmtM=n=>n>=1e6?(n/1e6).toFixed(1).replace('.',',')+' M':n>=1e3?Math.round(n/1e3)+' K':String(n);
+  const dstr=ms=>new Date(ms).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'})+' '+new Date(ms).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  const SNAP={"counters": {"tasksTotal": 123, "merged": 111, "milestoneClosure": 87, "milestoneRemaining": 0, "remainingIds": [], "milestoneAfter": ["H2", "E4.1", "H1.1", "H1.2", "H1.3", "Q1", "D8.4e", "D8.4.2", "D8.5", "V3", "D8.3.1", "S1.1", "E2.2", "H1.4", "H1.5", "S1.3"], "milestoneTitle": "Рубеж: живой проход малого горизонта omg-live («автономное знание»)", "missingInPlan": [], "otherCommitIds": [{"id": "M2", "short": "2e72e37", "at": 1789968718000}, {"id": "G7", "short": "b242cc1", "at": 1789991438000}]}, "tasks": [{"id": "A1", "status": "merged", "worker": null, "rounds": 2, "mergedAt": 1790017226000, "lastAt": 1790017226000, "verdicts": [{"type": "return", "at": 1790016478000}, {"type": "accept", "at": 1790017209000}]}, {"id": "A2", "status": "merged", "worker": null, "rounds": 2, "mergedAt": 1790020391000, "lastAt": 1790020391000, "verdicts": [{"type": "return", "at": 1790019661000}, {"type": "accept", "at": 1790020371000}]}, {"id": "A3", "status": "merged", "worker": null, "rounds": 2, "mergedAt": 1790023516000, "lastAt": 1790023516000, "verdicts": [{"type": "return", "at": 1790022260000}, {"type": "accept", "at": 1790023475000}]}, {"id": "A3.1", "status": "merged", "worker": null, "rounds": 3, "mergedAt": 1790030173000, "lastAt": 1790030173000, "verdicts": [{"type": "return", "at": 1790027008000}, {"type": "return", "at": 1790029063000}, {"type": "accept", "at": 1790030155000}]}, {"id": "A3.2", "status": "merged", "worker": null, "rounds": 1, "mergedAt": 1790045192000, "lastAt": 1790045192000, "verdicts": [{"type": "accept", "at": 1790045148000}]}, {"id": "A3.3", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790221103000, "lastAt": 1790221103000, "verdicts": [{"type": "reply", "at": 1790216288000}, {"type": "return", "at": 1790219585000}, {"type": "accept", "at": 1790221091000}]}, {"id": "A4", "status": "merged", "worker": null, "rounds": 3, "mergedAt": 1790039095000, "lastAt": 1790039095000, "verdicts": [{"type": "return", "at": 1790032739000}, {"type": "return", "at": 1790037239000}, {"type": "accept", "at": 1790039071000}]}, {"id": "A5", "status": "merged", "worker": null, "rounds": 3, "mergedAt": 1790044077000, "lastAt": 1790044077000, "verdicts": [{"type": "return", "at": 1790041399000}, {"type": "return", "at": 1790042846000}, {"type": "accept", "at": 1790044039000}]}, {"id": "A6", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790342953000, "lastAt": 1790342953000, "verdicts": [{"type": "accept", "at": 1790342930000}]}, {"id": "B0", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790132484000, "lastAt": 1790132484000, "verdicts": [{"type": "accept", "at": 1790132472000}]}, {"id": "B1", "status": "merged", "worker": "codex-worker", "rounds": 3, "mergedAt": 1790136728000, "lastAt": 1790136728000, "verdicts": [{"type": "return", "at": 1790134888000}, {"type": "return", "at": 1790136062000}, {"type": "accept", "at": 1790136716000}]}, {"id": "B1.1", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790307963000, "lastAt": 1790307963000, "verdicts": [{"type": "return", "at": 1790306459000}, {"type": "accept", "at": 1790307942000}]}, {"id": "B2", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790138926000, "lastAt": 1790138926000, "verdicts": [{"type": "accept", "at": 1790138908000}]}, {"id": "B3.0a", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790357262000, "lastAt": 1790357262000, "verdicts": [{"type": "reply", "at": 1790350951000}, {"type": "return", "at": 1790354357000}, {"type": "accept", "at": 1790357236000}]}, {"id": "B3.0b", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790371582000, "lastAt": 1790371582000, "verdicts": [{"type": "reply", "at": 1790362456000}, {"type": "reply", "at": 1790365535000}, {"type": "return", "at": 1790369812000}, {"type": "accept", "at": 1790371560000}]}, {"id": "B3", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790382842000, "lastAt": 1790382842000, "verdicts": [{"type": "reply", "at": 1790343752000}, {"type": "reply", "at": 1790372335000}, {"type": "accept", "at": 1790382816000}]}, {"id": "P1", "status": "issued", "worker": "claude-fable", "rounds": 0, "mergedAt": null, "lastAt": 1790836641000, "verdicts": []}, {"id": "P2", "status": "planned", "worker": null, "rounds": 0, "mergedAt": null, "lastAt": null, "verdicts": []}, {"id": "P3", "status": "planned", "worker": null, "rounds": 0, "mergedAt": null, "lastAt": null, "verdicts": []}, {"id": "C1", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790358740000, "lastAt": 1790358740000, "verdicts": [{"type": "reply", "at": 1790351192000}, {"type": "reply", "at": 1790352328000}, {"type": "reply", "at": 1790355580000}, {"type": "accept", "at": 1790358718000}]}, {"id": "C2", "status": "merged", "worker": "codex-worker", "rounds": 3, "mergedAt": 1790145047000, "lastAt": 1790145047000, "verdicts": [{"type": "accept", "at": 1790139308000}, {"type": "return", "at": 1790141544000}, {"type": "return", "at": 1790143390000}, {"type": "accept", "at": 1790145029000}]}, {"id": "C3", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790147076000, "lastAt": 1790147076000, "verdicts": [{"type": "accept", "at": 1790147056000}]}, {"id": "C4", "status": "merged", "worker": "codex-worker", "rounds": 3, "mergedAt": 1790155539000, "lastAt": 1790155539000, "verdicts": [{"type": "return", "at": 1790153278000}, {"type": "return", "at": 1790154348000}, {"type": "accept", "at": 1790155522000}]}, {"id": "C5", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790161832000, "lastAt": 1790161832000, "verdicts": [{"type": "accept", "at": 1790156079000}, {"type": "accept", "at": 1790156909000}, {"type": "return", "at": 1790160102000}, {"type": "accept", "at": 1790161817000}]}, {"id": "C5.1a", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790361756000, "lastAt": 1790361756000, "verdicts": [{"type": "accept", "at": 1790361723000}]}, {"id": "C5.1b", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790364174000, "lastAt": 1790364174000, "verdicts": [{"type": "accept", "at": 1790364156000}]}, {"id": "C5.2", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790171335000, "lastAt": 1790171335000, "verdicts": [{"type": "accept", "at": 1790162356000}, {"type": "return", "at": 1790165555000}, {"type": "accept", "at": 1790171317000}]}, {"id": "D1", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790151034000, "lastAt": 1790151034000, "verdicts": [{"type": "accept", "at": 1790147716000}, {"type": "return", "at": 1790149622000}, {"type": "accept", "at": 1790151007000}]}, {"id": "D2", "status": "merged", "worker": "codex-worker", "rounds": 3, "mergedAt": 1790182457000, "lastAt": 1790182457000, "verdicts": [{"type": "accept", "at": 1790171831000}, {"type": "other", "at": 1790172261000}, {"type": "accept", "at": 1790177232000}, {"type": "return", "at": 1790178816000}, {"type": "return", "at": 1790180296000}, {"type": "accept", "at": 1790182440000}]}, {"id": "D3", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790188252000, "lastAt": 1790188252000, "verdicts": [{"type": "return", "at": 1790186224000}, {"type": "accept", "at": 1790188234000}]}, {"id": "D4", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790205347000, "lastAt": 1790205347000, "verdicts": [{"type": "reply", "at": 1790201131000}, {"type": "reply", "at": 1790201669000}, {"type": "reply", "at": 1790204134000}, {"type": "accept", "at": 1790205332000}]}, {"id": "D5", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790190694000, "lastAt": 1790190694000, "verdicts": [{"type": "accept", "at": 1790183041000}, {"type": "accept", "at": 1790183846000}, {"type": "accept", "at": 1790190677000}]}, {"id": "D3.1", "status": "merged", "worker": "codex-worker", "rounds": 4, "mergedAt": 1790200636000, "lastAt": 1790200636000, "verdicts": [{"type": "return", "at": 1790193174000}, {"type": "return", "at": 1790195470000}, {"type": "return", "at": 1790198427000}, {"type": "reply", "at": 1790198585000}, {"type": "accept", "at": 1790200618000}]}, {"id": "D6", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790461218000, "lastAt": 1790461218000, "verdicts": [{"type": "reply", "at": 1790427856000}, {"type": "reply", "at": 1790431362000}, {"type": "return", "at": 1790436721000}, {"type": "accept", "at": 1790461175000}]}, {"id": "D7", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790237999000, "lastAt": 1790237999000, "verdicts": [{"type": "reply", "at": 1790234786000}, {"type": "accept", "at": 1790237983000}]}, {"id": "D8.0", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790287730000, "lastAt": 1790287730000, "verdicts": [{"type": "accept", "at": 1790287717000}]}, {"id": "D8", "status": "merged", "worker": "codex-worker", "rounds": 3, "mergedAt": 1790289770000, "lastAt": 1790289770000, "verdicts": [{"type": "reply", "at": 1790282572000}, {"type": "reply", "at": 1790282770000}, {"type": "return", "at": 1790284292000}, {"type": "return", "at": 1790285743000}, {"type": "reply", "at": 1790285969000}, {"type": "reply", "at": 1790286746000}, {"type": "accept", "at": 1790289750000}]}, {"id": "D8.1", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790292464000, "lastAt": 1790292464000, "verdicts": [{"type": "reply", "at": 1790290409000}, {"type": "accept", "at": 1790292448000}]}, {"id": "D8.3", "status": "merged", "worker": "codex-worker", "rounds": 4, "mergedAt": 1790302415000, "lastAt": 1790302415000, "verdicts": [{"type": "reply", "at": 1790295007000}, {"type": "reply", "at": 1790297245000}, {"type": "return", "at": 1790300545000}, {"type": "return", "at": 1790300601000}, {"type": "accept", "at": 1790302393000}]}, {"id": "D8.4a", "status": "merged", "worker": "codex-worker", "rounds": 4, "mergedAt": 1790480614000, "lastAt": 1790480625000, "verdicts": [{"type": "reply", "at": 1790461444000}, {"type": "return", "at": 1790470787000}, {"type": "return", "at": 1790473434000}, {"type": "return", "at": 1790475476000}, {"type": "reply", "at": 1790475909000}, {"type": "accept", "at": 1790479092000}]}, {"id": "D8.4b", "status": "merged", "worker": "kimi-worker", "rounds": 4, "mergedAt": 1790598238000, "lastAt": 1790598238000, "verdicts": [{"type": "reply", "at": 1790483060000}, {"type": "reply", "at": 1790528850000}, {"type": "return", "at": 1790535529000}, {"type": "return", "at": 1790563141000}, {"type": "other", "at": 1790563331000}, {"type": "other", "at": 1790564491000}, {"type": "return", "at": 1790586513000}, {"type": "accept", "at": 1790597120000}]}, {"id": "D8.4c", "status": "merged", "worker": "devin-worker", "rounds": 4, "mergedAt": 1790659752000, "lastAt": 1790659752000, "verdicts": [{"type": "other", "at": 1790597751000}, {"type": "other", "at": 1790600653000}, {"type": "other", "at": 1790606822000}, {"type": "return", "at": 1790626993000}, {"type": "return", "at": 1790638999000}, {"type": "return", "at": 1790644583000}, {"type": "accept", "at": 1790653413000}]}, {"id": "D8.4d", "status": "merged", "worker": "devin-worker", "rounds": 5, "mergedAt": 1790725442000, "lastAt": 1790725442000, "verdicts": [{"type": "other", "at": 1790654022000}, {"type": "other", "at": 1790662501000}, {"type": "return", "at": 1790680097000}, {"type": "return", "at": 1790692519000}, {"type": "return", "at": 1790712406000}, {"type": "return", "at": 1790719169000}, {"type": "accept", "at": 1790725324000}]}, {"id": "D8.4e", "status": "merged", "worker": "claude-fable", "rounds": 3, "mergedAt": 1790767419000, "lastAt": 1790767419000, "verdicts": [{"type": "other", "at": 1790726115000}, {"type": "return", "at": 1790738539000}, {"type": "return", "at": 1790764249000}, {"type": "accept", "at": 1790767399000}]}, {"id": "D8.3.1", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790388081000, "lastAt": 1790388081000, "verdicts": [{"type": "accept", "at": 1790388060000}]}, {"id": "D8.4.1", "status": "merged", "worker": "claude-fable", "rounds": 3, "mergedAt": 1790835718000, "lastAt": 1790835718000, "verdicts": [{"type": "other", "at": 1790806855000}, {"type": "other", "at": 1790807095000}, {"type": "return", "at": 1790811834000}, {"type": "return", "at": 1790828355000}, {"type": "accept", "at": 1790835517000}]}, {"id": "D8.4.2", "status": "merged", "worker": "claude-sonnet", "rounds": 2, "mergedAt": 1790784014000, "lastAt": 1790784014000, "verdicts": [{"type": "other", "at": 1790729846000}, {"type": "return", "at": 1790777016000}, {"type": "accept", "at": 1790783995000}]}, {"id": "D8.5", "status": "merged", "worker": "devin-worker", "rounds": 4, "mergedAt": 1790593073000, "lastAt": 1790593073000, "verdicts": [{"type": "reply", "at": 1790483062000}, {"type": "reply", "at": 1790543863000}, {"type": "reply", "at": 1790551261000}, {"type": "return", "at": 1790554361000}, {"type": "return", "at": 1790561370000}, {"type": "other", "at": 1790561507000}, {"type": "return", "at": 1790586883000}, {"type": "accept", "at": 1790591710000}]}, {"id": "D8.2", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790304424000, "lastAt": 1790304424000, "verdicts": [{"type": "reply", "at": 1790293006000}, {"type": "accept", "at": 1790304405000}]}, {"id": "V1", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790206841000, "lastAt": 1790206841000, "verdicts": [{"type": "accept", "at": 1790206829000}]}, {"id": "E1", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790065578000, "lastAt": 1790065578000, "verdicts": [{"type": "return", "at": 1790050626000}, {"type": "accept", "at": 1790065550000}]}, {"id": "E2", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790213246000, "lastAt": 1790213255000, "verdicts": [{"type": "reply", "at": 1790207185000}, {"type": "reply", "at": 1790208147000}, {"type": "return", "at": 1790210633000}, {"type": "reply", "at": 1790210918000}, {"type": "reply", "at": 1790211033000}, {"type": "accept", "at": 1790213231000}]}, {"id": "V3", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790375321000, "lastAt": 1790375321000, "verdicts": [{"type": "reply", "at": 1790370420000}, {"type": "reply", "at": 1790372488000}, {"type": "accept", "at": 1790375302000}]}, {"id": "E3", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790215846000, "lastAt": 1790215846000, "verdicts": [{"type": "reply", "at": 1790213694000}, {"type": "accept", "at": 1790215831000}]}, {"id": "E4", "status": "merged", "worker": "codex-worker", "rounds": 5, "mergedAt": 1790234251000, "lastAt": 1790234251000, "verdicts": [{"type": "reply", "at": 1790221627000}, {"type": "reply", "at": 1790222150000}, {"type": "return", "at": 1790225868000}, {"type": "return", "at": 1790227673000}, {"type": "return", "at": 1790229694000}, {"type": "reply", "at": 1790229865000}, {"type": "return", "at": 1790232992000}, {"type": "accept", "at": 1790234235000}]}, {"id": "E5.0", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790386960000, "lastAt": 1790386960000, "verdicts": [{"type": "return", "at": 1790384749000}, {"type": "accept", "at": 1790386938000}]}, {"id": "E5", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790409579000, "lastAt": 1790409591000, "verdicts": [{"type": "reply", "at": 1790396799000}, {"type": "reply", "at": 1790400141000}, {"type": "return", "at": 1790405533000}, {"type": "accept", "at": 1790409559000}]}, {"id": "E6", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790349170000, "lastAt": 1790349170000, "verdicts": [{"type": "reply", "at": 1790344134000}, {"type": "return", "at": 1790347325000}, {"type": "accept", "at": 1790349151000}]}, {"id": "F1", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790242316000, "lastAt": 1790242316000, "verdicts": [{"type": "return", "at": 1790240054000}, {"type": "reply", "at": 1790240665000}, {"type": "accept", "at": 1790242301000}]}, {"id": "F2", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790245720000, "lastAt": 1790245720000, "verdicts": [{"type": "reply", "at": 1790242910000}, {"type": "accept", "at": 1790245696000}]}, {"id": "E2.1", "status": "merged", "worker": "codex-worker", "rounds": 3, "mergedAt": 1790263168000, "lastAt": 1790263168000, "verdicts": [{"type": "reply", "at": 1790258402000}, {"type": "return", "at": 1790261594000}, {"type": "accept", "at": 1790263149000}]}, {"id": "F3", "status": "merged", "worker": "codex-worker", "rounds": 3, "mergedAt": 1790252631000, "lastAt": 1790252631000, "verdicts": [{"type": "reply", "at": 1790246089000}, {"type": "return", "at": 1790247934000}, {"type": "reply", "at": 1790248551000}, {"type": "return", "at": 1790250694000}, {"type": "reply", "at": 1790250844000}, {"type": "accept", "at": 1790252612000}]}, {"id": "F4", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790257906000, "lastAt": 1790257906000, "verdicts": [{"type": "reply", "at": 1790253223000}, {"type": "return", "at": 1790255903000}, {"type": "accept", "at": 1790257891000}]}, {"id": "V2", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790266570000, "lastAt": 1790266570000, "verdicts": [{"type": "accept", "at": 1790266555000}]}, {"id": "F5", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790274623000, "lastAt": 1790275175000, "verdicts": [{"type": "reply", "at": 1790263465000}, {"type": "reply", "at": 1790263665000}, {"type": "reply", "at": 1790267141000}, {"type": "return", "at": 1790270574000}, {"type": "accept", "at": 1790274601000}]}, {"id": "S1", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790282127000, "lastAt": 1790282127000, "verdicts": [{"type": "reply", "at": 1790275311000}, {"type": "reply", "at": 1790277104000}, {"type": "reply", "at": 1790279174000}, {"type": "accept", "at": 1790282110000}]}, {"id": "S1.1", "status": "merged", "worker": "claude-fable", "rounds": 3, "mergedAt": 1790670301000, "lastAt": 1790670357000, "verdicts": [{"type": "other", "at": 1790615727000}, {"type": "other", "at": 1790618712000}, {"type": "other", "at": 1790624970000}, {"type": "accept", "at": 1790630229000}, {"type": "other", "at": 1790637104000}, {"type": "other", "at": 1790639209000}, {"type": "other", "at": 1790640367000}, {"type": "other", "at": 1790642694000}, {"type": "other", "at": 1790647176000}, {"type": "return", "at": 1790664175000}, {"type": "other", "at": 1790664608000}, {"type": "accept", "at": 1790670039000}]}, {"id": "S1.2", "status": "merged", "worker": "claude-sonnet", "rounds": 2, "mergedAt": 1790830783000, "lastAt": 1790830783000, "verdicts": [{"type": "other", "at": 1790810558000}, {"type": "return", "at": 1790824751000}, {"type": "accept", "at": 1790830767000}]}, {"id": "E2.2", "status": "merged", "worker": "kimi-worker", "rounds": 3, "mergedAt": 1790701306000, "lastAt": 1790701314000, "verdicts": [{"type": "other", "at": 1790625832000}, {"type": "return", "at": 1790683992000}, {"type": "return", "at": 1790690850000}, {"type": "accept", "at": 1790699720000}]}, {"id": "G1", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790312190000, "lastAt": 1790312190000, "verdicts": [{"type": "reply", "at": 1790307016000}, {"type": "reply", "at": 1790308649000}, {"type": "accept", "at": 1790312169000}]}, {"id": "G1.1", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790316890000, "lastAt": 1790316890000, "verdicts": [{"type": "reply", "at": 1790312944000}, {"type": "reply", "at": 1790314140000}, {"type": "accept", "at": 1790316873000}]}, {"id": "G1.2", "status": "merged", "worker": "codex-worker", "rounds": 3, "mergedAt": 1790324120000, "lastAt": 1790324120000, "verdicts": [{"type": "return", "at": 1790319991000}, {"type": "return", "at": 1790322624000}, {"type": "accept", "at": 1790324095000}]}, {"id": "G1.3", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790326885000, "lastAt": 1790326885000, "verdicts": [{"type": "reply", "at": 1790324905000}, {"type": "accept", "at": 1790326866000}]}, {"id": "G1.4", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790333064000, "lastAt": 1790333064000, "verdicts": [{"type": "reply", "at": 1790327517000}, {"type": "return", "at": 1790330895000}, {"type": "accept", "at": 1790333039000}]}, {"id": "G2", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790336077000, "lastAt": 1790336077000, "verdicts": [{"type": "reply", "at": 1790333819000}, {"type": "accept", "at": 1790336057000}]}, {"id": "G3", "status": "merged", "worker": "codex-worker", "rounds": 1, "mergedAt": 1790338821000, "lastAt": 1790338821000, "verdicts": [{"type": "accept", "at": 1790338792000}]}, {"id": "H1.0a", "status": "merged", "worker": "codex-worker", "rounds": 2, "mergedAt": 1790526765000, "lastAt": 1790526765000, "verdicts": [{"type": "reply", "at": 1790466030000}, {"type": "reply", "at": 1790471160000}, {"type": "reply", "at": 1790471754000}, {"type": "reply", "at": 1790518069000}, {"type": "reply", "at": 1790518641000}, {"type": "reply", "at": 1790519201000}, {"type": "return", "at": 1790524158000}, {"type": "accept", "at": 1790525882000}]}, {"id": "H1.0b", "status": "merged", "worker": "codex-worker", "rounds": 3, "mergedAt": 1790547252000, "lastAt": 1790547252000, "verdicts": [{"type": "reply", "at": 1790466973000}, {"type": "reply", "at": 1790529692000}, {"type": "reply", "at": 1790531534000}, {"type": "reply", "at": 1790533016000}, {"type": "return", "at": 1790539203000}, {"type": "reply", "at": 1790539986000}, {"type": "return", "at": 1790544498000}, {"type": "accept", "at": 1790547226000}]}, {"id": "H1.0c", "status": "merged", "worker": "claude-worker", "rounds": 1, "mergedAt": 1790586043000, "lastAt": 1790586068000, "verdicts": [{"type": "reply", "at": 1790468049000}, {"type": "reply", "at": 1790549332000}, {"type": "reply", "at": 1790553395000}, {"type": "accept", "at": 1790586024000}]}, {"id": "H1.0d", "status": "merged", "worker": "claude-worker", "rounds": 2, "mergedAt": 1790601924000, "lastAt": 1790601924000, "verdicts": [{"type": "reply", "at": 1790468976000}, {"type": "other", "at": 1790588080000}, {"type": "return", "at": 1790596650000}, {"type": "other", "at": 1790597282000}, {"type": "accept", "at": 1790599877000}]}, {"id": "H1", "status": "merged", "worker": "claude-worker", "rounds": 3, "mergedAt": 1790633591000, "lastAt": 1790633651000, "verdicts": [{"type": "reply", "at": 1790465184000}, {"type": "reply", "at": 1790469519000}, {"type": "other", "at": 1790604353000}, {"type": "other", "at": 1790608851000}, {"type": "return", "at": 1790617713000}, {"type": "other", "at": 1790618062000}, {"type": "other", "at": 1790624553000}, {"type": "return", "at": 1790629834000}, {"type": "accept", "at": 1790633567000}]}, {"id": "Q1", "status": "merged", "worker": "kimi-worker", "rounds": 2, "mergedAt": 1790621959000, "lastAt": 1790622004000, "verdicts": [{"type": "other", "at": 1790601287000}, {"type": "other", "at": 1790603831000}, {"type": "return", "at": 1790616258000}, {"type": "accept", "at": 1790621941000}]}, {"id": "Q2", "status": "merged", "worker": "kimi-worker", "rounds": 5, "mergedAt": 1790877963000, "lastAt": 1790877963000, "verdicts": [{"type": "other", "at": 1790631349000}, {"type": "other", "at": 1790635533000}, {"type": "return", "at": 1790648961000}, {"type": "return", "at": 1790655492000}, {"type": "return", "at": 1790694938000}, {"type": "other", "at": 1790856493000}, {"type": "other", "at": 1790857140000}, {"type": "return", "at": 1790874069000}, {"type": "accept", "at": 1790877950000}]}, {"id": "Q2b", "status": "merged", "worker": null, "rounds": 0, "mergedAt": 1790882051000, "lastAt": 1790882051000, "verdicts": []}, {"id": "Q3", "status": "merged", "worker": "claude-worker", "rounds": 1, "mergedAt": 1790897460000, "lastAt": 1790897476000, "verdicts": [{"type": "other", "at": 1790882728000}, {"type": "other", "at": 1790883300000}, {"type": "other", "at": 1790883410000}, {"type": "other", "at": 1790885797000}, {"type": "other", "at": 1790886375000}]}, {"id": "Q2.1", "status": "merged", "worker": "claude-sonnet", "rounds": 2, "mergedAt": 1790888805000, "lastAt": 1790888805000, "verdicts": [{"type": "other", "at": 1790878153000}, {"type": "other", "at": 1790879922000}, {"type": "return", "at": 1790886312000}, {"type": "accept", "at": 1790888791000}]}, {"id": "Q4", "status": "merged", "worker": "devin-worker", "rounds": 2, "mergedAt": 1790942559000, "lastAt": 1790942614000, "verdicts": [{"type": "other", "at": 1790884537000}, {"type": "other", "at": 1790885086000}]}, {"id": "Q5", "status": "merged", "worker": "devin-worker", "rounds": 2, "mergedAt": 1790966166000, "lastAt": 1790966166000, "verdicts": [{"type": "reply", "at": 1790963636000}, {"type": "reply", "at": 1790966144000}]}, {"id": "E5.1", "status": "merged", "worker": "codex-worker", "rounds": 5, "mergedAt": 1790464400000, "lastAt": 1790465428000, "verdicts": [{"type": "reply", "at": 1790420471000}, {"type": "return", "at": 1790423640000}, {"type": "return", "at": 1790427346000}, {"type": "reply", "at": 1790427579000}, {"type": "return", "at": 1790432652000}, {"type": "reply", "at": 1790433182000}, {"type": "return", "at": 1790461148000}, {"type": "accept", "at": 1790463514000}]}, {"id": "H2.0", "status": "merged", "worker": "codex-worker", "rounds": 0, "mergedAt": 1791008663000, "lastAt": 1791008663000, "verdicts": [{"type": "reply", "at": 1790423825000}, {"type": "reply", "at": 1790424152000}]}, {"id": "E4.1", "status": "merged", "worker": "claude-sonnet", "rounds": 1, "mergedAt": 1790641350000, "lastAt": 1790641355000, "verdicts": [{"type": "other", "at": 1790634487000}, {"type": "other", "at": 1790636174000}, {"type": "accept", "at": 1790641333000}]}, {"id": "H1.1", "status": "merged", "worker": "claude-worker", "rounds": 2, "mergedAt": 1790664642000, "lastAt": 1790664642000, "verdicts": [{"type": "other", "at": 1790634798000}, {"type": "other", "at": 1790636170000}, {"type": "other", "at": 1790636725000}, {"type": "return", "at": 1790646868000}, {"type": "other", "at": 1790652612000}, {"type": "accept", "at": 1790658127000}]}, {"id": "T-DIET", "status": "merged", "worker": "claude-worker", "rounds": 1, "mergedAt": 1790697709000, "lastAt": 1790697717000, "verdicts": [{"type": "accept", "at": 1790696604000}]}, {"id": "H1.4", "status": "merged", "worker": "kimi-worker", "rounds": 1, "mergedAt": 1790721919000, "lastAt": 1790721920000, "verdicts": [{"type": "other", "at": 1790713784000}, {"type": "accept", "at": 1790721900000}]}, {"id": "H1.5", "status": "merged", "worker": "claude-sonnet", "rounds": 2, "mergedAt": 1790737961000, "lastAt": 1790737961000, "verdicts": [{"type": "return", "at": 1790728204000}, {"type": "accept", "at": 1790737938000}]}, {"id": "S1.3", "status": "merged", "worker": "claude-worker", "rounds": 1, "mergedAt": 1790742757000, "lastAt": 1790742757000, "verdicts": [{"type": "other", "at": 1790721968000}, {"type": "other", "at": 1790723828000}, {"type": "other", "at": 1790724500000}, {"type": "other", "at": 1790726473000}, {"type": "other", "at": 1790730043000}, {"type": "accept", "at": 1790742733000}]}, {"id": "S1.4", "status": "merged", "worker": "claude-worker", "rounds": 3, "mergedAt": 1790851335000, "lastAt": 1790851335000, "verdicts": [{"type": "other", "at": 1790803146000}, {"type": "other", "at": 1790837390000}, {"type": "return", "at": 1790844636000}, {"type": "return", "at": 1790848065000}, {"type": "accept", "at": 1790851317000}]}, {"id": "D8.5.1", "status": "merged", "worker": "kimi-worker", "rounds": 2, "mergedAt": 1790866423000, "lastAt": 1790888109000, "verdicts": [{"type": "other", "at": 1790853556000}, {"type": "other", "at": 1790856078000}, {"type": "return", "at": 1790863021000}, {"type": "accept", "at": 1790866300000}]}, {"id": "S1.5", "status": "merged", "worker": "claude-sonnet", "rounds": 1, "mergedAt": 1790840597000, "lastAt": 1790840597000, "verdicts": [{"type": "other", "at": 1790831762000}, {"type": "accept", "at": 1790840578000}]}, {"id": "R1", "status": "merged", "worker": "devin-worker", "rounds": 3, "mergedAt": 1790846112000, "lastAt": 1790846112000, "verdicts": [{"type": "other", "at": 1790825220000}, {"type": "return", "at": 1790833803000}, {"type": "return", "at": 1790841951000}, {"type": "other", "at": 1790842149000}, {"type": "accept", "at": 1790846091000}]}, {"id": "R2", "status": "merged", "worker": "claude-worker", "rounds": 1, "mergedAt": 1790856043000, "lastAt": 1790856043000, "verdicts": [{"type": "other", "at": 1790851568000}, {"type": "other", "at": 1790852569000}, {"type": "other", "at": 1790852762000}, {"type": "accept", "at": 1790856025000}]}, {"id": "R5", "status": "merged", "worker": "claude-worker", "rounds": 2, "mergedAt": 1790864342000, "lastAt": 1790864342000, "verdicts": [{"type": "other", "at": 1790856488000}, {"type": "other", "at": 1790856670000}, {"type": "other", "at": 1790857388000}, {"type": "other", "at": 1790859256000}, {"type": "return", "at": 1790861205000}, {"type": "accept", "at": 1790864329000}]}, {"id": "R6", "status": "merged", "worker": "devin-worker", "rounds": 1, "mergedAt": 1790867802000, "lastAt": 1790867826000, "verdicts": [{"type": "accept", "at": 1790867727000}]}, {"id": "R3", "status": "accepted", "worker": null, "rounds": 2, "mergedAt": null, "lastAt": 1790875642000, "verdicts": [{"type": "other", "at": 1790865104000}, {"type": "return", "at": 1790871696000}, {"type": "accept", "at": 1790875642000}]}, {"id": "R44", "status": "merged", "worker": "devin-worker", "rounds": 1, "mergedAt": 1790883617000, "lastAt": 1790883617000, "verdicts": [{"type": "accept", "at": 1790883456000}]}, {"id": "T48", "status": "merged", "worker": "kimi-worker", "rounds": 2, "mergedAt": 1790900318000, "lastAt": 1790900322000, "verdicts": [{"type": "return", "at": 1790896845000}, {"type": "accept", "at": 1790900298000}]}, {"id": "Q2.2", "status": "merged", "worker": "claude-sonnet", "rounds": 1, "mergedAt": 1790906116000, "lastAt": 1790906159000, "verdicts": [{"type": "other", "at": 1790889073000}]}, {"id": "AD1", "status": "merged", "worker": "devin-worker", "rounds": 3, "mergedAt": 1790960021000, "lastAt": 1790960058000, "verdicts": [{"type": "reply", "at": 1790943340000}, {"type": "reply", "at": 1790949248000}, {"type": "reply", "at": 1790954077000}, {"type": "reply", "at": 1790954722000}, {"type": "reply", "at": 1790959992000}]}, {"id": "AD2", "status": "merged", "worker": "antigravity-worker", "rounds": 6, "mergedAt": 1790998006000, "lastAt": 1790998022000, "verdicts": [{"type": "reply", "at": 1790974619000}, {"type": "reply", "at": 1790977430000}, {"type": "reply", "at": 1790977560000}, {"type": "reply", "at": 1790988950000}, {"type": "reply", "at": 1790994027000}]}, {"id": "LP1", "status": "submitted", "worker": "claude-sonnet", "rounds": 4, "mergedAt": null, "lastAt": 1791055167000, "verdicts": [{"type": "reply", "at": 1791003458000}, {"type": "reply", "at": 1791055136000}]}, {"id": "LP2", "status": "merged", "worker": "claude-sonnet", "rounds": 4, "mergedAt": 1790986506000, "lastAt": 1790986506000, "verdicts": [{"type": "reply", "at": 1790981765000}, {"type": "reply", "at": 1790986482000}]}, {"id": "PF1", "status": "merged", "worker": "claude-worker", "rounds": 5, "mergedAt": 1791008323000, "lastAt": 1791008323000, "verdicts": [{"type": "reply", "at": 1790997910000}, {"type": "reply", "at": 1791001352000}, {"type": "reply", "at": 1791001495000}, {"type": "reply", "at": 1791007043000}]}, {"id": "LP3", "status": "merged", "worker": "claude-worker", "rounds": 5, "mergedAt": 1791021210000, "lastAt": 1791021210000, "verdicts": [{"type": "reply", "at": 1791014854000}, {"type": "reply", "at": 1791018895000}, {"type": "reply", "at": 1791021191000}]}, {"id": "LP4", "status": "accepted", "worker": "claude-worker", "rounds": 2, "mergedAt": null, "lastAt": 1791035921000, "verdicts": [{"type": "return", "at": 1791031937000}, {"type": "accept", "at": 1791035921000}]}, {"id": "FJ1", "status": "submitted", "worker": "codex-worker2", "rounds": 1, "mergedAt": null, "lastAt": 1791049177000, "verdicts": [{"type": "reply", "at": 1791049134000}]}, {"id": "MP1", "status": "submitted", "worker": "claude-worker", "rounds": 2, "mergedAt": null, "lastAt": 1791077990000, "verdicts": [{"type": "reply", "at": 1791067806000}, {"type": "reply", "at": 1791077742000}]}, {"id": "MP2", "status": "issued", "worker": "claude-worker", "rounds": 0, "mergedAt": null, "lastAt": 1791077787000, "verdicts": []}, {"id": "MP3", "status": "issued", "worker": "claude-worker", "rounds": 0, "mergedAt": null, "lastAt": 1791073602000, "verdicts": []}, {"id": "PR1", "status": "submitted", "worker": "claude-sonnet", "rounds": 3, "mergedAt": null, "lastAt": 1791065623000, "verdicts": [{"type": "reply", "at": 1791057546000}, {"type": "reply", "at": 1791061515000}, {"type": "reply", "at": 1791064658000}]}, {"id": "PF2", "status": "accepted", "worker": "codex-worker2", "rounds": 2, "mergedAt": null, "lastAt": 1791058835000, "verdicts": [{"type": "return", "at": 1791044950000}, {"type": "accept", "at": 1791053395000}]}, {"id": "H1.2", "status": "merged", "worker": "claude-sonnet", "rounds": 2, "mergedAt": 1790691416000, "lastAt": 1790691428000, "verdicts": [{"type": "other", "at": 1790641796000}, {"type": "other", "at": 1790660004000}, {"type": "return", "at": 1790678263000}, {"type": "accept", "at": 1790691395000}]}, {"id": "H1.3", "status": "merged", "worker": "claude-worker", "rounds": 2, "mergedAt": 1790708183000, "lastAt": 1790708183000, "verdicts": [{"type": "other", "at": 1790641995000}, {"type": "other", "at": 1790658911000}, {"type": "return", "at": 1790704871000}, {"type": "accept", "at": 1790708153000}]}, {"id": "H2", "status": "merged", "worker": "claude-worker", "rounds": 1, "mergedAt": 1790712101000, "lastAt": 1790712102000, "verdicts": [{"type": "other", "at": 1790630864000}, {"type": "other", "at": 1790632365000}, {"type": "other", "at": 1790634135000}, {"type": "other", "at": 1790708294000}, {"type": "accept", "at": 1790712082000}]}], "taskCountSeries": [{"at": 1791039712000, "n": 119, "sha": "371d428"}, {"at": 1791044212000, "n": 123, "sha": "cde82bd"}], "ladder": [{"id": "L0", "title": "L0 · стадии продукта", "status": "accepted", "detail": "5/5 стадий приняты: discovery → concept → operation-map → specification → features", "spend": {"calls": 0}}, {"id": "R0", "title": "R0 · исследование", "status": "accepted", "detail": "Фаза phase:omg-live:R0; вызовов model-call не записано — исследование R0 шло через research-run", "spend": {"calls": 0}}, {"id": "L1", "title": "L1 · карта блоков", "status": "accepted", "detail": "Граф r1: 26 узлов, 72 рёбер; фаза phase:omg-live:L1", "spend": {"calls": 0}}, {"id": "R1", "title": "R1 · исследование блоков", "status": "accepted", "detail": "Черновики R1: 2; фаза phase:omg-live:R1", "spend": {"calls": 174}}, {"id": "L2", "title": "L2 · операции", "status": "accepted", "detail": "Граф r2: 55 узлов (29 операций), 87 рёбер; фаза phase:omg-live:L2", "spend": {"calls": 0}}, {"id": "R2", "title": "R2 · исследование операций", "status": "paused", "detail": "Область R2: 6 узлов + 5 граничных, 34 обязательств; прогонов на паузе: 2", "spend": {"calls": 51}}, {"id": "L3", "title": "L3 · атомарные работы", "status": "none", "detail": "Не начата (graph-layer:3 — лишь проекция уровня 3, horizon пуст)", "spend": {"calls": 0}}, {"id": "R3", "title": "R3 · исследование работ", "status": "none", "detail": "Не начата", "spend": {"calls": 0}}, {"id": "EXEC", "title": "Исполнение", "status": "none", "detail": "Не начато (записей OM: 433)", "spend": {"calls": 0}}], "spend": {"total": {"calls": 245, "tokens": 12355588, "inputTokens": 12001869, "outputTokens": 353719, "cachedInputTokens": 1623040, "reasoningOutputTokens": 58283, "failed": 12, "first": 1788641619453, "last": 1791026115054}, "byLevel": {"R1": {"tokens": 9162285}, "R2": {"tokens": 2552867}, "?": {"tokens": 640436}}}, "mapStatus": {"seq": 2056, "at": 1788717727648}, "r2nodes": 55};
+  async function live(){
+    let d,m;
+    try{ d=await (await fetch('../data/dev-timeline.json')).json(); m=await (await fetch('../data/map.json')).json(); }catch(e){ d=SNAP; m=SNAP; }
+    try{
+      const c=d.counters, T=d.tasks;
+      const st={}; T.forEach(t=>st[t.status]=(st[t.status]||0)+1);
+      const rounds=T.filter(t=>t.rounds>0).map(t=>t.rounds); const avg=rounds.length?rounds.reduce((a,b)=>a+b,0)/rounds.length:0;
+      let acc=0,ret=0; T.forEach(t=>(t.verdicts||[]).forEach(v=>{if(v.type==='accept')acc++;else if(v.type==='return')ret++;}));
+      document.getElementById('pillProg').innerHTML='до рубежа <span class="m">'+c.milestoneRemaining+' из '+c.milestoneClosure+'</span> · влито '+c.merged+' из '+c.tasksTotal;
+      document.getElementById('msTitle').textContent=(c.milestoneTitle||'рубеж').replace(/^Рубеж:\s*/,'');
+      document.getElementById('kMerged').innerHTML=c.merged+' <span style="font-size:12px;color:var(--ink3)">/ '+c.tasksTotal+'</span>';
+      const kr=document.getElementById('kRemain'); kr.textContent=c.milestoneRemaining; if(c.milestoneRemaining===0){kr.className='v ok';}
+      document.getElementById('kRounds').textContent=avg.toFixed(2).replace('.',',');
+      document.getElementById('kReturn').textContent=(acc+ret)?Math.round(100*ret/(acc+ret))+' %':'—';
+      const inWork=(st.issued||0)+(st.submitted||0)+(st.accepted||0); const tot=c.tasksTotal||1;
+      const bar=(l,cls,n)=>'<div><span class="lb">'+l+'</span><div class="b"><i class="'+cls+'" style="width:'+Math.round(100*n/tot)+'%"></i></div><span>'+n+'</span></div>';
+      document.getElementById('bars').innerHTML=bar('влито','ok',c.merged)+bar('в работе','run',inWork)+bar('возвращено','bad',T.filter(t=>t.status==='returned').length)+bar('не начато','',st.planned||0);
+      const last=Math.max(...T.map(t=>t.lastAt||0)); const grew=d.taskCountSeries||[]; const g0=grew.length>1?grew[grew.length-2].n:null, g1=grew.length?grew[grew.length-1].n:null;
+      const day=Date.now()-864e5; const m24=T.filter(t=>t.mergedAt&&t.mergedAt>day).length, r24=T.reduce((s,t)=>s+(t.verdicts||[]).filter(v=>v.type==='return'&&v.at>day).length,0);
+      document.getElementById('delta').innerHTML='За 24 ч: +'+m24+' влито · '+r24+' возврат(ов) · план '+(g0!==null&&g1!==null?(g1-g0>=0?'+':'')+(g1-g0):'—')+' задач. '+(m24>=r24?'<b style="color:var(--ok);font-weight:500">К цели.</b>':'<b style="color:var(--bad);font-weight:500">Больше возвратов, чем влито.</b>')+' Последнее событие: '+dstr(last)+' МСК.';
+      const days=[...Array(14)].map((_,i)=>{const x=new Date(Date.now()-(13-i)*864e5);return x.toLocaleDateString('sv');}); const per={}; T.forEach(t=>{if(t.mergedAt){const k=new Date(t.mergedAt).toLocaleDateString('sv');per[k]=(per[k]||0)+1;}});
+      const mx=Math.max(1,...days.map(k=>per[k]||0)); document.getElementById('spark').innerHTML=days.map(k=>'<i title="'+k+': '+(per[k]||0)+'" style="height:'+Math.round(100*(per[k]||0)/mx)+'%"'+((per[k]||0)===mx?' class="hi"':'')+'></i>').join('');
+      document.getElementById('sparkNote').textContent='пик '+days.find(k=>(per[k]||0)===mx).slice(5).split('-').reverse().join('.')+' — '+mx+' влито за день';
+      document.getElementById('inWork').innerHTML=T.filter(t=>t.status!=='merged').sort((a,b)=>(b.lastAt||0)-(a.lastAt||0)).slice(0,8).map(t=>'<div><b style="font-weight:500;color:var(--ink)">'+t.id+'</b> · '+({issued:'выдана',submitted:'сдана, ждёт ревью',accepted:'принята, не влита',planned:'в плане',returned:'возвращена'}[t.status]||t.status)+(t.worker?' · '+t.worker:'')+'</div>').join('')||'<span style="color:var(--ink3)">всё влито</span>';
+      document.getElementById('liveMeta').textContent='выгрузка seq '+m.mapStatus.seq+' · '+dstr(m.mapStatus.at)+' · граф r2: '+(m.graphs?m.graphs.r2.nodes.length:m.r2nodes)+' узлов';
+      const sm={accepted:'d',paused:'n','in-progress':'n',pending:''}; const lbl={accepted:'принята',paused:'на паузе','in-progress':'идёт',pending:'не начата'};
+      document.getElementById('ladder').innerHTML=m.ladder.map(s=>{const cl=sm[s.status]!==undefined?sm[s.status]:(s.status?'p':'');return '<div class="stg '+cl+'" title="'+(s.detail||'')+'"><b>'+s.id+' · '+(s.title||'').replace(/^.*?·\s*/,'')+'</b>'+(lbl[s.status]||s.status||'не начата')+(s.spend&&s.spend.calls?' · '+s.spend.calls+' выз.':'')+'<div class="pb"><i style="width:'+(s.status==='accepted'?100:s.status?50:0)+'%"></i></div></div>';}).join('');
+      const tot2=m.spend.total||{}; const toks=tot2.tokens||tot2.inputTokens||0; const calls=tot2.calls||0;
+      document.getElementById('spendK').innerHTML='<div><div class="v">'+fmtM(toks)+'</div><div class="l">токенов · карта OM</div></div><div><div class="v">'+calls+'</div><div class="l">вызовов модели</div></div>';
+      const byL=m.spend.byLevel||{}; const keys=Object.keys(byL); const mxl=Math.max(1,...keys.map(k=>byL[k].tokens||0));
+      document.getElementById('spendBars').innerHTML=keys.map(k=>'<div><span class="lb">'+k+'</span><div class="b"><i class="run" style="width:'+Math.round(100*(byL[k].tokens||0)/mxl)+'%"></i></div><span>'+fmtM(byL[k].tokens||0)+'</span></div>').join('');
+    }catch(e){ document.getElementById('delta').textContent='данных нет: '+e.message; }
+  }
+  live();
+  document.querySelectorAll('.node').forEach(n=>n.addEventListener('click',()=>{document.querySelectorAll('.node').forEach(x=>x.classList.remove('sel'));n.classList.add('sel');}));
+  const th=document.getElementById('theme');th.addEventListener('click',()=>{const h=document.documentElement;const d=h.dataset.theme==='dark';h.dataset.theme=d?'light':'dark';th.textContent=d?'☀':'☾';});
+</script>
+</body>
+</html>

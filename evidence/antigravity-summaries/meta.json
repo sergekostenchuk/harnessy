@@ -1,0 +1,857 @@
+{
+ "24e7e3c4-8927-4720-8a53-be1307097bef": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-01-24T21:33:39.027969Z",
+   "ver": null,
+   "summary": "Comprehensive implementation plan for Auto-iFlow landing page documentation. Includes 13 major sections: header, hero, what is Auto-iFlow, architecture overview, 5 key technologies deep dive (Sandbox, Consilium, Model Routing, QA Pipeline, Security), enhanced workflow, features, 3 detailed user journeys, best practices, artifact structure, getting started guide, CTA, and footer. Design follows Bauhaus/De Stijl style with detailed specifications for colors, typography, layout, and geometric elements. Plan ensures users gain complete understanding of Auto-iFlow architecture, capabilities, and usage patterns."
+  },
+  {
+   "file": "junior_analysis_review.md",
+   "type": "OTHER",
+   "updated": "2026-01-24T20:52:41.402155Z",
+   "ver": null,
+   "summary": "Критический анализ описания Auto-iFlow от джуна. Оценка корректности информации (85% точности), выявление несуществующих файлов (ARCHITECTURE.md, REFACTORING_SUMMARY.md), пропущенных ключевых модулей (Sandbox Mode, Consilium, Model Routing) и рекомендации по улучшению описания проекта."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-01-24T21:33:29.830511Z",
+   "ver": "3",
+   "summary": "Task checklist for creating comprehensive Auto-iFlow landing page documentation that includes architecture overview, key technologies deep dive, detailed user journeys, best practices, and complete getting started guide in Bauhaus/De Stijl style"
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-01-24T21:17:22.416647Z",
+   "ver": null,
+   "summary": "Walkthrough documentation of the Auto-iFlow Bauhaus-style landing page, detailing all completed sections (header, hero with geometric composition, 5-step workflow, 6 feature cards, 2 user journeys, CTA, footer), design system (colors, typography, borders), layout fixes applied, and content coverage verification."
+  }
+ ],
+ "e49556a8-5514-4fcd-b853-25205c3bd01e": [
+  {
+   "file": "auto-iflow-deep-dive.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-01-26T17:03:02.954763Z",
+   "ver": null,
+   "summary": "Comprehensive educational guide to Auto-iFlow architecture, components, workflows, and technologies. Covers system architecture, Kanban workflow, Sandbox mode, Consilium, Model Routing, QA Pipeline, Security Model, and project structure with detailed explanations of each component."
+  },
+  {
+   "file": "consilium-gap-analysis.md",
+   "type": "OTHER",
+   "updated": "2026-01-26T17:46:34.639270Z",
+   "ver": null,
+   "summary": "Critical gap analysis comparing the educational guide (auto-iflow-deep-dive.md) with the actual Consilium implementation plan (NEW-CONCIL.md). Identifies five major errors: misrepresentation of Consilium implementation, incorrect file paths (.auto-iflow vs .auto-claude), simplified Kanban statuses, missing UX requirements, and absence of AS-IS/TO-BE/GAP methodology. Provides detailed corrections and lessons learned for future documentation."
+  },
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-01-28T09:48:23.229925Z",
+   "ver": null,
+   "summary": "Implementation plan for updating PRESENTATION-AUTO-IFLOW.pen with 2.8.0 features (Pre-Code QA Guardrails, Post-Code Tests, Quality Pipeline). Identifies 5 problems: missing Pre-Code QA info, missing Post-Code Tests info, outdated Benefits Cards, potentially outdated Workflow, and old copyright year. Proposes adding new Benefits Cards, updating Features section, adding Quality Pipeline visualization, and updating Footer. Includes manual verification steps."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-01-28T09:48:23.235999Z",
+   "ver": null,
+   "summary": "Task breakdown for updating PRESENTATION-AUTO-IFLOW.pen with 2.8.0 features. 6 phases with 18 total tasks: Phase 1 (Analysis - completed), Phase 2 (Add Benefits Cards for Pre-Code QA and Post-Code Tests), Phase 3 (Create Quality Pipeline section or update Architecture), Phase 4 (Update Features cards), Phase 5 (Update Footer copyright year to 2026), Phase 6 (Verification and screenshot). Includes technical details (color scheme, fonts, icons) and user questions about section placement and card order."
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-01-28T10:19:44.290896Z",
+   "ver": null,
+   "summary": "Walkthrough documenting the completed Pencil landing page updates: 2 new Benefits Cards (Pre-Code QA Guardrails, Post-Code Tests), Quality Pipeline section with 6 stages, Footer updates (year to 2026, Telegram/Threads social icons). All changes verified via grep search. Includes diffs and summary of visual changes made."
+  }
+ ],
+ "845a0395-1b50-4771-a060-3f89aad443e2": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-01-29T18:19:50.310663Z",
+   "ver": null,
+   "summary": "Detailed translation plan for two HTML presentation files into RU, EN, FR, and ES while preserving HTML structure, technical terms, and formatting integrity"
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-01-29T18:18:48.799214Z",
+   "ver": null,
+   "summary": "Task checklist for translating two HTML presentation files into multiple languages (RU, EN, FR, ES) while preserving HTML structure and non-translatable technical terms"
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-01-29T21:32:30.278112Z",
+   "ver": null,
+   "summary": "Complete walkthrough of HTML translation project. Successfully translated two HTML files (Matrix-Codex-PRESENTATION and Matrix-Codex-DOCS) from English/Russian to Russian, French, Spanish, and English - total of 6 translations completed. All files maintain original HTML structure, CSS styling, JavaScript code, mermaid diagrams, and technical terminology. Files range from 20KB to 53KB with comprehensive documentation content."
+  }
+ ],
+ "63d354ac-0921-4be9-afe0-30f6c457b187": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-01-30T14:11:00.447085Z",
+   "ver": "2",
+   "summary": "Tracking test coverage addition to task file."
+  }
+ ],
+ "782223d6-787e-43ef-bdfa-fd6273078fa1": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-01-30T22:57:35.595808Z",
+   "ver": "1",
+   "summary": "Implementing read-only model/thinking display in Agent Pipeline UI and adding a link to Model Routing settings."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-01-30T18:50:32.918616Z",
+   "ver": null,
+   "summary": "Task tracking for the Plan Importer feature. Based on TASKS-CONCEPT-Tasks-importer.md."
+  }
+ ],
+ "66ab4f89-0e16-457a-82f0-0050766af467": [
+  {
+   "file": "CONCEPT-OpenCode-Integration.md",
+   "type": "OTHER",
+   "updated": "2026-01-31T22:02:19.459451Z",
+   "ver": null,
+   "summary": "Teaser concept for integrating OpenCode SDK into Auto-iFlow as an alternative agent executor."
+  },
+  {
+   "file": "CRUSH_INFO.md",
+   "type": "OTHER",
+   "updated": "2026-01-31T21:26:28.984126Z",
+   "ver": "1",
+   "summary": "Marking CRUSH_INFO as deprecated."
+  },
+  {
+   "file": "OPENCODE_INFO.md",
+   "type": "OTHER",
+   "updated": "2026-01-31T21:36:40.436717Z",
+   "ver": "1",
+   "summary": "Added details about official Open Source SDKs (JS/TS, Python, Go) to the info file."
+  },
+  {
+   "file": "RESEARCH-Radix-ScrollArea-Width-Bug.md",
+   "type": "OTHER",
+   "updated": "2026-02-01T06:52:53.076702Z",
+   "ver": null,
+   "summary": "Research on Radix ScrollArea display:table bug affecting Kanban card width. Contains root cause analysis, GitHub issue references, and 3 recommended solutions with pros/cons."
+  }
+ ],
+ "7bef6150-af34-41e1-9635-2301eceb8e69": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-04T00:10:28.809314Z",
+   "ver": null,
+   "summary": "Implementation plan for global fix: non-code tasks should skip post-code validation instead of failing. Modifies should_run_post_code_tests() and run_post_code_tests() to check task_type, adds new tests for skip behavior."
+  },
+  {
+   "file": "solution_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-04T01:19:29.931380Z",
+   "ver": null,
+   "summary": "Solution plan for making non-code tasks auto-complete to Done after CODING phase. Analyzes root cause and proposes 3 implementation variants with pros/cons."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-02T23:52:25.334933Z",
+   "ver": null,
+   "summary": "Task checklist for creating implementation plan document for CODEX-SEPARATE-PIPELINES integration"
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-02-04T00:49:30.760632Z",
+   "ver": null,
+   "summary": "Documentation of non-code task validation skip implementation. Applied defense-in-depth fix in session.py and post_code_tests.py, updated UI badge color, verified with 5/5 passing tests."
+  }
+ ],
+ "360adf66-464e-4001-95b2-ec4b28954019": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-03T23:15:25.806569Z",
+   "ver": null,
+   "summary": "Add support for Claude Opus 5.0 (claude-opus-5-0-20260302) to the frontend model selection."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-03T23:14:42.046329Z",
+   "ver": null,
+   "summary": "Task list for adding the new model configuration."
+  }
+ ],
+ "35342116-681a-4e69-b6da-767721b0851f": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-04T23:11:58.611629Z",
+   "ver": null,
+   "summary": "Implementation checklist for Strict Intake feature (Variant B). Organized by phases (1A Backend+IPC, 1B Minimal UI, 2 UI Polish, 3 Robustness, 4 Nice-to-have). Includes inline code snippets, field mapping table, and references to main plan sections for context preservation when working with large documents."
+  }
+ ],
+ "cf9fe37f-2cad-45e2-92c3-e880f94e5f9a": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-05T23:58:47.526753Z",
+   "ver": "1",
+   "summary": "Task tracking for Intake V2 planning work. All file analysis complete, both IMPL-PLAN and TASKS documents created in NEW-PLANS directory."
+  }
+ ],
+ "09a54edc-d1cf-4cf1-aa3f-f88054f9b3ce": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-07T19:21:11.260196Z",
+   "ver": "7",
+   "summary": "Final OpenCode SDK integration plan addressing all feedback. Backend from real entry point (iflow_client/AgentRunner). MVP phase: driver_type in runtime, iflow default, opencode opt-in, fallback on error. Links to existing settings.ts, settings-store.ts, Model Routing UI. Security contract with whitelist, version probe, UI states. Phased test strategy: unit first, then smoke, then matrix."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-07T19:21:11.261024Z",
+   "ver": "3",
+   "summary": "Task checklist with phased approach: MVP backend (factory+wrapper+fallback), security contract (whitelist+probe+UI states), frontend integration with existing stores, and phased test strategy (unit→smoke→matrix)."
+  }
+ ],
+ "043703bc-0ef8-47a7-9130-9815fca5346e": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-08T15:39:58.818394Z",
+   "ver": null,
+   "summary": "Complete architectural concept plan for implementing OpenCode as primary provider with iFlow as fallback. Covers discovery results with specific file references, component architecture with Mermaid diagrams, fallback policy decision matrix, backend/frontend implementation concepts, security considerations, migration strategy with feature flags, testing strategy, phased task breakdown (P0/P1/P2), Definition of Done, and risk analysis with mitigations."
+  },
+  {
+   "file": "opencode-integration-contract.md",
+   "type": "OTHER",
+   "updated": "2026-02-08T16:36:28.399930Z",
+   "ver": null,
+   "summary": "OpenCode Integration Contract: mandatory API contract document defining adapter input/output, error classification (timeout, transport, auth, business), execution metadata format, and subprocess security constraints. Any deviations require RFC amendment."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-08T16:36:58.393332Z",
+   "ver": "4",
+   "summary": "Task checklist for provider fallback architecture. All blockers addressed plus new items: Coverage Map, Integration Contract, single intercept strategy. User review pending for final approval."
+  }
+ ],
+ "6620bac1-89cd-4608-8b77-7072db1ddda4": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-10T00:48:57.898210Z",
+   "ver": "1",
+   "summary": "Plan to enable OpenCode in dev build by relaxing environment variable restrictions in `provider-env.ts`. This allows OpenCode models to be used even if 'iflow' is the primary provider."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-10T00:48:56.448800Z",
+   "ver": "1",
+   "summary": "Task list for enabling OpenCode integration in dev build. Focus on relaxing `provider-env.ts` restrictions and verifying UI behavior."
+  }
+ ],
+ "3e9211ea-da7a-4cd3-b33e-ae19a60fee5e": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-09T21:06:17.175064Z",
+   "ver": null,
+   "summary": "Tracking the creation of the .docx commercial proposal."
+  }
+ ],
+ "3c4f2b44-b189-4ff1-9234-4ecf826dce90": [
+  {
+   "file": "messenger_report.md",
+   "type": "OTHER",
+   "updated": "2026-02-10T11:33:23.887101Z",
+   "ver": null,
+   "summary": "Research report on 5 open-source messengers with Telegram-like statistics. Includes Rocket.Chat, Zulip, Mattermost, Element, and Tinode."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-10T11:29:37.319163Z",
+   "ver": null,
+   "summary": "Research open-source messengers with Telegram-like statistics for community management."
+  }
+ ],
+ "ebe3010c-500f-43d6-b304-a85040b4b8ab": [
+  {
+   "file": "QGIS-SDK-GUIDE.md",
+   "type": "TASK",
+   "updated": "2026-02-11T17:09:32.692854Z",
+   "ver": null,
+   "summary": "Guide for accessing and using QGIS Python SDK (PyQGIS) locally."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-11T15:32:09.129995Z",
+   "ver": "14",
+   "summary": "Task list for Land Purchase Agreement and QGIS visualization. DKP completed. QGIS blocked on координата conversion - МСК-50 to WGS84 conversion inaccurate, trying alternative import methods."
+  }
+ ],
+ "25bf0543-2810-417d-89b3-566ebe2411c7": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-12T02:59:13.968407Z",
+   "ver": null,
+   "summary": "Task to combine video and audio files with a fade-out effect. Steps include verifying files, getting duration, calculating fade parameters, and executing the ffmpeg command."
+  }
+ ],
+ "9ac297e2-abec-4435-ae02-a5016877be05": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-12T17:14:58.148700Z",
+   "ver": null,
+   "summary": "Task checklist for creating QGISChat pre-TZ concept document based on context documents."
+  }
+ ],
+ "75b91848-f6cc-4b0a-88e8-c1e930398982": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-15T23:31:09.326082Z",
+   "ver": null,
+   "summary": "Add \"Document & Web Enrichment\" flow to `UX-FLOWS-CONTEXT-SCOPE.md` and renumber sections."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-15T23:30:58.437913Z",
+   "ver": null,
+   "summary": "Task list for updating UX Flows diagrams."
+  }
+ ],
+ "dc1d2e16-ecf3-417a-a22c-5a72812135f3": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-16T16:34:53.789567Z",
+   "ver": null,
+   "summary": "Plan for creating the 'Detailed Product Concept' document. Defines the structure and source material for each section."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-16T20:41:47.585156Z",
+   "ver": "76",
+   "summary": "Marked Delivery Plan refinement task as done."
+  }
+ ],
+ "151e1ddb-fcdd-46cd-8f62-445d76854457": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-18T20:47:13.938537Z",
+   "ver": "4",
+   "summary": "Marked task plan creation as done. All planning tasks are now complete."
+  }
+ ],
+ "83c633c5-4e2b-4e9f-b80a-182a4ed98360": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-20T17:26:14.777999Z",
+   "ver": "17",
+   "summary": "Task list for UI fixes. Checked off the final missing screens and marked the UI Refinements epic as complete."
+  }
+ ],
+ "e25952ed-25dd-48fd-aa37-682d9796d575": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-22T03:39:13.679120Z",
+   "ver": null,
+   "summary": "Update FIX-ARTIGRAM-TASKS.MD section 3 UI Screen Matrix and lane commands"
+  }
+ ],
+ "922c4b13-e3c9-4975-a959-cbd4bc07d636": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-23T02:40:47.755976Z",
+   "ver": null,
+   "summary": "Plan to replace the hardcoded RAG stub in ARTIGRAM with a real ChromaDB-backed RAG pipeline. Uses a Python ChromaDB sidecar process managed by Tauri runtime, and a Rust reqwest HTTP client module to replace the static `build_context_pack` function."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-22T20:03:39.024397Z",
+   "ver": null,
+   "summary": "Task list for finding the latest stable version of Tauri."
+  }
+ ],
+ "8280e8dd-b107-47e6-a4f6-561847d80c0e": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-23T20:15:04.284262Z",
+   "ver": null,
+   "summary": "Implementation plan for OPENCODE resilience policy"
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-23T20:13:48.986959Z",
+   "ver": null,
+   "summary": "Task breakdown for T-R013 OpenCode resilience"
+  }
+ ],
+ "45cc8304-d5b7-4309-9ae0-07e948077dd8": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-24T10:46:40.800171Z",
+   "ver": null,
+   "summary": "Create task plan to explore ARTIGRAM-UI directory"
+  }
+ ],
+ "b15ae983-180a-47d6-931d-400816ac7a30": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-25T22:02:10.618098Z",
+   "ver": "3",
+   "summary": "Tasks for ARTIGRAM logo design"
+  }
+ ],
+ "60bb372e-2586-4e44-9310-284563e527a6": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-27T14:02:03.719634Z",
+   "ver": "4",
+   "summary": "Avatar flickering fix plan v4 (final). JS changes: A1 Map + avatarDbg helper; A2 lifecycle reset on logout/switch/disconnect; A3 guard fix; A4 render with onerror infinite-loop guard (restore_attempted flag), onload writes back to chat.avatarSrc and clears _pendingAvatarSrc; A5 diagnostics. Rust: extracts run_chat_read_sync (no send-receive loop) reused in desktop_tdlib_live_sync, registered in invoke_handler and COMMAND_ALLOWLIST. health-check no longer calls sync."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-27T13:33:00.793032Z",
+   "ver": null,
+   "summary": "Checklist for assimilating TDLib, Tauri, RAG, and OpenCode skills."
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-02-27T14:23:16.234430Z",
+   "ver": null,
+   "summary": "Verification of colleague's implementation of the avatar flickering fix (commit 1795407). All plan points verified: JS state, debug helper, lifecycle resets, render block with srcToTry order/restoreAttempted/onload commit. Rust: run_chat_read_sync (sync-only, no send loop), clean health-check, desktop_tdlib_live_sync registered in invoke_handler and COMMAND_ALLOWLIST. FAILs are all env-related (no TDLib binary, no credentials), not regressions from this fix."
+  }
+ ],
+ "52c71ee8-5e1b-4e75-a019-647736b0d40b": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-02-27T19:02:10.924309Z",
+   "ver": "1",
+   "summary": "Added Page Transitions implementation plan to the document."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-27T19:05:55.737339Z",
+   "ver": "4",
+   "summary": "Marked Page Transitions as Complete"
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-02-27T18:56:06.159157Z",
+   "ver": null,
+   "summary": "A summary walkthrough of the functional Prototype including Backend and Admin Panels."
+  }
+ ],
+ "8f366939-c374-4354-9a1a-d0e6a4239d90": [
+  {
+   "file": "prompt_evaluation.md",
+   "type": "OTHER",
+   "updated": "2026-02-28T01:50:12.041174Z",
+   "ver": null,
+   "summary": "Detailed evaluation report of 10 CASH-FIX prompt files (PROMPT-T-001..T-010) against their corresponding task cards in CASH-FIX-TASK-PLAN.MD v2.2. Each prompt rated on format, AC coverage, zone accuracy, dependencies, constraints, and evidence. Average score: 9.1/10. Two systemic issues identified: missing Depends on lines and missing specific test/proof references."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-27T21:53:26.668734Z",
+   "ver": null,
+   "summary": "Task plan for researching Telegram caching and hashing."
+  },
+  {
+   "file": "telegram_caching_research.md",
+   "type": "OTHER",
+   "updated": "2026-02-27T21:54:00.145376Z",
+   "ver": null,
+   "summary": "Research on how Telegram clients hash and load data instantly."
+  }
+ ],
+ "b0e923c2-57e3-4679-9d1a-36586a8f62a7": [
+  {
+   "file": "audit_report.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-02-28T01:17:47.722386Z",
+   "ver": null,
+   "summary": "Comprehensive 8-point audit of CASH-FIX-TASK-PLAN.MD against TASK-PLAN-STANDARD.md and CASH-FIX-CONCEPT.MD. Found 8 violations (2 Critical, 4 Major, 2 Minor), patched 6. Includes verification tables for: section completeness, status consistency, bidirectional deps, closure rules, resume protocol, acceptance criteria, concept alignment (WS/TG/RK), and commit format."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-28T01:13:28.580457Z",
+   "ver": "3",
+   "summary": "All 3 steps complete: Pass 1, Pass 2, and consistency audit for CASH-FIX-TASK-PLAN.MD rewrite."
+  }
+ ],
+ "13a81429-ad88-47e6-9cf8-914861d46147": [
+  {
+   "file": "audit_t001_t015.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-02-28T10:47:48.873161Z",
+   "ver": "1",
+   "summary": "Corrected code audit comparing CASH-FIX task plan T-001 through T-015 against actual implementation. All 15 tasks are fully implemented with matching code. Previous audit had faulty regex. Overall score: 9/10."
+  },
+  {
+   "file": "audit_t016_t029.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-02-28T11:43:20.218881Z",
+   "ver": null,
+   "summary": "Code audit of CASH-FIX tasks T-016 through T-029 against prompt acceptance criteria. All 14 tasks confirmed as implemented across HTML, Rust, and test files. Overall score: 9.5/10."
+  },
+  {
+   "file": "audit_t030_t042.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-02-28T12:56:14.918171Z",
+   "ver": null,
+   "summary": "Code audit of CASH-FIX tasks T-030 through T-042 against prompt acceptance criteria. All 13 tasks evaluated. High code completeness but some manual verification reports are missing. Overall score: 9/10."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-02-28T10:33:10.529935Z",
+   "ver": null,
+   "summary": "Checklist for auditing code implementation of CASH-FIX tasks T-001 through T-015 against the task plan."
+  }
+ ],
+ "dab0251d-fa9c-4b4e-8771-d4dfb8447b5c": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-03-01T15:28:48.086555Z",
+   "ver": null,
+   "summary": "Created the task plan to track fixing task document."
+  }
+ ],
+ "1474fb23-9ece-4fbd-afe0-e1f5fe803a5c": [
+  {
+   "file": "impl_audit_t001_t002.md",
+   "type": "OTHER",
+   "updated": "2026-03-04T17:51:07.149781Z",
+   "ver": null,
+   "summary": "Code implementation audit for T-001 and T-002. Evaluates the codebase changes applied by the executor, including React source files and vitest specs, against the task acceptance criteria."
+  },
+  {
+   "file": "impl_audit_t003_t006.md",
+   "type": "OTHER",
+   "updated": "2026-03-04T18:17:19.636130Z",
+   "ver": null,
+   "summary": "Code implementation audit for T-003 through T-006. Evaluates the codebase changes applied by the executor, including React/Zustand frontend state, UX polishes, TS contracts, and Tauri command wiring."
+  },
+  {
+   "file": "impl_audit_t007_t008.md",
+   "type": "OTHER",
+   "updated": "2026-03-04T18:44:54.095501Z",
+   "ver": null,
+   "summary": "Code implementation audit for T-007 and T-008. Evaluates the codebase changes applied by the executor, focusing on secure store integration for AI provider keys and the deterministic RAG policy resolver."
+  },
+  {
+   "file": "prompt_audit_t001_t005.md",
+   "type": "OTHER",
+   "updated": "2026-03-04T17:08:27.114877Z",
+   "ver": null,
+   "summary": "Comprehensive audit of 5 task prompts (T-001 through T-005) from AI-RAG-STRUCTURE-FIX, comparing each prompt file against its corresponding task card in the plan §6.2. Evaluates field-by-field compliance, identifies discrepancies, and provides scores."
+  },
+  {
+   "file": "prompt_audit_t006_t010.md",
+   "type": "OTHER",
+   "updated": "2026-03-04T17:12:17.529797Z",
+   "ver": null,
+   "summary": "Comprehensive audit of 5 task prompts (T-006 through T-010) comparing each prompt against its corresponding task card in the plan §6.2. Two minor findings: T-007 missing explicit secure store audit command, T-008 missing explicit determinism proof requirement."
+  },
+  {
+   "file": "prompt_audit_t011_t015.md",
+   "type": "OTHER",
+   "updated": "2026-03-04T17:16:28.091429Z",
+   "ver": null,
+   "summary": "Comprehensive audit of 5 task prompts (T-011 through T-015) comparing each prompt against its corresponding task card in the plan §6.2. Notes the correct implementation of the FAST_TRACK mode in T-013."
+  },
+  {
+   "file": "prompt_audit_t016_t020.md",
+   "type": "OTHER",
+   "updated": "2026-03-04T17:19:39.989566Z",
+   "ver": null,
+   "summary": "Comprehensive audit of 5 task prompts (T-016 through T-020) comparing each prompt against its corresponding task card in the plan §6.2. Confirms exact matching of dependencies and skill routing."
+  },
+  {
+   "file": "prompt_audit_t021.md",
+   "type": "OTHER",
+   "updated": "2026-03-04T17:22:02.314550Z",
+   "ver": null,
+   "summary": "Comprehensive audit of the final task prompt T-021, comparing it against its corresponding task card in the plan §6.2. Confirms exact matching of dependencies, skill routing, and closure rules."
+  }
+ ],
+ "c25c63b8-fbef-424d-b9be-0fc60cae3294": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-03-17T10:35:17.489651Z",
+   "ver": "6",
+   "summary": "Plan for achieving absolute photorealism by adding micro-imperfections, advanced lighting, and 'lived-in' details."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-03-17T09:56:41.725568Z",
+   "ver": "8",
+   "summary": "Task list for the house composition rendering based on specific user images."
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-03-16T19:25:29.703379Z",
+   "ver": null,
+   "summary": "Walkthrough of the photo enhancement and house rendering task for the Klimovo AI project. Includes before/after comparison."
+  }
+ ],
+ "bcff1cbc-28df-4273-831f-acfd37edaa63": [
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-03-17T10:55:46.282399Z",
+   "ver": null,
+   "summary": "Visualization of a premium modern forest villa integrated into an 80-100 year old pine and spruce forest. The image captures the Shou Sugi Ban cladding, concrete base, full-height glazing, and an established stone path through a park-like cleared woodland floor."
+  }
+ ],
+ "77742f91-b608-4810-8794-20e195421bac": [
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-03-17T11:01:59.187282Z",
+   "ver": null,
+   "summary": "Walkthrough of the generated forest residence visualization. Includes the final image and description of how it meets the user's requirements."
+  }
+ ],
+ "97c266ef-400e-4315-abe2-88da67facf7f": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-03-17T11:28:50.118891Z",
+   "ver": "2",
+   "summary": "Strategy to fix the 'hanging' corner and geometric misalignment by enforcing structural logic and vertical precision."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-03-17T11:16:35.319373Z",
+   "ver": null,
+   "summary": "Tracking the progress of generating and reviewing the premium forest villa visualization."
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-03-17T11:33:24.635105Z",
+   "ver": "3",
+   "summary": "Final walkthrough presenting the geometrically correct v4 villa, alongside previously improved landscape and interior textures."
+  }
+ ],
+ "e645e9c4-4f19-4e01-9767-1842ed4cd677": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-03-17T14:05:15.716460Z",
+   "ver": null,
+   "summary": "Implementation plan for generating and saving 5 architectural visualizations for the Klimovo AI project."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-03-17T16:39:44.147521Z",
+   "ver": "5",
+   "summary": "Expanded task list to include the 12-image series (3 angles for each house typology S, M, L, XL). Marked previous additional objects as done conceptually since the user moved on to this larger set."
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-03-17T14:07:29.123374Z",
+   "ver": null,
+   "summary": "Walkthrough of the generated architectural visualizations for Klimovo AI (Lot S, M, L, XL). Note that the Lake House image failed due to quota limits."
+  }
+ ],
+ "66af475e-6a82-4269-94e0-02a699c30868": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-03-19T14:08:16.224347Z",
+   "ver": null,
+   "summary": "Plan for generating 10 architectural images for the Klimovo AI project based on the final prompt batch."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-03-19T14:08:02.299328Z",
+   "ver": null,
+   "summary": "A checklist for reviewing and processing the top 10 final prompts for the Klimovo AI project."
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-03-19T14:47:40.604888Z",
+   "ver": "1",
+   "summary": "Updated walkthrough with the final location of images in the `KLIMOVO-AI` subfolder."
+  }
+ ],
+ "3cfd223b-f582-4eae-9426-9579a63887e3": [
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-03-20T19:15:48.963943Z",
+   "ver": "14",
+   "summary": "Marked task for downloading Stitch screens."
+  }
+ ],
+ "71c0b886-7c34-49e2-95bd-55b54f6d8327": [
+  {
+   "file": "clinic_website_audit.md",
+   "type": "OTHER",
+   "updated": "2026-03-21T16:48:20.123464Z",
+   "ver": null,
+   "summary": "A professional 10-category comparative audit of two versions of the M-AZUR aesthetic clinic website: the production site (m-azurclinic.ru) and the staging redesign (aamazuxf.beget.tech). Includes scored analysis across visual design, UX, trust architecture, conversion, mobile UX, SEO, accessibility, and technical quality, followed by a comparative table, winner declaration, and actionable recommendations."
+  }
+ ],
+ "afd39e0a-d8fd-4145-9c89-48b259284e98": [
+  {
+   "file": "XHTTP-VLESS-TASKPLAN.md",
+   "type": "TASK",
+   "updated": "2026-03-22T22:08:12.076324Z",
+   "ver": null,
+   "summary": "Детальный практический task plan по развёртыванию VLESS+XHTTP (Xray-core) на VPS. Охватывает: выбор целевого VPS из реального инвентаря, две архитектурные ветки (XHTTP+TLS и XHTTP+REALITY), фазы инвентаризации/апгрейда/деплоя/проверок, e2e acceptance test, rollback plan, determination of done, список артефактов на сервере, формат share-link для клиента. Явно помечены decision points и риски."
+  }
+ ],
+ "ed14ef0f-9a57-44fb-9602-34a426081255": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-04-18T23:48:25.264324Z",
+   "ver": "1",
+   "summary": "Plan for integrating Hyperframes into the agent's capabilities using native skills and KI system."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-04-18T23:52:56.833824Z",
+   "ver": "2",
+   "summary": "Tasks for integrating Hyperframes into the system."
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-04-19T01:14:28.243054Z",
+   "ver": "1",
+   "summary": "Summary of the Hyperframes KI integration."
+  }
+ ],
+ "7aab53a3-dd2e-4207-8d48-59e115af048b": [
+  {
+   "file": "all_cards_preview.md",
+   "type": "OTHER",
+   "updated": "2026-04-27T10:24:53.737178Z",
+   "ver": null,
+   "summary": "Carousel of the remaining 7 project cards"
+  },
+  {
+   "file": "extra_cards_preview.md",
+   "type": "OTHER",
+   "updated": "2026-04-27T10:34:28.693190Z",
+   "ver": null,
+   "summary": "Carousel for OpenCut and LosslessCut"
+  },
+  {
+   "file": "final_cards_preview.md",
+   "type": "OTHER",
+   "updated": "2026-04-27T10:40:51.181245Z",
+   "ver": null,
+   "summary": "Carousel with all 10 project cards, using README screenshots for GitHub projects"
+  },
+  {
+   "file": "kimu_card_preview.md",
+   "type": "OTHER",
+   "updated": "2026-04-27T11:08:33.292989Z",
+   "ver": null,
+   "summary": "Kimu project card using the provided screenshot"
+  },
+  {
+   "file": "olive_card_preview.md",
+   "type": "OTHER",
+   "updated": "2026-04-27T10:19:38.358525Z",
+   "ver": null,
+   "summary": "The third programmatic carousel card image (Olive) with a Macbook display."
+  },
+  {
+   "file": "opencut_updated_preview.md",
+   "type": "OTHER",
+   "updated": "2026-04-27T10:50:30.493155Z",
+   "ver": null,
+   "summary": "Updated OpenCut card with the user-provided screenshot"
+  },
+  {
+   "file": "remotion_card_preview.md",
+   "type": "OTHER",
+   "updated": "2026-04-27T10:06:47.509124Z",
+   "ver": null,
+   "summary": "The first programmatic carousel card image (Remotion) with a Macbook display."
+  },
+  {
+   "file": "shotcut_card_preview.md",
+   "type": "OTHER",
+   "updated": "2026-04-27T10:13:40.951697Z",
+   "ver": null,
+   "summary": "The second programmatic carousel card image (Shotcut) with a Macbook display."
+  }
+ ],
+ "9824330c-e20a-43c9-8b1f-5259bc7d4b4a": [
+  {
+   "file": "implementation_plan.md",
+   "type": "IMPLEMENTATION_PLAN",
+   "updated": "2026-05-20T00:28:01.270536Z",
+   "ver": null,
+   "summary": "Implementation plan for RAG cache validation script, preflight checks integration, and geocoding documentation."
+  },
+  {
+   "file": "task.md",
+   "type": "TASK",
+   "updated": "2026-05-20T00:28:46.428051Z",
+   "ver": null,
+   "summary": "Task list completed for RAG cache validation, preflight integration, and documentation updates."
+  },
+  {
+   "file": "walkthrough.md",
+   "type": "WALKTHROUGH",
+   "updated": "2026-05-20T00:28:44.898474Z",
+   "ver": null,
+   "summary": "Walkthrough artifact updated with RAG validation details, preflight check logs, and court geocoding architecture documentation."
+  }
+ ]
+}

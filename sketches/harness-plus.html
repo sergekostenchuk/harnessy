@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HARNESS + что добавить</title>
+<style>
+  :root { --bg:#1b1b1b; --panel:#262626; --panel2:#2e2e2e; --line:#3a3a3a; --ink:#e4e4e4; --dim:#9a9a9a; --blue:#3f74d1; --sel:#1f3b6b; --add:#e8b344; --warn:#d98c3a; --ok:#58a86a; --bad:#d35b5b; --ask:#e8d36b; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:20px 16px 60px; background:#111; color:var(--ink); font:13px/1.4 -apple-system,"Helvetica Neue",Arial,sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:16px; margin:36px 0 8px; }
+  p.lead { color:#bbb; max-width:960px; margin:0 0 14px; }
+  .scr { background:var(--bg); border:1px solid #444; max-width:1000px; }
+  .top { display:flex; align-items:center; gap:8px; padding:6px 8px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .top .cwd { background:#111; border:1px solid var(--line); padding:3px 8px; min-width:180px; color:#ccc; }
+  .btn { border:1px solid #555; background:#333; color:#eee; padding:3px 9px; border-radius:3px; white-space:nowrap; font-size:12px; }
+  .btn.blue { background:var(--blue); border-color:var(--blue); }
+  .chip { display:inline-block; border-radius:10px; padding:1px 8px; font-size:11px; background:#2c5a3a; color:#cfe; white-space:nowrap; }
+  .banner { background:#5a4a1a; color:#f6e2a0; padding:4px 8px; font-size:12px; border-bottom:1px solid var(--line); }
+  .cols { display:grid; grid-template-columns:170px 1fr 230px; min-height:430px; }
+  .left { background:var(--panel); border-right:1px solid var(--line); padding:8px; }
+  .left .t { font-size:10px; color:var(--dim); letter-spacing:.06em; margin:4px 0 6px; }
+  .seat { display:flex; gap:7px; align-items:flex-start; padding:5px 4px; border-radius:3px; }
+  .seat.sel { background:var(--sel); }
+  .dot { width:8px; height:8px; border-radius:50%; background:#666; margin-top:5px; flex:none; }
+  .dot.work { background:var(--blue); } .dot.ask { background:var(--ask); } .dot.bad { background:var(--bad); }
+  .seat b { display:block; font-weight:600; } .seat small { color:var(--dim); display:block; }
+  .center { padding:0; display:flex; flex-direction:column; }
+  .pane-h { display:flex; align-items:center; gap:8px; padding:6px 8px; background:var(--panel2); border-bottom:1px solid var(--line); font-size:12px; }
+  .pane-h b { font-size:13px; }
+  .feed { flex:1; padding:8px; display:flex; flex-direction:column; gap:6px; }
+  .msg { background:#2a3a55; border-radius:4px; padding:6px 8px; font-size:12px; color:#dbe4f5; }
+  .msg.me { background:#2d2d2d; color:#ddd; }
+  .msg .h { color:#9fb3d6; font-size:11px; margin-bottom:2px; }
+  .act { color:var(--dim); font-size:11px; padding:0 8px; }
+  .card { background:#3b3320; border:1px solid #6b5a2a; padding:6px 8px; border-radius:4px; font-size:12px; }
+  .comp { border-top:1px solid var(--line); padding:8px; background:var(--panel); }
+  .comp .in { background:#111; border:1px solid var(--line); color:#777; padding:8px; margin-bottom:6px; }
+  .row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .sel-k { background:#333; border:1px solid #555; padding:2px 6px; font-size:12px; }
+  .right { background:var(--panel); border-left:1px solid var(--line); padding:8px; }
+  .right .t { font-size:10px; color:var(--dim); letter-spacing:.06em; margin:4px 0 6px; }
+  .right .card { margin-bottom:6px; }
+  .journal { border-top:1px solid var(--line); background:#151515; padding:6px 8px; font:11px/1.5 Menlo,monospace; color:#bbb; max-height:110px; overflow:hidden; }
+  /* добавления */
+  .add { outline:2px solid var(--add); outline-offset:1px; position:relative; }
+  .n { display:inline-block; min-width:17px; height:17px; line-height:17px; text-align:center; border-radius:50%; background:var(--add); color:#1a1a1a; font-size:11px; font-weight:700; margin-right:4px; }
+  .addchip { display:inline-block; border-radius:10px; padding:1px 8px; font-size:11px; background:#3d3419; color:#f3d98a; border:1px solid #7a6530; white-space:nowrap; }
+  .st { font-size:11px; color:#f3d98a; }
+  .notes { max-width:1000px; padding:0; list-style:none; color:#ccc; font-size:13px; }
+  .notes li { margin:4px 0; }
+  .legend { color:#bbb; font-size:12px; margin:6px 0 10px; }
+  .box { border:1px solid #555; background:var(--panel2); padding:8px; border-radius:4px; }
+  .box.ask { border-color:#8a7a2a; background:#3b3320; } .box.ok { border-color:#3d6b48; background:#1f3327; } .box.bad { border-color:#7a3a3a; background:#3a2222; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .ladder { display:flex; gap:4px; }
+  .step { flex:1; border:1px solid #555; padding:4px; text-align:center; font-size:11px; background:#2a2a2a; }
+  .step.ok { background:#1f3327; border-color:#3d6b48; } .step.ask { background:#3b3320; border-color:#8a7a2a; }
+  h4 { margin:8px 0 4px; font-size:13px; color:#eee; }
+</style>
+</head>
+<body>
+<h1>HARNESS (:3777) — что уже есть и что добавить</h1>
+<p class="lead">Раскладка — ваша, как на экране харнесса сегодня. Серое — есть. <span class="n">1</span>Жёлтая рамка с номером — добавление; внизу каждого экрана написано, зачем оно и из какой вашей боли выросло.</p>
+<div class="legend">Пример один и тот же: проект OMG, тред H1.5, 19:58.</div>
+
+<!-- ЭКРАН A -->
+<h2>A. Главный экран с открытым окном оркестратора — как сейчас, плюс добавления</h2>
+<div class="scr">
+  <div class="top">
+    <span style="color:#aaa">Папка</span><span class="cwd">/Users/kostenchuksergey/OMG</span><span class="btn">Применить</span>
+    <span class="chip">H1.5 · р.2 · 8,5 · ждёт вас</span><span class="chip" style="background:#2f3f5a">E2.2 · принято · слито 64ec135</span>
+    <span class="addchip add"><span class="n">1</span>Где: OMG › L1 › H1.5</span>
+    <span class="addchip add"><span class="n">2</span>Ждёт вас 2 · старейшее 40 мин</span>
+    <span class="addchip add"><span class="n">3</span>Неделя 61 % · сброс пт 23:00 · Codex 64 %</span>
+    <span class="addchip add"><span class="n">4</span>С визита: +3 влито · 1 возврат</span>
+    <span style="flex:1"></span><span class="btn">Владельцу</span><span class="btn">Журнал</span>
+  </div>
+  <div class="banner">Codex: лимит до 19:58 — исполнитель приостановлен, сам не продолжит &nbsp;<span class="addchip add"><span class="n">5</span>зона: провайдер · что сделать: продолжить на Sonnet / ждать</span></div>
+  <div class="cols">
+    <div class="left">
+      <div class="t">КОМАНДА</div>
+      <div class="seat"><span class="dot"></span><div><b>ассистент</b><small>Claude · Sonnet 5</small><small class="st add"><span class="n">6</span>свободен · 0,2 %/день</small></div></div>
+      <div class="seat sel"><span class="dot work"></span><div><b>оркестратор</b><small>Claude · Fable 5.1</small><small class="st add">ждёт прогон · 31 мин · жив</small></div></div>
+      <div class="seat"><span class="dot"></span><div><b>архитектор</b><small>Codex · gpt-6-astra</small><small class="st add">свободен</small></div></div>
+      <div class="seat"><span class="dot bad"></span><div><b>исполнитель</b><small>Codex · gpt-5.3-codex-spark</small><small class="st add">приостановлен: лимит до 19:58</small></div></div>
+      <div class="seat"><span class="dot ask"></span><div><b>ревьюер</b><small>Claude · Haiku 4.5</small><small class="st add">ждёт вас · 40 мин</small></div></div>
+      <div class="seat"><span class="dot work"></span><div><b>тестер</b><small>Codex · gpt-5.3-codex-spark</small><small class="st add">прогон · шаг 6 из 9 · 12 мин</small></div></div>
+      <div class="seat"><span class="dot"></span><div><b>ресёрчер</b><small>Claude · Haiku 4.5</small><small class="st add">спит до задачи</small></div></div>
+      <div style="margin-top:6px;color:#7fa3e0;font-size:12px">все&nbsp; никого</div>
+    </div>
+    <div class="center">
+      <div class="pane-h"><b>оркестратор</b><span style="color:#aaa">Claude · Fable 5.1 · Правки без вопросов · корень</span><span class="addchip add"><span class="n">7</span>сейчас: ждёт прогон тестера · следующий отчёт 20:15</span><span style="flex:1"></span><span class="btn">⚙</span><span class="btn">✕</span></div>
+      <div class="feed">
+        <div class="msg"><div class="h">#2231 · review-request · от ревьюер · тред H1.5</div>Три тестовых пути старого инварианта — добавлять? Варианты А / Б. <span class="addchip add"><span class="n">8</span>ждёт вас 40 мин · ответить справа →</span></div>
+        <div class="act">▸ Bash: npm run test:slot — 3206/3206 &nbsp;<span class="addchip add"><span class="n">9</span>доказательство ▸ открыть вывод · 0,1 %</span></div>
+        <div class="msg me"><div class="h">#2233 · status · оркестратор → владельцу</div>Выдал задачу исполнителю; жду прогон тестера. <span class="addchip add"><span class="n">9</span>этот ход: 2 мин 10 с · 0,3 % недели</span></div>
+        <div class="card">Разрешить: git push origin om/module? &nbsp;<span class="btn">Разрешить</span> <span class="btn">Отказать</span> <span class="addchip add"><span class="n">10</span>необратимо · наружу · что изменится: 3 коммита</span></div>
+      </div>
+      <div class="comp">
+        <div class="in">Сообщение… (Enter — отправить, Shift+Enter — новая строка)</div>
+        <div class="row"><span class="sel-k">task ▾</span><span class="sel-k" style="color:#777">тред</span>
+          <span class="addchip add"><span class="n">11</span>Fable · усилие высокое ▾</span><span class="addchip add">доступ: правки без вопросов</span><span class="addchip add">этот ход ≈ 0,3 %</span>
+          <span style="flex:1"></span><span class="btn">Вмешаться</span><span class="btn">Стоп</span><span class="btn blue">Отправить</span></div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="t">ЖДУТ РЕШЕНИЯ (2)</div>
+      <div class="card add"><span class="n">12</span><b>ревьюер · H1.5 · 40 мин</b><br>Добавлять три тестовых пути?<br>
+        <div style="margin:4px 0"><b>А.</b> все три — +1 ч воркера, риск срока<br><b>Б.</b> только om-addressing — +20 мин, риск дыры</div>
+        <span class="btn blue">А</span> <span class="btn">Б</span> <span class="btn">Спросить</span><br><small style="color:#aaa">пока вы думаете: ревьюер спит, исполнитель ждёт лимит</small></div>
+      <div class="card add"><b>исполнитель · 8 мин</b><br>Лимит Codex до 19:58. Продолжить H1.5 на Sonnet?<br><span class="btn blue">Да, на Sonnet</span> <span class="btn">Ждать 19:58</span></div>
+      <div class="t add" style="padding:2px"><span class="n">13</span>ЗАПИСИ ВЛАДЕЛЬЦУ · сгруппированы</div>
+      <div class="box bad" style="font-size:12px;margin-bottom:6px">Сломалось (1): Codex лимит 19:12 · зона: провайдер</div>
+      <div class="box ok" style="font-size:12px;margin-bottom:6px">Готово к проверке (1): E2.2 · 3206/3206 · открыть</div>
+      <div class="box" style="font-size:12px">С визита (3): D8.4d влита · … </div>
+    </div>
+  </div>
+  <div class="journal">#25 02:30 владелец → ассистент · task · T25: что сейчас происходит?<br>#24 02:14 оркестратор → владелец · status · M-1: слито 28e500b · <span class="st">⟵ журнал как есть; добавить фильтр «только ждёт вас / только сбои»</span><span class="n" style="margin-left:6px">14</span></div>
+</div>
+<ul class="notes">
+  <li><span class="n">1</span>–<span class="n">4</span> Строка состояния сверху: <b>где</b> вы в проекте, <b>сколько ждёт вас</b> и как давно, <b>сколько стоит</b> (остаток недели по аккаунтам, как в CodexLimitBar), <b>что изменилось</b> с прошлого визита. Отвечает на «где мы?», «к цели или по кругу?», «не выбью ли лимит?».</li>
+  <li><span class="n">5</span> Жёлтая полоса есть — добавить <b>зону</b> (чья проблема) и <b>что сделать</b>.</li>
+  <li><span class="n">6</span> У места кроме точки — <b>слово состояния</b> и причина тишины: «ждёт вас 40 мин», «лимит до 19:58», «спит до задачи». Тишина перестаёт быть поломкой.</li>
+  <li><span class="n">7</span> В шапке окна — «что делает сейчас» и <b>когда следующий отчёт</b>, а не когда закончит.</li>
+  <li><span class="n">8</span> Вопрос вам в ленте помечен и ведёт на карточку справа — не тонет.</li>
+  <li><span class="n">9</span> У действия — ссылка на <b>доказательство</b> и цена хода. «Готово» видно, а не рассказано.</li>
+  <li><span class="n">10</span> Карточка разрешения есть — добавить <b>класс</b> (необратимо / наружу / расход) и что изменится.</li>
+  <li><span class="n">11</span> Под полем ввода — условия хода: модель и усилие (сейчас в ⚙), доступ, цена. Как в DSH, одной строкой.</li>
+  <li><span class="n">12</span> «Ждут решения» есть — добавить <b>возраст</b>, <b>последствия</b> каждого варианта и «что происходит, пока вы думаете». Карточка не исчезает по тайм-ауту.</li>
+  <li><span class="n">13</span> «Записи владельцу» — сгруппировать: сломалось · готово к проверке · с визита. Сейчас это одна лента.</li>
+  <li><span class="n">14</span> Журнал — как есть, плюс фильтры.</li>
+</ul>
+
+<!-- ЭКРАН B -->
+<h2>B. Центр, когда ни одно окно не открыто («никого») — сейчас пусто; станет «Сейчас»</h2>
+<div class="scr">
+  <div class="top"><span style="color:#aaa">Папка</span><span class="cwd">/Users/kostenchuksergey/OMG</span><span class="addchip">Где: OMG › L1</span><span class="addchip">Ждёт вас 2 · 40 мин</span><span class="addchip">Неделя 61 %</span><span class="addchip">С визита: +3 · 1 возврат</span><span style="flex:1"></span><span class="btn">Владельцу</span><span class="btn">Журнал</span></div>
+  <div class="cols" style="grid-template-columns:170px 1fr">
+    <div class="left"><div class="t">КОМАНДА</div><div class="seat"><span class="dot work"></span><div><b>оркестратор</b><small class="st">ждёт прогон · 31 мин</small></div></div><div class="seat"><span class="dot bad"></span><div><b>исполнитель</b><small class="st">лимит до 19:58</small></div></div><div class="seat"><span class="dot ask"></span><div><b>ревьюер</b><small class="st">ждёт вас · 40 мин</small></div></div><div class="seat"><span class="dot work"></span><div><b>тестер</b><small class="st">шаг 6 из 9</small></div></div><div style="margin-top:6px;color:#7fa3e0;font-size:12px">все&nbsp; никого</div></div>
+    <div class="center" style="padding:10px">
+      <div class="add" style="padding:8px"><span class="n">15</span><b>Пока вас не было</b> (с 02:10 до 19:58)
+        <div class="grid3" style="margin-top:6px">
+          <div class="box ask"><b>Ждёт вас (2)</b><br>· решение по H1.5 (40 мин)<br>· Codex: продолжить на Sonnet?</div>
+          <div class="box ok"><b>Сделано и проверено</b><br>· D8.4d влита 02:14<br>· E2.2 принята 04:30</div>
+          <div class="box bad"><b>Сломалось</b><br>· Codex лимит 19:12 — стоит 46 мин · зона: провайдер</div>
+        </div>
+        <div class="grid3" style="margin-top:6px">
+          <div class="box"><b>Потеряно</b><br>· сжатие контекста у оркестратора 05:20 — восстановлен по памятке, не проверено</div>
+          <div class="box"><b>Расход за это время</b><br>7 % недели · дороже плана на 2 % · причина: 3 круга ревью D8.4e</div>
+          <div class="box"><b>Если ничего не делать</b><br>тестер закончит ≈ 20:15 · ревьюер ждёт вас</div>
+        </div>
+      </div>
+      <div class="add" style="padding:8px;margin-top:10px"><span class="n">16</span><b>Стадии проекта</b>
+        <div class="ladder" style="margin-top:6px"><div class="step ok">Дискавери</div><div class="step ok">Концепция</div><div class="step ok">L0</div><div class="step ask">L1 · ждёт вас</div><div class="step">R1</div><div class="step">…</div><div class="step">OMG</div><div class="step" style="color:#888">Компиляция · нет данных</div></div>
+      </div>
+      <div class="add" style="padding:8px;margin-top:10px"><span class="n">17</span><b>Ход работы</b> (как Trajectory в DSH + дорожки «Вы» и «Внешнее») · <b>Расход</b> по аккаунтам и по ходам — отдельные вкладки здесь же</div>
+    </div>
+  </div>
+</div>
+<ul class="notes">
+  <li><span class="n">15</span> Вместо пустого центра — отчёт за время отсутствия: что ждёт, что сделано, что сломалось (и чья зона), что потеряно, что стоило, что будет, если не вмешаться. Это ответ на «ты помнишь, на чём остановились?» и на 28 из 69 дней с обрывом.</li>
+  <li><span class="n">16</span> Лестница стадий TaskPlan — пройдено ставит проверка, «ждёт вас» — шлюз с критерием.</li>
+  <li><span class="n">17</span> Траектория и расход — здесь же, не отдельным приложением.</li>
+</ul>
+
+<!-- ЭКРАН C -->
+<h2>C. Новое: «В план» — из чата в TaskPlan одним экраном</h2>
+<div class="scr">
+  <div class="top"><span style="color:#aaa">Папка</span><span class="cwd">/Users/kostenchuksergey/OMG</span><span class="addchip">чат → план</span><span style="flex:1"></span><span class="btn">Выйти в чат</span></div>
+  <div class="center" style="padding:12px">
+    <div class="grid2">
+      <div class="box"><h4>Что делаем</h4>Табло состояния всех агентов в одном окне.<br><small style="color:#aaa">из разговора, правится</small></div>
+      <div class="box"><h4>Зачем</h4>Чтобы не спрашивать «ты здесь?» и видеть, кто чего ждёт.</div>
+      <div class="box"><h4>Что переходит из разговора — дословно</h4>☑ «нужны возраст ожидания и кто спрашивает»<br>☑ «не трогать окна Kimi»<br>☐ «сначала самое простое»</div>
+      <div class="box"><h4>Успех · провал · стоп</h4>Успех: за 5 с видно, кто ждёт вас.<br>Провал: вопросы снова ищу в чатах.<br>Стоп: расход > 5 % недели, снос данных, секреты.</div>
+    </div>
+    <div class="box" style="margin-top:8px">Первая стадия: <b>Дискавери</b> · ожидаем ≈ 2 ч и ≈ 2 % недели · следующий отчёт через 30 мин · первый вопрос к вам: что считать «агентом» · места: оркестратор + ресёрчер</div>
+    <div class="row" style="margin-top:8px"><span class="btn">Выйти в чат</span><span class="btn blue">Подписать и начать</span><span style="color:#aaa;font-size:12px">подпись = запись в журнал: кто, когда, кнопкой</span></div>
+  </div>
+</div>
+<ul class="notes">
+  <li>Сегодня переход в план — три реплики текстом за часы («оцени → готов? → выполни»). Здесь — одна кнопка в чате и один экран по вашей рамке. Подпись пишется в журнал линии как запись владельца — не пересказ оркестратора.</li>
+</ul>
+
+<p class="lead" style="margin-top:36px">Итого в HARNESS уже есть: команда с состоянием, очередь «ждут решения», карточки разрешений, «Вмешаться/Стоп», журнал, вердикты с доказательствами, worktree, восстановление после перезапуска. Добавляется: строка состояния (где · ждёт вас · стоимость · с визита), слова состояния у мест, возраст и последствия у решений, зона у ошибок, цена хода, «Пока вас не было», лестница стадий, экран «В план», ход работы и расход.</p>
+</body>
+</html>

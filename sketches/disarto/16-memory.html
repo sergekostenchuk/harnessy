@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 16 · Память проекта · живой</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .scope{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;background:var(--raised);border:1px solid var(--line2);color:var(--ink2);white-space:nowrap}
+  .scope.all{color:var(--ink)}.scope.conv{color:var(--accent);border-color:rgba(194,122,52,.4)}
+  .rule{font-size:14px;line-height:1.55;color:var(--ink);border-left:2px solid var(--accent);padding:2px 0 2px 12px;margin:0 0 14px}
+  .place{display:grid;grid-template-columns:70px 1fr 90px;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.place:last-child{border-bottom:0}.place b{color:var(--ink);font-weight:500}
+  textarea.in{width:100%;min-height:74px;border:1px solid var(--line2);border-radius:8px;background:var(--raised);color:var(--ink);font:13px/1.5 var(--font);padding:10px 12px;resize:none;outline:none}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 16 · память проекта · живой</h1>
+  <p class="sub">Одно дело экрана — увидеть, что агенты знают, и поправить одно правило. Обзор: правило одной строкой · область · источник. Блок «Области» стал фильтром. <b>Клик по правилу — карточка поверх:</b> полный текст, откуда взялось, где применялось, кто пользуется, изменить или отозвать. «＋ правило» — поток в три шага. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side" data-rail="mem"></aside>
+    <section class="main">
+      <div class="top"><b>Память проекта · OMG</b><span class="st"><i></i>12 правил · 2 спорных</span>
+        <div class="r"><span class="seg" id="seg"><span class="on" data-v="rules">Правила</span><span data-v="dis">Спорные · 2</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span><span class="btn sm p" id="add" style="cursor:pointer">＋ правило</span></div></div>
+      <div class="views">
+        <div class="view on" id="v-rules"><div class="wrap">
+          <div class="nums n3"><div><b>12</b><small>правил действует</small></div><div><b>3</b><small>области · везде · проект · разговор</small></div><div><b class="acc">2</b><small>спорных · противоречат друг другу</small></div></div>
+          <div class="filters"><span class="chip on">все · 12</span><span class="chip">везде · 3</span><span class="chip">проект OMG · 8</span><span class="chip">этот разговор · 1</span><span class="sp"></span><span class="mono">по дате · новые сверху</span></div>
+          <div class="lst" id="rows" style="--cols:1fr 110px 130px 70px 16px"></div>
+        </div></div>
+        <div class="view" id="v-dis"><div class="wrap">
+          <p style="margin:4px 0 16px;color:var(--ink2);font-size:13px">Правила, которые противоречат друг другу или давно не применялись. Разобрать — значит выбрать одно, сузить область или отозвать.</p>
+          <div class="lst" style="--cols:1fr 1fr 130px 16px">
+            <div class="li head"><span>правило</span><span>с чем спорит</span><span>что предлагается</span><span></span></div>
+            <div class="li" data-r="11"><div><b>Третий возврат подряд — решение владельца</b><small>проект OMG · 24.09</small></div><div>«Ночью вопросы к владельцу решать совместно с ревьюером» · 29.09</div><span><span class="btn sm">Разобрать</span></span><span class="chev">›</span></div>
+            <div class="li" data-r="12"><div><b>Перед тяжёлым запуском — цена вслух и «да»</b><small>везде · 01.10</small></div><div>«Запускай сколько нужно, экономно и с умом» · 04.10</div><span><span class="btn sm">Разобрать</span></span><span class="chev">›</span></div>
+          </div>
+        </div></div>
+      </div>
+    </section>
+  </div>
+  <div class="cap"><span>16 · память · список правил → карточка правила · спорные · поток «＋ правило»</span><span>1280 × 860</span></div>
+  <div class="hint-bar"><span>клик по правилу раскрывает · «показать 5 мест» — вкладка в карточке · «＋ правило» — три шага</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (mem): 12 правил (mrow×12) — все в списке; «Память · сводка» → три числа; «Области» → фильтр-чипы; «＋ правило» → кнопка в шапке и поток; «Разобрать» → вкладка «Спорные» и действие в карточке; «Показать 5 мест» → вкладка «Где применялось» в карточке; действия правила (изменить · сузить · отозвать) — в карточке; «Паспорт · память» → чип.</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+(function(){
+  const {kv,blk,acts}=HX;
+  // [текст одной строкой, область, источник, применено, полный текст, почему, кто пользуется]
+  const R={
+    1:['Отвечать по-русски, без жаргона; код — в скобках в конце','везде','вы · 29.09','✓','Отвечать по-русски, человеческим языком, без жаргона; идентификаторы и код — в скобках в конце фразы.','«Я ничего не понял. Какой-то набор слов несвязанных! Коротко по-человечески, с примером.»','все роли'],
+    2:['Чтение и проверка — Sonnet; придумывать — Opus','проект OMG','вы · 01.10','✓','На чтение, проверку и сведение — Sonnet; придумывать и проектировать — Opus; Fable беречь, отдельное окно.','«Ок. Чтение — Sonnet. Там, где нужно подумать и придумать — Fable.» · уточнено 04.10','оркестратор · воркеры'],
+    3:['Ремонт класса, не прогона','проект OMG','вы · 08.09','✓','Чинить класс дефекта в движке с тестом; никаких обходов под конкретный прогон.','Возвраты из-за обходов, которые ломались на следующем прогоне.','воркеры · ревьюер'],
+    4:['Живую базу открывать только копией в режиме чтения','проект OMG','вы · 29.09','✓','Живую базу OMG не открывать напрямую: только копия через backup(), mode=ro; копию удалять после работы.','Риск записи в базу идущего прохода.','все роли'],
+    5:['Push и merge — только по слову владельца','везде','вы · 29.09','✓','Не делать push, merge и теги без явного слова владельца; коммиты в свою ветку — можно.','Необратимые внешние действия — стоп-случай.','все роли'],
+    6:['Хранитель проверяет каждую стадию и коммит','проект OMG','вы · 09.09','✓','Порядок: стадия → хранитель → ревьюер. Пропуск W2–W8 был ошибкой.','Дефекты доходили до ревьюера пачкой.','хранитель · оркестратор'],
+    7:['Форматы своих записей OM меняются на месте','проект OMG','вы · 28.09','✓','До живых данных OM — без второй версии формата и тестов «старые байты».','Церемонии без названного риска — растрата.','воркеры'],
+    8:['Не держать воркера без дела, пока решает владелец','проект OMG','вы · 23.09','✓','Пока владелец думает — выдать воркеру задачу с непересекающимися путями.','Простой D2 выглядел как поломка.','оркестратор'],
+    9:['Полный прогон — через nohup, не фоновой задачей','проект OMG','урок · 03.10','✓','check:backend запускать отвязанным процессом; фоновая задача убивается по пределу времени.','Прогон PF1 убит с кодом −15.','воркеры'],
+    10:['В этом разговоре — отвечать коротко, без таблиц','этот разговор','вы · сегодня','✓','Только в текущем разговоре: короткие ответы, без таблиц.','Просьба в начале разговора.','оркестратор'],
+    11:['Третий возврат подряд — решение владельца','проект OMG','вы · 24.09','спор','После третьего возврата задачи решение о четвёртом круге принимает владелец.','Статистика возвратов: четвёртые круги без решения шли по кругу.','оркестратор · ревьюер'],
+    12:['Перед тяжёлым запуском — цена вслух и «да»','везде','вы · 01.10','спор','Перед запуском больше ~2 % недели — назвать цену и дождаться «да».','Два перезапуска 28 авторов съели 17 % недели.','оркестратор']
+  };
+  const sc=s=>'<span class="scope '+(s==='везде'?'all':s==='этот разговор'?'conv':'')+'">'+s+'</span>';
+  const listHead='<div class="li head"><span>правило</span><span>область</span><span>источник</span><span>применено</span><span></span></div>';
+  const order=[10,2,12,9,5,4,1,7,3,11,8,6];
+  const rowOf=k=>{const r=R[k];return '<div class="li" data-r="'+k+'"><div><b>'+r[0]+'</b></div><span>'+sc(r[1])+'</span><span class="m">'+r[2]+'</span><span class="m'+(r[3]==='спор'?' hot':'')+'">'+r[3]+'</span><span class="chev">›</span></div>';};
+  function render(keys){ document.getElementById('rows').innerHTML=listHead+(keys||order).map(rowOf).join(''); }
+  render();
+  const places=[['04.10','оркестратор · ответ на вопрос о лимитах','применено'],['03.10','воркер 1 · отчёт по LP5','применено'],['02.10','ревьюер · возврат №2619','применено'],['01.10','оркестратор · выжимка /loop','применено'],['30.09','воркер 2 · сдача D8.4d','нарушено']];
+  const card=k=>{const r=R[k]; return '<div class="from">раскрытая карточка · правило</div><div class="ch">'+sc(r[1])+'<h3 style="font-size:17px">Правило №'+k+'</h3></div><div class="csub">источник: '+r[2]+' · '+(r[3]==='спор'?'<span style="color:var(--accent)">спорит с другим правилом</span>':'действует')+'</div>'+
+    '<p class="rule">'+r[4]+'</p>'+
+    '<div class="ctabs"><span class="on" data-ct="w">Откуда</span><span data-ct="p">Где применялось · 5</span><span data-ct="u">Кто пользуется</span></div>'+
+    '<div data-cp="w">'+blk('почему появилось','<q>'+r[5]+'</q>')+'</div>'+
+    '<div data-cp="p">'+places.map(([d,w,s])=>'<div class="place"><span class="m">'+d+'</span><b>'+w+'</b><span class="m'+(s==='нарушено'?' bad':'')+'">'+s+'</span></div>').join('')+'</div>'+
+    '<div data-cp="u">'+blk('роли',kv([['пользуются',r[6]],['читают при старте','да · в составе памяти проекта'],['последнее применение','сегодня']]))+'</div>'+
+    acts(r[3]==='спор'?[['Разобрать: оставить это','p','data-close'],'Оставить другое','Сузить область','Отозвать']:[['Изменить','p'],'Сузить область','Отозвать']); };
+  HX.views('#seg');
+  document.addEventListener('click',e=>{ const el=e.target.closest('.li[data-r]'); if(el&&R[el.dataset.r]) HX.open(el,card(el.dataset.r),{w:760,h:560}); });
+  window.MEM={R,order,render,card};   // рабочий слой прототипа (live.js) добавляет, меняет и отзывает правила
+  HX.bind('#add',()=>'<div class="from">новое правило · шаг <span data-stepn>1</span> из 3</div><div class="steps"><i class="on"></i><i></i><i></i></div>'+
+    '<div data-step="1" class="fh"><h4>Что должны знать агенты</h4><p>Одно правило — одна фраза. Лучше с причиной: так агент применит его и в соседних случаях.</p><textarea class="in" readonly>Скетчи показывать сразу живыми, с переходами — оценивается поведение, а не картинка.</textarea><div class="ft"><span class="btn ghost" data-close>Отмена</span><span class="btn p" data-go="2" style="margin-left:auto">Дальше</span></div></div>'+
+    '<div data-step="2" class="fh"><h4>Где действует</h4><p>Чем уже область, тем меньше шума в других проектах.</p><label class="pick" data-pick>Этот разговор<small>исчезнет вместе с ним</small></label><label class="pick on" data-pick>Проект OMG<small>все роли проекта, со следующего хода</small></label><label class="pick" data-pick>Везде<small>все проекты и комнаты</small></label><div class="ft"><span class="btn ghost" data-go="1">Назад</span><span class="btn p" data-go="3" style="margin-left:auto">Дальше</span></div></div>'+
+    '<div data-step="3" class="fh"><h4>Проверка на противоречия</h4><p>Сверили с 12 действующими правилами.</p>'+blk('результат',kv([['противоречий','нет'],['похожее правило','нет'],['начнёт действовать','со следующего хода каждой роли'],['источник','вы · 05.10']]))+'<div class="ft"><span class="btn ghost" data-go="2">Назад</span><span class="btn p" data-close style="margin-left:auto">Добавить правило</span></div></div>',{w:620,h:480,hide:false});
+  HX.passport({title:'Память проекта',where:'OMG › Память проекта',what:'Правила, которые агенты читают при старте: что, в какой области, откуда взялось',why:'Агент без памяти повторяет ошибки; с лишней памятью — путается',when:'Читается на старте каждой роли; правка действует со следующего хода',expect:'Правил немного, у каждого источник и причина',risk:'Противоречивые правила — агент выбирает сам; устаревшие — шум',ok:'Спорных 0; каждое правило применялось за последнюю неделю',fail:'Правило нарушается, а записи об этом нет'});
+})();
+</script>
+</body></html>

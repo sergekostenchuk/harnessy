@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Экраны по ia.md</title>
+<style>
+  :root { --ink:#1d1d1f; --dim:#6e6e73; --line:#e3e3e8; --bg:#fff; --soft:#f5f5f7; --need:#fff4d6; --need-line:#e0b84a; --ok:#2e8b57; --okbg:#e8f5ec; --warn:#c0392b; --warnbg:#fdecea; --blue:#0a66d6; --ref:#5b4fcf; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:28px 16px 80px; background:#ececf0; color:var(--ink); font:13px/1.45 -apple-system,"Helvetica Neue",Arial,sans-serif; }
+  h1 { font-size:22px; margin:0 0 4px; } .lead { color:#444; max-width:980px; margin:0 0 18px; font-size:14px; }
+  h2 { font-size:15px; color:#444; font-weight:600; margin:40px 0 10px; }
+  .win { width:1000px; max-width:100%; background:var(--bg); border:1px solid #cfcfd5; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.08); overflow:hidden; }
+  .ref { display:inline-block; font-size:10px; color:#fff; background:var(--ref); border-radius:4px; padding:0 5px; margin-left:4px; vertical-align:middle; white-space:nowrap; }
+  /* ① строка состояния */
+  .status { display:grid; grid-template-columns:2.2fr 1.3fr 1fr 1.6fr 1.2fr; border-bottom:1px solid var(--line); background:var(--soft); font-size:12px; }
+  .status div { padding:7px 10px; border-right:1px solid var(--line); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .status div:last-child { border-right:0; }
+  .status b { font-weight:600; }
+  .need-t { color:#8a6a00; } .warn-t { color:var(--warn); } .ok-t { color:var(--ok); }
+  .lad { font-family:Menlo,monospace; letter-spacing:1px; color:#555; }
+  /* зоны */
+  .zones { display:grid; grid-template-columns:190px 1fr 250px; min-height:470px; }
+  .rail { background:var(--soft); border-right:1px solid var(--line); padding:10px; font-size:13px; }
+  .rail .srch { border:1px solid #d0d0d5; border-radius:8px; padding:4px 8px; color:#999; background:#fff; margin-bottom:10px; font-size:12px; }
+  .rail .sec { padding:4px 6px; border-radius:6px; color:#333; display:flex; justify-content:space-between; }
+  .rail .sec.on { background:var(--ink); color:#fff; }
+  .rail .sub { padding:3px 6px 3px 16px; color:#444; display:flex; justify-content:space-between; font-size:12px; }
+  .rail .sub.on { background:#e2e2e8; border-radius:6px; }
+  .rail .cnt { color:#8a6a00; font-weight:600; } .rail .dim { color:var(--dim); }
+  .center { display:flex; flex-direction:column; }
+  .wait { border-bottom:1px solid var(--line); background:#fffbee; padding:6px 12px; font-size:12px; }
+  .wait .r { display:flex; gap:8px; align-items:center; padding:3px 0; }
+  .wait .r .act { margin-left:auto; }
+  .wait.empty { background:var(--soft); color:var(--dim); }
+  .views { display:flex; gap:2px; padding:8px 12px 0; border-bottom:1px solid var(--line); }
+  .views span { padding:5px 10px; border-radius:8px 8px 0 0; color:var(--dim); font-size:12px; }
+  .views span.on { background:var(--bg); color:var(--ink); border:1px solid var(--line); border-bottom-color:#fff; margin-bottom:-1px; font-weight:600; }
+  .views .path { margin-left:auto; color:var(--dim); font-size:12px; padding:5px 0; }
+  .obj { flex:1; padding:12px; }
+  .objline { border-top:1px solid var(--line); padding:6px 12px; font-size:12px; color:#444; background:var(--soft); }
+  .comp { border-top:1px solid var(--line); padding:10px 12px; }
+  .comp .in { border:1px solid #d0d0d5; border-radius:10px; padding:8px 12px; color:#999; }
+  .comp .u { display:flex; gap:10px; margin-top:6px; font-size:12px; color:var(--dim); align-items:center; flex-wrap:wrap; }
+  .comp .u .r { margin-left:auto; }
+  .right { border-left:1px solid var(--line); padding:10px; background:#fafafc; font-size:12px; }
+  .right h5 { margin:0 0 6px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); }
+  .pass div { display:grid; grid-template-columns:72px 1fr; gap:6px; padding:3px 0; border-bottom:1px dashed #e6e6ea; }
+  .pass label { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+  .assist { margin-top:12px; border-top:1px solid var(--line); padding-top:8px; }
+  .assist .in { border:1px solid #d0d0d5; border-radius:8px; padding:5px 8px; color:#999; background:#fff; margin-top:6px; }
+  .btn { display:inline-block; border:1px solid #c9c9ce; background:#fff; border-radius:7px; padding:3px 9px; font-size:12px; }
+  .btn.p { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .m { max-width:90%; padding:8px 12px; border-radius:12px; font-size:13px; margin-bottom:8px; }
+  .m.me { margin-left:auto; background:var(--soft); } .m.ai { background:#fff; border:1px solid var(--line); }
+  .m small { display:block; color:var(--dim); font-size:11px; margin-top:3px; }
+  .chip { display:inline-block; border:1px solid #d0d0d5; border-radius:999px; padding:0 8px; font-size:11px; background:#fff; }
+  .card { border:1px solid var(--line); border-radius:10px; padding:9px 11px; margin-bottom:8px; font-size:12px; }
+  .card h4 { margin:0 0 4px; font-size:12px; }
+  .card.need { background:var(--need); border-color:var(--need-line); } .card.ok { background:var(--okbg); border-color:#b7dcc3; } .card.warn { background:var(--warnbg); border-color:#f0b9b3; }
+  .ladder { display:flex; gap:4px; margin-bottom:10px; }
+  .step { flex:1; border:1px solid var(--line); border-radius:7px; padding:5px 3px; text-align:center; font-size:11px; color:var(--dim); }
+  .step.done { background:var(--okbg); color:var(--ok); border-color:#b7dcc3; } .step.now { background:var(--ink); color:#fff; border-color:var(--ink); font-weight:600; }
+  .step small { display:block; font-size:10px; opacity:.85; font-weight:400; }
+  table { border-collapse:collapse; width:100%; font-size:12px; }
+  td, th { border-bottom:1px solid var(--line); padding:6px 7px; text-align:left; vertical-align:top; }
+  th { color:var(--dim); font-weight:500; font-size:11px; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#9a9a9e; margin-right:5px; }
+  .dot.ok { background:var(--ok); } .dot.need { background:var(--need-line); } .dot.warn { background:var(--warn); } .dot.work { background:var(--blue); }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .doc h4 { margin:10px 0 3px; font-size:13px; } .doc .sec { border:1px solid var(--line); border-radius:8px; padding:7px 10px; margin-bottom:6px; font-size:12px; }
+  .doc .sec.ok { background:var(--okbg); } .doc .sec.need { background:var(--need); }
+  .note { max-width:1000px; color:#444; font-size:13px; margin:8px 0 0; }
+  .trace { max-width:1000px; font-size:12px; }
+</style>
+</head>
+<body>
+<h1>Экраны по `ia.md`: одна раскладка, четыре режима</h1>
+<p class="lead">Раскладка — §4.1 ia.md: <b>①</b> строка состояния (5 полей) · <b>②</b> рейка (7 разделов + проекты и комнаты) · <b>③</b> полоса «Ждёт вас» · <b>④</b> текущий объект с вкладками · <b>⑤</b> поле ввода с условиями хода · <b>⑥</b> быстрый просмотр (паспорт) · <b>⑦</b> ассистент. Фиолетовые метки — откуда элемент. Пример сквозной: проект «Табло агентов» и проект OMG.</p>
+
+<!-- ЧАТ -->
+<h2>Режим Чат — разговор в папке (ia.md §5.1, §6.2 «Разговоры»)</h2>
+<div class="win">
+  <div class="status">
+    <div><b>Табло агентов › Чат</b> · Claude Sonnet <span class="ref">① поле 1 Где</span></div>
+    <div>Ничего не ждёт вас <span class="ref">поле 2</span></div>
+    <div>⟳ 0 · ▲ 0 · ⬚ 0 <span class="ref">поле 3</span></div>
+    <div>Claude 61 % недели · данные 1 мин · сброс пт 23:00 <span class="ref">поле 4</span></div>
+    <div>с визита: — <span class="ref">поле 5</span></div>
+  </div>
+  <div class="zones">
+    <div class="rail"><div class="srch">Поиск по всему… <span class="ref">§6.3</span></div>
+      <div class="sec">Сейчас <span class="ref">§6.1</span></div>
+      <div class="sec on">Проекты и комнаты</div>
+      <div class="sub on">Табло агентов <span class="dim">чат</span></div>
+      <div class="sub">OMG <span class="cnt">◆ 2</span></div>
+      <div class="sub">HARNESS <span class="dim">спит</span></div>
+      <div class="sub">Комната «принтер» <span class="dim">чат</span></div>
+      <div class="sub" style="color:var(--blue)">+ новый разговор</div>
+      <div class="sec">Команда</div><div class="sec">Решения</div><div class="sec">Датчики <span class="ok-t">●</span></div><div class="sec">Расход</div><div class="sec">Память</div>
+    </div>
+    <div class="center">
+      <div class="wait empty">Ничего не ждёт вас · следующее событие: нет <span class="ref">③</span></div>
+      <div class="views"><span class="on">Разговор</span><span>Документ</span><span>Карта</span><span>Ход работы</span><span>Расход</span><span class="path">Разговоры проекта: 3 <span class="ref">④ §4.4 глубина 3</span></span></div>
+      <div class="obj">
+        <div class="m me">посмотри HARNESS и скажи, можно ли на нём сделать табло всех агентов. оценка из 10</div>
+        <div class="m ai">Можно. Там уже есть места команды, очередь решений и журнал — табло ляжет сверху без переделки сервера. 8 из 10: не хватает слов состояния у мест и возраста у вопросов.<small>Прочитал README и index.html · 1 мин 10 с · <a href="#">что читал</a> <span class="ref">«готово» со ссылкой</span></small></div>
+        <div class="m me">ок, делаем</div>
+        <div class="m ai">Для этого нужен план: стадии, кто работает, что считать готовым. Переключить в <b>План</b>? Сначала дискавери, и ничего не начнётся без вашей подписи. <span class="btn p">В План</span> <span class="btn">Ещё поговорим</span> <span class="ref">§5.3 M0: система не толкает</span></div>
+      </div>
+      <div class="objline">Разговор · ● отвечено 2 мин назад · ход 1 мин 10 с · 0,05 % недели <span class="ref">строка объекта §4.4</span></div>
+      <div class="comp"><div class="in">Сообщение…</div><div class="u"><span class="chip">@Claude</span><span class="chip">сейчас</span><span class="chip">Sonnet · усилие среднее</span><span class="chip">только читает папку</span><span class="r">ход ≈ 0,05 % (оценка) · <span class="btn">■ Стоп</span></span><span class="ref">⑤</span></div></div>
+    </div>
+    <div class="right"><h5>Быстрый просмотр · паспорт разговора <span class="ref">⑥ state-system §2</span></h5>
+      <div class="pass"><div><label>Где</label>Табло агентов › Чат</div><div><label>Что</label>обсуждение идеи табло</div><div><label>Зачем</label>понять, делать ли</div><div><label>Когда</label>последний ответ 2 мин назад</div><div><label>Ожидаем</label>ваше слово: план или нет</div><div><label>Успех</label>решение принято</div><div><label>Провал</label>разговор ушёл в сторону</div><div><label>Риски</label>нет — только чтение</div></div>
+      <div class="assist"><h5>Ассистент <span class="ref">⑦</span></h5>Объяснит по-человечески любое слово или событие на экране.<div class="in">Что значит «усилие среднее»?</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ПЛАН -->
+<h2>Режим План — документ стадии и лестница (ia.md §5.3–5.4, §6.2 «Документ стадии», §7.2)</h2>
+<div class="win">
+  <div class="status">
+    <div><b>Табло агентов › План › Концепция (L0)</b> <span class="lad">▪▣□□□□□□</span> <span class="ref">① путь + полоска</span></div>
+    <div class="need-t"><b>◆ 1 ждёт вас</b> · 12 мин</div>
+    <div>⟳ 1 · ▲ 0 · ⬚ 0</div>
+    <div>Claude 61 % · данные 1 мин · сброс пт 23:00</div>
+    <div>с визита: дискавери пройдено</div>
+  </div>
+  <div class="zones">
+    <div class="rail"><div class="srch">Поиск по всему…</div>
+      <div class="sec">Сейчас</div><div class="sec on">Проекты и комнаты</div>
+      <div class="sub on">Табло агентов <span class="cnt">◆ 1</span></div>
+      <div class="sub" style="padding-left:28px">Документ стадии</div><div class="sub" style="padding-left:28px">Карта</div><div class="sub" style="padding-left:28px">Задачи · 0</div><div class="sub" style="padding-left:28px">Места · 3</div><div class="sub" style="padding-left:28px">Разговоры · 3</div><div class="sub" style="padding-left:28px">Артефакты · 2</div><div class="sub" style="padding-left:28px">Расход</div>
+      <div class="sub">OMG <span class="cnt">◆ 2</span></div><div class="sub">Комната «принтер»</div>
+      <div class="sec">Команда</div><div class="sec">Решения</div><div class="sec">Датчики <span class="ok-t">●</span></div><div class="sec">Расход</div><div class="sec">Память</div>
+    </div>
+    <div class="center">
+      <div class="wait"><div class="r">◆ Шлюз стадии · Табло агентов › План › Концепция · перейти к Блокам (L1)? · 12 мин <span class="act btn p">Решить</span></div><span class="ref">③ лента «Ждёт вас»</span></div>
+      <div class="views"><span>Разговор</span><span class="on">Документ</span><span>Карта</span><span>Ход работы</span><span>Расход</span><span class="path">стадия 2 из 8</span></div>
+      <div class="obj doc">
+        <div class="ladder"><span class="step done">Дискавери<small>пройдено</small></span><span class="step now">Концепция (L0)<small>шлюз</small></span><span class="step">Блоки (L1)<small>≈ 3 ч</small></span><span class="step">Исследование (R1)</span><span class="step">Операции (L2)</span><span class="step">Атомарные работы (L3)</span><span class="step">Готовность (R3)</span><span class="step">Исполнение<small>данных нет</small></span></div>
+        <div class="two">
+          <div>
+            <div class="sec ok"><b>Зачем</b> · проверено<br>Не спрашивать «ты здесь?» и видеть, кто чего ждёт.</div>
+            <div class="sec ok"><b>Что перешло из дискавери</b> · проверено<br>3 пункта дословно, с источником · <a href="#">показать</a></div>
+            <div class="sec"><b>Варианты решения</b> · написано агентом, ждёт проверки<br>3 варианта; выбран «надстройка над HARNESS»</div>
+          </div>
+          <div>
+            <div class="sec need"><b>Критерии выхода</b> · ждёт вас<br>оценка ревьюера ≥ 9 — сейчас 8,5; не хватает: риски не разложены по зонам</div>
+            <div class="sec"><b>Риски</b> · частично<br>наша зона: 2 · провайдер: 1 · ваша: 0</div>
+            <div class="sec"><b>Решения</b> (со следом)<br>21:40 вы: «надстройка, не новый сервер» — кнопкой</div>
+          </div>
+        </div>
+      </div>
+      <div class="objline">Концепция (L0) · ◆ ждёт вас 12 мин · шла 1 ч 50 мин · оркестратор жив · расход стадии 1,8 % (план 2)</div>
+      <div class="comp"><div class="in">Написать оркестратору о стадии…</div><div class="u"><span class="chip">@оркестратор</span><span class="chip">в очередь</span><span class="chip">Fable · усилие высокое</span><span class="chip">правит документы сам</span><span class="r">ход ≈ 0,3 % (оценка) · <span class="btn">■ Стоп</span></span></div></div>
+    </div>
+    <div class="right"><h5>Быстрый просмотр · запрос решения <span class="ref">⑥ §4.5 «Что решить?»</span></h5>
+      <div class="card need"><h4>Шлюз: перейти к Блокам (L1)?</h4>Концепция проверена на 8,5. До порога 9 не хватает рисков по зонам (≈ 20 мин воркера).<br><b>Перейти</b> — L1 начнётся сейчас, риски допишут по ходу.<br><b>Доделать</b> — +20 мин, потом шлюз снова.<br><span class="btn p">Перейти</span> <span class="btn">Доделать</span> <span class="btn">Вопрос</span><br><small style="color:#7a5c00">если не ответить: оркестратор ждёт, воркер свободен</small></div>
+      <div class="pass"><div><label>Где</label>План › Концепция (L0)</div><div><label>Что</label>шлюз стадии</div><div><label>Зачем</label>не идти в код без решения</div><div><label>Когда</label>ждёт 12 мин</div><div><label>Ожидаем</label>ваш ответ → L1 ≈ 3 ч</div><div><label>Риски</label>третий круг ревью</div></div>
+      <div class="assist"><h5>Ассистент</h5><div class="in">Что такое «Блоки (L1)» по-простому?</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- РЕСЁРЧ -->
+<h2>Режим Ресёрч — карточки с достоверностью, результат уходит в документ стадии (ia.md §5.1, §6.2, cjm/S3)</h2>
+<div class="win">
+  <div class="status">
+    <div><b>Табло агентов › Ресёрч</b> · для стадии Концепция (L0) <span class="lad">▪▣□□□□□□</span></div>
+    <div>Ничего не ждёт вас</div>
+    <div>⟳ 1 · ▲ 0 · ⬚ 0</div>
+    <div>Claude 61 % · данные 1 мин</div>
+    <div>с визита: 1 карточка принята</div>
+  </div>
+  <div class="zones">
+    <div class="rail"><div class="srch">Поиск по всему…</div><div class="sec">Сейчас</div><div class="sec on">Проекты и комнаты</div><div class="sub on">Табло агентов</div><div class="sub" style="padding-left:28px">Документ стадии</div><div class="sub" style="padding-left:28px;background:#e2e2e8;border-radius:6px">Разговоры · ресёрч</div><div class="sub" style="padding-left:28px">Артефакты · 3</div><div class="sub">OMG <span class="cnt">◆ 2</span></div><div class="sec">Команда</div><div class="sec">Решения</div><div class="sec">Датчики <span class="ok-t">●</span></div><div class="sec">Расход</div><div class="sec">Память</div></div>
+    <div class="center">
+      <div class="wait empty">Ничего не ждёт вас · следующее событие: ответ на вопрос 2 через ≈ 5 мин</div>
+      <div class="views"><span class="on">Разговор</span><span>Документ</span><span>Карта</span><span>Ход работы</span><span>Расход</span><span class="path">ресёрчер · Haiku + интернет</span></div>
+      <div class="obj">
+        <div class="card ok"><h4>Вопрос 1 · готов · подтверждено (2 источника) <span class="ref">R22: статус утверждения</span></h4><b>Что это:</b> у Claude Code три состояния фоновых агентов — «нужен ввод», «работает», «готово».<br><b>Как применить:</b> та же тройка для мест, плюс возраст ожидания.<br><b>Польза нам:</b> снимает «ты здесь?».<br><b>Достоверность:</b> подтверждено · <a href="#">источники</a><br><span class="btn p">Применить к проекту → документ стадии, раздел «Что исследовано»</span> <span class="btn">Уточнить</span> <span class="btn">Отклонить</span></div>
+        <div class="card"><h4>Вопрос 2 · идёт 6 мин · обычно 10–15</h4>Как Devin и Factory показывают очередь решений · прочитано 4 источника из ≈ 8 · <a href="#">что уже найдено</a></div>
+        <div class="card" style="color:var(--dim)"><h4>Вопрос 3 · в очереди</h4>Как показывать стоимость долгой работы</div>
+      </div>
+      <div class="objline">Ресёрч · ⟳ идёт 6 мин · следующий отчёт через 5 мин · бюджет ≤ 1 % недели, потрачено 0,4 (счёт)</div>
+      <div class="comp"><div class="in">Задать вопрос…</div><div class="u"><span class="chip">@ресёрчер</span><span class="chip">в очередь</span><span class="chip">Haiku · интернет</span><span class="chip">только чтение + интернет</span><span class="r">вопрос ≈ 0,2 % (оценка) · <span class="btn">■ Стоп</span></span></div></div>
+    </div>
+    <div class="right"><h5>Быстрый просмотр · паспорт ресёрча</h5>
+      <div class="pass"><div><label>Где</label>Ресёрч › вопрос 2 из 3</div><div><label>Что</label>как показывают очередь решений</div><div><label>Зачем</label>не изобретать словарь с нуля</div><div><label>Когда</label>6 мин · обычно 10–15</div><div><label>Ожидаем</label>карточка из 5 полей</div><div><label>Успех</label>принята и применена</div><div><label>Провал</label>простыня без ответа</div><div><label>Риски</label>выдумывание → только со ссылкой</div></div>
+      <div class="assist"><h5>Ассистент</h5><div class="in">Почему «подтверждено» только 2 источника?</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- КОМАНДА -->
+<h2>Режим Команда — места, кто чего ждёт, сборка (ia.md §5.4, §6.1 «Команда», §6.2 «Места», R27–R29)</h2>
+<div class="win">
+  <div class="status">
+    <div><b>OMG › План › Блоки (L1)</b> <span class="lad">▪▪▪▣□□□□</span> · задача H1.5</div>
+    <div class="need-t"><b>◆ 2 ждут вас</b> · старейшее 40 мин</div>
+    <div>⟳ 3 · <span class="warn-t">▲ 1</span> · ⬚ 0</div>
+    <div>Claude 61 % · <span class="warn-t">⚠ Codex 94 %</span> · сброс сб 19:58</div>
+    <div>с визита: +3 влито / ↺ 1</div>
+  </div>
+  <div class="zones">
+    <div class="rail"><div class="srch">Поиск по всему…</div><div class="sec">Сейчас <span class="cnt">◆ 2</span></div><div class="sec">Проекты и комнаты</div><div class="sub on">OMG <span class="cnt">◆ 2</span></div><div class="sub" style="padding-left:28px">Документ стадии</div><div class="sub" style="padding-left:28px">Карта</div><div class="sub" style="padding-left:28px">Задачи · 9 до рубежа</div><div class="sub on" style="padding-left:28px">Места · 5</div><div class="sub" style="padding-left:28px">Разговоры · 14</div><div class="sec on">Команда</div><div class="sec">Решения <span class="cnt">◆ 2</span></div><div class="sec">Датчики <span class="ok-t">●</span></div><div class="sec">Расход</div><div class="sec">Память</div></div>
+    <div class="center">
+      <div class="wait"><div class="r">◆ Развилка · OMG › L1 › H1.5 › ревью · три тестовых пути? · 40 мин <span class="act btn p">Решить</span></div><div class="r">◆ Подпись · OMG › L1 › D8.4e · продолжить на Sonnet вместо Codex? · 8 мин <span class="act btn p">Решить</span></div></div>
+      <div class="views"><span>Разговор</span><span>Документ</span><span>Карта</span><span class="on">Места</span><span>Ход работы</span><span>Расход</span><span class="path">5 мест · <a href="#">собрать / изменить</a></span></div>
+      <div class="obj">
+        <table>
+          <tr><th>Место</th><th>Кто</th><th>Слово</th><th>Что делает сейчас</th><th>Ждёт</th><th>Как давно</th><th>Расход сегодня</th></tr>
+          <tr><td>Оркестратор</td><td>Claude · Fable · высокое</td><td><span class="dot work"></span>Идёт</td><td>ждёт прогон H1.5 · жив</td><td>прогон</td><td>31 мин</td><td>1,2 % (счёт)</td></tr>
+          <tr><td>Воркер</td><td>Claude · Sonnet</td><td><span class="dot work"></span>Идёт</td><td>H1.5 · пишет тесты · след. отчёт 20:15</td><td>—</td><td>12 мин</td><td>0,6 %</td></tr>
+          <tr style="background:var(--need)"><td>Ревьюер</td><td>Claude · Opus</td><td><span class="dot need"></span>Ждёт вас</td><td>вопрос: три тестовых пути?</td><td>вас</td><td>40 мин</td><td>0,9 %</td></tr>
+          <tr style="background:var(--warnbg)"><td>Исполнитель</td><td>Codex · gpt-5.6</td><td><span class="dot warn"></span>Приостановлено: лимит</td><td>D8.4e · сам не продолжит · зона: провайдер</td><td>19:58 или вас</td><td>8 мин</td><td>нет данных</td></tr>
+          <tr><td>Тестер</td><td>Codex · spark</td><td><span class="dot work"></span>Идёт</td><td>прогон · шаг 6 из 9</td><td>—</td><td>12 мин</td><td>0,3 %</td></tr>
+        </table>
+        <div class="card" style="margin-top:10px"><h4>Собрать / изменить команду <span class="ref">§5.4 «План → Команда»</span></h4>Роли по шаблону: архитектор · оркестратор · воркер · ревьюер · тестер · ресёрчер. У места: вендор · модель · усилие · что ей можно (спрашивать всё / спрашивать стоп-случаи / только сообщать) · где правит. Утверждение состава — ваша подпись, со сметой: ≈ 4–6 % недели на стадию (оценка).<br><span class="btn">+ место</span> <span class="btn">сменить модель</span> <span class="btn">Стоп всем</span></div>
+      </div>
+      <div class="objline">Команда OMG · 3 идёт · 1 ждёт вас · 1 приостановлено · расход сегодня 3,0 % (счёт)</div>
+      <div class="comp"><div class="in">Написать команде…</div><div class="u"><span class="chip">@всем ▾</span><span class="chip">в очередь</span><span class="r"><span class="btn">■ Стоп всем</span></span></div></div>
+    </div>
+    <div class="right"><h5>Быстрый просмотр · запрос решения</h5>
+      <div class="card need"><h4>Ревьюер · 40 мин · OMG › L1 › H1.5</h4>Добавлять три тестовых пути старого правила?<br><b>Да, все</b> — ещё ~1 ч воркера · риск срока<br><b>Только один</b> — быстрее · риск дыры в адресах<br><span class="btn p">Да, все</span> <span class="btn">Только один</span> <span class="btn">Объясни</span><br><small style="color:#7a5c00">пока вы думаете: ревьюер спит, воркер работает</small></div>
+      <div class="pass"><div><label>Где</label>L1 › H1.5 › ревью, круг 2</div><div><label>Зачем</label>закрыть H1.5 до рубежа</div><div><label>Ожидаем</label>вердикт ≥ 9 → слияние</div><div><label>Риски</label>третий возврат · лимит Codex</div></div>
+      <div class="assist"><h5>Ассистент</h5><div class="in">Что такое «тестовые пути старого правила»?</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- СЕЙЧАС / ВОЗВРАТ -->
+<h2>Раздел «Сейчас» при возврате — рекап визита первым (ia.md §4.6, §6.1; state-system §7)</h2>
+<div class="win">
+  <div class="status"><div><b>Сейчас · все проекты</b></div><div class="need-t"><b>◆ 3 ждут вас</b> · старейшее 7 ч</div><div>⟳ 2 · <span class="warn-t">▲ 1</span> · ⬚ 0</div><div>Claude 61 % · Codex 94 %</div><div>с визита 02:10: +2 влито / ↺ 1</div></div>
+  <div class="zones">
+    <div class="rail"><div class="srch">Поиск по всему…</div><div class="sec on">Сейчас <span class="cnt">◆ 3</span></div><div class="sec">Проекты и комнаты</div><div class="sub">OMG <span class="cnt">◆ 2</span></div><div class="sub">Табло агентов <span class="cnt">◆ 1</span></div><div class="sub">Комната «принтер»</div><div class="sec">Команда</div><div class="sec">Решения <span class="cnt">◆ 3</span></div><div class="sec">Датчики <span class="warn-t">●</span></div><div class="sec">Расход</div><div class="sec">Память</div></div>
+    <div class="center">
+      <div class="obj">
+        <div class="card"><h4>Пока вас не было (02:10 → 09:40) <span class="ref">рекап визита</span></h4>Влиты две задачи, обе проверены. Codex упёрся в лимит в 06:12 и стоял 3 ч — зона: провайдер, сам не продолжит. Три вопроса ждут вас. Потрачено 7 % недели, на 2 % больше плана: три круга ревью по D8.4e. Если ничего не делать — воркер закончит ≈ 10:30, ревьюер ждёт.</div>
+        <div class="two">
+          <div class="card need"><h4>Ждёт вас (3)</h4>◆ OMG › L1 › H1.5 · три тестовых пути? · 7 ч<br>◆ OMG › L1 › D8.4e · продолжить на Sonnet? · 3 ч<br>◆ Табло агентов › Концепция · шлюз · 12 ч<br><span class="btn p">Решать по порядку</span></div>
+          <div class="card warn"><h4>Нужно ваше внимание (1)</h4>▲ Исполнитель Codex · приостановлено: лимит · зона: провайдер · <span class="btn">Восстановить</span></div>
+          <div class="card ok"><h4>Готово к проверке (1)</h4>E2.2 · воркер Fable · 3206 тестов · <span class="btn">Открыть</span></div>
+          <div class="card"><h4>Идёт (2) · Завершено с визита (2)</h4>⟳ воркер · H1.5 · 12 мин &nbsp;·&nbsp; ⟳ тестер · шаг 6 из 9<br>✓ D8.4d влита 02:14 · ✓ E2.2 принята 04:30</div>
+        </div>
+      </div>
+    </div>
+    <div class="right"><h5>Быстрый просмотр</h5><div class="pass"><div><label>Где</label>Сейчас · 2 проекта</div><div><label>Что</label>за ночь: +2 влито, 1 сбой</div><div><label>Когда</label>если не вмешаться — 10:30</div><div><label>Риски</label>вопросы висят → день потерян</div></div><div class="assist"><h5>Ассистент</h5><div class="in">Почему Codex сам не продолжил?</div></div></div>
+  </div>
+</div>
+
+<h2>Откуда каждый элемент — и какую боль закрывает</h2>
+<table class="trace">
+  <tr><th>Элемент</th><th>Решение в документах</th><th>Боль / сигнал из ваших журналов</th></tr>
+  <tr><td>① Строка состояния (где · ждёт вас · сводка · неделя · с визита)</td><td>ia.md §4.3</td><td>каждая четвёртая реплика — «где мы?»; CodexLimitBar; «к цели или по кругу?»</td></tr>
+  <tr><td>② Рейка: Сейчас · Проекты и комнаты · Команда · Решения · Датчики · Расход · Память; поиск</td><td>ia.md §6.1, §6.3</td><td>«левую колонку — сквозняком по всем окнам»; «не могу найти нашу беседу»</td></tr>
+  <tr><td>③ Полоса «Ждёт вас» с возрастом</td><td>ia.md §4.2; state-system §4</td><td>9,4 ч невидимого ожидания → «заснул»; «что от меня нужно?»</td></tr>
+  <tr><td>④ Текущий объект: Разговор · Документ · Карта · Места · Ход работы · Расход</td><td>ia.md §4.4, §6.2</td><td>«в средней колонке — мультичат»; «видеть проект схемой»; DSH Trajectory</td></tr>
+  <tr><td>⑤ Поле ввода с условиями хода и ценой</td><td>ia.md §4.2 ⑤; dsh §4</td><td>«не видно, какой ход сколько съел»; переход в план без ритуала трёхходовки</td></tr>
+  <tr><td>⑥ Паспорт: где · что · зачем · когда · ожидаем · успех · провал · риски</td><td>state-system §2</td><td>ваша рамка, повторённая 9 раз</td></tr>
+  <tr><td>⑦ Ассистент «объясни по-человечески»</td><td>ia.md §4.2 ⑦</td><td>166 реплик о непонимании; «моя сестра спрашивает»</td></tr>
+  <tr><td>Слова состояния: Идёт · Ждёт вас · Приостановлено (лимит) · Готово к проверке · Пройдено · Сорвалось · Нет сигнала</td><td>state-system §3</td><td>тишина неотличима от работы; «готово» ставит проверка</td></tr>
+  <tr><td>Режимы как звено пути: Чат · План · Ресёрч · Команда · Наблюдение</td><td>ia.md §3.2, §5, §7.2</td><td>имя режима менялось 5 раз; «переключиться в режим таскплан про»</td></tr>
+  <tr><td>Стадии человеческими именами, код в скобках</td><td>ia.md §7.2</td><td>«объясни по человечески и в каком блоке этот вопрос r? l?»</td></tr>
+</table>
+<p class="note">Три варианта UI (фаза 3) — три облика этой структуры: что в центре по умолчанию (очередь «Сейчас» / объект / карта и документ), плотность, кодирование слов состояния, подача перехода «чат → план». Структура, слова и паспорт — одни.</p>
+</body>
+</html>

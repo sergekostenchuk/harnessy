@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Простой путь</title>
+<style>
+  :root { --ink:#1d1d1f; --dim:#86868b; --line:#e5e5ea; --bg:#fff; --me:#f2f2f7; --need:#fff4d6; --need-line:#e6c25a; --ok:#2e8b57; --warn:#c0392b; --blue:#0a66d6; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:28px 16px 80px; background:#f5f5f7; color:var(--ink); font:15px/1.5 -apple-system,"Helvetica Neue",Arial,sans-serif; }
+  h1 { font-size:22px; margin:0 0 4px; } .lead { color:#555; max-width:720px; margin:0 0 22px; }
+  h2 { font-size:15px; color:#555; font-weight:600; margin:38px 0 10px; }
+  .win { width:720px; max-width:100%; background:var(--bg); border:1px solid #d9d9de; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.08); overflow:hidden; }
+  .head { padding:14px 20px 10px; border-bottom:1px solid var(--line); }
+  .head .t { font-size:17px; font-weight:600; }
+  .head .s { color:var(--dim); font-size:13px; margin-top:2px; }
+  .head .s b { color:var(--ink); font-weight:500; }
+  .ribbon { padding:8px 20px; background:#f6f8fc; border-bottom:1px solid var(--line); font-size:13px; display:flex; gap:10px; align-items:center; }
+  .ribbon .pill { background:#fff; border:1px solid var(--line); border-radius:999px; padding:1px 10px; }
+  .ribbon .btn { margin-left:auto; }
+  .team { display:flex; gap:14px; padding:10px 20px; border-bottom:1px solid var(--line); font-size:12px; color:#444; }
+  .team div { display:flex; align-items:center; gap:6px; }
+  .av { width:22px; height:22px; border-radius:50%; background:#dfe3ea; display:inline-flex; align-items:center; justify-content:center; font-size:11px; color:#333; }
+  .av.w { background:#d9e7ff; } .av.a { background:var(--need); } .av.x { background:#ffe1dc; }
+  .chat { padding:18px 20px; min-height:300px; display:flex; flex-direction:column; gap:12px; }
+  .m { max-width:86%; padding:9px 13px; border-radius:14px; font-size:15px; }
+  .m.me { align-self:flex-end; background:var(--me); }
+  .m.ai { align-self:flex-start; background:#fff; border:1px solid var(--line); }
+  .m small { display:block; color:var(--dim); font-size:12px; margin-top:4px; }
+  .need { border:1px solid var(--need-line); background:var(--need); border-radius:12px; padding:12px 14px; }
+  .need .who { font-size:12px; color:#7a5c00; margin-bottom:2px; }
+  .need .q { font-weight:600; }
+  .need .why { color:#555; font-size:13px; margin:4px 0 8px; }
+  .btn { display:inline-block; border:1px solid #c9c9ce; background:#fff; border-radius:8px; padding:5px 12px; font-size:13px; }
+  .btn.p { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .comp { border-top:1px solid var(--line); padding:12px 20px 14px; }
+  .comp .in { border:1px solid #d0d0d5; border-radius:12px; padding:10px 14px; color:#999; }
+  .comp .u { display:flex; gap:12px; margin-top:8px; font-size:12px; color:var(--dim); align-items:center; }
+  .comp .u .r { margin-left:auto; }
+  .back { background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px 14px; font-size:15px; }
+  .back b { font-weight:600; }
+  .back a { color:var(--blue); text-decoration:none; }
+  .note { max-width:720px; color:#444; font-size:14px; margin:8px 0 0; }
+  .meter { display:inline-block; width:46px; height:6px; background:#e5e5ea; border-radius:3px; vertical-align:middle; position:relative; }
+  .meter i { position:absolute; left:0; top:0; bottom:0; width:61%; background:#8e8e93; border-radius:3px; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--ok); margin-right:5px; }
+  .dot.w { background:var(--need-line); } .dot.x { background:var(--warn); }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:720px; }
+  .alt { background:#fff; border:1px solid #d9d9de; border-radius:12px; padding:14px 16px; font-size:14px; }
+  .alt b { display:block; margin-bottom:4px; }
+</style>
+</head>
+<body>
+<h1>Простой путь: чат → план → команда</h1>
+<p class="lead">Одно окно, как мессенджер. Всё, что человеку нужно знать, — одной строкой словами, а не приборами. Сложное появляется только когда он сам в него зашёл, и исчезает, когда не нужно.</p>
+
+<h2>1. Открыл папку. Больше ничего.</h2>
+<div class="win">
+  <div class="head"><div class="t">OMG</div><div class="s">Claude · <b>готов</b>. Пишите, что нужно.</div></div>
+  <div class="chat" style="min-height:220px"></div>
+  <div class="comp"><div class="in">Сообщение…</div><div class="u"><span>Sonnet · только читает папку</span><span class="r">неделя <span class="meter"><i></i></span></span></div></div>
+</div>
+<p class="note">Как Claude Desktop. Одна строка под именем папки говорит, кто здесь и что он делает. Модель и права — серым под полем. Расход — полоска в углу; слов не нужно, пока не покраснеет.</p>
+
+<h2>2. Поговорили. Агент сам предлагает следующий шаг, не толкает.</h2>
+<div class="win">
+  <div class="head"><div class="t">OMG</div><div class="s">Claude · <b>ответил</b> 2 мин назад</div></div>
+  <div class="chat">
+    <div class="m me">посмотри, почему Brother не видит сеть, и вернись с оценкой из 10</div>
+    <div class="m ai">DHCP выдал принтеру новый адрес, а драйвер смотрит на старый. Уверен на 8 из 10.<small>Проверил командой lpstat — <a href="#">показать</a> · 1 мин 40 с</small></div>
+    <div class="m me">ок. а теперь хочу из этого сделать табло для всех моих агентов</div>
+    <div class="m ai">Это уже больше, чем чат. Могу собрать план — вы увидите его целиком и подпишете, прежде чем что-то начнётся. <div style="margin-top:8px"><span class="btn p">Собрать план</span> <span class="btn">Пока поговорим</span></div></div>
+  </div>
+  <div class="comp"><div class="in">Сообщение…</div><div class="u"><span>Sonnet · только читает папку</span><span class="r">неделя <span class="meter"><i></i></span></span></div></div>
+</div>
+<p class="note">«Готово» всегда со ссылкой на то, как проверено. Переход в план — предложение с двумя кнопками внутри разговора, никаких режимов и переключателей.</p>
+
+<h2>3. План идёт. Над чатом — одна строка о том, где вы.</h2>
+<div class="win">
+  <div class="head"><div class="t">OMG · Табло агентов</div><div class="s">Оркестратор · <b>ждёт вашего «да»</b></div></div>
+  <div class="ribbon"><span class="pill">Стадия 2 из 8 · Концепция</span><span>готова, проверена на 8,5 — не хватает рисков по зонам</span><span class="btn btn p" style="margin-left:auto">Перейти дальше</span><span class="btn">Доделать</span></div>
+  <div class="chat">
+    <div class="m ai">Концепция готова. Ревьюер проверил: 8,5 из 10. Что не дотянуло — риски не разложены по зонам. Можно идти дальше или доделать за ~20 минут.<small>Посмотреть концепцию · что перешло из разговора — <a href="#">показать</a></small></div>
+  </div>
+  <div class="comp"><div class="in">Сообщение…</div><div class="u"><span>Fable · правит файлы сам</span><span class="r">неделя <span class="meter"><i></i></span></span></div></div>
+</div>
+<p class="note">Стадии — не лестница на весь экран, а одна полоска: какая по счёту, что с ней, что от вас. Всё остальное — по ссылке.</p>
+
+<h2>4. Появилась команда — строка лиц, у каждого одно слово.</h2>
+<div class="win">
+  <div class="head"><div class="t">OMG · Табло агентов</div><div class="s">Команда · <b>один ждёт вас</b>, остальные работают</div></div>
+  <div class="ribbon"><span class="pill">Стадия 4 из 8 · L1</span><span>идёт · следующий отчёт в 20:15</span></div>
+  <div class="team">
+    <div><span class="av w">О</span>Оркестратор · думает</div>
+    <div><span class="av w">В</span>Воркер · пишет тесты, 12 мин</div>
+    <div><span class="av a">Р</span>Ревьюер · <b>ждёт вас</b></div>
+    <div><span class="av x">C</span>Codex · лимит до 19:58</div>
+  </div>
+  <div class="chat">
+    <div class="need"><div class="who">Ревьюер · 40 минут назад</div><div class="q">Добавлять три тестовых пути старого правила?</div><div class="why">Если да — ещё около часа работы. Если только один — быстрее, но останется дыра в проверке адресов.</div><span class="btn p">Да, все три</span> <span class="btn">Только один</span> <span class="btn">Объясни</span></div>
+    <div class="m ai">Пока вы решаете, воркер продолжает тесты, ревьюер спит. Codex стоит из-за лимита — сам продолжит в 19:58.</div>
+  </div>
+  <div class="comp"><div class="in">Написать команде…</div><div class="u"><span>кому: всем ▾</span><span class="r">неделя <span class="meter"><i></i></span></span></div></div>
+</div>
+<p class="note">Никаких восьми окон. Кто есть, кто что делает, кто ждёт — одной строкой. Вопрос вам — одна карточка в разговоре с последствиями каждого ответа. Тишина объяснена словами: «лимит до 19:58».</p>
+
+<h2>5. Вернулись утром — один абзац.</h2>
+<div class="win">
+  <div class="head"><div class="t">OMG · Табло агентов</div><div class="s">Команда · <b>двое ждут вас</b></div></div>
+  <div class="chat">
+    <div class="back"><b>Пока вас не было</b> (с 02:10): влиты две задачи, обе проверены. Codex упёрся в лимит в 19:12 и стоял 46 минут — это у провайдера, не у нас. Ревьюер ждёт вашего ответа про тестовые пути. Потрачено 7 % недели, на 2 % больше плана — три круга ревью по D8.4e. Если ничего не делать, воркер закончит около 20:15. <a href="#">Подробно ▸</a></div>
+    <div class="need"><div class="who">Ревьюер · с 02:50</div><div class="q">Добавлять три тестовых пути?</div><span class="btn p">Да, все три</span> <span class="btn">Только один</span></div>
+  </div>
+  <div class="comp"><div class="in">Сообщение…</div><div class="u"><span>кому: оркестратор ▾</span><span class="r">неделя <span class="meter"><i></i></span></span></div></div>
+</div>
+<p class="note">Что сделано, что сломалось и чьё это, чего ждут от вас, сколько стоило, что будет дальше — одним абзацем человеческим языком. Таблицы — по ссылке, если захочется.</p>
+
+<h2>Где здесь ваши «где · что · зачем · когда · ожидаем · риски · успех»</h2>
+<p class="note">Не отдельными полями, а в одной строке под названием и в одном абзаце у агента. «Где» — заголовок и полоска стадии. «Что и когда» — строка «что делает · следующий отчёт в…». «Зачем, ожидаем, успех/провал» — в плане, который вы подписали, и по ссылке «показать». «Риски» — в карточке решения: что будет при каждом ответе. Человек не учит интерфейс — он читает по-русски.</p>
+
+<h2>Два других варианта — той же простоты, другая главная мысль</h2>
+<div class="two">
+  <div class="alt"><b>«Дела»</b>Открывается не чат, а короткий список: «нужно вам» (2) · «идёт» (3) · «готово» (1). Каждая строка — одна фраза; нажал — открылся разговор об этом деле. Для тех, кто живёт в почте и задачах.</div>
+  <div class="alt"><b>«Карта»</b>Открывается картинка проекта: путь из стадий, на нём точки — где агенты, где вопрос к вам. Нажал на стадию — её разговор. Для тех, кто хочет видеть проект схемой, как вы просили в OMG.</div>
+</div>
+<p class="note">Во всех трёх одинаковы: язык без жаргона, одна карточка на вопрос с последствиями, «готово» со ссылкой на проверку, абзац «пока вас не было», полоска расхода.</p>
+</body>
+</html>

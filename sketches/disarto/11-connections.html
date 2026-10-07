@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 11 · Подключение моделей · живой</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .views{position:relative;height:100%;min-height:0}
+  .view{position:absolute;inset:0;padding:18px 20px;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .22s,transform .22s}.view.on{opacity:1;transform:none;pointer-events:auto}
+  .wrap{max-width:860px;margin:0 auto;padding:10px 0}
+  .sum{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0 26px}
+  .sum div{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px 14px}.sum b{display:block;font:500 22px/1.1 var(--font);letter-spacing:-.01em;margin-bottom:4px}.sum small{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.sum b.bad{color:var(--bad)}
+  .list{border:1px solid var(--line2);border-radius:14px;background:var(--panel);overflow:hidden}
+  .row{display:grid;grid-template-columns:34px 1.3fr 1fr 1fr 110px 20px;gap:14px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .15s}.row:last-child{border-bottom:0}.row:hover{background:var(--raised)}
+  .row.head{padding:8px 16px;background:var(--raised);font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);cursor:default}
+  .lg{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font:600 12px var(--mono);background:var(--raised);border:1px solid var(--line2);color:var(--ink)}
+  .lg.c{background:#2b231b;color:#dbb48a;border-color:#4a362a}.lg.o{background:#1c2422;color:#9fe2c3;border-color:#2b3f38}.lg.q{background:#1d2030;color:#a9b4ff;border-color:#2d3250}.lg.k{background:#241f2d;color:#d2b3ff;border-color:#3a3050}.lg.d{background:#1f2a2e;color:#8fd7f0;border-color:#2b3f47}.lg.r{opacity:.5}
+  .row b{font-weight:500;font-size:13.5px;display:block}.row small{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);display:block;margin-top:2px}
+  .row .st{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink2)}.row .st i{width:7px;height:7px;border-radius:50%;background:var(--ok)}.row .st i.bad{background:var(--bad-fill,#a3304b)}.row .st i.no{background:var(--line2)}
+  .row .num{font:500 13px var(--mono);color:var(--ink)}.row .num.bad{color:var(--bad)}.row .num small{text-transform:none;letter-spacing:0;color:var(--ink3);font-size:10px;display:inline}
+  .row .pay{font:11px var(--mono);color:var(--ink2)}.row .pay.hot{color:var(--accent)}.row .chev{color:var(--ink3)}.row.off b{color:var(--ink2)}
+  .foot-note{display:flex;justify-content:space-between;margin-top:14px;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  /* роли */
+  .rl{border:1px solid var(--line2);border-radius:14px;background:var(--panel);overflow:hidden}
+  .rr{display:grid;grid-template-columns:1.1fr 1.4fr 1.2fr 24px;gap:14px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--line)}.rr:last-child{border-bottom:0}
+  .rr.head{padding:8px 16px;background:var(--raised);font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .rr .n b{font-weight:500;display:block;font-size:13.5px}.rr .n small{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .rr .sel{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid var(--line2);border-radius:8px;background:var(--raised);font-size:12.5px}.rr .sel .lg{width:18px;height:18px;border-radius:5px;font-size:8px}.rr .sel .chev{color:var(--ink3);font-size:10px;margin-left:2px}.rr .sel.hot{border-color:rgba(194,122,52,.5)}
+  .rr .fb{font-size:12px;color:var(--ink2)}.rr .fb small{display:block;font:10px var(--mono);letter-spacing:.04em;color:var(--ink3)}.rr .chev{color:var(--ink3)}
+  .note{display:flex;align-items:center;gap:10px;margin-top:14px;padding:10px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--panel);font-size:12.5px;color:var(--ink2)}.note .m{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}.note .m::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:1px}
+  .seg span{cursor:pointer}
+  /* раскрытая карточка провайдера */
+  .ovl{position:absolute;inset:0;z-index:20;background:rgba(6,6,8,.55);opacity:0;pointer-events:none;transition:opacity .25s}.ovl.on{opacity:1;pointer-events:auto}
+  .panel{position:absolute;border:1px solid var(--line2);border-radius:14px;background:var(--panel);box-shadow:0 30px 80px rgba(0,0,0,.65);overflow:hidden;transition:left .34s cubic-bezier(.2,.7,.2,1),top .34s cubic-bezier(.2,.7,.2,1),width .34s cubic-bezier(.2,.7,.2,1),height .34s cubic-bezier(.2,.7,.2,1)}
+  .panel .inner{opacity:0;transition:opacity .18s;padding:20px 22px;width:860px}.panel.open .inner{opacity:1;transition-delay:.16s}
+  .panel .x{position:absolute;right:14px;top:12px;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--ink3);cursor:pointer;font-size:16px;z-index:2}.panel .x:hover{background:var(--raised);color:var(--ink)}
+  .panel .from{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px}
+  .head2{display:flex;align-items:center;gap:14px;margin-bottom:16px}.head2 .lg{width:44px;height:44px;border-radius:12px;font-size:16px}.head2 h3{margin:0;font-size:20px;font-weight:500}.head2 small{display:block;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-top:3px}.head2 .r{margin-left:auto;display:flex;gap:6px;margin-right:34px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .blk{border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:14px 16px}.blk .t{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px;display:flex;justify-content:space-between}
+  .big{font:500 28px/1 var(--font);letter-spacing:-.02em;margin-bottom:8px}
+  .tk{display:flex;gap:2px;margin:8px 0 6px}.tk i{flex:1;height:8px;border-radius:1.5px;background:var(--line2)}.tk i.on{background:var(--accent)}.tk i.ok{background:var(--ok)}.tk i.bad{background:var(--bad-fill,#a3304b)}.tk i.mark{background:var(--ink)}
+  .tkl{display:flex;justify-content:space-between;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .mrow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}.mrow:last-child{border-bottom:0}.mrow small{display:block;color:var(--ink3);font-size:11px;margin-top:1px}.mrow .who{font:10px var(--mono);letter-spacing:.04em;color:var(--ink2);text-align:right}.mrow .who.none{color:var(--ink3)}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:12.5px}.kv span{color:var(--ink3)}.kv b{font-weight:400;color:var(--ink)}
+  .opt{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:12.5px}.opt small{display:block;color:var(--ink3);font-size:11px}.opt .tog{margin-left:auto}
+  /* поток подключения внутри карточки */
+  .flow{display:none}.flow.on{display:block}
+  .steps{display:flex;gap:6px;margin:0 0 16px}.steps i{flex:1;height:3px;border-radius:2px;background:var(--line2)}.steps i.on{background:var(--accent)}
+  .opt3{display:flex;flex-direction:column;gap:8px;max-width:520px}.op{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;background:var(--raised);display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;font-size:12.5px;cursor:pointer}.op small{display:block;color:var(--ink3);font-size:11px}.op.on{border-color:var(--accent)}
+  .op .ic{width:28px;height:28px;border-radius:7px;background:var(--panel);border:1px solid var(--line2);display:grid;place-items:center}.op .ic svg{width:14px;height:14px;stroke:var(--ink2);fill:none;stroke-width:1.7;stroke-linecap:round}
+  .inp{height:38px;border:1px solid var(--line2);border-radius:8px;background:var(--raised);display:flex;align-items:center;padding:0 10px;font:12.5px var(--mono);color:var(--ink);gap:8px;max-width:520px}.inp.ok{border-color:var(--ok)}.inp .k{margin-left:auto;font-size:10px;color:var(--ink3)}
+  .chk{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink2);margin-top:10px}.chk div{display:flex;align-items:center;gap:8px}.chk .ok{width:14px;height:14px;border-radius:50%;background:var(--ok);display:grid;place-items:center;color:#fff;font-size:9px;font-weight:700}.chk .run{width:14px;height:14px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent}
+  .ft{display:flex;gap:8px;margin-top:18px;align-items:center;max-width:520px}.ft .btn{height:30px;cursor:pointer}
+  .fh h4{margin:0 0 4px;font-size:16px;font-weight:500}.fh p{margin:0 0 14px;color:var(--ink2);font-size:12.5px}
+  .hint-bar{display:flex;gap:16px;justify-content:center;margin:12px 0 0;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 11 · подключение моделей · живой</h1>
+  <p class="sub">Список провайдеров — одна главная цифра на строку. <b>Клик по строке — карточка провайдера раскрывается поверх списка</b> (лимиты, модели и кто на них, оплата, правила). «Подключить» у OpenRouter — поток в три шага в той же карточке. Вкладка «Роли» — переключателем сверху. × / клик мимо / Esc — закрыть. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg><span class="b">3</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg><span class="b">!</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg></div>
+      <div class="foot"><div class="nav on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></div><div class="nav"><span class="ring"><i></i></span></div><div class="nav"><span class="av">S<i></i></span></div></div>
+    </aside>
+    <section class="main">
+      <div class="top"><b>Подключения</b><div class="r"><span class="seg" id="seg"><span class="on" data-v="list">Провайдеры</span><span data-v="roles">Роли</span><span data-v="keys">Ключи</span></span><span class="btn sm p" id="addbtn">+ Подключить</span></div></div>
+      <div class="views">
+        <div class="view on" id="v-list"><div class="wrap">
+          <div class="sum"><div><b>5</b><small>подключено</small></div><div><b class="bad">1</b><small>на лимите · codex</small></div><div><b>07.10</b><small>ближайшая оплата · 200 $</small></div><div><b>248 $</b><small>в месяц · все подписки</small></div></div>
+          <div class="list">
+            <div class="row head"><span></span><span>провайдер</span><span>состояние</span><span>главное число</span><span>оплата</span><span></span></div>
+            <div class="row" data-p="claude"><span class="lg c">C</span><div><b>Claude</b><small>подписка max · 2 места</small></div><div class="st"><i></i>работает</div><div class="num">62 % <small>недели</small></div><div class="pay hot">07.10 · 200 $</div><span class="chev">›</span></div>
+            <div class="row" data-p="codex"><span class="lg o">X</span><div><b>Codex</b><small>подписка pro</small></div><div class="st"><i class="bad"></i>лимит · сброс 19:58</div><div class="num bad">94 % <small>5 часов</small></div><div class="pay">12.10 · 40 $</div><span class="chev">›</span></div>
+            <div class="row" data-p="qwen"><span class="lg q">Q</span><div><b>Qwen · Alibaba</b><small>ключ api</small></div><div class="st"><i></i>работает</div><div class="num">$41,20 <small>остаток</small></div><div class="pay">пополнение 12.10</div><span class="chev">›</span></div>
+            <div class="row" data-p="kimi"><span class="lg k">K</span><div><b>Kimi</b><small>подписка · cli</small></div><div class="st"><i></i>работает</div><div class="num">38 <small>запросов сегодня</small></div><div class="pay">28.10 · 19 $</div><span class="chev">›</span></div>
+            <div class="row" data-p="devin"><span class="lg d">D</span><div><b>Devin</b><small>сессия</small></div><div class="st"><i></i>работает</div><div class="num">142 / 250 <small>acu</small></div><div class="pay">01.11 · 20 $</div><span class="chev">›</span></div>
+            <div class="row" data-p="ollama"><span class="lg">⌂</span><div><b>Ollama</b><small>локально · без оплаты</small></div><div class="st"><i></i>3 модели</div><div class="num">48 гб</div><div class="pay">—</div><span class="chev">›</span></div>
+            <div class="row off" data-p="openrouter"><span class="lg r">R</span><div><b>OpenRouter</b><small>ключ api · не подключён</small></div><div class="st"><i class="no"></i>—</div><div class="num" style="color:var(--ink3)">—</div><div class="pay"><span class="btn sm">Подключить</span></div><span class="chev"></span></div>
+          </div>
+          <div class="foot-note"><span>проверено 2 мин назад · все ключи — в связке ключей этой машины</span><span>⌘K · «подключить…»</span></div>
+        </div></div>
+
+        <div class="view" id="v-roles"><div class="wrap">
+          <p style="margin:4px 0 16px;color:var(--ink2);font-size:13px">Кто какой моделью работает и чем заменяется, если модель на лимите. Меняется по роли, действует со следующего хода.</p>
+          <div class="rl">
+            <div class="rr head"><span>роль</span><span>модель</span><span>если на лимите</span><span></span></div>
+            <div class="rr"><div class="n"><b>Оркестратор</b><small>fable · отдельное окно</small></div><span class="sel"><span class="lg c">C</span>Opus 5.5 · высокое<span class="chev">▾</span></span><div class="fb">спросить вас<small>никогда не переключать молча</small></div><span class="chev">›</span></div>
+            <div class="rr"><div class="n"><b>Воркер 1</b><small>тяжёлый код</small></div><span class="sel"><span class="lg c">C</span>Opus 5.5<span class="chev">▾</span></span><div class="fb">Astra (Codex) → Sonnet<small>вернуть после сброса</small></div><span class="chev">›</span></div>
+            <div class="rr"><div class="n"><b>Воркер 2</b><small>средний код</small></div><span class="sel hot"><span class="lg c">C</span>Sonnet 5.5<span class="chev">▾</span></span><div class="fb" style="color:var(--accent)">сейчас на запасной<small>Codex на лимите с 14:37 · вернуть в 19:58</small></div><span class="chev">›</span></div>
+            <div class="rr"><div class="n"><b>Ревьюер</b><small>договоры · ультра</small></div><span class="sel"><span class="lg o">X</span>Astra · ultra<span class="chev">▾</span></span><div class="fb">Opus 5.5<small>если молчит 60 с</small></div><span class="chev">›</span></div>
+            <div class="rr"><div class="n"><b>Хранитель</b><small>каждая стадия</small></div><span class="sel"><span class="lg c">C</span>Sonnet 5.5<span class="chev">▾</span></span><div class="fb">Kimi K2.5</div><span class="chev">›</span></div>
+            <div class="rr"><div class="n"><b>Ресёрчер</b><small>чтение · описи</small></div><span class="sel"><span class="lg q">Q</span>Qwen 3 Coder<span class="chev">▾</span></span><div class="fb">Kimi K2.5 → Ollama<small>не дороже Sonnet</small></div><span class="chev">›</span></div>
+          </div>
+          <div class="note"><span class="m">не применено</span><span>воркер 2: вернуть на Codex после сброса</span><span class="btn sm ghost" style="margin-left:auto">Отменить</span><span class="btn sm p">Применить</span></div>
+        </div></div>
+
+        <div class="view" id="v-keys"><div class="wrap"><p style="color:var(--ink2);font-size:13px">Ключи и безопасность — не рисовал: связка ключей, кто и когда проверял, отзыв.</p></div></div>
+      </div>
+
+      <div class="ovl" id="ovl"><div class="panel" id="panel"><div class="inner">
+        <span class="x" id="x">×</span>
+        <div id="card">
+          <div class="from" id="p-from">раскрытая карточка · провайдер</div>
+          <div class="head2"><span class="lg" id="p-lg">C</span><div><h3 id="p-name">Claude</h3><small id="p-sub"></small></div><span class="pill ok" id="p-pill" style="margin-left:14px">работает</span><div class="r" id="p-acts"></div></div>
+          <div class="two" id="p-limits"></div>
+          <div class="two" style="margin-top:12px">
+            <div class="blk"><div class="t"><span>модели · кто на них работает</span><span id="p-mcnt"></span></div><div id="p-models"></div></div>
+            <div class="blk"><div class="t"><span>оплата и доступ</span></div><div class="kv" id="p-kv"></div><div id="p-opts" style="margin-top:10px"></div></div>
+          </div>
+        </div>
+        <div id="flow" class="flow">
+          <div class="from">подключить провайдера · шаг <span id="f-n">1</span> из 3</div>
+          <div class="steps" id="f-steps"><i class="on"></i><i></i><i></i></div>
+          <div class="fh" id="f-1"><h4>Как будете платить — так и подключаем</h4><p>Выберите способ; остальное спросим на следующем шаге.</p>
+            <div class="opt3">
+              <div class="op" data-m="sub"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span><div>По подписке — войти в аккаунт<small>Claude Max, Codex Pro, Kimi: лимиты по окнам, оплата по дате</small></div></div>
+              <div class="op on" data-m="key"><span class="ic"><svg viewBox="0 0 24 24"><path d="M15 7a4 4 0 11-8 0 4 4 0 018 0zM11 11l-7 7 2 2M8 16l2 2"/></svg></span><div>По ключу API<small>OpenRouter, Qwen, DeepSeek: баланс и цена за токен</small></div></div>
+              <div class="op" data-m="local"><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 10l8-6 8 6v10H4z"/></svg></span><div>Локально<small>Ollama, LM Studio: без оплаты, свои модели</small></div></div>
+            </div>
+            <div class="ft"><span class="btn ghost" data-f="close">Отмена</span><span class="btn p" data-f="2" style="margin-left:auto">Дальше</span></div></div>
+          <div class="fh" id="f-2" style="display:none"><h4>OpenRouter · ключ API</h4><p>Ключ хранится в связке ключей этой машины; в чат и журнал не попадает.</p>
+            <div class="inp">sk-or-v1-••••••••••••••••••<span class="k">вставлено · 73 символа</span></div>
+            <div class="chk"><div><span class="ok">✓</span>формат ключа верный</div><div><span class="run"></span>проверяю доступ · GET /models…</div></div>
+            <div class="ft"><span class="btn ghost" data-f="1">Назад</span><span class="btn p" data-f="3" style="margin-left:auto">Проверить ключ</span></div></div>
+          <div class="fh" id="f-3" style="display:none"><h4>OpenRouter подключён</h4><p>Ключ принят. Теперь — кому его давать.</p>
+            <div class="chk" style="margin-top:0"><div><span class="ok">✓</span>доступ есть · 214 моделей · 20 запросов/с</div><div><span class="ok">✓</span>баланс <b style="color:var(--ink);font-weight:500">$25,00</b> · предупреждать при $5</div><div><span class="ok">✓</span>цены подтянуты: DeepSeek V4 $0,3/1M · Gemini 3 Pro $2/1M</div></div>
+            <div class="inp ok" style="margin-top:12px;font-family:var(--font)">Запасной для: ресёрчер, хранитель<span class="k">▾</span></div>
+            <div class="ft"><span class="btn ghost" data-f="close">Пока никому</span><span class="btn p" data-f="done" style="margin-left:auto">Готово</span></div></div>
+        </div>
+      </div></div></div>
+    </section>
+  </div>
+  <div class="cap"><span>11 · живой · список → раскрытая карточка провайдера · поток «подключить» · вкладка «роли»</span><span>1280 × 860</span></div>
+  <div class="hint-bar"><span>клик по строке раскрывает · «подключить» = поток в карточке · переключатель вверху · × / клик мимо / esc</span></div></div>
+</div>
+<script>
+(function(){
+  const P={
+    claude:{lg:'c',l:'C',name:'Claude',sub:'подписка max · вход через аккаунт 9616166@gmail.com · 2 места',pill:['работает','ok'],acts:['Проверить','Сменить вход'],
+      limits:[['лимит недели','сброс вт 03:00 · через 2 д 9 ч','62,4 %',25,40,'on','31,2M / 50M','порог 80 %'],['лимит 5 часов','окно до 21:40','18 %',7,40,'ok','в норме','порог 80 %']],
+      models:[['Opus 5.5','придумывать · тяжёлый код','оркестратор · воркер 1'],['Sonnet 5.5','чтение · проверка · средний код','воркер 2 · хранитель'],['Fable 5.1','отдельное окно · беречь','воркер карты'],['Haiku 4.5','мелочи','никто']],
+      kv:[['тариф','Max · 200 $ в месяц'],['списание','<span style="color:var(--accent)">07.10 · через 2 дня</span>'],['места','2 · WORKER-OPUS-2, WORKER-FABLE'],['подключено','29.09 · вход через браузер']],
+      opts:[['При лимите переключать на Sonnet','воркеры и хранитель; оркестратор — спросить',1],['Предупреждать при 80 %','в приложении и в Telegram',1]]},
+    codex:{lg:'o',l:'X',name:'Codex',sub:'подписка pro · вход через аккаунт · место codex-worker2',pill:['лимит','bad'],acts:['Проверить','Сменить вход'],
+      limits:[['лимит 5 часов','сброс 19:58 · через 1 ч 12 мин','94 %',38,40,'bad','почти всё','порог 80 %'],['лимит недели','сброс пн 00:00','71 %',28,40,'on','в норме','порог 80 %']],
+      models:[['Astra','ревью договоров · ultra','ревьюер'],['GPT-6.1','код','никто'],['Daybreak','недоступен · фильтр','—']],
+      kv:[['тариф','Pro · 40 $ в месяц'],['списание','12.10'],['fallback','→ Opus 5.5, если молчит 60 с'],['подключено','22.09']],
+      opts:[['При лимите → запасной','ревью на Opus; воркер 2 → Sonnet',1],['Вернуть после сброса','автоматически в 19:58',1]]},
+    qwen:{lg:'q',l:'Q',name:'Qwen · Alibaba',sub:'ключ api · token plan · через обёртку claude-qwen',pill:['работает','ok'],acts:['Проверить','Сменить ключ'],
+      limits:[['остаток','пополнение 12.10','$41,20',14,40,'ok','2,1 $/день · хватит на 19 дней','предупредить при $10'],['лимит в минуту','сейчас 8 %','1M',3,40,'ok','токенов/мин','']],
+      models:[['Qwen 3 Coder','чтение · описи','ресёрчер'],['GLM 5','черновики','никто'],['Qwen 3 Max','резерв','никто']],
+      kv:[['ключ','sk-…8f2a · с 15.09'],['цена','$0,4 / 1M'],['расход','2,1 $/день'],['подключено','15.09']],opts:[['Предупреждать при $10','в приложении',1]]},
+    kimi:{lg:'k',l:'K',name:'Kimi',sub:'подписка · cli · диспетчер kimi_seat',pill:['работает','ok'],acts:['Проверить'],
+      limits:[['сегодня','без жёсткого лимита','38',12,40,'ok','запросов','']],models:[['Kimi K2.5','ресёрч · замена ревьюера','ресёрчер (запасной)']],
+      kv:[['тариф','19 $ в месяц'],['списание','28.10'],['место','kimi-worker'],['подключено','27.09']],opts:[]},
+    devin:{lg:'d',l:'D',name:'Devin',sub:'сессия lydian-cowbell · хук stop · место devin-worker',pill:['работает','ok'],acts:['Проверить'],
+      limits:[['ACU в месяце','сброс 01.11','142 / 250',23,40,'on','57 %','']],models:[['Devin','воркер по задачам Q4, Q5, H2.0','воркер (Devin)']],
+      kv:[['тариф','20 $ в месяц'],['списание','01.11'],['сессия','lydian-cowbell'],['подключено','27.09']],opts:[]},
+    ollama:{lg:'',l:'⌂',name:'Ollama · локально',sub:'127.0.0.1:11434 · без оплаты · 48 гб моделей',pill:['работает','ok'],acts:['Проверить','Открыть папку'],
+      limits:[['модели','3 загружены','48 гб',30,40,'ok','диск','']],models:[['qwen2.5-coder 14b','черновики','никто'],['llama 3.3 70b','резерв','никто'],['nomic-embed','эмбеддинги','память проекта']],
+      kv:[['адрес','127.0.0.1:11434'],['оплата','нет'],['подключено','21.09']],opts:[]}
+  };
+  const ovl=document.getElementById('ovl'), panel=document.getElementById('panel'), main=document.querySelector('.main'), card=document.getElementById('card'), flow=document.getElementById('flow'); let fromEl=null, fromRect=null, cur='list';
+  const g=id=>document.getElementById(id);
+  function fill(k){ const d=P[k];
+    g('p-lg').className='lg '+d.lg; g('p-lg').textContent=d.l; g('p-name').textContent=d.name; g('p-sub').textContent=d.sub; g('p-pill').textContent=d.pill[0]; g('p-pill').className='pill '+d.pill[1];
+    g('p-acts').innerHTML=d.acts.map((a,i)=>'<span class="btn sm'+(i?' ghost':'')+'">'+a+'</span>').join('');
+    g('p-limits').innerHTML=d.limits.map(([t,r,big,on,tot,cls,a,b])=>'<div class="blk"><div class="t"><span>'+t+'</span><span>'+r+'</span></div><div class="big">'+big+'</div><div class="tk">'+Array.from({length:tot},(_,i)=>'<i class="'+(i<on?cls:(i===Math.round(tot*.8)?'mark':''))+'"></i>').join('')+'</div><div class="tkl"><span>'+a+'</span><span>'+b+'</span></div></div>').join('');
+    g('p-mcnt').textContent=d.models.length; g('p-models').innerHTML=d.models.map(([m,s,w])=>'<div class="mrow"><div>'+m+'<small>'+s+'</small></div><div class="who'+(w==='никто'||w==='—'?' none':'')+'">'+w+'</div></div>').join('');
+    g('p-kv').innerHTML=d.kv.map(([a,b])=>'<span>'+a+'</span><b>'+b+'</b>').join('');
+    g('p-opts').innerHTML=d.opts.map(([a,s,on])=>'<div class="opt"><div>'+a+'<small>'+s+'</small></div><span class="tog'+(on?' on':'')+'"></span></div>').join(''); }
+  function rectIn(el){ const r=el.getBoundingClientRect(), m=main.getBoundingClientRect(), s=(m.width/main.offsetWidth)||1; return {l:(r.left-m.left)/s,t:(r.top-m.top)/s,w:r.width/s,h:r.height/s}; }
+  function setRect(r){ panel.style.left=r.l+'px'; panel.style.top=r.t+'px'; panel.style.width=r.w+'px'; panel.style.height=r.h+'px'; }
+  function openFrom(el,H){ fromEl=el; fromRect=rectIn(el); panel.style.transition='none'; setRect(fromRect); panel.classList.remove('open'); ovl.classList.add('on');
+    requestAnimationFrame(()=>{ panel.style.transition=''; const m={width:main.offsetWidth,height:main.offsetHeight}, W=904, h=Math.min(m.height-60,H); setRect({l:(m.width-W)/2,t:Math.max(30,(m.height-h)/2),w:W,h:h}); panel.classList.add('open'); }); }
+  function close(){ if(!fromEl) return; panel.classList.remove('open'); setRect(fromRect); ovl.classList.remove('on'); fromEl=null; }
+  function showFlow(n){ ['1','2','3'].forEach(i=>g('f-'+i).style.display=i==n?'':'none'); g('f-n').textContent=n; g('f-steps').querySelectorAll('i').forEach((s,i)=>s.classList.toggle('on',i<n)); }
+  document.querySelectorAll('.row[data-p]').forEach(r=>r.addEventListener('click',()=>{ if(r.dataset.p==='openrouter'){ card.style.display='none'; flow.classList.add('on'); showFlow(1); openFrom(r,470); } else { flow.classList.remove('on'); card.style.display=''; fill(r.dataset.p); openFrom(r,560); } }));
+  g('addbtn').addEventListener('click',()=>{ card.style.display='none'; flow.classList.add('on'); showFlow(1); openFrom(g('addbtn'),470); });
+  flow.addEventListener('click',e=>{ const b=e.target.closest('[data-f]'); if(!b) return; const f=b.dataset.f; if(f==='close'||f==='done') close(); else showFlow(f); const op=e.target.closest('.op'); if(op){ flow.querySelectorAll('.op').forEach(o=>o.classList.toggle('on',o===op)); } });
+  flow.addEventListener('click',e=>{ const op=e.target.closest('.op'); if(op) flow.querySelectorAll('.op').forEach(o=>o.classList.toggle('on',o===op)); });
+  g('x').addEventListener('click',close); ovl.addEventListener('click',e=>{ if(e.target===ovl) close(); }); addEventListener('keydown',e=>{ if(e.key==='Escape') close(); if(e.key==='1') show('list'); if(e.key==='2') show('roles'); });
+  const seg=g('seg'); function show(v){ if(fromEl) close(); g('v-'+cur).classList.remove('on'); g('v-'+v).classList.add('on'); cur=v; seg.querySelectorAll('span').forEach(s=>s.classList.toggle('on',s.dataset.v===v)); }
+  seg.addEventListener('click',e=>{ const s=e.target.closest('span[data-v]'); if(s) show(s.dataset.v); });
+})();
+</script>
+</body></html>

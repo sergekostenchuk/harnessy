@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 18 · Оверлеи: Уйти · Показать окно · ⌘K · Паспорт</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .main{grid-template-rows:auto 1fr auto}
+  .feed{overflow:hidden;padding:22px 0}.col{max-width:760px;margin:0 auto;padding:0 20px;display:flex;flex-direction:column;gap:16px}
+  .me{align-self:flex-end;max-width:70%;background:var(--raised);border:1px solid var(--line2);border-radius:14px 14px 4px 14px;padding:10px 14px;font-size:13.5px}
+  .ai{display:grid;grid-template-columns:24px 1fr;gap:12px}.ai .orb{width:20px;height:20px;margin-top:2px}.ai p{margin:0;font-size:13.5px;line-height:1.55}
+  .thought{color:var(--ink3);font-size:12px;margin-bottom:6px}.thought::before{content:"› "}
+  .comp{padding:12px 20px}.box{max-width:760px;margin:0 auto;border:1px solid var(--line2);border-radius:14px;background:var(--panel);padding:12px 12px 10px}
+  .box .in{color:var(--ink3);font-size:13.5px;padding:2px 4px 10px}.box .bar2{display:flex;align-items:center;gap:6px}.box .chip{cursor:pointer}.box .chip:hover{border-color:#4a4a52}
+  .go{margin-left:auto;width:30px;height:30px;border-radius:50%;background:var(--ink);display:grid;place-items:center;color:var(--bg);font-weight:700}
+  .top .btn{cursor:pointer}
+  /* палитра */
+  .pal-in{display:flex;align-items:center;gap:10px;height:44px;border:1px solid var(--line2);border-radius:10px;background:var(--raised);padding:0 12px;font-size:14px;color:var(--ink);margin-bottom:12px}.pal-in .k{margin-left:auto}
+  .pal-g{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:8px 4px 4px}
+  .pal-r{display:grid;grid-template-columns:88px 1fr auto;gap:10px;align-items:center;height:34px;padding:0 8px;border-radius:8px;font-size:13px;color:var(--ink)}.pal-r.on{background:var(--tile)}.pal-r .kd{font:9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}.pal-r .m{font:10.5px var(--mono);color:var(--ink3)}
+  /* окна */
+  .wins{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .win{border:1px solid var(--line2);border-radius:10px;background:var(--raised);padding:8px;cursor:pointer;font-size:12px;color:var(--ink2)}.win.on{border-color:var(--accent)}.win b{display:block;color:var(--ink);font-weight:500;margin-top:6px}
+  .thumb{height:78px;border-radius:6px;background:linear-gradient(160deg,#1f1f23,#15151a);border:1px solid var(--line);display:grid;place-items:center;font:9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .night{display:grid;grid-template-columns:70px 1fr 120px;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.night:last-child{border-bottom:0}.night b{color:var(--ink);font-weight:500}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 18 · оверлеи</h1>
+  <p class="sub">Четыре «экрана» прототипа были действиями, а не местами. Теперь они открываются <b>поверх того экрана, где вы находитесь</b> — здесь это чат: «☾ Уйти» (поток в три шага + прошлые ночи), «Показать окно» (выбор из чипа композера), «⌘K» (палитра поиска), «ⓘ Паспорт». Контекст под карточкой остаётся виден. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side" data-rail="chat"></aside>
+    <section class="main">
+      <div class="top"><span class="orb"></span><b>Оркестратор · OMG</b><span class="st"><i></i>работает · прогон H1.5 · шаг 4/7</span>
+        <div class="r"><span class="btn sm ghost" id="k">⌘K Найти</span><span class="btn sm ghost" id="leave">☾ Уйти</span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
+      <div class="feed"><div class="col">
+        <div class="me">Что сейчас делает команда и что ждёт меня?</div>
+        <div class="ai"><span class="orb"></span><div><div class="thought">думал 2,8 с</div><p>Двое ждут вас: <b>ревьюер</b> просит подпись M0 по D8.4d, <b>воркер 2</b> упёрся в лимит Codex. Прогон H1.5 на шаге 4 из 7, сбоев нет.</p></div></div>
+        <div class="me">Карта у тебя открыта? Там узел D8.4e красный</div>
+        <div class="ai"><span class="orb"></span><div><div class="thought">думал 0,6 с</div><p>У меня нет окна с картой — вижу только данные выгрузки. Покажите окно, и я сверю с тем, что вижу сам.</p></div></div>
+      </div></div>
+      <div class="comp"><div class="box"><div class="in">Написать оркестратору…</div><div class="bar2">
+        <span class="chip">＋</span><span class="chip" id="win">▣ показать окно</span><span class="chip">Думать</span><span class="chip">● Sonnet · среднее ▾</span><span class="go">↑</span></div></div></div>
+    </section>
+  </div>
+  <div class="cap"><span>18 · оверлеи поверх чата · уйти / показать окно / ⌘K / паспорт</span><span>1280 × 860</span></div>
+  <div class="hint-bar"><span>кнопки в шапке и чип «показать окно» в композере · клавиша ⌘K или Ctrl+K · × / клик мимо / esc</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (p-leave · p-window · p-search + «Паспорт» с 11 экранов): «Что идёт сейчас и чем кончится без вас» (5 пунктов) → шаг 1; окно «до 09:00 / до 13:00 / пока» и заместитель «Fable / никому — всё ждёт меня» → шаг 2; «Подписать уход» и «Отмена» → шаг 3; «Прошлые ночи» → вкладка в той же карточке. Окна: 6 окон, «Отправить снимок», «Показать агенту его же снимок», «Отмена». Поиск: 7 видов результатов. Паспорт: где · что · зачем · когда · что ожидаем · риски · успех · провал — одной карточкой на каждом экране.</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+(function(){
+  const {kv,blk,acts,tl}=HX;
+  // ── Уйти: поток в три шага + прошлые ночи
+  HX.bind('#leave',()=>'<div class="from">уйти · делегировать · шаг <span data-stepn>1</span> из 3</div><div class="steps"><i class="on"></i><i></i><i></i></div>'+
+    '<div data-step="1" class="fh"><h4>Что идёт сейчас и чем кончится без вас</h4><p>Пять линий работы — где каждая остановится, если вы ничего не решите.</p>'+
+      blk('без вас',tl([['c','18:40','Прогон H1.5 дойдёт до слияния и встанет','ждёт подпись M0 — стоп-случай, заместитель не подпишет'],['c','19:30','Воркер 2 закончит D8.4e и сдаст ревьюеру','на Sonnet; заместитель может подтвердить стадии'],['x','—','Ревьюер ждёт вас 40 минут и не двинется','это ваше решение'],['d','19:58','Лимит Codex сбросится сам',''],['d','30 мин','Выгрузка карты идёт по расписанию','']]))+
+      '<div class="ctabs" style="margin-top:14px"><span class="on" data-ct="x">Этот уход</span><span data-ct="n">Прошлые ночи · 3</span></div><div data-cp="x"></div>'+
+      '<div data-cp="n"><div class="night"><span class="m">03.10</span><b>6 решений заместителя · 0 оспорено</b><span class="m">9 ч 10</span></div><div class="night"><span class="m">30.09</span><b>4 решения · 1 оспорено (вернули D8.4d на круг 4)</b><span class="m">8 ч 40</span></div><div class="night"><span class="m">29.09</span><b>5 решений · живой проход ждал вас</b><span class="m">9 ч</span></div></div>'+
+      '<div class="ft"><span class="btn ghost" data-close>Отмена</span><span class="btn" data-close>Сначала подписать M0</span><span class="btn p" data-go="2" style="margin-left:auto">Дальше</span></div></div>'+
+    '<div data-step="2" class="fh"><h4>На сколько и кто решает за вас</h4><p>Стоп-случаи ждут вас всегда — их заместитель не закрывает.</p>'+
+      blk('окно отсутствия','<div class="opt"><div>До какого времени<small>после — заместитель перестаёт решать</small></div><span class="seg"><span data-pick class="on">до 09:00</span><span data-pick>до 13:00</span><span data-pick>пока не вернусь</span></span></div><div class="opt"><div>Заместитель<small>кто отвечает на вопросы команды</small></div><span class="seg"><span data-pick class="on">Fable</span><span data-pick>никому — всё ждёт меня</span></span></div>')+
+      blk('что заместитель может','<div class="opt"><div>Подтверждать стадии, принятые хранителем</div><span class="tog on"></span></div><div class="opt"><div>Переключать модель при лимите</div><span class="tog on"></span></div><div class="opt"><div>Отвечать на «чьё это» и возвращать задачи</div><span class="tog on"></span></div><div class="opt"><div>Запускать живой проход</div><span class="tog"></span></div>')+
+      '<div class="ft"><span class="btn ghost" data-go="1">Назад</span><span class="btn p" data-go="3" style="margin-left:auto">Дальше</span></div></div>'+
+    '<div data-step="3" class="fh"><h4>Подписать уход</h4><p>Утром — раздел «Сейчас · Пока вас не было»: что сделано, что решил заместитель, что ждёт вас.</p>'+
+      blk('итог',kv([['вас не будет','до 09:00 · 14 ч'],['заместитель','Fable · три права из четырёх'],['будить вас','только стоп-случаи: снос данных, расход > 5 %, секреты'],['не двинется без вас','подпись M0 · живой проход']]))+
+      '<div class="ft"><span class="btn ghost" data-go="2">Назад</span><span class="btn ghost" data-close>Отмена</span><span class="btn p" data-close style="margin-left:auto">Подписать уход</span></div></div>',{w:720,h:640,hide:false});
+  // ── Показать окно
+  HX.bind('#win',()=>'<div class="from">показать окно агенту</div><div class="ch"><h3>Какое окно показать оркестратору</h3></div><div class="csub">снимок уйдёт в этот разговор; агент скажет, что видит, и сверит со своими данными</div>'+
+    '<div class="wins">'+[['Workbench · OM-VIEW','карта проекта · выбрано',1],['Терминал · прогон H1.5','шаг 4/7'],['Браузер · harness.autoiflow.com','вход'],['Codex · ревьюер','круг 2'],['Finder · REPORTS','отчёты'],['Экран целиком','все окна']].map(([a,b,on])=>'<div class="win'+(on?' on':'')+'" data-pick><div class="thumb">'+a.split(' · ')[0]+'</div><b>'+a+'</b>'+b+'</div>').join('')+'</div>'+
+    blk('снимки в этом проекте',kv([['последний','Workbench · OM-VIEW · 19:57'],['агент считает открытым','порт 3000 отдаёт 200, карта отрисована'],['всего за сегодня','4 снимка']]))+
+    acts([['Отправить снимок','p','data-close'],['Показать агенту его же снимок','','data-close'],['Отмена','ghost','data-close']]),{w:720,h:600,hide:false});
+  // ── ⌘K
+  const pal=()=>'<div class="pal-in">⌕ D8.4<span style="color:var(--accent)">|</span><span class="kbd k">esc</span></div>'+
+    [['задачи',[['задача','D8.4e · владение завершением','падает · 4/6'],['задача','D8.4d · круг 2','ждёт подпись M0']]],
+     ['решения и разговоры',[['решение','Подписать M0 по D8.4d','ждёт вас · 40 мин'],['разговор','Оркестратор · H1.5 и прогон','сегодня']]],
+     ['остальное',[['артефакт','D8.4d · круг 2 · дифф','готово к проверке'],['правило','Третий возврат подряд — решение владельца','проект OMG'],['агент','Воркер 2 · D8.4e','работает'],['настройка','Разрешения и стоп-случаи','везде']]]]
+    .map(([g,rows],gi)=>'<div class="pal-g">'+g+'</div>'+rows.map(([k,t,m],i)=>'<div class="pal-r'+(gi===0&&i===0?' on':'')+'" data-pick><span class="kd">'+k+'</span><span>'+t+'</span><span class="m">'+m+'</span></div>').join('')).join('')+
+    '<div class="note-bar" style="margin-top:10px"><span>↑ ↓ выбрать · ⏎ открыть · ⌘⏎ открыть карточкой</span><span>8 результатов · 7 видов</span></div>';
+  const kBtn=document.getElementById('k');
+  HX.bind('#k',pal,{w:640,h:520,hide:false});
+  addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); HX.open(kBtn,pal(),{w:640,h:520,hide:false}); } });
+  HX.passport({title:'Разговор с оркестратором',where:'OMG › Разговор › Оркестратор',what:'Чат с главным агентом проекта: спрашивать, поручать, решать',why:'Одна точка входа: всё, что идёт в проекте, можно узнать и изменить отсюда',when:'Всегда; ход стоит ≈ 0,05 % недели',expect:'Ответ со ссылками на задачи и решения; действия — только после вашего «да»',risk:'Поручить больше, чем разрешено роли — тогда придёт вопрос',ok:'Вы знаете, где проект и что ждёт вас, за один вопрос',fail:'Ответ без источника или действие без спроса'});
+})();
+</script>
+</body></html>

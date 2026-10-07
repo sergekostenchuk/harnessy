@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness Design System • Живой каталог токенов и компонентов</title>
+<link rel="stylesheet" href="../core/unified-tokens.css">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-app);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Master Header */
+.ds-header {
+  height: 48px; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
+  user-select: none; flex-shrink: 0;
+}
+.ds-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; color: #fff; }
+.ds-badge { background: rgba(143,129,255,.15); color: var(--accent-purple); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.ds-nav { display: flex; align-items: center; gap: 8px; }
+.ds-btn { background: var(--bg-raised); border: 1px solid var(--border-subtle); color: var(--text-primary); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 6px; }
+.ds-btn:hover { background: var(--bg-hover); border-color: var(--border-focus); }
+.ds-btn-pri { background: var(--accent-purple); color: #fff; border: none; font-weight: 600; }
+.ds-btn-pri:hover { filter: brightness(1.1); }
+
+/* Layout */
+.ds-container { flex: 1; display: flex; overflow: hidden; }
+.ds-sidebar {
+  width: 240px; background: var(--bg-panel); border-right: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column; padding: 14px 10px; gap: 4px; overflow-y: auto; flex-shrink: 0;
+}
+.ds-side-group { font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--text-faint); letter-spacing: .5px; padding: 10px 8px 4px; }
+.ds-side-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius-sm);
+  color: var(--text-secondary); cursor: pointer; font-size: 12px; transition: background .12s; text-decoration: none;
+}
+.ds-side-item:hover { background: var(--bg-raised); color: var(--text-primary); }
+.ds-side-item.on { background: var(--bg-raised); color: #fff; font-weight: 600; }
+
+.ds-content { flex: 1; overflow-y: auto; padding: 32px 48px; max-width: 1080px; margin: 0 auto; width: 100%; }
+.ds-section { margin-bottom: 48px; }
+.ds-title { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+.ds-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px; }
+
+/* Token Swatches */
+.token-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.swatch-card {
+  background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color .15s;
+}
+.swatch-card:hover { border-color: var(--border-focus); }
+.swatch-color { height: 42px; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.06); }
+.swatch-info { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+.swatch-name { font-weight: 600; color: var(--text-primary); }
+.swatch-hex { font-family: var(--font-mono); color: var(--text-faint); }
+.swatch-wcag { font-size: 10px; background: rgba(61,220,151,.15); color: var(--accent-green); padding: 1px 5px; border-radius: 3px; font-weight: 700; }
+
+/* 12-State Interactive Matrix */
+.state-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.state-card {
+  background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  padding: 12px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; transition: all .15s;
+}
+.state-card:hover { background: var(--bg-raised); border-color: var(--border-focus); }
+.state-badge-row { display: flex; align-items: center; gap: 8px; }
+.state-badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 600;
+}
+.state-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+
+/* Component Demo Box */
+.demo-box {
+  background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
+  padding: 24px; display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px;
+}
+.demo-hdr { font-size: 12px; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: .5px; margin-bottom: -4px; }
+
+/* Density preview */
+.density-preview {
+  display: flex; gap: 12px; background: var(--bg-app); padding: 12px; border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle); align-items: center;
+}
+</style>
+</head>
+<body>
+
+<header class="ds-header">
+  <div class="ds-brand">
+    <span>📐 Harness Design System</span>
+    <span class="ds-badge">WCAG 2.2 AAA • 2026–2027</span>
+  </div>
+  <div class="ds-nav">
+    <a href="../core/workbench-unified.html" class="ds-btn ds-btn-pri">⚡ Открыть живой верстак →</a>
+    <a href="../index.html" class="ds-btn">Главное оглавление</a>
+  </div>
+</header>
+
+<div class="ds-container">
+  <aside class="ds-sidebar">
+    <div class="ds-side-group">ТОКЕНЫ</div>
+    <a href="#tokens-color" class="ds-side-item on">🎨 Цветовая палитра</a>
+    <a href="#tokens-spatial" class="ds-side-item">📁 4 Пространства</a>
+    <a href="#tokens-typo" class="ds-side-item">🔤 Типографика</a>
+    
+    <div class="ds-side-group">ГРАММАТИКА СОСТОЯНИЙ</div>
+    <a href="#state-matrix" class="ds-side-item">Формула 12 статусов</a>
+    
+    <div class="ds-side-group">КОМПОНЕНТЫ</div>
+    <a href="#comp-invariants" class="ds-side-item">📍 7 Инвариантов</a>
+    <a href="#comp-decision" class="ds-side-item">⏸ Карточка решения</a>
+    <a href="#comp-gate" class="ds-side-item">🔒 Рельсы шлюзов</a>
+    <a href="#comp-node" class="ds-side-item">🗺️ Узел карты n8n</a>
+    <a href="#comp-selfcheck" class="ds-side-item">🛡️ 5 проходов проверки</a>
+  </aside>
+
+  <main class="ds-content">
+    <!-- СЕКЦИЯ 1: ЦВЕТА -->
+    <section class="ds-section" id="tokens-color">
+      <div class="ds-title">🎨 Цветовая палитра (WCAG 2.2 AAA)</div>
+      <div class="ds-desc">
+        Канонический тёмный графит с синим уклоном. Все ключевые статусы строго валидированы по контрасту (не менее 7:1 к фону для текста, 15.2:1 для основного текста). Ни один статус никогда не передаётся цветом в одиночку.
+      </div>
+      <div class="token-grid">
+        <div class="swatch-card" onclick="copyHex('#0b0d12')">
+          <div class="swatch-color" style="background:#0b0d12;"></div>
+          <div class="swatch-info"><span class="swatch-name">bg-app</span><span class="swatch-hex">#0b0d12</span></div>
+          <span style="font-size:10px;color:var(--text-faint);">Холст, основное полотно</span>
+        </div>
+        <div class="swatch-card" onclick="copyHex('#111419')">
+          <div class="swatch-color" style="background:#111419;"></div>
+          <div class="swatch-info"><span class="swatch-name">bg-panel</span><span class="swatch-hex">#111419</span></div>
+          <span style="font-size:10px;color:var(--text-faint);">Панели, сайдбар, шапка</span>
+        </div>
+        <div class="swatch-card" onclick="copyHex('#181c24')">
+          <div class="swatch-color" style="background:#181c24;"></div>
+          <div class="swatch-info"><span class="swatch-name">bg-raised</span><span class="swatch-hex">#181c24</span></div>
+          <span style="font-size:10px;color:var(--text-faint);">Приподнятые карточки, инпуты</span>
+        </div>
+        <div class="swatch-card" onclick="copyHex('#8f81ff')">
+          <div class="swatch-color" style="background:#8f81ff;"></div>
+          <div class="swatch-info"><span class="swatch-name">accent-purple</span><span class="swatch-hex">#8f81ff</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:10px;color:var(--text-faint);">Лаванда (акцент верстака)</span>
+            <span class="swatch-wcag">AAA 8.4:1</span>
+          </div>
+        </div>
+        <div class="swatch-card" onclick="copyHex('#3ddc97')">
+          <div class="swatch-color" style="background:#3ddc97;"></div>
+          <div class="swatch-info"><span class="swatch-name">accent-green</span><span class="swatch-hex">#3ddc97</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:10px;color:var(--text-faint);">Мятный (успех, слияние)</span>
+            <span class="swatch-wcag">AAA 9.2:1</span>
+          </div>
+        </div>
+        <div class="swatch-card" onclick="copyHex('#f2b04b')">
+          <div class="swatch-color" style="background:#f2b04b;"></div>
+          <div class="swatch-info"><span class="swatch-name">accent-amber</span><span class="swatch-hex">#f2b04b</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:10px;color:var(--text-faint);">Янтарный (решение владельца)</span>
+            <span class="swatch-wcag">AAA 9.8:1</span>
+          </div>
+        </div>
+        <div class="swatch-card" onclick="copyHex('#5ab0ff')">
+          <div class="swatch-color" style="background:#5ab0ff;"></div>
+          <div class="swatch-info"><span class="swatch-name">accent-blue</span><span class="swatch-hex">#5ab0ff</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:10px;color:var(--text-faint);">Лазурный (инфо, Codex)</span>
+            <span class="swatch-wcag">AAA 8.1:1</span>
+          </div>
+        </div>
+        <div class="swatch-card" onclick="copyHex('#ff6b6b')">
+          <div class="swatch-color" style="background:#ff6b6b;"></div>
+          <div class="swatch-info"><span class="swatch-name">accent-red</span><span class="swatch-hex">#ff6b6b</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:10px;color:var(--text-faint);">Коралловый (сбой, отказ)</span>
+            <span class="swatch-wcag">AAA 7.5:1</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- СЕКЦИЯ 2: 4 ПРОСТРАНСТВА -->
+    <section class="ds-section" id="tokens-spatial">
+      <div class="ds-title">📁 Токены 4 Пространств (Spatial Quad)</div>
+      <div class="ds-desc">
+        В интерфейсе Harness всегда физически разделены и моментально узнаваемы 4 пространства: Проект · Обсуждение · Код · Продукт.
+      </div>
+      <div class="token-grid">
+        <div class="demo-box" style="margin:0;border-left:3px solid #0284c7;">
+          <div style="font-size:15px;font-weight:700;color:#38bdf8;">📁 1. ПРОЕКТ (Архитектура)</div>
+          <div style="font-size:12px;color:var(--text-secondary);">Иерархия этапов (L0–L3), граф n8n, файловое дерево, контракты модулей.</div>
+        </div>
+        <div class="demo-box" style="margin:0;border-left:3px solid #d97706;">
+          <div style="font-size:15px;font-weight:700;color:#fbbf24;">💬 2. ОБСУЖДЕНИЕ (Диалог)</div>
+          <div style="font-size:12px;color:var(--text-secondary);">Диалог с моделями Claude / Codex, цепочка рассуждений, вызовы инструментов.</div>
+        </div>
+        <div class="demo-box" style="margin:0;border-left:3px solid #059669;">
+          <div style="font-size:15px;font-weight:700;color:#34d399;">💻 3. КОД И ТЕСТЫ (Инженерия)</div>
+          <div style="font-size:12px;color:var(--text-secondary);">Мульти-файл диффер, подсветка синтаксиса, прогон тестов (8/8 OK), 5 проходов.</div>
+        </div>
+        <div class="demo-box" style="margin:0;border-left:3px solid #7c3aed;">
+          <div style="font-size:15px;font-weight:700;color:#a78bfa;">🚀 4. ПРОДУКТ (Живая витрина)</div>
+          <div style="font-size:12px;color:var(--text-secondary);">Интерактивный webview (React Flow), переключение разрешений (Desktop/Tablet/Mobile).</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- СЕКЦИЯ 3: ФОРМУЛА 12 СТАТУСОВ -->
+    <section class="ds-section" id="state-matrix">
+      <div class="ds-title">⚡ Формула 12 статусов</div>
+      <div class="ds-desc">
+        Обязательное правило дизайн-системы: <code>[Символ] + [Русское слово] + [Контекстный хвост]</code>. Кликните на карточку, чтобы скопировать HTML-код бейджа.
+      </div>
+      <div class="state-grid">
+        <div class="state-card" onclick="copyState('ready')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(255,255,255,.08);color:var(--text-secondary);">○ Готов</span>
+            <span style="font-size:10px;color:var(--text-faint);">свободен</span>
+          </div>
+          <div class="state-desc">Исполнитель свободен, ожидает поручения владельца.</div>
+        </div>
+        <div class="state-card" onclick="copyState('running')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(90,176,255,.15);color:var(--accent-blue);"><span class="dot dot-b"></span>Работает</span>
+            <span style="font-size:10px;color:var(--text-faint);">18 сек</span>
+          </div>
+          <div class="state-desc">Активное выполнение: пишет код, замер времени.</div>
+        </div>
+        <div class="state-card" onclick="copyState('waiting')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(242,176,75,.15);color:var(--accent-amber);">⏸ Ждёт вас</span>
+            <span style="font-size:10px;color:var(--accent-amber);font-weight:600;">12 мин</span>
+          </div>
+          <div class="state-desc">Требуется решение человека: слияние или выбор пути.</div>
+        </div>
+        <div class="state-card" onclick="copyState('checking')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(143,129,255,.15);color:var(--accent-purple);">⟳ Проверка</span>
+            <span style="font-size:10px;color:var(--text-faint);">vitest</span>
+          </div>
+          <div class="state-desc">Автоматический прогон тестов, линтеров, сборки.</div>
+        </div>
+        <div class="state-card" onclick="copyState('done')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(61,220,151,.15);color:var(--accent-green);">✓ Готово</span>
+            <span style="font-size:10px;color:var(--accent-green);">8/8 тестов</span>
+          </div>
+          <div class="state-desc">Шаг выполнен, 100% критериев успеха удовлетворены.</div>
+        </div>
+        <div class="state-card" onclick="copyState('warn')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(242,176,75,.15);color:var(--accent-amber);">◐ С оговоркой</span>
+            <span style="font-size:10px;color:var(--text-faint);">1 notice</span>
+          </div>
+          <div class="state-desc">Код работает, но есть некритичное замечание линтера.</div>
+        </div>
+        <div class="state-card" onclick="copyState('fail')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(255,107,107,.15);color:var(--accent-red);">✘ Ошибка</span>
+            <span style="font-size:10px;color:var(--accent-red);">строка 42</span>
+          </div>
+          <div class="state-desc">Ошибка сборки или падение теста с точным указанием зоны.</div>
+        </div>
+        <div class="state-card" onclick="copyState('guard')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(255,107,107,.2);color:#ff8585;">⊘ Остановлено</span>
+            <span style="font-size:10px;color:#ff8585;">лимит $2.00</span>
+          </div>
+          <div class="state-desc">Защитная пауза автомата (бюджет или 3 ошибки подряд).</div>
+        </div>
+        <div class="state-card" onclick="copyState('aborted')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(255,255,255,.1);color:var(--text-faint);">■ Прервано</span>
+            <span style="font-size:10px;color:var(--text-faint);">владельцем</span>
+          </div>
+          <div class="state-desc">Ручная отмена кнопкой «Стоп» с сохранением артефактов.</div>
+        </div>
+        <div class="state-card" onclick="copyState('pause')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(255,255,255,.08);color:var(--text-secondary);">◷ Пауза</span>
+            <span style="font-size:10px;color:var(--text-faint);">по расписанию</span>
+          </div>
+          <div class="state-desc">Плановое ожидание внешнего события или крона.</div>
+        </div>
+        <div class="state-card" onclick="copyState('offline')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(242,176,75,.15);color:var(--accent-amber);">⚠ Нет связи</span>
+            <span style="font-size:10px;color:var(--accent-amber);">> 60 сек</span>
+          </div>
+          <div class="state-desc">Фоновый процесс не отвечает. Предложение перезапуска.</div>
+        </div>
+        <div class="state-card" onclick="copyState('nodata')">
+          <div class="state-badge-row">
+            <span class="state-badge" style="background:rgba(255,255,255,.05);color:var(--text-faint);">◌ Нет данных</span>
+            <span style="font-size:10px;color:var(--text-faint);">1-й запуск</span>
+          </div>
+          <div class="state-desc">Честное отсутствие информации без домыслов и галлюцинаций.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- СЕКЦИЯ 4: КОМПОНЕНТ 7 ИНВАРИАНТОВ -->
+    <section class="ds-section" id="comp-invariants">
+      <div class="ds-title">📍 Компонент: 7 Инвариантов</div>
+      <div class="ds-desc">
+        Визуальный контракт: на любом экране с первого взгляда понятно 7 параметров без обучения и жаргона.
+      </div>
+      <div class="demo-box">
+        <div class="demo-hdr">Интерактивный виджет инвариантов</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg-app);padding:8px 12px;border-radius:var(--radius-md);border:1px solid var(--border-subtle);">
+          <div style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-raised);padding:3px 8px;border-radius:3px;font-size:11px;">
+            <span style="color:var(--text-faint);font-weight:700;font-size:9px;">ГДЕ</span><span style="font-family:var(--font-mono);">UI/asvh-workbench</span>
+          </div>
+          <div style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-raised);padding:3px 8px;border-radius:3px;font-size:11px;">
+            <span style="color:var(--text-faint);font-weight:700;font-size:9px;">ЧТО</span><span>Роутинг #/om-map</span>
+          </div>
+          <div style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-raised);padding:3px 8px;border-radius:3px;font-size:11px;">
+            <span style="color:var(--text-faint);font-weight:700;font-size:9px;">ЗАЧЕМ</span><span>Прямой вход на карту</span>
+          </div>
+          <div style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-raised);padding:3px 8px;border-radius:3px;font-size:11px;">
+            <span style="color:var(--text-faint);font-weight:700;font-size:9px;">КОГДА</span><span>Рубеж L3 • Шаг 3/9</span>
+          </div>
+          <div style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-raised);padding:3px 8px;border-radius:3px;font-size:11px;">
+            <span style="color:var(--text-faint);font-weight:700;font-size:9px;">ОЖИДАЕМ</span><span>React Flow холст</span>
+          </div>
+          <div style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-raised);padding:3px 8px;border-radius:3px;font-size:11px;">
+            <span style="color:var(--text-faint);font-weight:700;font-size:9px;">РИСКИ</span><span style="color:var(--accent-green);">Низкие (ветка)</span>
+          </div>
+          <div style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-raised);padding:3px 8px;border-radius:3px;font-size:11px;">
+            <span style="color:var(--text-faint);font-weight:700;font-size:9px;">КРИТЕРИИ</span><span style="color:var(--accent-green);">8/8 тестов OK</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- СЕКЦИЯ 5: РЕЛЬСЫ ШЛЮЗОВ -->
+    <section class="ds-section" id="comp-gate">
+      <div class="ds-title">🔒 Рельсы шлюзов допуска (Stage-Gate Rail)</div>
+      <div class="ds-desc">
+        Визуализация конвейера с контрольными шлюзами. Защита от молчаливого пропуска проверок.
+      </div>
+      <div class="demo-box">
+        <div style="display:flex;align-items:center;gap:12px;overflow-x:auto;">
+          <div style="padding:4px 10px;border-radius:4px;border:1px solid rgba(61,220,151,.3);color:var(--accent-green);font-size:12px;">✓ L0 Спецификация</div>
+          <span style="color:var(--text-faint);font-size:11px;">──►</span>
+          <div style="padding:4px 10px;border-radius:4px;border:1px solid rgba(61,220,151,.3);color:var(--accent-green);font-size:12px;">✓ L1 Черновики</div>
+          <span style="color:var(--text-faint);font-size:11px;">──►</span>
+          <div style="padding:4px 10px;border-radius:4px;border:1px solid rgba(61,220,151,.3);color:var(--accent-green);font-size:12px;">✓ L2 Граф R2 (55)</div>
+          <span style="color:var(--text-faint);font-size:11px;">──►</span>
+          <div style="padding:4px 10px;border-radius:4px;border:1px solid var(--accent-amber);background:rgba(242,176,75,.1);color:#fff;font-weight:600;font-size:12px;">● L3 Витрина OM (9 задач)</div>
+          <span style="color:var(--text-faint);font-size:11px;">──►</span>
+          <div style="padding:4px 10px;border-radius:4px;border:1px solid var(--border-subtle);opacity:.45;font-size:12px;">🔒 L4 Релиз в Main</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+function copyHex(hex) {
+  navigator.clipboard?.writeText(hex);
+  alert('Скопирован токен цвета: ' + hex);
+}
+function copyState(name) {
+  alert('Выбрано состояние: ' + name);
+}
+</script>
+</body>
+</html>

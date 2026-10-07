@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Лист 00 · Дизайн-код Harnessy</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .dc{max-width:1280px;display:grid;gap:34px}
+  .dc h2{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:0 0 12px;display:flex;gap:10px;align-items:center}.dc h2 i{flex:1;height:1px;background:var(--line)}
+  .sw{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .sw div{border:1px solid var(--line2);border-radius:12px;overflow:hidden;background:var(--panel)}
+  .sw div>u{display:block;height:64px;text-decoration:none}
+  .sw div>b{display:block;font:500 12.5px var(--font);padding:9px 12px 0}.sw div>span{display:block;font:10.5px var(--mono);color:var(--ink3);padding:2px 12px 10px;letter-spacing:.04em}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.three{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .box{border:1px solid var(--line2);border-radius:14px;background:var(--panel);padding:16px 18px}
+  .box .cap2{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px}
+  .rowx{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.rowx:last-child{margin-bottom:0}
+  .t1{font:600 26px/1.15 var(--font);letter-spacing:-.012em;margin:0 0 6px}.t2{font:500 15px var(--font);margin:0 0 6px}.t3{font-size:13px;color:var(--ink2);margin:0 0 10px}
+  .tm{font:10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.tn{font:500 30px/1 var(--mono);letter-spacing:-.02em}.tn small{font-size:12px;color:var(--ink3);margin-left:6px}
+  .tb{font:600 30px/1 "Fraunces",Georgia,serif;color:var(--gold)}
+  .rules{display:grid;gap:8px;font-size:13px;color:var(--ink2)}.rules div{display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:baseline}.rules div>span{font:10.5px var(--mono);color:var(--accent)}.rules b{color:var(--ink);font-weight:500}
+  .no{display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--ink2)}.no u{width:26px;height:26px;border-radius:7px;display:block;position:relative;flex:none}.no u::after{content:"";position:absolute;inset:-2px;background:linear-gradient(to top right,transparent 46%,var(--bad) 46%,var(--bad) 54%,transparent 54%)}
+  .drink{height:64px;border-radius:10px;background:radial-gradient(ellipse at 55% 110%,rgba(255,150,46,.75),rgba(214,104,24,.25) 40%,transparent 70%),linear-gradient(180deg,#1d0802,#341003 55%,#4a1a05);border:1px solid var(--line2);box-shadow:inset 0 0 0 1px rgba(240,154,58,.25),inset 0 0 26px rgba(208,106,22,.35)}
+  .where{font-size:12.5px;color:var(--ink2);display:grid;gap:6px}.where div{display:grid;grid-template-columns:190px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}.where div:last-child{border-bottom:0}.where b{color:var(--ink);font-weight:500}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · лист 00 · дизайн-код</h1>
+  <p class="sub">Один источник правды для скетчей, страницы входа и прототипа: ступени графита, один тёплый акцент — <b>коньячный</b> (оранжевого больше нет), сбои — <b>бордо</b> вместо красного, золото только для знака и имени, служебные подписи моно-капсом, прогресс тиками. Значения ниже — те, что стоят в <span class="mono" style="font-size:11px">style.css</span>, на странице входа и в основном облике прототипа. <a href="index.html">← все скетчи</a></p>
+
+  <div class="dc">
+    <section><h2>графит · поверхности<i></i></h2>
+      <div class="sw">
+        <div><u style="background:#0a0a0b"></u><b>Полотно</b><span>--canvas · #0a0a0b</span></div>
+        <div><u style="background:#101012"></u><b>Фон окна</b><span>--bg · #101012</span></div>
+        <div><u style="background:#141416"></u><b>Панель</b><span>--panel · #141416</span></div>
+        <div><u style="background:#1b1b1e"></u><b>Приподнято</b><span>--raised · #1b1b1e</span></div>
+        <div><u style="background:#202024"></u><b>Плитка</b><span>--tile · #202024</span></div>
+        <div><u style="background:#242428"></u><b>Линия</b><span>--line · #242428</span></div>
+        <div><u style="background:#2d2d32"></u><b>Линия ярче</b><span>--line2 · #2d2d32</span></div>
+      </div></section>
+
+    <section><h2>коньяк · акцент и напиток<i></i></h2>
+      <div class="sw">
+        <div><u style="background:#c27a34"></u><b>Акцент</b><span>--accent · #c27a34</span></div>
+        <div><u style="background:#d89c54"></u><b>Акцент светлее</b><span>--accent-hi · #d89c54</span></div>
+        <div><u style="background:#6a2808"></u><b>Акцент глубокий</b><span>--accent-deep · #6a2808</span></div>
+        <div><u style="background:rgba(194,122,52,.14)"></u><b>Акцент-подложка</b><span>--accent-soft · 14 %</span></div>
+        <div><u style="background:#dcb866"></u><b>Золото бренда</b><span>--gold · #dcb866</span></div>
+        <div><u class="drink" style="height:64px;border-radius:0;border:0"></u><b>Напиток в бокале</b><span>#1d0802 → #4a1a05 · свет #d06a16</span></div>
+      </div></section>
+
+    <section><h2>текст и состояния<i></i></h2>
+      <div class="sw">
+        <div><u style="background:#ececee"></u><b>Текст</b><span>--ink · #ececee</span></div>
+        <div><u style="background:#9a9aa2"></u><b>Текст второй</b><span>--ink2 · #9a9aa2</span></div>
+        <div><u style="background:#66666e"></u><b>Текст третий</b><span>--ink3 · #66666e</span></div>
+        <div><u style="background:#3fbf6f"></u><b>Готово</b><span>--ok · #3fbf6f</span></div>
+        <div><u style="background:#c9566e"></u><b>Сбой · текст</b><span>--bad · #c9566e · бордо светлый</span></div>
+        <div><u style="background:#a3304b"></u><b>Сбой · заливка</b><span>--bad-fill · #a3304b · бордо</span></div>
+        <div><u style="background:#e0b23c"></u><b>Предупреждение</b><span>--warn · #e0b23c</span></div>
+      </div></section>
+
+    <section><h2>шрифты<i></i></h2>
+      <div class="three">
+        <div class="box"><div class="cap2">inter · интерфейс</div><p class="t1">Войти в Harnessy</p><p class="t2">Заголовок карточки · 15 / 500</p><p class="t3">Основной текст 13 / 1,45 — чат, план и команда агентов в одном окне.</p></div>
+        <div class="box"><div class="cap2">jetbrains mono · подписи и числа</div><p class="tm" style="margin:0 0 12px">состояние · 02 · наливает</p><div class="tn">0,06 %<small>недели</small></div><p class="tm" style="margin:12px 0 0">капс · 10–10,5 · разрядка .08em</p></div>
+        <div class="box"><div class="cap2">fraunces · только имя бренда</div><div class="tb">Harnessy</div><p class="t3" style="margin-top:12px">Золотом на графине и на знаке. В интерфейсе антиква не используется.</p></div>
+      </div></section>
+
+    <section><h2>элементы<i></i></h2>
+      <div class="two">
+        <div class="box"><div class="cap2">кнопки</div>
+          <div class="rowx"><span class="btn p">Продолжить</span><span class="btn">Вторичная</span><span class="btn ghost">Отмена</span><span class="btn sm">малая</span><span class="btn sm ghost">ⓘ Паспорт</span></div>
+          <div class="cap2" style="margin-top:14px">пилюли и чипы</div>
+          <div class="rowx"><span class="pill acc">ждёт вас</span><span class="pill ok">готово</span><span class="pill bad">сбой</span><span class="pill warn">лимит 94 %</span><span class="pill">черновик</span></div>
+          <div class="rowx"><span class="chip">📁 ~/HARNESS</span><span class="chip acc">Sonnet · среднее</span><span class="chip ok">проверено</span><span class="chip bad">отказ</span></div></div>
+        <div class="box"><div class="cap2">прогресс тиками</div>
+          <div class="rowx"><div class="ticks" style="flex:1" id="t1"></div><b class="mono" style="color:var(--ink)">62 %</b></div>
+          <div class="rowx"><div class="ticks thin" style="flex:1" id="t2"></div><b class="mono" style="color:var(--ink)">9 из 12</b></div>
+          <div class="cap2" style="margin-top:14px">сегмент и переключатель</div>
+          <div class="rowx"><span class="seg"><span class="on">Обзор</span><span>Проекты</span><span>Причины</span></span><span class="tog on"></span><span class="tog"></span></div></div>
+      </div></section>
+
+    <section><h2>правила<i></i></h2>
+      <div class="two">
+        <div class="box rules">
+          <div><span>01</span><p style="margin:0"><b>Один экран — одно дело.</b> Обзор: числа и строки, без подробностей.</p></div>
+          <div><span>02</span><p style="margin:0"><b>Детали — раскрытой карточкой поверх экрана,</b> из того объекта, по которому кликнули. Не новой страницей.</p></div>
+          <div><span>03</span><p style="margin:0"><b>Соседнее — вкладками,</b> потоки — шагами внутри карточки.</p></div>
+          <div><span>04</span><p style="margin:0"><b>Акцент один — коньячный.</b> Он значит «ждёт вас» или «главное действие»; зелёный и бордо — только состояния.</p></div>
+          <div><span>05</span><p style="margin:0"><b>Золото — только знак и имя бренда.</b> В тексте и кнопках его нет.</p></div>
+        </div>
+        <div class="box" style="display:grid;gap:12px;align-content:start">
+          <div class="cap2" style="margin:0">чего больше нет</div>
+          <div class="no"><u style="background:#f0742f"></u>оранжевый акцент #f0742f — заменён коньячным</div>
+          <div class="no"><u style="background:#e2b65b"></u>золотой акцент прототипа #e2b65b на кнопках — золото осталось только бренду</div>
+          <div class="no"><u style="background:linear-gradient(180deg,#f29446,#dc6320)"></u>светлый непрозрачный напиток — теперь тёмный и прозрачный</div>
+          <div class="no"><u style="background:#e5533d"></u>красный #e5533d — заменён бордо: #a3304b в заливках, #c9566e в тексте</div>
+        </div>
+      </div></section>
+
+    <section><h2>где стоит<i></i></h2>
+      <div class="box where">
+        <div><b>Скетчи 01–20</b><span>общие токены в style.css; жёстко прописанный оранжевый заменён во всех файлах</span></div>
+        <div><b>Страница входа</b><span>двери, ожидание Telegram, ожидание допуска, код из письма — та же палитра и сцена с графином</span></div>
+        <div><b>Служебные страницы</b><span>ошибки входа, журнал, допуск, политика и условия</span></div>
+        <div><b>Прототип</b><span>основной облик A: токены графита и коньяка, подписи состояний моно-капсом, полосы прогресса тиками. Облики B и C не менялись</span></div>
+      </div></section>
+  </div>
+</div>
+<script>
+(function(){ const fill=(id,n,on)=>{ const e=document.getElementById(id); e.innerHTML=Array.from({length:n},(_,i)=>'<i'+(i<on?' class="on"':'')+'></i>').join(''); }; fill('t1',48,30); fill('t2',36,27); })();
+</script>
+</body></html>

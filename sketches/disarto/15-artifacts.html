@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 15 · Артефакты · живой</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .kind{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;background:var(--raised);border:1px solid var(--line2);color:var(--ink2)}
+  .prev{border:1px solid var(--line2);border-radius:10px;background:var(--bg);padding:10px 12px;font:11.5px/1.55 var(--mono);color:var(--ink2);max-height:190px;overflow:hidden}
+  .prev .a{color:var(--ok)}.prev .r{color:var(--bad)}.prev .h{color:var(--ink3)}
+  .vrow{display:grid;grid-template-columns:44px 1fr 110px auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.vrow:last-child{border-bottom:0}.vrow b{color:var(--ink);font-weight:500}
+  .show{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .sc{border:1px solid var(--line2);border-radius:14px;background:var(--panel);padding:14px 16px;cursor:pointer;display:flex;flex-direction:column;gap:8px;min-height:150px}.sc:hover{border-color:#4a4a52}.sc b{font-weight:500;font-size:14px}.sc p{margin:0;font-size:12.5px;color:var(--ink2);flex:1}.sc .f{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);display:flex;justify-content:space-between}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 15 · артефакты · живой</h1>
+  <p class="sub">Одно дело экрана — принять или вернуть результат работы. Обзор: строка на артефакт (вид · имя · состояние · возраст). Всё остальное — в <b>карточке артефакта поверх списка</b>: превью, источник, риски, версии, действия. «Витрина для внешних» — вкладкой. Состояния нейтральные: «готово к проверке → проверил сам → влито». <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side" data-rail="art"></aside>
+    <section class="main">
+      <div class="top"><b>Артефакты · OMG</b><span class="st"><i style="background:var(--accent)"></i>3 готовы к проверке</span>
+        <div class="r"><span class="seg" id="seg"><span class="on" data-v="list">Артефакты</span><span data-v="show">Витрина</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
+      <div class="views">
+        <div class="view on" id="v-list"><div class="wrap">
+          <div class="nums n3"><div><b class="acc">3</b><small>готовы к проверке</small></div><div><b>2</b><small>проверил сам · не влито</small></div><div><b class="ok">111</b><small>влито в om/module</small></div></div>
+          <div class="filters"><span class="chip on">все · 6</span><span class="chip">к проверке · 3</span><span class="chip">проверил сам · 2</span><span class="chip">влито</span><span class="sp"></span><span class="mono">новые сверху</span></div>
+          <div class="lst" style="--cols:92px 1.6fr 130px 150px 90px 16px">
+            <div class="li head"><span>вид</span><span>артефакт</span><span>от кого</span><span>состояние</span><span>возраст</span><span></span></div>
+            <div class="li" data-a="d84d"><span><span class="kind">дифф</span></span><div><b>D8.4d · круг 2 · владение завершением</b><small>14 файлов · +412 −96</small></div><span class="m">воркер 2 → ревьюер</span><span class="m hot">готово к проверке</span><span class="m">40 мин</span><span class="chev">›</span></div>
+            <div class="li" data-a="t48"><span><span class="kind">отчёт</span></span><div><b>OMG-T48-review · набор мутаций</b><small>~/REPORTS · 2 файла</small></div><span class="m">ревьюер</span><span class="m hot">готово к проверке</span><span class="m">2 ч</span><span class="chev">›</span></div>
+            <div class="li" data-a="doc"><span><span class="kind">документ</span></span><div><b>Документ стадии L1 · версия 6</b><small>7 разделов · 3 места «ждёт»</small></div><span class="m">оркестратор</span><span class="m hot">готово к проверке</span><span class="m">вчера</span><span class="chev">›</span></div>
+            <div class="li" data-a="map"><span><span class="kind">выгрузка</span></span><div><b>map.json · карта OM</b><small>745 кб · seq 3587</small></div><span class="m">launchd · 30 мин</span><span class="m">проверил сам</span><span class="m">30 мин</span><span class="chev">›</span></div>
+            <div class="li" data-a="pf1"><span><span class="kind">снимок</span></span><div><b>state-copy · стенд PF1</b><small>199 мб · только чтение</small></div><span class="m">воркер 1</span><span class="m">проверил сам</span><span class="m">03.10</span><span class="chev">›</span></div>
+            <div class="li dim" data-a="s14"><span><span class="kind">код</span></span><div><b>S1.4 · наблюдатель чтений Store</b><small>принята №2416 · 3338/3338</small></div><span class="m">воркер Opus</span><span class="m" style="color:var(--ok)">влито 4c2d5b3</span><span class="m">01.10</span><span class="chev">›</span></div>
+          </div>
+        </div></div>
+        <div class="view" id="v-show"><div class="wrap">
+          <p style="margin:4px 0 16px;color:var(--ink2);font-size:13px">Что видят внешние — без входа в проект. Каждая карточка — закреплённая версия артефакта и её возраст.</p>
+          <div class="show">
+            <div class="sc" data-s="map"><b>Карта OM</b><p>harness.autoiflow.com/map — живая карта проекта, данные из выгрузки</p><div class="f"><span>обновлено 30 мин назад</span><span style="color:var(--ok)">в норме</span></div></div>
+            <div class="sc" data-s="ds"><b>Дизайн-система</b><p>принципы, токены, 12 слов состояния, компоненты, три облика</p><div class="f"><span>версия 3 · 04.10</span><span style="color:var(--ok)">в норме</span></div></div>
+            <div class="sc" data-s="rep"><b>Отчёт T48</b><p>закреплена версия 2; вышла версия 3 — витрина отстаёт</p><div class="f"><span>версия 2 · 02.10</span><span style="color:var(--accent)">есть новее</span></div></div>
+          </div>
+        </div></div>
+      </div>
+    </section>
+  </div>
+  <div class="cap"><span>15 · артефакты · список → карточка артефакта · витрина</span><span>1280 × 860</span></div>
+  <div class="hint-bar"><span>клик по строке — карточка артефакта (превью · версии · риски) · «витрина» вверху · × / клик мимо / esc</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (art): было 10 кнопок на 6 артефактов → в строках 0, все действия в карточке: «Проверил сам» и «Влить в om/module» (вместо «Закрепить → влить»), «Открыть дифф», «Вернуть», «Доделать риски», «История», вкладка «Версии · 7» («Закрепить версию», «Сравнить с v2»), «Поделиться → витрина», на витрине — «Обновить и проверить». Блок «Витрина для внешних» → вкладка; «Паспорт · артефакты» → чип.</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+(function(){
+  const {tl,kv,blk,acts}=HX;
+  const A={
+    d84d:['дифф','D8.4d · круг 2 · владение завершением','воркер 2 → ревьюер · готово к проверке · 40 мин',
+      '<span class="h">@@ engine/completion.ts</span>\n<span class="r">- if (run.owner) finalize(run)</span>\n<span class="a">+ const cas = store.cas(run.id, run.rev)</span>\n<span class="a">+ if (!cas.ok) return refusal("completion_lost_race")</span>\n<span class="a">+ finalize(run, { via: "K" })</span>\n<span class="h">@@ tests/completion.w5.test.ts</span>\n<span class="a">+ it("refuses forged run-id on retry", …)</span>',
+      [['путь','wip/d84c · 14 файлов · +412 −96'],['прогон','3718/3718 на e05cff0e'],['ревьюер','Astra · круг 2 принят'],['ждёт','вашу подпись M0']],
+      ['Гонка завершения через K — закрыта CAS','Подделка run-id — негативный тест W5','Старые run без rev — обрабатываются правилом эры'],
+      [['Проверил сам','p'],'Влить в om/module','Открыть дифф','Вернуть','Доделать риски']],
+    t48:['отчёт','OMG-T48-review · набор мутаций','ревьюер · готово к проверке · 2 ч',
+      '<span class="h"># T48 — ревью, круг 2: ПРИНЯТЬ (№2628)</span>\nD2-сценарий держит E5-повтор и потребление.\nНабор мутаций: 12, убито 12.\n<span class="h">## Замечания</span>\n1. регистратор на стеках — перенести в общий\n2. очередь run_lock — урок записан',
+      [['путь','~/REPORTS/OMG-T48-review_021026-0219.md'],['рядом','набор мутаций (_kit)'],['версия','3 · на витрине версия 2']],
+      ['На витрине отстаёт на одну версию'],[['Проверил сам','p'],'Открыть','Поделиться → витрина','Вернуть']],
+    doc:['документ','Документ стадии L1 · версия 6','оркестратор · готово к проверке · вчера',
+      '<span class="h">1. Цель стадии</span>\nКарта блоков уровня L1: 87 задач, 15 до прогона.\n<span class="h">2. Критерии</span>\nРубеж: первый живой проход без стопов.\n<span class="h">5. Риски</span> <span class="r">— ждёт: не заполнено 2 из 5</span>',
+      [['разделов','7 · «ждёт» в 3 местах'],['версий','7 · текущая v6'],['следующая стадия','Рубеж']],
+      ['Раздел «Риски» не доделан — 2 из 5'],[['Проверил сам','p'],'Открыть','Доделать риски','Вернуть']],
+    map:['выгрузка','map.json · карта OM','launchd · проверил сам · 30 мин',
+      '{ "meta": { "generatedAt": "05.10 04:43", "source": "копия state.sqlite (ro)" },\n  "graphs": { "r2": { "nodes": 55, "edges": 87 } },\n  "ladder": [ L0, R0, L1, R1, … ],\n  "events": { "rows": 3587 } }',
+      [['путь','/harness/map-data/map.json'],['обновление','каждые 30 мин · launchd'],['на витрине','да · карта OM']],[],
+      [['Обновить и проверить','p'],'Открыть','История']],
+    pf1:['снимок','state-copy · стенд PF1','воркер 1 · проверил сам · 03.10',
+      '<span class="h">sqlite · 199 122 944 байт · mode=ro</span>\nquick_check: ok\nтаблиц: 41 · событий: 3587\nsha256: 9c540e14…',
+      [['путь','/tmp/omg-pf1/state-copy.sqlite'],['назначение','профиль evaluate'],['удалить после','вливания PF2']],['Копия живой базы — не коммитить'],
+      [['Открыть папку',''],'Удалить копию']],
+    s14:['код','S1.4 · наблюдатель чтений Store','воркер Opus · влито 4c2d5b3 · 01.10',
+      '<span class="h">принята №2416 · 3338/3338 на 4653883</span>\ncycle3: CPU −50 %, чтения ÷2,53\nвозвраты: №2395 (capture), №2410 (Transaction-preview)',
+      [['коммит','om/module 4c2d5b3 · дерево 9de7f944'],['кругов','3'],['цена','1,6 % недели Claude']],[],
+      [['Открыть дифф',''],'История']]
+  };
+  const V=[['v7','черновик · сегодня 16:20','воркер 2'],['v6','текущая · готова к проверке','воркер 2'],['v5','возврат №2204','ревьюер'],['v4','возврат №2141','ревьюер'],['v3','возврат','ревьюер'],['v2','первая сдача','Devin'],['v1','опись','Devin']];
+  // данные артефакта: [вид, имя, подзаголовок, превью, источник (пары), риски, действия]
+  const card=k=>{ const [kind,title,sub,prev,src,risks,act]=A[k];
+    return '<div class="from">раскрытая карточка · артефакт</div><div class="ch"><span class="kind">'+kind+'</span><h3>'+title+'</h3></div><div class="csub">'+sub+'</div>'+
+      '<div class="ctabs"><span class="on" data-ct="p">Превью</span><span data-ct="v">Версии · 7</span><span data-ct="r">Риски · '+risks.length+'</span></div>'+
+      '<div data-cp="p"><div class="two"><div class="prev"><pre style="margin:0;white-space:pre-wrap;font:inherit">'+prev+'</pre></div>'+blk('источник',kv(src))+'</div></div>'+
+      '<div data-cp="v">'+V.map(([v,s,w],i)=>'<div class="vrow"><b>'+v+'</b><span>'+s+'</span><span class="m">'+w+'</span><span>'+(i===1?'<span class="btn sm p">Закрепить версию</span>':i===5?'<span class="btn sm">Сравнить с v2</span>':'<span class="btn sm ghost">Открыть</span>')+'</span></div>').join('')+'</div>'+
+      '<div data-cp="r">'+(risks.length?'<ul style="margin:0;padding-left:16px;font-size:12.5px;color:var(--ink2);line-height:1.7">'+risks.map(x=>'<li>'+x+'</li>').join('')+'</ul>':'<p style="font-size:12.5px;color:var(--ink2);margin:0">Открытых рисков нет.</p>')+'</div>'+
+      acts(act); };
+  HX.views('#seg');
+  HX.bind('.li[data-a]',el=>card(el.dataset.a),{h:560});
+  const SH={map:['Карта OM','harness.autoiflow.com/map · обновлено 30 мин назад',[['артефакт','map.json · seq 3587'],['версия на витрине','текущая'],['кто видит','все, у кого ссылка и вход']]],
+    ds:['Дизайн-система','версия 3 · 04.10',[['артефакт','design-system.html'],['версия на витрине','3 · текущая'],['кто видит','все, у кого ссылка и вход']]],
+    rep:['Отчёт T48','на витрине версия 2 · вышла версия 3',[['артефакт','OMG-T48-review'],['версия на витрине','2 · отстаёт на одну'],['что изменилось','добавлен набор мутаций']]]};
+  HX.bind('.sc[data-s]',el=>{ const s=SH[el.dataset.s]; return '<div class="from">раскрытая карточка · витрина</div><div class="ch"><h3>'+s[0]+'</h3></div><div class="csub">'+s[1]+'</div>'+blk('что показано внешним',kv(s[2]))+acts([['Обновить и проверить','p','data-close'],'Открыть как внешний','Снять с витрины']); },{w:600,h:380});
+  HX.passport({title:'Артефакты',where:'OMG › Артефакты',what:'Результаты работы агентов: диффы, отчёты, документы, выгрузки, снимки',why:'Принять или вернуть результат — и увидеть, что уже влито',when:'Появляются при сдаче; «готово к проверке» ждёт вас',expect:'Нет артефактов «к проверке» старше суток',risk:'Влить непроверенное; витрина показывает старую версию',ok:'Очередь проверки пуста, витрина актуальна',fail:'Артефакт ждёт проверки дольше суток или влит с открытым риском'});
+})();
+</script>
+</body></html>

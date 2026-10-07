@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 08 · Вход: слово из точек и дизеринг-переход</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .stage{position:relative;width:1280px;height:560px;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--bg);box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .stage canvas{position:absolute;inset:0;width:100%;height:100%}
+  .ctl{position:absolute;left:20px;bottom:16px;display:flex;gap:8px;align-items:center;z-index:2}
+  .hud{position:absolute;right:20px;top:16px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);z-index:2;text-align:right}
+  .form{position:absolute;left:60px;top:50%;transform:translateY(-50%);width:360px;z-index:2;color:var(--ink)}
+  .form h2{font:600 26px/1.15 var(--font);margin:0 0 8px;letter-spacing:-.01em}.form p{color:var(--ink2);margin:0 0 18px;font-size:13px}
+  .doors{display:grid;gap:8px}.door{height:42px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:500;font-size:13px}.door.p{background:var(--accent);border-color:var(--accent);color:#1a1a1a}
+  .in{height:42px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);color:var(--ink3);display:flex;align-items:center;padding:0 12px;font-size:13px}
+  .light{--bg:#f4f3f0;--panel:#fbfaf8;--line:#e4e1da;--line2:#d6d2c9;--ink:#1c1b19;--ink2:#5f5d58;--ink3:#9a978f;--accent:#b8862a}
+  .light .door.p{color:#fff}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 08 · вход · слово из точек · дизеринг-переход обликов</h1>
+  <p class="sub">Приём Kiln: слово собирается из полутоновых точек (размер точки = яркость) при загрузке и растворяется в поток при успешном входе. Приём дизеринга: смена облика A → C не переключением, а проявлением сквозь точечную сетку (матрица Байера). Всё — один canvas, без библиотек; при «меньше анимации» — статичные кадры. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame">
+    <div class="stage" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="form">
+        <h2>Войти в Harnessy</h2><p>Чат, план и команда агентов — в одном окне. Нового человека допускает владелец.</p>
+        <div class="doors"><div class="in">почта — пришлём код</div><div class="door p">Продолжить с почтой</div><div class="door">Войти через Telegram</div><div class="door">Продолжить с Google</div></div>
+      </div>
+      <div class="hud" id="hud">состояние · 01 · собирается</div>
+      <div class="ctl">
+        <span class="btn sm" data-act="assemble">① собрать слово</span>
+        <span class="btn sm" data-act="idle">② дыхание</span>
+        <span class="btn sm" data-act="dissolve">③ вход · растворить</span>
+        <span class="btn sm" data-act="dither">④ облик A → C дизерингом</span>
+        <span class="btn sm" data-act="back">⑤ C → A</span>
+      </div>
+    </div>
+    <div class="cap"><span>08 · правая половина входа · живой canvas · кнопки внизу переключают состояния</span><span>1280 × 560</span></div>
+  </div>
+
+  <div class="legend">
+    <div><b>① Сборка</b>точки стартуют из случайных мест и за ~1,4 с слетаются в растр слова; размер точки — по яркости буквы.</div>
+    <div><b>② Дыхание</b>слово стоит; мерцают 2–3 % точек (как в дизеринг-ролике автора 30.05) — «живое», но дёшево.</div>
+    <div><b>③ Растворение</b>при успешном входе точки уносит потоком вправо-вверх, слово исчезает за ~1 с — и открывается прототип.</div>
+    <div><b>④ Дизеринг обликов</b>светлая палитра проявляется по порогам матрицы Байера 8×8: сетка остаётся, цвет «протекает» за 0,8 с.</div>
+  </div>
+</div>
+<script>
+(function(){
+  const st=document.getElementById('stage'), cv=document.getElementById('cv'), cx=cv.getContext('2d'), hud=document.getElementById('hud');
+  const W=1280,H=560,dpr=Math.min(2,devicePixelRatio||1); cv.width=W*dpr; cv.height=H*dpr; cx.setTransform(dpr,0,0,dpr,0,0);
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // растр слова: рисуем текст в офскрин, читаем яркость по сетке
+  const S=7, off=document.createElement('canvas'); off.width=W; off.height=H; const oc=off.getContext('2d');
+  oc.fillStyle='#000'; oc.fillRect(0,0,W,H); oc.fillStyle='#fff'; oc.font='600 165px Inter, sans-serif'; oc.textBaseline='middle'; oc.textAlign='center';
+  let pts=[];
+  function build(){ oc.fillStyle='#000'; oc.fillRect(0,0,W,H); oc.fillStyle='#fff'; oc.fillText('harnessy', 880, 250);
+    const d=oc.getImageData(0,0,W,H).data; pts=[];
+    for(let y=S/2;y<H;y+=S) for(let x=S/2;x<W;x+=S){ const i=((y|0)*W+(x|0))*4; const v=d[i]/255; if(v>.12 && x>520) pts.push({tx:x,ty:y,v,x:Math.random()*W,y:Math.random()*H,r:Math.random()}); } }
+  document.fonts.ready.then(build); build();
+  let mode='assemble', t0=performance.now(), dith=0, dithDir=0;
+  const dark={bg:'#101012',dot:'236,236,241'}, light={bg:'#f4f3f0',dot:'28,27,25'};
+  const bayer=[[0,32,8,40,2,34,10,42],[48,16,56,24,50,18,58,26],[12,44,4,36,14,46,6,38],[60,28,52,20,62,30,54,22],[3,35,11,43,1,33,9,41],[51,19,59,27,49,17,57,25],[15,47,7,39,13,45,5,37],[63,31,55,23,61,29,53,21]];
+  const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t;
+  function frame(now){
+    const t=(now-t0)/1000;
+    // фон: тёмный, поверх — светлый по дизеринг-маске
+    cx.fillStyle=dark.bg; cx.fillRect(0,0,W,H);
+    if(dith>0){ const cell=8; cx.fillStyle=light.bg; for(let y=0;y<H;y+=cell) for(let x=0;x<W;x+=cell){ if(bayer[(y/cell)%8|0][(x/cell)%8|0]/64 < dith) cx.fillRect(x,y,cell,cell); } }
+    const mix=dith; const dotc=mix<.5?dark.dot:light.dot;
+    // точки
+    for(const p of pts){
+      let x=p.tx,y=p.ty,a=1,r=.6+p.v*2.4;
+      if(mode==='assemble'){ const k=ease(Math.min(1,t/1.4)); x=p.x+(p.tx-p.x)*k; y=p.y+(p.ty-p.y)*k; a=.3+.7*k; }
+      else if(mode==='idle'){ if(((p.r*1000+t*60)|0)%37===0) a=.25; r*= (1+.08*Math.sin(t*2+p.r*6)); }
+      else if(mode==='dissolve'){ const k=Math.min(1,t/1.1); const kk=ease(k)*(0.6+p.r*0.8); x=p.tx+kk*(320+p.r*200); y=p.ty-kk*(180+p.r*160); a=1-k; r*=1-k*.5; }
+      cx.fillStyle='rgba('+dotc+','+(a*(0.35+p.v*.65)).toFixed(3)+')'; cx.beginPath(); cx.arc(x,y,r,0,6.283); cx.fill();
+    }
+    // фоновая «пыль» слева направо — только в idle
+    if(mode==='idle'){ for(let i=0;i<60;i++){ const x=(i*97+t*18)%W, y=(i*53)%H; cx.fillStyle='rgba('+dotc+',.08)'; cx.fillRect(x,y,2,2); } }
+    if(dithDir){ dith=Math.max(0,Math.min(1,dith+dithDir*(1/48))); if(dith===0||dith===1) dithDir=0; st.classList.toggle('light',dith>.5); }
+    if(!reduce) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  const labels={assemble:'01 · собирается',idle:'02 · дыхание',dissolve:'03 · вход · растворяется',dither:'04 · облик a → c · дизеринг',back:'05 · облик c → a'};
+  document.querySelectorAll('[data-act]').forEach(b=>b.addEventListener('click',()=>{ const a=b.dataset.act; hud.textContent='состояние · '+labels[a];
+    if(a==='dither'){ dithDir=1; return; } if(a==='back'){ dithDir=-1; return; }
+    if(a==='assemble') pts.forEach(p=>{p.x=Math.random()*W;p.y=Math.random()*H;}); mode=a; t0=performance.now(); }));
+})();
+</script>
+</body></html>

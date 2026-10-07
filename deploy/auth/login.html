@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101012">
+<title>Harnessy · %%TITLE%%</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<style>
+  /* страница входа в дизайн-коде набора (графит, моно-капс, тик-полосы); справа — сцена pour-scene.js */
+  :root { --bg:#101012; --panel:#141416; --raised:#1b1b1e; --line:#242428; --line2:#2d2d32; --ink:#ececee; --ink2:#9a9aa2; --ink3:#66666e;
+          --accent:#c27a34; --gold:#dcb866; --ok:#3fbf6f; --bad:#c9566e; --bad-fill:#a3304b; --font:"Inter",-apple-system,"Helvetica Neue",Arial,sans-serif; --mono:"JetBrains Mono","SF Mono",Menlo,monospace; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; }
+  body { background:var(--bg); color:var(--ink); font:14px/1.5 var(--font); -webkit-font-smoothing:antialiased; }
+  .wrap { min-height:100dvh; display:grid; grid-template-columns:minmax(380px,520px) minmax(0,1fr); }
+  /* левая колонка — вход */
+  .form { position:relative; z-index:2; display:flex; flex-direction:column; padding:40px 52px; background:var(--bg); border-right:1px solid var(--line); }
+  .mark { width:44px; height:44px; border-radius:13px; background:linear-gradient(160deg,#2a2a2f,#151517); border:1px solid var(--line2); display:grid; place-items:center; margin:auto 0 22px; flex:none; }
+  .mark svg { width:22px; height:22px; stroke:var(--gold); fill:none; stroke-width:2.3; stroke-linecap:round; stroke-linejoin:round; }
+  .ey { font:10.5px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); margin:0 0 10px; }
+  h1 { font:600 28px/1.15 var(--font); letter-spacing:-.012em; margin:0 0 10px; }
+  .lead { color:var(--ink2); margin:0 0 24px; max-width:390px; } .lead:empty { display:none; } .k, .lead b { color:var(--ink); font-weight:500; }
+  .doors { display:grid; gap:9px; max-width:400px; }
+  .door { display:flex; align-items:center; justify-content:center; gap:10px; height:46px; border-radius:9px; border:1px solid var(--line2); background:var(--panel); color:var(--ink); text-decoration:none; font:500 14px var(--font); cursor:pointer; transition:border-color .15s, background .15s, transform .1s; }
+  .door:hover { border-color:var(--ink3); background:var(--raised); } .door:active { transform:scale(.995); }
+  .door.p { background:var(--accent); border-color:var(--accent); color:#1a1a1a; } .door.p:hover { background:var(--accent); filter:brightness(1.07); }
+  .door svg { width:18px; height:18px; flex:none; }
+  .email-form, .code-form { display:grid; gap:9px; }
+  .email-in, .code-in { height:46px; border-radius:9px; border:1px solid var(--line2); background:var(--panel); color:var(--ink); font:14px var(--font); padding:0 14px; outline:none; }
+  .email-in:focus, .code-in:focus { border-color:var(--accent); }
+  .code-in { font:500 24px var(--mono); letter-spacing:.2em; text-align:center; height:56px; }
+  .door[type=submit] { width:100%; }
+  .or { display:flex; align-items:center; gap:10px; color:var(--ink3); font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; margin:4px 0; } .or::before, .or::after { content:""; flex:1; height:1px; background:var(--line); }
+  .hint { color:var(--ink2); font-size:13px; margin:0; } .hint:empty { display:none; } .hint a { color:var(--ink); } .hint b { color:var(--ink); font-weight:500; } .err { color:var(--bad); font-size:13px; margin:0; } .err a { color:var(--ink); }
+  code { font:12px var(--mono); background:var(--raised); border:1px solid var(--line); padding:0 6px; border-radius:5px; color:var(--ink); }
+  .code4 { display:flex; gap:8px; margin:2px 0 6px; } .code4 b { width:48px; height:58px; border-radius:10px; border:1px solid var(--line2); background:var(--panel); display:grid; place-items:center; font:500 27px var(--mono); color:var(--ink); }
+  .stl { display:grid; gap:7px; margin:6px 0 8px; font:10.5px var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); }
+  .stl div { display:flex; align-items:center; gap:9px; } .stl div::before { content:""; width:7px; height:7px; border-radius:1.5px; background:var(--line2); flex:none; }
+  .stl div.ok { color:var(--ink2); } .stl div.ok::before { background:var(--ok); } .stl div.bad { color:var(--bad); } .stl div.bad::before { background:var(--bad-fill,#a3304b); }
+  .stl div.cur { color:var(--ink); } .stl div.cur::before { background:var(--accent); animation:bl 1s steps(2) infinite; } @keyframes bl { 50% { opacity:.25; } }
+  .legal { color:var(--ink3); font-size:12px; margin:20px 0 0; max-width:400px; } .legal a { color:var(--ink2); }
+  .alt { color:var(--ink3); font-size:12px; margin-top:14px; max-width:400px; } .alt summary { cursor:pointer; } .alt .tg { margin-top:10px; min-height:40px; }
+  .foot { margin-top:auto; padding-top:40px; color:var(--ink3); font-size:13px; } .foot a { color:var(--ink); text-decoration:none; border-bottom:1px solid var(--line2); }
+  /* правая колонка — сцена */
+  .visual { position:relative; overflow:hidden; background:var(--bg); min-height:420px; }
+  .visual canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .cap { position:absolute; top:22px; font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); } .cap b { color:var(--ink2); font-weight:500; }
+  .cap.l { left:26px; } .cap.r { right:26px; text-align:right; }
+  .meter { position:absolute; left:8%; right:8%; bottom:26px; display:flex; align-items:center; gap:12px; font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); }
+  .meter b { font:500 12px var(--mono); color:var(--ink); min-width:46px; text-align:right; letter-spacing:0; }
+  .ticks { flex:1; display:flex; gap:2px; } .ticks i { flex:1; height:4px; border-radius:1.5px; background:var(--line2); } .ticks i.on { background:var(--accent); } .ticks i.bad { background:var(--bad-fill,#a3304b); }
+  @media (max-width:900px) {
+    .wrap { grid-template-columns:minmax(0,1fr); }
+    .visual { order:-1; height:40vh; min-height:280px; border-bottom:1px solid var(--line); }
+    .form { border-right:0; padding:26px 20px 30px; } .mark { margin-top:0; }
+    .cap { display:none; } .meter { left:20px; right:20px; bottom:12px; }
+    .foot { padding-top:28px; }
+  }
+  @media (prefers-reduced-motion:reduce) { .stl div.cur::before { animation:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="form">
+    <div class="mark"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+    <div class="ey">%%EYEBROW%%</div>
+    <h1>%%H1%%</h1>
+    <p class="lead">%%LEAD%%</p>
+    <div class="doors">%%DOORS%%</div>
+    %%ALT%%
+    <p class="legal">Входя, вы соглашаетесь с <a href="/terms.html">условиями</a> и <a href="/privacy.html">политикой конфиденциальности</a>. Запоминаем только имя, адрес и время входа.</p>
+    <div class="foot">Нет доступа или что-то не так? <a href="%%CONTACT%%" target="_blank" rel="noopener">Напишите владельцу →</a></div>
+  </section>
+  <section class="visual" aria-hidden="true">
+    <canvas id="pour"></canvas>
+    <div class="cap l">harnessy · закрытый прототип</div>
+    <div class="cap r" id="hud"></div>
+    <div class="meter"><span>налито</span><div class="ticks" id="tk"></div><b id="pct">0 %</b></div>
+  </section>
+</div>
+<script>%%POUR_JS%%</script>
+<script>
+(function(){
+  // сцена справа: графин наливает, пока идёт вход. Страница работает и без неё — двери остаются обычными ссылками и формами.
+  var hud=document.getElementById('hud'), pct=document.getElementById('pct'), tk=document.getElementById('tk'), sc=null, tks=[];
+  var HUDT={idle:'закрыт',pour:'наливает',finish:'доливает',done:'налито',fail:'не подтверждён'};
+  for(var i=0;i<40;i++){ var t=document.createElement('i'); tk.appendChild(t); tks.push(t); }
+  try{
+    sc=window.PourScene(document.getElementById('pour'),{
+      onState:function(m){ hud.innerHTML='вход · <b>'+HUDT[m]+'</b>'; },
+      onLevel:function(p,m){ var n=Math.round(p*40); for(var i=0;i<40;i++) tks[i].className=i<n?(m==='fail'?'bad':'on'):''; pct.textContent=Math.round(p*100)+' %'; }
+    });
+  }catch(e){ sc=null; }
+  window.Pour=sc;
+  var scene='%%SCENE%%';
+  if(sc&&scene==='pour') sc.start();
+  // страница дверей: клик по способу входа или отправка формы — графин начинает наливать, переход идёт как обычно
+  document.addEventListener('click',function(e){ var a=e.target.closest&&e.target.closest('a.door'); if(a&&sc&&sc.state()==='idle') sc.start(); });
+  document.addEventListener('submit',function(){ if(sc&&sc.state()==='idle') sc.start(); });
+  addEventListener('pageshow',function(e){ if(e.persisted&&sc&&scene==='idle') sc.reset(); });
+})();
+</script>
+%%SCRIPT%%
+</body>
+</html>

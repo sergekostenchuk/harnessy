@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 21 · Журнал · живой</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .jk{font:10px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);border:1px solid var(--line2);border-radius:999px;padding:1px 8px;white-space:nowrap}
+  .jk.dec{color:var(--accent);background:var(--accent-soft);border-color:transparent}.jk.bad{color:var(--bad);background:var(--bad-soft);border-color:transparent}.jk.ok{color:var(--ok);background:var(--ok-soft);border-color:transparent}
+  .li.mine b::after{content:"вы";margin-left:8px;font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);vertical-align:1px}
+  .empty{padding:26px 18px;text-align:center;color:var(--ink3);font-size:12.5px}
+  #jreset{cursor:pointer}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 21 · журнал · живой</h1>
+  <p class="sub">Одно дело экрана — увидеть, что происходило и что сделали вы сами. Сюда попадает <b>каждое действие в прототипе</b>: принятое решение, вопрос в чате, изменённая настройка. Ниже — события команды за сегодня. Фильтр по виду работает; строка раскрывается карточкой. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side" data-rail="log"></aside>
+    <section class="main">
+      <div class="top"><b>Журнал · OMG</b><span class="st" id="jst"><i></i>сегодня</span>
+        <div class="r"><span class="seg" id="seg"><span class="on" data-v="all">Все события</span><span data-v="mine">Мои действия</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span><span class="btn sm ghost" id="jreset" title="Вернуть прототип к началу: решения, разговор и настройки">↺ сбросить</span></div></div>
+      <div class="views">
+        <div class="view on" id="v-all"><div class="wrap">
+          <div class="nums n3"><div><b id="n-all">0</b><small>событий сегодня</small></div><div><b class="acc" id="n-mine">0</b><small>ваших действий</small></div><div><b class="bad" id="n-bad">0</b><small>сбоев</small></div></div>
+          <div class="filters" id="jf"></div>
+          <div class="lst" id="jrows" style="--cols:64px 118px 1fr 150px 16px"></div>
+          <div class="note-bar"><span>новое сверху · ваши действия помечены «вы»</span><span>строка → карточка события</span></div>
+        </div></div>
+        <div class="view" id="v-mine"><div class="wrap">
+          <div class="lst" id="jmine" style="--cols:64px 118px 1fr 150px 16px"></div>
+          <div class="note-bar"><span>только то, что сделали вы в этом браузере</span><span>«↺ сбросить» возвращает прототип к началу</span></div>
+        </div></div>
+      </div>
+    </section>
+  </div>
+  <div class="cap"><span>21 · журнал · все события и мои действия · фильтр по виду · карточка события</span><span>1280 × 860</span></div>
+  <div class="hint-bar"><span>примите решение в «Сейчас» или напишите в чат — запись появится здесь · фильтры работают · «↺ сбросить» очищает состояние прототипа</span></div>
+  <div class="recon"><b>Откуда экран:</b> в прежнем прототипе журнала отдельным экраном не было — «Журнал» в боковой панели вёл в никуда, а лист 09 показывал только виды плашек. Здесь записи двух родов: события команды (заготовка за сегодня) и действия пользователя, которые пишет рабочий слой прототипа.</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+(function(){
+  const {kv,blk,acts}=HX, KEY='harnessy-live-v1';
+  const KIND={'решение':['решение','dec'],'чат':['чат',''],'настройка':['настройка',''],'сбой':['сбой','bad'],'проверка':['проверка','ok'],'вопрос':['вопрос','dec'],'запуск':['запуск','']};
+  const WHERE={now:['Сейчас','14-now.html'],chat:['Чат','01-chat.html'],new:['Новый чат','10-new-chat.html'],set:['Настройки','06-settings.html'],spend:['Расход','05-spend.html'],swarm:['Стая','04-swarm.html'],sens:['Датчики','13-sensors.html'],plan:['План','02-plan.html'],away:['Чат','18-overlays.html'],log:['Журнал','21-journal.html'],mem:['Память','16-memory.html'],art:['Артефакты','15-artifacts.html'],conn:['Подключения','11-connections.html'],res:['Ресёрч','12-research.html'],doc:['Документ стадии','17-doc.html']};
+  // события команды за сегодня — заготовка, согласованная с остальными экранами
+  const day=new Date(); const at=(h,m)=>{ const t=new Date(day.getFullYear(),day.getMonth(),day.getDate(),h,m).getTime(); return t>Date.now()?t-864e5:t; };   // заготовка всегда в прошлом: новое действие пользователя окажется сверху
+  const SEED=[
+    {t:at(16,21),kind:'сбой',text:'Хук Devin Stop: нет сигнала 9 минут — сессия не отвечает',page:'sens',who:'датчик'},
+    {t:at(16,20),kind:'вопрос',text:'Воркер 1 спросил: три класса дефектов — чинить все сейчас?',page:'now',who:'воркер 1'},
+    {t:at(16,12),kind:'проверка',text:'Хранитель проверил W4: 0 замечаний, коммит 479b307',page:'now',who:'хранитель'},
+    {t:at(14,37),kind:'вопрос',text:'Оркестратор спросил: воркер 2 на лимите Codex — Sonnet или ждать?',page:'now',who:'оркестратор'},
+    {t:at(14,2),kind:'сбой',text:'Лимиты подписок: Codex 78 → 94 % за час',page:'spend',who:'датчик'},
+    {t:at(10,40),kind:'сбой',text:'Прогон воркера 2 снят по лимиту модели, перезапущен',page:'swarm',who:'очередь прогонов'},
+    {t:at(9,5),kind:'запуск',text:'Прогон H1.5 · check:backend запущен',page:'plan',who:'воркер 1'},
+    {t:at(2,35),kind:'сбой',text:'Хук Stop · Codex: 401 от OpenAI — глобальный сбой, прошёл сам',page:'sens',who:'датчик'}
+  ];
+  const hhmm=t=>new Date(t).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let filter='все', ALL=[];
+  function read(){ let mine=[]; try{ mine=(JSON.parse(localStorage.getItem(KEY)||'{}').log)||[]; }catch(e){}
+    ALL=mine.map(x=>Object.assign({mine:true,who:'вы'},x)).concat(SEED).sort((a,b)=>b.t-a.t); }
+  const row=(e,i)=>{ const k=KIND[e.kind]||[e.kind,''], w=WHERE[e.page]||['—',''];
+    return '<div class="li'+(e.mine?' mine':'')+'" data-i="'+i+'"><span class="m">'+hhmm(e.t)+'</span><span><span class="jk '+k[1]+'">'+k[0]+'</span></span><div><b>'+esc(e.text)+'</b></div><span class="m">'+esc(e.who||'')+' · '+w[0]+'</span><span class="chev">›</span></div>'; };
+  const head='<div class="li head"><span>когда</span><span>вид</span><span>что произошло</span><span>кто · где</span><span></span></div>';
+  function render(){ read();
+    const kinds=['все'].concat([...new Set(ALL.map(e=>e.kind))]);
+    document.getElementById('jf').innerHTML=kinds.map(k=>'<span class="chip'+(k===filter?' on':'')+'" data-k="'+k+'">'+k+' · '+(k==='все'?ALL.length:ALL.filter(e=>e.kind===k).length)+'</span>').join('')+'<span class="sp"></span><span class="mono">сегодня</span>';
+    const list=ALL.map((e,i)=>[e,i]).filter(x=>filter==='все'||x[0].kind===filter);
+    document.getElementById('jrows').innerHTML=head+(list.length?list.map(x=>row(x[0],x[1])).join(''):'<div class="empty">Событий такого вида сегодня нет.</div>');
+    const mine=ALL.map((e,i)=>[e,i]).filter(x=>x[0].mine);
+    document.getElementById('jmine').innerHTML=head+(mine.length?mine.map(x=>row(x[0],x[1])).join(''):'<div class="empty">Пока пусто. Примите решение в «Сейчас», напишите в чат или переключите настройку — запись появится здесь.</div>');
+    document.getElementById('n-all').textContent=ALL.length; document.getElementById('n-mine').textContent=mine.length; document.getElementById('n-bad').textContent=ALL.filter(e=>e.kind==='сбой').length;
+    document.getElementById('jst').innerHTML='<i></i>'+ALL.length+' событий · '+mine.length+' ваших';
+  }
+  window.renderJournal=render; render();
+  document.getElementById('jf').addEventListener('click',e=>{ const c=e.target.closest('[data-k]'); if(c){ filter=c.dataset.k; render(); } });
+  document.getElementById('jreset').addEventListener('click',()=>{ try{ localStorage.removeItem(KEY); }catch(e){} location.reload(); });
+  addEventListener('storage',render);
+  HX.views('#seg');
+  // список перерисовывается (фильтр, новые записи), поэтому раскрытие — через общий обработчик, а не привязкой к строкам
+  const card=el=>{ const e=ALL[+el.dataset.i], k=KIND[e.kind]||[e.kind,''], w=WHERE[e.page]||['—',''];
+    return '<div class="from">раскрытая карточка · событие</div><div class="ch"><h3>'+esc(e.text)+'</h3></div><div class="csub"><span class="jk '+k[1]+'">'+k[0]+'</span> &nbsp;'+hhmm(e.t)+' · '+esc(e.who||'')+'</div>'+
+      blk('подробности',kv([['когда',new Date(e.t).toLocaleString('ru-RU')],['кто',esc(e.who||'—')],['где',w[0]],['чьё действие',e.mine?'ваше — записано рабочим слоем прототипа':'команды — заготовка за сегодня']]))+
+      acts((w[1]?[['Открыть «'+w[0]+'»','p','data-open="'+w[1]+'"']]:[]).concat([['Закрыть','ghost','data-close']])); };
+  document.addEventListener('click',e=>{ const o=e.target.closest('[data-open]'); if(o){ location.href=o.dataset.open; return; }
+    const li=e.target.closest('.li[data-i]'); if(li) HX.open(li,card(li),{w:640,h:420}); });
+  HX.passport({title:'Журнал',where:'OMG › Журнал',what:'Все события проекта и ваши собственные действия, новое сверху',why:'Понять, что произошло и что сделали вы, не листая чаты',when:'Запись появляется в момент действия',expect:'Каждое решение, вопрос и изменение настройки оставляет строку',risk:'Действие совершено, а следа нет',ok:'У каждого решения есть запись с временем',fail:'Счётчик изменился, а записи в журнале нет'});
+})();
+</script>
+</body></html>

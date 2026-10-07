@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 19 · Первый запуск · живой</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .app{display:grid;grid-template-columns:1fr;place-items:center}
+  .fr{width:560px}
+  .mark{width:44px;height:44px;border-radius:13px;background:linear-gradient(160deg,#2a2a2f,#151517);border:1px solid var(--line2);display:grid;place-items:center;margin-bottom:18px}.mark svg{width:22px;height:22px;stroke:var(--gold);fill:none;stroke-width:2.2;stroke-linecap:round}
+  .fr h2{font:600 26px/1.15 var(--font);letter-spacing:-.015em;margin:0 0 8px}.fr>p{color:var(--ink2);font-size:13.5px;margin:0 0 18px}
+  .st{display:none}.st.on{display:block;animation:in .28s ease}@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .steps{margin-bottom:22px}
+  .ft .btn{height:34px;cursor:pointer}.ft .skip{color:var(--ink3);font-size:12.5px;cursor:pointer}
+  .in{height:42px;border:1px solid var(--line2);border-radius:10px;background:var(--panel);display:flex;align-items:center;padding:0 12px;color:var(--ink);font-size:13.5px;gap:8px}.in .k{margin-left:auto;font:10px var(--mono);color:var(--ink3)}
+  .pick{background:var(--panel)}
+  .done{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:14px 16px}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 19 · первый запуск · живой</h1>
+  <p class="sub">Три шага, по одному вопросу на шаг, как у страницы входа: где работаем → чем отвечаем → первый вопрос. На каждом шаге можно выйти — «просто чат». Ничего не запускается до последней кнопки. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app"><div class="fr">
+    <div class="mark"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+    <div class="steps" id="steps"><i class="on"></i><i></i><i></i></div>
+
+    <div class="st on" data-s="1"><h2>Где будем работать</h2><p>В папке агент читает проект и помнит его; комната — для быстрых дел без памяти.</p>
+      <label class="pick on" data-pick>📁 Выбрать папку<small>~/HARNESS · 412 файлов · агент прочитает перед первым ответом</small></label>
+      <label class="pick" data-pick>Комната без папки<small>просто разговор; папку можно подключить позже</small></label>
+      <div class="ft"><span class="skip" data-skip>Пропустить — просто чат</span><span class="btn p" data-go="2" style="margin-left:auto">Дальше →</span></div></div>
+
+    <div class="st" data-s="2"><h2>Чем отвечать</h2><p>Подключите хотя бы одну модель. Остальные добавите в «Подключениях».</p>
+      <label class="pick on" data-pick>Claude — войти в аккаунт<small>подписка · лимиты по окнам</small></label>
+      <label class="pick" data-pick>Codex — войти в аккаунт<small>подписка</small></label>
+      <label class="pick" data-pick>Ключ API<small>OpenRouter, Qwen, DeepSeek — цена за токен</small></label>
+      <label class="pick" data-pick>Локально<small>Ollama · без оплаты</small></label>
+      <div class="ft"><span class="btn ghost" data-go="1">← Назад</span><span class="skip" data-skip style="margin-left:14px">Пропустить — просто чат</span><span class="btn p" data-go="3" style="margin-left:auto">Дальше →</span></div></div>
+
+    <div class="st" data-s="3"><h2>С чего начнём</h2><p>Первый вопрос ничего не меняет в папке: агент только читает.</p>
+      <div class="done" style="margin-bottom:12px">
+        <div class="kv"><span>папка</span><b>~/HARNESS · только чтение</b><span>модель</span><b>Claude · Sonnet · усилие среднее</b><span>цена первого хода</span><b>≈ 0,05 % недели</b><span>что будет</span><b>ответ в чате; действий без вашего «да» не будет</b></div></div>
+      <div class="in">Посмотри проект и скажи, что мешает первому запуску<span class="k">⏎</span></div>
+      <div class="ft"><span class="btn ghost" data-go="2">← Назад</span><span class="btn p" data-skip style="margin-left:auto">Начать разговор</span></div></div>
+  </div></div>
+  <div class="cap"><span>19 · первый запуск · три шага · папка → модель → первый вопрос</span><span>1280 × 860</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (p-first): «📁 выбрать папку / комната без папки» → шаг 1; подключение модели → шаг 2 (тот же выбор, что в потоке «Подключить» скетча 11); «Пропустить — просто чат» — на шагах 1 и 2; «Дальше →» — на каждом шаге; итог и цена первого хода — шаг 3.</div></div>
+</div>
+<script>
+(function(){
+  const go=n=>{ document.querySelectorAll('.st').forEach(s=>s.classList.toggle('on',s.dataset.s===String(n))); document.querySelectorAll('#steps i').forEach((s,i)=>s.classList.toggle('on',i<n)); };
+  document.addEventListener('click',e=>{ const g=e.target.closest('[data-go]'); if(g){ go(g.dataset.go); return; }
+    const pk=e.target.closest('[data-pick]'); if(pk){ pk.parentElement.querySelectorAll('[data-pick]').forEach(x=>x.classList.toggle('on',x===pk)); return; }
+    if(e.target.closest('[data-skip]')) location.href='10-new-chat.html'; });
+})();
+</script>
+</body></html>

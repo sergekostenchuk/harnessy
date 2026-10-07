@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 12 · Ресёрч · живой</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .rh{display:flex;align-items:center;gap:14px;border:1px solid var(--line2);border-radius:14px;background:var(--panel);padding:14px 16px;margin:6px 0 16px}
+  .rh h3{margin:0;font-size:16px;font-weight:500}.rh small{display:block;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-top:4px}
+  .rh .pg{margin-left:auto;display:flex;align-items:center;gap:10px;min-width:280px}.rh .pg .ticks{flex:1}.rh .pg b{font:500 11px var(--mono);color:var(--ink2);white-space:nowrap}
+  .conf{display:inline-flex;gap:2px;vertical-align:middle}.conf i{width:5px;height:12px;border-radius:1px;background:var(--line2)}.conf i.on{background:var(--ok)}.conf i.mid{background:var(--warn)}
+  .src{display:grid;grid-template-columns:22px 1fr 90px;gap:10px;align-items:start;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.src:last-child{border-bottom:0}.src b{color:var(--ink);font-weight:500;display:block}.src .n{width:18px;height:18px;border-radius:5px;background:var(--tile);border:1px solid var(--line2);display:grid;place-items:center;font:10px var(--mono);color:var(--ink2)}
+  .ans{font-size:13.5px;line-height:1.6;color:var(--ink);margin:0 0 12px}.ans .c{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:5px;background:var(--tile);border:1px solid var(--line2);font:10px var(--mono);color:var(--ink2);vertical-align:1px;margin-left:2px}
+  .vrow{display:grid;grid-template-columns:44px 1fr 110px;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.vrow:last-child{border-bottom:0}.vrow b{color:var(--ink);font-weight:500}
+  .srch{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid var(--line2);border-radius:10px;background:var(--panel);color:var(--ink3);margin:6px 0 14px;font-size:13px}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 12 · ресёрч · живой</h1>
+  <p class="sub">Одно дело экрана — вести одно исследование: вопрос → источники → вывод. Обзор: шапка исследования с прогрессом и список вопросов (состояние · источников · уверенность одной шкалой). <b>Клик по вопросу — карточка поверх:</b> ответ со ссылками, источники, версии, действия. «Прошлые исследования» — вкладкой с поиском. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side" data-rail="res"></aside>
+    <section class="main">
+      <div class="top"><b>Ресёрч · OMG</b><span class="st"><i></i>идёт · 6 из 12 источников</span>
+        <div class="r"><span class="seg" id="seg"><span class="on" data-v="cur">Это исследование</span><span data-v="past">Прошлые · 14</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
+      <div class="views">
+        <div class="view on" id="v-cur"><div class="wrap">
+          <div class="rh"><div><h3>Как у харнессов-соседей устроены вход и подключение подписок</h3><small>ресёрчер · Qwen 3 Coder · начато 14:20 · глубина 12 источников</small></div>
+            <div class="pg"><div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></div><b>6 / 12</b><span class="btn sm">■ Стоп</span><span class="btn sm">Углубить до 20</span></div></div>
+          <div class="lst" style="--cols:1.6fr 110px 100px 110px 16px">
+            <div class="li head"><span>вопрос исследования</span><span>состояние</span><span>источников</span><span>уверенность</span><span></span></div>
+            <div class="li" data-q="1"><div><b>Какие способы входа предлагают Claude, Codex, Kimi, Perplexity</b><small>сравнение · 4 продукта</small></div><span class="m" style="color:var(--ok)">ответ готов</span><span class="m">3</span><span><span class="conf"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></span><span class="chev">›</span></div>
+            <div class="li" data-q="2"><div><b>Как показывают остаток лимитов и дату оплаты</b><small>паттерны · скриншоты</small></div><span class="m" style="color:var(--ok)">ответ готов</span><span class="m">2</span><span><span class="conf"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></span><span class="chev">›</span></div>
+            <div class="li" data-q="3"><div><b>Можно ли одним ключом подключить несколько моделей</b><small>OpenRouter · LiteLLM</small></div><span class="m hot">ответы расходятся</span><span class="m">1</span><span><span class="conf"><i class="mid"></i><i class="mid"></i><i></i><i></i><i></i></span></span><span class="chev">›</span></div>
+            <div class="li dim" data-q="4"><div><b>Как назначают модель на роль в мультиагентных харнессах</b><small>Pi · Hermes · Antigravity</small></div><span class="m">идёт поиск</span><span class="m">0</span><span><span class="conf"><i></i><i></i><i></i><i></i><i></i></span></span><span class="chev">›</span></div>
+          </div>
+          <div class="note-bar"><span>4 вопроса · 2 готовы · 1 расходится · 1 в поиске</span><span>применённое попадает в «Что исследовано» проекта</span></div>
+        </div></div>
+        <div class="view" id="v-past"><div class="wrap">
+          <div class="srch">⌕ Поиск по объектам: продукт, метод, термин…</div>
+          <div class="lst" style="--cols:1.6fr 100px 90px 130px 16px">
+            <div class="li head"><span>исследование</span><span>дата</span><span>вопросов</span><span>применено</span><span></span></div>
+            <div class="li" data-p="1"><div><b>Методы лидеров UX: CJM, Service Blueprint, JTBD</b><small>44 метода · R1–R44</small></div><span class="m">30.09</span><span class="m">12</span><span class="m" style="color:var(--ok)">в проект · 9 из 12</span><span class="chev">›</span></div>
+            <div class="li" data-p="2"><div><b>Тренды awards 2026–27</b><small>Awwwards · CSSDA · FWA</small></div><span class="m">30.09</span><span class="m">6</span><span class="m" style="color:var(--ok)">в проект · 6 из 6</span><span class="chev">›</span></div>
+            <div class="li" data-p="3"><div><b>Профиль evaluate прохода OM</b><small>83 % — перечтение следа</small></div><span class="m">03.10</span><span class="m">3</span><span class="m">в задачи A/B</span><span class="chev">›</span></div>
+            <div class="li dim" data-p="4"><div><b>Проба SWE-2 на копии omg-live</b><small>0/5 по контракту</small></div><span class="m">02.10</span><span class="m">2</span><span class="m">отклонено</span><span class="chev">›</span></div>
+          </div>
+        </div></div>
+      </div>
+    </section>
+  </div>
+  <div class="cap"><span>12 · ресёрч · вопросы исследования → карточка вопроса · прошлые</span><span>1280 × 860</span></div>
+  <div class="hint-bar"><span>клик по вопросу — карточка (ответ · источники · версии) · «прошлые» вверху · × / клик мимо / esc</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (res): было 7 кнопок → все на месте: «■ Стоп» и «Углубить до 20» — в шапке исследования; «Сравнить», «Свести ответы инструментов», «Применить к проекту → Что исследовано», «Уточнить», «Отклонить» — в карточке вопроса. Блоки: «Это исследование» → обзор; 4 вопроса (rq-row×4) → строки; 3 источника → вкладка «Источники»; 7 версий → вкладка «Версии»; «Прошлые исследования · поиск по объектам» → вкладка; «Паспорт · ресёрч» → чип.</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+(function(){
+  const {kv,blk,acts}=HX;
+  const Q={
+    1:['Какие способы входа предлагают Claude, Codex, Kimi, Perplexity','ответ готов · 3 источника · уверенность 4 из 5',
+      'Все четыре начинают с почты или Google; пароль как основной способ не предлагает никто<span class="c">1</span>. Claude и Perplexity шлют код на почту, Codex ведёт через аккаунт OpenAI<span class="c">2</span>, Kimi добавляет вход по телефону<span class="c">3</span>. Вход через Telegram есть только у ботов-оболочек.',
+      [['claude.ai · страница входа','почта (код) · Google · SSO','сегодня'],['OpenAI · документация Codex CLI','вход через аккаунт, device code','сегодня'],['Kimi · страница входа','телефон · WeChat · Google','сегодня']]],
+    2:['Как показывают остаток лимитов и дату оплаты','ответ готов · 2 источника · уверенность 3 из 5',
+      'Остаток чаще прячут: у Claude — процент недели в настройках<span class="c">1</span>, у Codex — баннер только при исчерпании<span class="c">2</span>. Дату оплаты на рабочем экране не показывает никто — это свободное место для нас.',
+      [['Claude · Settings → Usage','процент недели и 5 часов, сброс','сегодня'],['Codex · rate_limits в ответе API','баннер при лимите','сегодня']]],
+    3:['Можно ли одним ключом подключить несколько моделей','ответы расходятся · 1 источник · уверенность 2 из 5',
+      'OpenRouter даёт 200+ моделей одним ключом<span class="c">1</span>, но два инструмента поиска разошлись в том, поддерживает ли он подписочные модели Claude: один говорит «да, через BYOK», другой — «только по токенам». Нужна проверка первичного источника.',
+      [['OpenRouter · docs / models','один ключ, цена за токен','сегодня']]],
+    4:['Как назначают модель на роль в мультиагентных харнессах','идёт поиск · 0 источников','Ответа пока нет — ресёрчер читает документацию Pi-subagents и Hermes.',[]]
+  };
+  const V=[['v7','текущая · добавлен Kimi','14:52'],['v6','уточнён Codex device code','14:41'],['v5','свод ответов двух инструментов','14:38'],['v4','первый ответ','14:31'],['v3','вопрос переформулирован','14:27'],['v2','разбит на 4 продукта','14:24'],['v1','исходный вопрос','14:20']];
+  const card=k=>{const q=Q[k]; const split=k==='3';
+    return '<div class="from">раскрытая карточка · вопрос исследования</div><div class="ch"><h3>'+q[0]+'</h3></div><div class="csub">'+q[1]+'</div>'+
+      '<div class="ctabs"><span class="on" data-ct="a">Ответ</span><span data-ct="s">Источники · '+q[3].length+'</span><span data-ct="v">Версии · 7</span></div>'+
+      '<div data-cp="a"><p class="ans">'+q[2]+'</p>'+(split?blk('где расходятся инструменты',kv([['поиск 1 (Exa)','поддерживает через BYOK'],['поиск 2 (Perplexity)','только по токенам'],['что сделать','свести и проверить по документации']])):'')+'</div>'+
+      '<div data-cp="s">'+(q[3].length?q[3].map(([a,b,c],i)=>'<div class="src"><span class="n">'+(i+1)+'</span><div><b>'+a+'</b>'+b+'</div><span class="m">'+c+'</span></div>').join(''):'<p style="font-size:12.5px;color:var(--ink2);margin:0">Источников пока нет.</p>')+'</div>'+
+      '<div data-cp="v">'+V.map(([v,s,t])=>'<div class="vrow"><b>'+v+'</b><span>'+s+'</span><span class="m">'+t+'</span></div>').join('')+'</div>'+
+      acts(k==='4'?[['Уточнить вопрос','p'],'Отклонить']:split?[['Свести ответы инструментов','p'],'Сравнить','Уточнить','Отклонить']:[['Применить к проекту → «Что исследовано»','p','data-close'],'Сравнить','Уточнить','Отклонить']); };
+  HX.views('#seg');
+  HX.bind('.li[data-q]',el=>card(el.dataset.q),{w:820,h:560});
+  HX.bind('.li[data-p]',el=>'<div class="from">раскрытая карточка · прошлое исследование</div><div class="ch"><h3>'+el.querySelector('b').textContent+'</h3></div><div class="csub">'+el.querySelector('small').textContent+'</div>'+blk('итог',kv([['вопросов',el.children[2].textContent],['применено',el.children[3].textContent],['где лежит','~/REPORTS/workbench-design/research/'],['кто вёл','ресёрчеры · Sonnet']]))+acts([['Открыть отчёт','p'],'Продолжить это исследование','Сравнить с текущим']),{w:640,h:380});
+  HX.passport({title:'Ресёрч',where:'OMG › Ресёрч',what:'Одно исследование: вопросы, источники, ответы и их версии',why:'Отвечать на вопросы проекта по первичным источникам, а не по памяти модели',when:'Идёт в фоне; готовые ответы ждут «применить»',expect:'У каждого ответа — источники и уверенность',risk:'Инструменты поиска расходятся — тогда «свести», а не верить одному',ok:'Ответ применён к проекту и лежит в «Что исследовано»',fail:'Ответ без источников или применён при расхождении'});
+})();
+</script>
+</body></html>

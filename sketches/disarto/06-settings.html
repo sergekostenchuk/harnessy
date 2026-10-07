@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 06–07 · Настройки · меню профиля</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .set{display:grid;grid-template-columns:230px 1fr;gap:18px;height:100%;min-height:0}
+  .snav{display:flex;flex-direction:column;gap:2px}
+  .snav .srch{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--rs);color:var(--ink3);background:var(--panel);margin-bottom:10px;font-size:12.5px}
+  .snav .grp{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:12px 9px 4px}
+  .snav .it{height:30px;padding:0 9px;border-radius:var(--rs);display:flex;align-items:center;gap:8px;color:var(--ink2);font-size:12.5px}.snav .it.on{background:var(--raised);color:var(--ink)}.snav .it .n{margin-left:auto;font:10px var(--mono);color:var(--ink3)}
+  .pane{min-height:0;overflow:hidden;display:none;flex-direction:column;gap:14px}.pane.on{display:flex}
+  .snav .it{cursor:pointer}.snav .it:hover{background:var(--raised)}.row.click{cursor:pointer}.row.click:hover{background:var(--raised)}
+  .pane h3{margin:0;font-size:15px;font-weight:500}.pane .d{color:var(--ink2);font-size:12.5px;margin:2px 0 0}
+  .rows{border:1px solid var(--line2);border-radius:12px;background:var(--panel);overflow:hidden}
+  .row{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}.row:last-child{border-bottom:0}
+  .row b{font-weight:500;font-size:13px;display:block}.row small{color:var(--ink3);font-size:11.5px;display:block;margin-top:1px}
+  .row .seg span{padding:0 9px;font-size:11.5px}
+  .row.head{background:var(--raised);padding:8px 14px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .scope{display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--ink3)}.scope .chip{height:22px;font-size:11px}
+  .rcpt{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ok);padding:8px 14px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center}
+  .rcpt.pend{color:var(--accent)}
+  /* меню профиля */
+  .menus{display:grid;grid-template-columns:repeat(3,260px);gap:40px;justify-content:center;align-items:start;padding:30px 0}
+  .menu{border:1px solid var(--line2);border-radius:12px;background:var(--raised);box-shadow:0 20px 50px rgba(0,0,0,.6);padding:6px;position:relative}
+  .menu .usr{display:flex;align-items:center;gap:9px;padding:8px 8px 10px}.menu .usr b{display:block;font-weight:500;font-size:13px}.menu .usr small{color:var(--ink3);font-size:11px}
+  .menu .plan{margin:0 6px 6px;padding:8px 10px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);font-size:12px}.menu .plan .l{display:flex;justify-content:space-between;margin-bottom:5px}.menu .plan .l a{color:var(--accent);text-decoration:none;font-weight:500}.menu .plan small{font:9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);display:block;margin-top:5px}
+  .menu .sep{height:1px;background:var(--line);margin:4px 0}
+  .menu .mi{display:flex;align-items:center;gap:9px;height:30px;padding:0 10px;border-radius:7px;font-size:12.5px;color:var(--ink)}.menu .mi.on{background:var(--tile)}.menu .mi .k{margin-left:auto;font:10px var(--mono);color:var(--ink3)}.menu .mi .chev{margin-left:auto;color:var(--ink3)}.menu .mi .chk{margin-left:auto;color:var(--ok)}
+  .menu .mi svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round}
+  .menu .mi.dim{color:var(--ink3)}
+  .menu .ws{display:flex;align-items:center;gap:9px;height:32px;padding:0 10px;border-radius:7px;font-size:12.5px}.menu .ws .sq{width:20px;height:20px;border-radius:6px;background:var(--tile);border:1px solid var(--line2);display:grid;place-items:center;font:600 10px var(--mono);color:var(--ink2)}.menu .ws .chk{margin-left:auto;color:var(--ok)}
+  .menu .lbl{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:8px 10px 4px}
+  .mcap{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);text-align:center;margin-bottom:12px}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 06 · настройки · 07 · меню профиля</h1>
+  <p class="sub">Две колонки: слева группы моно-капсом и поиск, справа строка = название + описание серым + управление справа (сегмент или тумблер). У каждой настройки видно, где действует (разговор · проект · везде) и квитанция «применено». Меню профиля — три глубины одного меню. <b>Левое меню живое:</b> «Уведомления», «Разрешения и стоп-случаи», «Бюджет и выключатель» — по панели на раздел; права роли и «Стоп всем» — карточкой поверх. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg><span class="b">3</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg></div>
+      <div class="foot"><div class="nav on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></div><div class="nav"><span class="ring"><i></i></span></div><div class="nav"><span class="av">S<i></i></span></div></div>
+    </aside>
+    <section class="main">
+      <div class="top"><b>Настройки</b><span class="st">уведомления · область: везде</span><div class="r"><span class="scope">область: <span class="seg"><span>разговор</span><span>проект OMG</span><span class="on">везде</span></span></span></div></div>
+      <div class="body"><div class="set">
+        <div class="snav">
+          <div class="srch">⌕ Найти настройку…</div>
+          <div class="grp">Личное</div>
+          <div class="it">Профиль и входы<span class="n">3</span></div><div class="it on" data-p="notif">Уведомления<span class="n">5</span></div><div class="it">Облик<span class="n">A</span></div><div class="it">Клавиши</div>
+          <div class="grp">Проект · OMG</div>
+          <div class="it" data-p="rights">Разрешения и стоп-случаи<span class="n">6</span></div><div class="it" data-p="budget">Бюджет и выключатель</div><div class="it">Память и правила<span class="n">12</span></div><div class="it">Роли и места<span class="n">6</span></div>
+          <div class="grp">Подключения</div>
+          <div class="it">Claude · Codex · Qwen<span class="n">3</span></div><div class="it">Telegram · GitHub<span class="n">2</span></div><div class="it">Разработчик</div>
+        </div>
+        <div class="pane on" data-pane="notif">
+          <div><h3>Уведомления</h3><p class="d">Будить имеет право только то, что срочно, требует действия и не может подождать. Пульс и «идёт» — никогда.</p></div>
+          <div class="rows">
+            <div class="row head"><span>событие</span><span>канал</span></div>
+            <div class="row"><div><b>Нужно ваше решение</b><small>стоп-случай, подпись, выбор модели при лимите</small></div><span class="seg"><span>Выкл</span><span>В приложении</span><span>Мессенджер</span><span class="on">Оба</span></span></div>
+            <div class="row"><div><b>Агент завершил задачу</b><small>сдача ревьюеру, вливание</small></div><span class="seg"><span>Выкл</span><span class="on">В приложении</span><span>Мессенджер</span><span>Оба</span></span></div>
+            <div class="row"><div><b>Лимит подписки 80 %</b><small>Claude, Codex; при 100 % — всегда</small></div><span class="seg"><span>Выкл</span><span>В приложении</span><span>Мессенджер</span><span class="on">Оба</span></span></div>
+            <div class="row"><div><b>Сбой прогона</b><small>упал тест или проверка; повтор не считается</small></div><span class="seg"><span>Выкл</span><span>В приложении</span><span class="on">Мессенджер</span><span>Оба</span></span></div>
+            <div class="row"><div><b>Пульс, keepalive, «идёт»</b><small>никогда не будит; видно в строке состояния</small></div><span class="seg"><span class="on">Выкл</span><span style="color:var(--line2)">В приложении</span><span style="color:var(--line2)">Мессенджер</span><span style="color:var(--line2)">Оба</span></span></div>
+            <div class="rcpt">✓ применено везде · 04.10 04:50 · действует со следующего хода каждой роли</div>
+          </div>
+          <div class="rows">
+            <div class="row"><div><b>Умные уведомления</b><small>не слать в мессенджер, пока вы активны в приложении последние 5 минут</small></div><span class="tog on"></span></div>
+            <div class="row"><div><b>Тихие часы</b><small>23:00 – 08:00 · копится в «Пока вас не было»; стоп-случаи — всё равно</small></div><span class="seg"><span>Выкл</span><span class="on">Будни</span><span>Всегда</span></span></div>
+            <div class="row"><div><b>Мессенджер</b><small>куда слать: Telegram @Serge_Kost · бот @harness_autoiflow_bot</small></div><span class="btn sm">Проверить</span></div>
+            <div class="rcpt pend">● изменено · не применено — <span class="btn sm p" style="margin-left:4px">Применить везде</span></div>
+          </div>
+        </div>
+
+        <div class="pane" data-pane="rights">
+          <div><h3>Разрешения и стоп-случаи</h3><p class="d">Что агент может делать сам, где обязан спросить, что запрещено всегда. Задаётся на роль; смена модели прав не меняет.</p></div>
+          <div class="rows">
+            <div class="row"><div><b>Свобода по умолчанию для новой роли</b><small>можно переопределить у каждого места</small></div><span class="seg"><span>спрашивать всё</span><span class="on">спрашивать стоп-случаи</span><span>только сообщать</span></span></div>
+            <div class="row"><div><b>Кто решает в ваше отсутствие</b><small>заместитель — по правилам делегирования; стоп-случаи ждут вас</small></div><span class="seg"><span>только вы</span><span class="on">заместитель на ночь</span></span></div>
+            <div class="row"><div><b>Окно отсутствия</b><small>06:00–13:00 МСК · копится в «Пока вас не было»</small></div><span class="seg"><span class="on">задать</span><span>выключить</span></span></div>
+          </div>
+          <div class="rows">
+            <div class="row head"><span>стоп-случаи — всегда спрашивают вас, даже при «только сообщать»</span><span>вкл</span></div>
+            <div class="row"><div><b>Снос или перезапись данных вне рабочей копии</b></div><span class="tog on"></span></div>
+            <div class="row"><div><b>Расход больше 5 % недели за один ход</b></div><span class="tog on"></span></div>
+            <div class="row"><div><b>Секреты, ключи, доступы</b></div><span class="tog on"></span></div>
+            <div class="row"><div><b>Необратимое наружу: push, публикация, платёж, письмо</b></div><span class="tog on"></span></div>
+            <div class="row"><div><b>Выход за папку проекта</b></div><span class="tog on"></span></div>
+            <div class="row"><div><b>Установка ПО на машину</b></div><span class="tog"></span></div>
+            <div class="rcpt">✓ применено везде · 04.10 04:50 · действует со следующего хода каждой роли</div>
+          </div>
+          <div class="rows">
+            <div class="row head"><span>права по ролям — подробности в карточке</span><span></span></div>
+            <div class="row click" data-role="worker"><div><b>Воркер</b><small>правит сам в своей копии · push запрещён</small></div><span style="color:var(--ink3)">›</span></div>
+            <div class="row click" data-role="review"><div><b>Ревьюер</b><small>только чтение · отвечает в канал</small></div><span style="color:var(--ink3)">›</span></div>
+            <div class="row click" data-role="orch"><div><b>Оркестратор</b><small>выдаёт задачи · код не пишет</small></div><span style="color:var(--ink3)">›</span></div>
+          </div>
+        </div>
+
+        <div class="pane" data-pane="budget">
+          <div><h3>Бюджет и выключатель</h3><p class="d">Единица — процент недели у подписок, доллары и токены у ключей. У каждого порога — что произойдёт при достижении.</p></div>
+          <div class="rows">
+            <div class="row"><div><b>Предупреждать при</b><small>сообщение в приложении и в мессенджере</small></div><span class="seg"><span>70 %</span><span class="on">80 %</span><span>90 %</span></span></div>
+            <div class="row"><div><b>При 95 % недели</b><small>сигнал — только сообщить; ограничитель — остановить всё, кроме оркестратора</small></div><span class="seg"><span>95 % · сигнал</span><span class="on">95 % · ограничитель</span><span>не задан</span></span></div>
+            <div class="row"><div><b>Цена одного хода вслух</b><small>перед запуском дороже порога — назвать цену и ждать «да»</small></div><span class="seg"><span>всегда</span><span class="on">требовать только по &gt; 2 %</span><span>никогда</span></span></div>
+            <div class="row"><div><b>Бюджет этапа</b><small>карта блоков L1 · израсходовано 14,2 % из 20 %</small></div><span class="btn sm">Изменить</span></div>
+            <div class="rcpt pend">● изменено · не применено — <span class="btn sm p" style="margin-left:4px">Применить везде</span></div>
+          </div>
+          <div class="rows">
+            <div class="row"><div><b>Выключатель</b><small>останавливает все места сразу; идущие прогоны завершают шаг и встают; ничего не теряется</small></div><span class="btn sm" id="kill" style="cursor:pointer;border-color:rgba(163,48,75,.5);color:var(--bad)">Стоп всем…</span></div>
+            <div class="row"><div><b>Кто может включить обратно</b><small>только вы; заместитель — нет</small></div><span class="seg"><span class="on">только вы</span><span>вы и заместитель</span></span></div>
+          </div>
+        </div>
+      </div></div>
+    </section>
+  </div><div class="cap"><span>06 · настройки · живое меню · уведомления / разрешения / бюджет · права роли карточкой</span><span>1280 × 860</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (set): пять разделов одного экрана → по панели на раздел. На месте: свобода по умолчанию (3 варианта), 6 стоп-случаев тумблерами, «только вы / заместитель на ночь», окно 06:00–13:00 (задать / выключить), порог 70 / 80 / 90 %, «95 % · сигнал / ограничитель / не задан», «требовать только по…», квитанции «применено» и «не применено → Применить везде», область «разговор · проект · везде». «Память и правила» (таблица 4) → отдельный экран 16; «Остальные разделы» → пункты левого меню.</div></div>
+
+  <div class="frame"><div class="app free" style="height:auto">
+    <div class="mcap">меню профиля · три глубины одного меню</div>
+    <div class="menus">
+      <div class="menu">
+        <div class="usr"><span class="av">S<i></i></span><div><b>Serge</b><small>9616166@gmail.com</small></div></div>
+        <div class="plan"><div class="l"><span>Claude Max · неделя</span><a>Управлять ›</a></div><div class="bar"><i style="width:62%"></i></div><small>62 % использовано · сброс вт 03:00</small></div>
+        <div class="sep"></div>
+        <div class="mi"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg>Проекты<span class="chev">›</span></div>
+        <div class="mi"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Облик<span class="chev">A · Графит ›</span></div>
+        <div class="mi"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="M7 10h2M11 10h2M15 10h2M7 14h10"/></svg>Клавиши<span class="k">⌘/</span></div>
+        <div class="mi"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>Настройки<span class="k">⌘,</span></div>
+        <div class="sep"></div>
+        <div class="mi dim"><svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M19 4v16"/></svg>Выйти</div>
+      </div>
+      <div class="menu">
+        <div class="lbl">проекты</div>
+        <div class="ws"><span class="sq">O</span>OMG<span class="chk">✓</span></div>
+        <div class="ws"><span class="sq">H</span>HARNESS</div>
+        <div class="ws"><span class="sq">P</span>Принтер Brother</div>
+        <div class="sep"></div>
+        <div class="mi"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Создать проект</div>
+        <div class="mi dim"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/></svg>Комната без папки</div>
+      </div>
+      <div class="menu">
+        <div class="lbl">облик</div>
+        <div class="mi">Как в системе</div>
+        <div class="mi on">A · Графит<span class="chk">✓</span></div>
+        <div class="mi">B · Диспетчерская</div>
+        <div class="mi">C · Студия · светлый</div>
+        <div class="sep"></div>
+        <div class="mi"><span>Меньше анимации</span><span class="tog" style="margin-left:auto;width:30px;height:18px"></span></div>
+        <div class="mi"><span>Переход между обликами</span><span class="k">дизеринг</span></div>
+      </div>
+    </div>
+  </div><div class="cap"><span>07 · меню профиля · план и использование · проекты · облик</span><span>три глубины</span></div></div>
+</div><script src="app.js"></script>
+<script>
+(function(){
+  const {kv,blk,acts}=HX;
+  document.querySelectorAll('.snav .it[data-p]').forEach(it=>it.addEventListener('click',()=>{ HX.close(); document.querySelectorAll('.snav .it').forEach(x=>x.classList.toggle('on',x===it)); document.querySelectorAll('.pane').forEach(pn=>pn.classList.toggle('on',pn.dataset.pane===it.dataset.p)); document.querySelector('.top .st').textContent=it.firstChild.textContent.toLowerCase()+' · область: везде'; }));
+  document.querySelectorAll('.pane .seg').forEach(s=>s.addEventListener('click',e=>{ const sp=e.target.closest('span'); if(sp&&sp.parentElement===s) s.querySelectorAll('span').forEach(x=>x.classList.toggle('on',x===sp)); }));
+  document.querySelectorAll('.pane .tog').forEach(g=>g.addEventListener('click',()=>g.classList.toggle('on')));
+  const RL={worker:['Воркер',['править код в своей копии','запускать тесты через очередь','коммитить в свою ветку'],['отход от договора','новая зависимость','правка общего движка'],['push и merge','секреты и доступы','снос данных вне копии']],
+    review:['Ревьюер',['читать код и договор','отвечать в канал','ставить оценку и возврат'],['третий возврат подряд — к вам'],['править код','запускать прогоны','менять план']],
+    orch:['Оркестратор',['выдавать и принимать задачи','писать в канал и вам','запускать пробу движка'],['живой проход','расход > 5 % недели за ход','смена состава'],['править код','push, публикация, платёж','снос данных']]};
+  const li=a=>'<ul>'+a.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+  HX.bind('.row[data-role]',el=>{const r=RL[el.dataset.role]; return '<div class="from">раскрытая карточка · права роли</div><div class="ch"><h3>'+r[0]+' · права</h3></div><div class="csub">действует для всех мест с этой ролью в проекте OMG · область можно сузить до места</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">'+blk('может сам',li(r[1]))+blk('обязан спросить',li(r[2]))+blk('запрещено всегда',li(r[3]))+'</div>'+blk('где действует','<div class="opt"><div>Область<small>роль целиком или одно место</small></div><span class="seg"><span data-pick>это место</span><span class="on" data-pick>проект OMG</span><span data-pick>везде</span></span></div>')+acts([['Применить','p','data-close'],'Добавить правило','Сбросить к умолчанию']);},{h:520});
+  HX.bind('#kill',()=>'<div class="from">выключатель · шаг <span data-stepn>1</span> из 2</div><div class="steps"><i class="on"></i><i></i></div>'+
+    '<div data-step="1" class="fh"><h4>Что остановится</h4><p>Шесть мест встанут после текущего шага; прогоны не обрываются на середине.</p>'+blk('сейчас работает',kv([['воркер 1','integration · доведёт шаг и встанет'],['воркер 2','W5 · сохранит черновик'],['ревьюер','ждёт вас · без изменений'],['очередь прогонов','новые не стартуют']]))+'<div class="ft"><span class="btn ghost" data-close>Отмена</span><span class="btn p" data-go="2" style="margin-left:auto">Дальше</span></div></div>'+
+    '<div data-step="2" class="fh"><h4>Остановить всех?</h4><p>Включить обратно сможете только вы. Ничего не теряется: ветки, черновики и очередь остаются.</p><div class="ft"><span class="btn ghost" data-go="1">Назад</span><span class="btn" data-close style="margin-left:auto;border-color:rgba(163,48,75,.5);color:var(--bad)">Стоп всем</span></div></div>',{w:600,h:430,hide:false});
+})();
+</script>
+</body></html>

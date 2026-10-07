@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness • Человечный рабочий стол для моделей (Award 2026-2027)</title>
+<style>
+:root {
+  --bg-app: #0c0e12;
+  --bg-sidebar: #111419;
+  --bg-panel: #151820;
+  --bg-card: #1a1e28;
+  --bg-hover: #222735;
+  --bg-input: #101217;
+
+  --border: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(143, 129, 255, 0.45);
+  
+  --text-main: #f3f5f8;
+  --text-muted: #8e95a5;
+  --text-faint: #565d6d;
+
+  --accent-ai: #8f81ff;
+  --accent-ok: #3ddc97;
+  --accent-warn: #f2b04b;
+  --accent-info: #5ab0ff;
+  --accent-bad: #ff6b6b;
+
+  --font-ui: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Display", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-main);
+  background-color: var(--bg-app);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════ HEADER: MAC OS CHROME & CONTEXT ═══════ */
+.app-header {
+  height: 46px;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  user-select: none;
+  z-index: 10;
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.traffic-lights {
+  display: flex;
+  gap: 7px;
+}
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.dot-red { background: #ff5f56; }
+.dot-yellow { background: #ffbd2e; }
+.dot-green { background: #27c93f; }
+
+.app-title {
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.project-tag {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: rgba(61,220,151,0.08);
+  border: 1px solid rgba(61,220,151,0.25);
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-ok);
+  box-shadow: 0 0 6px var(--accent-ok);
+}
+.model-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-ai);
+  cursor: pointer;
+}
+
+/* ═══════ MAIN WORKSPACE: UNIFIED SPLIT ═══════ */
+.workspace {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* LEFT COLUMN: DIALOG & ACTIVE ACTIONS (42%) */
+.left-pane {
+  width: 44%;
+  min-width: 420px;
+  max-width: 600px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Pending Decision Hero Card */
+.decision-hero {
+  margin: 16px 16px 0;
+  background: linear-gradient(145deg, #1d212b, #151821);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.decision-hero.resolved {
+  display: none;
+}
+.hero-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent-warn);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hero-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.35;
+}
+
+/* 7 Invariants Box */
+.invariants-clean {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 12px;
+  font-size: 11.5px;
+}
+.inv-line {
+  display: flex;
+  flex-direction: column;
+}
+.inv-k {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.inv-v {
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inv-v code {
+  font-family: var(--font-mono);
+  color: var(--accent-info);
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4px;
+}
+.btn-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 120ms ease;
+}
+.btn-green {
+  background: var(--accent-ok);
+  color: #062315;
+}
+.btn-green:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover {
+  background: var(--bg-hover);
+}
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.25);
+}
+
+/* Chat Stream */
+.chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.chat-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chat-author {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chat-text {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-main);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+.bubble-user .chat-text {
+  background: var(--bg-card);
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* DeepSeek-R1 Thought Accordion */
+.thought-card {
+  background: rgba(143, 129, 255, 0.05);
+  border: 1px solid rgba(143, 129, 255, 0.2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.thought-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent-ai);
+  cursor: pointer;
+  background: rgba(143, 129, 255, 0.08);
+}
+.thought-body {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  line-height: 1.5;
+  border-top: 1px solid rgba(143, 129, 255, 0.1);
+}
+
+/* Tool execution badge */
+.tool-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+}
+
+/* Bottom Floating Composer */
+.composer-box {
+  padding: 14px 16px;
+  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.composer-input-wrap {
+  display: flex;
+  align-items: flex-end;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  gap: 8px;
+}
+.composer-input-wrap:focus-within {
+  border-color: var(--border-focus);
+}
+.composer-textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  color: #fff;
+  resize: none;
+  height: 48px;
+  line-height: 1.4;
+}
+.btn-send {
+  background: var(--accent-ai);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* RIGHT COLUMN: INTERACTIVE CANVAS (56%) */
+.right-pane {
+  flex: 1;
+  background: var(--bg-app);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Canvas Tabs: 4 Spaces */
+.canvas-tabs {
+  height: 44px;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+.tabs-switcher {
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  gap: 2px;
+}
+.c-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: all 120ms ease;
+}
+.c-tab:hover {
+  color: var(--text-main);
+  background: var(--bg-hover);
+}
+.c-tab.active {
+  background: var(--bg-card);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.canvas-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+.tab-view {
+  display: none;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+.tab-view.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* TAB 1: LIVE PRODUCT WEBVIEW */
+.product-frame-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+}
+.browser-bar {
+  height: 36px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 10px;
+  font-size: 11.5px;
+}
+.browser-url {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 3px 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.browser-iframe {
+  flex: 1;
+  border: none;
+  background: #0b0d12;
+}
+
+/* TAB 2: CODE & SYNTAX DIFF */
+.diff-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #080a0d;
+}
+.diff-toolbar {
+  height: 40px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+.diff-lines-wrap {
+  flex: 1;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 12px 0;
+}
+.d-line {
+  display: flex;
+  padding: 1px 16px;
+  white-space: pre-wrap;
+}
+.d-add { background: rgba(61, 220, 151, 0.08); color: #56f2aa; }
+.d-del { background: rgba(255, 107, 107, 0.08); color: #ff8585; }
+.d-hunk { background: rgba(143, 129, 255, 0.1); color: var(--accent-ai); padding: 4px 16px; font-weight: 600; }
+.d-num { width: 44px; color: var(--text-faint); text-align: right; padding-right: 14px; user-select: none; }
+
+.test-summary-bar {
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+/* TAB 3: OPERATION MAP (n8n DAG) */
+.map-screen-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app);
+}
+.ladder-bar {
+  height: 38px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 8px;
+  overflow-x: auto;
+}
+.ladder-pill {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ladder-pill.active {
+  border-color: var(--accent-ai);
+  color: #fff;
+  background: rgba(143,129,255,0.12);
+}
+.map-canvas-area {
+  flex: 1;
+  position: relative;
+  overflow: auto;
+  background: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px) 0 0/18px 18px;
+  padding: 24px;
+}
+.map-grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+.map-node-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.map-node-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-focus);
+}
+.node-kind-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  align-self: flex-start;
+}
+
+/* TAB 4: TASKS ROSTER */
+.tasks-screen-wrap {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.task-row-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  transition: all 120ms ease;
+}
+.task-row-card:hover {
+  border-color: rgba(255,255,255,0.15);
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════ HEADER ═══════ -->
+<header class="app-header">
+  <div class="header-left">
+    <div class="traffic-lights">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+    </div>
+    <div class="app-title">
+      <span>⚡ Harness</span>
+      <span class="project-tag">OMG-Dev / main</span>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <div class="status-pill">
+      <span class="status-dot"></span>
+      <span>3 агента на связи · Рубеж L3 (76/96 влито)</span>
+    </div>
+    <div class="model-selector" onclick="cycleModel()">
+      <span>✦</span>
+      <span id="active-model-label">Claude 3.7 Sonnet</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════ WORKSPACE ═══════ -->
+<main class="workspace">
+
+  <!-- LEFT PANE: ДИАЛОГ & АКТИВНЫЕ ДЕЙСТВИЯ -->
+  <aside class="left-pane">
+    
+    <!-- Hero Decision Card (When model needs human input) -->
+    <div class="decision-hero" id="hero-decision-card">
+      <div class="hero-tag">
+        <span>⚠️</span>
+        <span>ТРЕБУЕТСЯ ВАШЕ ПОДТВЕРЖДЕНИЕ · РУБЕЖ L3</span>
+      </div>
+      
+      <div class="hero-title">
+        Задача Q2: Прямой вход #/om-map и изоляция витрины в OmMapScreen.tsx
+      </div>
+
+      <!-- Clean 7 Invariants Card -->
+      <div class="invariants-clean">
+        <div class="inv-line">
+          <span class="inv-k">📍 ГДЕ</span>
+          <span class="inv-v"><code>src/sections/om-map/OmMapScreen.tsx</code></span>
+        </div>
+        <div class="inv-line">
+          <span class="inv-k">⚡ ЧТО</span>
+          <span class="inv-v">Хэш-роутер #/om-map без релоада</span>
+        </div>
+        <div class="inv-line">
+          <span class="inv-k">🎯 ЗАЧЕМ</span>
+          <span class="inv-v">Прямой вход на Карту ОМ по ссылке</span>
+        </div>
+        <div class="inv-line">
+          <span class="inv-k">⏱️ КОГДА</span>
+          <span class="inv-v">Рубеж L3 · Блокирует сдачу</span>
+        </div>
+        <div class="inv-line">
+          <span class="inv-k">📦 ОЖИДАЕМ</span>
+          <span class="inv-v">8/8 тестов OK · Плавный переход</span>
+        </div>
+        <div class="inv-line">
+          <span class="inv-k">⚠️ РИСКИ</span>
+          <span class="inv-v">Низкие (чистая изоляция)</span>
+        </div>
+      </div>
+
+      <div class="hero-actions">
+        <div class="btn-group">
+          <button class="btn btn-green" onclick="approveCurrentTask()">
+            <span>✓ Одобрить слияние</span>
+            <span class="kbd">Space</span>
+          </button>
+          <button class="btn btn-ghost" onclick="switchCanvasTab('code')">
+            <span>Смотреть дифф</span>
+          </button>
+          <button class="btn btn-ghost" onclick="rejectCurrentTask()">
+            <span>Отклонить</span>
+          </button>
+        </div>
+        <span style="font-size:11px; color:var(--accent-ok); white-space:nowrap; font-weight:600; padding-left:6px;">● Vitest 8/8 OK</span>
+      </div>
+    </div>
+
+    <!-- Conversation Feed -->
+    <div class="chat-scroll" id="chat-feed">
+      
+      <!-- Message from Architect -->
+      <div class="chat-bubble">
+        <div class="chat-author">
+          <span style="color:var(--accent-ai);">✦ Architect (Claude 3.7 + Codex)</span>
+          <span>14:15</span>
+        </div>
+
+        <!-- DeepSeek-R1 Thought Accordion -->
+        <div class="thought-card">
+          <div class="thought-toggle" onclick="toggleThought()">
+            <span>▸ Мышление модели (DeepThink: 14с)</span>
+            <span id="thought-arrow">▾</span>
+          </div>
+          <div class="thought-body" id="thought-text">
+            1. Проверил текущий роутер: переход на #/om-map вызывал перезагрузку всего приложения.<br>
+            2. Добавил слушатель hashchange с локальным переключением состояния currentView.<br>
+            3. Запустил Vitest: все 8 тестов витрины успешно пройдены.<br>
+            4. Сверил с 5 проходами Конституции: пути закрыты, отказы типизированы.
+          </div>
+        </div>
+
+        <div class="chat-text">
+          Я подготовил коммит <code>f3bf191</code>: подключил прямой хэш-маршрут <code>#/om-map</code> в витрине и проверил рендеринг. Все тесты пройдены.<br><br>
+          Справа на холсте открыт живой работающий продукт — можете проверить нативно.
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:4px;">
+          <span class="tool-badge">📄 Edited OmMapScreen.tsx (+26 -18)</span>
+          <span class="tool-badge" style="color:var(--accent-ok);">✓ Vitest 8/8 passed</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Floating Composer -->
+    <div class="composer-box">
+      <div class="composer-input-wrap">
+        <textarea class="composer-textarea" id="chat-composer-input" placeholder="Напишите поручение модели... (например: обнови тесты или открой задачу D8.4d)"></textarea>
+        <button class="btn-send" onclick="sendChatPrompt()">Отправить ↵</button>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- RIGHT PANE: ИНТЕРАКТИВНЫЙ ХОЛСТ (CANVAS) -->
+  <section class="right-pane">
+    
+    <!-- Canvas Switcher (The 4 Spaces) -->
+    <div class="canvas-tabs">
+      <div class="tabs-switcher">
+        <button class="c-tab active" id="tab-btn-product" onclick="switchCanvasTab('product')">
+          <span>🚀 1. Продукт (:3000)</span>
+        </button>
+        <button class="c-tab" id="tab-btn-code" onclick="switchCanvasTab('code')">
+          <span>💻 2. Код и Дифф</span>
+        </button>
+        <button class="c-tab" id="tab-btn-map" onclick="switchCanvasTab('map')">
+          <span>🗺️ 3. Карта ОМ</span>
+        </button>
+        <button class="c-tab" id="tab-btn-tasks" onclick="switchCanvasTab('tasks')">
+          <span>📋 4. Задачи рубежа (9)</span>
+        </button>
+      </div>
+
+      <div style="font-size:11.5px; color:var(--text-muted); font-family:var(--font-mono);">
+        localhost:3000/#/om-map
+      </div>
+    </div>
+
+    <!-- Canvas Views Container -->
+    <div class="canvas-content">
+      
+      <!-- VIEW 1: LIVE RUNNING PRODUCT -->
+      <div class="tab-view active" id="view-product">
+        <div class="product-frame-wrap">
+          <div class="browser-bar">
+            <span style="color:var(--accent-ok); font-size:12px;">● LIVE</span>
+            <div class="browser-url">http://localhost:3000/#/om-map</div>
+            <button class="btn btn-ghost" style="padding:2px 8px; font-size:11px;" onclick="reloadBrowserFrame()">🔄 Обновить</button>
+          </div>
+          <iframe class="browser-iframe" id="product-iframe" src="http://localhost:3000/#/om-map"></iframe>
+        </div>
+      </div>
+
+      <!-- VIEW 2: CODE & SYNTAX DIFF -->
+      <div class="tab-view" id="view-code">
+        <div class="diff-screen">
+          <div class="diff-toolbar">
+            <span style="font-family:var(--font-mono); font-size:12.5px; color:var(--accent-info);">OmMapScreen.tsx (коммит f3bf191)</span>
+            <button class="btn btn-green" onclick="approveCurrentTask()">✓ Влить коммит (Space)</button>
+          </div>
+
+          <div class="diff-lines-wrap">
+            <div class="d-hunk">@@ -35,18 +35,26 @@ export function OmMapScreen() {</div>
+            <div class="d-line d-del"><span class="d-num">35</span>- const defaultHash = window.location.pathname;</div>
+            <div class="d-line d-add"><span class="d-num">35</span>+ // Прямой вход по адресу http://localhost:3000/#/om-map</div>
+            <div class="d-line d-add"><span class="d-num">36</span>+ const isOmMap = window.location.hash === '#/om-map';</div>
+            <div class="d-line d-add"><span class="d-num">37</span>+ const [currentView, setCurrentView] = useState(isOmMap ? 'om-map' : 'feed');</div>
+            <div class="d-line"><span class="d-num">38</span>   useEffect(() => {</div>
+            <div class="d-line"><span class="d-num">39</span>     const onHashChange = () => {</div>
+            <div class="d-line d-add"><span class="d-num">40</span>+      if (window.location.hash === '#/om-map') setCurrentView('om-map');</div>
+            <div class="d-line d-del"><span class="d-num">41</span>-      else setCurrentView('feed');</div>
+            <div class="d-line"><span class="d-num">42</span>     };</div>
+            <div class="d-line"><span class="d-num">43</span>     window.addEventListener('hashchange', onHashChange);</div>
+            <div class="d-line"><span class="d-num">44</span>     return () => window.removeEventListener('hashchange', onHashChange);</div>
+            <div class="d-line"><span class="d-num">45</span>   }, []);</div>
+          </div>
+
+          <div class="test-summary-bar">
+            <span style="color:var(--accent-ok); font-weight:700;">● Vitest: 8/8 тестов успешно пройдено (0.19s)</span>
+            <div style="color:var(--text-muted); display:flex; gap:12px;">
+              <span>ПУТИ: ✓</span> <span>ОТСУТСТВИЕ: ✓</span> <span>МАСКАРАД: ✓</span> <span>ОКНА: ✓</span> <span>СОСЕДИ: ✓</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 3: OPERATION MAP (n8n DAG CARDS) -->
+      <div class="tab-view" id="view-map">
+        <div class="map-screen-wrap">
+          <div class="ladder-bar">
+            <div class="ladder-pill active">L0 · стадии продукта</div>
+            <div class="ladder-pill">R0 · исследование</div>
+            <div class="ladder-pill">L1 · карта блоков</div>
+            <div class="ladder-pill">R1 · исследование блоков</div>
+            <div class="ladder-pill">L2 · операции</div>
+            <div class="ladder-pill">L3 · атомарные работы</div>
+          </div>
+
+          <div class="map-canvas-area">
+            <div class="map-grid-cards" id="nodes-grid-wrap"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 4: MILESTONE TASKS (9) -->
+      <div class="tab-view" id="view-tasks">
+        <div class="tasks-screen-wrap" id="tasks-list-wrap"></div>
+      </div>
+
+    </div>
+
+  </section>
+
+</main>
+
+<script>
+// Real data injection
+const r2Nodes = [{"id": "n-product", "kind": "product", "parent": null, "title": "OMG: сохраняемый путь от идеи к полезному изменению", "purpose": "Предложение исследователя о целевом продукте, не описание готовой реализации и не новое решение владельца. Карта раскрывает весь продукт на L1. Ближайший проход последовательный через CLI/API; параллельность, отложенное исполнение и UI остаются будущими возможностями. Контрактные блоки описывают продукт, а не дополнительные процедуры разработки.", "benefit": "Полезное проверенное изменение с сохраняемыми основаниями и понятным продолжением.", "outcome": "persistent-through-run", "beneficiary": "owner", "boundary": {"authority": "owner", "provider": false, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": [], "tests": [], "code": [], "ports": []}, {"id": "n-intake", "kind": "block", "parent": "n-product", "title": "Приём поручения через CLI/API", "purpose": "Принять идею и доступный репозиторий, определить проект и запуск, сохранить существующие основания полномочий. Повтор команды адресует существующий запуск. Все входы защищённого действия используют общие ограничения.", "benefit": "Начало работы без внутренних анкет и ручного создания карточек.", "outcome": "a-mandate", "beneficiary": "owner", "boundary": {"authority": "owner", "provider": false, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-idea-to-change", "req-live-small-horizon", "req-idempotent-action", "req-modularity-and-authority"], "tests": [], "code": [], "ports": [{"contract": "ct-mandate", "direction": "out", "id": "out"}]}, {"id": "n-state", "kind": "block", "parent": "n-product", "title": "Каноническая SQLite и согласованные версии", "purpose": "Единственный модуль записи канонических исследований, стадий, одной карты, плана, попыток и результатов. Предоставляет адресное чтение и разрешение полных версионных ссылок. Все производители сохраняют результат через эту границу; чтение предыдущих версий не зависит от будущих записей текущего действия. Проекции воспроизводимы; история сохраняет смысл своей эры.", "benefit": "Состояние переживает процесс и не расходится с файловой проекцией.", "outcome": "a-canon", "beneficiary": "operator", "boundary": {"authority": "owner", "provider": false, "rollback": "n-backup", "state": "durable", "writer": "n-state"}, "implements": ["req-sqlite-canonical", "req-history-and-future", "req-modularity-and-authority"], "tests": [], "code": [], "ports": [{"contract": "ct-mandate", "direction": "in", "id": "mandate"}, {"contract": "ct-canon", "direction": "out", "id": "out"}]}, {"id": "n-runtime", "kind": "block", "parent": "n-product", "title": "Разрешённая среда и адаптеры", "purpose": "Определить доступность репозитория, Git, процессов, проверок и настроенных моделей в существующей разрешённой конфигурации. Различать технический отказ и отсутствие полномочий. Секреты не передаются в диагностику или контекст.", "benefit": "Понятная техническая причина остановки и разрешённое продолжение.", "outcome": "a-runtime", "beneficiary": "operator", "boundary": {"authority": "owner", "provider": false, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-modularity-and-authority", "req-owner-question-or-pause", "req-live-small-horizon"], "tests": [], "code": [], "ports": [{"contract": "ct-mandate", "direction": "in", "id": "mandate"}, {"contract": "ct-runtime", "direction": "out", "id": "out"}]}, {"id": "n-control", "kind": "block", "parent": "n-product", "title": "Запуск, повтор, остановка и возобновление", "purpose": "Вычислить действие по каноническим результатам и зависимостям; атомарно определить активную попытку. Сохранить остановку конкретного запуска, прекратить новые зависимые действия и воздействовать только на принадлежащие ему процессы. Неопределённый внешний эффект сначала восстановить.", "benefit": "Продолжение без повторного поручения, дублирующих вызовов и чужих остановленных процессов.", "outcome": "a-action", "beneficiary": "operator", "boundary": {"authority": "owner", "provider": false, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-resume-canonical-run", "req-idempotent-action", "req-scoped-stop", "req-git-effect-recovery"], "tests": [], "code": [], "ports": [{"contract": "ct-canon", "direction": "in", "id": "canon"}, {"contract": "ct-runtime", "direction": "in", "id": "runtime"}, {"contract": "ct-action", "direction": "out", "id": "out"}]}, {"id": "n-results", "kind": "block", "parent": "n-product", "title": "Каталог пригодных самостоятельных результатов", "purpose": "Прочитать уже сохранённые точные версии исследований, discovery, концепции, карты, ТЗ, фич, уточнений и коммитов. Отделить самостоятельно полезный результат от изменяемого кандидата. Передать область применения, разрешённых потребителей и оставшуюся работу. Новые записи становятся входами следующего действия после сохранения; обратной немедленной зависимости от будущего результата нет.", "benefit": "Подготовка повторно использует пригодные сведения и самостоятельные части без ложного общего завершения.", "outcome": "a-results", "beneficiary": "pipeline-consumer", "boundary": {"authority": "owner", "provider": false, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-autonomous-discovery", "req-deferred-and-partial", "req-history-and-future", "req-sqlite-canonical"], "tests": [], "code": [], "ports": [{"contract": "ct-canon", "direction": "in", "id": "canon"}, {"contract": "ct-results", "direction": "out", "id": "out"}]}, {"id": "n-research", "kind": "block", "parent": "n-product", "title": "Адресное исследование и происхождение оснований", "purpose": "Исследовать существенный пробел конкретного потребителя по доступным источникам и коду. Переиспользовать применимые ответы, сохранять релевантные доказательства и различать факт, предложение и существующее решение. Конфликт блокирует только зависимый вывод. После исследования адресовать владельцу лишь существенный недоступный факт или необходимое решение; технический отказ сохранить отдельно.", "benefit": "Достаточные основания без повторных вопросов об известном и без подмены происхождения.", "outcome": "autonomous-knowledge", "beneficiary": "researcher", "boundary": {"authority": "owner", "provider": true, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-autonomous-discovery", "req-evidence-and-origin", "req-owner-question-or-pause"], "tests": [], "code": [], "ports": [{"contract": "ct-canon", "direction": "in", "id": "canon"}, {"contract": "ct-runtime", "direction": "in", "id": "runtime"}, {"contract": "ct-action", "direction": "in", "id": "action"}, {"contract": "ct-results", "direction": "in", "id": "results"}, {"contract": "ct-knowledge", "direction": "out", "id": "out"}]}, {"id": "n-discovery", "kind": "block", "parent": "n-product", "title": "Discovery участников, результатов и сценариев", "purpose": "Сформировать содержательную модель участников, результатов, применимых сценариев, ограничений и адресных неизвестных. Использовать точные основания поручения и исследований. Неполную потребность вернуть исследованию.", "benefit": "Концепция получает связанные потребности вместо пустой формы.", "outcome": "a-discovery", "beneficiary": "pipeline-consumer", "boundary": {"authority": "owner", "provider": true, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-stage-chain", "req-autonomous-discovery", "req-requirement-traceability"], "tests": [], "code": [], "ports": [{"contract": "ct-knowledge", "direction": "in", "id": "knowledge"}, {"contract": "ct-discovery", "direction": "out", "id": "out"}]}, {"id": "n-concept", "kind": "block", "parent": "n-product", "title": "Концепция и устойчивые требования", "purpose": "Связать устойчивые требования с пользой, получателем, результатом discovery и наблюдаемыми критериями. Не объявлять целевое свойство фактом реализации. Сохранять идентичность требований при уточнении.", "benefit": "Карта и ТЗ получают объяснимые обязательства продукта.", "outcome": "a-concept", "beneficiary": "pipeline-consumer", "boundary": {"authority": "owner", "provider": true, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-stage-chain", "req-requirement-traceability"], "tests": [], "code": [], "ports": [{"contract": "ct-discovery", "direction": "in", "id": "discovery"}, {"contract": "ct-concept", "direction": "out", "id": "out"}]}, {"id": "n-map", "kind": "block", "parent": "n-product", "title": "Одна L1 полного продукта", "purpose": "Связать весь продукт блоками, контрактами, производителями, потребителями, зависимостями и маршрутами отказа. Покрыть требования и сценарии, обозначить будущее. Последующие версии обогащают ту же карту; изменение смысла контракта не маскируется прежним идентификатором.", "benefit": "Целостные границы продукта при небольшом ближайшем горизонте.", "outcome": "a-map", "beneficiary": "pipeline-consumer", "boundary": {"authority": "owner", "provider": true, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-whole-product-l1", "req-requirement-traceability", "req-refine-same-map", "req-history-and-future"], "tests": [], "code": [], "ports": [{"contract": "ct-concept", "direction": "in", "id": "concept"}, {"contract": "ct-map", "direction": "out", "id": "out"}]}, {"id": "n-spec", "kind": "block", "parent": "n-product", "title": "ТЗ наблюдаемого поведения", "purpose": "По точным совместимым версиям концепции и карты определить поведение, обязательные входы, отказы и критерии. Сохранить идентичность требований и объектов карты. Неполную потребность вернуть концепции, дефект топологии — карте.", "benefit": "Фичи и уточнение получают проверяемые обязательства.", "outcome": "a-spec", "beneficiary": "pipeline-consumer", "boundary": {"authority": "owner", "provider": true, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-stage-chain", "req-requirement-traceability", "req-route-defects"], "tests": [], "code": [], "ports": [{"contract": "ct-concept", "direction": "in", "id": "concept"}, {"contract": "ct-map", "direction": "in", "id": "map"}, {"contract": "ct-spec", "direction": "out", "id": "out"}]}, {"id": "n-features", "kind": "block", "parent": "n-product", "title": "Подготовка самостоятельных фич", "purpose": "Выделить результаты фич, их потребителей, критерии и зависимости из ТЗ и той же карты. Объяснить самостоятельную пользу частей. Не создавать ручные карточки реализации.", "benefit": "Уточнение получает предметные границы малого полезного горизонта.", "outcome": "a-features", "beneficiary": "pipeline-consumer", "boundary": {"authority": "owner", "provider": true, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-stage-chain", "req-requirement-traceability", "req-deferred-and-partial"], "tests": [], "code": [], "ports": [{"contract": "ct-map", "direction": "in", "id": "map"}, {"contract": "ct-spec", "direction": "in", "id": "spec"}, {"contract": "ct-features", "direction": "out", "id": "out"}]}, {"id": "n-continuation", "kind": "block", "parent": "n-product", "title": "Передача самостоятельных частей; будущие отложенные продолжения", "purpose": "Передать точные самостоятельные результаты, включая результаты подготовки, допустимому потребителю через cn-continuation. Для обычного последовательного прохода отсутствие отложенной части явно not_applicable и не требует будущего механизма ожидания. Предложение для будущего: сохранять remaining, точные зависимости и условие пробуждения; повтор события не создаёт новую попытку. Изменённое основание возвращает затронутую часть на уточнение.", "benefit": "Потребитель получает пригодную часть с её происхождением, а исполнитель сохраняет незавершённое продолжение.", "outcome": "a-continuation", "beneficiary": "implementer", "boundary": {"authority": "owner", "provider": false, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-deferred-and-partial", "req-idempotent-action", "req-history-and-future"], "tests": [], "code": [], "ports": [{"contract": "ct-results", "direction": "in", "id": "results"}, {"contract": "ct-action", "direction": "in", "id": "action"}, {"contract": "ct-continuation", "direction": "out", "id": "out"}]}, {"id": "n-refine", "kind": "block", "parent": "n-product", "title": "Малый горизонт и уточнение той же карты", "purpose": "Выбрать небольшое полезное изменение по исследованному пробелу реального OMG. Уточнять прежние объекты через R0–R3/L1–L3 до достаточности для компиляции; данный ответ описывает только ответственность L1. Полученные самостоятельные части использовать по точным версиям и разрешённой области. Обычный not_applicable не блокирует работу; waiting блокирует лишь действительно зависимую часть.", "benefit": "Компилятор получает содержательно достаточное основание после R3 без второй карты.", "outcome": "a-refinement", "beneficiary": "pipeline-consumer", "boundary": {"authority": "owner", "provider": true, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-live-small-horizon", "req-refine-same-map", "req-history-and-future", "req-stage-chain", "req-requirement-traceability"], "tests": [], "code": [], "ports": [{"contract": "ct-knowledge", "direction": "in", "id": "knowledge"}, {"contract": "ct-map", "direction": "in", "id": "map"}, {"contract": "ct-spec", "direction": "in", "id": "spec"}, {"contract": "ct-features", "direction": "in", "id": "features"}, {"contract": "ct-continuation", "direction": "in", "id": "continuation"}, {"contract": "ct-refinement", "direction": "out", "id": "out"}]}, {"id": "n-compile", "kind": "block", "parent": "n-product", "title": "Машинный план и достаточный контекст", "purpose": "После R3 вывести задания и зависимости автоматически. Передать результат, требования, точные входы, область изменений, критерии, применимые проверки и короткий достаточный контекст с адресами подробностей. Содержательный дефект вернуть производителю; переполнение обязательного контекста сохранить как техническую паузу.", "benefit": "Пригодная прослеживаемая работа без ручных карточек и скрытой потери условий.", "outcome": "prepared-product", "beneficiary": "pipeline-consumer", "boundary": {"authority": "owner", "provider": false, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-stage-chain", "req-requirement-traceability", "req-whole-product-l1", "req-refine-same-map", "req-compile-atomic-tasks", "req-sufficient-context", "req-history-and-future"], "tests": [], "code": [], "ports": [{"contract": "ct-concept", "direction": "in", "id": "concept"}, {"contract": "ct-spec", "direction": "in", "id": "spec"}, {"contract": "ct-refinement", "direction": "in", "id": "refinement"}, {"contract": "ct-plan", "direction": "out", "id": "out"}]}, {"id": "n-schedule", "kind": "block", "parent": "n-product", "title": "Назначение работы; будущая параллельность", "purpose": "В ближайшем режиме выдать одну готовую последовательную задачу с точной попыткой и рабочей копией. Предложение для будущего: распределять совместимые задачи по изолированным копиям, учитывать данные, интерфейсы, запись, ресурсы и полномочия; конфликтующие сериализовать. cn-dispatch доставляет назначение исполнителю и условия будущей интеграции её производителю.", "benefit": "Исполнитель знает своё задание, основание и область; чужие кандидаты сохраняются.", "outcome": "a-dispatch", "beneficiary": "implementer", "boundary": {"authority": "owner", "provider": false, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-parallel-integrated-result", "req-idempotent-action", "req-compile-atomic-tasks"], "tests": [], "code": [], "ports": [{"contract": "ct-plan", "direction": "in", "id": "plan"}, {"contract": "ct-runtime", "direction": "in", "id": "runtime"}, {"contract": "ct-action", "direction": "in", "id": "action"}, {"contract": "ct-assignment", "direction": "out", "id": "out"}]}, {"id": "n-implement", "kind": "block", "parent": "n-product", "title": "Реализация назначенного результата", "purpose": "Получить машинное задание, конкретное назначение и право активной попытки. Реализовать результат в своей рабочей копии и разрешённой области, прочитать адресные основания, захватить точный кандидат. Назначение обязано соответствовать плану и попытке. Дефект подготовки вернуть производителю, кандидат при остановке сохранить.", "benefit": "Исполнитель действует по достаточному заданию и точному основанию.", "outcome": "a-candidate", "beneficiary": "implementer", "boundary": {"authority": "owner", "provider": true, "rollback": "n-recovery", "state": "durable", "writer": "n-implement"}, "implements": ["req-idea-to-change", "req-sufficient-context", "req-final-candidate-commit", "req-route-defects", "req-scoped-stop"], "tests": [], "code": [], "ports": [{"contract": "ct-plan", "direction": "in", "id": "plan"}, {"contract": "ct-action", "direction": "in", "id": "action"}, {"contract": "ct-assignment", "direction": "in", "id": "assignment"}, {"contract": "ct-candidate", "direction": "out", "id": "out"}]}, {"id": "n-check", "kind": "block", "parent": "n-product", "title": "Полный применимый прогон итогового кандидата", "purpose": "Выполнить один полный применимый прогон на итоговых байтах с учётом затронутого поведения. Сохранить предмет и результат; известное UI-исключение применять только в своей области. Дефект кода вернуть исполнителю, технический отказ сохранить отдельно.", "benefit": "Ревьюер получает результаты прогона рассматриваемого дерева.", "outcome": "a-check", "beneficiary": "reviewer", "boundary": {"authority": "owner", "provider": false, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-final-candidate-commit", "req-route-defects"], "tests": [], "code": [], "ports": [{"contract": "ct-candidate", "direction": "in", "id": "candidate"}, {"contract": "ct-runtime", "direction": "in", "id": "runtime"}, {"contract": "ct-check", "direction": "out", "id": "out"}]}, {"id": "n-review", "kind": "block", "parent": "n-product", "title": "Независимое ревью и адресация дефекта", "purpose": "Рассмотреть точный diff, контракт результата и полный прогон того же кандидата независимым агентом. Различить дефекты кода, задания и оснований; вернуть конкретному производителю. Сбой модели не является предметным вердиктом.", "benefit": "Исправляется причина дефекта, а не повторяется реализация непригодного задания.", "outcome": "a-review", "beneficiary": "owner", "boundary": {"authority": "owner", "provider": true, "rollback": "n-recovery", "state": "durable", "writer": "n-state"}, "implements": ["req-final-candidate-commit", "req-route-defects"], "tests": [], "code": [], "ports": [{"contract": "ct-plan", "direction": "in", "id": "plan"}, {"contract": "ct-candidate", "direction": "in", "id": "candidate"}, {"contract": "ct-check", "direction": "in", "id": "check"}, {"contract": "ct-runtime", "direction": "in", "id": "runtime"}, {"contract": "ct-review", "direction": "out", "id": "out"}]}, {"id": "n-publish", "kind": "block", "parent": "n-product", "title": "Обычный коммит и регистрация изменения", "purpose": "Связать итоговое дерево с полным прогоном и независимым ревью. До Git сохранить намерение, автоматически создать обычный коммит от точного ожидаемого родителя в пределах принятого плана, зарегистрировать связь в SQLite. Финальный root→main merge требует отдельного решения владельца.", "benefit": "Полезное изменение связано с проверенными байтами и точным коммитом.", "outcome": "verified-change", "beneficiary": "owner", "boundary": {"authority": "owner", "provider": false, "rollback": "n-recovery", "state": "durable", "writer": "n-publish"}, "implements": ["req-idea-to-change", "req-final-candidate-commit", "req-route-defects"], "tests": [], "code": [], "ports": [{"contract": "ct-candidate", "direction": "in", "id": "candidate"}, {"contract": "ct-check", "direction": "in", "id": "check"}, {"contract": "ct-review", "direction": "in", "id": "review"}, {"contract": "ct-intent", "direction": "out", "id": "intent"}, {"contract": "ct-change", "direction": "out", "id": "out"}]}];
+const tasksList = [{"id": "D8.4.2", "slice": "D", "title": "Общий исторический читатель research-assessment у прежних потребителей (урок 45)", "after": ["D8.4e", "Q1", "Q2", "Q2b", "B1.1", "G1.4", "B3.0b", "C5.1a", "E5"], "inMilestone": true, "status": "planned", "worker": null, "issuedAt": null, "issuedN": null, "submittedAt": null, "rounds": 0, "verdicts": [], "returns": 0, "mergedAt": null, "mergedSha": null, "events": 0, "firstAt": null, "lastAt": null, "runs": 0}, {"id": "D8.4d", "slice": "D", "title": "D8.4 · семейство 4: основания оценки — runtime, typed, L3", "after": ["D8.4c", "D8.5"], "inMilestone": true, "status": "returned", "worker": "devin-worker", "issuedAt": 1790662552000, "issuedN": 2001, "submittedAt": 1790679676000, "rounds": 1, "verdicts": [{"n": 1971, "at": 1790654022000, "type": "other"}, {"n": 2000, "at": 1790662501000, "type": "other"}, {"n": 2059, "at": 1790680097000, "type": "return"}], "returns": 1, "mergedAt": null, "mergedSha": null, "events": 14, "firstAt": 1790653463000, "lastAt": 1790680129000, "runs": 1}, {"id": "D8.4e", "slice": "D", "title": "D8.4 · семейство 5: принятие ответа и завершение исходного хода", "after": ["D8.4d"], "inMilestone": true, "status": "planned", "worker": null, "issuedAt": null, "issuedN": null, "submittedAt": null, "rounds": 0, "verdicts": [], "returns": 0, "mergedAt": null, "mergedSha": null, "events": 0, "firstAt": null, "lastAt": null, "runs": 0}, {"id": "E2.2", "slice": "E", "title": "E2: доставка причин отказа предыдущей попытки в повторный пакет вопроса", "after": ["S1.1", "Q1"], "inMilestone": true, "status": "issued", "worker": "kimi-worker", "issuedAt": 1790625595000, "issuedN": 1797, "submittedAt": null, "rounds": 0, "verdicts": [{"n": 1801, "at": 1790625832000, "type": "other"}], "returns": 0, "mergedAt": null, "mergedSha": null, "events": 6, "firstAt": 1790625595000, "lastAt": 1790675147000, "runs": 0}, {"id": "H1.2", "slice": "H", "title": "Конечный исход автономного прохода без ожидания пользователя", "after": ["H1", "H1.1"], "inMilestone": true, "status": "returned", "worker": "claude-sonnet", "issuedAt": 1790646916000, "issuedN": 1939, "submittedAt": 1790677467000, "rounds": 1, "verdicts": [{"n": 1908, "at": 1790641796000, "type": "other"}, {"n": 1995, "at": 1790660004000, "type": "other"}, {"n": 2045, "at": 1790678263000, "type": "return"}], "returns": 1, "mergedAt": null, "mergedSha": null, "events": 16, "firstAt": 1790641227000, "lastAt": 1790680278000, "runs": 1}, {"id": "H1.3", "slice": "H", "title": "Драйвер прохода и срочная остановка", "after": ["E4.1", "H1.1", "H1.2", "Q2", "S1.1"], "inMilestone": true, "status": "issued", "worker": "claude-worker", "issuedAt": 1790658263000, "issuedN": 1986, "submittedAt": null, "rounds": 0, "verdicts": [{"n": 1910, "at": 1790641995000, "type": "other"}, {"n": 1991, "at": 1790658911000, "type": "other"}], "returns": 0, "mergedAt": null, "mergedSha": null, "events": 9, "firstAt": 1790641995000, "lastAt": 1790664665000, "runs": 0}, {"id": "H2", "slice": "H", "title": "Команды блока OM в едином командном API", "after": ["H1", "G2", "E4.1", "H1.3"], "inMilestone": true, "status": "planned", "worker": null, "issuedAt": null, "issuedN": null, "submittedAt": null, "rounds": 0, "verdicts": [{"n": 1821, "at": 1790630864000, "type": "other"}, {"n": 1825, "at": 1790632365000, "type": "other"}, {"n": 1837, "at": 1790634135000, "type": "other"}], "returns": 0, "mergedAt": null, "mergedSha": null, "events": 7, "firstAt": 1790630383000, "lastAt": 1790634135000, "runs": 0}, {"id": "Q2", "slice": "Q", "title": "Коды отказов модуля = всё, что он выдаёт", "after": ["H1", "Q1", "S1.1"], "inMilestone": true, "status": "returned", "worker": "kimi-worker", "issuedAt": 1790633816000, "issuedN": 1834, "submittedAt": 1790648418000, "rounds": 2, "verdicts": [{"n": 1822, "at": 1790631349000, "type": "other"}, {"n": 1849, "at": 1790635533000, "type": "other"}, {"n": 1951, "at": 1790648961000, "type": "return"}, {"n": 1976, "at": 1790655492000, "type": "return"}], "returns": 2, "mergedAt": null, "mergedSha": null, "events": 28, "firstAt": 1790630383000, "lastAt": 1790658206000, "runs": 3}, {"id": "Q2b", "slice": "Q", "title": "Коды отказов модуля — части 2+3: каталоги E5/G5/M8/M9 и B3/series/H1", "after": ["Q2", "H1.1", "S1.1", "H1.3"], "inMilestone": true, "status": "planned", "worker": null, "issuedAt": null, "issuedN": null, "submittedAt": null, "rounds": 0, "verdicts": [], "returns": 0, "mergedAt": null, "mergedSha": null, "events": 0, "firstAt": null, "lastAt": null, "runs": 0}];
+
+// Tab Switching
+function switchCanvasTab(tabName) {
+  document.querySelectorAll('.c-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+
+  const btn = document.getElementById('tab-btn-' + tabName);
+  const view = document.getElementById('view-' + tabName);
+  if (btn) btn.classList.add('active');
+  if (view) view.classList.add('active');
+}
+
+// Model Cycling
+const models = ['Claude 3.7 Sonnet', 'DeepSeek-R1 (DeepThink)', 'Codex Reviewer'];
+let curModelIdx = 0;
+function cycleModel() {
+  curModelIdx = (curModelIdx + 1) % models.length;
+  document.getElementById('active-model-label').textContent = models[curModelIdx];
+}
+
+// Thought Accordion
+function toggleThought() {
+  const body = document.getElementById('thought-text');
+  const arr = document.getElementById('thought-arrow');
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    arr.textContent = '▾';
+  } else {
+    body.style.display = 'none';
+    arr.textContent = '▸';
+  }
+}
+
+// Task Approvals
+function approveCurrentTask() {
+  const card = document.getElementById('hero-decision-card');
+  if (!card) return;
+  card.style.transition = 'all 200ms ease';
+  card.style.opacity = '0';
+  card.style.transform = 'translateY(-10px)';
+  setTimeout(() => {
+    card.classList.add('resolved');
+    addChatMessage('Вы (Владелец)', 'Одобрил слияние коммита f3bf191 в ветку om-map.');
+    setTimeout(() => {
+      addChatMessage('✦ Architect', 'Принято! Коммит влит. Запускаю следующую задачу D8.4d из очереди рубежа L3.');
+    }, 500);
+  }, 200);
+}
+
+function rejectCurrentTask() {
+  const card = document.getElementById('hero-decision-card');
+  if (card) card.classList.add('resolved');
+}
+
+function addChatMessage(author, text) {
+  const feed = document.getElementById('chat-feed');
+  const msg = document.createElement('div');
+  msg.className = 'chat-bubble';
+  msg.innerHTML = `
+    <div class="chat-author">
+      <span style="color:#fff;">${author}</span>
+      <span>Только что</span>
+    </div>
+    <div class="chat-text">${text}</div>
+  `;
+  feed.appendChild(msg);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function sendChatPrompt() {
+  const input = document.getElementById('chat-composer-input');
+  const text = input.value.trim();
+  if (!text) return;
+  addChatMessage('Вы (Владелец)', text);
+  input.value = '';
+
+  setTimeout(() => {
+    addChatMessage('✦ Architect', 'Понял задачу: «' + text + '». Проверяю код витрины и текущие требования рубежа L3.');
+  }, 600);
+}
+
+function reloadBrowserFrame() {
+  const f = document.getElementById('product-iframe');
+  if (f) f.src = f.src;
+}
+
+// Populate Map Cards
+function renderMapCards() {
+  const wrap = document.getElementById('nodes-grid-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = r2Nodes.map(n => `
+    <div class="map-node-card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span class="node-kind-badge" style="background:${n.kind === 'root' ? 'rgba(143,129,255,0.15)' : 'rgba(59,130,246,0.15)'}; color:${n.kind === 'root' ? '#8f81ff' : '#5ab0ff'};">${n.kind || 'BLOCK'}</span>
+        <span style="font-family:var(--font-mono); font-size:10.5px; color:var(--text-muted);">${n.id}</span>
+      </div>
+      <div style="font-weight:600; font-size:12.5px; color:#fff;">${n.title || n.id}</div>
+      <div style="font-size:11.5px; color:var(--text-muted); line-height:1.4;">${n.purpose || ''}</div>
+    </div>
+  `).join('');
+}
+
+// Populate Tasks Roster
+function renderTasksRoster() {
+  const wrap = document.getElementById('tasks-list-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = tasksList.map(t => `
+    <div class="task-row-card">
+      <div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <strong style="color:#fff; font-size:13.5px;">${t.id}: ${t.title || 'Задача'}</strong>
+          <span style="font-size:10px; font-weight:700; color:var(--accent-warn); background:rgba(242,176,75,0.15); padding:1px 6px; border-radius:3px;">РУБЕЖ L3</span>
+        </div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:3px;">
+          Исполнитель: ${t.worker || 'worker'} · Прогонов: ${t.runs || 1}
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="switchCanvasTab('code')">Смотреть дифф →</button>
+    </div>
+  `).join('');
+}
+
+// Keyboard Shortcuts
+window.addEventListener('keydown', (e) => {
+  if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendChatPrompt();
+    return;
+  }
+  if (e.key === '1') switchCanvasTab('product');
+  if (e.key === '2') switchCanvasTab('code');
+  if (e.key === '3') switchCanvasTab('map');
+  if (e.key === '4') switchCanvasTab('tasks');
+  if (e.key === ' ') {
+    e.preventDefault();
+    approveCurrentTask();
+  }
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  renderMapCards();
+  renderTasksRoster();
+  const initTab = location.hash.replace('#', '');
+  if (['product', 'code', 'map', 'tasks'].includes(initTab)) {
+    switchCanvasTab(initTab);
+  }
+});
+
+window.addEventListener('hashchange', () => {
+  const t = location.hash.replace('#', '');
+  if (['product', 'code', 'map', 'tasks'].includes(t)) {
+    switchCanvasTab(t);
+  }
+});
+</script>
+</body>
+</html>

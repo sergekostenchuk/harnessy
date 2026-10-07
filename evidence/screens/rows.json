@@ -1,0 +1,1094 @@
+[
+ {
+  "id": "S01",
+  "key": "Social-MSU/15b9e00b:3",
+  "ts": "2026-07-18T02:10:37",
+  "n": 2,
+  "files": [
+   "Social-MSU-15b9e00b-3-1.png",
+   "Social-MSU-15b9e00b-3-2.png"
+  ],
+  "text": "смотри, эти mcp древние и уже не рабочие. их можно убрать?",
+  "app": "CL",
+  "desc": "стопка жёлтых тостов «MCP docker: Unexpected token … is not valid JSON», «MCP memory: Server disconnected», кнопка Open developer settings",
+  "pains": "ВЕ",
+  "queued": false
+ },
+ {
+  "id": "S02",
+  "key": "Social-MSU/2a56db67:112",
+  "ts": "2026-07-19T21:52:00",
+  "n": 1,
+  "files": [
+   "Social-MSU-2a56db67-112-1.png"
+  ],
+  "text": "что мне ему ответить?",
+  "app": "OT",
+  "desc": "Qwen.app: модель отвечает «нет доступа к файловой системе, работаю в изолированной среде» на «посмотри папку»",
+  "pains": "БД",
+  "queued": false
+ },
+ {
+  "id": "S03",
+  "key": "Social-MSU/2a56db67:284",
+  "ts": "2026-07-19T22:30:37",
+  "n": 1,
+  "files": [
+   "Social-MSU-2a56db67-284-1.webp"
+  ],
+  "text": "",
+  "app": "OT",
+  "desc": "Qwen.app: меню «+» (Загрузить вложение, Глубокое исследование, … МСР, Больше>), тумблер «Инструменты»",
+  "pains": "БЗ",
+  "queued": false
+ },
+ {
+  "id": "S04",
+  "key": "Social-MSU/2a56db67:417",
+  "ts": "2026-07-20T01:55:31",
+  "n": 1,
+  "files": [
+   "Social-MSU-2a56db67-417-1.png"
+  ],
+  "text": "а куда делся значок приложения kimi из dock на моем mac?",
+  "app": "OT",
+  "desc": "macOS Dock: вместо значка Kimi иконка «?» с подсказкой «.Kimi.app.installing-…»",
+  "pains": "ЗД",
+  "queued": false
+ },
+ {
+  "id": "S05",
+  "key": "TASKPLAN-PRO-V2/c30a83e4:88",
+  "ts": "2026-07-26T18:03:28",
+  "n": 4,
+  "files": [
+   "TASKPLAN-PRO-V2-c30a83e4-88-1.png",
+   "TASKPLAN-PRO-V2-c30a83e4-88-2.png",
+   "TASKPLAN-PRO-V2-c30a83e4-88-3.png",
+   "TASKPLAN-PRO-V2-c30a83e4-88-4.webp"
+  ],
+  "text": "смотри, здесь /Users/kostenchuksergey/Documents/kimi/workspace/taskplan-ui-2 агент проработал(неплохо, но спорно) только одну стадию дисковери. и я не увидел здесь стилей референсов, это , блядь, какой-то стиль блога, а не системы(это не значит, что это плохо, просто это не лендинг-блога должен быть). я хочу в минималистичном стиле apple или как на скринах или https://www.awwwards.com/websites/?text=dashboard  или https://webflow.com/made-in-webflow/dashboard. ты понимаешь, что я хочу? пусть сделает в новой папке /Users/kostenchuksergey/Documents/kimi/workspace/taskplan-ui-3",
+  "app": "RF",
+  "desc": "4 образца: светлый минималистичный сайт (слои INTERFACE/LOGIC/DATA/INTEGRATIONS), тёмный редактор воронок с библиотекой блоков и связями, два дашборд-шаблона",
+  "pains": "Ж",
+  "queued": false
+ },
+ {
+  "id": "S06",
+  "key": "TASKPLAN-PRO-V2/d5cbede6:527",
+  "ts": "2026-07-30T14:30:59",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-d5cbede6-527-1.webp"
+  ],
+  "text": "сейчас так подвисает",
+  "app": "OT",
+  "desc": "приложение-сканер, созданное агентом: модальное «Формат файла» поверх предпросмотра, подписи «Отмена/Сканировать» налезают на текст",
+  "pains": "АГ",
+  "queued": false
+ },
+ {
+  "id": "S07",
+  "key": "TASKPLAN-PRO-V2/d5cbede6:815q",
+  "ts": "2026-07-30T15:56:01",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-d5cbede6-815q-1.webp"
+  ],
+  "text": "предпросмотр норм, скан пока не сохранился в файл",
+  "app": "OT",
+  "desc": "то же приложение: предпросмотр, спиннер на кнопке, «Сканирую… затем распознаю текст, это дольше»",
+  "pains": "Г",
+  "queued": true
+ },
+ {
+  "id": "S08",
+  "key": "TASKPLAN-PRO-V2/25570f76:2975q",
+  "ts": "2026-08-05T00:26:24",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-2975q-1.png"
+  ],
+  "text": "а я правильно понимаю, что вы уже перед ревьювером остановились?",
+  "app": "TP",
+  "desc": "кокпит: конвейер Планировщик→…→Закрытие, у «Ревьюера» «требует сверки», метка «review loops: 2/2»",
+  "pains": "Б",
+  "queued": true
+ },
+ {
+  "id": "S09",
+  "key": "TASKPLAN-PRO-V2/25570f76:4918",
+  "ts": "2026-08-05T23:29:06",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-4918-1.png"
+  ],
+  "text": "ты либо не туда смотришь, либо мне пиздишь!!! агент читает очередь каждую минуту",
+  "app": "CX",
+  "desc": "Codex Desktop, автоматизация: одинаковые плашки «Отправлено запланированной задачей… Monitor…», «No pending envelopes.»; в шапке строка с иероглифами",
+  "pains": "ЕД",
+  "queued": false
+ },
+ {
+  "id": "S10",
+  "key": "TASKPLAN-PRO-V2/25570f76:5440q",
+  "ts": "2026-08-06T02:30:16",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-5440q-1.png"
+  ],
+  "text": "",
+  "app": "PI",
+  "desc": "Qwen Code в терминальной панели: 401 → /auth «Successfully configured» → снова 401 → ответ пошёл",
+  "pains": "ВБ",
+  "queued": true
+ },
+ {
+  "id": "S11",
+  "key": "TASKPLAN-PRO-V2/25570f76:5463q",
+  "ts": "2026-08-06T02:31:17",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-5463q-1.webp"
+  ],
+  "text": "",
+  "app": "PI",
+  "desc": "то же + справа «How is Qwen doing this session? 1 Good 2 Bad 3 Fine 0 Dismiss»; слева Claude Desktop («Compacted conversation», «1 running task»)",
+  "pains": "ВБ",
+  "queued": true
+ },
+ {
+  "id": "S12",
+  "key": "TASKPLAN-PRO-V2/25570f76:7250",
+  "ts": "2026-08-07T19:52:37",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-7250-1.png"
+  ],
+  "text": "совет запущен и ждет твоих инструкций",
+  "app": "CX",
+  "desc": "Codex Desktop «Claude Fable Concil»: десятки одинаковых плашек relay-монитора «Выполнено за 3 с … No pending relay envelopes remain», на левом краю полоса-индикатор прокрутки из десятков рисок",
+  "pains": "Е",
+  "queued": false
+ },
+ {
+  "id": "S13",
+  "key": "TASKPLAN-PRO-V2/25570f76:8001",
+  "ts": "2026-08-08T12:59:17",
+  "n": 2,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-8001-1.webp",
+   "TASKPLAN-PRO-V2-25570f76-8001-2.webp"
+  ],
+  "text": "1) агент ответил : \"Готово. Созданы прямые PF-005 ACC:\n\n* [T-014](/Users/kostenchuksergey/TASKPLAN PRO V2/.task-plan/receipts/ACC-TASK-PF-005-T-014.json) — `1608b2495b7fdbf35b494c77cefc1bb23f3e7b9bd69bf1513ecdf19aafab6a5e`\n* [T-007](/Users/kostenchuksergey/TASKPLAN PRO V2/.task-plan/receipts/ACC-TASK-PF-005-T-007.json) — `47f65ce244dde29d24ef347980c931f3dfc97168b54553229aa66133ba13ead1`\n* [T-009](/Users/kostenchuksergey/TASKPLAN PRO V2/.task-plan/receipts/ACC-TASK-PF-005-T-009.json) — `875852e239117150c61f4d369bb347251d2772143c3b61692bb623a1f78124b8`\n* [T-008](/Users/kostenchuksergey/TASKPLAN PRO V2/.task-plan/receipts/ACC-TASK-PF-005-T-008.json) — `8673bdf9cb155327dfb4d984ca0761dc1e31b5aac10ad3533aad07fb571e5922`\n\nT-010: scope выполнен в `34b7190bc6839c48b2d621745914b1b84d1bac59`, но текущей подписью владельца не принят; ACC-TASK для T-010 не выдавался. Статус записан в [реестре](/Users/kostenchuksergey/TASKPLAN PRO V2/.task-plan/receipts/TASK-STATUS-PF-005-T-010-34b7190.json), SHA-256 `af2c8f37aa7e0e30c6df401dc4747cea897b7227f3241821d35b583a76cd0a03`.\nB09 штатно переведён с T-006 на T-010. Старое состояние сохранено в архиве; текущий B09 SHA-256: `33fc7dc0df7fb7420b26962e250a6ce0a17b6fb69601842fdc010a1a73c6fa6d`. Старые PF-001 квитанции T-007/T-008 не изменялись. UI 7100: HTTP 200, LaunchAgent работает.\nРиск эпохи/коллизии → канонические PF-005 имена и сохранение старых квитанций. Риск дрейфа B09 → архив предыдущих байтов и явный переход на T-010.\"   2) ui некорректно показывает состояние",
+  "app": "TP",
+  "desc": "(1) Обзор PF: жёлтый баннер Dirty Git, READY/BLOCKED/NAMED, Feature Journey; (2) красная панель «Runtime reconciliation required» из 13 строк кодов + конвейер T-006",
+  "pains": "ДЕБ",
+  "queued": false
+ },
+ {
+  "id": "S14",
+  "key": "TASKPLAN-PRO-V2/25570f76:8213",
+  "ts": "2026-08-08T14:55:50",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-8213-1.webp"
+  ],
+  "text": "<!-- attach -->\n> Требует вашего решения — четыре dirty-файла в дереве (runtime-bridge.mjs, runtime-snapshot-read-model.mjs и два теста). Агент по приказу их не тронул и ждёт вашего слова: закоммитить как есть или отбросить. Скажете — передам конвертом.\n\nчто за файлы? объясни, что произойдет по каждому, если я скажу закоммитить или откатить.   2) ui сейчас с переодичностью в несколько минут перезагружается. t-010 ui показывает незакрытой. в депенденси граф нет баблов с прохождением на задачах.",
+  "app": "TP",
+  "desc": "кокпит: список accepted-задач, у каждой «Нет launch authority» и жёлтая «Запуск недоступен: exact_b09_runtime_authority_missing»",
+  "pains": "ЕБ",
+  "queued": false
+ },
+ {
+  "id": "S15",
+  "key": "TASKPLAN-PRO-V2/25570f76:8238",
+  "ts": "2026-08-08T15:22:15",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-8238-1.webp"
+  ],
+  "text": "> Требует вашего решения — четыре dirty-файла в дереве (runtime-bridge.mjs, runtime-snapshot-read-model.mjs и два теста). Агент по приказу их не тронул и ждёт вашего слова: закоммитить как есть или отбросить. Скажете — передам конвертом.\n\nчто за файлы? объясни, что произойдет по каждому, если я скажу закоммитить или откатить.   2) ui сейчас с переодичностью в несколько минут перезагружается. t-010 ui показывает незакрытой. в депенденси граф нет баблов с прохождением на задачах.",
+  "app": "TP",
+  "desc": "то же сообщение отправлено повторно (цитата ответа агента + скриншот кокпита)",
+  "pains": "ЕБ",
+  "queued": false
+ },
+ {
+  "id": "S16",
+  "key": "TASKPLAN-PRO-V2/25570f76:8272",
+  "ts": "2026-08-08T16:05:06",
+  "n": 4,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-8272-1.webp",
+   "TASKPLAN-PRO-V2-25570f76-8272-2.webp",
+   "TASKPLAN-PRO-V2-25570f76-8272-3.webp",
+   "TASKPLAN-PRO-V2-25570f76-8272-4.webp"
+  ],
+  "text": "так а почему t-010 так и не отмечена готовой и общий пайплайн так и не закрыт?",
+  "app": "TP",
+  "desc": "4 экрана кокпита: карточки задач; T-010 «runtime_ready» с «Запуск недоступен: git_dirty»",
+  "pains": "БЕД",
+  "queued": false
+ },
+ {
+  "id": "S17",
+  "key": "TASKPLAN-PRO-V2/25570f76:8420",
+  "ts": "2026-08-08T18:19:57",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-8420-1.png"
+  ],
+  "text": "не помогло",
+  "app": "TP",
+  "desc": "красная плашка «Выбранная PF не найдена: отсутствует в verified PI projection…», кнопки «Открыть PF-001…006», остальной экран пуст",
+  "pains": "ВГ",
+  "queued": false
+ },
+ {
+  "id": "S18",
+  "key": "TASKPLAN-PRO-V2/25570f76:8744",
+  "ts": "2026-08-08T23:21:03",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-8744-1.png"
+  ],
+  "text": "и как этим пользоваться? что здесь?",
+  "app": "TP",
+  "desc": "«Пульт владельца» без стилей: сплошной текст, кнопки «ПринятьОтклонитьЗапросить изменения» слиплись",
+  "pains": "АБ",
+  "queued": false
+ },
+ {
+  "id": "S19",
+  "key": "TASKPLAN-PRO-V2/25570f76:8840",
+  "ts": "2026-08-09T00:39:38",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-8840-1.webp"
+  ],
+  "text": "эти три решения дальше не идут и не пропадают",
+  "app": "TP",
+  "desc": "Пульт владельца: 3 жёлтые плашки «Нечитаемая owner-decision квитанция исключена…», карточки «Если принять / Если отклонить», «Это решение уже изменилось в другом окне»",
+  "pains": "ЕДЗ",
+  "queued": false
+ },
+ {
+  "id": "S20",
+  "key": "TASKPLAN-PRO-V2/25570f76:9200",
+  "ts": "2026-08-09T10:58:55",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-9200-1.png"
+  ],
+  "text": "UI не работает. или этот норм?",
+  "app": "TP",
+  "desc": "карточка «Восстанавливаем состояние проекта… ничего нажимать не нужно» со спиннером",
+  "pains": "Г",
+  "queued": false
+ },
+ {
+  "id": "S21",
+  "key": "TASKPLAN-PRO-V2/8e05efa4:4",
+  "ts": "2026-08-09T15:07:19",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-8e05efa4-4-1.png"
+  ],
+  "text": "у меня в чате с тобой появляются подсказки, как мне сделать, чтобы они попадали в чат?",
+  "app": "CL",
+  "desc": "Claude Desktop (Code): серая подсказка-призрак в поле ввода; строка «Bypass permissions», «Opus 4.8 Ultracode», «+17 042 −0 Commit changes»",
+  "pains": "Б",
+  "queued": false
+ },
+ {
+  "id": "S22",
+  "key": "TASKPLAN-PRO-V2/25570f76:9463",
+  "ts": "2026-08-09T15:18:05",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-9463-1.png"
+  ],
+  "text": "так. а ну-ка снова проверь. пиздить запрещено!!!!! есть задача или нет. ты проверил только пульта владельца? или в кокпите тоже смотрел?",
+  "app": "TP",
+  "desc": "полоска «PF-008 · F-018 READY — Живой контур знания…»",
+  "pains": "Д",
+  "queued": false
+ },
+ {
+  "id": "S23",
+  "key": "TASKPLAN-PRO-V2/25570f76:9746",
+  "ts": "2026-08-09T17:13:15",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-9746-1.webp"
+  ],
+  "text": "",
+  "app": "TP",
+  "desc": "карточка «Состояние проекта не подтверждено · unsupported_connector · local TASKPLAN runtime bridge is unavailable · попытка 6», три кнопки",
+  "pains": "ВГ",
+  "queued": false
+ },
+ {
+  "id": "S24",
+  "key": "TASKPLAN-PRO-V2/25570f76:9760",
+  "ts": "2026-08-09T17:14:44",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-9760-1.webp"
+  ],
+  "text": "восстановился, но гит грязный показывается в ui",
+  "app": "TP",
+  "desc": "кокпит Agent Pipeline: баннеры «Dirty Git…» и «Текущее исполнение не подтверждено», все задачи blocked",
+  "pains": "ДЕ",
+  "queued": false
+ },
+ {
+  "id": "S25",
+  "key": "TASKPLAN-PRO-V2/25570f76:9792",
+  "ts": "2026-08-09T17:36:30",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-9792-1.webp"
+  ],
+  "text": "я попытался запросить выполнения, он вернул так",
+  "app": "TP",
+  "desc": "после «Запросить запуск»: «Ожидает current-chat host», «pending_host_claim», красное «Run не создан: taskplan_runtime_response_timeout»",
+  "pains": "ВЗБ",
+  "queued": false
+ },
+ {
+  "id": "S26",
+  "key": "TASKPLAN-PRO-V2/25570f76:9955",
+  "ts": "2026-08-09T19:37:14",
+  "n": 2,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-9955-1.webp",
+   "TASKPLAN-PRO-V2-25570f76-9955-2.png"
+  ],
+  "text": "а нахуя ты мне пиздишь?",
+  "app": "TP",
+  "desc": "(1) красная стена global_execution_scope_mismatch при зелёной строке «Живое исполнение · событие 10»; (2) сообщение агента «Runtime-run честно остался recovery_required… Изменено 16 файлов»",
+  "pains": "ДЕ",
+  "queued": false
+ },
+ {
+  "id": "S27",
+  "key": "TASKPLAN-PRO-V2/25570f76:10063",
+  "ts": "2026-08-09T20:22:13",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-10063-1.png"
+  ],
+  "text": "вот появилось нормально, и снова пропало, сейчас снова появилось. что он там делает? и еще, занесите в базу, что вы сделали, что появилась анимация",
+  "app": "TP",
+  "desc": "конвейер с кольцом на «Ревьюер», «Фактический маршрут: separate_cli_process…»; строка статуса то появляется, то исчезает",
+  "pains": "ДГ",
+  "queued": false
+ },
+ {
+  "id": "S28",
+  "key": "TASKPLAN-PRO-V2/25570f76:10221",
+  "ts": "2026-08-09T22:24:38",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-10221-1.png"
+  ],
+  "text": "БлядЬ, чем вы занимаетесь????? вы день и дневную порцию лимитов убили на эту хрень. ВЫ понимамете, что вы делаете? или вы слепыми котятами пытаетесь сделать????? ты вообще, понимаешь, как должно работать?????? читай основную концепцию проекта вообще.",
+  "app": "TP",
+  "desc": "кокпит: T-001 «failed», «Run не создан: …timeout», кнопки «Контролировать run / Запросить повторный запуск», остальные blocked",
+  "pains": "ДЕЗ",
+  "queued": false
+ },
+ {
+  "id": "S29",
+  "key": "TASKPLAN-PRO-V2/25570f76:20202q",
+  "ts": "2026-08-14T13:43:22",
+  "n": 2,
+  "files": [
+   "TASKPLAN-PRO-V2-25570f76-20202q-1.webp",
+   "TASKPLAN-PRO-V2-25570f76-20202q-2.png"
+  ],
+  "text": "что нужно сделать, чтобы ты мог читать реддит?",
+  "app": "RF",
+  "desc": "«Scape» (2): дерево проектов, страница миссии агента, список сессий с индикаторами контекста и стоимости, Toolkit; канбан «Internal Tickets»",
+  "pains": "Ж",
+  "queued": true
+ },
+ {
+  "id": "S30",
+  "key": "TASKPLAN-PRO-V3/f9de24ec:1332",
+  "ts": "2026-08-22T22:21:18",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-f9de24ec-1332-1.png"
+  ],
+  "text": "блядь, видишь эту хуйню, это у меня сейчас в телефоне. Мне нужны рабочие чаты. блядь, вы что, сука, ремоут не можете настроить, уебаны???",
+  "app": "CL",
+  "desc": "Claude на телефоне, вкладка Code: три безымянные сессии «macbook-pro-kostenc… Connected», старые Disconnected",
+  "pains": "И",
+  "queued": false
+ },
+ {
+  "id": "S31",
+  "key": "TASKPLAN-PRO-V3/f9de24ec:1395",
+  "ts": "2026-08-22T22:30:07",
+  "n": 2,
+  "files": [
+   "TASKPLAN-PRO-V3-f9de24ec-1395-1.png",
+   "TASKPLAN-PRO-V3-f9de24ec-1395-2.png"
+  ],
+  "text": "ты выдумываешь и издеваешься????",
+  "app": "CL",
+  "desc": "Claude Desktop: автодополнение «/rc» без команды remote control + «/rc isn't a recognized command here»; лимит «77% Fable 5»",
+  "pains": "БИ",
+  "queued": false
+ },
+ {
+  "id": "S32",
+  "key": "TASKPLAN-PRO-V3/d09c89fe:7506",
+  "ts": "2026-08-28T20:47:35",
+  "n": 16,
+  "files": [
+   "TASKPLAN-PRO-V3-d09c89fe-7506-1.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-2.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-3.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-4.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-5.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-6.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-7.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-8.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-9.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-10.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-11.webp",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-12.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-13.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-14.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-15.png",
+   "TASKPLAN-PRO-V3-d09c89fe-7506-16.png"
+  ],
+  "text": "а насколько сложно сделать вот эти фичи из скриншотов из Hermess(bots) и  Deepseek Harness",
+  "app": "RF",
+  "desc": "16 образцов Hermes и DeepSeek Harness: Bots, группировка воркспейсов, настройки, подписки с 5-часовым окном, Trajectory с таймлайном Input/Model/Tools",
+  "pains": "Ж",
+  "queued": false
+ },
+ {
+  "id": "S33",
+  "key": "TASKPLAN-PRO-V3/bb991941:676",
+  "ts": "2026-09-03T19:09:52",
+  "n": 2,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-676-1.png",
+   "TASKPLAN-PRO-V3-bb991941-676-2.png"
+  ],
+  "text": "1) так, тогда посмотри пока элемент выбора модели. в гермесе есть свертывание списка в провайдера, можно так в дипсике сделать? пока посмотри и разберись 2) есть ли возможность сделать сплит(на две/три/четыре) чатов вкладки, как это в десктоп клод код? 3) есть ли возможность открывать отдельным окном чат?",
+  "app": "RF",
+  "desc": "2 образца выбора модели: провайдеры со свёрнутыми группами (подчёркнуты рукой), поиск, шкала усилия, MoA-пресеты",
+  "pains": "Ж",
+  "queued": false
+ },
+ {
+  "id": "S34",
+  "key": "TASKPLAN-PRO-V3/bb991941:898",
+  "ts": "2026-09-03T19:40:45",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-898-1.png"
+  ],
+  "text": "вот так уже несколько минут",
+  "app": "DS",
+  "desc": "окно «HARNESS · Starting Harness…» со спиннером «уже несколько минут»",
+  "pains": "Г",
+  "queued": false
+ },
+ {
+  "id": "S35",
+  "key": "TASKPLAN-PRO-V3/bb991941:957q",
+  "ts": "2026-09-03T19:44:03",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-957q-1.png"
+  ],
+  "text": "### 环境信息\n\napp: 0.10.3\ndsh: 0.1.0-rc.7\nnode: 22.23.1\nos: macos (aarch64)\n\n### 服务日志\n\n```\n\n```\n\n### 前台日志\n\n```\n[2026-09-03 16:36:32.388Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:36:37.394Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:36:42.399Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:36:47.404Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:36:49.109Z] ERROR frontend: [Harness] preinstall failed: Harness made no progress during process boot before its activity deadline. Last readiness status: HARNESS_NOT_READY: boot page returned 401 Unauthorized\nAr@tauri://localhost/assets/index-DonmCKVH.js:20:301566\nlaunchAndWait@tauri://localhost/assets/index-DonmCKVH.js:21:5590\n[2026-09-03 16:40:18.368Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:40:19.375Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:40:20.880Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:40:23.136Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:40:26.519Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:40:31.523Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:40:36.528Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:40:41.533Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:40:46.539Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:40:51.542Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:40:56.546Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:01.549Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:06.554Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:11.560Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:16.564Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:21.568Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:26.577Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:31.581Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:36.585Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:41.589Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:46.594Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:51.599Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:41:56.603Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:01.607Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:06.610Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:11.615Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:16.619Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:21.623Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:26.629Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:31.633Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:36.637Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:41.641Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:46.646Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:51.652Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:42:56.656Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:43:01.660Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:43:06.663Z] ERROR frontend: [Harness] health check failed: HARNESS_NOT_READY: boot page returned 401 Unauthorized\n[2026-09-03 16:43:28.349Z] ERROR frontend: [Harness] startup failed: Harness exited early: exit status: 1\nFm@tauri://localhost/assets/index-DonmCKVH.js:20:302055\nlaunchAndWait@tauri://localhost/assets/index-DonmCKVH.js:21:5728\n[2026-09-03 16:43:35.178Z] ERROR frontend: [Harness] startup failed: Harness exited early: exit status: 1\nFm@tauri://localhost/assets/index-DonmCKVH.js:20:302055\nlaunchAndWait@tauri://localhost/assets/index-DonmCKVH.js:21:5728\n```\n\n### 后台日志\n\n```\n2026-09-03 16:43:26.878Z  WARN dsh:       at Entry._init (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/cordis-plugin-loader/lib/index.js:519:10)\n2026-09-03 16:43:26.878Z  WARN dsh:       at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {\n2026-09-03 16:43:26.878Z  WARN dsh:     [cause]: Error: failed to apply loader entry credentials (@deepseek-ai/dsh-credentials-local): credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:26.878Z  WARN dsh:         at updateError (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/cordis-plugin-loader/lib/index.js:299:9)\n2026-09-03 16:43:26.878Z  WARN dsh:         at Entry._init (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/cordis-plugin-loader/lib/index.js:519:10) {\n2026-09-03 16:43:26.878Z  WARN dsh:       [cause]: TypeError: credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:26.878Z  WARN dsh:           at parseCredentialsDocument (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:132:40)\n2026-09-03 16:43:26.878Z  WARN dsh:           at LocalCredentialProvider.loadInitial (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:344:17)\n2026-09-03 16:43:26.878Z  WARN dsh:           at async [cordis.init] (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:207:3)\n2026-09-03 16:43:26.878Z  WARN dsh:           at file:///Users/kostenchuksergey/.dsh/profiles/web/#credentials\n2026-09-03 16:43:26.878Z  WARN dsh:           at file:///Users/kostenchuksergey/.dsh/profiles/web/#include\n2026-09-03 16:43:26.878Z  WARN dsh:     }\n2026-09-03 16:43:26.878Z  WARN dsh:   }\n2026-09-03 16:43:26.878Z  WARN dsh: }\n2026-09-03 16:43:26.878Z  WARN dsh: \n2026-09-03 16:43:26.878Z  WARN dsh: Node.js v22.23.1\n2026-09-03 16:43:26.878Z ERROR main::desktop::builder: start failed: Harness exited early: exit status: 1\n2026-09-03 16:43:26.918Z  WARN main::utils: dsh patch anchor missing, skip: /Users/kostenchuksergey/Library/Application Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-web-app/lib/startup.js\n2026-09-03 16:43:26.918Z  WARN main::utils: dsh patch anchor missing, skip: /Users/kostenchuksergey/Library/Application Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-client-connection/lib/index.js\n2026-09-03 16:43:26.918Z  INFO main::utils: dsh patch target not found, skip: /Users/kostenchuksergey/Library/Application Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-client-ui-renderer/lib/client.js\n2026-09-03 16:43:26.918Z  INFO main::utils: dsh patch already applied: /Users/kostenchuksergey/Library/Application Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-session/lib/index.js\n2026-09-03 16:43:26.919Z  INFO main::utils: dsh patch already applied: /Users/kostenchuksergey/Library/Application Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-workspace/lib/index.js\n2026-09-03 16:43:26.919Z  INFO main::service::plugin::internal: checking 8 internal preset plugins for install state\n2026-09-03 16:43:27.111Z  INFO main::service::workflow::launch: Starting Harness process\n2026-09-03 16:43:28.347Z  WARN dsh: file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js:1186\n2026-09-03 16:43:28.347Z  WARN dsh: \t\tthrow new Error(`${binName}: ${stage}: ${detail}${stack}`, { cause });\n2026-09-03 16:43:28.347Z  WARN dsh: \t\t      ^\n2026-09-03 16:43:28.347Z  WARN dsh: \n2026-09-03 16:43:28.347Z  WARN dsh: Error: dsh: plugin tree failed to load: failed to apply loader entry include (cordis:include): failed to apply loader entry credentials (@deepseek-ai/dsh-credentials-local): credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:28.347Z  WARN dsh: TypeError: credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:28.347Z  WARN dsh:     at parseCredentialsDocument (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:132:40)\n2026-09-03 16:43:28.347Z  WARN dsh:     at LocalCredentialProvider.loadInitial (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:344:17)\n2026-09-03 16:43:28.347Z  WARN dsh:     at async [cordis.init] (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:207:3)\n2026-09-03 16:43:28.347Z  WARN dsh:     at file:///Users/kostenchuksergey/.dsh/profiles/web/#credentials\n2026-09-03 16:43:28.347Z  WARN dsh:     at file:///Users/kostenchuksergey/.dsh/profiles/web/#include\n2026-09-03 16:43:28.347Z  WARN dsh:     at boot (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js:1186:9)\n2026-09-03 16:43:28.347Z  WARN dsh:     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n2026-09-03 16:43:28.347Z  WARN dsh:     at async runProfile (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh/lib/profile-boot-DG5t9aNs.js:247:14)\n2026-09-03 16:43:28.347Z  WARN dsh:     at async file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js:133:3 {\n2026-09-03 16:43:28.347Z  WARN dsh:   [cause]: Error: failed to apply loader entry include (cordis:include): failed to apply loader entry credentials (@deepseek-ai/dsh-credentials-local): credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:28.347Z  WARN dsh:       at updateError (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/cordis-plugin-loader/lib/index.js:299:9)\n2026-09-03 16:43:28.347Z  WARN dsh:       at Entry._init (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/cordis-plugin-loader/lib/index.js:519:10)\n2026-09-03 16:43:28.347Z  WARN dsh:       at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {\n2026-09-03 16:43:28.347Z  WARN dsh:     [cause]: Error: failed to apply loader entry credentials (@deepseek-ai/dsh-credentials-local): credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:28.347Z  WARN dsh:         at updateError (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/cordis-plugin-loader/lib/index.js:299:9)\n2026-09-03 16:43:28.347Z  WARN dsh:         at Entry._init (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/cordis-plugin-loader/lib/index.js:519:10) {\n2026-09-03 16:43:28.347Z  WARN dsh:       [cause]: TypeError: credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:28.347Z  WARN dsh:           at parseCredentialsDocument (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:132:40)\n2026-09-03 16:43:28.347Z  WARN dsh:           at LocalCredentialProvider.loadInitial (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:344:17)\n2026-09-03 16:43:28.347Z  WARN dsh:           at async [cordis.init] (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:207:3)\n2026-09-03 16:43:28.347Z  WARN dsh:           at file:///Users/kostenchuksergey/.dsh/profiles/web/#credentials\n2026-09-03 16:43:28.347Z  WARN dsh:           at file:///Users/kostenchuksergey/.dsh/profiles/web/#include\n2026-09-03 16:43:28.347Z  WARN dsh:     }\n2026-09-03 16:43:28.347Z  WARN dsh:   }\n2026-09-03 16:43:28.347Z  WARN dsh: }\n2026-09-03 16:43:28.347Z  WARN dsh: \n2026-09-03 16:43:28.347Z  WARN dsh: Node.js v22.23.1\n2026-09-03 16:43:32.704Z  INFO main::service::download::installable: Detected compatible local Node.js (/Users/kostenchuksergey/.local/bin/node), skipping bundled runtime\n2026-09-03 16:43:32.704Z  INFO main::service::download::installable: Detected user-installed pnpm, skipping bundled pnpm\n2026-09-03 16:43:32.705Z  INFO main::service::plugin::internal: checking 8 internal preset plugins for install state\n2026-09-03 16:43:33.759Z  WARN main::utils: dsh patch anchor missing, skip: /Users/kostenchuksergey/Library/Application Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-web-app/lib/startup.js\n2026-09-03 16:43:33.759Z  WARN main::utils: dsh patch anchor missing, skip: /Users/kostenchuksergey/Library/Application Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-client-connection/lib/index.js\n2026-09-03 16:43:33.759Z  INFO main::utils: dsh patch target not found, skip: /Users/kostenchuksergey/Library/Application Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-client-ui-renderer/lib/client.js\n2026-09-03 16:43:33.759Z  INFO main::utils: dsh patch already applied: /Users/kostenchuksergey/Library/Application Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-session/lib/index.js\n2026-09-03 16:43:33.759Z  INFO main::utils: dsh patch already applied: /Users/kostenchuksergey/Library/Application Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-workspace/lib/index.js\n2026-09-03 16:43:33.759Z  INFO main::service::plugin::internal: checking 8 internal preset plugins for install state\n2026-09-03 16:43:33.940Z  INFO main::service::workflow::launch: Starting Harness process\n2026-09-03 16:43:35.176Z  WARN dsh: file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js:1186\n2026-09-03 16:43:35.176Z  WARN dsh: \t\tthrow new Error(`${binName}: ${stage}: ${detail}${stack}`, { cause });\n2026-09-03 16:43:35.176Z  WARN dsh: \t\t      ^\n2026-09-03 16:43:35.176Z  WARN dsh: \n2026-09-03 16:43:35.176Z  WARN dsh: Error: dsh: plugin tree failed to load: failed to apply loader entry include (cordis:include): failed to apply loader entry credentials (@deepseek-ai/dsh-credentials-local): credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:35.176Z  WARN dsh: TypeError: credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:35.176Z  WARN dsh:     at parseCredentialsDocument (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:132:40)\n2026-09-03 16:43:35.176Z  WARN dsh:     at LocalCredentialProvider.loadInitial (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:344:17)\n2026-09-03 16:43:35.176Z  WARN dsh:     at async [cordis.init] (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:207:3)\n2026-09-03 16:43:35.176Z  WARN dsh:     at file:///Users/kostenchuksergey/.dsh/profiles/web/#credentials\n2026-09-03 16:43:35.176Z  WARN dsh:     at file:///Users/kostenchuksergey/.dsh/profiles/web/#include\n2026-09-03 16:43:35.176Z  WARN dsh:     at boot (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js:1186:9)\n2026-09-03 16:43:35.176Z  WARN dsh:     at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n2026-09-03 16:43:35.176Z  WARN dsh:     at async runProfile (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh/lib/profile-boot-DG5t9aNs.js:247:14)\n2026-09-03 16:43:35.176Z  WARN dsh:     at async file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js:133:3 {\n2026-09-03 16:43:35.176Z  WARN dsh:   [cause]: Error: failed to apply loader entry include (cordis:include): failed to apply loader entry credentials (@deepseek-ai/dsh-credentials-local): credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:35.176Z  WARN dsh:       at updateError (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/cordis-plugin-loader/lib/index.js:299:9)\n2026-09-03 16:43:35.176Z  WARN dsh:       at Entry._init (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/cordis-plugin-loader/lib/index.js:519:10)\n2026-09-03 16:43:35.176Z  WARN dsh:       at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {\n2026-09-03 16:43:35.176Z  WARN dsh:     [cause]: Error: failed to apply loader entry credentials (@deepseek-ai/dsh-credentials-local): credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:35.176Z  WARN dsh:         at updateError (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/cordis-plugin-loader/lib/index.js:299:9)\n2026-09-03 16:43:35.176Z  WARN dsh:         at Entry._init (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/cordis-plugin-loader/lib/index.js:519:10) {\n2026-09-03 16:43:35.176Z  WARN dsh:       [cause]: TypeError: credentials-local: the value for \"version\" in /Users/kostenchuksergey/.dsh/.credentials.yaml must be a string\n2026-09-03 16:43:35.176Z  WARN dsh:           at parseCredentialsDocument (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:132:40)\n2026-09-03 16:43:35.176Z  WARN dsh:           at LocalCredentialProvider.loadInitial (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:344:17)\n2026-09-03 16:43:35.176Z  WARN dsh:           at async [cordis.init] (file:///Users/kostenchuksergey/Library/Application%20Support/io.github.hairyf.deepseek-harness-desktop/dependencies/dsh/node_modules/@deepseek-ai/dsh-credentials-local/lib/index.js:207:3)\n2026-09-03 16:43:35.176Z  WARN dsh:           at file:///Users/kostenchuksergey/.dsh/profiles/web/#credentials\n2026-09-03 16:43:35.176Z  WARN dsh:           at file:///Users/kostenchuksergey/.dsh/profiles/web/#include\n2026-09-03 16:43:35.176Z  WARN dsh:     }\n2026-09-03 16:43:35.176Z  WARN dsh:   }\n2026-09-03 16:43:35.176Z  WARN dsh: }\n2026-09-03 16:43:35.176Z  WARN dsh: \n2026-09-03 16:43:35.176Z  WARN dsh: Node.js v22.23.1\n```",
+  "app": "DS",
+  "desc": "«Startup failed — Harness exited early: exit status 1», Retry, Copy Logs (лог скопирован китайским шаблоном)",
+  "pains": "ВГ",
+  "queued": true
+ },
+ {
+  "id": "S36",
+  "key": "TASKPLAN-PRO-V3/bb991941:1194q",
+  "ts": "2026-09-03T19:58:15",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-1194q-1.png"
+  ],
+  "text": "",
+  "app": "DS",
+  "desc": "«Failed to load plugins» — стена путей модулей на весь экран",
+  "pains": "ВА",
+  "queued": true
+ },
+ {
+  "id": "S37",
+  "key": "TASKPLAN-PRO-V3/bb991941:2176",
+  "ts": "2026-09-03T21:54:14",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-2176-1.webp"
+  ],
+  "text": "<!-- attach -->\n> Вывод: сплита на два-четыре чата нет. Есть вторая колонка, предназначенная для деталей текущей сессии, но технически это готовая точка, куда можно посадить своё — тем же способом, каким я посадил выбор модели.\n\n<!-- attach -->\n> (dsh-session-browser, привязка к cwd жёсткая), в вашем профиле его нет.\n\nнужно сделать копию уже рабочего пространства и вывести их рядом . костыли в виде \"давай засунем второй воркспейс во вторую вспомогательную колонку\" не нужны. это понятно?  2) добавь \"dsh-session-browser\"",
+  "app": "DS",
+  "desc": "чат «какая ты модель?», статусная строка «1 turns · 1 steps · LLM 3.3s · TTFT…», вкладки Chat/Trajectory",
+  "pains": "ЖЗ",
+  "queued": false
+ },
+ {
+  "id": "S38",
+  "key": "TASKPLAN-PRO-V3/bb991941:2342",
+  "ts": "2026-09-03T23:45:06",
+  "n": 3,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-2342-1.png",
+   "TASKPLAN-PRO-V3-bb991941-2342-2.png",
+   "TASKPLAN-PRO-V3-bb991941-2342-3.png"
+  ],
+  "text": "<!-- attach -->\n> там ровно две кнопки: Open sidebar и Close details, то есть переключатели левой и правой колонок.\n\n1) я не вижу там этих кнопок. \"в шапке справа — там ровно две кнопки: Open sidebar и Close details\". их нужно тогда сделать и проверить, чтобы они работали как на разворачивания, так и на сворачивания. 2) после этого можно п1 и п2",
+  "app": "DS",
+  "desc": "шапка справа: «Expand bottom panel», «Expand sidebar» вместо названных агентом «Open sidebar / Close details»",
+  "pains": "ЗД",
+  "queued": false
+ },
+ {
+  "id": "S39",
+  "key": "TASKPLAN-PRO-V3/bb991941:2879",
+  "ts": "2026-09-04T01:35:02",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-2879-1.png"
+  ],
+  "text": "",
+  "app": "DS",
+  "desc": "Plugin Market, поиск «dsh-split-view»: единственный результат «dsh-decision-split»",
+  "pains": "З",
+  "queued": false
+ },
+ {
+  "id": "S40",
+  "key": "TASKPLAN-PRO-V3/bb991941:3039",
+  "ts": "2026-09-04T01:48:05",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-3039-1.png"
+  ],
+  "text": "",
+  "app": "DS",
+  "desc": "главное окно без ожидаемой кнопки, новая сессия «Into the Unknown»",
+  "pains": "ЗД",
+  "queued": false
+ },
+ {
+  "id": "S41",
+  "key": "TASKPLAN-PRO-V3/bb991941:4294q",
+  "ts": "2026-09-04T04:22:48",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-4294q-1.png"
+  ],
+  "text": "что мне нужно : 1) левую колонку оставить с управлением, она должна сквозняком по всем окнам быть. 2) правую колонку оставить тоже, она должна сквозняком по всему выбранному воркспейсу быть, там уже есть чат и я его превращу в чат ассистент пользвателя. там же терминал, там же браузер и тд 3) а вот в средней колонке нужно делать мультичатовую , с чатами с ролями.",
+  "app": "DS",
+  "desc": "окно с панелью Files справа; владелец формулирует три зоны (левая управление, правая ассистент+терминал+браузер, средняя мультичат по ролям)",
+  "pains": "Ж",
+  "queued": true
+ },
+ {
+  "id": "S42",
+  "key": "TASKPLAN-PRO-V3/bb991941:4929",
+  "ts": "2026-09-04T05:25:41",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-4929-1.png"
+  ],
+  "text": "а как мне запустить то, что у тебя на скрине было? у меня сейчас вот так",
+  "app": "DS",
+  "desc": "контекстное меню сессии (Rename/Archive/Fork/Refresh), в шапке «no role 12724eab», центр пуст",
+  "pains": "ЗД",
+  "queued": false
+ },
+ {
+  "id": "S43",
+  "key": "TASKPLAN-PRO-V3/bb991941:5019q",
+  "ts": "2026-09-04T05:32:26",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-5019q-1.png"
+  ],
+  "text": "пока ты только экраны разделил. функционально ничего не работает. чата нет. провайдеров/модели я выбрать не могу. это минимальный список",
+  "app": "DS",
+  "desc": "две пустые колонки «no role», «Empty», поле «Message this column…»",
+  "pains": "З",
+  "queued": true
+ },
+ {
+  "id": "S44",
+  "key": "TASKPLAN-PRO-V3/bb991941:5204",
+  "ts": "2026-09-04T05:47:57",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-5204-1.png"
+  ],
+  "text": "блядь. ты наугад что-то пытаешься сделать? такое впечатление, что ты ебануты джун, который первый раз вообще разработку видит. То, что заархивировано в гите, это сделал квен за 20 минут. и там были изолированные вендоры в чатах с общим контекстом. Тыже уже 4 часа гоняешь яйца между карманами. ЧТО ТЫ ВООБЩЕ ДЕЛАЕШЬ? ТЫ ПОНИМАЕШЬ, ЧТО НУЖНО???? Я В ахуе, канешн",
+  "app": "DS",
+  "desc": "три пустых «Into the Unknown» под вкладками reviewer/orchestrator/worker",
+  "pains": "АДЗ",
+  "queued": false
+ },
+ {
+  "id": "S45",
+  "key": "TASKPLAN-PRO-V3/bb991941:5470",
+  "ts": "2026-09-04T06:14:16",
+  "n": 1,
+  "files": [
+   "TASKPLAN-PRO-V3-bb991941-5470-1.png"
+  ],
+  "text": "извини, это ты , блядь, о чем, нахуй????? ты , блядь, считаешь, что оно работает?????",
+  "app": "DS",
+  "desc": "шапка «WORKFLOW TEAM Architect…Researcher», справа «Owner Ass… glm-5.3-flash» — белый пустой прямоугольник, «Approval requests», «Directive to agents»",
+  "pains": "ДА",
+  "queued": false
+ },
+ {
+  "id": "S46",
+  "key": "TASKPLAN-PRO-V3/effc9b2f:2276",
+  "ts": "2026-09-04T18:05:29",
+  "n": 17,
+  "files": [
+   "TASKPLAN-PRO-V3-effc9b2f-2276-1.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-2.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-3.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-4.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-5.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-6.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-7.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-8.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-9.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-10.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-11.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-12.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-13.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-14.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-15.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-16.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2276-17.png"
+  ],
+  "text": "помести все скрины в /Users/kostenchuksergey/TASKPLAN PRO V3/DeepSeek Harness/DISCOVERY-DSH/SCREENSHOTS",
+  "app": "RF",
+  "desc": "17 образцов DeepSeek Harness: сессии, меню группировки, файлы, задачи, терминал, браузер, настройки, шапка ролей",
+  "pains": "Ж",
+  "queued": false
+ },
+ {
+  "id": "S47",
+  "key": "TASKPLAN-PRO-V3/effc9b2f:2319",
+  "ts": "2026-09-04T18:15:33",
+  "n": 19,
+  "files": [
+   "TASKPLAN-PRO-V3-effc9b2f-2319-1.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-2.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-3.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-4.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-5.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-6.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-7.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-8.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-9.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-10.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-11.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-12.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-13.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-14.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-15.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-16.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-17.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-18.png",
+   "TASKPLAN-PRO-V3-effc9b2f-2319-19.png"
+  ],
+  "text": "",
+  "app": "RF",
+  "desc": "19 образцов DeepSeek Harness: плагин-маркет, уведомления, подписки, боковая карточка, архив, боковые панели",
+  "pains": "Ж",
+  "queued": false
+ },
+ {
+  "id": "S48",
+  "key": "TASKPLAN-PRO-V3/240df162:17167",
+  "ts": "2026-09-06T18:09:43",
+  "n": 2,
+  "files": [
+   "TASKPLAN-PRO-V3-240df162-17167-1.webp",
+   "TASKPLAN-PRO-V3-240df162-17167-2.png"
+  ],
+  "text": "а какие процессы сейчас пытаются получить доступ? это ты или кодекс?",
+  "app": "OT",
+  "desc": "macOS: «python3.11 хочет получить доступ к iCloud Drive / Apple Music»; первый снимок — фото экрана камерой",
+  "pains": "ИВ",
+  "queued": false
+ },
+ {
+  "id": "S49",
+  "key": "OMG/6a01efce:11766",
+  "ts": "2026-09-10T19:29:58",
+  "n": 1,
+  "files": [
+   "OMG-6a01efce-11766-1.png"
+  ],
+  "text": "",
+  "app": "CL",
+  "desc": "Claude Desktop, панель файла: «Couldn't find this file … lives outside the working directory … Show in Finder»",
+  "pains": "ЗВ",
+  "queued": false
+ },
+ {
+  "id": "S50",
+  "key": "OMG/6a01efce:12039",
+  "ts": "2026-09-11T03:37:14",
+  "n": 1,
+  "files": [
+   "OMG-6a01efce-12039-1.webp"
+  ],
+  "text": "здесь сделай скрол я не могу закончить выбор моделей и внесение изменений. и всегда проверяй корректный скрол",
+  "app": "PI",
+  "desc": "pi-gui, окно «Edit custom endpoint»: длинный список моделей с чекбоксами, кнопки сохранения не видны, прокрутки нет",
+  "pains": "А",
+  "queued": false
+ },
+ {
+  "id": "S51",
+  "key": "OMG/6a01efce:12186",
+  "ts": "2026-09-11T03:55:17",
+  "n": 1,
+  "files": [
+   "OMG-6a01efce-12186-1.png"
+  ],
+  "text": "в qwen зашел, но это сообщение меня смущает. что это значит?",
+  "app": "PI",
+  "desc": "терминал Pi: жёлтое «Anthropic subscription auth is active. Third-party harness usage draws from extra usage…»",
+  "pains": "ВБ",
+  "queued": false
+ },
+ {
+  "id": "S52",
+  "key": "OMG/6a01efce:12205",
+  "ts": "2026-09-11T04:01:30",
+  "n": 1,
+  "files": [
+   "OMG-6a01efce-12205-1.png"
+  ],
+  "text": "убери этот скрол. я тебя о нем не просил и здесь должно все адаптивной версткой собираться",
+  "app": "PI",
+  "desc": "pi-gui: под ответом две полосы прокрутки (горизонтальная и вертикальная)",
+  "pains": "А",
+  "queued": false
+ },
+ {
+  "id": "S53",
+  "key": "OMG/6a01efce:12234",
+  "ts": "2026-09-11T04:37:51",
+  "n": 1,
+  "files": [
+   "OMG-6a01efce-12234-1.png"
+  ],
+  "text": "что ты здесь видишь?",
+  "app": "RF",
+  "desc": "макет «Workflow Team» (Stitch), три колонки (по описанию агента; файл не открывался повторно)",
+  "pains": "Ж",
+  "queued": false
+ },
+ {
+  "id": "S54",
+  "key": "OMG/6a01efce:12247",
+  "ts": "2026-09-11T04:41:13",
+  "n": 4,
+  "files": [
+   "OMG-6a01efce-12247-1.png",
+   "OMG-6a01efce-12247-2.png",
+   "OMG-6a01efce-12247-3.png",
+   "OMG-6a01efce-12247-4.png"
+  ],
+  "text": "а здесь что ты видишь?",
+  "app": "RF",
+  "desc": "4 состояния макета «Workflow Team» (Stitch): New thread, две пустые ленты Team lead/Worker с рейкой Owner Assistant, три колонки",
+  "pains": "Ж",
+  "queued": false
+ },
+ {
+  "id": "S55",
+  "key": "OMG/f0b671d7:1040",
+  "ts": "2026-09-11T18:02:32",
+  "n": 1,
+  "files": [
+   "OMG-f0b671d7-1040-1.webp"
+  ],
+  "text": "",
+  "app": "OT",
+  "desc": "ComfyUI Desktop: пустой «Unsaved Workflow (2)», иконки слева, «Запустить», «0 активно»",
+  "pains": "БЗ",
+  "queued": false
+ },
+ {
+  "id": "S56",
+  "key": "HARNESS/bde94333:124",
+  "ts": "2026-09-14T01:33:28",
+  "n": 1,
+  "files": [
+   "HARNESS-bde94333-124-1.png"
+  ],
+  "text": "скажи, этим удобно пользоваться?",
+  "app": "OW",
+  "desc": "собственный харнесс localhost:3777: семь колонок по 170 px, у каждой полный набор селекторов, поля ввода и кнопки внизу налезают друг на друга",
+  "pains": "АБ",
+  "queued": false
+ },
+ {
+  "id": "S57",
+  "key": "HARNESS/bde94333:139",
+  "ts": "2026-09-14T01:36:40",
+  "n": 2,
+  "files": [
+   "HARNESS-bde94333-139-1.png",
+   "HARNESS-bde94333-139-2.webp"
+  ],
+  "text": "это примеры. скажи , мы можем реализовать подобное?",
+  "app": "RF",
+  "desc": "2 макета «Workflow Team»: роли-вкладки, треды по вендорам, ленты рядом, панель «Проверка», рейка Owner Assistant",
+  "pains": "Ж",
+  "queued": false
+ },
+ {
+  "id": "S58",
+  "key": "OMG/ebc42c9f:218q",
+  "ts": "2026-09-15T00:26:10",
+  "n": 1,
+  "files": [
+   "OMG-ebc42c9f-218q-1.png"
+  ],
+  "text": "можно вместо этих моделей поставить то, что я тебе дал: qwen3.8-max , qwen3.8-flash , ZHIPU/GLM-5.3 , kimi-k3",
+  "app": "CL",
+  "desc": "меню моделей «Sonnet 5 / Haiku 4.5 / More models › Opus 4.7…»; владелец просит подставить свой список",
+  "pains": "З",
+  "queued": true
+ },
+ {
+  "id": "S59",
+  "key": "HARNESS/fb59eb7f:3321",
+  "ts": "2026-09-18T11:45:17",
+  "n": 1,
+  "files": [
+   "HARNESS-fb59eb7f-3321-1.png"
+  ],
+  "text": "на верхней панели , там где \"WORKFLOW TEAM\n\nArchitect\n\nTeam lead\n\nWorker\n\nReviewer\n\nTester\n\nDebugger\n\nResearcher\"   мне нужно кнопка ассистента, чтобы она была обособленной от выбора ролей. по ней я хочу вызывать окно ассистента и закрывать его. Ассистент должен выводиться правой независимой от ролей колонкой.",
+  "app": "OW",
+  "desc": "верхняя панель «WORKFLOW TEAM Architect … Researcher · ходов идёт: 0»",
+  "pains": "З",
+  "queued": false
+ },
+ {
+  "id": "S60",
+  "key": "HARNESS/f421b105:869",
+  "ts": "2026-09-20T06:19:28",
+  "n": 1,
+  "files": [
+   "HARNESS-f421b105-869-1.png"
+  ],
+  "text": "а что это такое у кодекса? как этим пользоваться? это поможет задаче, которую мы обсуждаем?",
+  "app": "CX",
+  "desc": "Codex Desktop: плашка «Хуки · ОтправкаЗапросаПользователем — hook returned invalid user prompt submit JSON output»",
+  "pains": "ВБ",
+  "queued": false
+ },
+ {
+  "id": "S61",
+  "key": "HARNESS/f421b105:1068",
+  "ts": "2026-09-20T06:59:05",
+  "n": 1,
+  "files": [
+   "HARNESS-f421b105-1068-1.png"
+  ],
+  "text": "",
+  "app": "CX",
+  "desc": "Codex (терминал): «Hooks need review: 1 hook is new» с тремя пунктами",
+  "pains": "Б",
+  "queued": false
+ },
+ {
+  "id": "S62",
+  "key": "HARNESS/f421b105:1081",
+  "ts": "2026-09-20T06:59:48",
+  "n": 1,
+  "files": [
+   "HARNESS-f421b105-1081-1.png"
+  ],
+  "text": "",
+  "app": "CX",
+  "desc": "Codex (терминал): таблица хуков по событиям (Installed/Active/Review), «Press t to trust all; enter to review hooks; esc to close»",
+  "pains": "Б",
+  "queued": false
+ },
+ {
+  "id": "S63",
+  "key": "HARNESS/f421b105:1094",
+  "ts": "2026-09-20T07:00:39",
+  "n": 1,
+  "files": [
+   "HARNESS-f421b105-1094-1.png"
+  ],
+  "text": "",
+  "app": "CX",
+  "desc": "Codex (терминал): предупреждения MCP «filesystem timed out… failed: 45telega, docker, filesystem, postgres» + «Stop hooks · Hook 1 · new · Press t to trust»",
+  "pains": "ВБ",
+  "queued": false
+ },
+ {
+  "id": "S64",
+  "key": "HARNESS/f421b105:1108",
+  "ts": "2026-09-20T07:05:48",
+  "n": 1,
+  "files": [
+   "HARNESS-f421b105-1108-1.png"
+  ],
+  "text": "1) как выйти? 2) что там за проблемы с mcp?",
+  "app": "CX",
+  "desc": "Codex (терминал): «[x] Hook 1 … Trust: Trusted · Press space or enter to toggle; esc to go back»",
+  "pains": "БЗ",
+  "queued": false
+ },
+ {
+  "id": "S65",
+  "key": "HARNESS/f421b105:1265",
+  "ts": "2026-09-20T07:31:50",
+  "n": 1,
+  "files": [
+   "HARNESS-f421b105-1265-1.png"
+  ],
+  "text": "Еще добавь следующее: мне нужно , чтобы вы сделали \"New thread\" ,  когда пользователь просто пока общается с моделями. НО, я бы хотел, чтобы это был чат, в котором можно было переключать модели в ручном режиме(а также выбрать \"автоматический\" подбор моделей через jev. Как лучше его настроить?) . Чтобы это был просто чат с моделью(как с тобой сейчас) , чтобы при переключении моделей контекст чата передавался вновь подключенной. Ты понимаешь, что я хочу? ответь коротко, как ты понял?",
+  "app": "RF",
+  "desc": "макет «New thread» (Stitch): «Let's build», шаблоны задач, Local/Worktree, рейка Owner Assistant; логотип закрашен",
+  "pains": "Ж",
+  "queued": false
+ },
+ {
+  "id": "S66",
+  "key": "HARNESS/f421b105:2438",
+  "ts": "2026-09-20T21:54:53",
+  "n": 1,
+  "files": [
+   "HARNESS-f421b105-2438-1.png"
+  ],
+  "text": "тогда пока исправь. ollama cloude добавь или исправь , правильный адрес api поставь",
+  "app": "OW",
+  "desc": "Settings, вендор Ollama: «ключ нет», «key_not_applicable — вендору ollama ключ API не нужен», адрес API, «Проверить снова»",
+  "pains": "ВБ",
+  "queued": false
+ },
+ {
+  "id": "S67",
+  "key": "OMG/1964d85b:14091",
+  "ts": "2026-09-26T01:41:37",
+  "n": 1,
+  "files": [
+   "OMG-1964d85b-14091-1.png"
+  ],
+  "text": "что значит это сообщение: \"unexpected status 401 Unauthorized: Incorrect API key provided: sk-svcac***********************************************************************************************************************************************************fvMA. You can find your API key at https://platform.openai.com/account/api-keys., url: http://127.0.0.1:11435/api/codex/v1/responses, cf-ray: a40d85eafd414d76-FRA, request id: ec766966-ceea-4498-a0a7-7cc13dc3307a\" которое мне вывел кодекс в чате с воркером?",
+  "app": "CX",
+  "desc": "Codex Desktop: красный блок «unexpected status 401 Unauthorized: Incorrect API key… url: http://127.0.0.1:11435/…»",
+  "pains": "В",
+  "queued": false
+ },
+ {
+  "id": "S68",
+  "key": "OMG/1964d85b:14145",
+  "ts": "2026-09-26T01:47:06",
+  "n": 1,
+  "files": [
+   "OMG-1964d85b-14145-1.png"
+  ],
+  "text": "у меня сейчас в codex были установлены и другие провайдеры. как вернуть все к настройкам кодекс?",
+  "app": "CX",
+  "desc": "Codex Desktop: «Выбрать модель» — kimi/glm/deepseek/gemma:cloud вперемешку с GPT-6 Astra, GPT-5.6 Sol/Terra/Luna",
+  "pains": "Б",
+  "queued": false
+ },
+ {
+  "id": "S69",
+  "key": "OMG/1964d85b:14520",
+  "ts": "2026-09-26T02:31:18",
+  "n": 1,
+  "files": [
+   "OMG-1964d85b-14520-1.png"
+  ],
+  "text": "проблема глобальная. https://www.reddit.com/r/codex/s/e3Ocd70nlQ    https://x.com/thsottiaux/status/2103620061156290622",
+  "app": "EX",
+  "desc": "пост в X «We are aware that codex is down…» (владелец: «проблема глобальная»)",
+  "pains": "",
+  "queued": false
+ },
+ {
+  "id": "S70",
+  "key": "OMG/1964d85b:14591",
+  "ts": "2026-09-26T02:44:25",
+  "n": 1,
+  "files": [
+   "OMG-1964d85b-14591-1.png"
+  ],
+  "text": "так. давай, проверь, sol 6 и luna 6 есть в роутере? мне пишет,что таких моделей нет в каталоге. нужно это починить, так как они есть у опенаи",
+  "app": "CX",
+  "desc": "Codex Desktop: реплика «ты ожил?» и плашка «Model is not in the configured routing catalog»",
+  "pains": "В",
+  "queued": false
+ },
+ {
+  "id": "S71",
+  "key": "OMG/1964d85b:22768q",
+  "ts": "2026-09-27T23:44:31",
+  "n": 1,
+  "files": [
+   "OMG-1964d85b-22768q-1.png"
+  ],
+  "text": "",
+  "app": "OT",
+  "desc": "Devin: ответ «Нет, файл я не читал напрямую — SQL-запрос через sqlite3 к state.vscdb…» на «ты читаешь файл?»",
+  "pains": "И",
+  "queued": true
+ },
+ {
+  "id": "S72",
+  "key": "OMG/2adee739:1100",
+  "ts": "2026-09-30T03:39:31",
+  "n": 3,
+  "files": [
+   "OMG-2adee739-1100-1.webp",
+   "OMG-2adee739-1100-2.webp",
+   "OMG-2adee739-1100-3.webp"
+  ],
+  "text": "посмотри на общий дизайн, и скажи, чтобы ты поменял? предложи свои варианты дизайнкодов, свои решения по деталям,  по ключевым элементам. Смотри на весь представленный воркбенч, не только ОМГ.  Например элементы раздела threads, ты со всем согласен? для этого изучи решения этих элементов у лидеров рынка. Дай мне решения достойные Awards. Ты понимаешь, что я хочу?",
+  "app": "OW",
+  "desc": "Workbench (asvh-workbench v0.3, Demo Mode), 3 экрана: Threads/#main, New thread «вендор не выбран» с колонкой ассистента и без неё",
+  "pains": "БЗ",
+  "queued": false
+ },
+ {
+  "id": "S73",
+  "key": "OMG/2adee739:1326",
+  "ts": "2026-09-30T04:01:13",
+  "n": 1,
+  "files": [
+   "OMG-2adee739-1326-1.webp"
+  ],
+  "text": "",
+  "app": "OW",
+  "desc": "страница дизайн-концепций (0 Как сейчас / A / B / C): вместо русского текста кракозябры",
+  "pains": "А",
+  "queued": false
+ }
+]

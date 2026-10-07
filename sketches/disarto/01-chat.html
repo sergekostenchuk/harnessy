@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Скетч 01 · Чат · сайдбар развёрнут / свёрнут</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ===== общий механизм живых скетчей (05.10): виды, раскрытая карточка, списки, вкладки и потоки в карточке ===== */
+.views{position:relative;height:100%;min-height:0}
+.view{position:absolute;inset:0;padding:18px 20px;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .22s,transform .22s;overflow:hidden}.view.on{opacity:1;transform:none;pointer-events:auto}
+.wrap{max-width:900px;margin:0 auto;padding:6px 0}
+.seg span[data-v],.seg span[data-pick]{cursor:pointer}
+.nums{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:8px 0 20px}.nums.n3{grid-template-columns:repeat(3,1fr)}
+.nums div{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px 14px}.nums b{display:block;font:500 22px/1.1 var(--font);letter-spacing:-.01em;margin-bottom:4px}.nums small{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.nums b.bad{color:var(--bad)}.nums b.acc{color:var(--accent)}.nums b.ok{color:var(--ok)}
+.lst{border:1px solid var(--line2);border-radius:14px;background:var(--panel);overflow:hidden}
+.li{display:grid;grid-template-columns:var(--cols);gap:14px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .15s;font-size:12.5px;color:var(--ink2)}.li:last-child{border-bottom:0}.li:hover{background:var(--raised)}
+.li.head{padding:8px 16px;background:var(--raised);font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);cursor:default}
+.li b{font-weight:500;font-size:13px;color:var(--ink);display:block}.li small{font:10px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);display:block;margin-top:2px}
+.li .m{font:11px var(--mono);color:var(--ink2)}.li .m.hot{color:var(--accent)}.li .m.bad{color:var(--bad)}.li .chev{color:var(--ink3);text-align:right}.li.dim b{color:var(--ink2)}
+.li .o,.o{width:12px;height:12px;border-radius:50%;flex:none;display:inline-block}.o.run{background:radial-gradient(circle at 35% 35%,#e2b47c,#c27a34 55%,#7a3414)}.o.idle{background:var(--line2)}.o.done{background:var(--ok)}.o.need{background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}.o.err{background:var(--bad-fill,#a3304b)}
+.filters{display:flex;gap:6px;margin:0 0 12px;align-items:center}.filters .chip{cursor:pointer}.filters .chip.on{color:var(--ink);border-color:#4a4a52}.filters .sp{flex:1}
+.note-bar{display:flex;justify-content:space-between;margin-top:12px;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.ovl{position:absolute;inset:0;z-index:20;background:rgba(6,6,8,.55);opacity:0;pointer-events:none;transition:opacity .25s}.ovl.on{opacity:1;pointer-events:auto}
+.panel{position:absolute;border:1px solid var(--line2);border-radius:14px;background:var(--panel);box-shadow:0 30px 80px rgba(0,0,0,.65);overflow:hidden;transition:left .34s cubic-bezier(.2,.7,.2,1),top .34s cubic-bezier(.2,.7,.2,1),width .34s cubic-bezier(.2,.7,.2,1),height .34s cubic-bezier(.2,.7,.2,1)}
+.panel .inner{opacity:0;transition:opacity .18s;padding:20px 22px}.panel.open .inner{opacity:1;transition-delay:.16s}
+.panel .x{position:absolute;right:14px;top:12px;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--ink3);cursor:pointer;font-size:16px;z-index:2}.panel .x:hover{background:var(--raised);color:var(--ink)}
+.from{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px}
+.ch{display:flex;align-items:center;gap:10px;margin-bottom:6px;padding-right:36px}.ch h3{margin:0;font-size:19px;font-weight:500;line-height:1.25}.ch .r{margin-left:auto;display:flex;gap:6px;flex:none}
+.csub{font-size:12.5px;color:var(--ink2);margin-bottom:14px}.csub b{color:var(--ink);font-weight:500}
+.two{display:grid;grid-template-columns:1.2fr 1fr;gap:12px}.two.eq{grid-template-columns:1fr 1fr}
+.blk{border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:14px 16px}.blk+.blk{margin-top:12px}.two>.blk+.blk{margin-top:0}.blk .t{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px;display:flex;justify-content:space-between}
+.blk p{margin:0;font-size:12.5px;color:var(--ink2);line-height:1.5}.blk p b{color:var(--ink);font-weight:500}.blk ul{margin:0;padding-left:16px;font-size:12.5px;color:var(--ink2);line-height:1.6}.blk ul b{color:var(--ink);font-weight:500}
+.blk q{display:block;quotes:none;border-left:2px solid var(--line2);padding:2px 0 2px 10px;color:var(--ink2);font-size:12.5px;line-height:1.5}
+.tl{display:flex;flex-direction:column}.tl>div{display:grid;grid-template-columns:18px 52px 1fr;gap:10px;align-items:start;padding:6px 0;font-size:12.5px;color:var(--ink2);position:relative}.tl>div::before{content:"";position:absolute;left:8px;top:22px;bottom:-8px;width:1px;background:var(--line2)}.tl>div:last-child::before{display:none}
+.tl i{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center;font-size:9px;color:#fff;margin-top:1px;background:var(--raised);font-style:normal}.tl .d i{background:var(--ok);border-color:var(--ok)}.tl .c i{border:2px solid var(--accent);border-right-color:transparent}.tl .x i{background:var(--bad-fill,#a3304b);border-color:var(--bad-fill,#a3304b)}
+.tl span{font:10.5px var(--mono);color:var(--ink3);padding-top:2px}.tl b{color:var(--ink);font-weight:500;display:block}.tl small{display:block;color:var(--ink3);font-size:11px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:12.5px}.kv span{color:var(--ink3)}.kv b{font-weight:400;color:var(--ink)}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.acts .btn{cursor:pointer}
+.decide{border-left:2px solid var(--accent);padding-left:12px;font-size:12.5px;color:var(--ink2);margin-top:12px}.decide .lbl{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.ctabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 0 12px}.ctabs span{padding:6px 10px;font-size:12px;color:var(--ink2);border-bottom:2px solid transparent;cursor:pointer}.ctabs span.on{color:var(--ink);border-bottom-color:var(--ink)}
+.steps{display:flex;gap:6px;margin:0 0 16px}.steps i{flex:1;height:3px;border-radius:2px;background:var(--line2)}.steps i.on{background:var(--accent)}
+.fh h4{margin:0 0 4px;font-size:16px;font-weight:500}.fh>p{margin:0 0 14px;color:var(--ink2);font-size:12.5px}
+.ft{display:flex;gap:8px;margin-top:16px;align-items:center}.ft .btn{cursor:pointer}
+.opt{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:12.5px}.opt:first-child{border-top:0}.opt small{display:block;color:var(--ink3);font-size:11px}.opt>.tog,.opt>.seg{margin-left:auto}
+.pick{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;background:var(--raised);font-size:12.5px;cursor:pointer;display:block}.pick small{display:block;color:var(--ink3);font-size:11px}.pick.on{border-color:var(--accent)}.pick+.pick{margin-top:8px}
+.pp{display:grid;grid-template-columns:104px 1fr;gap:8px 14px;font-size:12.5px}.pp span{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding-top:2px}.pp b{font-weight:400;color:var(--ink);line-height:1.45}
+.hint-bar{display:flex;gap:16px;justify-content:center;margin:12px 0 0;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.recon{margin:14px 0 0;padding:10px 14px;border:1px dashed var(--line2);border-radius:10px;font-size:12px;color:var(--ink2);max-width:1280px}.recon b{color:var(--ink);font-weight:500}
+[data-passport]{cursor:pointer}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;font:500 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--line2);color:var(--ink2)}.pill.acc{color:var(--accent);border-color:transparent;background:var(--accent-soft)}
+  .crow{display:grid;grid-template-columns:1fr 130px 54px;gap:10px;align-items:center;padding:5px 0;font-size:12.5px;color:var(--ink2)}.crow b{font:500 11px var(--mono);color:var(--ink);text-align:right}.crow .bar{margin:0}
+  .health{display:flex;gap:3px;align-items:flex-end;height:16px}.health i{width:5px;height:100%;border-radius:1px;background:var(--line2)}.health i.ok{background:var(--ok)}.health i.bad{background:var(--bad-fill,#a3304b)}
+  .feed .card{cursor:pointer;transition:border-color .15s}.feed .card:hover{border-color:#4a4a52}
+</style>
+<style>
+  /* ── палитра в духе автора: ступени графита, один тёплый акцент, зелёный/красный только по смыслу ── */
+  :root{
+    --canvas:#0a0a0b; --bg:#101012; --panel:#141416; --raised:#1b1b1e; --tile:#202024; --line:#242428; --line2:#2d2d32;
+    --ink:#ececee; --ink2:#9a9aa2; --ink3:#66666e; --accent:#c27a34; --gold:#dcb866; --accent-soft:rgba(194,122,52,.14); --ok:#3fbf6f; --bad:#c9566e; --bad-fill:#a3304b;
+    --font:"Inter",-apple-system,sans-serif; --mono:"JetBrains Mono",Menlo,monospace; --r:14px; --rs:9px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);font:13px/1.45 var(--font);-webkit-font-smoothing:antialiased;
+       background-image:radial-gradient(circle at 1px 1px,#1a1a1d 1px,transparent 1px);background-size:24px 24px}
+  .sheet{max-width:1320px;margin:0 auto;padding:40px 20px 60px}
+  h1{font:500 14px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin:0 0 6px}
+  .sub{color:var(--ink2);font-size:13px;margin:0 0 28px;max-width:860px}
+  .frame{margin:0 0 56px}
+  .cap{display:flex;justify-content:space-between;font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:10px 2px 0}
+  /* ── окно приложения ── */
+  .app{width:1280px;height:860px;background:var(--bg);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:grid;grid-template-columns:232px 1fr;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .app.rail{grid-template-columns:60px 1fr}
+  /* сайдбар */
+  .side{background:var(--panel);border-right:1px solid var(--line);padding:12px 10px;display:flex;flex-direction:column;gap:2px;position:relative;z-index:5}
+  .ws{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--rs);font-weight:500;margin-bottom:8px}
+  .ws .logo{width:24px;height:24px;border-radius:7px;background:linear-gradient(160deg,#2a2a2f,#151517);border:1px solid var(--line2);display:grid;place-items:center}
+  .ws .logo svg{width:12px;height:12px;stroke:var(--gold);fill:none;stroke-width:2.2;stroke-linecap:round}
+  .ws .chev{color:var(--ink3);font-size:11px;margin-left:2px} .ws .col{margin-left:auto;color:var(--ink3)}
+  .search{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--rs);color:var(--ink3);background:var(--bg);margin-bottom:10px}
+  .search kbd{margin-left:auto;font:10px var(--mono);color:var(--ink3);border:1px solid var(--line2);border-radius:4px;padding:1px 5px}
+  .nav{display:flex;align-items:center;gap:9px;height:32px;padding:0 9px;border-radius:var(--rs);color:var(--ink2);cursor:default}
+  .nav.on{background:var(--raised);color:var(--ink)} .nav:hover{background:var(--raised)}
+  .nav svg,.search svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .nav .b{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad-fill,#a3304b);color:#fff;font:600 10px/18px var(--mono);text-align:center}
+  .nav .m{margin-left:auto;font:10px var(--mono);color:var(--ink3)}
+  .nav .chev{margin-left:auto;color:var(--ink3);font-size:10px}
+  .sub-nav{margin-left:16px;border-left:1px solid var(--line2);padding-left:6px;display:flex;flex-direction:column;gap:2px}
+  .sub-nav .nav{height:28px;font-size:12.5px}
+  .grp{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:12px 9px 4px;display:flex;align-items:center} .grp .chev{margin-left:auto;font-size:9px}
+  .foot{margin-top:auto;display:flex;flex-direction:column;gap:2px}
+  .limits{margin:8px 0 6px;padding:9px 10px;border:1px solid var(--line2);border-radius:var(--rs);background:var(--raised)}
+  .limits .row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink2);margin-bottom:4px} .limits .row b{font:500 11px var(--mono);color:var(--ink)}
+  .bar{height:3px;border-radius:2px;background:var(--line2);overflow:hidden;margin-bottom:7px} .bar i{display:block;height:100%;background:var(--ok)} .bar i.warn{background:var(--accent)}
+  .limits .row:last-of-type,.bar:last-child{margin-bottom:0}
+  .user{display:flex;align-items:center;gap:9px;padding:7px 8px;border:1px solid var(--line2);border-radius:var(--rs);background:var(--raised)}
+  .av{width:26px;height:26px;border-radius:50%;background:linear-gradient(160deg,#d9a066,#8a5a2b);display:grid;place-items:center;font:600 11px var(--font);color:#1a1a1a;position:relative;flex:none}
+  .av i{position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border-radius:50%;background:var(--ok);border:2px solid var(--raised)}
+  .user div{line-height:1.2} .user small{display:block;color:var(--ink3);font-size:10.5px} .user .chev{margin-left:auto;color:var(--ink3);font-size:11px}
+  /* рейка (свёрнутый сайдбар) */
+  .rail .side{padding:12px 10px;align-items:center}
+  .rail .ws{padding:0;margin-bottom:10px} .rail .nav{width:36px;height:34px;padding:0;justify-content:center;position:relative}
+  .rail .nav .b{position:absolute;top:2px;right:2px;margin:0;min-width:14px;height:14px;font-size:9px;line-height:14px;padding:0 3px}
+  .rail .search{width:36px;height:34px;padding:0;justify-content:center;margin-bottom:8px}
+  .rail .av{width:28px;height:28px}
+  .tip{position:absolute;left:52px;top:0;height:28px;line-height:28px;padding:0 10px;background:var(--tile);border:1px solid var(--line2);border-radius:8px;color:var(--ink);font-size:12.5px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+  .tip::before{content:"";position:absolute;left:-5px;top:9px;width:8px;height:8px;background:var(--tile);border-left:1px solid var(--line2);border-bottom:1px solid var(--line2);transform:rotate(45deg)}
+  .ring{width:26px;height:26px;border-radius:50%;background:conic-gradient(var(--ok) 0 62%,var(--line2) 62% 100%);display:grid;place-items:center} .ring i{width:18px;height:18px;border-radius:50%;background:var(--panel)}
+  /* главная область */
+  .main{display:grid;grid-template-rows:auto 1fr auto;min-height:0;background:var(--bg)}
+  .top{display:flex;align-items:center;gap:10px;height:52px;padding:0 20px;border-bottom:1px solid var(--line)}
+  .orb{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#e2b47c,#c27a34 55%,#7a3414);box-shadow:0 0 0 3px rgba(194,122,52,.15)}
+  .top b{font-weight:500} .top .st{font:10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-left:4px} .top .st i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px}
+  .top .tools{margin-left:auto;display:flex;gap:4px} .top .tools span{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--ink3)} .top .tools svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round}
+  .feed{overflow:auto;padding:22px 0}
+  .col{max-width:760px;margin:0 auto;padding:0 20px;display:flex;flex-direction:column;gap:18px}
+  .me{align-self:flex-end;max-width:70%;background:var(--raised);border:1px solid var(--line2);border-radius:14px 14px 4px 14px;padding:10px 14px;font-size:13.5px}
+  .ai{display:grid;grid-template-columns:24px 1fr;gap:12px}
+  .ai .orb{width:20px;height:20px;margin-top:2px}
+  .thought{display:inline-flex;align-items:center;gap:6px;color:var(--ink3);font-size:12px;margin-bottom:6px;cursor:default} .thought::before{content:"›";font-size:13px}
+  .ai p{margin:0 0 10px;font-size:13.5px;line-height:1.55} .ai p:last-child{margin:0}
+  .cite{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:5px;background:var(--tile);border:1px solid var(--line2);font:10px var(--mono);color:var(--ink2);vertical-align:1px;margin-left:2px}
+  .card{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:12px 14px;margin:8px 0 6px}
+  .card .h{display:flex;align-items:center;gap:8px;font-weight:500;font-size:13px} .card .h .cnt{margin-left:auto;font:11px var(--mono);color:var(--ink3)}
+  .card .h svg{width:14px;height:14px;stroke:var(--ink2);fill:none;stroke-width:1.7;stroke-linecap:round}
+  .ticks{display:flex;gap:2px;margin:10px 0 10px} .ticks i{flex:1;height:7px;border-radius:1.5px;background:var(--line2)} .ticks i.on{background:var(--accent)} .ticks i.bad{background:var(--bad-fill,#a3304b)}
+  .chk{display:flex;flex-direction:column;gap:6px;font-size:12.5px} .chk div{display:flex;align-items:center;gap:8px;color:var(--ink2)} .chk div.d{color:var(--ink)}
+  .chk .ok{width:14px;height:14px;border-radius:50%;background:var(--ok);display:grid;place-items:center;color:#fff;font-size:9px;font-weight:700} .chk .run{width:14px;height:14px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent} .chk .todo{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--line2)}
+  .chk .t{margin-left:auto;font:10.5px var(--mono);color:var(--ink3)}
+  .act{display:flex;gap:8px;margin-top:10px} .btn{height:30px;padding:0 12px;border-radius:8px;border:1px solid var(--line2);background:var(--raised);color:var(--ink);font:500 12.5px var(--font);display:inline-flex;align-items:center;gap:6px} .btn.p{background:var(--accent);border-color:var(--accent);color:#1a1a1a}
+  .decide{border-left:2px solid var(--accent);padding-left:12px} .decide .lbl{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+  .fb{display:flex;gap:4px;margin-top:8px} .fb span{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--ink3)} .fb svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round}
+  /* композер */
+  .comp{padding:12px 20px 12px}
+  .box{max-width:760px;margin:0 auto;border:1px solid var(--line2);border-radius:14px;background:var(--panel);padding:12px 12px 10px;position:relative}
+  .box::before{content:"";position:absolute;inset:-1px;border-radius:15px;padding:1px;background:linear-gradient(120deg,rgba(194,122,52,.45),transparent 40%,transparent 60%,rgba(194,122,52,.25));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+  .box .in{color:var(--ink3);font-size:13.5px;padding:2px 4px 10px}
+  .box .bar2{display:flex;align-items:center;gap:6px}
+  .chip{height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--line2);background:var(--raised);color:var(--ink2);font-size:12px;display:inline-flex;align-items:center;gap:6px} .chip.sq{width:28px;padding:0;justify-content:center}
+  .chip svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round} .chip .chev{font-size:10px;color:var(--ink3)}
+  .chip.model{border-color:var(--line2);color:var(--ink)} .chip.model .dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  .send{margin-left:auto;display:flex;gap:6px;align-items:center} .send .mic{width:28px;height:28px;display:grid;place-items:center;color:var(--ink3)} .send .go{width:30px;height:30px;border-radius:50%;background:var(--ink);display:grid;place-items:center;color:var(--bg)} .send svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+  .status{max-width:760px;margin:8px auto 0;display:flex;gap:18px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)} .status i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:1px;animation:p 1.4s ease-in-out infinite} .status .r{margin-left:auto}
+  .status kbd{border:1px solid var(--line2);border-radius:3px;padding:0 4px;font:inherit}
+  @keyframes p{50%{opacity:.35}}
+  /* док-пилюля свёрнутого чата */
+  .dock{position:absolute;right:24px;bottom:118px;display:flex;align-items:center;gap:10px;padding:8px 10px 8px 8px;border:1px solid var(--line2);border-radius:999px;background:var(--panel);box-shadow:0 14px 40px rgba(0,0,0,.55)}
+  .dock .orb{width:28px;height:28px} .dock b{font-weight:500;font-size:12.5px;display:block} .dock small{display:block;font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .dock .open{margin-left:6px;height:24px;padding:0 10px;border-radius:999px;background:var(--accent);color:#1a1a1a;font:600 10px var(--mono);letter-spacing:.06em;display:grid;place-items:center}
+  .main{position:relative}
+  /* легенда */
+  .legend{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:1280px;margin:18px 0 0}
+  .legend div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--ink2);background:var(--panel)} .legend b{display:block;color:var(--ink);font-weight:500;margin-bottom:3px;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <h1>Harnessy · скетч 01 · чат</h1>
+  <p class="sub">Стиль по разбору @disarto.digital: ступени графита (подложка → панель → плитка), один тёплый акцент, зелёный/красный только по смыслу, моно-капс для метаданных, тик-полоса для «сколько», активный пункт — мягкая плашка. Содержание — наше: проект OMG, оркестратор, прогон H1.5. Отдельный скетч, в прототип не встроен. <b>Карточка прогона и карточка воркера в ленте раскрываются поверх чата</b> (клик), × / клик мимо / Esc — обратно.</p>
+
+  <!-- ═══════════ КАДР 1: сайдбар развёрнут ═══════════ -->
+  <div class="frame">
+    <div class="app">
+      <aside class="side">
+        <div class="ws"><span class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></span>OMG <span class="chev">▾</span><span class="col">⟨</span></div>
+        <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Найти… <kbd>⌘K</kbd></div>
+        <div class="nav on"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg>Чат<span class="b">3</span></div>
+        <div class="nav"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg>План<span class="m">87 · L1</span></div>
+        <div class="nav"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg>Стая<span class="m">6 мест</span></div>
+        <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg>Расход<span class="m" style="color:var(--bad)">Codex 94%</span></div>
+        <div class="nav"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg>Журнал</div>
+        <div class="nav"><svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Артефакты<span class="chev">⌄</span></div>
+        <div class="sub-nav">
+          <div class="nav">Документ стадии</div>
+          <div class="nav">Отчёты ревью</div>
+        </div>
+        <div class="grp">Проекты<span class="chev">⌄</span></div>
+        <div class="nav on" style="background:transparent;color:var(--ink)"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg>OMG<span class="m">◆ 2</span></div>
+        <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg>HARNESS<span class="m">спит</span></div>
+        <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg>Принтер Brother</div>
+        <div class="foot">
+          <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 01-.3 2l2 1.6-2 3.4-2.4-.9a7 7 0 01-3.4 2L12.5 22h-1l-.4-2.6a7 7 0 01-3.4-2l-2.4.9-2-3.4 2-1.6A7 7 0 015 12a7 7 0 01.3-2L3.3 8.4l2-3.4 2.4.9a7 7 0 013.4-2L11.5 2h1l.4 2.6a7 7 0 013.4 2l2.4-.9 2 3.4-2 1.6a7 7 0 01.3 2z"/></svg>Настройки</div>
+          <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 015 0c0 1.5-2.5 2-2.5 3.5M12 17h.01"/></svg>Справка</div>
+          <div class="limits">
+            <div class="row"><span>Claude · неделя</span><b>62%</b></div><div class="bar"><i style="width:62%"></i></div>
+            <div class="row"><span>Codex · 5 часов</span><b style="color:var(--bad)">94%</b></div><div class="bar"><i class="warn" style="width:94%;background:var(--bad-fill,#a3304b)"></i></div>
+          </div>
+          <div class="user"><span class="av">S<i></i></span><div>Serge<small>9616166@gmail.com</small></div><span class="chev">⌄</span></div>
+        </div>
+      </aside>
+
+      <section class="main">
+        <div class="top"><span class="orb"></span><b>Оркестратор · OMG</b><span class="st"><i></i>работает · прогон H1.5 · шаг 3/7</span>
+          <div class="tools"><span><svg viewBox="0 0 24 24"><path d="M4 12h16M12 4v16"/></svg></span><span><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M9 5v14"/></svg></span><span><svg viewBox="0 0 24 24"><path d="M6 10h12M6 14h12"/></svg></span><span><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></span></div>
+        </div>
+
+        <div class="feed"><div class="col">
+          <div class="me">Что сейчас делает команда и что ждёт меня?</div>
+
+          <div class="ai"><span class="orb"></span><div>
+            <div class="thought">думал 2,8 с</div>
+            <p>Двое ждут вас: <b>ревьюер</b> просит подпись M0 по D8.4d<span class="cite">1</span>, <b>воркер 2</b> упёрся в лимит Codex и остановился<span class="cite">2</span>. Прогон H1.5 на шаге 3 из 7, сбоев нет.</p>
+            <div class="card">
+              <div class="h"><svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg>Прогон H1.5 · check:backend<span class="cnt">3/7</span></div>
+              <div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
+              <div class="chk">
+                <div class="d"><span class="ok">✓</span>сборка<span class="t">12 с</span></div>
+                <div class="d"><span class="ok">✓</span>typecheck<span class="t">41 с</span></div>
+                <div class="d"><span class="ok">✓</span>unit · 3410/3410<span class="t">3 м 50 с</span></div>
+                <div><span class="run"></span>integration · идёт<span class="t">2 м 10 с…</span></div>
+                <div><span class="todo"></span>e2e</div>
+                <div><span class="todo"></span>кольцо импортов</div>
+                <div><span class="todo"></span>отчёт ревьюеру</div>
+              </div>
+            </div>
+            <div class="decide">
+              <div class="lbl">Нужно ваше решение · 40 мин</div>
+              <p>Воркер 2 стоит до сброса Codex в 19:58. Можно перевести его на Sonnet сейчас (ход ≈ 0,3 % недели Claude) или ждать.</p>
+              <div class="act"><span class="btn p">Перевести на Sonnet</span><span class="btn">Ждать сброса</span><span class="btn">Открыть D8.4d</span></div>
+            </div>
+            <div class="fb"><span><svg viewBox="0 0 24 24"><path d="M8 8h8v8H8z"/><path d="M6 6h8"/></svg></span><span><svg viewBox="0 0 24 24"><path d="M7 11l5-6 5 6M12 5v14"/></svg></span><span><svg viewBox="0 0 24 24"><path d="M7 13l5 6 5-6M12 19V5"/></svg></span><span><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0114-5l2 2M20 4v5h-5"/></svg></span></div>
+          </div></div>
+
+          <div class="me">Переведи на Sonnet и напомни про M0 после прогона</div>
+
+          <div class="ai"><span class="orb"></span><div>
+            <div class="thought">думал 1,1 с</div>
+            <p>Готово: воркер 2 → Sonnet, задача продолжена с шага «тесты». Напоминание о подписи M0 поставлено на завершение прогона (≈ 18:40).</p>
+            <div class="card" style="padding:10px 14px">
+              <div class="h"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>Напоминание · после прогона H1.5<span class="cnt">≈ 18:40</span></div>
+            </div>
+          </div></div>
+        </div></div>
+
+        <div class="comp">
+          <div class="box">
+            <div class="in">Написать оркестратору…</div>
+            <div class="bar2">
+              <span class="chip sq"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+              <span class="chip"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Поиск</span>
+              <span class="chip"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 00-3 11v3h6v-3a6 6 0 00-3-11zM10 21h4"/></svg>Думать</span>
+              <span class="chip model"><span class="dot"></span>Sonnet · среднее<span class="chev">▾</span></span>
+              <span class="send"><span class="mic"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><span class="go"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></span>
+            </div>
+          </div>
+          <div class="status"><span><i></i>прогон · 3/7 · идёт</span><span>ход ≈ 0,05 %</span><span>контекст 38 %</span><span class="r"><kbd>⌘K</kbd> команды · <kbd>⌘\</kbd> панель</span></div>
+        </div>
+      </section>
+    </div>
+    <div class="cap"><span>01 · чат · сайдбар развёрнут</span><span>1280 × 860 · облик графит</span></div>
+  </div>
+
+  <!-- ═══════════ КАДР 2: сайдбар свёрнут в рейку, tooltip, док-пилюля ═══════════ -->
+  <div class="frame">
+    <div class="app rail">
+      <aside class="side">
+        <div class="ws"><span class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></span></div>
+        <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></div>
+        <div class="nav on"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg><span class="b">3</span></div>
+        <div class="nav" style="background:var(--raised)"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg><span class="tip">План · 87 задач · L1</span></div>
+        <div class="nav"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg></div>
+        <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg><span class="b" style="background:var(--bad-fill,#a3304b)">!</span></div>
+        <div class="nav"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg></div>
+        <div class="nav"><svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></div>
+        <div class="nav" style="margin-top:8px"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg></div>
+        <div class="foot" style="align-items:center">
+          <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 01-.3 2l2 1.6-2 3.4-2.4-.9a7 7 0 01-3.4 2L12.5 22h-1l-.4-2.6a7 7 0 01-3.4-2l-2.4.9-2-3.4 2-1.6A7 7 0 015 12a7 7 0 01.3-2L3.3 8.4l2-3.4 2.4.9a7 7 0 013.4-2L11.5 2h1l.4 2.6a7 7 0 013.4 2l2.4-.9 2 3.4-2 1.6a7 7 0 01.3 2z"/></svg></div>
+          <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 015 0c0 1.5-2.5 2-2.5 3.5M12 17h.01"/></svg></div>
+          <div class="nav" style="height:36px"><span class="ring"><i></i></span></div>
+          <div class="nav" style="height:36px"><span class="av">S<i></i></span></div>
+        </div>
+      </aside>
+
+      <section class="main">
+        <div class="top"><span class="orb"></span><b>Оркестратор · OMG</b><span class="st"><i></i>работает · прогон H1.5 · шаг 4/7</span>
+          <div class="tools"><span><svg viewBox="0 0 24 24"><path d="M4 12h16M12 4v16"/></svg></span><span><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M9 5v14"/></svg></span><span><svg viewBox="0 0 24 24"><path d="M6 10h12M6 14h12"/></svg></span><span><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></span></div>
+        </div>
+        <div class="feed"><div class="col">
+          <div class="me">Покажи, что воркер 2 успел до остановки</div>
+          <div class="ai"><span class="orb"></span><div>
+            <div class="thought">думал 0,9 с</div>
+            <p>Воркер 2 (Sonnet, задача D8.4e) прошёл 4 шага из 6: прочитал договор, собрал опись путей, написал тесты W1–W4 и упёрся в лимит на прогоне. Дальше — W5–W6 и сдача ревьюеру.</p>
+            <div class="card">
+              <div class="h"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5"/></svg>Воркер 2 · D8.4e · Sonnet<span class="cnt">шаг 4 из 6</span></div>
+              <div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div>
+              <div class="chk">
+                <div class="d"><span class="ok">✓</span>договор прочитан · 14 путей<span class="t">09:12</span></div>
+                <div class="d"><span class="ok">✓</span>опись: 3 файла, 2 теста соседей<span class="t">09:31</span></div>
+                <div class="d"><span class="ok">✓</span>тесты W1–W4 написаны<span class="t">10:05</span></div>
+                <div class="d"><span class="ok">✓</span>прогон · упёрся в лимит Codex<span class="t" style="color:var(--bad)">10:40</span></div>
+                <div><span class="run"></span>W5–W6 · продолжает на Sonnet<span class="t">сейчас</span></div>
+                <div><span class="todo"></span>сдача ревьюеру</div>
+              </div>
+            </div>
+          </div></div>
+          <div class="me">Ок. Когда прогон кончится — сверни чат, я буду в плане</div>
+          <div class="ai"><span class="orb"></span><div><div class="thought">думал 0,4 с</div><p>Сверну в пилюлю и подам голос только по итогу прогона или если понадобится ваше решение.</p></div></div>
+        </div></div>
+        <div class="comp">
+          <div class="box">
+            <div class="in">Написать оркестратору…</div>
+            <div class="bar2">
+              <span class="chip sq"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+              <span class="chip"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Поиск</span>
+              <span class="chip"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 00-3 11v3h6v-3a6 6 0 00-3-11zM10 21h4"/></svg>Думать</span>
+              <span class="chip model"><span class="dot"></span>Sonnet · среднее<span class="chev">▾</span></span>
+              <span class="send"><span class="mic"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><span class="go"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></span>
+            </div>
+          </div>
+          <div class="status"><span><i></i>прогон · 4/7 · идёт</span><span>ход ≈ 0,05 %</span><span>контекст 41 %</span><span class="r"><kbd>⌘K</kbd> команды · <kbd>⌘\</kbd> панель</span></div>
+        </div>
+        <div class="dock"><span class="orb"></span><div><b>Оркестратор</b><small>прогон · 4/7 · идёт</small></div><span class="open">открыть</span></div>
+      </section>
+    </div>
+    <div class="cap"><span>02 · чат · сайдбар свёрнут в рейку · tooltip у «План» · док-пилюля чата (как он выглядит, свёрнутый)</span><span>1280 × 860</span></div>
+  </div>
+
+  <div class="legend">
+    <div><b>Ступени графита</b>подложка #101012 → панель #141416 → плитка #1b1b1e → поверх #202024; линии 1 px, без теней внутри.</div>
+    <div><b>Один тёплый акцент</b>главная кнопка, тики прогресса, точка модели. Зелёный — только «прошло», красный — только «сбой/лимит».</div>
+    <div><b>Моно-капс для метаданных</b>статус в шапке, строка под композером, подписи времени; значения — обычным гротеском.</div>
+    <div><b>Свёртка</b>«мысль» — одной строкой; чат — в док-пилюлю с живым статусом; сайдбар — в рейку с tooltip и бейджами.</div>
+  </div>
+</div>
+<script src="app.js"></script>
+<script>
+(function(){
+  const {tl,kv,blk,acts}=HX;
+  const run='<div class="from">раскрытая карточка · прогон · из чата</div><div class="ch"><h3>Прогон H1.5 · check:backend</h3><span class="pill acc">идёт · 3/7</span></div><div class="csub">воркер 1 · Opus 5.5 · начат 14:02 · сдача ревьюеру ≈ 18:40</div>'+
+    '<div class="two"><div class="blk"><div class="ctabs"><span class="on" data-ct="s">Шаги</span><span data-ct="c">Стоимость</span><span data-ct="z">Сжатие</span></div>'+
+    '<div data-cp="s">'+tl([['d','14:02','Сборка','12 с'],['d','14:03','Typecheck','41 с'],['d','14:04','Unit · 3410/3410','3 м 50 с'],['c','16:01','Integration · идёт','118 из 140'],['','—','E2E',''],['','—','Кольцо импортов',''],['','—','Отчёт ревьюеру','']])+'</div>'+
+    '<div data-cp="c">'+[['Сборка',0.02],['Typecheck',0.06],['Unit',0.35],['Integration · идёт',0.45]].map(([a,v])=>'<div class="crow"><span>'+a+'</span><div class="bar"><i style="width:'+v*200+'%;background:var(--accent)"></i></div><b>'+v.toFixed(2)+' %</b></div>').join('')+'<div class="crow" style="border-top:1px solid var(--line);margin-top:4px;padding-top:8px"><span>итого · недели Claude</span><span></span><b>0.88 %</b></div></div>'+
+    '<div data-cp="z"><p style="font-size:12.5px;color:var(--ink2);margin:0">Сжатий контекста: 1. Потерялось: содержимое 2 из 5 прочитанных файлов движка — осталась опись.</p></div></div>'+
+    '<div>'+blk('карточка',kv([['исполнитель','воркер 1 · Opus 5.5'],['ревьюер','Astra (Codex)'],['задача','H1.5 · карта, уровень L1'],['цена','0,88 % недели Claude'],['блокирует','H2.0 · рубеж']])+'<div style="margin-top:12px"><div class="t" style="margin-bottom:6px"><span>здоровье · 8 прогонов</span><span>7 · 1 сбой</span></div><div class="health">'+'ok ok bad ok ok ok ok ok'.split(' ').map(h=>'<i class="'+h+'"></i>').join('')+'</div></div>')+acts([['Открыть на карте','p'],'Написать воркеру 1','Остановить прогон'])+'</div></div>';
+  const w2='<div class="from">раскрытая карточка · агент · из чата</div><div class="ch"><h3>Воркер 2 · D8.4e</h3><span class="pill acc">работает · 4/6</span></div><div class="csub">worker · Sonnet 5.5 · переведён с Codex в 14:37 · владелец: оркестратор</div>'+
+    '<div class="two">'+blk('ход шагов',tl([['d','09:12','Договор прочитан','14 путей'],['d','09:31','Опись','3 файла, 2 теста соседей'],['d','10:05','Тесты W1–W4 написаны',''],['x','10:40','Прогон упёрся в лимит Codex','переведён на Sonnet'],['c','сейчас','W5–W6 · продолжает на Sonnet',''],['','—','Сдача ревьюеру','']]),'4 из 6')+
+    '<div>'+blk('карточка',kv([['цель','закрыть D8.4e кругом 4 до 19:30'],['контекст','38 % · 76k / 200k'],['сегодня','48 действий · 1,2M токенов'],['цена','0,3 % недели Claude']]))+acts([['Открыть в стае','p'],'Написать воркеру 2','⏸ Пауза'])+'</div></div>';
+  document.querySelectorAll('.feed .card').forEach(c=>{ const h=c.querySelector('.h').textContent; if(/Прогон H1.5/.test(h)) c.addEventListener('click',()=>HX.open(c,run,{w:860,h:540})); else if(/Воркер 2/.test(h)) c.addEventListener('click',()=>HX.open(c,w2,{w:860,h:520})); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 05 · Расход и роутер моделей</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .lay{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;height:100%;min-height:0}
+  .col{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:hidden}
+  .big{font:500 30px/1 var(--font);letter-spacing:-.02em}.big small{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);display:block;margin-bottom:6px}
+  .sub2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}.sub2 div{border-top:1px solid var(--line);padding-top:8px}.sub2 b{display:block;font-size:14px;font-weight:500}.sub2 small{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .tk{display:flex;gap:2px;margin:10px 0 6px}.tk i{flex:1;height:10px;border-radius:1.5px;background:var(--line2)}.tk i.on{background:var(--accent)}.tk i.ok{background:var(--ok)}.tk i.bad{background:var(--bad)}.tk i.mark{background:var(--ink)}
+  .tkl{display:flex;justify-content:space-between;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .opt{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);margin-top:10px;font-size:12.5px}.opt small{display:block;color:var(--ink3);font-size:11px}.opt .tog{margin-left:auto}
+  .subs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .subs .card{padding:11px 13px}.subs .h b{font-size:13px}.subs .v{display:flex;align-items:baseline;gap:6px;margin:6px 0 4px}.subs .v b{font-size:20px;font-weight:500}.subs .v small{font:10px var(--mono);color:var(--ink3);letter-spacing:.06em;text-transform:uppercase}
+  .subs .reset{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-top:6px}
+  .hist .h{margin-bottom:8px}
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.cal div{height:34px;border-radius:6px;background:var(--raised);border:1px solid var(--line);font:10px var(--mono);color:var(--ink3);padding:4px 5px;position:relative}.cal div.p{border-color:var(--line2)}.cal div.p::after{content:attr(data-s);position:absolute;right:5px;bottom:4px;font:600 9px var(--mono);color:var(--ink)}.cal div.r::before{content:"";position:absolute;left:5px;bottom:5px;width:6px;height:6px;border-radius:50%;background:var(--ok)}.cal div.today{border-color:var(--accent)}
+  /* роутер */
+  .river{position:relative;height:220px;margin:8px 0 10px}
+  .river svg{width:100%;height:100%}.river path{fill:none;stroke-linecap:round;stroke:var(--line2)}.river path.a{stroke:var(--accent)}.river path.g{stroke:var(--ok)}
+  .river .nd{position:absolute;border:1px solid var(--line2);border-radius:8px;background:var(--raised);padding:6px 10px;font-size:12px;white-space:nowrap}.river .nd small{display:block;font:9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .fb{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);padding:9px 10px;border:1px dashed var(--line2);border-radius:8px}.fb b{color:var(--ink);font-weight:500}
+  .dirty{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12px;white-space:nowrap}.dirty .m{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}.dirty .m::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:1px}
+</style></head>
+<body><div class="sheet">
+  <h1>Harness · скетч 05 · расход и роутер моделей</h1>
+  <p class="sub">Панель подписки: процент крупно, тик-полоса с числом, остаток и таймер сброса, тумблер «при лимите переключать на дешёвую модель», история по моделям с периодом. Шкала с порогом 80 %. Роутер: режимы COST / BALANCED / QUALITY, «река» от шлюза к моделям — толщина линии = доля, таблица маршрутов, fallback, «грязное состояние» включает кнопку. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg><span class="b">3</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg></div>
+      <div class="nav on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg><span class="b">!</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg></div>
+      <div class="foot"><div class="nav"><span class="ring"><i></i></span></div><div class="nav"><span class="av">S<i></i></span></div></div>
+    </aside>
+    <section class="main">
+      <div class="top"><b>Расход · все проекты</b><span class="st"><i style="background:var(--bad)"></i>codex 94 % · сброс 19:58 · claude 62 % недели</span>
+        <div class="r"><span class="seg"><span>7 дн</span><span class="on">30 дн</span><span>90 дн</span><span>всё</span></span><span class="btn sm ghost">⋮</span></div></div>
+      <div class="body"><div class="lay">
+        <div class="col">
+          <div class="card">
+            <div class="h"><span class="orb" style="width:16px;height:16px"></span>Claude Max<span class="pill" style="margin-left:6px">подписка · 2 места</span><span class="cnt">сброс недели · вт 03:00</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+              <div><div class="big"><small>использовано · неделя</small>62,4 %</div><div class="tk"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="mark"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="tkl"><span>31,2M / 50M токенов</span><span>порог 80 %</span></div></div>
+              <div><div class="big"><small>использовано · 5 часов</small>18 %</div><div class="tk"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="mark"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="tkl"><span>окно до 21:40</span><span>порог 80 %</span></div></div>
+            </div>
+            <div class="sub2"><div><b>18,8M</b><small>остаток недели</small></div><div><b>2 д 9 ч</b><small>до сброса</small></div><div><b>≈ 71 %</b><small>прогноз к сбросу</small></div></div>
+            <div class="opt"><div>При лимите переключать на дешёвую модель<small>Opus → Sonnet · воркеры и ревьюер; оркестратор — спросить</small></div><span class="tog on"></span></div>
+            <div class="opt" style="margin-top:0"><div>Предупреждать при 80 %<small>в приложении и в Telegram</small></div><span class="tog on"></span></div>
+          </div>
+          <div class="subs">
+            <div class="card"><div class="h"><b>Codex</b><span class="pill bad" style="margin-left:auto">лимит</span></div><div class="v"><b style="color:var(--bad)">94 %</b><small>5 часов</small></div><div class="bar"><i class="bad" style="width:94%"></i></div><div class="reset">сброс через 1 ч 12 мин · воркер 2 переведён на Sonnet</div></div>
+            <div class="card"><div class="h"><b>Qwen · ключ API</b><span class="pill ok" style="margin-left:auto">ok</span></div><div class="v"><b>$41,20</b><small>остаток</small></div><div class="bar"><i style="width:34%"></i></div><div class="reset">пополнение 12.10 · расход 2,1 $/день</div></div>
+          </div>
+          <div class="card hist"><div class="h">История · по моделям<span class="cnt">30 дней · показать все</span></div>
+            <table class="tbl"><tr><th>дата</th><th>модель</th><th>роль</th><th>токены</th><th>стоимость</th></tr>
+              <tr><td class="m">04.10</td><td>Opus 5.5</td><td>воркер 1 · H1.5</td><td class="m">4,1M</td><td class="m">1,1 %</td></tr>
+              <tr><td class="m">04.10</td><td>Sonnet 5.5</td><td>воркер 2 · D8.4e</td><td class="m">1,2M</td><td class="m">0,3 %</td></tr>
+              <tr><td class="m">04.10</td><td>Astra (Codex)</td><td>ревьюер</td><td class="m">2,8M</td><td class="m" style="color:var(--bad)">лимит</td></tr>
+              <tr><td class="m">03.10</td><td>Fable 5.1</td><td>оркестратор</td><td class="m">0,9M</td><td class="m">0,6 %</td></tr></table></div>
+        </div>
+
+        <div class="col">
+          <div class="card" style="flex:1;min-height:0">
+            <div class="h">Роутер моделей<span class="seg" style="margin-left:auto"><span>Cost</span><span class="on">Balanced</span><span>Quality</span></span></div>
+            <div class="river">
+              <svg viewBox="0 0 420 220" preserveAspectRatio="none">
+                <path d="M70 110 C150 110, 150 40, 230 40" style="stroke-width:14" class="a"/>
+                <path d="M70 110 C150 110, 150 90, 230 90" style="stroke-width:9"/>
+                <path d="M70 110 C150 110, 150 140, 230 140" style="stroke-width:5"/>
+                <path d="M70 110 C150 110, 150 190, 230 190" style="stroke-width:2" class="g"/>
+              </svg>
+              <div class="nd" style="left:0;top:92px">Шлюз<small>все вызовы</small></div>
+              <div class="nd" style="left:238px;top:24px">Opus 5.5<small>58 % · $15/1M</small></div>
+              <div class="nd" style="left:238px;top:74px">Sonnet 5.5<small>27 % · $3/1M</small></div>
+              <div class="nd" style="left:238px;top:124px">Astra · Codex<small>11 % · подписка</small></div>
+              <div class="nd" style="left:238px;top:174px">Qwen 3<small>4 % · $0,4/1M</small></div>
+            </div>
+            <table class="tbl"><tr><th>маршрут</th><th>доля</th><th>p50 / p95</th><th>ошибки</th></tr>
+              <tr><td>оркестратор → Opus</td><td class="m">58 %</td><td class="m">9 с / 41 с</td><td class="m">0,2 %</td></tr>
+              <tr><td>воркеры → Sonnet</td><td class="m">27 %</td><td class="m">4 с / 18 с</td><td class="m">0,4 %</td></tr>
+              <tr><td>ревью → Astra</td><td class="m">11 %</td><td class="m">22 с / 90 с</td><td class="m" style="color:var(--bad)">3,1 %</td></tr>
+              <tr><td>чтение → Qwen</td><td class="m">4 %</td><td class="m">2 с / 6 с</td><td class="m">0 %</td></tr></table>
+            <div class="fb" style="margin-top:10px"><svg class="ico" viewBox="0 0 24 24"><path d="M4 12h6l2-4 2 8 2-4h4"/></svg><span><b>Fallback:</b> если Astra не отвечает 60 с → ревью на Opus; если Codex в лимите → Sonnet</span></div>
+            <div class="dirty"><span class="m">изменения не применены</span><span>Sonnet 27 → 35 %</span><span class="btn sm ghost" style="margin-left:auto">Отменить</span><span class="btn sm p">Применить политику</span></div>
+          </div>
+          <div class="card"><div class="h">Платежи и сбросы · октябрь<span class="cnt">итого 248 $ / мес</span></div>
+            <div class="cal" style="margin-top:8px">
+              <div>29</div><div>30</div><div class="r">1</div><div>2</div><div>3</div><div class="today r">4</div><div>5</div>
+              <div>6</div><div class="p" data-s="200 $">7</div><div class="r">8</div><div>9</div><div>10</div><div>11</div><div class="p" data-s="40 $">12</div>
+              <div>13</div><div>14</div><div class="r">15</div><div>16</div><div>17</div><div>18</div><div>19</div>
+            </div>
+            <div class="mono" style="margin-top:8px">● сброс недельного лимита · <span style="color:var(--ink)">сумма</span> — дата списания</div>
+          </div>
+        </div>
+      </div></div>
+    </section>
+  </div><div class="cap"><span>05 · расход · панель подписки · роутер моделей · календарь платежей</span><span>1280 × 860</span></div></div>
+</div></body></html>

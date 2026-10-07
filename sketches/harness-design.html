@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness — дизайн</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0f0f10; --panel:#161617; --panel2:#1c1c1e; --raised:#232326; --line:#2a2a2e; --line2:#333338;
+    --ink:#ececee; --ink2:#a7a7ad; --ink3:#6f6f76;
+    --accent:#e2b65b; --accent-ink:#1a1a1a; --accent-soft:rgba(226,182,91,.12);
+    --ok:#5fb87a; --ok-soft:rgba(95,184,122,.14); --bad:#e0655f; --bad-soft:rgba(224,101,95,.14); --run:#7aa2ff; --run-soft:rgba(122,162,255,.14);
+    --r:12px; --rs:8px;
+    --font:"Inter",-apple-system,"Helvetica Neue",Arial,sans-serif; --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+  }
+  [data-theme="light"] {
+    --bg:#f4f3f0; --panel:#fbfaf8; --panel2:#ffffff; --raised:#ffffff; --line:#e6e3dd; --line2:#d9d5cd;
+    --ink:#1c1b19; --ink2:#5f5d58; --ink3:#9a978f; --accent:#b8862a; --accent-soft:rgba(184,134,42,.12);
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:#09090a; }
+  body { font:14px/1.5 var(--font); color:var(--ink); padding:28px 20px 60px; -webkit-font-smoothing:antialiased; }
+  .intro { max-width:1180px; margin:0 auto 16px; color:#b8b8be; font-size:14px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  .intro h1 { font-size:18px; color:#fff; margin:0; font-weight:600; }
+  .intro .sw { margin-left:auto; display:flex; gap:6px; }
+  .intro button { background:#1c1c1e; color:#ddd; border:1px solid #333; border-radius:8px; padding:5px 10px; font:12px var(--font); cursor:pointer; }
+  .intro button.on { background:#e2b65b; color:#1a1a1a; border-color:#e2b65b; }
+
+  .app { max-width:1180px; margin:0 auto; background:var(--bg); border:1px solid #2b2b2f; border-radius:14px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.55); display:grid; grid-template-rows:36px 1fr; height:780px; }
+  .title { display:flex; align-items:center; gap:8px; padding:0 14px; background:var(--panel); border-bottom:1px solid var(--line); font-size:12px; color:var(--ink3); }
+  .tl { display:flex; gap:7px; margin-right:10px; } .tl i { width:11px; height:11px; border-radius:50%; background:#3a3a3e; display:block; }
+  .tl i:nth-child(1){background:#ff5f57}.tl i:nth-child(2){background:#febc2e}.tl i:nth-child(3){background:#28c840}
+  .title .path { color:var(--ink2); } .title .path b { color:var(--ink); font-weight:500; }
+  .title .mid { margin:0 auto; display:flex; gap:14px; align-items:center; }
+  .pill { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:2px 10px; font-size:12px; background:var(--raised); color:var(--ink2); border:1px solid var(--line2); white-space:nowrap; }
+  .pill.need { background:var(--accent-soft); color:var(--accent); border-color:transparent; font-weight:500; }
+  .pill .m { font-family:var(--mono); font-size:11px; }
+  .meter { width:52px; height:5px; border-radius:3px; background:var(--line2); position:relative; overflow:hidden; }
+  .meter i { position:absolute; inset:0; width:61%; background:var(--ink3); }
+
+  .body { display:grid; grid-template-columns:236px 1fr; min-height:0; }
+  .side { background:var(--panel); border-right:1px solid var(--line); padding:12px 10px; display:flex; flex-direction:column; gap:4px; overflow:auto; }
+  .ws { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:var(--rs); font-weight:600; font-size:13px; }
+  .ws .av { width:22px; height:22px; border-radius:7px; background:linear-gradient(135deg,#e2b65b,#c98a3a); color:#1a1a1a; font-size:11px; display:grid; place-items:center; font-weight:700; }
+  .srch { margin:6px 0 10px; border:1px solid var(--line2); border-radius:var(--rs); padding:6px 10px; color:var(--ink3); font-size:13px; background:var(--panel2); display:flex; gap:8px; align-items:center; }
+  .srch kbd { margin-left:auto; font:11px var(--mono); color:var(--ink3); }
+  .nav { display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:var(--rs); color:var(--ink2); font-size:13px; cursor:pointer; }
+  .nav:hover { background:var(--panel2); } .nav.on { background:var(--raised); color:var(--ink); }
+  .nav .ic { width:16px; text-align:center; color:var(--ink3); font-size:13px; }
+  .nav .b { margin-left:auto; font:11px var(--mono); color:var(--accent); background:var(--accent-soft); border-radius:999px; padding:1px 7px; }
+  .nav .w { margin-left:auto; font-size:11px; color:var(--ink3); }
+  .sec { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); padding:12px 10px 4px; }
+  .proj { padding:6px 10px; border-radius:var(--rs); font-size:13px; display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .proj:hover { background:var(--panel2); } .proj.on { background:var(--raised); }
+  .proj .st { margin-left:auto; font-size:11px; color:var(--ink3); } .proj .st.need { color:var(--accent); }
+  .conv { padding:5px 10px 5px 30px; font-size:13px; color:var(--ink2); border-radius:var(--rs); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+  .conv:hover { background:var(--panel2); } .conv.on { color:var(--ink); background:var(--raised); }
+  .side .foot { margin-top:auto; border-top:1px solid var(--line); padding-top:8px; }
+
+  .main { display:grid; grid-template-rows:auto 1fr auto; min-height:0; }
+  .status { display:flex; align-items:center; gap:10px; padding:10px 20px; border-bottom:1px solid var(--line); font-size:13px; color:var(--ink2); }
+  .status .where { color:var(--ink); font-weight:500; }
+  .status .lad { display:inline-flex; gap:3px; margin-left:8px; vertical-align:middle; }
+  .status .lad i { width:14px; height:4px; border-radius:2px; background:var(--line2); display:block; } .status .lad i.d { background:var(--ok); } .status .lad i.n { background:var(--accent); }
+  .status .sp { flex:1; }
+  .content { overflow:auto; padding:22px 24px; }
+  .wrap { max-width:760px; margin:0 auto; }
+  h2.s { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); margin:22px 0 10px; font-weight:600; display:flex; align-items:center; gap:8px; }
+  h2.s:first-child { margin-top:0; }
+  h2.s .cnt { font:11px var(--mono); color:var(--ink3); }
+
+  .card { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px; margin-bottom:10px; }
+  .card.need { border-color:rgba(226,182,91,.45); background:linear-gradient(0deg,var(--accent-soft),var(--accent-soft)),var(--panel2); }
+  .card.bad { border-color:rgba(224,101,95,.4); }
+  .card .who { font-size:12px; color:var(--ink2); display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .card .who .age { margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--accent); }
+  .card .q { font-size:15px; font-weight:500; color:var(--ink); line-height:1.4; }
+  .card .why { color:var(--ink2); font-size:13px; margin:6px 0 10px; }
+  .card .why b { color:var(--ink); font-weight:500; }
+  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line2); background:var(--raised); color:var(--ink); border-radius:9px; padding:6px 12px; font-size:13px; cursor:pointer; }
+  .btn.p { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:500; }
+  .btn.g { background:transparent; }
+  .btn.sm { padding:4px 10px; font-size:12px; }
+  .hint { font-size:12px; color:var(--ink3); margin-top:8px; }
+  .row { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--rs); background:var(--panel2); margin-bottom:6px; font-size:13px; }
+  .row .dot { width:8px; height:8px; border-radius:50%; background:var(--ink3); flex:none; }
+  .row .dot.run { background:var(--run); box-shadow:0 0 0 3px var(--run-soft); } .row .dot.ok { background:var(--ok); } .row .dot.need { background:var(--accent); } .row .dot.bad { background:var(--bad); }
+  .row .nm { font-weight:500; min-width:120px; } .row .wd { color:var(--ink2); } .row .age { margin-left:auto; font:11px var(--mono); color:var(--ink3); }
+  .row .state { font-size:12px; padding:1px 8px; border-radius:999px; background:var(--raised); color:var(--ink2); }
+  .row .state.run { color:var(--run); background:var(--run-soft); } .row .state.need { color:var(--accent); background:var(--accent-soft); } .row .state.bad { color:var(--bad); background:var(--bad-soft); } .row .state.ok { color:var(--ok); background:var(--ok-soft); }
+  .recap { background:var(--panel2); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:var(--r); padding:14px 16px; font-size:14px; line-height:1.6; margin-bottom:18px; }
+  .recap b { font-weight:600; } .recap a { color:var(--accent); text-decoration:none; }
+
+  .msg { display:flex; gap:12px; margin-bottom:18px; }
+  .msg .av { width:28px; height:28px; border-radius:50%; background:var(--raised); display:grid; place-items:center; font-size:12px; color:var(--ink2); flex:none; font-weight:600; }
+  .msg.me .av { background:var(--accent); color:var(--accent-ink); }
+  .msg .t { font-size:15px; line-height:1.55; }
+  .msg .meta { font-size:12px; color:var(--ink3); margin-top:6px; display:flex; gap:10px; }
+  .msg .meta a { color:var(--ink2); text-decoration:underline dotted; }
+  .sugg { display:flex; gap:8px; margin-top:10px; }
+
+  .stages { display:flex; gap:6px; margin-bottom:16px; }
+  .stg { flex:1; border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--panel2); font-size:12px; color:var(--ink3); }
+  .stg b { display:block; color:var(--ink2); font-weight:500; font-size:13px; } .stg small { font-size:11px; }
+  .stg.d { border-color:rgba(95,184,122,.35); } .stg.d b { color:var(--ok); }
+  .stg.n { border-color:var(--accent); background:var(--accent-soft); } .stg.n b { color:var(--ink); }
+  .doc { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; }
+  .doc .h { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; font-weight:500; }
+  .doc .h .sp { flex:1; }
+  .doc .sec2 { padding:12px 16px; border-bottom:1px solid var(--line); display:grid; grid-template-columns:1fr auto; gap:12px; align-items:start; }
+  .doc .sec2:last-child { border-bottom:0; }
+  .doc .sec2 b { font-weight:500; display:block; margin-bottom:2px; } .doc .sec2 p { margin:0; color:var(--ink2); font-size:13px; }
+  .tag { font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .tag.ok { color:var(--ok); background:var(--ok-soft); } .tag.need { color:var(--accent); background:var(--accent-soft); } .tag.wait { color:var(--ink2); background:var(--raised); }
+
+  .comp { padding:12px 24px 16px; border-top:1px solid var(--line); background:var(--bg); }
+  .comp .box { max-width:760px; margin:0 auto; background:var(--panel2); border:1px solid var(--line2); border-radius:14px; padding:12px 14px 10px; box-shadow:0 1px 0 rgba(255,255,255,.02) inset; }
+  .comp .in { color:var(--ink3); font-size:15px; min-height:26px; }
+  .comp .bar { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
+  .chip { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--ink2); background:var(--raised); border:1px solid var(--line2); border-radius:999px; padding:3px 10px; }
+  .chip .m { font-family:var(--mono); font-size:11px; }
+  .comp .send { margin-left:auto; display:flex; gap:6px; align-items:center; }
+  .send .go { width:30px; height:30px; border-radius:50%; background:var(--accent); color:var(--accent-ink); display:grid; place-items:center; font-weight:700; }
+  .comp .cost { font:11px var(--mono); color:var(--ink3); margin-left:auto; }
+
+  .peek { position:absolute; right:18px; top:58px; width:300px; background:var(--panel2); border:1px solid var(--line2); border-radius:var(--r); box-shadow:0 20px 50px rgba(0,0,0,.5); padding:14px 16px; font-size:13px; display:none; }
+  .peek.show { display:block; }
+  .peek h4 { margin:0 0 8px; font-size:13px; font-weight:600; display:flex; align-items:center; }
+  .peek h4 .x { margin-left:auto; color:var(--ink3); font-weight:400; cursor:pointer; }
+  .peek dl { display:grid; grid-template-columns:72px 1fr; gap:5px 10px; margin:0; }
+  .peek dt { font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink3); padding-top:2px; } .peek dd { margin:0; color:var(--ink2); }
+  .peek dd.w { color:var(--bad); }
+  .main { position:relative; }
+
+  .screen { display:none; } .screen.on { display:block; }
+  .legend { max-width:1180px; margin:18px auto 0; color:#b8b8be; font-size:13px; }
+  .legend h3 { color:#fff; font-size:14px; margin:18px 0 6px; }
+  .legend ol { padding-left:20px; margin:0; } .legend li { margin:4px 0; }
+  .legend b { color:#e2b65b; font-weight:500; }
+</style>
+</head>
+<body>
+<div class="intro">
+  <h1>Harness</h1><span>· один экран, четыре режима, слова вместо приборов</span>
+  <div class="sw">
+    <button class="on" data-s="now">Сейчас</button><button data-s="chat">Чат</button><button data-s="plan">План</button><button data-s="team">Команда</button>
+    <button id="theme" style="margin-left:10px">☾ тёмная</button>
+  </div>
+</div>
+
+<div class="app">
+  <div class="title">
+    <div class="tl"><i></i><i></i><i></i></div>
+    <span class="path"><b>OMG</b> › План › Блоки (L1) › H1.5</span>
+    <div class="mid">
+      <span class="pill need" id="pillNeed">◆ 2 ждут вас <span class="m">· 40 мин</span></span>
+      <span class="pill">⟳ 3 идёт <span class="m">· ▲ 1</span></span>
+      <span class="pill">неделя <span class="meter"><i></i></span> <span class="m">61 %</span> · сброс пт 23:00</span>
+      <span class="pill">с визита <span class="m">+3 / ↺1</span></span>
+    </div>
+    <span style="color:var(--ink3)">⌘K</span>
+  </div>
+  <div class="body">
+    <aside class="side">
+      <div class="ws"><span class="av">S</span>Serge <span style="margin-left:auto;color:var(--ink3);font-weight:400">⌄</span></div>
+      <div class="srch">🔍 Найти разговор, задачу, решение… <kbd>⌘K</kbd></div>
+      <div class="nav" data-s="now"><span class="ic">◆</span>Сейчас <span class="b">2</span></div>
+      <div class="nav" data-s="team"><span class="ic">◎</span>Команда <span class="w">5 мест</span></div>
+      <div class="nav"><span class="ic">✓</span>Решения <span class="w">за неделю 14</span></div>
+      <div class="nav"><span class="ic">◔</span>Расход <span class="w">61 %</span></div>
+      <div class="sec">Проекты</div>
+      <div class="proj on"><span>OMG</span><span class="st need">◆ 2 · L1</span></div>
+      <div class="conv on" data-s="chat">Оркестратор · H1.5 и прогон</div>
+      <div class="conv" data-s="plan">Документ стадии · Блоки (L1)</div>
+      <div class="conv">Ревьюер · три тестовых пути</div>
+      <div class="conv">Воркер Sonnet · тесты H1.5</div>
+      <div class="proj"><span>Табло агентов</span><span class="st need">◆ 1 · L0</span></div>
+      <div class="proj"><span>HARNESS</span><span class="st">спит</span></div>
+      <div class="sec">Комнаты</div>
+      <div class="proj"><span>Принтер Brother</span><span class="st">вчера</span></div>
+      <div class="proj" style="color:var(--ink3)"><span>+ Новый разговор</span></div>
+      <div class="foot">
+        <div class="nav"><span class="ic">◉</span>Датчики <span class="w" style="color:var(--ok)">● все живы</span></div>
+        <div class="nav"><span class="ic">≡</span>Память · Настройки</div>
+      </div>
+    </aside>
+
+    <section class="main">
+      <div class="status">
+        <span class="where" id="where">Сейчас · все проекты</span>
+        <span class="sp"></span>
+        <span id="next">следующее событие: отчёт воркера в 20:15</span>
+      </div>
+
+      <div class="content">
+        <!-- СЕЙЧАС -->
+        <div class="screen on wrap" id="s-now">
+          <div class="recap"><b>Пока вас не было</b> (с 02:10) — влиты две задачи, обе проверены. Codex упёрся в лимит в 06:12 и стоял три часа: это у провайдера, сам не продолжит. Два вопроса ждут вас. Потрачено 7 % недели — на 2 % больше плана из-за трёх кругов ревью по D8.4e. Если ничего не делать, воркер закончит около 20:15. <a href="#">Подробно</a></div>
+          <h2 class="s">Ждёт вас <span class="cnt">2</span></h2>
+          <div class="card need"><div class="who"><span>Ревьюер</span><span>·</span><span>OMG › L1 › H1.5 › ревью, круг 2</span><span class="age">40 мин</span></div>
+            <div class="q">Добавлять три тестовых пути старого правила?</div>
+            <div class="why"><b>Да, все три</b> — ещё около часа воркера, риск по сроку. <b>Только один</b> — быстрее, но останется дыра в проверке адресов.</div>
+            <span class="btn p">Да, все три</span> <span class="btn">Только один</span> <span class="btn g">Объясни</span>
+            <div class="hint">Пока вы решаете: ревьюер спит, воркер работает над другим.</div></div>
+          <div class="card need"><div class="who"><span>Исполнитель Codex</span><span>·</span><span>OMG › L1 › D8.4e</span><span class="age">8 мин</span></div>
+            <div class="q">Codex стоит на лимите до 19:58. Продолжить D8.4e на Sonnet?</div>
+            <div class="why"><b>Да</b> — продолжит сейчас, другая модель, тот же договор. <b>Ждать</b> — 46 минут простоя.</div>
+            <span class="btn p">Продолжить на Sonnet</span> <span class="btn">Ждать 19:58</span></div>
+          <h2 class="s">Идёт <span class="cnt">3</span></h2>
+          <div class="row"><span class="dot run"></span><span class="nm">Воркер Sonnet</span><span class="state run">Идёт</span><span class="wd">H1.5 · пишет тесты · следующий отчёт 20:15</span><span class="age">12 мин</span></div>
+          <div class="row"><span class="dot run"></span><span class="nm">Тестер</span><span class="state run">Идёт</span><span class="wd">прогон · шаг 6 из 9</span><span class="age">31 мин</span></div>
+          <div class="row"><span class="dot"></span><span class="nm">Оркестратор</span><span class="state">Ждёт прогон</span><span class="wd">жив · ход 2 мин назад</span><span class="age">31 мин</span></div>
+          <h2 class="s">Готово к проверке <span class="cnt">1</span></h2>
+          <div class="row"><span class="dot ok"></span><span class="nm">E2.2</span><span class="state ok">Готово к проверке</span><span class="wd">воркер Fable · 3206 тестов зелёные · <a href="#" style="color:var(--ink2)">как проверено</a></span><span class="btn sm" style="margin-left:auto">Открыть</span></div>
+          <h2 class="s">Завершено с визита <span class="cnt">2</span></h2>
+          <div class="row"><span class="dot ok"></span><span class="nm">D8.4d</span><span class="state ok">Пройдено</span><span class="wd">влита 02:14 · ревьюер принял</span><span class="age">02:14</span></div>
+        </div>
+
+        <!-- ЧАТ -->
+        <div class="screen wrap" id="s-chat">
+          <div class="msg me"><div class="av">S</div><div><div class="t">посмотри HARNESS и скажи, можно ли на нём сделать табло всех агентов. оценка из 10</div></div></div>
+          <div class="msg"><div class="av">О</div><div><div class="t">Можно. Там уже есть места команды, очередь решений и журнал — табло ляжет сверху без переделки сервера. <b>8 из 10</b>: не хватает слов состояния у мест и возраста у вопросов.</div><div class="meta"><span>1 мин 10 с</span><a href="#">что читал: README, index.html</a><span>0,05 % недели</span></div></div></div>
+          <div class="msg me"><div class="av">S</div><div><div class="t">ок, делаем</div></div></div>
+          <div class="msg"><div class="av">О</div><div><div class="t">Чтобы делать, нужен план: стадии, кто работает, что считать готовым. Начнём с дискавери — ничего не стартует без вашей подписи.</div><div class="sugg"><span class="btn p">Собрать план</span><span class="btn">Ещё поговорим</span></div></div></div>
+        </div>
+
+        <!-- ПЛАН -->
+        <div class="screen wrap" id="s-plan">
+          <div class="stages">
+            <div class="stg d"><b>Дискавери</b><small>пройдено</small></div>
+            <div class="stg d"><b>Концепция</b><small>L0 · пройдено</small></div>
+            <div class="stg n"><b>Блоки</b><small>L1 · шлюз ждёт вас</small></div>
+            <div class="stg"><b>Исследование</b><small>R1 · ≈ 4 ч</small></div>
+            <div class="stg"><b>Операции</b><small>L2</small></div>
+            <div class="stg"><b>Атомарные работы</b><small>L3</small></div>
+            <div class="stg"><b>Готовность</b><small>R3</small></div>
+            <div class="stg"><b>Исполнение</b><small>данных нет</small></div>
+          </div>
+          <div class="card need" style="margin-bottom:14px"><div class="who"><span>Шлюз стадии</span><span>·</span><span>OMG › План › Блоки (L1)</span><span class="age">12 мин</span></div>
+            <div class="q">Перейти к исследованию блоков (R1)?</div>
+            <div class="why">Блоки проверены на <b>8,5 из 10</b>. До порога 9 не хватает: риски не разложены по зонам — около 20 минут воркера.</div>
+            <span class="btn p">Перейти</span> <span class="btn">Доделать</span> <span class="btn g">Вопрос</span></div>
+          <div class="doc">
+            <div class="h">Документ стадии · Блоки (L1)<span class="sp"></span><span class="tag ok">4 из 6 разделов проверены</span></div>
+            <div class="sec2"><div><b>Зачем</b><p>Закрыть L1 до рубежа: девять задач, из них влито семь.</p></div><span class="tag ok">проверено</span></div>
+            <div class="sec2"><div><b>Что перешло из концепции</b><p>Три решения дословно, с источником — вы подписали 21:40 кнопкой.</p></div><span class="tag ok">проверено</span></div>
+            <div class="sec2"><div><b>Блоки и задачи</b><p>H1.5 идёт · D8.4e приостановлена (лимит) · E2.2 готово к проверке.</p></div><span class="tag wait">идёт</span></div>
+            <div class="sec2"><div><b>Критерии выхода</b><p>Оценка ревьюера ≥ 9 — сейчас 8,5. Не хватает рисков по зонам.</p></div><span class="tag need">ждёт вас</span></div>
+            <div class="sec2"><div><b>Риски</b><p>Наша зона — 2 · провайдер — 1 (лимит Codex) · ваша — 0.</p></div><span class="tag wait">частично</span></div>
+            <div class="sec2"><div><b>Расход стадии</b><p>1,8 % недели при плане 2 — счёт, не оценка.</p></div><span class="tag ok">в плане</span></div>
+          </div>
+        </div>
+
+        <!-- КОМАНДА -->
+        <div class="screen wrap" id="s-team">
+          <h2 class="s">Места <span class="cnt">5</span><span style="margin-left:auto"><span class="btn sm">+ место</span> <span class="btn sm g">Стоп всем</span></span></h2>
+          <div class="row"><span class="dot"></span><span class="nm">Оркестратор</span><span class="state">Ждёт прогон</span><span class="wd">Claude · Fable · ведёт L1 · жив</span><span class="age">31 мин · 1,2 %</span></div>
+          <div class="row"><span class="dot run"></span><span class="nm">Воркер</span><span class="state run">Идёт</span><span class="wd">Claude · Sonnet · H1.5, тесты · отчёт 20:15</span><span class="age">12 мин · 0,6 %</span></div>
+          <div class="row"><span class="dot need"></span><span class="nm">Ревьюер</span><span class="state need">Ждёт вас</span><span class="wd">Claude · Opus · вопрос про тестовые пути</span><span class="age">40 мин · 0,9 %</span></div>
+          <div class="row"><span class="dot bad"></span><span class="nm">Исполнитель</span><span class="state bad">Приостановлено</span><span class="wd">Codex · лимит до 19:58 · зона: провайдер · сам не продолжит</span><span class="age">8 мин</span></div>
+          <div class="row"><span class="dot run"></span><span class="nm">Тестер</span><span class="state run">Идёт</span><span class="wd">Codex · прогон, шаг 6 из 9</span><span class="age">31 мин · 0,3 %</span></div>
+          <h2 class="s">Как устроено место</h2>
+          <div class="card"><div class="q" style="font-size:14px">Роль · вендор · модель · усилие · что ей можно · где правит</div><div class="why">Права идут за ролью: смена модели прав не меняет. Три ступени свободы: <b>спрашивать всё</b> · <b>спрашивать стоп-случаи</b> · <b>только сообщать</b>. Состав утверждается вашей подписью со сметой на стадию.</div><span class="btn sm">Собрать команду по шаблону</span> <span class="btn sm g">Сменить модель</span></div>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="box">
+          <div class="in" id="ph">Написать оркестратору…</div>
+          <div class="bar">
+            <span class="chip">@ оркестратор ⌄</span><span class="chip">Fable · высокое ⌄</span><span class="chip">правит сам ⌄</span>
+            <span class="cost">ход ≈ 0,3 % · оценка</span>
+            <span class="send"><span class="btn sm g">■ Стоп</span><span class="go">↑</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="peek" id="peek">
+        <h4>Паспорт · H1.5 <span class="x" onclick="document.getElementById('peek').classList.remove('show')">✕</span></h4>
+        <dl><dt>Где</dt><dd>OMG › План › Блоки (L1) › H1.5 › ревью, круг 2</dd><dt>Что</dt><dd>ревьюер задал вопрос, воркер пишет тесты</dd><dt>Зачем</dt><dd>закрыть H1.5 — последнюю до рубежа</dd><dt>Когда</dt><dd>вопрос ждёт 40 мин · прогон шаг 6 из 9</dd><dt>Ожидаем</dt><dd>ваш ответ → вердикт ≥ 9 → слияние</dd><dt>Успех</dt><dd>H1.5 влита, прогон зелёный</dd><dt>Провал</dt><dd>третий возврат</dd><dt>Риски</dt><dd class="w">лимит Codex остановит исполнителя</dd></dl>
+        <div style="margin-top:10px"><span class="btn sm">Открыть</span> <span class="btn sm g">Копировать ссылку</span></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="legend">
+  <h3>Что здесь задаёт тренд (решения сеньор-архитектора)</h3>
+  <ol>
+    <li><b>Слова вместо приборов.</b> Состояние любого объекта — одно слово из закрытого словаря (Идёт · Ждёт вас · Приостановлено · Готово к проверке · Пройдено · Сорвалось · Нет сигнала) и «как давно». Ни одного спиннера без причины: у каждой тишины есть имя и срок.</li>
+    <li><b>«Ждёт вас» — объект, а не абзац.</b> Вопрос к человеку живёт отдельной карточкой с возрастом, последствиями каждого ответа и строкой «что происходит, пока вы думаете». Он не тонет в чате и не умирает по тайм-ауту.</li>
+    <li><b>Паспорт у всего.</b> Любая строка, чип или имя раскрывается в семь ответов — где · что · зачем · когда · ожидаем · успех/провал · риски — из данных, не из пересказа.</li>
+    <li><b>«Готово» ставит проверка.</b> Исполнитель может сказать только «готово к проверке» — и обязан приложить «как проверено». Зелёное появляется после проверки.</li>
+    <li><b>Стоимость как состояние.</b> Остаток недели по провайдерам в заголовке, цена следующего хода под полем ввода, «счёт / оценка» у каждого числа. Не потолки, а цена правильного результата.</li>
+    <li><b>Визит как единица.</b> Возвращение открывает один абзац «пока вас не было», а в заголовке — дельта «+влито / возвращено». «К цели или по кругу» видно без вопроса.</li>
+    <li><b>Режим — звено адреса, а не переключатель.</b> OMG › План › Блоки (L1) — видно, в каком режиме и стадии вы находитесь, всегда; «чат → план» — предложение внутри разговора и один экран подписи.</li>
+    <li><b>Стадии человеческими именами</b>, код в скобках. Шлюз — не ворота, а карточка «чего не хватает до порога».</li>
+    <li><b>Одна раскладка на всё</b>: боковая панель проектов и разговоров (как у Claude/Codex), объект в центре, паспорт сбоку, композер-карточка с условиями хода (как у DSH). Ничего нового учить не нужно.</li>
+  </ol>
+</div>
+
+<script>
+  const screens = {
+    now:  { where:'Сейчас · все проекты', next:'следующее событие: отчёт воркера в 20:15', ph:'Написать оркестратору…' },
+    chat: { where:'Табло агентов › Чат · Claude Sonnet', next:'ничего не идёт в фоне', ph:'Сообщение…' },
+    plan: { where:'OMG › План › Блоки (L1)', next:'шлюз ждёт вас · R1 после перехода ≈ 4 ч', ph:'Написать оркестратору о стадии…' },
+    team: { where:'OMG › Команда · 5 мест', next:'прогон: шаг 6 из 9 · отчёт 20:15', ph:'Написать команде…' },
+  };
+  function show(s) {
+    document.querySelectorAll('.screen').forEach(e => e.classList.toggle('on', e.id === 's-' + s));
+    document.querySelectorAll('.intro button[data-s]').forEach(b => b.classList.toggle('on', b.dataset.s === s));
+    document.getElementById('where').textContent = screens[s].where;
+    document.getElementById('next').textContent = screens[s].next;
+    document.getElementById('ph').textContent = screens[s].ph;
+  }
+  document.querySelectorAll('[data-s]').forEach(el => el.addEventListener('click', () => show(el.dataset.s)));
+  document.querySelectorAll('.row .nm, .card .who').forEach(el => el.addEventListener('click', () => document.getElementById('peek').classList.add('show')));
+  const th = document.getElementById('theme');
+  th.addEventListener('click', () => { const h = document.documentElement; const d = h.dataset.theme === 'dark'; h.dataset.theme = d ? 'light' : 'dark'; th.textContent = d ? '☀ светлая' : '☾ тёмная'; });
+</script>
+</body>
+</html>

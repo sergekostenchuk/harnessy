@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Программа UX харнесса — что сделано</title>
+<style>
+  body { margin:0; padding:28px 20px 60px; font:15px/1.5 -apple-system,"Helvetica Neue",Arial,sans-serif; color:#e6e9f0; background:#0b0d12; }
+  main { max-width:920px; margin:0 auto; }
+  h1 { font-size:22px; margin:0 0 4px; color:#fff; } .sub { color:#8b93a7; margin:0 0 22px; }
+  h2 { font-size:16px; margin:28px 0 8px; color:#fff; }
+  .st { display:inline-block; font-size:11px; border-radius:999px; padding:1px 8px; margin-left:6px; vertical-align:middle; }
+  .done { background:rgba(61,220,151,.15); color:#3ddc97; } .part { background:rgba(242,176,75,.15); color:#f2b04b; } .no { background:#222; color:#777; }
+  ul { padding-left:18px; margin:0; } li { margin:6px 0; }
+  a { color:#5ab0ff; text-decoration:none; } a:hover { text-decoration:underline; }
+  .path { color:#8b93a7; font-size:12px; font-family:monospace; }
+  .box { background:#111419; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:16px 20px; margin-bottom:14px; }
+  .hero-box { background:linear-gradient(135deg, #161a23, #111419); border:1px solid #8f81ff; border-radius:12px; padding:20px 24px; margin-bottom:20px; }
+  .hero-btn { display:inline-flex; align-items:center; gap:8px; background:#8f81ff; color:#fff; font-weight:700; font-size:14px; padding:10px 20px; border-radius:8px; text-decoration:none; margin-top:12px; transition:transform .12s; }
+  .hero-btn:hover { text-decoration:none; transform:scale(1.02); filter:brightness(1.1); }
+</style>
+</head>
+<body><main>
+
+<div class="hero-box">
+  <div style="font-size:11px; font-weight:700; color:#8f81ff; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">ГЛАВНЫЙ ИСПОЛНЯЕМЫЙ ХАРНЕСС (AWARD EDITION 2026-2027)</div>
+  <h1 style="font-size:24px; margin-bottom:8px;">⚡ Harnessy OS • Desktop Workbench</h1>
+  <p style="color:#8b93a7; font-size:13px; line-height:1.5; margin-bottom:12px;">
+    Единый десктопный интерфейс по референсам <strong>Claude Desktop, Codex / Cursor, DeepSeek-R1, Perplexity, Kimi, Hermes, Antigravity, Pi</strong>.<br>
+    На каждом экране зафиксированы <strong>7 Инвариантов</strong> (ГДЕ · ЧТО · ЗАЧЕМ · КОГДА · ОЖИДАЕМ · РИСКИ · КРИТЕРИИ) и <strong>4 Пространства</strong> (ПРОЕКТ · ОБСУЖДЕНИЕ · КОД · ПРОДУКТ).
+  </p>
+  <a href="core/harness-awards-platform.html" class="hero-btn">🚀 Открыть платформу Harnessy (3 концепта Awards 26/27) →</a>
+</div>
+
+<p class="sub">Всё лежит в <span class="path">~/REPORTS/workbench-design/</span>. Локальный сервер: <span class="path">http://localhost:8766/</span>.</p>
+
+<div class="box"><h2 style="margin-top:0">0. Главная платформа и живой верстак <span class="st done">сделано</span></h2>
+<ul>
+<li><a href="core/harness-awards-platform.html" style="font-weight:700; color:#8f81ff; font-size:16px;">★ core/harness-awards-platform.html — ЕДИНАЯ ПЛАТФОРМА HARNESS (3 КОНЦЕПТА AWARDS 26/27)</a>
+  <ul style="margin:6px 0 8px 18px; font-size:13px; color:#8b93a7;">
+    <li><b>Клавиша 1: 🛰️ Studio Horizon (Claude Desktop + Linear + Figma)</b> — трехколоночная рабочая станция: диалог с Архитектором, управление флотом агентов (Оркестратор, Ревьюер, Воркеры 1..64), смена провайдеров и моделей, Карта операций L0..L4, паспорт решения (7 инвариантов) и живой продукт.</li>
+    <li><b>Клавиша 2: 🌐 Swarm Canvas (Antigravity + Perplexity Spaces + n8n)</b> — пространственный бесконечный холст, где агенты физически размещены на узлах графа операций с анимированными потоками данных и масштабированием стаи от 4 до 64 воркеров.</li>
+    <li><b>Клавиша 3: 🧘 Zen Director (Apple Human Interface + Pi + Superhuman)</b> — абсолютно чистый дзен-интерфейс без визуального шума; диалог, карточка развития с 1-клик слиянием (Space) и плавная выкатная панель флота снизу.</li>
+  </ul>
+</li>
+<li><a href="core/workbench-unified.html" style="font-weight:700; color:#8f81ff; font-size:15px;">★ core/workbench-unified.html — ГЛАВНЫЙ ЖИВОЙ ДЕСКТОПНЫЙ HARNESS (Клавиши 1-2-3)</a>
+  <ul style="margin:6px 0 8px 18px; font-size:13px; color:#8b93a7;">
+    <li><b>Клавиша 1: 🛰️ Action Horizon (Hermes + Linear + Perplexity)</b> — диспетчерская решений фоновых агентов: 4 радарных спидометра, очередь развилок с 7 инвариантами, слияние в 1 клик (Space), цитаты фактов из Perplexity Engine.</li>
+    <li><b>Клавиша 2: 📐 Spatial Workbench (Cursor + Claude + DeepSeek-R1)</b> — 4 пространства синхронно: [📁 Проект] дерево файлов и вех, [💬 Диалог] с аккордеоном рассуждений DeepThink и живым композером, [💻 Код] синтаксический diff и Vitest 8/8 OK, [🚀 Продукт] живой интерактивный превью экрана входа.</li>
+    <li><b>Клавиша 3: 🔒 Deterministic Gateway (Рельсы истины & Шлюзы)</b> — конвейер шлюзов этапов (L0..L4), бортовой формуляр спецификации, интерактивный чек-лист 5 проходов Конституции владельца, неизменяемый журнал доказательств.</li>
+  </ul>
+</li>
+<li><a href="design-system/index.html" style="font-weight:700; color:#5ab0ff;">★ design-system/index.html — Дизайн-система: Токены WCAG AAA, Матрица 12 статусов, Инварианты</a></li>
+<li><a href="cjm-blueprint/index.html" style="font-weight:700; color:#5ab0ff;">★ cjm-blueprint/index.html — CJM & Сервисный чертёж: 16 сцен, 7 слоёв сервиса</a></li>
+</ul></div>
+
+<div class="box"><h2 style="margin-top:0">1. Свидетельства из ваших журналов <span class="st done">сделано</span> · 21 файл</h2>
+<ul>
+<li><a href="evidence/_critic.md">_critic.md</a> — критик первого круга: десять сигналов (§4), чего не хватало (§5)</li>
+<li><a href="evidence/_critic2.md">_critic2.md</a> — критик второго круга: что добрано, что требует вас (§2), обновлённые сигналы (§5–6)</li>
+<li>Первый круг: <a href="evidence/claude-code.md">claude-code</a> · <a href="evidence/codex.md">codex</a> · <a href="evidence/kimi-hermes-pi.md">kimi-hermes-pi</a> · <a href="evidence/antigravity-chatgpt-cursor-warp.md">antigravity-chatgpt-cursor-warp</a> · <a href="evidence/omg-process.md">omg-process</a> · <a href="evidence/owner-vision.md">owner-vision</a> · <a href="evidence/reports-memory.md">reports-memory</a></li>
+<li>Второй круг: <a href="evidence/r2-transitions.md">переход чат→план</a> · <a href="evidence/r2-research-content.md">ресёрч</a> · <a href="evidence/r2-spend-limits.md">расход и лимиты</a> · <a href="evidence/r2-other-harnesses.md">другие харнессы</a> · <a href="evidence/r2-antigravity-summaries.md">Antigravity янв–май</a> · <a href="evidence/r2-owner-voice.md">ваш голос в OMG</a> · <a href="evidence/r2-waiting.md">точки ожидания</a> · <a href="evidence/r2-screenshots.md">ваши скриншоты</a> · <a href="evidence/r2-touchpoints.md">точки контакта</a> · <a href="evidence/r2-positive.md">положительные эмоции</a></li>
+<li><a href="evidence/screens/">evidence/screens/</a> — 159 ваших снимков + <a href="evidence/screens/dsh/">DSH</a></li>
+</ul></div>
+
+<div class="box"><h2 style="margin-top:0">2. Методы и продукты лидеров <span class="st done">сделано</span> · 6 файлов</h2>
+<ul>
+<li><a href="research/methods.md">methods.md</a> — NN/g, PAIR, HAX, Apple, Microsoft, Anthropic, OpenAI; §5 — 44 требования R1–R44</li>
+<li><a href="research/products.md">products.md</a> — Claude, Codex, Cursor, Devin, Factory, Warp…; чек-лист 1–30</li>
+<li><a href="research/state-visibility.md">state-visibility.md</a> — видимость состояния долгой работы: словарь состояний, чек-лист</li>
+<li><a href="research/awards-trends.md">awards-trends.md</a> — премии 2025–2026, критерии жюри, куда подавать</li>
+<li><a href="research/standard-scenarios.md">standard-scenarios.md</a> — стандартные сценарии вендоров; чего нет в ваших журналах</li>
+<li><a href="research/dsh-trajectory-composer.md">dsh-trajectory-composer.md</a> — разбор DSH: журнал агента, композер, аналитика</li>
+</ul></div>
+
+<div class="box"><h2 style="margin-top:0">3. Синтез: CJM, чертежи, архитектура, система состояния <span class="st done">сделано</span></h2>
+<ul>
+<li><a href="synthesis/users-needs.md">users-needs.md</a> — <b>пользователи: потребности и боли</b> (портреты П1–П5, таблица кто·что·где·когда·главное·дополнительно·успех·провал, 18 моментов пути, боли без экрана) — критерий приёмки любого макета</li>
+<li><a href="synthesis/jtbd.md">jtbd.md</a> — персоны, 16 работ с критериями успеха/провала вашими словами, 16 сцен</li>
+<li><a href="synthesis/cjm/">cjm/</a> — <b>карты пути</b> S1–S16 (S1 чат · S2 TaskPlan/OMG · S3 ресёрч · S4 команда · S5 ревью · S6 долгая работа · S7 возврат · S8 бюджет · S9 настройка · S10 объяснить третьему · S11 автоматизации · S12 показать экран · S13–S16 гипотезы)</li>
+<li><a href="synthesis/blueprint/">blueprint/</a> — <b>сервисные чертежи</b> S1–S12 и <a href="synthesis/blueprint/_system.md">сводный _system.md</a> (акторы, линия видимости, точки сбоя/ожидания/решения, что нужно движку)</li>
+<li><a href="synthesis/ia.md">ia.md</a> — <b>информационная архитектура</b>: объекты, «где я», раскладка, режимы и переходы, навигация, словарь терминов</li>
+<li><a href="synthesis/state-system.md">state-system.md</a> — <b>система видимости состояния</b>: паспорт по вашей рамке, слова состояния, очередь «ждёт вас», время, стоимость, рекап, уведомления</li>
+<li><a href="synthesis/ia-proposal-control.md">предложение «диспетчерская»</a> · <a href="synthesis/ia-proposal-objects.md">предложение «объектное»</a> — два угла, из которых собран ia.md</li>
+<li><a href="synthesis/_critic-phase2.md">_critic-phase2.md</a> — критик: вердикт, 7 блокеров до концепций, 14 вопросов только вам (§10.3), смета фазы 3 (§10.6)</li>
+<li><a href="synthesis/digest/">digest/</a> — дословные выжимки свидетельств по сценам (рабочий материал)</li>
+</ul></div>
+
+<div class="box"><h2 style="margin-top:0">4. Эскизы экранов <span class="st part">черновик</span></h2>
+<ul>
+<li><a href="sketches/harness.html">harness.html</a> — <b>РАБОЧИЙ ПРОТОТИП</b> (04.10): 5 разделов (Сейчас · Проекты · Команда · Расход · Настройки), 26 экранов, живая карта OM-VIEW, данные вшиты; действия: Новый чат, поиск ⌘K, В план, Уйти, Показать окно</li>
+<li><a href="sketches/harness-design-v3.html">harness-design-v3.html</a> — v3: План = живая карта OM-VIEW (iframe :3000/#/om-map?embed, выгрузка 04.10) + прогресс из data/*.json; экран Настройки</li>
+<li><a href="sketches/harness-design-v2.html">harness-design-v2.html</a> — v2 (оценка 8/10): План = карта проекта с прогрессом и таймлайном, Команда = стая узлов + роли и места, Провайдеры (подписки, API, окна, сброс, оплаты, прогноз)</li>
+<li><a href="sketches/harness-design.html">harness-design.html</a> — v1 (оценка пользователя 7/10): Harnessy в ДНК Claude/Codex/DSH, четыре экрана, тёмная/светлая тема, паспорт по клику; девять решений-трендов</li>
+<li><a href="sketches/ia-screens.html">ia-screens.html</a> — каркас по ia.md с источником у каждого элемента</li>
+<li><a href="sketches/path.html">path.html</a>, <a href="sketches/simple.html">simple.html</a>, <a href="sketches/harness-plus.html">harness-plus.html</a>, <a href="sketches/index.html">index.html</a> — ранние импровизации, не основа</li>
+</ul></div>
+
+<div class="box"><h2 style="margin-top:0">5. Фаза 3: Три концепции UX/UI и Дизайн-система <span class="st done">сделано</span></h2>
+<ul>
+<li><a href="core/workbench-unified.html" style="font-weight:700; color:#0071e3; font-size:14px;">★ core/workbench-unified.html — ЖИВОЙ ВЕРСТАК ВЛАДЕЛЬЦА: 3 варианта UX/UI (горячие клавиши 1-2-3)</a>
+  <ul style="margin:4px 0 8px 18px; font-size:12px; color:#555;">
+    <li><b>Клавиша 1: «Тихий пульт & Карта n8n»</b> (wbdesign-after.png) — шина каналов, диалог Что/Где/Зачем/Ожидаю, граф r2 на 55 узлов и 87 SVG-рёбер с dagre-сеткой, инспектор контракта, таймлайн на 2729 событий.</li>
+    <li><b>Клавиша 2: «Инженерный верстак / Spatial Quadrant»</b> (Cursor + Antigravity) — 4 пространства (Проект · Обсуждение · Код · Продукт) с панелью 7 инвариантов, реальные диффы 5 файлов, тест-раннер и живой webview <code>http://localhost:3000/#/om-map</code> с переключением разрешений.</li>
+    <li><b>Клавиша 3: «Штаб решений / Deterministic Gateway»</b> (Linear + Perplexity) — рельсы шлюзов L0–L4, карточки развилок с полным паспортом 7 инвариантов, слияние в 1 клик (Space), чек-лист 5 проходов самопроверки владельца и цитаты из SQLite.</li>
+  </ul>
+</li>
+<li><a href="design-system/index.html" style="font-weight:700; color:#0071e3;">★ design-system/index.html — ЖИВОЙ КАТАЛОГ ДИЗАЙН-СИСТЕМЫ: Токены WCAG AAA, Матрица 12 статусов, Инварианты</a> (<a href="design-system/DESIGN-SYSTEM-SPEC.md">спецификация .md</a>)</li>
+<li><a href="cjm-blueprint/index.html" style="font-weight:700; color:#0071e3;">★ cjm-blueprint/index.html — ИНТЕРАКТИВНЫЙ НАВИГАТОР CJM & СЕРВИСНЫЙ ЧЕРТЁЖ: 16 сцен, 7 слоёв сервиса</a> (<a href="cjm-blueprint/MASTER-CJM-AND-BLUEPRINT.md">полный чертёж .md</a>)</li>
+<li><a href="phase3/01-FOUNDATION-BLOCKERS-RESOLVED.md">01-FOUNDATION-BLOCKERS-RESOLVED.md</a> — Архитектурный фундамент: снятие 7 блокеров, модель «Этап · Лестница · Режим», словарь без жаргона</li>
+<li><a href="phase3/02-THREE-UX-UI-CONCEPTS.md">02-THREE-UX-UI-CONCEPTS.md</a> — Полный отчёт по 3 концепциям UX/UI, экраны E1–E17 и критерии жюри Awards 2026–2027</li>
+<li><a href="phase3/interactive-concepts.html">interactive-concepts.html</a> — Ранний черновой прототип концепций</li>
+</ul></div>
+
+<div class="box"><h2 style="margin-top:0">5. Три облика <span class="st done">сделано</span> · 6. Дизайн-система <span class="st done">сделано</span></h2>
+<ul><li><a href="sketches/harness.html">harness.html</a> — переключатель обликов в заголовке: <b>A Тихий пульт</b> (тёмный, тёплый, Inter) · <b>B Диспетчерская</b> (плотный, холодный, Plex + моно) · <b>C Студия</b> (светлый, бумага, Fraunces)</li>
+<a href="sketches/disarto/index.html">Скетчи 01–09 в стиле @disarto.digital (04.10) — чат, план-карта, прогресс, стая, расход, настройки, вход, события</a> · <li><a href="sketches/design-system.html">design-system.html</a> — принципы, токены, словарь состояний (12 слов), каталог компонентов, три облика рядом, слова интерфейса, доступность</li></ul></div>
+<div class="box"><h2 style="margin-top:0">Служебное</h2>
+<ul>
+<li><a href="workflows/">workflows/</a> — скрипты всех прогонов (свидетельства ×2, синтез, добивка)</li>
+<li>HARNESS (база для UI): <span class="path">~/HARNESS</span> · <a href="http://localhost:3777/">http://localhost:3777/</a></li>
+</ul></div>
+</main></body>
+</html>

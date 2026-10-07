@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 20 · Вход: бутылка наливает · живой</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .stage{position:relative;width:1280px;height:640px;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--bg);box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .stage canvas{position:absolute;inset:0;width:100%;height:100%}
+  .hud{position:absolute;right:20px;top:16px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);z-index:2}
+  .hud b{color:var(--ink2);font-weight:500}
+  .meter{position:absolute;left:560px;right:40px;bottom:16px;display:flex;align-items:center;gap:12px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);z-index:2}
+  .meter .ticks{flex:1}.meter b{font:500 12px var(--mono);color:var(--ink);min-width:46px;text-align:right;letter-spacing:0}
+  .form{position:absolute;left:64px;top:120px;width:360px;z-index:2;color:var(--ink)}
+  .mark{width:44px;height:44px;border-radius:13px;background:linear-gradient(160deg,#2a2a2f,#151517);border:1px solid var(--line2);display:grid;place-items:center;margin-bottom:20px}.mark svg{width:22px;height:22px;stroke:var(--gold);fill:none;stroke-width:2.2;stroke-linecap:round}
+  .pane{display:none}.pane.on{display:block;animation:in .28s ease}@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .pane h2{font:600 26px/1.15 var(--font);margin:0 0 8px;letter-spacing:-.01em}.pane p{color:var(--ink2);margin:0 0 18px;font-size:13px}
+  .pane .ey{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px}
+  .doors{display:grid;gap:8px}.door{height:42px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:500;font-size:13px;cursor:pointer}.door:hover{border-color:var(--ink3)}.door.p{background:var(--accent);border-color:var(--accent);color:#1a1a1a}
+  .code{display:flex;gap:8px;margin:0 0 18px}.code b{width:46px;height:56px;border-radius:10px;border:1px solid var(--line2);background:var(--panel);display:grid;place-items:center;font:500 26px var(--mono);color:var(--ink)}
+  .stl{display:grid;gap:7px;margin:0 0 20px;font:10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .stl div{display:flex;align-items:center;gap:9px}.stl div::before{content:"";width:7px;height:7px;border-radius:1.5px;background:var(--line2);flex:none}
+  .stl div.ok{color:var(--ink2)}.stl div.ok::before{background:var(--ok)}.stl div.cur{color:var(--ink)}.stl div.cur::before{background:var(--accent);animation:bl 1s steps(2) infinite}@keyframes bl{50%{opacity:.25}}
+  .row{display:flex;gap:8px;align-items:center}.row .btn{height:36px;cursor:pointer;text-decoration:none}
+  .demo{display:flex;gap:8px;align-items:center;margin:14px 2px 0;flex-wrap:wrap}.demo .btn{cursor:pointer}.demo .lbl{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-right:4px}
+  .demo .sw{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:12px;color:var(--ink2)}.demo .tog{cursor:pointer}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 20 · вход · графин наливает · живой</h1>
+  <p class="sub">Пока идёт авторизация, справа графин Harnessy наливает коньяк в бокал. Силуэт графина построен по профилю образца; материалы — чёрное глянцевое стекло, хромовое горло, золотая надпись, тонкий бокал с отражением в столе. Срок ожидания неизвестен, поэтому бокал наполняется всё медленнее и сам до конца не доходит; доливает только настоящее подтверждение. <b>Нажмите любой способ входа.</b> <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame">
+    <div class="stage" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="form">
+        <div class="mark"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+        <div class="pane on" data-p="doors">
+          <h2>Войти в Harnessy</h2><p>Чат, план и команда агентов — в одном окне. Нового человека допускает владелец.</p>
+          <div class="doors"><div class="door p" data-door="tg">Войти через Telegram</div><div class="door" data-door="gh">Продолжить с GitHub</div><div class="door" data-door="gg">Продолжить с Google</div><div class="door" data-door="mail">Почта — пришлём код</div></div>
+        </div>
+        <div class="pane" data-p="wait">
+          <div class="ey" id="w-ey">вход через telegram</div>
+          <h2 id="w-t">Подтвердите вход</h2><p id="w-d"></p>
+          <div class="code" id="w-code"><b>4</b><b>7</b><b>2</b><b>9</b></div>
+          <div class="stl" id="stl"><div>запрос отправлен</div><div id="w-w">ждём кнопку «войти» в боте</div><div>открываем сессию</div></div>
+          <div class="row"><span class="btn ghost" data-act="reset">Отмена</span></div>
+        </div>
+        <div class="pane" data-p="done">
+          <div class="ey">вход выполнен</div>
+          <h2>Налито</h2><p>Сессия открыта на 30 дней. Открываем Harnessy…</p>
+          <div class="row"><a class="btn p" href="10-new-chat.html">Открыть чат →</a><span class="btn ghost" data-act="reset">Заново</span></div>
+        </div>
+        <div class="pane" data-p="fail">
+          <div class="ey" style="color:var(--bad)">вход не подтверждён</div>
+          <h2>Графин закрыт</h2><p>Подтверждение не пришло или было отклонено. Ничего не открыто, сессии нет.</p>
+          <div class="row"><span class="btn p" data-act="reset">Попробовать снова</span></div>
+        </div>
+      </div>
+      <div class="hud" id="hud"></div>
+      <div class="meter"><span>налито</span><div class="ticks thin" id="tk"></div><b id="pct">0 %</b></div>
+    </div>
+    <div class="cap"><span>20 · вход · графин наливает в бокал · один canvas, без библиотек</span><span>1280 × 640</span></div>
+    <div class="demo"><span class="lbl">показать исход</span><span class="btn sm" data-act="confirm">✓ подтверждение пришло</span><span class="btn sm" data-act="deny">✕ отказ или вышел срок</span><span class="btn sm ghost" data-act="reset">↺ заново</span>
+      <span class="sw">подтверждать самому через 8 с<span class="tog on" id="auto"></span></span></div>
+  </div>
+
+  <div class="legend">
+    <div><b>① Закрыта</b>человек выбирает способ входа: графин стоит с пробкой, бокал пуст; раз в несколько секунд по стеклу пробегает блик.</div>
+    <div><b>② Наливает</b>клик по способу входа: пробка ложится на стол, графин наклоняется, коньяк течёт струёй. Чем дольше ждём, тем тоньше струя — до 86 % и не выше.</div>
+    <div><b>③ Налито</b>подтверждение пришло: доливает примерно за секунду, графин возвращается и закрывается, бокал светится — и открывается чат.</div>
+    <div><b>④ Отказ</b>отклонено или вышел срок: струя обрывается, коньяк теряет цвет и уходит, графин снова закрыт.</div>
+  </div>
+  <div class="recon"><b>Перенос на страницу входа:</b> «наливает» включается кликом по способу входа, «налито» — ответом сервиса входа, «отказ» — отклонением или сроком; переход в чат анимация задерживает не дольше секунды. Код из четырёх цифр показывается только для Telegram. Сцена — общий файл pour-scene.js: тот же код стоит на странице входа. При настройке «меньше анимации» картинка обновляется раз в секунду.</div>
+</div>
+<script src="pour-scene.js"></script>
+<script>
+(function(){
+  const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+  const hud=$('#hud'), pct=$('#pct'), tk=$('#tk'); tk.innerHTML='<i></i>'.repeat(40); const tks=[...tk.children];
+  const HUDT={idle:'01 · закрыт',pour:'02 · наливает',finish:'03 · доливает',done:'04 · налито',fail:'05 · не подтверждён'};
+  const PROV={
+    tg:{n:'telegram',t:'Подтвердите вход',d:'Откройте бота @harness_autoiflow_bot и нажмите «Войти». Код в боте должен совпасть с этим:',w:'ждём кнопку «войти» в боте',code:true},
+    gh:{n:'github',t:'Ждём ответ GitHub',d:'Разрешите вход в окне GitHub — страница продолжит сама, возвращаться вручную не нужно.',w:'ждём разрешение в окне github'},
+    gg:{n:'google',t:'Ждём ответ Google',d:'Выберите аккаунт в окне Google — страница продолжит сама, возвращаться вручную не нужно.',w:'ждём выбор аккаунта google'},
+    mail:{n:'почту',t:'Проверьте почту',d:'Отправили письмо с кодом. Нажмите ссылку в письме — эта страница продолжит сама.',w:'ждём переход по ссылке из письма'}
+  };
+  let auto=true, timer=null;
+  function ui(m){
+    const pane=m==='idle'?'doors':(m==='pour'||m==='finish')?'wait':m;
+    $$('.pane').forEach(p=>p.classList.toggle('on',p.dataset.p===pane));
+    hud.innerHTML='состояние · <b>'+HUDT[m]+'</b>';
+    const k=m==='pour'?1:m==='finish'?2:3; $$('#stl div').forEach((d,i)=>{ d.className=i<k?'ok':i===k?'cur':''; });
+  }
+  function meter(p,m){ const n=Math.round(p*40); tks.forEach((t,i)=>t.className=i<n?(m==='fail'?'bad':'on'):''); pct.textContent=Math.round(p*100)+' %'; }
+  const sc=PourScene($('#cv'),{onState:ui,onLevel:meter,ax:1});
+  function start(key){ const p=PROV[key]||PROV.tg; $('#w-ey').textContent='вход через '+p.n; $('#w-t').textContent=p.t; $('#w-d').textContent=p.d; $('#w-w').textContent=p.w; $('#w-code').style.display=p.code?'':'none';
+    sc.start(); clearTimeout(timer); if(auto) timer=setTimeout(()=>{ if(sc.state()==='pour') sc.confirm(); },8000); }
+  document.addEventListener('click',e=>{
+    const dr=e.target.closest('[data-door]'); if(dr){ start(dr.dataset.door); return; }
+    const ac=e.target.closest('[data-act]'); if(ac){ clearTimeout(timer); ({confirm:()=>sc.confirm(),deny:()=>sc.deny(),reset:()=>sc.reset()})[ac.dataset.act](); return; }
+    const tg=e.target.closest('#auto'); if(tg){ auto=tg.classList.toggle('on'); }
+  });
+})();
+</script>
+</body></html>

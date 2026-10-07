@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 03 · Прогресс и состояния</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .row{display:grid;grid-template-columns:150px 1fr 86px;align-items:center;gap:16px;padding:14px 16px;border:1px solid var(--line2);border-radius:12px;background:var(--panel)}
+  .row .n{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.row .n b{display:block;font:500 13px var(--font);letter-spacing:0;text-transform:none;color:var(--ink);margin-bottom:2px}
+  .row .v{text-align:right;font:500 12px var(--mono);color:var(--ink2)}.row .v small{display:block;font-size:10px;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase}
+  .track{height:8px;border-radius:4px;background:var(--line2);position:relative;overflow:hidden}
+  /* 1. сегментные тики — обычный прогресс */
+  .segs{display:flex;gap:3px}.segs i{flex:1;height:8px;border-radius:2px;background:var(--line2)}.segs i.on{background:var(--accent)}.segs i.cur{background:var(--accent);animation:blink 1.2s ease-in-out infinite}
+  @keyframes blink{50%{opacity:.35}}
+  /* 2. неопределённое движение — ждёт/думает */
+  .sweep::after{content:"";position:absolute;top:0;bottom:0;width:28%;border-radius:4px;background:linear-gradient(90deg,transparent,var(--ink2),transparent);animation:sweep 1.6s ease-in-out infinite}
+  @keyframes sweep{0%{left:-30%}100%{left:100%}}
+  /* 3. пульс-линия — идёт работа */
+  .pulse{display:flex;align-items:center;gap:0;height:22px}.pulse svg{width:100%;height:22px}.pulse path{fill:none;stroke:var(--accent);stroke-width:1.6;stroke-linecap:round;stroke-dasharray:420;stroke-dashoffset:420;animation:draw 2.2s linear infinite}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  /* 4. мерцание — данные обновились */
+  .shimmer{background:linear-gradient(90deg,var(--line2) 0 60%,var(--ok) 60% 100%)}.shimmer::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);animation:sh 1.4s ease-in-out 3}
+  @keyframes sh{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+  /* 5. ошибка */
+  .fail{background:linear-gradient(90deg,var(--accent) 0 57%,var(--bad) 57% 71%,var(--line2) 71%)}
+  /* словарь состояний — точечные орбы */
+  .orbs{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:16px}
+  .orb-card{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:10px}
+  .orb-card .num{font:10px var(--mono);letter-spacing:.08em;color:var(--ink3)}.orb-card b{font-weight:500;font-size:13px}.orb-card small{color:var(--ink2);font-size:11.5px;line-height:1.4}
+  .dots{width:88px;height:88px;position:relative;margin:4px auto}
+  .dots i{position:absolute;width:5px;height:5px;border-radius:50%;background:var(--ink2);left:50%;top:50%;margin:-2.5px}
+  /* idle: спокойная сетка */
+  .idle i{opacity:.55}
+  /* thinking: орбиты */
+  .think i{animation:orbit 3s linear infinite;background:var(--accent)}
+  @keyframes orbit{from{transform:rotate(var(--a)) translateX(var(--r)) rotate(calc(-1*var(--a)))}to{transform:rotate(calc(var(--a) + 360deg)) translateX(var(--r)) rotate(calc(-1*var(--a) - 360deg))}}
+  /* running: быстрый поток вниз */
+  .run i{background:var(--accent);animation:flow 1.1s linear infinite}
+  @keyframes flow{from{transform:translate(var(--x),-40px);opacity:0}30%{opacity:1}to{transform:translate(var(--x),40px);opacity:0}}
+  /* complete: галочка */
+  .done i{background:var(--ok)}
+  /* error: красные, дрожат */
+  .err i{background:var(--bad-fill,#a3304b);animation:jit .5s steps(2) infinite}
+  @keyframes jit{50%{transform:translate(var(--x),var(--y)) translate(1px,-1px)}}
+  .map{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:16px;font-size:12px}
+  .map div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);color:var(--ink2)}.map b{display:block;color:var(--ink);font-weight:500;margin-bottom:3px}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 03 · прогресс и состояния</h1>
+  <p class="sub">У автора — 8 стилей анимации прогресса; нам нужно четыре, и каждому — своё значение. Рядом с полосой всегда число (иначе полоса ни о чём). Ниже — единый словарь состояний агента точечным орбом: то же, что на фоне страницы входа. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app free" style="height:auto">
+    <div class="mono" style="margin-bottom:14px">четыре стиля · каждому — одно значение</div>
+    <div class="grid">
+      <div class="row"><div class="n"><b>Сегментные тики</b>обычный прогресс · шаги известны</div><div class="segs"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="cur"></i><i></i><i></i></div><div class="v">4/7<small>шагов</small></div></div>
+      <div class="row"><div class="n"><b>Неопределённое движение</b>ждёт · думает · очередь</div><div class="track sweep"></div><div class="v">—<small>думает 2,8 с</small></div></div>
+      <div class="row"><div class="n"><b>Пульс-линия</b>идёт работа · поток токенов</div><div class="pulse"><svg viewBox="0 0 420 22" preserveAspectRatio="none"><path d="M0 11 H60 L70 4 L80 18 L90 11 H150 L160 7 L170 15 L180 11 H240 L250 2 L262 20 L272 11 H330 L340 8 L350 14 L360 11 H420"/></svg></div><div class="v">1,2k<small>токенов/с</small></div></div>
+      <div class="row"><div class="n"><b>Мерцание</b>данные обновились · только что</div><div class="track shimmer"></div><div class="v">60 %<small>обновлено 3 с назад</small></div></div>
+      <div class="row"><div class="n"><b>Сбой</b>красный сегмент на месте шага</div><div class="track fail"></div><div class="v">4/7<small style="color:var(--bad)">шаг 5 упал</small></div></div>
+      <div class="row"><div class="n"><b>Порог и маркер</b>лимит с предупреждением</div><div style="position:relative"><div class="track" style="background:linear-gradient(90deg,var(--ok) 0 62%,var(--line2) 62%)"></div><i style="position:absolute;left:80%;top:-5px;width:1px;height:18px;background:var(--bad-fill,#a3304b)"></i><i style="position:absolute;left:calc(62% - 5px);top:11px;border:5px solid transparent;border-bottom-color:var(--ink)"></i></div><div class="v">62 %<small>порог 80 %</small></div></div>
+    </div>
+
+    <div class="mono" style="margin:26px 0 0">словарь состояний агента · орб из точек · номер · смысл</div>
+    <div class="orbs">
+      <div class="orb-card"><span class="num">01 / 05</span><div class="dots idle"><i style="--x:-24px;--y:-24px;transform:translate(-24px,-24px)"></i><i style="transform:translate(0,-24px)"></i><i style="transform:translate(24px,-24px)"></i><i style="transform:translate(-24px,0)"></i><i style="transform:translate(0,0)"></i><i style="transform:translate(24px,0)"></i><i style="transform:translate(-24px,24px)"></i><i style="transform:translate(0,24px)"></i><i style="transform:translate(24px,24px)"></i></div><b>Простаивает</b><small>место занято, работы нет; тихие серые точки</small></div>
+      <div class="orb-card"><span class="num">02 / 05</span><div class="dots think"><i style="--a:0deg;--r:26px"></i><i style="--a:60deg;--r:26px"></i><i style="--a:120deg;--r:26px"></i><i style="--a:180deg;--r:26px"></i><i style="--a:240deg;--r:26px"></i><i style="--a:300deg;--r:26px"></i><i style="--a:90deg;--r:12px"></i><i style="--a:270deg;--r:12px"></i></div><b>Думает</b><small>читает, планирует; орбиты акцентного цвета</small></div>
+      <div class="orb-card"><span class="num">03 / 05</span><div class="dots run"><i style="--x:-24px;animation-delay:0s"></i><i style="--x:-12px;animation-delay:.3s"></i><i style="--x:0px;animation-delay:.6s"></i><i style="--x:12px;animation-delay:.15s"></i><i style="--x:24px;animation-delay:.45s"></i><i style="--x:-18px;animation-delay:.8s"></i><i style="--x:18px;animation-delay:.95s"></i></div><b>Работает</b><small>пишет код, гоняет тесты; быстрый поток</small></div>
+      <div class="orb-card"><span class="num">04 / 05</span><div class="dots done"><i style="transform:translate(-20px,2px)"></i><i style="transform:translate(-12px,10px)"></i><i style="transform:translate(-4px,18px)"></i><i style="transform:translate(6px,8px)"></i><i style="transform:translate(16px,-2px)"></i><i style="transform:translate(26px,-12px)"></i></div><b>Готово</b><small>сдано ревьюеру; точки собираются в галочку</small></div>
+      <div class="orb-card"><span class="num">05 / 05</span><div class="dots err"><i style="--x:-16px;--y:-16px;transform:translate(-16px,-16px)"></i><i style="--x:16px;--y:-16px;transform:translate(16px,-16px)"></i><i style="--x:0;--y:0;transform:translate(0,0)"></i><i style="--x:-16px;--y:16px;transform:translate(-16px,16px)"></i><i style="--x:16px;--y:16px;transform:translate(16px,16px)"></i></div><b>Сбой</b><small>упал прогон или лимит; красные точки, дрожь</small></div>
+    </div>
+
+    <div class="map">
+      <div><b>Где живёт словарь</b>карточка агента · док-пилюля чата · обзор стаи · фон страницы входа · строка статуса под композером</div>
+      <div><b>Правило</b>одно состояние — одно слово, один рисунок, один цвет. Нет «идёт» и «работает» одновременно.</div>
+      <div><b>Доступность</b>при «меньше анимации» — статичный кадр каждого орба; слово всегда рядом с рисунком</div>
+    </div>
+  </div><div class="cap"><span>03 · прогресс · 6 полос + словарь из 5 орбов</span><span>живые css-анимации</span></div></div>
+</div></body></html>

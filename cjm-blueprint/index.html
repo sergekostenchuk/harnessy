@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness • Интерактивная CJM и Сервисный чертёж</title>
+<link rel="stylesheet" href="../core/unified-tokens.css">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-app);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Header */
+.cjm-header {
+  height: 48px; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
+  user-select: none; flex-shrink: 0;
+}
+.cjm-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; color: #fff; }
+.cjm-badge { background: rgba(61,220,151,.15); color: var(--accent-green); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.cjm-nav { display: flex; align-items: center; gap: 8px; }
+.cjm-btn { background: var(--bg-raised); border: 1px solid var(--border-subtle); color: var(--text-primary); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 6px; }
+.cjm-btn:hover { background: var(--bg-hover); border-color: var(--border-focus); }
+.cjm-btn-pri { background: var(--accent-purple); color: #fff; border: none; font-weight: 600; }
+
+/* Top Challenges Bar */
+.chall-strip {
+  background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle);
+  display: flex; gap: 6px; padding: 8px 20px; overflow-x: auto; flex-shrink: 0;
+}
+.chall-tab {
+  padding: 6px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);
+  background: var(--bg-app); color: var(--text-secondary); cursor: pointer; white-space: nowrap;
+  font-size: 12px; font-weight: 500; transition: all .12s;
+}
+.chall-tab:hover { color: #fff; background: var(--bg-raised); }
+.chall-tab.on { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); font-weight: 600; }
+
+/* Main Stage */
+.cjm-stage { flex: 1; display: flex; overflow: hidden; }
+
+/* Left Scene Selector */
+.scene-sidebar {
+  width: 260px; background: var(--bg-panel); border-right: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column; padding: 12px 8px; gap: 4px; overflow-y: auto; flex-shrink: 0;
+}
+.scene-item {
+  padding: 8px 10px; border-radius: var(--radius-sm); color: var(--text-secondary);
+  cursor: pointer; display: flex; flex-direction: column; gap: 2px; transition: background .12s;
+}
+.scene-item:hover { background: var(--bg-raised); color: var(--text-primary); }
+.scene-item.on { background: var(--bg-raised); color: #fff; font-weight: 600; border-left: 2px solid var(--accent-purple); }
+.scene-num { font-size: 10px; font-family: var(--font-mono); color: var(--text-faint); }
+.scene-title { font-size: 12px; }
+
+/* Center Blueprint Matrix */
+.matrix-col { flex: 1; overflow-y: auto; padding: 24px 36px; max-width: 960px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 16px; }
+
+/* 7-Layer Blueprint Card */
+.bp-layer {
+  background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  padding: 14px 18px; display: flex; flex-direction: column; gap: 6px;
+}
+.bp-layer-hdr {
+  display: flex; justify-content: space-between; align-items: center; font-size: 10px;
+  font-weight: 700; text-transform: uppercase; color: var(--text-faint); letter-spacing: .5px;
+}
+.bp-layer-val { font-size: 13px; color: var(--text-primary); line-height: 1.5; }
+
+/* Separator Lines */
+.bp-line {
+  display: flex; align-items: center; gap: 10px; font-size: 10px; text-transform: uppercase;
+  color: var(--accent-purple); font-weight: 700; letter-spacing: 1px; margin: 4px 0;
+}
+.bp-line::before, .bp-line::after { content: ''; flex: 1; height: 1px; background: rgba(143,129,255,.25); }
+
+/* Invariants Box */
+.cjm-inv-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 12px; background: var(--bg-app);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 12px; margin-top: 8px; font-size: 11px;
+}
+.cjm-inv-cell { display: flex; gap: 6px; }
+.cjm-inv-lbl { font-weight: 700; color: var(--text-faint); font-size: 10px; text-transform: uppercase; min-width: 60px; }
+</style>
+</head>
+<body>
+
+<header class="cjm-header">
+  <div class="cjm-brand">
+    <span>🧭 Интерактивная CJM & Service Blueprint</span>
+    <span class="cjm-badge">16 Сцен • 7 Слоёв сервиса</span>
+  </div>
+  <div class="cjm-nav">
+    <a href="../core/workbench-unified.html" class="cjm-btn cjm-btn-pri">⚡ Открыть живой верстак →</a>
+    <a href="../design-system/index.html" class="cjm-btn">Дизайн-система</a>
+    <a href="../index.html" class="cjm-btn">Оглавление</a>
+  </div>
+</header>
+
+<!-- 5 Главных Вызовов Пользователя -->
+<div class="chall-strip">
+  <div class="chall-tab on" onclick="selChallenge(1)">Вызов 1: Быстрый диалог в контексте папки</div>
+  <div class="chall-tab" onclick="selChallenge(2)">Вызов 2: Капитальная задача по этапам (OMG)</div>
+  <div class="chall-tab" onclick="selChallenge(3)">Вызов 3: Исследование и сбор доказательств</div>
+  <div class="chall-tab" onclick="selChallenge(4)">Вызов 4: Команда автономных исполнителей</div>
+  <div class="chall-tab" onclick="selChallenge(5)">Вызов 5: Принятие сложного решения (Ревью)</div>
+</div>
+
+<div class="cjm-stage">
+  <!-- Боковой перечень сцен -->
+  <aside class="scene-sidebar" id="scenes-list">
+    <!-- Наполняется кодом JS -->
+  </aside>
+
+  <!-- 7-слойный Сервисный чертёж -->
+  <main class="matrix-col" id="matrix-col">
+    <!-- Наполняется кодом JS -->
+  </main>
+</div>
+
+<script>
+const SCENES = [
+  {
+    id: 'S1',
+    chall: 1,
+    title: 'Быстрый диалог в папке',
+    desc: 'Разобраться с локальным кодом без тяжеловесного планирования',
+    emo: 'Нетерпение на старте (+1), опасение за скрытые правки (-1), восторг от точного ответа (+2)',
+    action: 'Открывает верстак, вводит вопрос, нажимает Enter, проверяет дифф',
+    touchpoint: 'Поле ввода с индикатором папки [📁 ~/OMG] + переключатель режима [Только чтение / Правки]',
+    frontstage: 'Модель выдаёт 4 строки диффа, объясняет причину без жаргона, ждёт подтверждения',
+    backstage: 'Сканирование структуры за 180 мс, контроль «check-then-act», запуск изолированного процесса',
+    failpoint: 'Модель пытается перезаписать весь файл или коснуться .env. Защита: защитный барьер секретов.',
+    waitpoint: 'Генерация ответа: 2–4 сек (индикатор: «Анализирую 2 файла…»)',
+    inv: {
+      where: '~/OMG/auth',
+      what: 'Функция валидации сессии в auth_service.py',
+      why: 'Устранить баг повторного входа',
+      when: 'Мгновенно (ответ за 3с)',
+      expected: 'Дифф из 4 строк без побочных эффектов',
+      risks: 'Низкие (режим чтения)',
+      criteria: 'Тесты auth_test.py зелёные, код чистый'
+    },
+    mode: 2
+  },
+  {
+    id: 'S2',
+    chall: 2,
+    title: 'Капитальная задача (TaskPlan / OMG)',
+    desc: 'Большая инженерная работа на несколько часов с гарантией порядка',
+    emo: 'Фокус и концентрация (+1), напряжение при прогоне тестов (-1), гордость за качество (+3)',
+    action: 'Ставит задачу в плане, утверждает спецификацию, следит за лестницей шагов L0..L8',
+    touchpoint: 'Интерактивный шагомер конвейера + чек-лист 5 проходов самопроверки владельца',
+    frontstage: 'Агент отчитывается по формуле Что/Где/Зачем/Ожидаю, предлагает коммит f3bf191',
+    backstage: 'Создание изолированного git worktree, фоновый запуск vitest и typecheck, фиксация sha',
+    failpoint: 'Модель меняет сами тесты, чтобы они «прошли». Защита: запрет правок тестов без паузы.',
+    waitpoint: 'Прогон полного набора тестов: 45 сек. Лог запуска команды отображается прозрачно.',
+    inv: {
+      where: 'OMG / ветка: om-map',
+      what: 'Реализация React Flow холста карты',
+      why: 'Визуализация 55 узлов и 87 рёбер r2',
+      when: 'Рубеж L3 • Шаг 3/9',
+      expected: 'Рабочий холст с dagre-сеткой',
+      risks: 'Средние (изолированная ветка)',
+      criteria: '8/8 тестов OK, typecheck 0 ошибок'
+    },
+    mode: 1
+  },
+  {
+    id: 'S3',
+    chall: 3,
+    title: 'Глубокое исследование документации',
+    desc: 'Сбор доказательств и фактов без уверенных галлюцинаций LLM',
+    emo: 'Скепсис (0), раздражение от водянистых рассуждений (-1), восторг от точных цитат (+3)',
+    action: 'Запрашивает анализ различий версий библиотек, кликает по сноскам',
+    touchpoint: 'Спецификация из 3 колонок: [Подтверждено], [Гипотеза], [Неизвестно] + сноски [1], [2]',
+    frontstage: 'Выжимка ключевых параметров API со ссылками на документацию 2026 года',
+    backstage: 'Обращение к Context7 и PubMed с верификацией HTTP 200, фиксация дампа цитаты',
+    failpoint: 'Ошибка 404 по ссылке. Защита: автоматическая пометка [Ссылка недоступна, взят снапшот].',
+    waitpoint: 'Выкачка и парсинг документации: 12–25 сек.',
+    inv: {
+      where: 'Документация / Context7',
+      what: 'Лимиты и схемы авторизации OAuth 2.0',
+      why: 'Выбрать архитектуру без скрытых платежей',
+      when: 'До начала написания кода',
+      expected: 'Сравнительная таблица со ссылками',
+      risks: 'Нулевые (чистое исследование)',
+      criteria: '100% утверждений подтверждены цитатой'
+    },
+    mode: 3
+  },
+  {
+    id: 'S4',
+    chall: 4,
+    title: 'Команда автономных исполнителей',
+    desc: 'Слаженная работа Fable, Codex, Devin и Kimi без хаоса и столкновений',
+    emo: 'Тревога за рассинхронизацию (-1), спокойствие при виде статусов шины (+2)',
+    action: 'Наблюдает за перекличкой агентов в шине, разрешает конфликты доступа',
+    touchpoint: 'Шина каналов (#main, #events) с цветовой маркировкой ролей и статусами',
+    frontstage: 'Диалог агентов: Fable передаёт коммит на ревью, Codex возвращает вердикт 9/10',
+    backstage: 'Шина asvh, контроль уникальности lock-файла, очередь сообщений SQLite',
+    failpoint: 'Два агента правят один файл одновременно. Защита: блочный lease-замок.',
+    waitpoint: 'Ожидание вердикта ревьюера: 30–90 сек.',
+    inv: {
+      where: 'Шина событий / SQLite heads',
+      what: 'Параллельная разработка и ревью',
+      why: 'Ускорить выпуск рубежа L3 в 4 раза',
+      when: 'Постоянно в фоне',
+      expected: 'Вердикт независимого ревьюера',
+      risks: 'Высокие при гонках (закрыты lease)',
+      criteria: '0 перезаписей чужого кода'
+    },
+    mode: 1
+  },
+  {
+    id: 'S5',
+    chall: 5,
+    title: 'Принятие сложного решения (Ревью)',
+    desc: 'Владелец оценивает развилку с понятной ценой ошибки и риском',
+    emo: 'Ответственность (+1), нежелание тратить часы на чтение 500 строк (-1), уверенность (+3)',
+    action: 'Нажимает Space для одобрения или Esc для отклонения задачи',
+    touchpoint: 'Карточка развилки с 7 инвариантами + панель 5 проходов самопроверки',
+    frontstage: 'Сетка 7 инвариантов: Где, Что, Зачем, Когда, Ожидаем, Риски, Критерии успеха',
+    backstage: 'Проверка неизменяемости git sha, перепроверка тестов перед слиянием, обновление метрик',
+    failpoint: 'Зазор check-then-act (состояние изменилось в момент нажатия). Защита: атомарный коммит.',
+    waitpoint: 'Человеческое решение: 10–60 сек (замер времени простоя).',
+    inv: {
+      where: 'asvh/runtime/errors.ts',
+      what: 'Q2: Типизация 14 кодов ошибок',
+      why: 'Исключить невидимый пропуск сбоев',
+      when: 'Блокирует рубеж L3',
+      expected: 'Enum ModuleFailureCode',
+      risks: 'Средние (смежные потребители)',
+      criteria: '14/14 кодов типизированы'
+    },
+    mode: 3
+  }
+];
+
+let curChall = 1;
+let curScene = SCENES[0];
+
+function selChallenge(c) {
+  curChall = c;
+  document.querySelectorAll('.chall-tab').forEach((t, i) => t.classList.toggle('on', i + 1 === c));
+  const sc = SCENES.find(s => s.chall === c) || SCENES[0];
+  renderScenesList(sc);
+  renderBlueprint(sc);
+}
+
+function selScene(id) {
+  const sc = SCENES.find(s => s.id === id);
+  if (!sc) return;
+  curScene = sc;
+  document.querySelectorAll('.scene-item').forEach(el => el.classList.toggle('on', el.dataset.id === id));
+  renderBlueprint(sc);
+}
+
+function renderScenesList(selectedScene) {
+  const list = document.getElementById('scenes-list');
+  list.innerHTML = '';
+  SCENES.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'scene-item' + (s.id === selectedScene.id ? ' on' : '');
+    el.dataset.id = s.id;
+    el.innerHTML = `
+      <span class="scene-num">${s.id} • ВЫЗОВ ${s.chall}</span>
+      <span class="scene-title">${s.title}</span>
+    `;
+    el.onclick = () => selScene(s.id);
+    list.appendChild(el);
+  });
+}
+
+function renderBlueprint(s) {
+  const col = document.getElementById('matrix-col');
+  col.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+      <div>
+        <div style="font-size:11px;font-family:var(--font-mono);color:var(--accent-purple);font-weight:700;">СЦЕНА ${s.id} • ВЫЗОВ ${s.chall}</div>
+        <div style="font-size:20px;font-weight:700;color:#fff;">${s.title}</div>
+        <div style="font-size:13px;color:var(--text-secondary);">${s.desc}</div>
+      </div>
+      <a href="../core/workbench-unified.html" class="cjm-btn cjm-btn-pri" style="text-decoration:none;">Открыть в Верстаке (Режим ${s.mode}) ↗</a>
+    </div>
+
+    <!-- 7 СЛОЁВ СЕРВИСНОГО ЧЕРТЕЖА -->
+    <div class="bp-layer" style="border-left:3px solid var(--accent-amber);">
+      <div class="bp-layer-hdr"><span>1. ЭМОЦИИ И КОНТЕКСТ ВЛАДЕЛЬЦА</span><span>ЭМОЦИОНАЛЬНАЯ КРИВАЯ</span></div>
+      <div class="bp-layer-val">${s.emo}</div>
+    </div>
+
+    <div class="bp-layer">
+      <div class="bp-layer-hdr"><span>2. ФИЗИЧЕСКИЕ ДЕЙСТВИЯ ВЛАДЕЛЬЦА</span><span>ЧТО ДЕЛАЕТ ЧЕЛОВЕК</span></div>
+      <div class="bp-layer-val">${s.action}</div>
+    </div>
+
+    <div class="bp-line">ЛИНИЯ ВЗАИМОДЕЙСТВИЯ (LINE OF INTERACTION)</div>
+
+    <div class="bp-layer" style="border-left:3px solid var(--accent-blue);">
+      <div class="bp-layer-hdr"><span>3. ТОЧКИ КОНТАКТА И ЭКРАНЫ (ФРОНТСТЕЙДЖ)</span><span>ИНТЕРФЕЙС</span></div>
+      <div class="bp-layer-val">${s.touchpoint}</div>
+    </div>
+
+    <div class="bp-line">ЛИНИЯ ВИДИМОСТИ (LINE OF VISIBILITY)</div>
+
+    <div class="bp-layer">
+      <div class="bp-layer-hdr"><span>4. ПЕРЕДНИЙ КРАЙ АГЕНТОВ</span><span>ЧТО ПОКАЗЫВАЕТ МОДЕЛЬ</span></div>
+      <div class="bp-layer-val">${s.frontstage}</div>
+    </div>
+
+    <div class="bp-line">ЛИНИЯ ВНУТРЕННЕГО ДЕЙСТВИЯ (LINE OF INTERNAL ACTION)</div>
+
+    <div class="bp-layer">
+      <div class="bp-layer-hdr"><span>5. СИСТЕМНЫЕ ПРОЦЕССЫ И ДВИЖОК</span><span>БЭКСТЕЙДЖ</span></div>
+      <div class="bp-layer-val">${s.backstage}</div>
+    </div>
+
+    <div class="bp-layer" style="border-left:3px solid var(--accent-red);">
+      <div class="bp-layer-hdr"><span style="color:var(--accent-red);">6. ТОЧКИ СБОЯ И РИСКА (FAIL POINTS)</span><span>ЗАЩИТНЫЙ БАРЬЕР</span></div>
+      <div class="bp-layer-val">${s.failpoint}</div>
+    </div>
+
+    <div class="bp-layer" style="border-left:3px solid var(--accent-green);">
+      <div class="bp-layer-hdr"><span style="color:var(--accent-green);">7. ТОЧКИ ОЖИДАНИЯ (WAIT POINTS)</span><span>ТАЙМИНГ</span></div>
+      <div class="bp-layer-val">${s.waitpoint}</div>
+    </div>
+
+    <!-- ПАСПОРТ 7 ИНВАРИАНТОВ -->
+    <div style="margin-top:12px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.5px;">
+        ФИКСАЦИЯ 7 ИНВАРИАНТОВ ДЛЯ ДАННОЙ СЦЕНЫ
+      </div>
+      <div class="cjm-inv-grid">
+        <div class="cjm-inv-cell"><span class="cjm-inv-lbl">📍 Где:</span><span><code>${s.inv.where}</code></span></div>
+        <div class="cjm-inv-cell"><span class="cjm-inv-lbl">⚡ Что:</span><span>${s.inv.what}</span></div>
+        <div class="cjm-inv-cell"><span class="cjm-inv-lbl">🎯 Зачем:</span><span>${s.inv.why}</span></div>
+        <div class="cjm-inv-cell"><span class="cjm-inv-lbl">⏳ Когда:</span><span>${s.inv.when}</span></div>
+        <div class="cjm-inv-cell"><span class="cjm-inv-lbl">📦 Ожидаем:</span><span>${s.inv.expected}</span></div>
+        <div class="cjm-inv-cell"><span class="cjm-inv-lbl">⚠️ Риски:</span><span>${s.inv.risks}</span></div>
+        <div class="cjm-inv-cell" style="grid-column:span 2;"><span class="cjm-inv-lbl">🏆 Критерии:</span><span style="color:var(--accent-green);">${s.inv.criteria}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+// Инициализация при старте
+selChallenge(1);
+</script>
+</body>
+</html>

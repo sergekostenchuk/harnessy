@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 05 · Расход и роутер моделей</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .lay{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;height:100%;min-height:0}
+  .col{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:hidden}
+  .big{font:500 30px/1 var(--font);letter-spacing:-.02em}.big small{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);display:block;margin-bottom:6px}
+  .sub2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}.sub2 div{border-top:1px solid var(--line);padding-top:8px}.sub2 b{display:block;font-size:14px;font-weight:500}.sub2 small{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .tk{display:flex;gap:2px;margin:10px 0 6px}.tk i{flex:1;height:10px;border-radius:1.5px;background:var(--line2)}.tk i.on{background:var(--accent)}.tk i.ok{background:var(--ok)}.tk i.bad{background:var(--bad-fill,#a3304b)}.tk i.mark{background:var(--ink)}
+  .tkl{display:flex;justify-content:space-between;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .opt{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);margin-top:10px;font-size:12.5px}.opt small{display:block;color:var(--ink3);font-size:11px}.opt .tog{margin-left:auto}
+  .subs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .subs .card{padding:11px 13px}.subs .h b{font-size:13px}.subs .v{display:flex;align-items:baseline;gap:6px;margin:6px 0 4px}.subs .v b{font-size:20px;font-weight:500}.subs .v small{font:10px var(--mono);color:var(--ink3);letter-spacing:.06em;text-transform:uppercase}
+  .subs .reset{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-top:6px}
+  .hist .h{margin-bottom:8px}
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.cal div{height:34px;border-radius:6px;background:var(--raised);border:1px solid var(--line);font:10px var(--mono);color:var(--ink3);padding:4px 5px;position:relative}.cal div.p{border-color:var(--line2)}.cal div.p::after{content:attr(data-s);position:absolute;right:5px;bottom:4px;font:600 9px var(--mono);color:var(--ink)}.cal div.r::before{content:"";position:absolute;left:5px;bottom:5px;width:6px;height:6px;border-radius:50%;background:var(--ok)}.cal div.today{border-color:var(--accent)}
+  /* роутер */
+  .river{position:relative;height:220px;margin:8px 0 10px}
+  .river svg{width:100%;height:100%}.river path{fill:none;stroke-linecap:round;stroke:var(--line2)}.river path.a{stroke:var(--accent)}.river path.g{stroke:var(--ok)}
+  .river .nd{position:absolute;border:1px solid var(--line2);border-radius:8px;background:var(--raised);padding:6px 10px;font-size:12px;white-space:nowrap}.river .nd small{display:block;font:9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .fb{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);padding:9px 10px;border:1px dashed var(--line2);border-radius:8px}.fb b{color:var(--ink);font-weight:500}
+  .dirty{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12px;white-space:nowrap}.dirty .m{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}.dirty .m::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:1px}
+  .top b{white-space:nowrap}.top .st{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  [data-c]{cursor:pointer;transition:border-color .15s}[data-c]:hover{border-color:#4a4a52}
+  .crow{display:grid;grid-template-columns:1fr 130px 60px;gap:10px;align-items:center;padding:6px 0;font-size:12.5px;color:var(--ink2)}.crow b{font:500 11px var(--mono);color:var(--ink);text-align:right}
+  .wk{display:flex;gap:6px;align-items:flex-end;height:70px}.wk div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;font:9px var(--mono);color:var(--ink3)}.wk i{width:100%;border-radius:3px 3px 0 0;background:var(--accent)}.wk i.f{background:var(--line2)}
+  .pay{display:grid;grid-template-columns:60px 1fr 90px 90px;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.pay:last-child{border-bottom:0}.pay b{color:var(--ink);font-weight:500}
+  .rt{display:grid;grid-template-columns:1.3fr 130px 60px 100px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.rt:last-child{border-bottom:0}.rt b{color:var(--ink);font-weight:500}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 05 · расход и роутер моделей</h1>
+  <p class="sub"><b>Обзор оставлен как есть.</b> Вторые экраны: клик по блоку обзора раскрывает его в полную карточку (подписка, Codex, Qwen, история, роутер, платежи); три остальных экрана раздела — вкладками. Панель подписки: процент крупно, тик-полоса с числом, остаток и таймер сброса, тумблер «при лимите переключать на дешёвую модель», история по моделям с периодом. Шкала с порогом 80 %. Роутер: режимы COST / BALANCED / QUALITY, «река» от шлюза к моделям — толщина линии = доля, таблица маршрутов, fallback, «грязное состояние» включает кнопку. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg><span class="b">3</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg></div>
+      <div class="nav on"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg><span class="b">!</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg></div>
+      <div class="foot"><div class="nav"><span class="ring"><i></i></span></div><div class="nav"><span class="av">S<i></i></span></div></div>
+    </aside>
+    <section class="main">
+      <div class="top"><b>Расход · все проекты</b><span class="st"><i style="background:var(--bad-fill,#a3304b)"></i>codex 94 % · сброс 19:58 · claude 62 % недели</span>
+        <div class="r"><span class="seg" id="seg"><span class="on" data-v="over">Обзор</span><span data-v="proj">Проекты</span><span data-v="role">Причины</span><span data-v="est">Смета</span></span><span class="seg"><span>7 дн</span><span class="on">30 дн</span><span>90 дн</span><span>всё</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
+      <div class="views"><div class="view on" id="v-over"><div class="lay">
+        <div class="col">
+          <div class="card" data-c="claude">
+            <div class="h"><span class="orb" style="width:16px;height:16px"></span>Claude Max<span class="pill" style="margin-left:6px">подписка · 2 места</span><span class="cnt">сброс недели · вт 03:00</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px">
+              <div><div class="big"><small>использовано · неделя</small>62,4 %</div><div class="tk"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="mark"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="tkl"><span>31,2M / 50M токенов</span><span>порог 80 %</span></div></div>
+              <div><div class="big"><small>использовано · 5 часов</small>18 %</div><div class="tk"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="mark"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="tkl"><span>окно до 21:40</span><span>порог 80 %</span></div></div>
+            </div>
+            <div class="sub2"><div><b>18,8M</b><small>остаток недели</small></div><div><b>2 д 9 ч</b><small>до сброса</small></div><div><b>≈ 71 %</b><small>прогноз к сбросу</small></div></div>
+            <div class="opt"><div>При лимите переключать на дешёвую модель<small>Opus → Sonnet · воркеры и ревьюер; оркестратор — спросить</small></div><span class="tog on"></span></div>
+            <div class="opt" style="margin-top:0"><div>Предупреждать при 80 %<small>в приложении и в Telegram</small></div><span class="tog on"></span></div>
+          </div>
+          <div class="subs">
+            <div class="card" data-c="codex"><div class="h"><b>Codex</b><span class="pill bad" style="margin-left:auto">лимит</span></div><div class="v"><b style="color:var(--bad)">94 %</b><small>5 часов</small></div><div class="bar"><i class="bad" style="width:94%"></i></div><div class="reset">сброс через 1 ч 12 мин · воркер 2 переведён на Sonnet</div></div>
+            <div class="card" data-c="qwen"><div class="h"><b>Qwen · ключ API</b><span class="pill ok" style="margin-left:auto">ok</span></div><div class="v"><b>$41,20</b><small>остаток</small></div><div class="bar"><i style="width:34%"></i></div><div class="reset">пополнение 12.10 · расход 2,1 $/день</div></div>
+          </div>
+          <div class="card hist" data-c="hist"><div class="h">История · по моделям<span class="cnt">30 дней · показать все</span></div>
+            <table class="tbl"><tr><th>дата</th><th>модель</th><th>роль</th><th>токены</th><th>стоимость</th></tr>
+              <tr><td class="m">04.10</td><td>Opus 5.5</td><td>воркер 1 · H1.5</td><td class="m">4,1M</td><td class="m">1,1 %</td></tr>
+              <tr><td class="m">04.10</td><td>Sonnet 5.5</td><td>воркер 2 · D8.4e</td><td class="m">1,2M</td><td class="m">0,3 %</td></tr>
+              <tr><td class="m">04.10</td><td>Astra (Codex)</td><td>ревьюер</td><td class="m">2,8M</td><td class="m" style="color:var(--bad)">лимит</td></tr>
+              <tr><td class="m">03.10</td><td>Fable 5.1</td><td>оркестратор</td><td class="m">0,9M</td><td class="m">0,6 %</td></tr></table></div>
+        </div>
+
+        <div class="col">
+          <div class="card" data-c="router" style="flex:1;min-height:0">
+            <div class="h">Роутер моделей<span class="seg" style="margin-left:auto"><span>Cost</span><span class="on">Balanced</span><span>Quality</span></span></div>
+            <div class="river">
+              <svg viewBox="0 0 420 220" preserveAspectRatio="none">
+                <path d="M70 110 C150 110, 150 40, 230 40" style="stroke-width:14" class="a"/>
+                <path d="M70 110 C150 110, 150 90, 230 90" style="stroke-width:9"/>
+                <path d="M70 110 C150 110, 150 140, 230 140" style="stroke-width:5"/>
+                <path d="M70 110 C150 110, 150 190, 230 190" style="stroke-width:2" class="g"/>
+              </svg>
+              <div class="nd" style="left:0;top:92px">Шлюз<small>все вызовы</small></div>
+              <div class="nd" style="left:238px;top:24px">Opus 5.5<small>58 % · $15/1M</small></div>
+              <div class="nd" style="left:238px;top:74px">Sonnet 5.5<small>27 % · $3/1M</small></div>
+              <div class="nd" style="left:238px;top:124px">Astra · Codex<small>11 % · подписка</small></div>
+              <div class="nd" style="left:238px;top:174px">Qwen 3<small>4 % · $0,4/1M</small></div>
+            </div>
+            <table class="tbl"><tr><th>маршрут</th><th>доля</th><th>p50 / p95</th><th>ошибки</th></tr>
+              <tr><td>оркестратор → Opus</td><td class="m">58 %</td><td class="m">9 с / 41 с</td><td class="m">0,2 %</td></tr>
+              <tr><td>воркеры → Sonnet</td><td class="m">27 %</td><td class="m">4 с / 18 с</td><td class="m">0,4 %</td></tr>
+              <tr><td>ревью → Astra</td><td class="m">11 %</td><td class="m">22 с / 90 с</td><td class="m" style="color:var(--bad)">3,1 %</td></tr>
+              <tr><td>чтение → Qwen</td><td class="m">4 %</td><td class="m">2 с / 6 с</td><td class="m">0 %</td></tr></table>
+            <div class="fb" style="margin-top:10px"><svg class="ico" viewBox="0 0 24 24"><path d="M4 12h6l2-4 2 8 2-4h4"/></svg><span><b>Fallback:</b> если Astra не отвечает 60 с → ревью на Opus; если Codex в лимите → Sonnet</span></div>
+            <div class="dirty"><span class="m">изменения не применены</span><span>Sonnet 27 → 35 %</span><span class="btn sm ghost" style="margin-left:auto">Отменить</span><span class="btn sm p">Применить политику</span></div>
+          </div>
+          <div class="card" data-c="cal"><div class="h">Платежи и сбросы · октябрь<span class="cnt">итого 248 $ / мес</span></div>
+            <div class="cal" style="margin-top:8px">
+              <div>29</div><div>30</div><div class="r">1</div><div>2</div><div>3</div><div class="today r">4</div><div>5</div>
+              <div>6</div><div class="p" data-s="200 $">7</div><div class="r">8</div><div>9</div><div>10</div><div>11</div><div class="p" data-s="40 $">12</div>
+              <div>13</div><div>14</div><div class="r">15</div><div>16</div><div>17</div><div>18</div><div>19</div>
+            </div>
+            <div class="mono" style="margin-top:8px">● сброс недельного лимита · <span style="color:var(--ink)">сумма</span> — дата списания</div>
+          </div>
+        </div>
+      </div></div>
+
+        <!-- По проектам и стадиям (p-sp1) -->
+        <div class="view" id="v-proj"><div class="wrap">
+          <div class="nums n3"><div><b>14,2 %</b><small>этап «карта блоков» · недели claude</small></div><div><b class="ok">0,13 %</b><small>цена одной влитой задачи</small></div><div><b>+1,4 %</b><small>прогноз до рубежа</small></div></div>
+          <div class="lst" style="--cols:1.5fr 110px 100px 110px 120px 16px">
+            <div class="li head"><span>проект · стадия</span><span>расход</span><span>кругов ревью</span><span>цена на влитую</span><span>итог</span><span></span></div>
+            <div class="li" data-pj="l1"><div><b>OMG · L1 · карта блоков</b><small>111 влито из 123 · идёт</small></div><span class="m">14,2 %</span><span class="m">2,1</span><span class="m" style="color:var(--ok)">0,13 %</span><span class="m">в смете</span><span class="chev">›</span></div>
+            <div class="li" data-pj="r1"><div><b>OMG · R1 · исследование</b><small>174 хода · принята</small></div><span class="m">6,1 %</span><span class="m">1,4</span><span class="m">—</span><span class="m">в смете</span><span class="chev">›</span></div>
+            <div class="li" data-pj="live"><div><b>OMG · живой проход 02–03.10</b><small>21 вызов без проектного ответа · остановлен</small></div><span class="m bad">9,8 %</span><span class="m">—</span><span class="m bad">без результата</span><span class="m bad">мимо</span><span class="chev">›</span></div>
+            <div class="li" data-pj="ux"><div><b>HARNESS · программа UX/UI</b><small>4 результата из 4 · оценка 9/10</small></div><span class="m hot">54 %</span><span class="m">—</span><span class="m">13,5 % на результат</span><span class="m hot">×2 сметы</span><span class="chev">›</span></div>
+            <div class="li dim" data-pj="pr"><div><b>Принтер Brother · комната</b><small>1 разговор</small></div><span class="m">0,2 %</span><span class="m">—</span><span class="m">—</span><span class="m">—</span><span class="chev">›</span></div>
+          </div>
+          <div class="note-bar"><span>цена правильного результата = расход ÷ принятые результаты · повторы и возвраты входят</span><span>остатки по аккаунтам — в «Подключениях» (11)</span></div>
+        </div></div>
+
+        <!-- По ролям и причинам (p-sp2) -->
+        <div class="view" id="v-role"><div class="wrap">
+          <div class="nums n3"><div><b>31 %</b><small>самое дорогое · повторы блока</small></div><div><b class="acc">57 %</b><small>расхода — не на первый проход</small></div><div><b>3</b><small>причины с готовым правилом</small></div></div>
+          <div class="lst" style="--cols:1.5fr 150px 1fr 70px 16px">
+            <div class="li head"><span>причина расхода</span><span>чья роль</span><span>доля недели</span><span>цена</span><span></span></div>
+            <div class="li" data-rs="1"><div><b>Повторы блока дорожают мультипликативно</b><small>серия M5 · лестница</small></div><span class="m">воркеры</span><div class="bar"><i class="bad" style="width:100%"></i></div><span class="m">31 %</span><span class="chev">›</span></div>
+            <div class="li" data-rs="2"><div><b>Третьи возвраты подряд</b><small>D8.4a–e · Q2 · E5.1</small></div><span class="m">ревьюер · воркеры</span><div class="bar"><i class="bad" style="width:58%"></i></div><span class="m">18 %</span><span class="chev">›</span></div>
+            <div class="li" data-rs="3"><div><b>Исторические чтения в тестах</b><small>не фикстуры, а перечтение следа</small></div><span class="m">воркеры</span><div class="bar"><i class="acc" style="width:45%"></i></div><span class="m">14 %</span><span class="chev">›</span></div>
+            <div class="li" data-rs="4"><div><b>Перезапуск воркфлоу без кэша</b><small>два resume · 28 авторов заново</small></div><span class="m">оркестратор</span><div class="bar"><i class="acc" style="width:39%"></i></div><span class="m">12 %</span><span class="chev">›</span></div>
+            <div class="li" data-rs="5"><div><b>Полные прогоны на каждый круг</b><small>check:backend · 14–43 мин</small></div><span class="m">воркеры</span><div class="bar"><i style="width:29%"></i></div><span class="m">9 %</span><span class="chev">›</span></div>
+            <div class="li" data-rs="6"><div><b>Чтение дорогой моделью</b><small>Fable вместо Sonnet</small></div><span class="m">оркестратор</span><div class="bar"><i style="width:26%"></i></div><span class="m">8 %</span><span class="chev">›</span></div>
+            <div class="li dim" data-rs="7"><div><b>Прочее</b><small>пульс, выжимки, наблюдение</small></div><span class="m">все</span><div class="bar"><i style="width:26%"></i></div><span class="m">8 %</span><span class="chev">›</span></div>
+          </div>
+        </div></div>
+
+        <!-- Смета и факт (p-sp3) -->
+        <div class="view" id="v-est"><div class="wrap">
+          <div class="nums n3"><div><b>71 %</b><small>точность смет · 30 дней</small></div><div><b class="bad">×2,7</b><small>худший промах · программа ux</small></div><div style="cursor:pointer" id="cap"><b class="acc">95 %</b><small>порог недели · ограничитель ›</small></div></div>
+          <div class="lst" style="--cols:1.5fr 90px 90px 1fr 80px 16px">
+            <div class="li head"><span>задача или этап</span><span>смета</span><span>факт</span><span>факт против сметы</span><span>точность</span><span></span></div>
+            <div class="li" data-es="1"><div><b>S1.4 · наблюдатель чтений</b><small>Opus · 3 круга</small></div><span class="m">1,5 %</span><span class="m">1,6 %</span><div class="bar"><i style="width:52%"></i></div><span class="m" style="color:var(--ok)">94 %</span><span class="chev">›</span></div>
+            <div class="li" data-es="2"><div><b>R5 · исторические чтения</b><small>Fable · 2 круга</small></div><span class="m">2,0 %</span><span class="m">2,3 %</span><div class="bar"><i style="width:58%"></i></div><span class="m" style="color:var(--ok)">87 %</span><span class="chev">›</span></div>
+            <div class="li" data-es="3"><div><b>D8.4d · владение завершением</b><small>5 кругов · три исполнителя</small></div><span class="m">0,8 %</span><span class="m hot">2,1 %</span><div class="bar"><i class="acc" style="width:100%"></i></div><span class="m hot">38 %</span><span class="chev">›</span></div>
+            <div class="li" data-es="4"><div><b>Живой проход 02–03.10</b><small>остановлен</small></div><span class="m">4,0 %</span><span class="m bad">9,8 %</span><div class="bar"><i class="bad" style="width:100%"></i></div><span class="m bad">41 %</span><span class="chev">›</span></div>
+            <div class="li" data-es="5"><div><b>Программа UX/UI харнесса</b><small>4 результата</small></div><span class="m">20 %</span><span class="m bad">54 %</span><div class="bar"><i class="bad" style="width:100%"></i></div><span class="m bad">37 %</span><span class="chev">›</span></div>
+            <div class="li" data-es="6"><div><b>MP1 · сборщик задания</b><small>Astra</small></div><span class="m">подписка</span><span class="m">подписка</span><div class="bar"><i style="width:50%"></i></div><span class="m">—</span><span class="chev">›</span></div>
+            <div class="li dim" data-es="7"><div><b>H2.0 · полномочие владельца</b><small>не начата</small></div><span class="m">0,6 %</span><span class="m">—</span><div class="bar"></div><span class="m">—</span><span class="chev">›</span></div>
+            <div class="li dim" data-es="8"><div><b>Рубеж · подготовка прохода</b><small>смета не задана</small></div><span class="m hot">не задана</span><span class="m">—</span><div class="bar"></div><span class="m">—</span><span class="chev">›</span></div>
+          </div>
+        </div></div>
+      </div>
+    </section>
+  </div><div class="cap"><span>05 · расход · обзор без изменений · вторые экраны: карточки блоков и три вкладки</span><span>1280 × 860</span></div>
+  <div class="hint-bar"><span>клик по любому блоку обзора раскрывает его · вкладки вверху: проекты (и стадии) / причины (и роли) / смета (и факт) · клавиши 1–4</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (prov · p-sp1 · p-sp2 · p-sp3): обзор не менялся. «Аккаунты и лимиты» → карточки Claude / Codex / Qwen из блоков обзора («Перевести на Sonnet» — в карточке Codex) и «Подключения» (11). «Цена правильного результата» и «Аккаунты · остаток» → вкладка «Проекты и стадии» + карточка стадии. «Самое дорогое» (7 строк) → вкладка «Роли и причины» + карточка причины с правилом. «Точность смет» (8 строк, 2 таблицы) → вкладка «Смета и факт»; «95 % · сигнал / 95 % · ограничитель / Оставить незаданным» → карточка «Порог недели». История, роутер и календарь — раскрываются в полные карточки.</div></div>
+</div><script src="app.js"></script>
+<script>
+(function(){
+  const {kv,blk,acts,tl}=HX;
+  const ticks=(on,tot,cls)=>'<div class="tk">'+Array.from({length:tot},(_,i)=>'<i class="'+(i<on?cls:(i===Math.round(tot*.8)?'mark':''))+'"></i>').join('')+'</div>';
+  const C={
+    claude:()=>'<div class="from">раскрытая карточка · подписка</div><div class="ch"><h3>Claude Max</h3><span class="pill ok">работает</span></div><div class="csub">подписка · 2 места · 200 $ в месяц · списание 07.10</div>'+
+      '<div class="ctabs"><span class="on" data-ct="l">Лимиты</span><span data-ct="h">История</span><span data-ct="r">Правила</span></div>'+
+      '<div data-cp="l"><div class="two eq">'+blk('неделя','<div class="big">62,4 %</div>'+ticks(25,40,'on')+'<div class="tkl"><span>31,2M / 50M</span><span>сброс вт 03:00</span></div>')+blk('5 часов','<div class="big">18 %</div>'+ticks(7,40,'ok')+'<div class="tkl"><span>в норме</span><span>окно до 21:40</span></div>')+'</div>'+
+        blk('неделя по дням · факт и прогноз','<div class="wk">'+[['ср',9],['чт',14],['пт',11],['сб',6],['вс',12],['пн',10],['вт',9,1]].map(([d,v,f])=>'<div><i class="'+(f?'f':'')+'" style="height:'+v*4+'px"></i>'+d+'</div>').join('')+'</div><p style="margin-top:8px">к сбросу будет ≈ <b>71 %</b> — запас 29 %; самый дорогой день — четверг (D8.4d, круг 4)</p>','прогноз 71 %')+'</div>'+
+      '<div data-cp="h">'+[['04.10','Opus 5.5 · воркер 1 · H1.5','4,1M','1,1 %'],['04.10','Sonnet 5.5 · воркер 2 · D8.4e','1,2M','0,3 %'],['03.10','Fable 5.1 · оркестратор','0,9M','0,6 %'],['03.10','Opus 5.5 · LP5','3,4M','0,9 %'],['02.10','Sonnet 5.5 · ревью T48','0,8M','0,2 %']].map(r=>'<div class="pay"><span class="m">'+r[0]+'</span><b>'+r[1]+'</b><span class="m">'+r[2]+'</span><span class="m">'+r[3]+'</span></div>').join('')+'<div class="note-bar"><span>показано 5 из 41 · по 8 на страницу</span><span>экспорт CSV</span></div></div>'+
+      '<div data-cp="r"><div class="opt"><div>При лимите переключать на дешёвую модель<small>Opus → Sonnet · воркеры и хранитель; оркестратор — спросить</small></div><span class="tog on"></span></div><div class="opt"><div>Предупреждать при 80 %<small>в приложении и в Telegram</small></div><span class="tog on"></span></div><div class="opt"><div>Fable — только отдельное окно<small>общая квота; беречь для «придумать»</small></div><span class="tog on"></span></div></div>'+
+      acts([['Управлять планом','p'],'Открыть в подключениях','Экспорт CSV']),
+    codex:()=>'<div class="from">раскрытая карточка · подписка</div><div class="ch"><h3>Codex Pro</h3><span class="pill bad">лимит 94 %</span></div><div class="csub">5 часов · сброс в 19:58 через 1 ч 12 мин · неделя 71 %</div>'+
+      '<div class="two eq">'+blk('5 часов','<div class="big" style="color:var(--bad)">94 %</div>'+ticks(38,40,'bad')+'<div class="tkl"><span>почти всё</span><span>сброс 19:58</span></div>')+blk('кого задело',tl([['x','10:40','Воркер 2 остановился на W5','переведён на Sonnet в 14:37'],['c','сейчас','Ревьюер Astra — ещё работает','при 100 % встанет; запасной — Opus']]))+'</div>'+
+      '<div class="decide"><div class="lbl">что сделать</div>До сброса 1 ч 12 мин. Ревьюер дочитывает круг 2 — хватит ли остатка, неизвестно.'+acts([['Перевести ревью на Opus','p','data-close'],['Ждать 19:58','','data-close'],'Перевести на Sonnet'])+'</div>',
+    qwen:()=>'<div class="from">раскрытая карточка · ключ API</div><div class="ch"><h3>Qwen · Alibaba</h3><span class="pill ok">работает</span></div><div class="csub">ключ sk-…8f2a · token plan · оплата по факту</div>'+
+      '<div class="two eq">'+blk('остаток','<div class="big">$41,20</div><div class="bar"><i style="width:34%"></i></div><p style="margin-top:8px">расход <b>2,1 $/день</b> — хватит на <b>19 дней</b>; пополнение 12.10</p>')+blk('на что уходит',[['Ресёрчер · описи',1.3],['Чтение репозитория',0.6],['Черновики',0.2]].map(([a,v])=>'<div class="crow"><span>'+a+'</span><div class="bar"><i style="width:'+v/1.3*100+'%"></i></div><b>'+v.toFixed(1)+' $</b></div>').join(''))+'</div>'+acts([['Пополнить','p'],'Сменить ключ','Предупреждать при $10']),
+    hist:()=>'<div class="from">раскрытая карточка · история</div><div class="ch"><h3>История расхода · по моделям</h3></div><div class="csub">30 дней · 41 запись · все подписки и ключи</div>'+
+      '<div class="filters"><span class="chip on">все модели</span><span class="chip">Opus</span><span class="chip">Sonnet</span><span class="chip">Fable</span><span class="chip">Astra</span><span class="sp"></span><span class="seg"><span data-pick>7 дн</span><span class="on" data-pick>30 дн</span><span data-pick>90 дн</span></span></div>'+
+      [['04.10','Opus 5.5','воркер 1 · H1.5','4,1M','1,1 %'],['04.10','Sonnet 5.5','воркер 2 · D8.4e','1,2M','0,3 %'],['04.10','Astra (Codex)','ревьюер','2,8M','лимит'],['03.10','Fable 5.1','оркестратор','0,9M','0,6 %'],['03.10','Opus 5.5','воркер 1 · LP5','3,4M','0,9 %'],['03.10','Qwen 3','ресёрчер','6,0M','2,4 $'],['02.10','Sonnet 5.5','ревью T48','0,8M','0,2 %'],['02.10','Astra','живой проход','11M','9,8 %']].map(r=>'<div class="rt" style="grid-template-columns:60px 130px 1fr 70px 70px"><span class="m">'+r[0]+'</span><b>'+r[1]+'</b><span>'+r[2]+'</span><span class="m">'+r[3]+'</span><span class="m'+(r[4]==='лимит'?' bad':'')+'">'+r[4]+'</span></div>').join('')+
+      '<div class="note-bar"><span>показано 8 из 41 · ‹ 1 2 3 4 5 6 ›</span><span>показывать по: 8</span></div>'+acts(['Экспорт CSV','Обновить данные','Настройки оплаты']),
+    router:()=>'<div class="from">раскрытая карточка · роутер</div><div class="ch"><h3>Роутер моделей</h3><span class="seg" style="margin-left:6px"><span data-pick>Cost</span><span class="on" data-pick>Balanced</span><span data-pick>Quality</span></span></div><div class="csub">куда идут вызовы и чем заменяются · изменения применяются со следующего хода</div>'+
+      '<div class="ctabs"><span class="on" data-ct="m">Маршруты</span><span data-ct="f">Запасные</span><span data-ct="j">Журнал изменений</span></div>'+
+      '<div data-cp="m"><div class="rt" style="border-bottom:1px solid var(--line2)"><span class="mono">маршрут</span><span class="mono">доля</span><span class="mono">%</span><span class="mono">p50 / p95</span></div>'+[['оркестратор → Opus 5.5',58,'9 с / 41 с'],['воркеры → Sonnet 5.5',35,'4 с / 18 с',1],['ревью → Astra',3,'22 с / 90 с'],['чтение → Qwen 3',4,'2 с / 6 с']].map(([a,v,l,d])=>'<div class="rt"><b>'+a+'</b><div class="bar"><i class="'+(d?'acc':'')+'" style="width:'+v/58*100+'%"></i></div><span class="m'+(d?' hot':'')+'">'+v+' %</span><span class="m">'+l+'</span></div>').join('')+'<p style="font-size:12px;color:var(--ink3);margin:8px 0 0">подсвечено изменённое: Sonnet 27 → 35 % (воркер 2 с Codex)</p></div>'+
+      '<div data-cp="f">'+tl([['d','1','Astra молчит 60 с → ревью на Opus 5.5','сработало 2 раза за неделю'],['d','2','Codex в лимите → воркер на Sonnet 5.5','сработало сегодня 14:37'],['d','3','Claude неделя ≥ 95 % → всё, кроме оркестратора, встаёт','ограничитель'],['','4','Qwen остаток < $5 → чтение на Ollama','не срабатывало']])+'</div>'+
+      '<div data-cp="j">'+[['04.10 14:37','Воркер 2: Codex → Sonnet','заместитель'],['01.10 21:10','Чтение → Qwen вместо Sonnet','вы'],['29.09 11:25','Ревью → Astra ultra','вы']].map(r=>'<div class="pay" style="grid-template-columns:110px 1fr 110px"><span class="m">'+r[0]+'</span><b>'+r[1]+'</b><span class="m">'+r[2]+'</span></div>').join('')+'</div>'+
+      '<div class="decide"><div class="lbl">изменения не применены</div>Sonnet 27 → 35 % · действует после «Применить».'+acts([['Применить политику','p','data-close'],['Отменить','','data-close'],'Назначить роли →'])+'</div>',
+    cal:()=>'<div class="from">раскрытая карточка · платежи</div><div class="ch"><h3>Платежи и сбросы · октябрь</h3></div><div class="csub">итого 248 $ в месяц · ближайшее списание через 2 дня</div>'+
+      '<div class="two"><div>'+blk('списания',[['07.10','Claude Max','200 $','через 2 дня'],['12.10','Codex Pro','40 $','через 7 дней'],['12.10','Qwen · пополнение','по факту','≈ 25 $'],['28.10','Kimi','19 $',''],['01.11','Devin','20 $','']].map(r=>'<div class="pay"><span class="m">'+r[0]+'</span><b>'+r[1]+'</b><span class="m">'+r[2]+'</span><span class="m'+(r[3].includes('2 дня')?' hot':'')+'">'+r[3]+'</span></div>').join(''),'5')+'</div>'+
+      '<div>'+blk('сбросы лимитов',tl([['c','сегодня','Codex · 5 часов','19:58'],['','вт 03:00','Claude · неделя','через 2 д 9 ч'],['','пн 00:00','Codex · неделя',''],['','каждые 5 ч','Claude · окно','до 21:40']]))+'</div></div>'+acts(['Экспорт в календарь','Настройки оплаты','Напомнить за день до списания'])
+  };
+  document.querySelectorAll('[data-c]').forEach(el=>el.addEventListener('click',e=>{ if(e.target.closest('.tog,.seg,.btn')) return; const k=el.dataset.c; HX.open(el,C[k](),{w:k==='hist'||k==='router'?900:820,h:k==='claude'||k==='router'||k==='hist'?600:500}); }));
+  // вкладка «Проекты и стадии»
+  const PJ={l1:['OMG · L1 · карта блоков','14,2 % недели · 111 влито · 2,1 круга в среднем',[['D8.4d · 5 кругов',2.1],['S1.1 · серия M5',1.9],['R5 · исторические чтения',2.3],['H1.5 · прогон',1.1],['остальные 107',6.8]],'Цена одной влитой — 0,13 %. Четыре задачи съели половину этапа: все — стыки и третьи возвраты.'],
+    r1:['OMG · R1 · исследование','6,1 % · 174 хода',[['Вопросы владельцу · 26 уточнений',2.4],['Чтение репозитория',2.0],['Сведение',1.7]],'Принята с первого прохода; дорого обошлись уточнения — «автономное знание» сократило бы треть.'],
+    live:['OMG · живой проход 02–03.10','9,8 % · результата нет',[['21 вызов без проектного ответа',7.9],['Два стопа и продолжения',1.9]],'Остановлен по сути, а не по здоровью процесса. Причина ушла в задачи MP1–MP3.'],
+    ux:['HARNESS · программа UX/UI','54 % двух недель · 4 результата',[['Перезапуск 28 авторов (resume)',17],['Исследование · 21 файл улик',14],['Синтез CJM / Blueprint',12],['Прототип и скетчи',11]],'Смета 20 %, факт 54 %: треть — перезапуск без кэша. Правило «цена вслух» появилось отсюда.'],
+    pr:['Принтер Brother · комната','0,2 %',[['Один разговор',0.2]],'Комната без папки — без памяти проекта.']};
+  HX.bind('.li[data-pj]',el=>{const p=PJ[el.dataset.pj]; const mx=Math.max(...p[2].map(x=>x[1])); return '<div class="from">раскрытая карточка · стадия</div><div class="ch"><h3>'+p[0]+'</h3></div><div class="csub">'+p[1]+'</div><div class="two">'+blk('на что ушло',p[2].map(([a,v])=>'<div class="crow"><span>'+a+'</span><div class="bar"><i class="acc" style="width:'+v/mx*100+'%"></i></div><b>'+v.toString().replace('.',',')+' %</b></div>').join(''))+blk('цена правильного результата','<p>'+p[3]+'</p>')+'</div>'+acts([['Открыть задачи на карте','p'],'Сравнить со сметой','Экспорт']);},{w:820,h:460});
+  // вкладка «Роли и причины»
+  const RS={1:['Повторы блока дорожают мультипликативно','Каждая повторная попытка блока перечитывает след прошлых — попытка ×2–3 дороже предыдущей.','Серия M5: 14 → 43 минуты, пик 1,39 ГБ.','Правило есть: «лестницу тестировать на серии M5»; задача S1.1 влита — рост снят.'],
+    2:['Третьи возвраты подряд','Задача возвращается третий круг — исполнитель чинит замечание, а не класс.','D8.4d: пять кругов, три исполнителя, 2,1 % вместо 0,8 %.','Правило есть: «третий возврат — решение владельца»; спорит с ночным делегированием — см. Память → Спорные.'],
+    3:['Исторические чтения в тестах','Цена тестов OM — не фикстуры, а перечтение исторического следа.','Профиль CPU: 83 % evaluate — перечтение через Proxy.','Задачи S1.3, S1.4 влиты: чтения ÷2,53.'],
+    4:['Перезапуск воркфлоу без кэша','resume с позиционным кэшем заново запустил уже отработавших авторов.','01.10: два resume → 28 авторов на Fable, неделя 37 → 54 %.','Правило есть: «resume не доверять; новый скрипт берёт готовое с диска».'],
+    5:['Полные прогоны на каждый круг','check:backend гоняется на каждом круге, хотя менялся один модуль.','14–43 минуты и очередь на машине.','Правила нет. Предложение: полный прогон — один раз на финальных байтах.'],
+    6:['Чтение дорогой моделью','Чтение и сведение уходило на Fable/Opus.','Программа UX: читатели на Fable.','Правило есть: «чтение — Sonnet, придумывать — Opus».'],
+    7:['Прочее','Пульс, выжимки, наблюдение.','0,06 % в день на датчики.','В пределах нормы.']};
+  HX.bind('.li[data-rs]',el=>{const r=RS[el.dataset.rs]; return '<div class="from">раскрытая карточка · причина расхода</div><div class="ch"><h3>'+r[0]+'</h3></div><div class="csub">'+el.children[1].textContent+' · '+el.children[3].textContent+' недели</div><div class="two eq">'+blk('что происходит','<p>'+r[1]+'</p>')+blk('пример','<p>'+r[2]+'</p>')+'</div>'+blk('что с этим делаем','<p>'+r[3]+'</p>')+acts([['Открыть правило в памяти','p'],'Создать правило','Показать задачи']);},{w:780,h:440});
+  // вкладка «Смета и факт»
+  HX.bind('.li[data-es]',el=>{const c=el.children; return '<div class="from">раскрытая карточка · смета и факт</div><div class="ch"><h3>'+c[0].querySelector('b').textContent+'</h3></div><div class="csub">'+c[0].querySelector('small').textContent+'</div>'+blk('сравнение',kv([['смета',c[1].textContent],['факт',c[2].textContent],['точность',c[4].textContent],['почему разошлось','круги ревью и повторы не входили в смету'],['как считать дальше','смета × средние круги исполнителя (вкладка «Сравнение» в стае)']]))+acts([['Пересчитать смету','p'],'Открыть задачу','Оставить незаданной']);},{w:640,h:400});
+  HX.bind('#cap',()=>'<div class="from">раскрытая карточка · порог недели</div><div class="ch"><h3>Что делать на 95 % недели</h3></div><div class="csub">сейчас 62 % · прогноз к сбросу 71 % · порог не достигается</div>'+
+    '<label class="pick" data-pick>95 % · сигнал<small>только сообщить в приложении и в мессенджере; работа продолжается</small></label><label class="pick on" data-pick>95 % · ограничитель<small>остановить всё, кроме оркестратора; включить обратно можете только вы</small></label><label class="pick" data-pick>Оставить незаданным<small>без порога — расход ограничен только лимитом подписки</small></label>'+acts([['Применить','p','data-close'],['Отмена','ghost','data-close']]),{w:560,h:420,hide:false});
+  HX.views('#seg');
+  HX.passport({title:'Расход',where:'Расход · все проекты',what:'Сколько потрачено, на что, чем это кончилось и когда платить',why:'Мера всего — цена правильного результата, а не процент лимита',when:'Данные лимитов — раз в 5 минут; история — по ходам',expect:'Расход в смете; ни одна подписка не упирается в лимит без запасной',risk:'Перезапуски и третьи возвраты съедают неделю незаметно',ok:'Точность смет ≥ 80 %, цена на влитую задачу падает',fail:'Расход без результата (как живой проход 02–03.10)'});
+})();
+</script>
+</body></html>

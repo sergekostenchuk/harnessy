@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 02 · План-карта · живой: узел → раскрытая карточка</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .map{position:relative;height:calc(100% - 46px);border:1px solid var(--line);border-radius:14px;background:var(--panel);background-image:radial-gradient(circle at 1px 1px,#1f1f23 1px,transparent 1px);background-size:22px 22px;overflow:hidden}
+  .map svg.edges{position:absolute;inset:0;width:100%;height:100%}
+  .map svg.edges path{fill:none;stroke:var(--line2);stroke-width:1.5}.map svg.edges path.on{stroke:var(--accent)}.map svg.edges path.dash{stroke-dasharray:4 4}
+  .node{position:absolute;width:236px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:10px 12px 9px;box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:pointer;transition:transform .15s,border-color .15s}
+  .node:hover{transform:translateY(-2px);border-color:#4a4a52}
+  .node.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),0 10px 30px rgba(0,0,0,.35)}
+  .node.dim{opacity:.6}
+  .node .meta{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .pr{width:16px;height:16px;border-radius:4px;display:grid;place-items:center;font:600 9px var(--mono)}.pr.h{background:var(--bad-soft);color:var(--bad)}.pr.m{background:rgba(224,178,60,.14);color:var(--warn)}.pr.l{background:var(--raised);border:1px solid var(--line2);color:var(--ink3)}
+  .node .id{font:10.5px var(--mono);color:var(--ink3);margin-left:auto}
+  .node .t{font-weight:500;font-size:13px;line-height:1.3;margin-bottom:8px}
+  .node .prog{display:flex;align-items:center;gap:8px;margin-bottom:8px}.node .prog .ticks{flex:1}.node .prog b{font:500 10.5px var(--mono);color:var(--ink2)}
+  .node .tags{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}.node .tags span{font-size:10.5px;color:var(--ink2);background:var(--tile);border-radius:5px;padding:1px 6px}
+  .node .foot{display:flex;align-items:center;gap:8px}.node .foot .due{font:10px var(--mono);color:var(--ink3);margin-left:auto}.node .foot .due.hot{color:var(--accent)}
+  .health{display:flex;gap:2px;align-items:flex-end;height:12px}.health i{width:3px;height:100%;border-radius:1px;background:var(--line2)}.health i.ok{background:var(--ok)}.health i.bad{background:var(--bad-fill,#a3304b)}.health i.h2{height:60%}
+  .stage{position:absolute;right:14px;top:14px;width:250px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:10px 12px;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+  .stage .h{display:flex;align-items:center;gap:8px;font-weight:500;font-size:12.5px}.stage .h .cnt{margin-left:auto;font:10.5px var(--mono);color:var(--ink3)}.stage .h .x{color:var(--ink3);font-size:11px;margin-left:6px}
+  .stage ol{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink2)}
+  .stage ol li{display:flex;align-items:center;gap:8px}.stage ol li i{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center;font:600 9px var(--mono);color:var(--ink3);flex:none}
+  .stage ol li.d i{background:var(--ok);border-color:var(--ok);color:#fff}.stage ol li.c{color:var(--ink)}.stage ol li.c i{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+  .unsaved{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:8px 10px 8px 14px;border:1px solid var(--line2);border-radius:999px;background:var(--raised);box-shadow:0 12px 30px rgba(0,0,0,.5);font-size:12.5px;white-space:nowrap}
+  .unsaved .m{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}.unsaved .m::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:1px}
+  .runs{position:absolute;left:14px;bottom:14px;padding:8px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--raised);display:flex;align-items:center;gap:10px}
+  .runs .lbl{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.runs .ticks.v{height:16px}.runs b{font:500 11px var(--mono);color:var(--ink2)}
+  /* раскрытая карточка задачи */
+  .ovl{position:absolute;inset:0;z-index:20;background:rgba(6,6,8,.55);opacity:0;pointer-events:none;transition:opacity .25s}.ovl.on{opacity:1;pointer-events:auto}
+  .panel{position:absolute;border:1px solid var(--line2);border-radius:14px;background:var(--panel);box-shadow:0 30px 80px rgba(0,0,0,.65);overflow:hidden;transition:left .34s cubic-bezier(.2,.7,.2,1),top .34s cubic-bezier(.2,.7,.2,1),width .34s cubic-bezier(.2,.7,.2,1),height .34s cubic-bezier(.2,.7,.2,1)}
+  .panel .inner{opacity:0;transition:opacity .18s;padding:20px 22px;width:860px}.panel.open .inner{opacity:1;transition-delay:.16s}
+  .panel .x{position:absolute;right:14px;top:12px;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--ink3);cursor:pointer;font-size:16px}.panel .x:hover{background:var(--raised);color:var(--ink)}
+  .panel .from{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px}
+  .ph{display:flex;align-items:center;gap:10px;margin-bottom:6px}.ph .pr{width:22px;height:22px;font-size:11px}.ph h3{margin:0;font-size:19px;font-weight:500}.ph .id{font:11px var(--mono);color:var(--ink3)}.ph .r{margin-left:auto;display:flex;gap:6px}
+  .psub{display:flex;gap:8px;align-items:center;margin-bottom:14px;font-size:12.5px;color:var(--ink2)}.psub .tags span{font-size:10.5px;color:var(--ink2);background:var(--tile);border-radius:5px;padding:1px 6px;margin-right:4px}
+  .pprog{display:flex;align-items:center;gap:10px;margin-bottom:14px}.pprog .ticks{flex:1}.pprog .ticks i{height:9px}.pprog b{font:500 12px var(--mono);color:var(--ink)}
+  .two{display:grid;grid-template-columns:1.2fr 1fr;gap:12px}
+  .blk{border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:14px 16px}.blk .t{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px;display:flex;justify-content:space-between}
+  .tl{display:flex;flex-direction:column}.tl>div{display:grid;grid-template-columns:18px 52px 1fr;gap:10px;align-items:start;padding:6px 0;font-size:12.5px;color:var(--ink2);position:relative}.tl>div::before{content:"";position:absolute;left:8px;top:22px;bottom:-8px;width:1px;background:var(--line2)}.tl>div:last-child::before{display:none}
+  .tl i{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center;font-size:9px;color:#fff;margin-top:1px;background:var(--raised);font-style:normal}.tl .d i{background:var(--ok);border-color:var(--ok)}.tl .c i{border:2px solid var(--accent);border-right-color:transparent}.tl .x i{background:var(--bad-fill,#a3304b);border-color:var(--bad-fill,#a3304b)}
+  .tl span{font:10.5px var(--mono);color:var(--ink3);padding-top:2px}.tl b{color:var(--ink);font-weight:500;display:block}.tl small{display:block;color:var(--ink3);font-size:11px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:7px 12px;font-size:12.5px}.kv span{color:var(--ink3)}.kv b{font-weight:400;color:var(--ink)}
+  .hl{margin-top:12px}.hl .health{height:16px;gap:3px}.hl .health i{width:5px}
+  .decide{margin-top:12px;border-left:2px solid var(--accent);padding-left:12px;font-size:12.5px;color:var(--ink2)}.decide .lbl{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}.decide .act{display:flex;gap:6px;margin-top:8px}
+  .ph{padding-right:36px}
+  .mode span{cursor:pointer}.mode span.on{color:var(--ink)}
+  .tlist{display:none;height:calc(100% - 46px);overflow:hidden}.tlist.on{display:block}.map.off{display:none}
+  .life{display:flex;gap:3px}.life i{flex:1;height:6px;border-radius:2px;background:var(--line2)}.life i.d{background:var(--ok)}.life i.c{background:var(--accent)}.life i.x{background:var(--bad-fill,#a3304b)}
+  .life-l{display:flex;gap:3px;font:9px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink3);margin-top:3px}.life-l span{flex:1}
+  .crow{display:grid;grid-template-columns:1fr 130px 54px;gap:10px;align-items:center;padding:5px 0;font-size:12.5px;color:var(--ink2)}.crow b{font:500 11px var(--mono);color:var(--ink);text-align:right}
+  .days{display:flex;gap:4px;align-items:flex-end;height:60px}.days i{flex:1;background:var(--ok);border-radius:2px 2px 0 0;min-height:2px}.days i.z{background:var(--line2)}
+  .mx{display:grid;grid-template-columns:110px repeat(8,1fr);gap:3px;font-size:11.5px;color:var(--ink2);align-items:center}.mx i{height:12px;border-radius:2px;background:var(--line2)}.mx i.ok{background:var(--ok)}.mx i.bad{background:var(--bad-fill,#a3304b)}
+  .stage{cursor:pointer}.stage:hover{border-color:#4a4a52}
+  .hint-bar{display:flex;gap:16px;justify-content:center;margin:12px 0 0;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 02 · план-карта · живой</h1>
+  <p class="sub">Карта во всю ширину: узел = карточка задачи с сегментным прогрессом и лентой тиков здоровья; счётчики на вкладках; свёрнутый этап; черновик плана. <b>Клик по узлу — карточка задачи раскрывается поверх карты</b> (из геометрии узла), × / клик мимо / Esc — схлопывается. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg><span class="b">3</span></div>
+      <div class="nav on"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg><span class="b">!</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg></div>
+      <div class="foot"><div class="nav"><span class="ring"><i></i></span></div><div class="nav"><span class="av">S<i></i></span></div></div>
+    </aside>
+    <section class="main">
+      <div class="top"><b>План · OMG</b><span class="st">уровень L1 · 87 задач · карта блоков</span>
+        <div class="r"><span class="mono" style="font-size:10px">проверено 3 мин назад</span><span class="btn sm ghost" id="quality" style="cursor:pointer">Качество</span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span><span class="btn sm">+ задача</span></div></div>
+      <div class="body" style="height:100%">
+        <div class="tabs"><span class="on" data-f="all">Все <b>87</b></span><span data-f="bad">Падают <b class="bad">3</b></span><span data-f="run">В работе <b>12</b></span><span data-f="wait">Ждут вас <b>2</b></span><span data-f="done">Готово <b>70</b></span><span class="mode" style="margin-left:auto;color:var(--ink3);gap:8px"><span class="on" data-m="graph">граф</span> · <span data-m="list">список</span> · <span style="opacity:.5">таблица</span></span></div>
+        <div class="tlist" id="tlist"><div class="lst" id="tl-rows" style="--cols:64px 1.6fr 1.3fr 110px 130px 16px"></div></div>
+        <div class="map" id="map">
+          <svg class="edges" viewBox="0 0 1180 726" preserveAspectRatio="none">
+            <path class="on" d="M252 100 C330 100, 330 100, 420 100"/>
+            <path d="M252 100 C340 100, 340 244, 420 244"/>
+            <path d="M252 400 C340 400, 340 390, 420 390"/>
+            <path class="dash" d="M656 100 C740 100, 740 260, 824 260"/>
+            <path class="on" d="M656 244 C740 244, 740 400, 824 400"/>
+            <path class="dash" d="M656 390 C740 390, 740 540, 824 540"/>
+          </svg>
+          <div class="node dim" data-n="s13" style="left:16px;top:40px"><div class="meta"><span class="pr l">L</span><span class="pill ok" style="height:18px">готово</span><span class="id">S1.3</span></div><div class="t">Удержание исторических доказательств</div><div class="prog"><div class="ticks thin"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i></div><b>4/4</b></div><div class="tags"><span>движок</span><span>M5</span></div><div class="foot"><div class="health"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i></div><span class="due">влита 30.09</span></div></div>
+          <div class="node" data-n="h10d" style="left:16px;top:340px"><div class="meta"><span class="pr m">M</span><span class="pill" style="height:18px">ждёт</span><span class="id">H1.0d</span></div><div class="t">Адресация M5 — стык до H1</div><div class="prog"><div class="ticks thin"><i class="ok"></i><i class="ok"></i><i></i><i></i><i></i></div><b>2/5</b></div><div class="tags"><span>стык</span><span>договор</span></div><div class="foot"><div class="health"><i class="ok"></i><i class="ok"></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span class="due">ревьюер · 2 дня</span></div></div>
+          <div class="node on" data-n="h15" style="left:420px;top:40px"><div class="meta"><span class="pr h">H</span><span class="pill acc" style="height:18px">идёт</span><span class="id">H1.5</span></div><div class="t">Прогон H1.5: выбор старым кодом → исполнение новым</div><div class="prog"><div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div><b>4/7</b></div><div class="tags"><span>прогон</span><span>Opus</span><span>воркер 1</span></div><div class="foot"><div class="health"><i class="ok"></i><i class="ok"></i><i class="bad"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok h2"></i></div><span class="due hot">сдача сегодня 18:40</span></div></div>
+          <div class="node" data-n="d84e" style="left:420px;top:184px"><div class="meta"><span class="pr h">H</span><span class="pill bad" style="height:18px">падает</span><span class="id">D8.4e</span></div><div class="t">Владение завершением · CAS run при завершении через K</div><div class="prog"><div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div><b>4/6</b></div><div class="tags"><span>движок</span><span>Sonnet</span><span>воркер 2</span></div><div class="foot"><div class="health"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="bad"></i><i class="bad"></i><i class="bad"></i><i></i><i></i></div><span class="due hot">3 из 72 проверок упали</span></div></div>
+          <div class="node dim" data-n="q22" style="left:420px;top:330px"><div class="meta"><span class="pr m">M</span><span class="pill" style="height:18px">в плане</span><span class="id">Q2.2</span></div><div class="t">Анализатор типов — за рубеж</div><div class="prog"><div class="ticks thin"><i></i><i></i><i></i><i></i></div><b>0/4</b></div><div class="tags"><span>после рубежа</span></div><div class="foot"><div class="health"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span class="due">—</span></div></div>
+          <div class="node dim" data-n="h20" style="left:824px;top:200px"><div class="meta"><span class="pr m">M</span><span class="pill" style="height:18px">в плане</span><span class="id">H2.0</span></div><div class="t">Полномочие владельца — owner-result</div><div class="prog"><div class="ticks thin"><i></i><i></i><i></i></div><b>0/3</b></div><div class="tags"><span>после H1.5</span></div><div class="foot"><div class="health"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span class="due">Devin</span></div></div>
+          <div class="node" data-n="m0" style="left:824px;top:340px"><div class="meta"><span class="pr m">M</span><span class="pill warn" style="height:18px">ждёт вас</span><span class="id">M0</span></div><div class="t">Подпись M0 по D8.4d</div><div class="prog"><div class="ticks thin"><i class="ok"></i><i class="ok"></i><i class="cur"></i></div><b>2/3</b></div><div class="tags"><span>решение</span></div><div class="foot"><div class="health"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i></i><i></i></div><span class="due hot">40 мин</span></div></div>
+          <div class="node dim" data-n="t48" style="left:824px;top:480px"><div class="meta"><span class="pr l">L</span><span class="pill" style="height:18px">в плане</span><span class="id">T48</span></div><div class="t">Тест E5-повтора в D2-сценарии</div><div class="prog"><div class="ticks thin"><i></i><i></i></div><b>0/2</b></div><div class="tags"><span>тесты</span></div><div class="foot"><div class="health"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span class="due">—</span></div></div>
+
+          <div class="stage"><div class="h"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg>Текущий этап<span class="cnt">2/5</span><span class="x">⌄</span></div>
+            <ol><li class="d"><i>1</i>Дискавери · R0</li><li class="c"><i>2</i>Карта блоков L1 · 87 задач</li><li><i>3</i>Рубеж: первый живой проход</li><li><i>4</i>Кольцо импортов</li><li><i>5</i>Этап UI</li></ol></div>
+          <div class="runs"><span class="lbl">запуски сегодня</span><div class="ticks v"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="bad"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="bad"></i><i class="ok"></i><i class="ok"></i><i class="cur"></i></div><b>11 · 2 сбоя</b></div>
+          <div class="unsaved"><span class="m">изменения не утверждены</span><span>D8.4e → после H1.5 · T48 добавлена</span><span class="btn sm ghost">Отменить</span><span class="btn sm p">Утвердить план</span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div class="cap"><span>02 · живой · карта во всю ширину · клик по узлу = раскрытая карточка задачи</span><span>1280 × 860</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (plan · p-tasks · p-traj): четыре сводных блока «Прогресс · рубеж», «Влито по дням», «Расход карты OM», «В работе сейчас» — в карточке «Сводка плана» (клик по плашке этапа); 8 задач с лентой жизни — режим «Список»; «Классы дефектов · неделя» и «Матрица H1.5 × прогоны» — карточка «Качество»; «Метрики / Стоимость по ходам / Что потерялось при сжатии» — вкладки в карточке задачи. Паспорт — чип в шапке.</div>
+  <div class="hint-bar"><span>клик по узлу или строке · «список» в переключателе · плашка этапа = сводка · «качество» и «паспорт» в шапке · в карточке вкладки шаги / стоимость / сжатие</span></div></div>
+</div>
+<script src="app.js"></script>
+<script>
+(function(){
+  const T={
+    h15:{pr:'h',title:'Прогон H1.5: выбор старым кодом → исполнение новым',id:'H1.5',pill:['идёт','acc'],tags:['прогон','Opus','воркер 1'],due:'сдача сегодня 18:40',cnt:'4/7',ticks:[1,1,1,1,0,0,0],acts:[['Открыть договор',''],['Написать воркеру 1','p']],
+      kv:[['исполнитель','воркер 1 · Opus 5.5'],['ревьюер','Astra (Codex)'],['начато','14:02 · 2 ч 11 мин'],['цена','1,1 % недели Claude'],['зависит от','S1.3 (готово)'],['блокирует','H2.0']],health:'ok ok bad ok ok ok ok ok',hl:'7 · 1 сбой',
+      steps:[['d','14:02','Сборка · 12 с',''],['d','14:03','Typecheck · 41 с',''],['d','14:04','Unit 3410/3410',''],['x','15:10','Typecheck упал → починен 15:24','старый импорт history/proofs'],['c','16:01','Integration · идёт','118 из 140'],['','—','E2E',''],['','—','Кольцо импортов · отчёт ревьюеру','']]},
+    d84e:{pr:'h',title:'Владение завершением · CAS run при завершении через K',id:'D8.4e',pill:['падает','bad'],tags:['движок','Sonnet','воркер 2'],due:'3 из 72 проверок упали',cnt:'4/6',ticks:[1,1,1,1,0,0],acts:[['Открыть сдачу',''],['Написать воркеру 2','p']],
+      kv:[['исполнитель','воркер 2 · Sonnet 5.5 (с Codex)'],['ревьюер','Astra (Codex)'],['круг','4 · после трёх возвратов'],['цена','0,3 % недели Claude'],['зависит от','D8.4d · подпись M0'],['блокирует','рубеж']],health:'ok ok ok bad bad bad - -',hl:'6 · 3 сбоя',
+      steps:[['d','09:12','Договор прочитан','14 путей, таблица К1–К18'],['d','09:31','Опись','3 файла, 2 теста соседей'],['d','10:05','Тесты W1–W4 написаны',''],['x','10:40','Прогон: 3 из 72 упали','integration · лимит Codex'],['c','сейчас','W5 — негативный тест на подделку run-id','идёт 14 мин'],['','—','W6 · прогон · сдача','']],
+      decide:['нужно решение · 1 ч 20','Воркер 2 переведён на Sonnet до сброса Codex 19:58. Оставить или вернуть после сброса?',[['Оставить на Sonnet','p'],['Вернуть после сброса','']]]},
+    m0:{pr:'m',title:'Подпись M0 по D8.4d',id:'M0',pill:['ждёт вас','warn'],tags:['решение'],due:'ждёт 40 мин',cnt:'2/3',ticks:[2,2,3],acts:[['Открыть D8.4d',''],['Подписать M0','p']],
+      kv:[['просит','ревьюер · Astra'],['о чём','принять круг 2 D8.4d'],['ждёт','40 мин · за ним слияние H1.5'],['цена простоя','воркер 1 и рубеж'],['зависит от','—'],['блокирует','H1.5 · D8.4e']],health:'ok ok ok ok ok ok - -',hl:'6 · 0 сбоев',
+      steps:[['d','22:50','Ревьюер прочитал круг 2',''],['d','23:05','Сверил таблицу К1–К18 с кодом','расхождений нет'],['c','23:10','Ждёт вашу подпись','вы · 40 мин']],
+      decide:['нужно ваше решение · 40 мин','Подписать M0 — и H1.5 уйдёт в слияние; отклонить — вернётся воркеру 2 с замечаниями ревьюера.',[['Подписать M0','p'],['Отклонить с замечанием','']]]},
+    h10d:{pr:'m',title:'Адресация M5 — стык до H1',id:'H1.0d',pill:['ждёт',''],tags:['стык','договор'],due:'ревьюер · 2 дня',cnt:'2/5',ticks:[2,2,0,0,0],acts:[['Открыть договор','']],kv:[['исполнитель','воркер Claude'],['ревьюер','Astra'],['ждёт','сверки договора 2 дня'],['цена','0,4 %']],health:'ok ok - - - - - -',hl:'2 · 0 сбоев',
+      steps:[['d','27.09','Договор написан',''],['d','28.09','Опись путей',''],['c','—','Ждёт сверку ревьюером','2 дня'],['','—','Код',''],['','—','Прогон · сдача','']]},
+    s13:{pr:'l',title:'Удержание исторических доказательств',id:'S1.3',pill:['готово','ok'],tags:['движок','M5'],due:'влита 30.09',cnt:'4/4',ticks:[2,2,2,2],acts:[['Открыть отчёт','']],kv:[['исполнитель','Fable'],['ревьюер','Astra · №2248'],['влита','30.09 · 92e6786'],['цена','2,1 %']],health:'ok ok ok ok ok ok ok ok',hl:'8 · 0 сбоев',
+      steps:[['d','29.09','Договор · 11 путей',''],['d','30.09','Код',''],['d','30.09','Прогон 3218/3218',''],['d','30.09','Принята №2248 · влита','']]},
+    q22:{pr:'m',title:'Анализатор типов — за рубеж',id:'Q2.2',pill:['в плане',''],tags:['после рубежа'],due:'—',cnt:'0/4',ticks:[0,0,0,0],acts:[['Открыть договор','']],kv:[['исполнитель','не назначен'],['когда','после рубежа'],['решение','29.09 · за рубеж, потом типами']],health:'- - - - - - - -',hl:'0',steps:[['','—','Ничего не запускалось','']]},
+    h20:{pr:'m',title:'Полномочие владельца — owner-result',id:'H2.0',pill:['в плане',''],tags:['после H1.5'],due:'Devin',cnt:'0/3',ticks:[0,0,0],acts:[['Открыть договор','']],kv:[['исполнитель','Devin'],['когда','после H1.5'],['решение','вариант Б, развязано']],health:'- - - - - - - -',hl:'0',steps:[['','—','Ждёт H1.5','']]},
+    t48:{pr:'l',title:'Тест E5-повтора в D2-сценарии',id:'T48',pill:['в плане',''],tags:['тесты'],due:'—',cnt:'0/2',ticks:[0,0],acts:[['Открыть договор','']],kv:[['исполнитель','не назначен'],['добавлена','сегодня · черновик плана']],health:'- - - - - - - -',hl:'0',steps:[['','—','Добавлена в план, не утверждена','']]}
+  };
+  const L={s13:[2,2,2,2,2],h10d:[2,1,0,0,0],h15:[2,2,1,0,0],d84e:[2,2,3,0,0],q22:[0,0,0,0,0],h20:[0,0,0,0,0],m0:[2,2,2,1,0],t48:[0,0,0,0,0]};
+  const lifeCls=v=>v===2?'d':v===1?'c':v===3?'x':'';
+  const COST={h15:[0.02,0.06,0.35,0.22,0.45],d84e:[0.03,0.05,0.12,0.06,0.04]};
+  const ZIP={h15:['детали сбоя typecheck 15:10 — осталась одна строка','содержимое 2 из 5 прочитанных файлов движка','промежуточные версии теста integration'],d84e:['таблица К1–К18 — осталась ссылка на договор']};
+  function card(k,from){ const d=T[k];
+    const ticks=d.ticks.map(v=>'<i class="'+(v===1?'on':v===2?'ok':v===3?'cur':'')+'"></i>').join('');
+    const done=d.steps.filter(s=>s[0]); const cs=COST[k]||done.map((_,i)=>0.03+0.02*i); const sum=cs.slice(0,done.length).reduce((a,b)=>a+b,0);
+    const cost=done.length&&d.steps[0][0]?done.map((s,i)=>'<div class="crow"><span>'+s[2]+'</span><div class="bar"><i class="acc" style="width:'+Math.min(100,(cs[i]||0.02)/0.5*100)+'%"></i></div><b>'+(cs[i]||0.02).toFixed(2)+' %</b></div>').join('')+'<div class="crow" style="border-top:1px solid var(--line);margin-top:4px;padding-top:8px"><span>итого · недели Claude</span><span></span><b>'+sum.toFixed(2)+' %</b></div>':'<p style="font-size:12.5px;color:var(--ink2)">Ничего не запускалось — расхода нет.</p>';
+    const zip=ZIP[k]?'<p style="font-size:12.5px;color:var(--ink2);margin:0 0 8px">Сжатий контекста: '+(k==='h15'?2:1)+'. Что при этом потерялось:</p><ul style="margin:0;padding-left:16px;font-size:12.5px;color:var(--ink2);line-height:1.6">'+ZIP[k].map(x=>'<li>'+x+'</li>').join('')+'</ul>':'<p style="font-size:12.5px;color:var(--ink2)">Сжатия не было — контекст в пределах окна.</p>';
+    const dec=d.decide?'<div class="decide"><div class="lbl">'+d.decide[0]+'</div>'+d.decide[1]+'<div class="act">'+d.decide[2].map(([l,c])=>'<span class="btn sm '+c+'" data-close>'+l+'</span>').join('')+'</div></div>':'';
+    return '<div class="from">раскрытая карточка · задача · '+from+'</div>'+
+      '<div class="ph"><span class="pr '+d.pr+'">'+d.pr.toUpperCase()+'</span><h3>'+d.title+'</h3><span class="id">'+d.id+'</span><span class="pill '+d.pill[1]+'">'+d.pill[0]+'</span></div>'+
+      '<div class="psub"><div class="tags">'+d.tags.map(x=>'<span>'+x+'</span>').join('')+'</div><span>· '+d.due+'</span><span style="margin-left:auto;display:flex;gap:6px">'+d.acts.map(([l,c])=>'<span class="btn sm '+c+'">'+l+'</span>').join('')+'</span></div>'+
+      '<div class="pprog"><div class="ticks">'+ticks+'</div><b>'+d.cnt+'</b></div>'+
+      '<div class="two"><div class="blk"><div class="ctabs"><span class="on" data-ct="s">Шаги</span><span data-ct="c">Стоимость</span><span data-ct="z">Сжатие</span></div><div data-cp="s">'+HX.tl(d.steps)+'</div><div data-cp="c">'+cost+'</div><div data-cp="z">'+zip+'</div></div>'+
+      '<div><div class="blk"><div class="t"><span>карточка</span></div>'+HX.kv(d.kv)+'<div class="hl"><div class="t" style="margin-bottom:6px"><span>здоровье · 8 последних прогонов</span><span>'+d.hl+'</span></div><div class="health">'+d.health.split(' ').map(h=>'<i class="'+(h==='-'?'':h)+'"></i>').join('')+'</div></div></div>'+dec+'</div></div>'; }
+  // режим «Список»: те же задачи строками с лентой жизни (договор · код · прогон · ревью · влита)
+  const order=['h15','d84e','m0','h10d','s13','q22','h20','t48'];
+  const listHead='<div class="li head"><span>№</span><span>задача</span><span>жизнь · договор · код · прогон · ревью · влита</span><span>состояние</span><span>срок</span><span></span></div>';
+  const rowOf=k=>{const d=T[k];return '<div class="li'+(d.pill[0]==='в плане'||d.pill[0]==='готово'?' dim':'')+'" data-n="'+k+'"><span class="m">'+d.id+'</span><div><b>'+d.title+'</b><small>'+d.tags.join(' · ')+'</small></div><div><div class="life">'+L[k].map(v=>'<i class="'+lifeCls(v)+'"></i>').join('')+'</div></div><span><span class="pill '+d.pill[1]+'" style="height:18px">'+d.pill[0]+'</span></span><span class="m'+(/сегодня|мин|упали/.test(d.due)?' hot':'')+'">'+d.due+'</span><span class="chev">›</span></div>';};
+  function renderList(keys,note){ document.getElementById('tl-rows').innerHTML=listHead+(keys||order).map(rowOf).join('')+(note?'<div class="li dim" style="cursor:default"><span></span><div><small>'+note+'</small></div></div>':''); }
+  renderList();
+  let mode='graph';
+  document.querySelector('.mode').addEventListener('click',e=>{ const s=e.target.closest('[data-m]'); if(!s) return; HX.close(); mode=s.dataset.m; document.querySelectorAll('.mode [data-m]').forEach(x=>x.classList.toggle('on',x===s)); document.getElementById('map').classList.toggle('off',mode!=='graph'); document.getElementById('tlist').classList.toggle('on',mode==='list'); });
+  document.addEventListener('click',e=>{ const el=e.target.closest('.node[data-n], .li[data-n]'); if(el&&T[el.dataset.n]) HX.open(el,card(el.dataset.n,mode==='graph'?'карта':'список'),{h:610}); });
+  window.PLAN={T,L,order,card,renderList};   // рабочий слой прототипа (live.js) меняет состояния задач и добавляет новые
+  // «Сводка плана» — четыре сводных блока прототипа, раскрываются из плашки этапа
+  HX.bind('.stage',()=>'<div class="from">раскрытая карточка · сводка плана</div><div class="ch"><h3>Сводка плана · этап 2 из 5</h3></div><div class="csub">карта блоков L1 · 87 задач · до рубежа «первый живой проход»</div>'+
+    '<div class="two eq"><div>'+HX.blk('прогресс · рубеж','<div style="font:500 28px/1 var(--font);margin-bottom:8px">111 из 123</div><div class="ticks">'+Array.from({length:41},(_,i)=>'<i class="'+(i<37?'ok':'')+'"></i>').join('')+'</div><p style="margin-top:8px">влито в om/module · до рубежа осталось <b>0 из 87</b> предпосылок — рубеж открыт, ждёт подписи M0</p>','90 %')+
+    HX.blk('влито по дням · 14 дней','<div class="days">'+[3,5,2,8,6,9,4,7,11,6,8,5,9,3].map(v=>'<i style="height:'+v*5+'px"></i>').join('')+'</div><p style="margin-top:8px">в среднем <b>6,1</b> задачи в день · пик 11 (30.09)</p>','86 задач')+'</div>'+
+    '<div>'+HX.blk('расход карты OM',HX.kv([['всего на этап','14,2 % недели Claude · 31 $ Codex'],['на одну влитую','0,13 % · 3 круга ревью в среднем'],['самая дорогая','D8.4d · 4 круга · 2,1 %'],['прогноз до рубежа','+1,4 %']]))+
+    HX.blk('в работе сейчас',HX.tl([['c','H1.5','Прогон · воркер 1 · шаг 4/7','сдача 18:40'],['x','D8.4e','Владение завершением · воркер 2','3 из 72 упали'],['c','M0','Подпись · ждёт вас','40 мин']]),'3')+'</div></div>',{h:560,hide:false});
+  // «Качество» — два блока экрана «Задачи» прототипа
+  HX.bind('#quality',()=>'<div class="from">раскрытая карточка · качество</div><div class="ch"><h3>Качество · неделя</h3></div><div class="csub">какие классы дефектов возвращают задачи и как шёл прогон H1.5</div>'+
+    '<div class="two eq">'+HX.blk('классы дефектов · неделя',[['Пути: не закрыт второй путь к действию',9],['Отсутствие: поле без типизированного отказа',6],['Окна: зазор между проверкой и записью',4],['Маскарад: подделка статусного поля',2],['Соседи: устаревший тест',2]].map(([a,n])=>'<div class="crow"><span>'+a+'</span><div class="bar"><i class="bad" style="width:'+n*11+'%"></i></div><b>'+n+'</b></div>').join(''),'23 возврата')+
+    HX.blk('матрица · H1.5 × прогоны','<div class="mx"><span></span>'+[1,2,3,4,5,6,7,8].map(n=>'<span style="font:9px var(--mono);color:var(--ink3);text-align:center">'+n+'</span>').join('')+[['сборка','11111111'],['typecheck','11011111'],['unit','11111111'],['integration','1110111-'],['e2e','111-----'],['кольцо','11------']].map(([a,r])=>'<span>'+a+'</span>'+r.split('').map(c=>'<i class="'+(c==='1'?'ok':c==='0'?'bad':'')+'"></i>').join('')).join('')+'</div><p style="margin-top:10px">шаг × прогон · зелёный прошёл · красный упал · пусто не дошёл</p>','8 прогонов')+'</div>',{h:440,hide:false});
+  HX.passport({title:'План · карта',where:'OMG › План › уровень L1',what:'87 задач этапа: что готово, что идёт, что падает и что ждёт вас',why:'Видеть прогресс к рубежу и находить, где встало, не открывая задач',when:'Данные — выгрузка карты, проверка каждые 3 мин',expect:'Все узлы до рубежа зелёные; правки плана — только через «Утвердить»',risk:'Правка плана на ходу сбивает воркеров — поэтому черновик',ok:'До рубежа 0 предпосылок, сбоев в лентах нет',fail:'Узел падает третий круг подряд или ждёт вас больше часа'});
+})();
+</script>
+</body></html>

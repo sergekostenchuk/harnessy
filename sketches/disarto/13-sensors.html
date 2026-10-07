@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 13 · Датчики · живой</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .sil{display:flex;gap:2px;align-items:flex-end;height:26px;margin:6px 0 6px}.sil i{flex:1;height:100%;border-radius:1.5px;background:var(--ok)}.sil i.q{background:var(--line2);height:30%}.sil i.b{background:var(--bad-fill,#a3304b)}.sil i.w{background:var(--warn);height:60%}
+  .sil-l{display:flex;justify-content:space-between;font:9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .kd{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 13 · датчики · живой</h1>
+  <p class="sub">Одно дело экрана — понять, что система видит о себе и сколько стоит наблюдение. Обзор: три числа и строка на датчик (вид · состояние · последний сигнал · цена в день). <b>Клик по датчику — карточка поверх:</b> лента тишины за 24 часа, пороги, кто слушает, сбои. «Сбои за 24 ч» — вкладкой. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side" data-rail="sens"></aside>
+    <section class="main">
+      <div class="top"><b>Датчики · OMG</b><span class="st"><i></i>12 датчиков · 1 без связи · 1 молчит</span>
+        <div class="r"><span class="seg" id="seg"><span class="on" data-v="all">Датчики</span><span data-v="fail">Сбои за 24 ч · 4</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span><span class="btn sm" id="add1" style="cursor:pointer">＋ сторож</span><span class="btn sm" id="add2" style="cursor:pointer">＋ вахта</span></div></div>
+      <div class="views">
+        <div class="view on" id="v-all"><div class="wrap">
+          <div class="nums n3"><div><b>0,06 %</b><small>цена наблюдения в день · недели claude</small></div><div><b class="bad">4</b><small>сбоя за 24 часа</small></div><div><b class="acc">2</b><small>требуют взгляда · нет связи · молчит</small></div></div>
+          <div class="lst" id="rows" style="--cols:1.5fr 80px 150px 110px 80px 16px"></div>
+        </div></div>
+        <div class="view" id="v-fail"><div class="wrap">
+          <div class="lst" style="--cols:70px 1.2fr 1.6fr 110px 16px">
+            <div class="li head"><span>когда</span><span>датчик</span><span>что случилось</span><span>чем кончилось</span><span></span></div>
+            <div class="li" data-s="8"><span class="m">16:21</span><div><b>Хук Devin Stop</b></div><span>нет сигнала 9 минут — сессия не отвечает</span><span class="m bad">открыт</span><span class="chev">›</span></div>
+            <div class="li" data-s="7"><span class="m">14:02</span><div><b>Лимиты подписок</b></div><span>Codex 78 → 94 % за час</span><span class="m hot">предупреждение</span><span class="chev">›</span></div>
+            <div class="li dim" data-s="4"><span class="m">10:40</span><div><b>Очередь полных прогонов</b></div><span>прогон воркера 2 снят по лимиту модели</span><span class="m">перезапущен</span><span class="chev">›</span></div>
+            <div class="li dim" data-s="2"><span class="m">02:35</span><div><b>Хук Stop · Codex</b></div><span>401 от OpenAI — глобальный сбой</span><span class="m">прошёл сам</span><span class="chev">›</span></div>
+          </div>
+        </div></div>
+      </div>
+    </section>
+  </div>
+  <div class="cap"><span>13 · датчики · список → карточка датчика с лентой тишины · сбои</span><span>1280 × 860</span></div>
+  <div class="hint-bar"><span>клик по датчику — лента тишины, пороги, слушатели · «сбои за 24 ч» вверху · ＋ сторож / ＋ вахта</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (sens): «Цена наблюдения · день» (таблица) → число в сводке и колонка «цена» в списке; «Сбои за 24 ч» (таблица) → вкладка; 7 лент тишины → лента в карточке каждого датчика; 12 строк → 12 датчиков; «＋ сторож» и «＋ вахта» → кнопки в шапке с карточкой добавления; «Паспорт · датчики» → чип.</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+(function(){
+  const {kv,blk,acts,tl}=HX;
+  // [имя, вид, состояние, класс, последний сигнал, цена/день, лента (g=сигнал, q=тихо, b=сбой, w=предупр.), что слушает, порог, кто слушает]
+  const S={
+    1:['Вахта канала ревью','вахта','работает','','2 мин назад','0,02 %','gggggggggggggggggggggggg','~/.asvp-review/channel.ndjson — новые строки','молчание > 30 мин в рабочие часы','оркестратор · ревьюер'],
+    2:['Хук Stop · Codex','хук','работает','','9 мин назад','0','gggbgggggggggggggggggggg','завершение хода Codex → пробуждение места','нет сигнала > 15 мин при активной задаче','codex-worker2'],
+    3:['Диспетчер Kimi','сторож','работает','','4 мин назад','0,01 %','ggggggqqqqqqgggggggggggg','события канала для места kimi-worker','очередь > 3 событий','kimi-worker'],
+    4:['Очередь полных прогонов','сторож','идёт прогон','','сейчас','0','ggggggggggbggggggggggggg','flock на check:backend — один прогон на машине','ожидание в очереди > 40 мин','воркеры'],
+    5:['Синхронизация обмена','сторож','работает','','12 мин назад','0','gggggggggggggggggggggggg','launchd раз в 30 мин → omg-exchange','пропуск двух запусков подряд','вы'],
+    6:['Выгрузка карты','сторож','работает','','30 мин назад','0','gggggggggggggggggggggggg','launchd раз в 30 мин → /harness/map-data','возраст данных > 1 ч','вы · витрина'],
+    7:['Лимиты подписок','датчик','предупреждение · Codex 94 %','hot','1 мин назад','0,01 %','ggggggggggggggwwwwwwwwww','get_usage каждые 5 мин','80 % — предупреждение · 100 % — стоп','оркестратор · вы'],
+    8:['Хук Devin Stop','хук','нет связи · 9 мин','bad','9 мин назад','0','ggggggggggggggggggggggbb','завершение хода Devin → пробуждение','нет сигнала > 5 мин','devin-worker'],
+    9:['Страж секретов','сторож','работает','','12 мин назад','0','gggggggggggggggggggggggg','шаблоны секретов в выгрузке обмена','любая находка — код 3, без коммита','вы'],
+    10:['Маршрутизатор субагентов','хук','тень · только журнал','','3 мин назад','0','ggggggggggggqqqqgggggggg','PreToolUse на запуск агента','—  (режим shadow)','оркестратор'],
+    11:['Выжимка /loop','вахта','молчит 2 ч','hot','2 ч назад','0,02 %','ggggggggggggggggqqqqqqqq','пересказ чатов раз в час','молчание > 90 мин','вы'],
+    12:['Пульс живого прохода','датчик','выключен · прохода нет','','—','0','qqqqqqqqqqqqqqqqqqqqqqqq','шаги прохода OM','шаг дольше 15 мин','оркестратор']
+  };
+  const listHead='<div class="li head"><span>датчик</span><span>вид</span><span>состояние</span><span>последний сигнал</span><span>цена / день</span><span></span></div>';
+  const order=[8,11,7,4,1,2,3,5,6,9,10,12];
+  const rowOf=k=>{const s=S[k];return '<div class="li'+(k==12||k==10?' dim':'')+'" data-s="'+k+'"><div><b>'+s[0]+'</b></div><span class="kd">'+s[1]+'</span><span class="m '+s[3]+'">'+s[2]+'</span><span class="m">'+s[4]+'</span><span class="m">'+s[5]+'</span><span class="chev">›</span></div>';};
+  function render(keys){ document.getElementById('rows').innerHTML=listHead+(keys||order).map(rowOf).join(''); }
+  render();
+  const lane=str=>'<div class="sil">'+str.split('').map(c=>'<i class="'+(c==='g'?'':c)+'"></i>').join('')+'</div><div class="sil-l"><span>24 ч назад</span><span>12 ч</span><span>сейчас</span></div>';
+  const card=k=>{const s=S[k]; const bad=s[3]==='bad', warn=s[3]==='hot';
+    return '<div class="from">раскрытая карточка · датчик</div><div class="ch"><h3>'+s[0]+'</h3><span class="pill '+(bad?'bad':warn?'warn':'ok')+'">'+s[2]+'</span></div><div class="csub">'+s[1]+' · последний сигнал '+s[4]+' · цена '+s[5]+' в день</div>'+
+      blk('лента тишины · 24 часа',lane(s[6]),s[6].split('b').length-1+' сбоя · '+(s[6].split('q').length-1)+' ч тишины')+
+      '<div class="two eq">'+blk('что наблюдает',kv([['источник',s[7]],['порог',s[8]],['кто слушает',s[9]]]))+
+      blk('поведение','<div class="opt"><div>Будить вас при срабатывании<small>иначе — только счётчик в рейке</small></div><span class="tog'+(bad||warn?' on':'')+'"></span></div><div class="opt"><div>Заместитель может гасить сам</div><span class="tog on"></span></div>')+'</div>'+
+      acts(bad?[['Проверить сейчас','p'],'Перезапустить место','Изменить порог','Выключить']:[['Проверить сейчас','p'],'Изменить порог','Выключить']); };
+  HX.views('#seg');
+  document.addEventListener('click',e=>{ const el=e.target.closest('.li[data-s]'); if(el&&S[el.dataset.s]) HX.open(el,card(el.dataset.s),{w:820,h:560}); });
+  window.SENS={S,order,render,card};   // рабочий слой прототипа (live.js) проверяет, перезапускает, выключает и добавляет датчики
+  const add=(kind,what)=>'<div class="from">добавить · '+kind+'</div><div class="ch"><h3>Новый '+kind+'</h3></div><div class="csub">'+what+'</div>'+
+    blk('что наблюдать','<label class="pick on" data-pick>Файл или журнал<small>новые строки, молчание, размер</small></label><label class="pick" data-pick>Место в стае<small>сигнал завершения хода</small></label><label class="pick" data-pick>Расписание<small>launchd / cron — пропуски запусков</small></label>')+
+    blk('когда срабатывать',kv([['порог','молчание > 30 мин'],['кому сообщать','оркестратору · вам при повторе'],['цена','≈ 0,01 % недели в день']]))+acts([['Добавить','p','data-close'],['Отмена','ghost','data-close']]);
+  HX.bind('#add1',()=>add('сторож','следит за одним источником и срабатывает по порогу'),{w:600,h:520,hide:false});
+  HX.bind('#add2',()=>add('вахта','смотрит на несколько источников и пересказывает по расписанию'),{w:600,h:520,hide:false});
+  HX.passport({title:'Датчики',where:'OMG › Команда › Датчики',what:'Сторожа, вахты и хуки: что система видит о себе, когда сигналили и сколько это стоит',why:'Заметить молчание и сбой раньше, чем встанет работа',when:'Сигналы живые; лента — за 24 часа',expect:'Все датчики сигналят в срок; цена наблюдения < 0,1 % в день',risk:'Датчик молчит, и это принимают за «всё хорошо»',ok:'Сбоев 0, молчащих 0',fail:'Место без связи дольше порога, а датчик не сработал'});
+})();
+</script>
+</body></html>

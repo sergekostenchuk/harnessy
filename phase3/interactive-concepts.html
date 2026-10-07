@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness для человека — 3 нативных концепции UX/UI</title>
+<style>
+  :root {
+    --bg-app: #111215;
+    --bg-panel: #16181d;
+    --bg-raised: #1c1f26;
+    --bg-hover: #222630;
+    --border-subtle: #262932;
+    --border-focus: #3b4252;
+    --text-main: #f0f2f5;
+    --text-muted: #8b929e;
+    --text-faint: #5a606d;
+    --accent-blue: #3b82f6;
+    --accent-purple: #8b5cf6;
+    --accent-green: #10b981;
+    --accent-amber: #f59e0b;
+    --accent-red: #ef4444;
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 10px;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-main);
+    background: var(--bg-app);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Верхний переключатель 3 вариантов */
+  .variant-selector-bar {
+    height: 44px;
+    background: #0d0e11;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    z-index: 100;
+  }
+  .variant-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .variant-tabs {
+    display: flex;
+    background: var(--bg-app);
+    padding: 3px;
+    border-radius: var(--radius-md);
+    gap: 4px;
+    border: 1px solid var(--border-subtle);
+  }
+  .v-tab-btn {
+    border: none;
+    background: transparent;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .v-tab-btn:hover { color: var(--text-main); }
+  .v-tab-btn.active {
+    background: var(--bg-raised);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+
+  /* Общий контейнер вариантов */
+  .variant-viewport {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Вспомогательные классы */
+  .dot-green { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); display: inline-block; }
+  .dot-blue  { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-blue); display: inline-block; animation: pulse 1.5s infinite; }
+  .dot-amber { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-amber); display: inline-block; }
+  @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+
+  /* ========================================================
+     ВАРИАНТ 1: «ТИХИЙ ПУЛЬТ & КАРТА n8n» (wbdesign-after.png)
+     ======================================================== */
+  #v1-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+  .top-header {
+    height: 40px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    font-size: 13px;
+  }
+  .search-box {
+    display: flex;
+    align-items: center;
+    background: var(--bg-app);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 3px 12px;
+    color: var(--text-muted);
+    font-size: 12px;
+    width: 320px;
+    gap: 8px;
+  }
+  .search-box kbd {
+    background: var(--bg-raised);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    color: var(--text-faint);
+    margin-left: auto;
+  }
+  .workbench-layout { display: flex; flex: 1; overflow: hidden; }
+  .sidebar {
+    width: 210px;
+    background: var(--bg-app);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    padding: 12px 8px;
+    font-size: 12px;
+  }
+  .nav-group-title {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 8px 4px;
+    margin-top: 10px;
+  }
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .nav-btn:hover { background: var(--bg-panel); color: var(--text-main); }
+  .nav-btn.active { background: var(--bg-raised); color: #fff; font-weight: 500; }
+  .nav-btn .count {
+    margin-left: auto;
+    background: var(--bg-raised);
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .team-seat {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 8px;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+  }
+
+  .center-stage { flex: 1; display: flex; flex-direction: column; background: var(--bg-panel); overflow: hidden; }
+  .tabs-bar {
+    height: 36px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 4px;
+    background: var(--bg-app);
+  }
+  .tab-item {
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tab-item.active { background: var(--bg-panel); color: #fff; font-weight: 500; }
+
+  .channel-feed { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .feed-row { display: flex; gap: 10px; font-size: 13px; line-height: 1.5; }
+  .avatar {
+    width: 24px; height: 24px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0;
+  }
+  .av-owner { background: #d97706; }
+  .av-fable { background: #7c3aed; }
+  .av-codex { background: #2563eb; }
+  .feed-meta { font-size: 11px; color: var(--text-faint); margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+  .pill-verdict { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+  .pill-owner-quote { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); padding: 1px 6px; border-radius: 3px; font-size: 10px; }
+  .code-chip { background: var(--bg-app); border: 1px solid var(--border-subtle); padding: 1px 6px; border-radius: 3px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+  .right-agent-panel { width: 440px; background: var(--bg-app); border-left: 1px solid var(--border-subtle); display: flex; flex-direction: column; }
+  .agent-header { height: 36px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-size: 12px; }
+  .agent-conv { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; font-size: 13px; }
+  .bubble-owner { background: var(--bg-raised); padding: 8px 12px; border-radius: var(--radius-md); border-left: 2px solid var(--accent-amber); }
+  .task-quad-summary { background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: var(--radius-md); padding: 10px 12px; font-size: 12px; line-height: 1.5; }
+
+  /* Карта n8n */
+  .om-map-view { flex: 1; display: flex; flex-direction: column; background: #0f1013; overflow: hidden; }
+  .ladder-strip { height: 36px; background: var(--bg-panel); border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; padding: 0 16px; gap: 10px; font-size: 11px; }
+  .ladder-step { padding: 3px 8px; border-radius: 3px; color: var(--text-muted); background: var(--bg-app); cursor: pointer; }
+  .ladder-step.active { background: var(--accent-blue); color: #fff; font-weight: 600; }
+  .canvas-area { flex: 1; position: relative; background-image: radial-gradient(#262932 1px, transparent 1px); background-size: 20px 20px; overflow: hidden; }
+  .flow-node { position: absolute; width: 220px; background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); cursor: pointer; }
+  .flow-node.selected { border-color: var(--accent-blue); }
+  .node-inspector { width: 320px; background: var(--bg-panel); border-left: 1px solid var(--border-subtle); padding: 16px; overflow-y: auto; }
+  .player-strip { height: 44px; background: var(--bg-panel); border-top: 1px solid var(--border-subtle); display: flex; align-items: center; padding: 0 16px; gap: 14px; font-size: 11px; }
+
+  /* ========================================================
+     ВАРИАНТ 2: «ИНЖЕНЕРНАЯ СТУДИЯ» (Cursor + Antigravity)
+     ======================================================== */
+  #v2-container {
+    display: none;
+    flex: 1;
+    overflow: hidden;
+    background: var(--bg-app);
+  }
+  .v2-filetree {
+    width: 220px;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    padding: 12px 8px;
+    font-size: 12px;
+  }
+  .v2-tree-item {
+    padding: 5px 8px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .v2-tree-item:hover { background: var(--bg-raised); color: var(--text-main); }
+  .v2-tree-item.active { background: var(--bg-raised); color: #fff; font-weight: 500; }
+  .v2-chat-col {
+    width: 460px;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-app);
+    border-right: 1px solid var(--border-subtle);
+  }
+  .v2-code-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #0d0e11;
+  }
+  .v2-code-header {
+    height: 38px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    font-size: 12px;
+  }
+  .v2-code-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    color: #e2e8f0;
+  }
+  .diff-line-add { background: rgba(16, 185, 129, 0.12); color: #34d399; display: block; padding: 0 6px; border-left: 2px solid #10b981; }
+  .diff-line-del { background: rgba(239, 68, 68, 0.12); color: #f87171; display: block; padding: 0 6px; border-left: 2px solid #ef4444; }
+  .v2-preview-drawer {
+    height: 220px;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ========================================================
+     ВАРИАНТ 3: «ШТАБ РЕШЕНИЙ / ДИСПЕТЧЕРСКАЯ» (Perplexity + Linear Triage)
+     ======================================================== */
+  #v3-container {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    background: var(--bg-app);
+    overflow: hidden;
+  }
+  .triage-metrics-bar {
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 12px 24px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .metric-card {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .metric-card:hover { border-color: var(--accent-blue); }
+  .metric-label { font-size: 11px; text-transform: uppercase; color: var(--text-faint); font-weight: 600; }
+  .metric-val { font-size: 18px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+  .triage-feed-col {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    max-width: 860px;
+    margin: 0 auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .triage-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  }
+  .triage-card.urgent { border-left: 3px solid var(--accent-amber); }
+  .triage-card.research { border-left: 3px solid var(--accent-blue); }
+  .citation-tag {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent-blue);
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    margin-right: 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Верхний переключатель трёх концепций -->
+<header class="variant-selector-bar">
+  <div class="variant-title-group">
+    <span style="color:#fff;">⚡ Harness 2026–2027</span>
+    <span style="color:var(--text-faint); font-weight:normal;">| Три нативных концепции</span>
+  </div>
+
+  <div class="variant-tabs">
+    <button class="v-tab-btn active" onclick="switchVariant(1)">1. Тихий пульт & n8n Карта</button>
+    <button class="v-tab-btn" onclick="switchVariant(2)">2. Инженерная студия (Cursor/Code)</button>
+    <button class="v-tab-btn" onclick="switchVariant(3)">3. Штаб решений (Perplexity/Triage)</button>
+  </div>
+
+  <div style="font-size:11px; color:var(--text-faint);">
+    Человеческий интерфейс • Без жаргона
+  </div>
+</header>
+
+<div class="variant-viewport">
+
+  <!-- ========================================================
+       ВАРИАНТ 1: «ТИХИЙ ПУЛЬТ & КАРТА n8n»
+       ======================================================== -->
+  <div id="v1-container">
+    <div class="top-header">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-weight:700; color:#fff;">OMG</span>
+        <span style="color:var(--text-faint);">•</span>
+        <span style="font-size:12px; color:var(--text-muted);">Owner Workbench</span>
+      </div>
+      <div class="search-box">
+        <span>🔍</span>
+        <span>поиск, команды, окна, задачи...</span>
+        <kbd>⌘K</kbd>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-muted);">
+        <span class="dot-green"></span>
+        <span>Ассистент на связи</span>
+      </div>
+    </div>
+
+    <div class="workbench-layout">
+      <!-- 1. Навигация -->
+      <aside class="sidebar">
+        <div style="font-weight:700; font-size:13px; padding:4px 8px 8px; display:flex; justify-content:space-between;">
+          <span>OMG</span><span style="color:var(--text-faint); font-weight:normal;">проект</span>
+        </div>
+        <a class="nav-btn active" id="v1-nav-feed" onclick="v1SwitchSub('feed')"><span>📰 Лента</span></a>
+        <a class="nav-btn" id="v1-nav-map" onclick="v1SwitchSub('map')">
+          <span>🗺️ Карта ОМ (n8n)</span>
+          <span class="count" style="background:#2563eb; color:#fff;">55 узлов</span>
+        </a>
+        <a class="nav-btn"><span>💬 Разговоры</span></a>
+        <a class="nav-btn"><span>👥 Команда</span><span class="count">3</span></a>
+        <a class="nav-btn"><span>⚙️ Настройки</span></a>
+
+        <div class="nav-group-title">КАНАЛЫ ШИНЫ</div>
+        <a class="nav-btn" style="color:var(--text-main);"><span># main</span><span class="count" style="background:var(--accent-amber); color:#000; font-weight:700;">1</span></a>
+        <a class="nav-btn"><span># events</span><span class="count">70</span></a>
+        <a class="nav-btn"><span># omg-r2-l3</span></a>
+
+        <div class="nav-group-title">КОМАНДА</div>
+        <div class="team-seat">
+          <div style="display:flex; align-items:center; gap:6px;"><span class="dot-blue"></span><span style="color:var(--text-main);">Architect</span></div>
+          <span style="font-size:10px; color:var(--accent-blue);">идёт ход</span>
+        </div>
+        <div class="team-seat">
+          <div style="display:flex; align-items:center; gap:6px;"><span class="dot-amber"></span><span style="color:var(--text-main);">Reviewer</span></div>
+          <span style="font-size:10px; color:var(--accent-amber);">2 ждут</span>
+        </div>
+      </aside>
+
+      <!-- 2. Центральная Лента канала -->
+      <div id="v1-sub-feed" style="display:flex; flex:1;">
+        <main class="center-stage">
+          <div class="tabs-bar">
+            <div class="tab-item active"># main</div>
+            <div class="tab-item"><span class="dot-blue"></span> Architect ✕</div>
+            <div class="tab-item" style="color:var(--text-faint);">+</div>
+          </div>
+          <div class="channel-feed">
+            <div class="feed-row">
+              <div class="avatar av-owner">В</div>
+              <div class="feed-content-col">
+                <div class="feed-meta"><strong>Владелец</strong> → все <span class="pill-owner-quote">слово владельца</span> <span>29.09, 10:42</span></div>
+                <div><strong>Первый ломоть UI.</strong> Начинаем третий ломоть: витрина поверх шины. Fable — каркас воркбенча, codex — ревью по готовности.</div>
+              </div>
+            </div>
+            <div class="feed-row">
+              <div class="avatar av-fable">F</div>
+              <div class="feed-content-col">
+                <div class="feed-meta"><strong>Fable</strong> → Codex <span style="color:var(--accent-blue);">на ревью</span> <span>11:52</span></div>
+                <div><strong>Каркас воркбенча.</strong> Проверить: правила не дублируются, отказы доходят формой {ok:false}, постинг owner идёт со следом cli-notty.</div>
+                <div style="display:flex; gap:6px; margin-top:6px;"><span class="code-chip">electron/main.cjs</span><span class="code-chip">src/App.tsx</span></div>
+              </div>
+            </div>
+            <div class="feed-row">
+              <div class="avatar av-codex">C</div>
+              <div class="feed-content-col">
+                <div class="feed-meta"><strong>Codex</strong> → Fable <span class="pill-verdict">вердикт 9/10</span> <span>13:12</span></div>
+                <div>Каркас принят. Мост тонкий, правил не повторяет. Замечание: опрос status каждые 3с перевести на watch в asvh.</div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- 3. Правое окно агента -->
+        <aside class="right-agent-panel">
+          <div class="agent-header">
+            <div style="display:flex; align-items:center; gap:6px;"><span class="dot-blue"></span><strong>Architect</strong></div>
+            <span style="color:var(--text-faint);">✕</span>
+          </div>
+          <div class="agent-conv">
+            <div class="bubble-owner">
+              <div style="font-size:11px; color:var(--text-faint);">вы • 03:40</div>
+              <div>а что здесь?</div>
+            </div>
+            <div style="color:var(--text-faint); font-size:11px;">▸ размышление • 52 симв.</div>
+            <div style="background:var(--bg-panel); border:1px solid var(--border-subtle); padding:8px 10px; border-radius:6px; font-family:var(--font-mono); font-size:11px; display:flex; justify-content:space-between;">
+              <span>📄 Read <strong>package.json</strong></span><span style="color:var(--accent-green);">✓</span>
+            </div>
+            <div class="task-quad-summary">
+              <div><strong>Что:</strong> Проверяю тестовые скрипты и структуру пакетов.</div>
+              <div><strong>Где:</strong> `package.json` и `src/sections/om-map/`</div>
+              <div><strong>Зачем:</strong> Убедиться, что карта на React Flow компилируется без ошибок.</div>
+              <div><strong>Ожидаю:</strong> Запустить `npm test` в режиме только для чтения.</div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- 2B. Карта OM n8n -->
+      <div id="v1-sub-map" class="om-map-view" style="display:none;">
+        <div class="ladder-strip">
+          <span style="color:var(--text-faint); font-weight:600;">СТУПЕНИ:</span>
+          <div class="ladder-step">L0 Старт</div>
+          <div class="ladder-step">L1 Черновики (26)</div>
+          <div class="ladder-step active">L2 Граф R2 (55 узлов)</div>
+          <div class="ladder-step">L3 Разработка OM</div>
+          <span style="margin-left:auto; color:var(--accent-green);">11,7M токенов • 225 вызовов</span>
+        </div>
+        <div style="display:flex; flex:1; overflow:hidden;">
+          <div class="canvas-area">
+            <svg style="position:absolute; width:100%; height:100%; pointer-events:none;">
+              <path d="M 270 95 L 360 95" stroke="#3b4252" stroke-width="2" fill="none" />
+              <path d="M 580 95 L 670 95" stroke="#3b82f6" stroke-width="2" fill="none" />
+            </svg>
+            <div class="flow-node" style="top:50px; left:50px;">
+              <div style="display:flex; justify-content:space-between; font-weight:600;"><span>📥 n-intake</span><span style="color:var(--accent-green);">ready</span></div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Приём поручения из channel.ndjson</div>
+            </div>
+            <div class="flow-node selected" style="top:50px; left:360px;">
+              <div style="display:flex; justify-content:space-between; font-weight:600;"><span>⚙️ n-r2-scope</span><span style="color:var(--accent-blue);">active</span></div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Связи графа r2: 55 узлов через порты.</div>
+            </div>
+            <div class="flow-node" style="top:50px; left:670px;">
+              <div style="display:flex; justify-content:space-between; font-weight:600;"><span>🖥️ n-view-map</span><span style="color:var(--accent-amber);">in review</span></div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Встраивание раздела om-map на Vite.</div>
+            </div>
+          </div>
+          <aside class="node-inspector">
+            <div style="font-size:14px; font-weight:700; margin-bottom:12px;">⚙️ n-r2-scope</div>
+            <div style="font-size:11px; color:var(--text-faint);">СТАДИЯ</div>
+            <div style="font-size:12px; margin-bottom:10px;">Граф R2 (Ступень L2)</div>
+            <div style="font-size:11px; color:var(--text-faint);">ВЕРИФИКАЦИЯ</div>
+            <div style="font-size:12px; color:var(--accent-green); margin-bottom:10px;">✓ 100% тестов пройдены (55/55)</div>
+            <div style="font-size:11px; color:var(--text-faint);">РАСХОД</div>
+            <div style="font-size:12px;">51 вызов • 2,55M токенов ($1.28)</div>
+          </aside>
+        </div>
+        <div class="player-strip">
+          <button style="background:var(--bg-raised); border:1px solid var(--border-subtle); color:#fff; padding:3px 8px; border-radius:4px;">▶ Воспроизвести</button>
+          <span style="color:var(--text-faint);">Событие 2058 из 2729 (29.09 14:16)</span>
+          <input type="range" min="1" max="2729" value="2058" style="flex:1; accent-color:var(--accent-blue);">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+     ВАРИАНТ 2: «ИНЖЕНЕРНАЯ СТУДИЯ» (Cursor + Antigravity)
+     ======================================================== -->
+  <div id="v2-container">
+    <!-- Дерево файлов -->
+    <aside class="v2-filetree">
+      <div style="font-weight:700; font-size:12px; padding:4px 6px 8px; color:#fff;">📁 OMG-DEV</div>
+      <div class="v2-tree-item">📁 src</div>
+      <div class="v2-tree-item" style="padding-left:18px;">📁 sections</div>
+      <div class="v2-tree-item active" style="padding-left:26px;">📄 OmMapScreen.tsx</div>
+      <div class="v2-tree-item" style="padding-left:26px;">📄 om-map.css</div>
+      <div class="v2-tree-item">📁 public/om-map</div>
+      <div class="v2-tree-item" style="padding-left:18px;">📄 map.json</div>
+      <div class="v2-tree-item" style="padding-left:18px;">📄 dev-timeline.json</div>
+      <div style="margin-top:auto; font-size:11px; color:var(--text-faint); padding:8px 4px;">
+        Ветка: <strong>om-map</strong> • Коммит: <strong>f3bf191</strong>
+      </div>
+    </aside>
+
+    <!-- Диалог с ассистентом (Код-первый) -->
+    <section class="v2-chat-col">
+      <div style="height:38px; border-bottom:1px solid var(--border-subtle); display:flex; align-items:center; justify-content:space-between; padding:0 14px; font-size:12px;">
+        <span style="font-weight:600;">Чат разработки</span>
+        <span class="dot-green"></span>
+      </div>
+      <div style="flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:14px;">
+        <div class="bubble-owner">
+          <div style="font-size:11px; color:var(--text-faint);">Владелец</div>
+          <div>Сделай прямой вход по адресу http://localhost:3000/#/om-map на React Flow.</div>
+        </div>
+
+        <div style="font-size:13px; line-height:1.5;">
+          <strong>Claude 3.7 Sonnet:</strong><br>
+          Понял. Подключаю <code>@xyflow/react</code> и настраиваю хэш-маршрутизацию в <code>App.tsx</code>.
+
+          <!-- Шаги -->
+          <div style="margin-top:8px; border:1px solid var(--border-subtle); border-radius:6px; background:var(--bg-panel); padding:8px 10px; font-size:12px;">
+            <div style="color:var(--accent-green);">✓ 1. Установил зависимости @xyflow/react@12</div>
+            <div style="color:var(--accent-green);">✓ 2. Написал слой данных OmMapSource</div>
+            <div style="color:var(--accent-blue); font-weight:600;">● 3. Встраиваю экран в Sidebar.tsx и App.tsx</div>
+          </div>
+
+          <!-- Карточка подтверждения коммита -->
+          <div style="margin-top:12px; background:var(--bg-raised); border:1px solid var(--accent-blue); border-radius:8px; padding:12px;">
+            <div style="font-size:11px; font-weight:700; color:var(--accent-blue); text-transform:uppercase;">Готово к проверке</div>
+            <div style="font-size:13px; font-weight:600; margin:4px 0;">Коммит f3bf191: читаемый холст и сетка</div>
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Typecheck и линт чистые. Скриншоты сняты через Electron.</div>
+            <button style="background:var(--accent-blue); color:#fff; border:none; padding:6px 14px; border-radius:4px; font-weight:600; cursor:pointer;" onclick="alert('Коммит принят и отправлен оркестратору!')">
+              Одобрить коммит (Enter)
+            </button>
+          </div>
+        </div>
+      </div>
+      <div style="padding:12px; border-top:1px solid var(--border-subtle);">
+        <input type="text" placeholder="Поручение кодеру... (Enter)" style="width:100%; background:var(--bg-panel); border:1px solid var(--border-subtle); padding:8px 12px; color:#fff; border-radius:6px; outline:none; font-size:13px;">
+      </div>
+    </section>
+
+    <!-- Правая область: Дифф файла + Живое окно продукта -->
+    <main class="v2-code-stage">
+      <div class="v2-code-header">
+        <span>📄 <strong>OmMapScreen.tsx</strong> (+18 / -3 строк)</span>
+        <span style="font-size:11px; color:var(--text-faint);">Vite HMR: активен</span>
+      </div>
+      <div class="v2-code-body">
+@@ -35,6 +35,18 @@ export function OmMapScreen() {
+<span class="diff-line-del">-  const defaultHash = window.location.pathname;</span>
+<span class="diff-line-add">+  // Прямой вход по адресу http://localhost:3000/#/om-map</span>
+<span class="diff-line-add">+  const isOmMap = window.location.hash === '#/om-map';</span>
+<span class="diff-line-add">+  const [currentView, setCurrentView] = useState(isOmMap ? 'om-map' : 'feed');</span>
+ 
+   useEffect(() => {
+     const onHashChange = () => {
+<span class="diff-line-add">+      if (window.location.hash === '#/om-map') setCurrentView('om-map');</span>
+     };
+     window.addEventListener('hashchange', onHashChange);
+     return () => window.removeEventListener('hashchange', onHashChange);
+   }, []);
+      </div>
+
+      <!-- Встроенный предпросмотр работающего продукта -->
+      <div class="v2-preview-drawer">
+        <div style="height:28px; background:var(--bg-app); border-bottom:1px solid var(--border-subtle); display:flex; align-items:center; justify-content:space-between; padding:0 12px; font-size:11px; color:var(--text-muted);">
+          <span>🚀 Живой результат: <strong>http://localhost:3000/#/om-map</strong></span>
+          <span style="color:var(--accent-green);">● Сервер работает (порт 3000)</span>
+        </div>
+        <div style="flex:1; background:#0f1013; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; border:1px dashed var(--border-subtle); margin:8px; border-radius:6px;">
+          [Окно встроенного Vite WebView: Карта OM активна, 26 узлов отрисованы]
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ========================================================
+     ВАРИАНТ 3: «ШТАБ РЕШЕНИЙ / ДИСПЕТЧЕРСКАЯ» (Perplexity + Linear Triage)
+     ======================================================== -->
+  <div id="v3-container">
+    <!-- Верхний пульс проекта (Метрики и сигналы) -->
+    <div class="triage-metrics-bar">
+      <div class="metric-card" style="border-left:3px solid var(--accent-amber);">
+        <div class="metric-label">Ждут вашего решения</div>
+        <div class="metric-val"><span style="color:var(--accent-amber);">1 развилка</span> <span style="font-size:11px; font-weight:normal; color:var(--text-faint);">(4 мин)</span></div>
+      </div>
+      <div class="metric-card" style="border-left:3px solid var(--accent-blue);">
+        <div class="metric-label">Агенты в работе</div>
+        <div class="metric-val"><span style="color:var(--accent-blue);">2 места</span> <span style="font-size:11px; font-weight:normal; color:var(--text-faint);">(Architect, Worker)</span></div>
+      </div>
+      <div class="metric-card" style="border-left:3px solid var(--accent-green);">
+        <div class="metric-label">Принято ревьюером</div>
+        <div class="metric-val"><span style="color:var(--accent-green);">76 из 96</span> <span style="font-size:11px; font-weight:normal; color:var(--text-faint);">(до рубежа 9)</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Расход за день</div>
+        <div class="metric-val"><span>$1.42</span> <span style="font-size:11px; font-weight:normal; color:var(--text-faint);">/ лимит $10.00</span></div>
+      </div>
+    </div>
+
+    <!-- Лента карточек решений и синтеза знаний (Triage Feed) -->
+    <div style="display:flex; flex:1; overflow:hidden;">
+      <div class="triage-feed-col">
+        
+        <!-- Карточка 1: Срочное решение владельца -->
+        <div class="triage-card urgent">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="dot-amber"></span>
+              <span style="font-weight:700; color:var(--accent-amber); font-size:11px; text-transform:uppercase;">Требуется решение владельца</span>
+            </div>
+            <span style="font-size:11px; color:var(--text-faint);">возраст: 4 мин • простой: $0.00</span>
+          </div>
+          <div style="font-size:15px; font-weight:600; margin-bottom:6px;">
+            Задача №2061: Вторая дорожка таймлайна «разработка OM»
+          </div>
+          <div style="font-size:13px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
+            Воркер выгрузил 76 коммитов задач и 57 прогонов. Ревьюер Codex дал вердикт <strong>9/10</strong>. Влить ветку <code>om-map</code> в <code>main</code>?
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button style="background:var(--accent-blue); color:#fff; border:none; padding:7px 16px; border-radius:4px; font-weight:600; cursor:pointer;" onclick="alert('Влито в main! Оркестратор уведомлён.')">
+              ✓ Влить в main (Space)
+            </button>
+            <button style="background:var(--bg-raised); border:1px solid var(--border-subtle); color:var(--text-main); padding:7px 12px; border-radius:4px; cursor:pointer;" onclick="alert('Открыт список из 76 коммитов')">
+              Посмотреть коммиты (76)
+            </button>
+          </div>
+        </div>
+
+        <!-- Карточка 2: Синтез исследования (в стиле Perplexity) -->
+        <div class="triage-card research">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="dot-blue"></span>
+              <span style="font-weight:700; color:var(--accent-blue); font-size:11px; text-transform:uppercase;">Справка исследования • Perplexity-style</span>
+            </div>
+            <span style="font-size:11px; color:var(--text-faint);">100% подтверждено источниками</span>
+          </div>
+          <div style="font-size:15px; font-weight:600; margin-bottom:8px;">
+            Анализ базы SQLite: Event-Sourcing и структура графа r2
+          </div>
+          <div style="font-size:13px; color:var(--text-main); line-height:1.6; margin-bottom:12px;">
+            База содержит 2 729 событий ревизий <span class="citation-tag">[1]</span>. Граф r2 состоит из 55 узлов и 87 рёбер, связанных через коннекторы портов <span class="citation-tag">[2]</span>. Расход зафиксирован: R1 потратил 9,16M токенов на 174 вызова, R2 — 2,55M на 51 вызов <span class="citation-tag">[3]</span>.
+          </div>
+          <div style="border-top:1px solid var(--border-subtle); padding-top:10px; display:flex; gap:16px; font-size:11px; color:var(--text-muted);">
+            <span>[1] revisions + events table</span>
+            <span>[2] export-map.mjs:54</span>
+            <span>[3] model-call summary</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Правая панель контекста документа -->
+      <aside style="width:360px; background:var(--bg-panel); border-left:1px solid var(--border-subtle); padding:20px; overflow-y:auto;">
+        <div style="font-size:11px; font-weight:700; color:var(--text-faint); text-transform:uppercase; margin-bottom:8px;">Контекст развилки</div>
+        <div style="font-size:14px; font-weight:700; margin-bottom:8px;">Спецификация задачи №2061</div>
+        <div style="font-size:12px; color:var(--text-muted); line-height:1.5;">
+          • Источник: <code>~/.asvp-review/WORKER-START-OMG-VIEW.md</code><br>
+          • Прогон: 57 бэкенд-ранов привязаны к задачам<br>
+          • Замыкание рубежа: осталось 9 задач из 85<br>
+          • Риск слияния: нулевой (тесты и сборка пройдены)
+        </div>
+      </aside>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function switchVariant(variantNum) {
+    document.querySelectorAll('.v-tab-btn').forEach((b, idx) => {
+      b.classList.toggle('active', idx + 1 === variantNum);
+    });
+
+    document.getElementById('v1-container').style.display = variantNum === 1 ? 'flex' : 'none';
+    document.getElementById('v2-container').style.display = variantNum === 2 ? 'flex' : 'none';
+    document.getElementById('v3-container').style.display = variantNum === 3 ? 'flex' : 'none';
+  }
+
+  function v1SwitchSub(sub) {
+    document.getElementById('v1-nav-feed').classList.toggle('active', sub === 'feed');
+    document.getElementById('v1-nav-map').classList.toggle('active', sub === 'map');
+    document.getElementById('v1-sub-feed').style.display = sub === 'feed' ? 'flex' : 'none';
+    document.getElementById('v1-sub-map').style.display = sub === 'map' ? 'flex' : 'none';
+  }
+</script>
+
+</body>
+</html>

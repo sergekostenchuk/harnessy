@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 17 · Документ стадии · живой</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .doc{display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px;height:100%;min-height:0}
+  .toc{display:flex;flex-direction:column;gap:2px}
+  .toc .t{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:4px 9px 8px}
+  .toc .it{display:flex;align-items:center;gap:8px;height:32px;padding:0 9px;border-radius:var(--rs);color:var(--ink2);font-size:12.5px;cursor:pointer}.toc .it.on{background:var(--raised);color:var(--ink)}.toc .it:hover{background:var(--raised)}
+  .toc .it i{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center;font:600 8px var(--mono);color:#fff;flex:none;font-style:normal}.toc .it.d i{background:var(--ok);border-color:var(--ok)}.toc .it.w i{border-color:var(--accent);background:var(--accent-soft)}
+  .toc .it .n{margin-left:auto;font:10px var(--mono);color:var(--accent)}
+  .toc .pg{margin-top:auto;border:1px solid var(--line2);border-radius:10px;background:var(--panel);padding:10px 12px}.toc .pg .l{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink2);margin-bottom:6px}.toc .pg .l b{font:500 11px var(--mono);color:var(--ink)}
+  .paper{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:28px 36px;overflow:hidden;min-height:0}
+  .paper h2{font-size:20px;font-weight:500;margin:0 0 4px}.paper .meta{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:20px}
+  .paper h4{font-size:14px;font-weight:500;margin:20px 0 6px;display:flex;align-items:center;gap:8px}.paper h4 .num{font:10px var(--mono);color:var(--ink3)}
+  .paper p,.paper li{font-size:13.5px;line-height:1.65;color:var(--ink2);margin:0 0 8px}.paper ul{margin:0 0 8px;padding-left:18px}.paper b{color:var(--ink);font-weight:500}
+  .wait{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;cursor:pointer;vertical-align:1px}.wait:hover{background:rgba(194,122,52,.24)}
+  .top .btn{cursor:pointer}
+  .vrow{display:grid;grid-template-columns:44px 1fr 110px auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.vrow:last-child{border-bottom:0}.vrow b{color:var(--ink);font-weight:500}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 17 · документ стадии · живой</h1>
+  <p class="sub">Одно дело экрана — прочитать документ стадии и перейти к следующей. Документ остаётся главным: слева разделы с отметками, по центру текст. Всё вспомогательное — карточками из шапки: «Версии · 7», «ⓘ Паспорт»; незаполненные места помечены «ждёт» прямо в тексте — клик раскрывает, чего не хватает. Переход к рубежу — поток в два шага. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side" data-rail="doc"></aside>
+    <section class="main">
+      <div class="top"><b>Документ стадии · L1</b><span class="st"><i style="background:var(--accent)"></i>версия 6 · ждёт в 3 местах</span>
+        <div class="r"><span class="btn sm ghost" id="vers">Версии · 7</span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span><span class="btn sm" id="fix">Доделать</span><span class="btn sm p" id="next">Перейти к рубежу</span></div></div>
+      <div class="body" style="height:100%"><div class="doc">
+        <div class="toc">
+          <div class="t">разделы · 7</div>
+          <div class="it d on"><i>✓</i>1 · Цель стадии</div>
+          <div class="it d"><i>✓</i>2 · Критерии</div>
+          <div class="it d"><i>✓</i>3 · Состав блоков</div>
+          <div class="it d"><i>✓</i>4 · Зависимости</div>
+          <div class="it w" data-w="risk"><i></i>5 · Риски<span class="n">ждёт</span></div>
+          <div class="it w" data-w="budget"><i></i>6 · Бюджет<span class="n">ждёт</span></div>
+          <div class="it w" data-w="sign"><i></i>7 · Переход<span class="n">ждёт вас</span></div>
+          <div class="pg"><div class="l"><span>заполнено</span><b>4 из 7</b></div><div class="ticks"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="on"></i><i class="on"></i><i></i></div></div>
+        </div>
+        <div class="paper">
+          <h2>Карта блоков уровня L1</h2><div class="meta">стадия 2 из 5 · оркестратор · версия 6 · вчера 22:40</div>
+          <h4><span class="num">1</span>Цель стадии</h4>
+          <p>Разложить продукт на <b>87 задач</b> с зависимостями и довести <b>15 предпосылок</b> до первого живого прохода. Стадия закончена, когда рубеж открыт и подписан.</p>
+          <h4><span class="num">2</span>Критерии успеха и провала</h4>
+          <ul><li><b>Успех:</b> до рубежа 0 предпосылок; полный прогон зелёный на финальных байтах; одно независимое ревью.</li><li><b>Провал:</b> задача возвращается третий круг подряд без решения владельца; живой проход встаёт на первом вызове.</li></ul>
+          <h4><span class="num">3</span>Состав блоков</h4>
+          <p>Движок (41), договоры и стыки (19), перенос метода (12), производительность (9), очередь и окружение (6). Полный список — на карте.</p>
+          <h4><span class="num">5</span>Риски <span class="wait" data-w="risk">ждёт · 2 из 5</span></h4>
+          <p>Описаны три: повторы блока дорожают мультипликативно; цена тестов — в исторических чтениях; лимиты подписок на рубеже. Не заполнены «что делаем» у двух.</p>
+          <h4><span class="num">6</span>Бюджет <span class="wait" data-w="budget">ждёт · факт без сметы</span></h4>
+          <p>Израсходовано <b>14,2 %</b> недели Claude и <b>31 $</b> Codex. Смета на остаток стадии не задана.</p>
+          <h4><span class="num">7</span>Переход <span class="wait" data-w="sign">ждёт вашей подписи</span></h4>
+          <p>Следующая стадия — <b>рубеж: первый живой проход</b>.</p>
+        </div>
+      </div></div>
+    </section>
+  </div>
+  <div class="cap"><span>17 · документ стадии · разделы и текст · версии / паспорт / «ждёт» — карточками</span><span>1280 × 860</span></div>
+  <div class="hint-bar"><span>клик по «ждёт» в тексте или слева · «версии · 7» и «доделать» в шапке · «перейти к рубежу» — два шага</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (p-doc): 7 разделов (dsec×7) — слева и в тексте; 3 места «ждёт» — метки в тексте и в оглавлении, каждая с карточкой; «Версии · 7» → карточка («Сравнить с v5»); «Доделать» → карточка со списком недоделанного; «Перейти» и «Перейти так» → поток перехода (шаг 1 показывает, что не доделано, и даёт оба пути); «Паспорт · стадия» → чип.</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+(function(){
+  const {kv,blk,acts,tl}=HX;
+  const W={risk:['Раздел 5 · Риски','не заполнено «что делаем» у двух рисков из пяти',[['риск 4','Живой проход упрётся в лимит Codex на первом часу'],['риск 5','Ревьюер недоступен (фильтр формулировок)'],['чего не хватает','действие и владелец у каждого'],['кто может доделать','оркестратор — черновик · вы — подтверждаете']]],
+    budget:['Раздел 6 · Бюджет','есть факт, нет сметы на остаток стадии',[['факт','14,2 % недели Claude · 31 $ Codex'],['осталось задач','3 в работе · 0 до рубежа'],['чего не хватает','смета на живой проход'],['предложение','+1,4 % по среднему (0,13 % на влитую)']]],
+    sign:['Раздел 7 · Переход','ждёт вашей подписи',[['куда','рубеж: первый живой проход'],['условие','разделы 5 и 6 доделаны или «перейти так»'],['кто подписывает','только вы'],['что запустит','подготовку прохода — не сам проход']]]};
+  const wcard=k=>{const w=W[k]; return '<div class="from">раскрытая карточка · не доделано</div><div class="ch"><h3>'+w[0]+'</h3></div><div class="csub">'+w[1]+'</div>'+blk('что именно',kv(w[2]))+acts(k==='sign'?[['Перейти к подписи','p','data-close'],'Спросить оркестратора']:[['Доделать — поручить оркестратору','p','data-close'],'Заполнить самому','Оставить как есть']);};
+  HX.bind('[data-w]',el=>wcard(el.dataset.w),{w:640,h:400,hide:false});
+  HX.bind('#vers',()=>'<div class="from">раскрытая карточка · версии</div><div class="ch"><h3>Версии документа · 7</h3></div><div class="csub">каждая правка — новая версия; сравнить можно любые две</div>'+
+    [['v6','текущая · добавлены риски 1–3','оркестратор · вчера 22:40',1],['v5','подписана вами · состав блоков 87','вы · 27.09',2],['v4','план заморожен, 15 до прогона','оркестратор · 27.09'],['v3','четыре стыка до H1','оркестратор · 27.09'],['v2','первая карта, 72 задачи','оркестратор · 24.09'],['v1','черновик из разговора','оркестратор · 22.09'],['v0','дискавери · вход','вы · 20.09']].map(([v,s,w,f])=>'<div class="vrow"><b>'+v+'</b><span>'+s+'</span><span class="m">'+w+'</span><span>'+(f===1?'<span class="pill acc">текущая</span>':f===2?'<span class="btn sm">Сравнить с v5</span>':'<span class="btn sm ghost">Открыть</span>')+'</span></div>').join(''),{w:720,h:520,hide:false});
+  HX.bind('#fix',()=>'<div class="from">раскрытая карточка · доделать</div><div class="ch"><h3>Что не доделано · 3 места</h3></div><div class="csub">можно поручить оркестратору всё сразу — он заполнит черновик и вернёт вам на подтверждение</div>'+blk('список',tl([['c','разд. 5','Риски — действие у двух из пяти','≈ 10 минут оркестратора'],['c','разд. 6','Бюджет — смета на остаток','из среднего по влитым'],['x','разд. 7','Переход — ваша подпись','только вы']]))+acts([['Доделать 5 и 6 — поручить','p','data-close'],'Открыть раздел 5','Отмена']),{w:640,h:440,hide:false});
+  HX.bind('#next',()=>'<div class="from">переход к рубежу · шаг <span data-stepn>1</span> из 2</div><div class="steps"><i class="on"></i><i></i></div>'+
+    '<div data-step="1" class="fh"><h4>Документ не доделан в двух местах</h4><p>Перейти можно и так — тогда недоделанное переедет в следующую стадию открытым.</p>'+blk('что останется открытым',kv([['раздел 5','2 риска без действия'],['раздел 6','смета на живой проход'],['последствие','рубеж начнётся без сметы — расход только по факту']]))+'<div class="ft"><span class="btn ghost" data-close>Отмена</span><span class="btn" data-close>Доделать</span><span class="btn" data-go="2" style="margin-left:auto">Перейти так</span><span class="btn p" data-go="2">Перейти</span></div></div>'+
+    '<div data-step="2" class="fh"><h4>Подписать переход</h4><p>Стадия «Карта блоков L1» закрывается версией 6; начинается «Рубеж».</p>'+blk('что произойдёт',kv([['закрывается','стадия 2 · версия 6 становится подписанной'],['начинается','стадия 3 · подготовка живого прохода'],['не запускается','сам проход — отдельное решение'],['подписывает','Serge · 05.10.2026']]))+'<div class="ft"><span class="btn ghost" data-go="1">Назад</span><span class="btn p" data-close style="margin-left:auto">Подписать и перейти</span></div></div>',{w:660,h:460,hide:false});
+  HX.passport({title:'Документ стадии',where:'OMG › Документ стадии › L1',what:'Договор о стадии: цель, критерии, состав, зависимости, риски, бюджет, переход',why:'Одна истина о том, что считается «стадия закончена»',when:'Правится оркестратором, подписывается вами при переходе',expect:'Все семь разделов заполнены до подписи',risk:'Перейти «так» — недоделанное уедет в следующую стадию',ok:'Подписанная версия без меток «ждёт»',fail:'Стадия закрыта, а критерии провала не описаны'});
+})();
+</script>
+</body></html>

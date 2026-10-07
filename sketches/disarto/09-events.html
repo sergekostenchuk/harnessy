@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 09 · События · плашки · пустые состояния</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .g3{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:16px;align-items:start}
+  .co{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--panel);position:relative;margin-bottom:8px}
+  .co::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:1px;background:var(--c)}
+  .co svg{width:15px;height:15px;stroke:var(--c);fill:none;stroke-width:1.8;stroke-linecap:round;flex:none;margin-top:1px}
+  .co .k{font:9.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--c);display:block;margin-bottom:2px}.co p{margin:0;font-size:12.5px;color:var(--ink2)}.co p b{color:var(--ink);font-weight:500}
+  .co.info{--c:#7aa2f7}.co.tip{--c:var(--ok)}.co.warn{--c:var(--warn)}.co.err{--c:var(--bad)}
+  .feed .grp{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);display:flex;justify-content:space-between;padding:10px 2px 6px;border-bottom:1px solid var(--line);margin-bottom:6px}
+  .ev{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:7px 2px;font-size:12.5px;color:var(--ink2)}.ev .o{width:16px;height:16px;border-radius:50%;background:var(--raised);border:1px solid var(--line2);display:grid;place-items:center;font-size:9px;color:var(--ink3);margin-top:1px}
+  .ev b{color:var(--ink);font-weight:500}.ev .chg{font:11px var(--mono);color:var(--ink2);background:var(--raised);border-radius:5px;padding:1px 6px}.ev .chg i{color:var(--ink3);font-style:normal}.ev .t{font:10px var(--mono);color:var(--ink3);margin-left:6px}
+  .ev q{display:block;margin:6px 0 0;padding:6px 10px;border-left:2px solid var(--line2);color:var(--ink2);font-size:12px;quotes:none}
+  .ev.new{background:var(--accent-soft);border-radius:8px;margin:0 -6px;padding:7px 8px}
+  .ffoot{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--line);margin-top:6px}
+  .empty{border:1px dashed var(--line2);border-radius:12px;padding:18px 16px;text-align:left}
+  .empty h4{margin:0 0 4px;font-size:14px;font-weight:500}.empty p{margin:0 0 12px;color:var(--ink2);font-size:12.5px}
+  .step{display:flex;align-items:center;gap:10px;height:40px;padding:0 10px;border:1px solid var(--line2);border-radius:9px;background:var(--panel);margin-bottom:6px;font-size:12.5px}.step .n{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center;font:600 10px var(--mono);color:var(--ink3)}.step .chev{margin-left:auto;color:var(--ink3)}.step.d .n{background:var(--ok);border-color:var(--ok);color:#fff}
+  .up{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:12px 14px}
+  .f{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}.f:last-of-type{border-bottom:0}
+  .f small{display:block;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-top:3px}.f .bar{width:120px}.f.bad b{color:var(--bad)}.f.bad small{color:var(--bad)}
+  .toast{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--raised);box-shadow:0 12px 30px rgba(0,0,0,.5);font-size:12.5px}.toast .ok{color:var(--ok)}
+  .mcap{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 09 · события · плашки · пустые состояния</h1>
+  <p class="sub">Плашки INFO / TIP / WARNING / ERROR — тон только цветом иконки и микроподписи, без заливки, слева короткая риска. Лента событий: группы по сущности, строка «было → стало», цитата, футер. Пустое состояние = список следующих шагов. Ошибка — в строке, кнопка отражает общее состояние. Тост внизу по центру. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app free" style="height:auto">
+    <div class="g3">
+      <div>
+        <div class="mcap">плашки · 4 тона</div>
+        <div class="co info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><div><span class="k">info</span><p>Воркер 2 переведён на <b>Sonnet</b> до сброса Codex в 19:58. Ход подорожает на ≈ 0,3 % недели Claude.</p></div></div>
+        <div class="co tip"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 00-3 11v3h6v-3a6 6 0 00-3-11zM10 21h4"/></svg><div><span class="k">tip</span><p>Чтение и проверку отдавайте Sonnet, придумывать — Opus: <b>в 4 раза дешевле</b> при той же точности на описях.</p></div></div>
+        <div class="co warn"><svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg><div><span class="k">warning · лимит</span><p>Codex <b>94 %</b> за 5 часов. При 100 % ревьюер встанет; fallback на Opus включён.</p></div></div>
+        <div class="co err"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg><div><span class="k">error · прогон</span><p>D8.4e: <b>3 из 72</b> проверок упали на шаге «integration». Повтор не считается — нужна правка класса, не прогона.</p></div></div>
+        <div class="mcap" style="margin-top:18px">тост · внизу по центру · 4 с</div>
+        <div class="toast"><span class="ok">✓</span>Данные карты обновлены · 3 с назад</div>
+      </div>
+
+      <div class="feed">
+        <div class="mcap">лента событий · по сущности · было → стало</div>
+        <div class="grp"><span>H1.5 · прогон</span><span>сегодня</span></div>
+        <div class="ev new"><span class="o">⟳</span><div><b>Воркер 1</b> перешёл к шагу <span class="chg"><i>4</i> → 5 · e2e</span><span class="t">2 мин</span></div></div>
+        <div class="ev"><span class="o">✓</span><div><b>typecheck</b> починен <span class="chg">упал → прошёл</span><span class="t">15:24</span><q>«причина — старый импорт history/proofs; правка класса, не обход» — воркер 1</q></div></div>
+        <div class="grp"><span>D8.4d · ревью</span><span>вчера</span></div>
+        <div class="ev"><span class="o">◆</span><div><b>Ревьюер</b> вернул круг 3 <span class="chg">принять → вернуть</span><span class="t">23:10</span><q>«смешение исходной области и лестницы; четвёртый круг — Fable» — №2141</q></div></div>
+        <div class="ev"><span class="o">S</span><div><b>Вы</b> изменили исполнителя <span class="chg">Devin → Fable</span><span class="t">23:14</span></div></div>
+        <div class="grp"><span>Подписки</span><span>вчера</span></div>
+        <div class="ev"><span class="o">!</span><div><b>Codex</b> лимит <span class="chg">78 % → 94 %</span><span class="t">14:02</span></div></div>
+        <div class="ffoot"><span class="btn sm ghost">Отметить прочитанным</span><span class="btn sm" style="margin-left:auto">Назначить агента ▾</span></div>
+      </div>
+
+      <div>
+        <div class="mcap">пустое состояние · следующие шаги</div>
+        <div class="empty"><h4>Проект пуст — четыре шага до первой задачи</h4><p>Ничего не запускалось. Начните с плана: без него агентам нечего делать.</p>
+          <div class="step d"><span class="n">1</span>Папка подключена · ~/HARNESS<span class="chev">✓</span></div>
+          <div class="step"><span class="n">2</span>Создать план из разговора<span class="chev">›</span></div>
+          <div class="step"><span class="n">3</span>Добавить агента на место «воркер»<span class="chev">›</span></div>
+          <div class="step"><span class="n">4</span>Подключить подписку · Claude или Codex<span class="chev">›</span></div>
+        </div>
+        <div class="mcap" style="margin-top:18px">ошибка в строке · кнопка отражает общее</div>
+        <div class="up">
+          <div class="f"><div>договор D8.4e.md<small>12 кб · загружено</small></div><div class="bar"><i style="width:100%"></i></div></div>
+          <div class="f"><div>опись-путей.json<small>3 кб · загружено</small></div><div class="bar"><i style="width:100%"></i></div></div>
+          <div class="f bad"><div><b>state-copy.sqlite</b><small>199 мб · больше лимита 20 мб</small></div><div class="bar"><i class="bad" style="width:100%"></i></div></div>
+          <div class="f"><div>тесты-W1-W4.ts<small>41 кб · идёт</small></div><div class="bar"><i class="acc" style="width:60%"></i></div></div>
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center"><span class="mono">3 из 4 · 1 отклонён</span><span class="btn sm p" style="margin-left:auto">Загружается…</span></div>
+        </div>
+      </div>
+    </div>
+  </div><div class="cap"><span>09 · плашки · лента событий · пустое состояние · ошибка в строке · тост</span><span>компоненты</span></div></div>
+</div></body></html>

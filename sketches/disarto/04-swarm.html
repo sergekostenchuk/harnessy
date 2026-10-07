@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 04 · Стая · живой: полотно · карточки · раскрытая карточка · канал</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .o{width:14px;height:14px;border-radius:50%;flex:none}.o.run{background:radial-gradient(circle at 35% 35%,#e2b47c,#c27a34 55%,#7a3414)}.o.idle{background:var(--line2)}.o.think{background:radial-gradient(circle,#c27a34 30%,transparent 32%),conic-gradient(var(--accent) 0 30%,transparent 30%)}.o.done{background:var(--ok)}.o.need{background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);animation:p 1.6s ease-in-out infinite}.o.off{background:transparent;border:2px solid var(--bad);box-sizing:border-box}
+  @keyframes p{50%{box-shadow:0 0 0 7px rgba(194,122,52,.08)}}
+  /* виды и переходы */
+  .views{position:relative;height:100%;min-height:0}
+  .view{position:absolute;inset:0;padding:18px 20px;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .22s ease,transform .22s ease}
+  .view.on{opacity:1;transform:none;pointer-events:auto}
+  .view.zoom{transition:opacity .35s ease,transform .35s cubic-bezier(.2,.7,.2,1)}
+  /* полотно стаи */
+  .board{position:relative;height:100%;border:1px solid var(--line);border-radius:14px;background:var(--panel);background-image:radial-gradient(circle at 1px 1px,#1f1f23 1px,transparent 1px);background-size:22px 22px;overflow:hidden;transform-origin:50% 50%;transition:transform .35s cubic-bezier(.2,.7,.2,1),opacity .3s}
+  .board svg{position:absolute;inset:0;width:100%;height:100%}.board path{fill:none;stroke:var(--line2);stroke-width:1.5}.board path.on{stroke:#4a4a52}.board path.hot{stroke:var(--accent);stroke-width:2;stroke-dasharray:5 5;animation:ants 1.2s linear infinite}
+  @keyframes ants{to{stroke-dashoffset:-20}}
+  .seat{position:absolute;width:224px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:10px 12px;cursor:pointer;transition:transform .15s,border-color .15s,box-shadow .15s;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .seat:hover{transform:translateY(-2px);border-color:#4a4a52}.seat.need{border-color:rgba(194,122,52,.6)}.seat.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),0 10px 30px rgba(0,0,0,.35)}
+  .seat .h{display:flex;align-items:center;gap:8px;margin-bottom:5px}.seat .h b{font-weight:500;font-size:13px}.seat .role{margin-left:auto;font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .seat .md{font-size:11.5px;color:var(--ink2);margin-bottom:7px}
+  .seat .f{display:flex;align-items:center;gap:8px;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}.seat .f .ticks{flex:1}.seat .f .t{margin-left:auto}.seat .f .t.hot{color:var(--accent)}
+  .you{position:absolute;left:28px;top:300px;display:flex;flex-direction:column;align-items:center;gap:6px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.you .av{width:34px;height:34px;font-size:13px}
+  .waits{position:absolute;left:14px;bottom:14px;width:300px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:10px 12px;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+  .waits .t{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;display:flex;justify-content:space-between}
+  .waits .w{display:grid;grid-template-columns:52px 1fr auto;gap:8px;align-items:center;font-size:12px;color:var(--ink2);padding:4px 0}.waits .w .lb{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}.waits .w .bar{height:4px}.waits .w b{font:10.5px var(--mono);color:var(--ink2);font-weight:500}
+  .waits .hint{font-size:11px;color:var(--ink3);margin-top:6px;line-height:1.4}
+  .strip{position:absolute;right:14px;top:14px;display:flex;gap:14px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);background:var(--raised);border:1px solid var(--line2);border-radius:999px;padding:6px 12px}.strip b{color:var(--ink2);font-weight:500}
+  /* карточки */
+  .wrap{max-width:960px;margin:0 auto}
+  .over{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .win{border:1px solid var(--line2);border-radius:14px;background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-height:190px;cursor:pointer;transition:border-color .15s,transform .15s}.win:hover{border-color:#4a4a52;transform:translateY(-2px)}.win.focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .win .h{display:flex;align-items:center;gap:9px}.win .h b{font-weight:500;font-size:14px}.win .h .role{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-left:auto}
+  .win .msg{font-size:12.5px;color:var(--ink2);line-height:1.5;flex:1}.win .msg b{color:var(--ink);font-weight:500}
+  .win .f{display:flex;align-items:center;gap:10px;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}.win .f .ticks{flex:1}
+  .win .standby{flex:1;display:grid;place-items:center;color:var(--ink3);font:10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;border:1px dashed var(--line2);border-radius:10px;min-height:60px}
+  .sum{display:flex;gap:18px;align-items:center;margin:0 0 16px;font:10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.sum b{color:var(--ink2);font-weight:500}.sum .sp{flex:1}
+  /* страница агента */
+  .crumb{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink3);margin-bottom:14px}.crumb a{color:var(--ink2);cursor:pointer}.crumb a:hover{color:var(--ink)}.crumb b{color:var(--ink);font-weight:500}
+  .head2{display:flex;align-items:center;gap:14px;margin-bottom:18px}.head2 .orb{width:40px;height:40px}.head2 h3{margin:0;font-size:20px;font-weight:500}.head2 small{display:block;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-top:3px}.head2 .r{margin-left:auto;display:flex;gap:6px}
+  .goal{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:12px 16px;font-size:13px;color:var(--ink2);margin-bottom:12px}.goal b{color:var(--ink);font-weight:500}
+  .two{display:grid;grid-template-columns:1.2fr 1fr;gap:12px}
+  .blk{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:14px 16px}.blk .t{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px;display:flex;justify-content:space-between}
+  .tl{display:flex;flex-direction:column}.tl>div{display:grid;grid-template-columns:18px 52px 1fr;gap:10px;align-items:start;padding:7px 0;font-size:12.5px;color:var(--ink2);position:relative}.tl>div::before{content:"";position:absolute;left:8px;top:22px;bottom:-8px;width:1px;background:var(--line2)}.tl>div:last-child::before{display:none}
+  .tl i{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center;font-size:9px;color:#fff;margin-top:1px;background:var(--panel);font-style:normal}.tl .d i{background:var(--ok);border-color:var(--ok)}.tl .c i{border:2px solid var(--accent);border-right-color:transparent}.tl .x i{background:var(--bad-fill,#a3304b);border-color:var(--bad-fill,#a3304b)}
+  .tl span{font:10.5px var(--mono);color:var(--ink3);padding-top:2px}.tl b{color:var(--ink);font-weight:500;display:block}.tl small{display:block;color:var(--ink3);font-size:11px}
+  .tools{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.tool{border:1px solid var(--line2);border-radius:8px;padding:8px 10px;background:var(--raised);font-size:12.5px;display:flex;justify-content:space-between;align-items:center}.tool small{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.tool.use{border-color:rgba(194,122,52,.5)}.tool.use small{color:var(--accent)}
+  .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.stat div{border-top:1px solid var(--line);padding-top:8px}.stat b{display:block;font-size:16px;font-weight:500}.stat small{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .load{margin-top:12px}.load .lbl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink2);margin-bottom:5px}
+  /* канал */
+  .chan{display:flex;align-items:center;padding:28px 10px 10px;border:1px solid var(--line2);border-radius:14px;background:var(--panel);margin-bottom:12px}
+  .chan .nd{display:flex;flex-direction:column;align-items:center;gap:8px;font:10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);min-width:110px}.chan .nd .o{width:26px;height:26px}.chan .nd small{color:var(--ink3);font-size:9.5px}
+  .chan .ln{flex:1;height:0;border-top:2px solid var(--line2);position:relative;margin:0 4px 26px}.chan .ln.on{border-color:var(--ok)}.chan .ln.dash{border-top-style:dashed;border-color:var(--bad-fill,#a3304b)}
+  .chan .ln .q{position:absolute;left:50%;top:-12px;transform:translateX(-50%);font:9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);background:var(--panel);padding:0 6px;white-space:nowrap}.chan .ln.on .q{color:var(--ok)}.chan .ln.dash .q{color:var(--bad)}
+  .msgs{border:1px solid var(--line2);border-radius:14px;background:var(--panel);overflow:hidden}
+  .m{display:grid;grid-template-columns:52px 150px 1fr 60px;gap:12px;align-items:center;padding:11px 16px;border-bottom:1px solid var(--line);font-size:12.5px}.m:last-child{border-bottom:0}.m.head{padding:8px 16px;background:var(--raised);font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .m .n{font:10.5px var(--mono);color:var(--ink3)}.m .who{color:var(--ink2)}.m .who b{color:var(--ink);font-weight:500}.m .tx{color:var(--ink2)}.m .tx b{color:var(--ink);font-weight:500}.m .t{font:10.5px var(--mono);color:var(--ink3);text-align:right}.m.new{background:var(--accent-soft)}
+  .seg span{cursor:pointer}
+  /* раскрытая карточка поверх экрана */
+  .ovl{position:absolute;inset:0;z-index:20;background:rgba(6,6,8,.55);opacity:0;pointer-events:none;transition:opacity .25s}
+  .ovl.on{opacity:1;pointer-events:auto}
+  .panel{position:absolute;border:1px solid var(--line2);border-radius:14px;background:var(--panel);box-shadow:0 30px 80px rgba(0,0,0,.65);overflow:hidden;transition:left .34s cubic-bezier(.2,.7,.2,1),top .34s cubic-bezier(.2,.7,.2,1),width .34s cubic-bezier(.2,.7,.2,1),height .34s cubic-bezier(.2,.7,.2,1),border-color .2s}
+  .panel.open{border-color:#3a3a42}
+  .panel .inner{opacity:0;transition:opacity .18s;padding:20px 22px;width:840px}
+  .panel.open .inner{opacity:1;transition-delay:.16s}
+  .panel .x{position:absolute;right:14px;top:12px;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--ink3);cursor:pointer;font-size:16px}.panel .x:hover{background:var(--raised);color:var(--ink)}
+  .panel .from{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px}
+  .hint-bar{display:flex;gap:16px;justify-content:center;margin:12px 0 0;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 04 · стая · живой</h1>
+  <p class="sub">Первый экран — полотно стаи как в текущем прототипе (места и связи: оркестратор → воркеры и ресёрчер → ревьюер и хранитель; «горячая» связь — кто ждёт вас), в разбираемом стиле. Переключатель сверху: <b>Стая · Карточки · Канал</b>. Клик по месту или карточке — карточка <b>раскрывается поверх экрана</b> (вырастает из той, по которой кликнули, фон приглушается); × / клик мимо / Esc — схлопывается обратно. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app" id="app">
+    <aside class="side">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg><span class="b">3</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg></div>
+      <div class="nav on"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg><span class="b">!</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg></div>
+      <div class="foot"><div class="nav"><span class="ring"><i></i></span></div><div class="nav"><span class="av">S<i></i></span></div></div>
+    </aside>
+    <section class="main">
+      <div class="top"><b>Стая · OMG</b><span class="st" id="topst"><i></i>6 мест · 4 работают · 1 ждёт вас</span>
+        <div class="r"><span class="seg" id="seg"><span class="on" data-v="board">Стая</span><span data-v="cards">Карточки</span><span data-v="chan">Канал</span><span data-v="seats">Места</span><span data-v="cmp">Сравнение</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span><span class="btn sm" id="addseat" style="cursor:pointer">+ место</span></div></div>
+      <div class="views">
+
+        <!-- вид: полотно -->
+        <div class="view on" id="v-board">
+          <div class="board" id="board">
+            <svg viewBox="0 0 1180 700" preserveAspectRatio="none">
+              <path class="on" d="M300 120 C 360 120, 360 70, 420 70"/>
+              <path class="on" d="M300 120 C 360 120, 360 230, 420 230"/>
+              <path d="M300 120 C 360 120, 360 390, 420 390"/>
+              <path class="on" d="M644 70 C 710 70, 710 120, 780 120"/>
+              <path class="on" d="M644 230 C 710 230, 710 300, 780 300"/>
+              <path class="hot" d="M780 150 C 560 150, 420 520, 300 160"/>
+              <path d="M76 330 C 150 330, 200 160, 300 150" class="hot"/>
+            </svg>
+            <div class="strip"><span><b>4</b> работают</span><span><b>1</b> думает</span><span><b>1</b> свободно</span><span>канал <b style="color:var(--ok)">в норме</b></span></div>
+            <div class="you"><span class="av">S<i></i></span>вы</div>
+            <div class="seat" data-a="orch" style="left:76px;top:70px"><div class="h"><span class="o run"></span><b>Оркестратор</b><span class="role">orch</span></div><div class="md">Opus 5.5 · усилие высокое</div><div class="f"><span>H1.5 · шаг 4/7</span><span class="t">ведёт прогон</span></div></div>
+            <div class="seat" data-a="w1" style="left:420px;top:20px"><div class="h"><span class="o run"></span><b>Воркер 1</b><span class="role">worker</span></div><div class="md">Opus 5.5 · правит сам</div><div class="f"><div class="ticks thin"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div><span class="t">integration · 12 мин</span></div></div>
+            <div class="seat sel" data-a="w2" style="left:420px;top:180px"><div class="h"><span class="o run"></span><b>Воркер 2</b><span class="role">worker</span></div><div class="md">Sonnet 5.5 · с Codex, лимит</div><div class="f"><div class="ticks thin"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div><span class="t">W5 · 14 мин</span></div></div>
+            <div class="seat" data-a="res" style="left:420px;top:340px"><div class="h"><span class="o idle"></span><b>Ресёрчер</b><span class="role">research</span></div><div class="md">Qwen 3 Coder · ключ API</div><div class="f"><span>место свободно</span><span class="t">0 задач</span></div></div>
+            <div class="seat need" data-a="rev" style="left:780px;top:70px"><div class="h"><span class="o need"></span><b>Ревьюер</b><span class="role">review</span></div><div class="md">Astra · Codex · порог 9</div><div class="f"><span>D8.4d · круг 2</span><span class="t hot">ждёт вас · 40 мин</span></div></div>
+            <div class="seat" data-a="keep" style="left:780px;top:250px"><div class="h"><span class="o done"></span><b>Хранитель</b><span class="role">keeper</span></div><div class="md">Sonnet 5.5 · каждая стадия</div><div class="f"><span>W4 · 0 замечаний</span><span class="t">ждёт W5</span></div></div>
+            <div class="waits"><div class="t"><span>кто кого ждёт</span><span>3</span></div>
+              <div class="w"><span class="lb">вас</span><div class="bar"><i class="acc" style="width:100%"></i></div><b>ревьюер · 40 мин</b></div>
+              <div class="w"><span class="lb">лимит</span><div class="bar"><i class="bad" style="width:100%"></i></div><b>воркер 2 · до 19:58</b></div>
+              <div class="w"><span class="lb">прогон</span><div class="bar"><i style="width:57%"></i></div><b>хранитель · W5</b></div>
+              <div class="hint">Самый дорогой простой сейчас — ваш ответ ревьюеру: за ним слияние H1.5 и рубеж.</div></div>
+          </div>
+        </div>
+
+        <!-- вид: карточки -->
+        <div class="view" id="v-cards"><div class="wrap">
+          <div class="sum"><span><b>6</b> мест</span><span><b>4</b> работают</span><span><b>1</b> думает</span><span><b>1</b> свободно</span><span class="sp"></span><span>канал <b style="color:var(--ok)">в норме</b> · 2 в очереди</span></div>
+          <div class="over">
+            <div class="win" data-a="orch"><div class="h"><span class="o run"></span><b>Оркестратор</b><span class="role">orch · opus</span></div><div class="msg">Ведёт прогон H1.5. <b>→ вам:</b> напомнит о подписи M0 в 18:40.</div><div class="f">шаг 4/7<div class="ticks thin"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div></div></div>
+            <div class="win" data-a="w1"><div class="h"><span class="o run"></span><b>Воркер 1</b><span class="role">worker · opus</span></div><div class="msg">Гоняет <b>integration</b>: 118 из 140, падений нет.</div><div class="f">H1.5 · 4/7<div class="ticks thin"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div></div></div>
+            <div class="win focus" data-a="w2"><div class="h"><span class="o run"></span><b>Воркер 2</b><span class="role">worker · sonnet</span></div><div class="msg">Пишет тест <b>W5</b> — повтор завершения через K при гонке. Прогон после W6.</div><div class="f">D8.4e · 4/6<div class="ticks thin"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></div></div></div>
+            <div class="win" data-a="rev"><div class="h"><span class="o need"></span><b>Ревьюер</b><span class="role">review · astra</span></div><div class="msg">Ждёт вашу подпись M0 по D8.4d — <b>40 мин</b>. Круг 2 прочитан.</div><div class="f">круг 2 · 2/3<div class="ticks thin"><i class="on"></i><i class="on"></i><i></i></div></div></div>
+            <div class="win" data-a="keep"><div class="h"><span class="o done"></span><b>Хранитель</b><span class="role">keeper · sonnet</span></div><div class="msg">W4 проверена, 0 замечаний. <b>Ждёт W5.</b></div><div class="f">готово<div class="ticks thin"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i></div></div></div>
+            <div class="win" data-a="res"><div class="h"><span class="o idle"></span><b>Ресёрчер</b><span class="role">research · qwen</span></div><div class="standby">место свободно</div><div class="f">0 задач</div></div>
+          </div>
+        </div></div>
+
+        <!-- вид: канал -->
+        <div class="view" id="v-chan"><div class="wrap">
+          <div class="chan">
+            <div class="nd"><span class="o run"></span>оркестратор<small>opus</small></div><div class="ln on"><span class="q">in sync</span></div>
+            <div class="nd"><span class="o run"></span>воркер 2<small>sonnet</small></div><div class="ln"><span class="q">2 в очереди</span></div>
+            <div class="nd"><span class="o need"></span>ревьюер<small>astra</small></div><div class="ln dash"><span class="q">нет связи · 9 мин</span></div>
+            <div class="nd"><span class="o off"></span>devin<small>сессия</small></div>
+          </div>
+          <div class="msgs">
+            <div class="m head"><span>№</span><span>кто → кому</span><span>о чём</span><span>когда</span></div>
+            <div class="m new"><span class="n">3214</span><span class="who"><b>ревьюер</b> → воркер 2</span><span class="tx"><b>Эра брифа om-brief/v2</b>: сохранённые brief-v1 выводятся прежними — принять.</span><span class="t">2 мин</span></div>
+            <div class="m"><span class="n">3213</span><span class="who"><b>воркер 2</b> → ревьюер</span><span class="tx">Сдача D8.4e, круг 4: 14 путей, тесты W1–W4, негативные на подделку run-id.</span><span class="t">11 мин</span></div>
+            <div class="m"><span class="n">3212</span><span class="who"><b>оркестратор</b> → вам</span><span class="tx"><b>Нужно решение:</b> воркер 2 упёрся в лимит Codex — перевести на Sonnet или ждать 19:58?</span><span class="t">40 мин</span></div>
+            <div class="m"><span class="n">3211</span><span class="who"><b>хранитель</b> → оркестратор</span><span class="tx">W4 проверена, 0 замечаний, коммит 479b307 подписан.</span><span class="t">1 ч 05</span></div>
+            <div class="m"><span class="n">3210</span><span class="who"><b>оркестратор</b> → воркер 1</span><span class="tx">После integration — e2e, затем отчёт ревьюеру; кольцо импортов не трогать.</span><span class="t">2 ч 11</span></div>
+          </div>
+        </div></div>
+        <!-- вид: места (экран «Места и роли» прототипа) -->
+        <div class="view" id="v-seats"><div class="wrap">
+          <div class="sum"><span><b>7</b> мест</span><span><b>6</b> заняты</span><span><b>1</b> свободно</span><span class="sp"></span><span>состав <b style="color:var(--accent)">не подписан</b> · 1 изменение</span></div>
+          <div class="lst" style="--cols:120px 1.2fr 1.5fr 110px 16px">
+            <div class="li head"><span>роль</span><span>модель · аккаунт</span><span>права одной строкой</span><span>состояние</span><span></span></div>
+            <div class="li" data-seat="orch"><span><b>Оркестратор</b></span><div>Opus 5.5 · высокое<small>claude max · место 1</small></div><span>выдаёт задачи · не пишет код · спрашивает стоп-случаи</span><span class="m">работает</span><span class="chev">›</span></div>
+            <div class="li" data-seat="w1"><span><b>Воркер 1</b></span><div>Opus 5.5<small>claude max · место 2</small></div><span>правит сам в своей копии · прогон через очередь</span><span class="m">работает</span><span class="chev">›</span></div>
+            <div class="li" data-seat="w2"><span><b>Воркер 2</b></span><div>Sonnet 5.5<small>с codex · лимит до 19:58</small></div><span>правит сам в worktree · push запрещён</span><span class="m hot">на запасной</span><span class="chev">›</span></div>
+            <div class="li" data-seat="rev"><span><b>Ревьюер</b></span><div>Astra · ultra<small>codex pro</small></div><span>только чтение · отвечает в канал · порог 9</span><span class="m hot">ждёт вас</span><span class="chev">›</span></div>
+            <div class="li" data-seat="keep"><span><b>Хранитель</b></span><div>Sonnet 5.5<small>claude max</small></div><span>только чтение · проверяет каждую стадию и коммит</span><span class="m">готово</span><span class="chev">›</span></div>
+            <div class="li" data-seat="res"><span><b>Ресёрчер</b></span><div>Qwen 3 Coder<small>ключ api</small></div><span>только чтение · веб и репозиторий</span><span class="m">свободно</span><span class="chev">›</span></div>
+            <div class="li dim" data-seat="dev"><span><b>Воркер (Devin)</b></span><div>Devin<small>сессия · нет связи</small></div><span>правит сам в своей среде · задачи Q4, Q5, H2.0</span><span class="m bad">нет связи</span><span class="chev">›</span></div>
+          </div>
+          <div class="note" style="margin-top:14px;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--panel);font-size:12.5px;color:var(--ink2)"><span class="mono" style="color:var(--accent)">● состав не подписан</span><span>воркер 2: Codex → Sonnet (предложение оркестратора)</span><span class="btn sm ghost" style="margin-left:auto">Сохранить как шаблон</span><span class="btn sm">Принять предложение</span><span class="btn sm p">Подписать состав</span></div>
+          <div class="note-bar"><span>аккаунты и лимиты — в «Подключениях» (11) · права — в карточке места</span><span>у роли права и папка; смена модели прав не меняет</span></div>
+        </div></div>
+
+        <!-- вид: сравнение (экран «Исполнители» прототипа) -->
+        <div class="view" id="v-cmp"><div class="wrap">
+          <div class="filters"><span class="chip on">все задачи</span><span class="chip">тяжёлый код</span><span class="chip">чтение и описи</span><span class="chip">ревью</span><span class="sp"></span><span class="btn sm" id="ab" style="cursor:pointer">A/B на одной задаче</span></div>
+          <div class="lst" style="--cols:1.3fr 110px 110px 100px 1.4fr 16px">
+            <div class="li head"><span>исполнитель</span><span>кругов до принятия</span><span>цена на задачу</span><span>время</span><span>годится для</span><span></span></div>
+            <div class="li" data-ex="fable"><div><b>Fable 5.1</b><small>claude · 9 задач</small></div><span class="m" style="color:var(--ok)">1,3</span><span class="m">1,9 %</span><span class="m">2 ч 10</span><span>стыки, третьи возвраты, договоры</span><span class="chev">›</span></div>
+            <div class="li" data-ex="opus"><div><b>Opus 5.5</b><small>claude · 21 задача</small></div><span class="m">1,8</span><span class="m">1,1 %</span><span class="m">1 ч 40</span><span>тяжёлый код, прогоны</span><span class="chev">›</span></div>
+            <div class="li" data-ex="sonnet"><div><b>Sonnet 5.5</b><small>claude · 34 задачи</small></div><span class="m">2,1</span><span class="m" style="color:var(--ok)">0,3 %</span><span class="m">55 мин</span><span>средний код, чтение, проверка</span><span class="chev">›</span></div>
+            <div class="li" data-ex="astra"><div><b>Astra</b><small>codex · 18 задач</small></div><span class="m">2,4</span><span class="m">подписка</span><span class="m">1 ч 20</span><span>ревью договоров, перенос метода</span><span class="chev">›</span></div>
+            <div class="li dim" data-ex="devin"><div><b>Devin</b><small>сессия · 5 задач</small></div><span class="m bad">3,2</span><span class="m">11 ACU</span><span class="m">3 ч 05</span><span>изолированные задачи без стыков</span><span class="chev">›</span></div>
+          </div>
+          <div class="note" style="margin-top:14px;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--panel);font-size:12.5px;color:var(--ink2)"><span class="mono">рекомендация</span><span>S1.4 (наблюдатель чтений, стыки) — <b style="color:var(--ink);font-weight:500">Fable</b>: меньше кругов важнее цены</span><span class="btn sm ghost" style="margin-left:auto">Выдать Sonnet</span><span class="btn sm p">Выдать Fable</span></div>
+        </div></div>
+      </div>
+      <div class="ovl" id="ovl"><div class="panel" id="panel"><div class="inner"><div class="from" id="a-from">раскрытая карточка · стая</div><span class="x" id="x">×</span>
+          <div class="head2"><span class="orb"></span><div><h3 id="a-h">Воркер 2</h3><small id="a-sub">worker · sonnet 5.5 · задача D8.4e · владелец: оркестратор</small></div><span class="pill acc" id="a-pill" style="margin-left:14px">работает</span><div class="r"><span class="btn sm">⏸ Пауза</span><span class="btn sm">Сменить модель</span><span class="btn sm p">Написать</span></div></div>
+          <div class="goal" id="a-goal"><b>Цель:</b> закрыть D8.4e кругом 4 — владение завершением и CAS run при завершении через K; сдать ревьюеру до 19:30.</div>
+          <div class="two">
+            <div class="blk"><div class="t"><span>ход шагов</span><span id="a-cnt">4 из 6</span></div><div class="tl" id="a-steps"></div></div>
+            <div><div class="blk"><div class="t"><span>инструменты</span><span>3 в работе</span></div>
+              <div class="tools"><div class="tool use">Edit<small>in use · 41</small></div><div class="tool use">Bash · тесты<small>in use · 12</small></div><div class="tool use">git<small>in use · 3</small></div><div class="tool">Браузер<small>idle</small></div><div class="tool">MCP asvh<small>idle · 6</small></div><div class="tool">Ревью-канал<small>idle · 2</small></div></div>
+              <div class="stat"><div><b>48</b><small>действий сегодня</small></div><div><b>1,2M</b><small>токенов</small></div><div><b>0,3 %</b><small>недели claude</small></div></div>
+              <div class="load"><div class="lbl"><span>контекст</span><b>38 % · 76k / 200k</b></div><div class="bar"><i style="width:38%"></i></div></div></div></div>
+          </div>
+        </div></div></div>
+    </section>
+  </div>
+  <div class="cap"><span>04 · живой · стая → карточки → канал · клик по месту/карточке = раскрытая карточка поверх экрана</span><span>1280 × 860</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (team · roles · p-exec): «Роли и места» → вкладка «Места» (7 мест, права в карточке места: может сам / обязан спросить / запрещено); «Каталог ролей» (5) → шаг 1 потока «+ место»; «Аккаунты под рукой» → «Подключения» (11), здесь шаг 2 потока; «Принять предложение · Сохранить как шаблон · Подписать состав» — на вкладке и в потоке; «Кто кого ждёт» — на полотне; «Исполнители» → вкладка «Сравнение», «A/B на одной задаче» и «Что ещё измеряем» — карточка A/B; «Выдать Fable · Выдать Sonnet · Сменить · Оставить · Запустить A/B для S1.4» — на местах. «Стоп всем» — в меню полотна (не нарисовано).</div>
+  <div class="hint-bar"><span>стая · карточки · канал · места · сравнение (клавиши 1–5) · клик раскрывает карточку · «+ место» — поток в три шага</span></div></div>
+</div>
+<script>
+(function(){
+  const A={
+    orch:{name:'Оркестратор',sub:'orch · opus 5.5 · прогон H1.5 · владелец: вы',pill:['работает','acc'],goal:'<b>Цель:</b> довести прогон H1.5 до сдачи ревьюеру и напомнить вам о подписи M0 после прогона.',cnt:'4 из 7',steps:[['d','14:02','Сборка · 12 с',''],['d','14:03','Typecheck · 41 с',''],['d','14:04','Unit 3410/3410',''],['x','15:10','Typecheck упал → починен 15:24','старый импорт history/proofs'],['c','16:01','Integration · идёт','118 из 140'],['','—','E2E',''],['','—','Отчёт ревьюеру','']]},
+    w1:{name:'Воркер 1',sub:'worker · opus 5.5 · задача H1.5 · владелец: оркестратор',pill:['работает','acc'],goal:'<b>Цель:</b> прогнать H1.5 целиком: выбор старым влитым кодом → исполнение новым; без обходов под прогон.',cnt:'4 из 7',steps:[['d','14:02','Сборка',''],['d','14:03','Typecheck',''],['d','14:04','Unit 3410/3410',''],['d','15:24','Typecheck починен','правка класса, не обход'],['c','16:01','Integration · 118/140','падений нет'],['','—','E2E',''],['','—','Кольцо импортов','']]},
+    w2:{name:'Воркер 2',sub:'worker · sonnet 5.5 · задача D8.4e · владелец: оркестратор',pill:['работает','acc'],goal:'<b>Цель:</b> закрыть D8.4e кругом 4 — владение завершением и CAS run при завершении через K; сдать ревьюеру до 19:30.',cnt:'4 из 6',steps:[['d','09:12','Договор прочитан','14 путей, таблица строк К1–К18'],['d','09:31','Опись','3 файла, 2 теста соседей'],['d','10:05','Тесты W1–W4 написаны',''],['x','10:40','Прогон упёрся в лимит Codex','14:37 переведён на Sonnet, продолжил'],['c','сейчас','W5 — негативный тест на подделку run-id','идёт 14 мин'],['','—','W6 · прогон · сдача ревьюеру','']]},
+    res:{name:'Ресёрчер',sub:'research · qwen 3 coder · место свободно',pill:['свободно',''],goal:'<b>Цель:</b> нет задачи. Место держит ключ Qwen; дать задачу — из плана или из чата.',cnt:'0',steps:[['','—','Нет шагов — место свободно','']]},
+    rev:{name:'Ревьюер',sub:'review · astra (codex) · ultra · порог 9',pill:['ждёт вас','warn'],goal:'<b>Цель:</b> принять или вернуть D8.4d круг 2; ждёт вашу подпись M0 уже 40 минут.',cnt:'2 из 3',steps:[['d','22:50','Прочитал сдачу круга 2',''],['d','23:05','Сверил таблицу К1–К18 с кодом','расхождений нет'],['c','23:10','Ждёт подпись M0','вы · 40 мин']]},
+    keep:{name:'Хранитель',sub:'keeper · sonnet 5.5 · каждая стадия и коммит',pill:['готово','ok'],goal:'<b>Цель:</b> проверять каждую стадию воркера 2 до ревьюера; W4 принята, ждёт W5.',cnt:'4 из 6',steps:[['d','09:40','W1 проверена',''],['d','10:02','W2 проверена',''],['d','10:30','W3 проверена',''],['d','16:12','W4 проверена · 0 замечаний','коммит 479b307 подписан'],['','—','W5',''],['','—','W6','']]}
+  };
+  const views=['board','cards','chan']; let cur='board';
+  const ovl=document.getElementById('ovl'), panel=document.getElementById('panel'), main=document.querySelector('.main'); let fromRect=null, fromEl=null;
+  const seg=document.getElementById('seg'), board=document.getElementById('board');
+  function show(v){
+    if(ovl.classList.contains('on')) closeSheet(true); if(window.HX) HX.close();
+    const from=document.getElementById('v-'+cur), to=document.getElementById('v-'+v);
+    from.classList.remove('on'); to.classList.add('on'); cur=v;
+    seg.querySelectorAll('span').forEach(s=>s.classList.toggle('on',s.dataset.v===v));
+    document.getElementById('topst').innerHTML=v==='chan'?'<i></i>канал в норме · 2 в очереди':v==='seats'?'<i></i>7 мест · состав не подписан':v==='cmp'?'<i></i>5 исполнителей · по 87 задачам':'<i></i>6 мест · 4 работают · 1 ждёт вас';
+  }
+  function rectIn(el){ const r=el.getBoundingClientRect(), m=main.getBoundingClientRect(), s=(m.width/main.offsetWidth)||1; return {l:(r.left-m.left)/s,t:(r.top-m.top)/s,w:r.width/s,h:r.height/s}; }
+  function setRect(r){ panel.style.left=r.l+'px'; panel.style.top=r.t+'px'; panel.style.width=r.w+'px'; panel.style.height=r.h+'px'; }
+  function openSheet(el){
+    fromEl=el; fromRect=rectIn(el); panel.style.transition='none'; setRect(fromRect); panel.classList.remove('open');
+    document.getElementById('a-from').textContent='раскрытая карточка · '+(cur==='board'?'стая':'карточки');
+    ovl.classList.add('on'); el.style.visibility='hidden';
+    requestAnimationFrame(()=>{ panel.style.transition=''; const m={width:main.offsetWidth,height:main.offsetHeight}, W=884, H=Math.min(m.height-60, 560);
+      setRect({l:(m.width-W)/2,t:Math.max(30,(m.height-H)/2),w:W,h:H}); panel.classList.add('open'); });
+  }
+  function closeSheet(fast){
+    if(!fromEl) return;
+    panel.classList.remove('open');
+    if(fast){ ovl.classList.remove('on'); fromEl.style.visibility=''; fromEl=null; return; }
+    setRect(fromRect); ovl.classList.remove('on');
+    const el=fromEl; setTimeout(()=>{ el.style.visibility=''; },340); fromEl=null;
+  }
+  function openAgent(id,el){
+    const a=A[id]; document.getElementById('a-h').textContent=a.name; document.getElementById('a-sub').textContent=a.sub;
+    const p=document.getElementById('a-pill'); p.textContent=a.pill[0]; p.className='pill '+a.pill[1];
+    document.getElementById('a-goal').innerHTML=a.goal; document.getElementById('a-cnt').textContent=a.cnt;
+    document.getElementById('a-steps').innerHTML=a.steps.map(([k,t,b,s])=>'<div class="'+k+'"><i>'+(k==='d'?'✓':k==='x'?'!':'')+'</i><span>'+t+'</span><div><b>'+b+'</b>'+(s?'<small>'+s+'</small>':'')+'</div></div>').join('');
+    document.querySelectorAll('.seat').forEach(e=>e.classList.toggle('sel',e.dataset.a===id)); document.querySelectorAll('.win').forEach(e=>e.classList.toggle('focus',e.dataset.a===id));
+    openSheet(el);
+  }
+  seg.addEventListener('click',e=>{ const s=e.target.closest('span[data-v]'); if(s) show(s.dataset.v); });
+  document.querySelectorAll('.seat,.win').forEach(el=>el.addEventListener('click',()=>openAgent(el.dataset.a,el)));
+  document.getElementById('x').addEventListener('click',()=>closeSheet());
+  ovl.addEventListener('click',e=>{ if(e.target===ovl) closeSheet(); });
+  addEventListener('keydown',e=>{ if(e.key==='1')show('board'); if(e.key==='2')show('cards'); if(e.key==='3')show('chan'); if(e.key==='4')show('seats'); if(e.key==='5')show('cmp'); if(e.key==='Escape')closeSheet(); });
+})();
+</script>
+<script src="app.js"></script>
+<script>
+(function(){
+  const {tl,kv,blk,acts}=HX;
+  const S={
+    orch:['Оркестратор','Opus 5.5 · высокое · claude max, место 1',['выдавать и принимать задачи','писать в канал и вам','запускать пробу движка'],['живой проход','расход больше 5 % недели за ход','смена состава'],['править код','push, публикация, платёж','снос данных вне рабочей копии'],'~/OMG · только чтение + канал','Sonnet 5.5 · при лимите — спросить вас'],
+    w1:['Воркер 1','Opus 5.5 · claude max, место 2',['править код в своей копии','запускать тесты через очередь','коммитить в свою ветку'],['отход от договора','новая зависимость','правка общего движка'],['push','merge в om/module','секреты и доступы'],'/tmp/omg-h15 · своя копия','Astra (Codex) → Sonnet 5.5'],
+    w2:['Воркер 2','Sonnet 5.5 · с Codex, лимит до 19:58',['править код в worktree','запускать тесты через очередь'],['отход от договора','правка чужих тестов'],['push','снос данных','установка ПО на машину'],'worktree d84e · своя ветка','вернуть на Codex после сброса'],
+    rev:['Ревьюер','Astra · ultra · codex pro',['читать код и договор','отвечать в канал','ставить оценку и возврат'],['третий возврат подряд — к вам'],['править код','запускать прогоны'],'~/OMG · только чтение','Opus 5.5 · если молчит 60 с'],
+    keep:['Хранитель','Sonnet 5.5 · claude max',['читать стадию и коммит','подписывать стадию'],['расхождение с договором — оркестратору'],['править код','менять план'],'~/OMG · только чтение','Kimi K2.5'],
+    res:['Ресёрчер','Qwen 3 Coder · ключ api',['читать репозиторий и веб','писать опись и отчёт в ~/REPORTS'],['платные источники'],['править код','писать в канал без запроса'],'~/OMG · только чтение · веб','Kimi K2.5 → Ollama'],
+    dev:['Воркер (Devin)','Devin · сессия lydian-cowbell · нет связи 9 мин',['править код в своей среде','сдавать в канал'],['всё, что касается стыков'],['push в om/module','задачи с графом пересечений'],'своя среда Devin','нет — задачи ждут']
+  };
+  const seat=k=>{const s=S[k]; const li=a=>'<ul>'+a.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+    return '<div class="from">раскрытая карточка · место</div><div class="ch"><h3>'+s[0]+'</h3></div><div class="csub">'+s[1]+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">'+blk('может сам',li(s[2]))+blk('обязан спросить',li(s[3]))+blk('запрещено всегда',li(s[4]))+'</div>'+
+    '<div class="two eq" style="margin-top:12px">'+blk('папка и модель',kv([['папка',s[5]],['запасная модель',s[6]],['смена модели','прав не меняет']]))+
+    blk('свобода по умолчанию','<div class="opt"><div>Что спрашивать<small>для этого места; стоп-случаи — всегда</small></div><span class="seg"><span data-pick>всё</span><span class="on" data-pick>стоп-случаи</span><span data-pick>только сообщать</span></span></div><div class="opt"><div>Заместитель на ночь может решать за это место</div><span class="tog on"></span></div>')+'</div>'+
+    acts([['Сохранить','p','data-close'],'Сменить модель','Освободить место']);};
+  HX.bind('.li[data-seat]',el=>seat(el.dataset.seat),{h:590});
+  HX.bind('#addseat',()=>'<div class="from">добавить место · шаг <span data-stepn>1</span> из 3</div><div class="steps"><i class="on"></i><i></i><i></i></div>'+
+    '<div data-step="1" class="fh"><h4>Какая роль нужна</h4><p>Каталог ролей; у роли — права и папка, модель выбирается следующим шагом.</p><label class="pick on" data-pick>Воркер<small>пишет код в своей копии, сдаёт ревьюеру</small></label><label class="pick" data-pick>Ревьюер<small>только чтение, оценка и возврат</small></label><label class="pick" data-pick>Ресёрчер<small>чтение и веб, отчёты</small></label><label class="pick" data-pick>Хранитель<small>проверка каждой стадии</small></label><label class="pick" data-pick>Тестер<small>прогоны, только чтение кода</small></label><div class="ft"><span class="btn ghost" data-close>Отмена</span><span class="btn p" data-go="2" style="margin-left:auto">Дальше</span></div></div>'+
+    '<div data-step="2" class="fh"><h4>Какой моделью</h4><p>Из подключённых аккаунтов; лимиты видны сразу.</p><label class="pick on" data-pick>Claude · Sonnet 5.5<small>подписка max · неделя 62 % · дёшево для среднего кода</small></label><label class="pick" data-pick>Claude · Opus 5.5<small>подписка max · дороже, меньше кругов</small></label><label class="pick" data-pick>Qwen 3 Coder<small>ключ api · $41,20 · чтение и описи</small></label><label class="pick" data-pick>Codex · Astra<small>лимит 94 % до 19:58 — сейчас не советуем</small></label><div class="ft"><span class="btn ghost" data-go="1">Назад</span><span class="btn p" data-go="3" style="margin-left:auto">Дальше</span></div></div>'+
+    '<div data-step="3" class="fh"><h4>Подписать состав</h4><p>Новое место начинает работать после подписи; до неё — черновик.</p>'+blk('что меняется',kv([['добавляется','Воркер 3 · Sonnet 5.5'],['папка','worktree · своя ветка'],['права','как у воркера · push запрещён'],['состав','7 → 8 мест']]))+'<div class="ft"><span class="btn ghost" data-go="2">Назад</span><span class="btn ghost" data-close>Сохранить как шаблон</span><span class="btn p" data-close style="margin-left:auto">Подписать состав</span></div></div>',{w:640,h:560,hide:false});
+  const E={fable:['Fable 5.1','claude · 9 задач за 14 дней',[['кругов до принятия','1,3 · лучший'],['цена на задачу','1,9 % недели'],['время до сдачи','2 ч 10'],['возвратов третьего круга','0 из 9']],'Стыки и задачи после третьего возврата: D8.4d (круги 4–5), D8.4e, S1.1, E2.2.','Дорог; общая квота с воркером карты — беречь.'],
+    opus:['Opus 5.5','claude · 21 задача',[['кругов до принятия','1,8'],['цена на задачу','1,1 %'],['время до сдачи','1 ч 40'],['возвратов третьего круга','2 из 21']],'Тяжёлый код и прогоны: R2–R5, LP3, LP5, MP2.','На задачах со стыками уступает Fable по кругам.'],
+    sonnet:['Sonnet 5.5','claude · 34 задачи',[['кругов до принятия','2,1'],['цена на задачу','0,3 % · лучшая'],['время до сдачи','55 мин'],['возвратов третьего круга','3 из 34']],'Средний код, чтение, проверка, описи: E4.1, H1.2, S1.2, Q2, Q2.1.','На многомерных правилах исхода — возвраты.'],
+    astra:['Astra','codex · 18 задач',[['кругов до принятия','2,4'],['цена на задачу','подписка'],['время до сдачи','1 ч 20'],['ошибки связи','3,1 %']],'Ревью договоров, перенос метода в движок: MP1–MP3.','Лимиты 5 часов; фильтр cyber_policy на отдельных формулировках.'],
+    devin:['Devin','сессия · 5 задач',[['кругов до принятия','3,2 · худший'],['цена на задачу','11 ACU'],['время до сдачи','3 ч 05'],['возвратов третьего круга','2 из 5']],'Изолированные задачи без стыков: Q4, Q5.','Смешение исходной области и лестницы (D8.4c).']};
+  const ex=k=>{const e=E[k]; return '<div class="from">раскрытая карточка · исполнитель</div><div class="ch"><h3>'+e[0]+'</h3></div><div class="csub">'+e[1]+'</div><div class="two eq">'+blk('метрики · 14 дней',kv(e[2]))+'<div>'+blk('где силён','<p>'+e[3]+'</p>')+blk('где слаб','<p>'+e[4]+'</p>')+'</div></div>'+acts([['Выдать задачу S1.4','p','data-close'],'Сменить на месте','Оставить как есть']);};
+  HX.bind('.li[data-ex]',el=>ex(el.dataset.ex),{h:470});
+  HX.bind('#ab',()=>'<div class="from">раскрытая карточка · A/B</div><div class="ch"><h3>A/B на одной задаче</h3></div><div class="csub">одна задача — два исполнителя в отдельных копиях; принимается лучший результат, второй — в отчёт</div>'+
+    '<div class="two eq">'+blk('последний A/B · R5',kv([['Fable','1 круг · 2,0 % · принят №2479'],['Opus','2 круга · 1,3 % · возврат №2471'],['вывод','на заморозке снимков Fable точнее']]))+blk('что ещё измеряем','<ul><li>сколько вопросов задал до кода</li><li>сколько путей закрыл из описи</li><li>сколько тестов соседей обновил</li><li>сколько раз упёрся в лимит</li></ul>')+'</div>'+acts([['Запустить A/B для S1.4','p','data-close'],'Сменить пару','Оставить']),{h:420,hide:false});
+  HX.passport({title:'Стая',where:'OMG › Команда › Стая',what:'Кто на каком месте, что делает сейчас, кто кого ждёт и чем исполнители отличаются',why:'Видеть простой и узкое место команды одним взглядом',when:'Состояние мест — живое; сравнение — за 14 дней',expect:'Нет мест «ждёт вас» дольше 15 минут; канал in sync',risk:'Смена модели на ходу; права места — в его карточке',ok:'Все места заняты делом, связь есть',fail:'Место молчит без причины или два места ждут друг друга'});
+})();
+</script>
+</body></html>

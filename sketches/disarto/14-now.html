@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 14 · Сейчас · живой</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  .kind{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;background:var(--raised);border:1px solid var(--line2);color:var(--ink2);white-space:nowrap}
+  .kind.acc{color:var(--accent);background:var(--accent-soft);border-color:transparent}.kind.bad{color:var(--bad);background:var(--bad-soft);border-color:transparent}.kind.ok{color:var(--ok);background:var(--ok-soft);border-color:transparent}
+  .yn{display:grid;grid-template-columns:1fr 1fr;gap:10px}.yn div{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--ink2);background:var(--panel)}.yn small{display:block;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px}.yn .y small{color:var(--ok)}.yn .n small{color:var(--warn)}
+  .idle-card{margin-top:14px;display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line2);border-radius:12px;background:var(--panel);font-size:12.5px;color:var(--ink2);cursor:pointer}.idle-card:hover{border-color:#4a4a52}.idle-card b{color:var(--ink);font-weight:500}.idle-card .chev{margin-left:auto;color:var(--ink3)}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 14 · сейчас · живой</h1>
+  <p class="sub">Три экрана прототипа («Чей ход», «Решения», «Пока вас не было») и отдельный экран подписи M0 — это одни и те же решения в разных срезах. Теперь: три вкладки, в строке — одна главная кнопка, всё остальное в <b>карточке решения поверх экрана</b>; подпись M0 — поток в два шага в той же карточке. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame"><div class="app">
+    <aside class="side">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+      <div class="nav on"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.700 19.400l1.2-6L3.400 9.300l6-.7z"/></svg><span class="b">2</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg><span class="b">!</span></div>
+      <div class="foot"><div class="nav"><span class="ring"><i></i></span></div><div class="nav"><span class="av">S<i></i></span></div></div>
+    </aside>
+    <section class="main">
+      <div class="top"><b>Сейчас</b><span class="st"><i style="background:var(--accent)"></i>2 ждут вас · самый долгий 40 мин</span>
+        <div class="r"><span class="seg" id="seg"><span class="on" data-v="turn">Чей ход</span><span data-v="week">Решения</span><span data-v="away">Пока вас не было</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
+      <div class="views">
+
+        <div class="view on" id="v-turn"><div class="wrap">
+          <div class="nums n3"><div><b class="acc">2</b><small>ждут вас</small></div><div><b>40 мин</b><small>самый долгий простой</small></div><div><b>H1.5 → рубеж</b><small>что стоит за вашим ответом</small></div></div>
+          <div class="lst" style="--cols:110px 1fr 90px 170px 16px">
+            <div class="li head"><span>кто просит</span><span>что</span><span>ждёт</span><span>главное действие</span><span></span></div>
+            <div class="li" data-d="m0"><span><span class="o need"></span>&nbsp; ревьюер</span><div><b>Подпись M0 по D8.4d</b><small>подпись · за ней слияние H1.5</small></div><span class="m hot">40 мин</span><span><span class="btn sm p">Открыть и подписать</span></span><span class="chev">›</span></div>
+            <div class="li" data-d="limit"><span><span class="o err"></span>&nbsp; оркестратор</span><div><b>Воркер 2 упёрся в лимит Codex</b><small>лимит · сброс в 19:58</small></div><span class="m hot">1 ч 20</span><span><span class="btn sm">Продолжить на Sonnet</span></span><span class="chev">›</span></div>
+            <div class="li" data-d="defects"><span><span class="o run"></span>&nbsp; воркер 1</span><div><b>Три класса дефектов — чинить все сейчас?</b><small>развилка · не блокирует прогон</small></div><span class="m">12 мин</span><span><span class="btn sm">Да, все три</span></span><span class="chev">›</span></div>
+            <div class="li dim" data-d="w4"><span><span class="o done"></span>&nbsp; хранитель</span><div><b>W4 проверена — подтвердить?</b><small>подтверждение · можно позже</small></div><span class="m">3 мин</span><span><span class="btn sm">Подтвердить</span></span><span class="chev">›</span></div>
+          </div>
+          <div class="note-bar"><span>строка = одно решение · остальные действия — в карточке</span><span>клавиши 1 · 2 · 3 — вкладки</span></div>
+        </div></div>
+
+        <div class="view" id="v-week"><div class="wrap">
+          <div class="filters"><span class="chip on">все · 6</span><span class="chip">ждут · 2</span><span class="chip">отложены · 1</span><span class="chip">решены · 3</span><span class="sp"></span><span class="mono">неделя 29.09 – 05.10</span></div>
+          <div class="lst" style="--cols:110px 1fr 150px 90px 16px">
+            <div class="li head"><span>вид</span><span>вопрос</span><span>источник</span><span>состояние</span><span></span></div>
+            <div class="li" data-d="m0"><span><span class="kind acc">подпись</span></span><div><b>Подписать M0 по D8.4d</b><small>ревьюер · сегодня 23:10</small></div><span class="m">канал №3212</span><span class="m hot">ждёт вас</span><span class="chev">›</span></div>
+            <div class="li" data-d="limit"><span><span class="kind bad">лимит</span></span><div><b>Воркер 2: Sonnet или ждать сброса</b><small>оркестратор · сегодня 14:37</small></div><span class="m">расход · codex</span><span class="m hot">ждёт вас</span><span class="chev">›</span></div>
+            <div class="li" data-d="defects"><span><span class="kind">развилка</span></span><div><b>Три класса дефектов — чинить все</b><small>воркер 1 · сегодня 16:20</small></div><span class="m">прогон H1.5</span><span class="m">отложено до 20:15</span><span class="chev">›</span></div>
+            <div class="li dim" data-d="w4"><span><span class="kind ok">подтверждение</span></span><div><b>W4 проверена · 0 замечаний</b><small>хранитель · сегодня 16:12</small></div><span class="m">коммит 479b307</span><span class="m">подтверждено</span><span class="chev">›</span></div>
+            <div class="li dim" data-d="mine"><span><span class="kind">чьё это</span></span><div><b>Правка README — моя задача или воркера?</b><small>воркер 1 · вчера 21:40</small></div><span class="m">задача Q2.1</span><span class="m">не моё — вернул</span><span class="chev">›</span></div>
+            <div class="li dim" data-d="restore"><span><span class="kind">стоп-случай</span></span><div><b>Снос данных вне рабочей копии</b><small>воркер 2 · 03.10 02:14</small></div><span class="m">стоп-случай №2</span><span class="m">оспорено</span><span class="chev">›</span></div>
+          </div>
+        </div></div>
+
+        <div class="view" id="v-away"><div class="wrap">
+          <div class="nums n3"><div><b class="ok">9</b><small>сделано без вас</small></div><div><b class="acc">2</b><small>ждут вашего решения</small></div><div><b>6 ч 12 мин</b><small>вас не было · с 03:00</small></div></div>
+          <div class="lst" style="--cols:70px 1fr 150px 150px 16px">
+            <div class="li head"><span>когда</span><span>что произошло</span><span>кто</span><span>нужно от вас</span><span></span></div>
+            <div class="li" data-d="m0"><span class="m">23:10</span><div><b>Ревьюер принял круг 2 D8.4d и ждёт подпись M0</b></div><span class="m">ревьюер</span><span><span class="btn sm p">Подписать</span></span><span class="chev">›</span></div>
+            <div class="li" data-d="limit"><span class="m">14:37</span><div><b>Воркер 2 упёрся в лимит Codex, переведён на Sonnet</b></div><span class="m">заместитель · Fable</span><span><span class="btn sm">Подтвердить</span></span><span class="chev">›</span></div>
+            <div class="li dim" data-d="w4"><span class="m">16:12</span><div><b>Хранитель проверил W4 · 0 замечаний</b></div><span class="m">хранитель</span><span class="m">ничего</span><span class="chev">›</span></div>
+            <div class="li dim" data-d="restore"><span class="m">02:14</span><div><b>Стоп-случай: попытка сноса вне рабочей копии — остановлено</b></div><span class="m">воркер 2</span><span><span class="btn sm">Восстановить</span></span><span class="chev">›</span></div>
+            <div class="li dim" data-d="defects"><span class="m">16:20</span><div><b>Воркер 1 нашёл три класса дефектов, продолжил прогон</b></div><span class="m">воркер 1</span><span class="m">можно позже</span><span class="chev">›</span></div>
+            <div class="li dim" data-d="mine"><span class="m">21:40</span><div><b>Правка README возвращена воркеру — не ваша задача</b></div><span class="m">заместитель · Fable</span><span class="m">ничего</span><span class="chev">›</span></div>
+          </div>
+          <div class="idle-card" id="idle"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span><b>Что будет, если ничего не делать</b> — H1.5 встанет на слиянии в 18:40, воркер 2 продолжит на Sonnet</span><span class="btn sm" style="margin-left:auto">Решать по порядку</span><span class="chev">›</span></div>
+        </div></div>
+      </div>
+    </section>
+  </div>
+  <div class="cap"><span>14 · сейчас · чей ход / решения / пока вас не было · карточка решения поверх</span><span>1280 × 860</span></div>
+  <div class="hint-bar"><span>клик по строке раскрывает решение · m0 — поток в два шага · × / клик мимо / esc</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (экраны now · dec · p-return · p-m0): было 32 кнопки на 4 экранах → все действия на месте: в строках обзора — по одной главной (8), в карточках — остальные: «Да, все три · Только один · Объясни · Продолжить на Sonnet · Ждать 19:58 · Отложить до 20:15 · Подтвердить · Оспорить · Это моё · Не моё — вернуть · Восстановить · Решать по порядку · Выйти в чат · Подписать и начать». Блоки «Что произойдёт после подписи» и «Чего НЕ произойдёт» — шаг 1 карточки M0; «Что дальше, если ничего не делать» — карточка из плашки; «Паспорт · решения» — чип в шапке.</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+(function(){
+  const {tl,kv,acts,blk}=HX;
+  const D={
+    limit:{kind:['лимит','bad'],q:'Воркер 2 упёрся в лимит Codex — продолжить на Sonnet или ждать?',who:'оркестратор · 14:37 · ждёт 1 ч 20',
+      ctx:'«Codex 94 % за 5 часов, сброс в 19:58. Воркер 2 стоит на шаге W5 задачи D8.4e. Sonnet закончит W5–W6 примерно за 40 минут, цена ≈ 0,3 % недели Claude.»',
+      y:'Воркер 2 продолжает сейчас; D8.4e сдаётся ревьюеру до 19:30; расход Claude +0,3 %.',n:'Простой до 19:58; сдача сдвигается на ~20:40; рубеж — на завтра.',
+      a:[['Продолжить на Sonnet','p'],'Ждать 19:58','Объясни','Отложить до 20:15'],
+      h:[['d','10:40','Прогон упёрся в лимит',''],['d','14:37','Оркестратор спросил вас',''],['c','сейчас','Ждёт решения','1 ч 20']]},
+    defects:{kind:['развилка',''],q:'Три класса дефектов — чинить все сейчас?',who:'воркер 1 · 16:20 · ждёт 12 мин',
+      ctx:'«Нашёл три класса: чтение следа через Proxy, область скана, однократная привязка. Все три — в движке; чинить класс, не прогон.»',
+      y:'+2 задачи в план (черновик), прогон H1.5 идёт дальше; цена ≈ 1,4 % недели.',n:'Чинится только блокирующий класс; два остаются в реестре наблюдений до аудита.',
+      a:[['Да, все три','p'],'Только один','Объясни','Отложить до 20:15'],
+      h:[['d','16:01','Integration идёт',''],['d','16:20','Воркер 1 задал вопрос',''],['c','сейчас','Ждёт решения','12 мин']]},
+    w4:{kind:['подтверждение','ok'],q:'W4 проверена хранителем — подтвердить?',who:'хранитель · 16:12',
+      ctx:'«W4: 0 замечаний, коммит 479b307 подписан. Жду W5.»',y:'Стадия закрыта, воркер 2 идёт к W5.',n:'Оспорить — W4 возвращается воркеру 2 с вашим замечанием.',
+      a:[['Подтвердить','p'],'Оспорить'],h:[['d','16:12','Хранитель проверил W4','0 замечаний']]},
+    mine:{kind:['чьё это',''],q:'Правка README — моя задача или воркера?',who:'воркер 1 · вчера 21:40',
+      ctx:'«README устарел после Q2.1. Править самому или это задача владельца?»',y:'Берёте на себя — задача уходит из очереди воркера.',n:'Возвращается воркеру как подзадача Q2.1.',
+      a:['Это моё',['Не моё — вернуть','p']],h:[['d','21:40','Вопрос задан',''],['d','21:52','Возвращено воркеру','заместитель · Fable']]},
+    restore:{kind:['стоп-случай','bad'],q:'Снос данных вне рабочей копии — остановлено',who:'воркер 2 · 03.10 02:14',
+      ctx:'«rm -rf ~/omg-live/run-bases — вне рабочей копии. Стоп-случай №2: снос или перезапись данных.»',y:'Восстановить из снимка 01:58 — данные вернутся, воркер 2 получит запрет на путь.',n:'Оставить как есть; случай остаётся в журнале оспоренным.',
+      a:[['Восстановить','p'],'Подтвердить','Оспорить'],h:[['x','02:14','Команда остановлена','стоп-случай №2'],['d','02:15','Заместитель оспорил',''],['c','—','Ждёт вашего взгляда','не срочно']]}
+  };
+  function decision(k,from){ const d=D[k];
+    return '<div class="from">раскрытая карточка · решение · '+from+'</div>'+
+      '<div class="ch"><span class="kind '+d.kind[1]+'">'+d.kind[0]+'</span><h3>'+d.q+'</h3></div><div class="csub">'+d.who+'</div>'+
+      '<div class="two"><div>'+blk('контекст · слова того, кто просит','<q>'+d.ctx+'</q>')+
+      '<div class="blk"><div class="t"><span>последствия</span></div><div class="yn"><div class="y"><small>если да</small>'+d.y+'</div><div class="n"><small>если нет</small>'+d.n+'</div></div></div></div>'+
+      '<div>'+blk('история',tl(d.h))+'<div class="decide"><div class="lbl">ваше решение</div>Одно нажатие — и решение уходит тому, кто просил.'+acts(d.a)+'</div></div></div>'; }
+  function m0(from){
+    return '<div class="from">раскрытая карточка · подпись · '+from+' · шаг <span data-stepn>1</span> из 2</div><div class="steps"><i class="on"></i><i></i></div>'+
+      '<div data-step="1" class="fh"><h4>Подпись M0 по D8.4d — что это запустит</h4><p>ревьюер · ждёт 40 мин · за подписью — слияние H1.5 и рубеж</p>'+
+        '<div class="two eq">'+blk('что произойдёт после подписи','<ul><li><b>D8.4d</b> считается принятой, круг 2 закрыт</li><li><b>H1.5</b> уходит в слияние в om/module</li><li>воркер 2 продолжает <b>D8.4e</b> на принятой основе</li><li>хранитель снимает наблюдение с D8.4d</li><li>в журнал — запись с вашей подписью и временем</li></ul>')+
+        blk('чего НЕ произойдёт','<ul><li>не будет push во внешний репозиторий</li><li>не запустится живой проход — это отдельное решение</li><li>не изменятся права ролей и бюджет</li><li>не закроется D8.4e — она сдаётся отдельно</li></ul>')+'</div>'+
+        '<div class="ft"><span class="btn ghost" data-close>Выйти в чат</span><span class="btn ghost" data-close>Отклонить с замечанием</span><span class="btn p" data-go="2" style="margin-left:auto">Дальше — к подписи</span></div></div>'+
+      '<div data-step="2" class="fh"><h4>Подписать и начать</h4><p>Подпись необратима для этого круга; отменить можно только новым решением.</p>'+
+        blk('что подписываете',kv([['документ','M0 · переход D8.4d → принята'],['круг','2 · таблица К1–К18 сверена, расхождений нет'],['ревьюер','Astra (Codex) · №3212'],['после подписи','слияние H1.5 · ≈ 18:40'],['подписывает','Serge · 05.10.2026']]))+
+        '<div class="ft"><span class="btn ghost" data-go="1">Назад</span><span class="btn ghost" data-close>Выйти в чат</span><span class="btn p" data-close style="margin-left:auto">Подписать и начать</span></div></div>'; }
+  const show=HX.views('#seg');
+  const viewName=()=>document.querySelector('#seg .on').textContent.toLowerCase();
+  HX.bind('.li[data-d]',el=>el.dataset.d==='m0'?m0(viewName()):decision(el.dataset.d,viewName()),el=>el.dataset.d==='m0'?{h:520}:{h:560});
+  HX.bind('#idle',()=>'<div class="from">раскрытая карточка · прогноз</div><div class="ch"><h3>Что будет, если ничего не делать</h3></div><div class="csub">прогноз на ближайшие 12 часов по текущим правилам делегирования</div>'+
+    blk('по порядку',tl([['c','18:40','H1.5 дойдёт до слияния и встанет','ждёт подпись M0'],['','19:58','Сбросится лимит Codex','воркер 2 вернётся на Codex, если подтвердите'],['','20:15','Вернётся отложенное решение о дефектах',''],['','09:00','Истечёт окно делегирования','заместитель перестанет решать за вас']]))+
+    '<div class="decide"><div class="lbl">самое дорогое</div>Подпись M0 — за ней слияние H1.5 и рубеж.'+acts([['Решать по порядку','p','data-close'],['Только подпись M0','','data-close']])+'</div>',{h:480,hide:false});
+  HX.passport({title:'Сейчас',where:'Раздел «Сейчас» · три вкладки',what:'Решения, которые ждут вас, решены за неделю и случились в ваше отсутствие',why:'Самый дорогой простой команды — ваш ответ; экран показывает только то, что без вас не двинется',when:'Обновляется при каждом новом вопросе; счётчик в рейке',expect:'Одно нажатие на строке — и команда идёт дальше',risk:'Решить не глядя — последствия «если да / если нет» в карточке',ok:'Очередь «ждут вас» пуста, простой < 15 мин',fail:'Решение висит дольше часа и держит слияние'});
+})();
+</script>
+</body></html>

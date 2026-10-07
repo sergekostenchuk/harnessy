@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru" data-skin="a">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Harnessy · вход</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Fraunces:opsz,wght@9..144,400;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#111113; --panel:#17171a; --line:#2a2a2f; --line2:#35353b; --ink:#ececf1; --ink2:#a3a3ab; --ink3:#6e6e77; --accent:#e2b65b; --accent-ink:#1a1a1a; --dot:236,236,241;
+          --font:"Inter",-apple-system,"Helvetica Neue",Arial,sans-serif; --head:var(--font); --mono:"JetBrains Mono","SF Mono",Menlo,monospace; --r:14px; --rs:10px; }
+  [data-skin="b"] { --font:"IBM Plex Sans",sans-serif; --head:var(--font); --r:8px; --rs:6px; --accent:#f0b64d; }
+  [data-skin="c"] { --bg:#f4f3f0; --panel:#fbfaf8; --line:#e4e1da; --line2:#d6d2c9; --ink:#1c1b19; --ink2:#5f5d58; --ink3:#9a978f; --accent:#b8862a; --accent-ink:#fff; --dot:28,27,25;
+                    --head:"Fraunces",Georgia,serif; --r:18px; --rs:12px; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; }
+  body { background:var(--bg); color:var(--ink); font:15px/1.5 var(--font); -webkit-font-smoothing:antialiased; }
+  .wrap { min-height:100dvh; display:grid; grid-template-columns:minmax(380px,520px) minmax(0,1fr); }
+  /* левая колонка — вход */
+  .form { position:relative; z-index:2; display:flex; flex-direction:column; justify-content:center; padding:40px 48px; background:var(--bg); border-right:1px solid var(--line); }
+  .mark { width:44px; height:44px; border-radius:12px; background:linear-gradient(160deg,#2b2b31,#141416); border:1px solid var(--line2); display:grid; place-items:center; margin-bottom:26px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+  [data-skin="c"] .mark { background:linear-gradient(160deg,#fff,#ebe8e1); box-shadow:0 10px 30px rgba(0,0,0,.08); }
+  .mark svg { width:22px; height:22px; stroke:var(--accent); fill:none; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
+  h1 { font:600 30px/1.15 var(--head); letter-spacing:-.01em; margin:0 0 10px; }
+  [data-skin="c"] h1 { font-weight:600; font-size:34px; }
+  .lead { color:var(--ink2); margin:0 0 26px; max-width:380px; }
+  .doors { display:grid; gap:10px; max-width:400px; }
+  .door { display:flex; align-items:center; justify-content:center; gap:10px; height:48px; border-radius:var(--rs); border:1px solid var(--line2); background:var(--panel); color:var(--ink); text-decoration:none; font-weight:500; font-size:15px; transition:border-color .15s, transform .1s, background .15s; }
+  .door:hover { border-color:var(--accent); } .door:active { transform:scale(.995); }
+  .door.p { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .door.p:hover { filter:brightness(1.06); }
+  .door svg { width:18px; height:18px; flex:none; }
+  .email-form, .code-form { display:grid; gap:10px; }
+  .email-in, .code-in { height:48px; border-radius:var(--rs); border:1px solid var(--line2); background:var(--panel); color:var(--ink); font:15px var(--font); padding:0 14px; outline:none; }
+  .email-in:focus, .code-in:focus { border-color:var(--accent); }
+  .code-in { font:500 24px var(--mono); letter-spacing:.2em; text-align:center; height:56px; }
+  .door[type=submit] { width:100%; cursor:pointer; font-family:var(--font); }
+  .or { display:flex; align-items:center; gap:10px; color:var(--ink3); font-size:12px; margin:4px 0; } .or::before, .or::after { content:""; flex:1; height:1px; background:var(--line); }
+  .hint { color:var(--ink2); font-size:13px; margin:0; } .hint a { color:var(--ink2); } .err { color:#e0655f; font-size:13px; margin:0; }
+  .legal { color:var(--ink3); font-size:12px; margin:18px 0 0; max-width:400px; } .legal a { color:var(--ink2); }
+  .foot { margin-top:auto; padding-top:40px; color:var(--ink3); font-size:13px; } .foot a { color:var(--ink); text-decoration:none; border-bottom:1px solid var(--line2); }
+  .alt { color:var(--ink3); font-size:12px; margin-top:14px; max-width:400px; } .alt summary { cursor:pointer; } .alt .tg { margin-top:10px; min-height:40px; }
+  .skins { position:absolute; top:18px; right:20px; display:flex; gap:4px; }
+  .skins button { width:26px; height:22px; border-radius:6px; border:1px solid var(--line2); background:transparent; color:var(--ink3); font:11px var(--mono); cursor:pointer; }
+  .skins button.on { color:var(--ink); border-color:var(--ink3); }
+  /* правая колонка — живой фон (Kiln) + сюжет (Payper) */
+  .visual { position:relative; overflow:hidden; background:var(--bg); }
+  .visual canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .cap { position:absolute; top:22px; right:26px; max-width:260px; text-align:right; font:11px/1.5 var(--mono); letter-spacing:.08em; color:var(--ink3); text-transform:uppercase; }
+  .hero { position:absolute; left:8%; right:8%; top:34%; transform:translateY(-50%); font:600 clamp(28px,4vw,54px)/1.1 var(--head); letter-spacing:-.015em; color:var(--ink); text-shadow:0 2px 30px rgba(0,0,0,.5); }
+  [data-skin="c"] .hero { text-shadow:none; }
+  .hero span { display:block; color:var(--ink2); font-weight:400; }
+  .story { position:absolute; left:8%; right:8%; bottom:52px; }
+  .slide { display:none; } .slide.on { display:block; animation:in .5s ease; }
+  @keyframes in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  .slide b { display:block; font:500 22px/1.2 var(--head); margin-bottom:8px; }
+  .slide p { margin:0; color:var(--ink2); max-width:520px; }
+  .ind { display:flex; gap:6px; margin-top:18px; } .ind i { width:18px; height:3px; border-radius:2px; background:var(--line2); transition:width .3s, background .3s; } .ind i.on { width:34px; background:var(--ink); }
+  @media (max-width:900px) {
+    .wrap { grid-template-columns:minmax(0,1fr); }
+    .visual { order:-1; height:38vh; min-height:260px; border-bottom:1px solid var(--line); }
+    .form { border-right:0; padding:28px 20px 32px; }
+    .hero { top:50%; font-size:clamp(24px,7vw,34px); }
+    .story, .cap { display:none; }
+    .foot { padding-top:28px; }
+  }
+  @media (prefers-reduced-motion:reduce) { .slide.on { animation:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="form">
+    <div class="skins" title="Облик"><button data-skin="a">A</button><button data-skin="b">B</button><button data-skin="c">C</button></div>
+    <div class="mark"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+    <h1>Войти в Harnessy</h1>
+    <p class="lead">Чат, план и команда агентов — в одном окне. Прототип закрытый: нового человека допускает владелец, остальным вход сразу.</p>
+    <div class="doors">%%DOORS%%</div>
+    %%ALT%%
+    <p class="legal">Входя, вы соглашаетесь с <a href="/terms.html">условиями</a> и <a href="/privacy.html">политикой конфиденциальности</a>. Запоминаем только имя, адрес и время входа.</p>
+    <div class="foot">Нет доступа или что-то не так? <a href="%%CONTACT%%" target="_blank" rel="noopener">Напишите владельцу →</a></div>
+  </section>
+  <section class="visual" aria-hidden="true">
+    <canvas id="dots"></canvas>
+    <div class="cap">проектируемый харнесс · прототип 26 экранов · три облика · живая карта проекта</div>
+    <div class="hero">Видно, где вы.<span>Что дальше. Кто работает.</span></div>
+    <div class="story">
+      <div class="slide on"><b>Чат → план → стая</b><p>Разговор вырастает в план, план — в карту с живым прогрессом, карта раздаёт работу агентам. Везде одна строка: где · что дальше · что ждёт вас.</p></div>
+      <div class="slide"><b>Решения — к вам, остальное — само</b><p>Стоп-случаи, лимиты и подписи приходят только когда нужны именно вы. Пульс, keepalive и «идёт» вас не будят.</p></div>
+      <div class="slide"><b>Любые модели — по подписке и по ключу</b><p>Claude, Codex, Kimi, свои ключи: остатки лимитов, даты оплат и цена хода — на одном экране, роли назначаются перетаскиванием.</p></div>
+      <div class="ind"><i class="on"></i><i></i><i></i></div>
+    </div>
+  </section>
+</div>
+<script>
+(function(){
+  // облик: как в прототипе (localStorage.skin), иначе по системной теме
+  const h=document.documentElement, btns=[...document.querySelectorAll('.skins button')];
+  let k='a'; try{ k=localStorage.getItem('skin')||(matchMedia('(prefers-color-scheme: light)').matches?'c':'a'); }catch(e){}
+  const apply=s=>{ h.dataset.skin=s; btns.forEach(b=>b.classList.toggle('on',b.dataset.skin===s)); try{localStorage.setItem('skin',s);}catch(e){} };
+  btns.forEach(b=>b.addEventListener('click',()=>apply(b.dataset.skin))); apply(k);
+
+  // сюжет: три слайда
+  const slides=[...document.querySelectorAll('.slide')], ind=[...document.querySelectorAll('.ind i')]; let i=0;
+  setInterval(()=>{ i=(i+1)%slides.length; slides.forEach((s,j)=>s.classList.toggle('on',j===i)); ind.forEach((d,j)=>d.classList.toggle('on',j===i)); }, 6000);
+
+  // живой точечный фон: сетка точек, яркость от трёх плывущих «пятен» (Kiln)
+  const cv=document.getElementById('dots'), cx=cv.getContext('2d'); let W=0,H=0,dpr=1,t0=performance.now();
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function size(){ const r=cv.parentElement.getBoundingClientRect(); dpr=Math.min(2,devicePixelRatio||1); W=r.width; H=r.height; cv.width=W*dpr; cv.height=H*dpr; cx.setTransform(dpr,0,0,dpr,0,0); }
+  addEventListener('resize',size); size();
+  const S=16;
+  function frame(now){
+    const t=(now-t0)/1000; const rgb=getComputedStyle(h).getPropertyValue('--dot').trim();
+    cx.clearRect(0,0,W,H);
+    const bl=[ [W*(.5+.32*Math.sin(t*.21)), H*(.45+.30*Math.cos(t*.17)), Math.min(W,H)*.42],
+               [W*(.35+.30*Math.cos(t*.13+1)), H*(.60+.28*Math.sin(t*.19+2)), Math.min(W,H)*.36],
+               [W*(.70+.22*Math.sin(t*.11+3)), H*(.30+.26*Math.cos(t*.23+1)), Math.min(W,H)*.30] ];
+    for(let y=S/2;y<H;y+=S){ for(let x=S/2;x<W;x+=S){
+      let v=0; for(const [bx,by,br] of bl){ const dx=x-bx,dy=y-by; const d=Math.sqrt(dx*dx+dy*dy)/br; v+=Math.max(0,1-d*d); }
+      v=Math.min(1,v*.75)+.05*Math.sin(x*.05+t)*Math.cos(y*.05-t*.7);
+      if(v<=.03) continue;
+      const r=.5+v*2.1; cx.fillStyle='rgba('+rgb+','+(0.10+v*.55).toFixed(3)+')'; cx.beginPath(); cx.arc(x,y,r,0,6.283); cx.fill();
+    } }
+    if(!reduce && !document.hidden) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame); document.addEventListener('visibilitychange',()=>{ if(!document.hidden) requestAnimationFrame(frame); });
+})();
+</script>
+</body>
+</html>

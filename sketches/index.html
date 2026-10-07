@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Эскизы экранов</title>
+<style>
+  :root { --ink:#222; --line:#555; --soft:#e9e9e9; --softer:#f4f4f4; --mark:#fff2b3; --warn:#ffd9a8; --ok:#d7f0d7; --bad:#ffd0d0; --note:#2a5bd7; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px 16px 64px; font:14px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; color:var(--ink); background:#fff; }
+  h1 { font-size:22px; margin:0 0 6px; }
+  h2 { font-size:17px; margin:40px 0 6px; }
+  p.lead { margin:0 0 18px; color:#444; max-width:900px; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:#444; margin-bottom:8px; }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .sw { width:14px; height:14px; border:1px solid var(--line); display:inline-block; }
+  .screen { border:2px solid var(--ink); background:#fff; max-width:980px; font-size:13px; }
+  .bar { display:grid; grid-template-columns:1.6fr 1.2fr 1.2fr 1fr 1.2fr; border-bottom:2px solid var(--ink); }
+  .bar div { padding:6px 8px; border-right:1px solid var(--line); background:var(--softer); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar div:last-child { border-right:0; }
+  .cols { display:grid; grid-template-columns:180px 1fr 300px; min-height:380px; }
+  .cols.two { grid-template-columns:180px 1fr; }
+  .side { border-right:1px solid var(--line); padding:8px; background:var(--softer); }
+  .main { padding:8px 10px; }
+  .right { border-left:1px solid var(--line); padding:8px 10px; background:#fff; }
+  .box { border:1px solid var(--line); padding:6px 8px; margin:6px 0; background:#fff; }
+  .box.soft { background:var(--soft); }
+  .box.mark { background:var(--mark); }
+  .box.warn { background:var(--warn); }
+  .box.ok { background:var(--ok); }
+  .box.bad { background:var(--bad); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .row > * { flex:1 1 auto; }
+  .chip { display:inline-block; border:1px solid var(--line); border-radius:10px; padding:0 7px; font-size:11px; background:#fff; white-space:nowrap; }
+  .btn { display:inline-block; border:1px solid var(--ink); padding:3px 9px; background:#fff; font-size:12px; white-space:nowrap; }
+  .btn.primary { background:var(--ink); color:#fff; }
+  .muted { color:#666; }
+  .h { font-weight:600; margin:8px 0 4px; }
+  .n { display:inline-block; min-width:18px; height:18px; line-height:18px; text-align:center; border-radius:50%; background:var(--note); color:#fff; font-size:11px; font-weight:700; margin-right:4px; }
+  .notes { max-width:980px; margin:8px 0 0; padding:0; list-style:none; color:#333; font-size:13px; }
+  .notes li { margin:3px 0; }
+  table { border-collapse:collapse; width:100%; font-size:12px; }
+  td, th { border:1px solid var(--line); padding:4px 6px; text-align:left; vertical-align:top; }
+  th { background:var(--softer); font-weight:600; }
+  .composer { border-top:2px solid var(--ink); padding:8px 10px; background:var(--softer); }
+  .composer .input { border:1px solid var(--line); background:#fff; padding:8px; color:#777; margin-bottom:6px; }
+  .lanes { display:grid; grid-template-columns:90px 1fr; gap:2px 6px; font-size:12px; }
+  .lane { height:16px; background:var(--soft); position:relative; }
+  .seg { position:absolute; top:0; bottom:0; }
+  .ladder { display:flex; gap:4px; }
+  .step { flex:1; border:1px solid var(--line); padding:4px; text-align:center; font-size:12px; }
+  .stage-doc h4 { margin:8px 0 2px; font-size:13px; }
+</style>
+</head>
+<body>
+<h1>Эскизы экранов — путь пользователя</h1>
+<p class="lead">Это каркасы, не дизайн: серые коробки — место элемента, текст — пример содержимого. Синие цифры — что элемент отвечает: <b>где · что · зачем · когда · что ожидаем · риски · успех/провал</b>. Один и тот же пример во всех экранах: проект OMG, задача H1.5, вечер.</p>
+<div class="legend">
+  <span><i class="sw" style="background:var(--mark)"></i> ждёт вас</span>
+  <span><i class="sw" style="background:var(--warn)"></i> сорвалось / лимит</span>
+  <span><i class="sw" style="background:var(--ok)"></i> пройдено (ставит проверка)</span>
+  <span><i class="sw" style="background:var(--soft)"></i> идёт / обычное</span>
+</div>
+
+<!-- ЭКРАН 1 -->
+<h2>1. «Сейчас» — то, что вы видите, открыв папку</h2>
+<div class="screen">
+  <div class="bar">
+    <div><span class="n">1</span>OMG · стадия L1 · задача H1.5</div>
+    <div><span class="n">2</span>Ждёт вас: 2 · старейшее 40 мин</div>
+    <div><span class="n">3</span>Идёт 3 · сорвалось 1</div>
+    <div><span class="n">4</span>Неделя 61 % · сброс пт 23:00</div>
+    <div><span class="n">5</span>С вашего визита: +3 влито, 1 возврат</div>
+  </div>
+  <div class="cols">
+    <div class="side">
+      <div class="h">Папки</div>
+      <div class="box">OMG <span class="chip">ждёт 2</span></div>
+      <div class="box">HARNESS</div>
+      <div class="box">Комната «принтер» <span class="chip muted">чат</span></div>
+      <div class="h">Команда</div>
+      <div class="box soft">Оркестратор · жив</div>
+      <div class="box soft">Воркер Sonnet · работает 12 мин</div>
+      <div class="box warn">Воркер Codex · лимит до 19:58</div>
+      <div class="box soft">Ревьюер · спит до вашего ответа</div>
+    </div>
+    <div class="main">
+      <div class="h"><span class="n">2</span>Ждёт вас (2)</div>
+      <div class="box mark">Ревьюер → решение по H1.5: вариант А или Б &nbsp; <span class="chip">40 мин</span> <span class="chip">стадия L1</span></div>
+      <div class="box mark">Воркер Codex не может работать: лимит до 19:58 · продолжить на Sonnet? &nbsp; <span class="chip">8 мин</span></div>
+      <div class="h">Идёт (3)</div>
+      <div class="box soft">Воркер Sonnet · H1.5 · пишет тесты · 12 мин · следующий отчёт в 20:15</div>
+      <div class="box soft">Прогон проверок · шаг 6 из 9 · 31 мин · ожидание очереди 0</div>
+      <div class="box soft">Оркестратор · ждёт прогон · жив</div>
+      <div class="h">Готово к проверке (1)</div>
+      <div class="box">E2.2 · воркер Fable сдал · доказательство: 3206/3206 тестов · <span class="btn">Открыть</span></div>
+      <div class="h">Завершено с вашего визита</div>
+      <div class="box ok">D8.4d влита · ревьюер принял · 02:14</div>
+    </div>
+    <div class="right">
+      <div class="h"><span class="n">6</span>Быстрый просмотр</div>
+      <div class="box"><b>Ревьюер спрашивает</b> (№2231, 40 мин назад)<br>
+        <span class="muted">Где: OMG › L1 › H1.5 › ревью, круг 2</span><br>
+        Три тестовых пути старого инварианта — добавлять?<br>
+        <div class="box">А. Добавить все три<br><span class="muted">+1 ч работы воркера · риск: срок</span></div>
+        <div class="box">Б. Только om-addressing<br><span class="muted">+20 мин · риск: дыра в gap-lines</span></div>
+        <span class="btn primary">А</span> <span class="btn">Б</span> <span class="btn">Спросить ещё</span><br>
+        <span class="muted">Пока вы не ответили: ревьюер спит, воркер работает над другим.</span>
+      </div>
+    </div>
+  </div>
+  <div class="composer">
+    <div class="input">Написать оркестратору… &nbsp;<span class="muted">(@ кому · / команда)</span></div>
+    <div class="row"><span class="chip">Кому: оркестратор</span><span class="chip">Claude · Fable · усилие высокое</span><span class="chip">Доступ: полный</span><span class="chip">Этот ход ≈ 0,3 % недели</span><span class="btn">Стоп всё</span><span class="btn primary">Отправить</span></div>
+  </div>
+</div>
+<ul class="notes">
+  <li><span class="n">1</span><b>Где</b> — всегда одна строка: проект › стадия › задача. Никаких «а где сейчас агенты?».</li>
+  <li><span class="n">2</span><b>Что от меня нужно</b> — отдельный список с возрастом. Вопрос не тонет в чате и не закрывается по тайм-ауту.</li>
+  <li><span class="n">3</span><b>Что происходит</b> — «идёт» и «сорвалось» разные слова и разные цвета; тишина объясняется («лимит до 19:58», «спит до вашего ответа»).</li>
+  <li><span class="n">4</span><b>Сколько стоит</b> — остаток недели с временем сброса, как в CodexLimitBar, но внутри.</li>
+  <li><span class="n">5</span><b>К цели или по кругу</b> — что изменилось с прошлого раза, а не всего за проект.</li>
+  <li><span class="n">6</span>Ответ — кнопкой с последствиями каждого варианта. Что произойдёт, пока вы думаете, — написано.</li>
+</ul>
+
+<!-- ЭКРАН 2 -->
+<h2>2. Обычный чат в папке — и кнопка «В план»</h2>
+<div class="screen">
+  <div class="bar">
+    <div>Комната «принтер» · чат</div><div>Ждёт вас: 0</div><div>Идёт 0</div><div>Неделя 61 %</div><div>—</div>
+  </div>
+  <div class="cols two">
+    <div class="side">
+      <div class="h">Разговоры</div>
+      <div class="box">Принтер не печатает</div>
+      <div class="box soft">Курс доллара</div>
+      <div class="box">Идея: табло для агентов <span class="chip">созрело?</span></div>
+    </div>
+    <div class="main">
+      <div class="box soft"><b>Вы:</b> посмотри, почему Brother не видит сеть, и вернись с оценкой из 10</div>
+      <div class="box"><b>Claude</b> <span class="chip">работал 1 мин 40 с · 3 команды · 0,1 % недели</span><br>Причина — DHCP выдал новый адрес, драйвер смотрит на старый. Оценка уверенности 8/10. <span class="muted">Доказательство: вывод lpstat ▸</span></div>
+      <div class="box soft"><b>Вы:</b> ок. а теперь хочу из этого сделать табло для всех моих агентов</div>
+      <div class="box"><b>Claude</b> Это уже больше, чем чат. <span class="btn primary">В план</span> <span class="muted">— или продолжим разговором.</span></div>
+    </div>
+  </div>
+  <div class="composer">
+    <div class="input">Сообщение…</div>
+    <div class="row"><span class="chip">Кому: Claude</span><span class="chip">Sonnet · усилие среднее ▾</span><span class="chip">Доступ: читать папку</span><span class="chip">Этот ход ≈ 0,05 %</span><span class="btn">В план</span><span class="btn primary">Отправить</span></div>
+  </div>
+</div>
+<ul class="notes">
+  <li>Чат — обычный, как в Claude. Строка под полем ввода — условия хода: кому, какая модель, что ей можно, сколько стоит.</li>
+  <li>Переход в план — одна кнопка. Система не толкает сама: предлагает, когда разговор вырос, и ждёт.</li>
+</ul>
+
+<!-- ЭКРАН 3 -->
+<h2>3. «В план» — один экран перед тем, как система начнёт работать сама</h2>
+<div class="screen">
+  <div class="bar"><div>Комната «принтер» → проект «Табло агентов»</div><div>—</div><div>—</div><div>Неделя 61 %</div><div>—</div></div>
+  <div class="main" style="padding:10px 14px">
+    <div class="row">
+      <div class="box"><b><span class="n">1</span>Что делаем</b><br>Табло состояния всех агентов в одном окне.<br><span class="muted">из разговора, можно править</span></div>
+      <div class="box"><b><span class="n">2</span>Зачем</b><br>Чтобы не спрашивать «ты здесь?» и видеть, кто чего ждёт.</div>
+    </div>
+    <div class="row">
+      <div class="box"><b><span class="n">3</span>Что переходит из разговора — дословно</b><br>☑ «нужны возраст ожидания и кто спрашивает»<br>☑ «не трогать окна Kimi»<br>☐ «сначала самое простое» <span class="muted">(вы решаете, что брать)</span></div>
+      <div class="box"><b><span class="n">4</span>Успех / провал / стоп</b><br>Успех: в любой момент за 5 с видно, кто ждёт вас.<br>Провал: вопросы снова ищу в чатах.<br>Стоп-случаи: расходы > 5 % недели, снос данных, секреты.</div>
+    </div>
+    <div class="row">
+      <div class="box soft">Первая стадия: <b>Дискавери</b> · ожидаем ≈ 2 ч и ≈ 2 % недели · следующий отчёт вам: через 30 мин · первый вопрос к вам: выбор, что считать «агентом»</div>
+    </div>
+    <div class="row"><span class="btn">Выйти в чат</span><span class="btn primary">Подписать и начать</span></div>
+  </div>
+</div>
+<ul class="notes">
+  <li>Это ваша рамка — где · что · зачем · что переходит · когда · что ожидаем · успех · провал · риски — как один экран, а не «план для планов».</li>
+  <li>Подпись — ваша кнопка, и она же запись: «кто решил, когда, каким каналом». Никаких приписанных решений.</li>
+</ul>
+
+<!-- ЭКРАН 4 -->
+<h2>4. Проект в работе: лестница стадий и документ стадии</h2>
+<div class="screen">
+  <div class="bar"><div>Табло агентов · стадия Концепция</div><div>Ждёт вас: 1 · 5 мин</div><div>Идёт 2</div><div>Неделя 63 %</div><div>С визита: дискавери принято</div></div>
+  <div class="main" style="padding:10px 14px">
+    <div class="ladder">
+      <div class="step" style="background:var(--ok)">Дискавери<br><small>пройдено 19:40</small></div>
+      <div class="step" style="background:var(--mark)">Концепция<br><small>ждёт вас: шлюз</small></div>
+      <div class="step">L0<br><small>впереди</small></div>
+      <div class="step">L1</div><div class="step">R1</div><div class="step">…</div><div class="step">OMG</div><div class="step">Компиляция<br><small class="muted">данных нет</small></div>
+    </div>
+    <div class="cols two" style="min-height:0; margin-top:10px">
+      <div class="side">
+        <div class="h">В стадии</div>
+        <div class="box soft">Документ стадии</div>
+        <div class="box">Карта проекта</div>
+        <div class="box">Ход работы</div>
+        <div class="box">Расход: 1,8 % <span class="muted">(ожидали 2)</span></div>
+      </div>
+      <div class="main stage-doc">
+        <h4>Документ стадии «Концепция»</h4>
+        <div class="box ok">1. Что перешло из дискавери <span class="chip">проверено</span><br><span class="muted">три пункта, дословно, с источником</span></div>
+        <div class="box soft">2. Варианты решения <span class="chip">написано агентом · ждёт проверки</span></div>
+        <div class="box mark">3. Шлюз: перейти к L0? <span class="chip">ждёт вас 5 мин</span><br>Критерий выхода: оценка ревьюера ≥ 9 (сейчас 8,5) · что не хватает: «риски не разложены по зонам» · <span class="btn primary">Перейти</span> <span class="btn">Доделать</span> <span class="btn">Вопрос</span></div>
+        <div class="box">4. Что исследовано / получено / неизвестно <span class="chip muted">нет данных: исследование не запускалось</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<ul class="notes">
+  <li>Лестница видна всегда: что пройдено, где вы, что впереди. «Пройдено» ставит проверка, не исполнитель.</li>
+  <li>Шлюз между стадиями — ваша кнопка с критерием, что не хватает до порога. Ответ на «какого … это не перешло из дискавери?» — раздел 1, дословно.</li>
+  <li>Если данных нет — так и написано, почему. Это не ошибка экрана, это честность.</li>
+</ul>
+
+<!-- ЭКРАН 5 -->
+<h2>5. Команда — кто над чем и чего ждёт</h2>
+<div class="screen">
+  <div class="bar"><div>OMG · команда</div><div>Ждёт вас: 2</div><div>Идёт 3 · сорвалось 1</div><div>Неделя 61 % · Codex 64 %</div><div>—</div></div>
+  <div class="main" style="padding:10px 14px">
+    <table>
+      <tr><th>Место</th><th>Кто</th><th>Состояние</th><th>Что делает сейчас</th><th>Ждёт</th><th>Как давно</th><th>Расход за день</th></tr>
+      <tr><td>Оркестратор</td><td>Claude · Fable</td><td>жив, ждёт</td><td>ждёт прогон H1.5</td><td>прогон</td><td>31 мин</td><td>1,2 %</td></tr>
+      <tr><td>Воркер 1</td><td>Claude · Sonnet</td><td>работает</td><td>H1.5 · тесты</td><td>—</td><td>12 мин</td><td>0,6 %</td></tr>
+      <tr style="background:var(--warn)"><td>Воркер 2</td><td>Codex · GPT</td><td>приостановлен: лимит</td><td>D8.4e · не может продолжить</td><td>сброс 19:58 или вас</td><td>8 мин</td><td>—</td></tr>
+      <tr style="background:var(--mark)"><td>Ревьюер</td><td>Codex</td><td>ждёт вас</td><td>вопрос №2231</td><td>вас</td><td>40 мин</td><td>0,9 %</td></tr>
+      <tr><td>Kimi</td><td>Kimi · своё окно</td><td class="muted">только наблюдаем</td><td class="muted">по журналу: тихо 2 ч</td><td>?</td><td>2 ч</td><td class="muted">нет данных</td></tr>
+    </table>
+    <div class="row" style="margin-top:8px"><span class="btn">Добавить место</span><span class="btn">Написать всем</span><span class="btn">Стоп всем</span></div>
+  </div>
+</div>
+<ul class="notes">
+  <li>Строка на каждого: кто, жив ли, что делает, чего ждёт, как давно, сколько съел. Это та самая панель, которую вы собирали из 8 окон.</li>
+  <li>Те, кого харнесс только «смотрит» (Kimi), помечены честно: данные из журнала, кнопки «Стоп» нет.</li>
+</ul>
+
+<!-- ЭКРАН 6 -->
+<h2>6. Ход работы агента — как в DSH, плюс дорожка «Вы»</h2>
+<div class="screen">
+  <div class="bar"><div>Воркер 1 · H1.5</div><div>—</div><div>работает 12 мин</div><div>этот ход: 0,2 %</div><div>—</div></div>
+  <div class="main" style="padding:10px 14px">
+    <div class="lanes">
+      <div>Ввод</div><div class="lane"><div class="seg" style="left:0;width:4%;background:#999"></div><div class="seg" style="left:46%;width:3%;background:#999"></div></div>
+      <div>Модель</div><div class="lane"><div class="seg" style="left:4%;width:18%;background:#8a7cd8"></div><div class="seg" style="left:49%;width:30%;background:#8a7cd8"></div></div>
+      <div>Инструменты</div><div class="lane"><div class="seg" style="left:22%;width:14%;background:#6aa"></div><div class="seg" style="left:79%;width:12%;background:#6aa"></div></div>
+      <div>Вы</div><div class="lane"><div class="seg" style="left:36%;width:10%;background:var(--mark);border:1px solid #c9a700"></div></div>
+      <div>Внешнее</div><div class="lane"><div class="seg" style="left:91%;width:9%;background:var(--warn)"></div></div>
+    </div>
+    <div class="row" style="margin-top:6px; font-size:12px"><span>▲ ошибка (зона: сеть)</span><span>✚ вопрос к вам (ответ через 1 мин 10 с)</span><span>✓ тесты 3206/3206</span><span>▮ сжатие контекста</span></div>
+    <div class="box soft" style="margin-top:8px">Ходов 7 · время модели 9 мин · инструменты 2 мин · <b>ожидание вас 1 мин</b> · лимит 1 мин · свежих токенов 38 K, из кэша 410 K · контекст 31 %</div>
+  </div>
+</div>
+<ul class="notes">
+  <li>Три дорожки DSH (ввод / модель / инструменты) и две новые: «Вы» — где он ждал вас, «Внешнее» — лимит, сеть. Видно, за что заплачено и где потеряно время.</li>
+</ul>
+
+<!-- ЭКРАН 7 -->
+<h2>7. «Пока вас не было» — первое, что видно утром</h2>
+<div class="screen">
+  <div class="bar"><div>OMG · с 02:10 до 09:40</div><div>Ждёт вас: 3</div><div>—</div><div>Неделя 61 %</div><div>За ночь: +4 влито, 2 возврата</div></div>
+  <div class="main" style="padding:10px 14px">
+    <div class="row">
+      <div class="box mark"><b>Ждёт вас</b><br>· решение по H1.5 (с 02:50)<br>· Codex: продолжить на Sonnet?<br>· подпись: план вырос на 2 задачи</div>
+      <div class="box ok"><b>Сделано и проверено</b><br>· D8.4d влита (02:14)<br>· E2.2 принята (04:30)</div>
+      <div class="box warn"><b>Сломалось</b><br>· Codex лимит 06:12 — чат стоял 3 ч, сам не продолжил<br>· зона: провайдер</div>
+    </div>
+    <div class="row">
+      <div class="box"><b>Потеряно</b><br>· сжатие контекста у воркера 1 в 05:20 — восстановлено по памятке, не проверено</div>
+      <div class="box"><b>Расход за ночь</b><br>7 % недели · дороже плана на 2 % · причина: 3 круга ревью по D8.4e</div>
+      <div class="box"><b>Что дальше, если ничего не делать</b><br>воркер 1 закончит H1.5 ≈ 10:30 · ревьюер ждёт вас</div>
+    </div>
+    <div class="row"><span class="btn primary">Продолжить с первого вопроса</span><span class="btn">Открыть «Сейчас»</span></div>
+  </div>
+</div>
+<ul class="notes">
+  <li>Вместо «ты помнишь, на чём остановились?» — сам отчёт: что ждёт, что сделано, что сломалось и чья это зона, что потеряно, что стоило, что будет дальше.</li>
+</ul>
+
+<p class="lead" style="margin-top:40px">Это один эскиз из трёх вариантов. Два других отличаются тем, что стоит в центре: не очередь «Сейчас», а сам разговор (как в Claude) — или карта проекта с документом стадии. Их я нарисую после вашего «да».</p>
+</body>
+</html>

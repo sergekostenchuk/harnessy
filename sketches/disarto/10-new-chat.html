@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 10 · Новый чат · сайдбар развёрнут / свёрнут</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  /* развёрнутый сайдбар (как в 01) */
+  .app.wide .side{align-items:stretch;padding:12px 10px}
+  .ws{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--rs);font-weight:500;margin-bottom:8px}
+  .ws .logo{margin:0;width:24px;height:24px}.ws .chev{color:var(--ink3);font-size:11px}.ws .col{margin-left:auto;color:var(--ink3)}
+  .newbtn{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:var(--rs);background:var(--raised);border:1px solid var(--line2);color:var(--ink);font-weight:500;margin-bottom:6px}.newbtn kbd{margin-left:auto;font:10px var(--mono);color:var(--ink3);border:1px solid var(--line2);border-radius:4px;padding:1px 5px}
+  .newbtn.on{border-color:rgba(194,122,52,.5)}
+  .search{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--rs);color:var(--ink3);background:var(--bg);margin-bottom:10px;font-size:12.5px}.search kbd{margin-left:auto;font:10px var(--mono);color:var(--ink3);border:1px solid var(--line2);border-radius:4px;padding:1px 5px}
+  .app.wide .nav{width:auto;height:32px;display:flex;align-items:center;gap:9px;padding:0 9px;justify-content:flex-start;font-size:13px}
+  .app.wide .nav .b{position:static;margin-left:auto;min-width:18px;height:18px;font-size:10px;line-height:18px;padding:0 5px}
+  .app.wide .nav .m{margin-left:auto;font:10px var(--mono);color:var(--ink3)}
+  .grp{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:12px 9px 4px;display:flex}.grp .chev{margin-left:auto;font-size:9px}
+  .conv{height:28px;padding:0 9px 0 30px;border-radius:var(--rs);display:flex;align-items:center;color:var(--ink2);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.conv .t{margin-left:auto;font:9.5px var(--mono);color:var(--ink3)}
+  .app.wide .foot{align-items:stretch;gap:2px}
+  .limits{margin:8px 0 6px;padding:9px 10px;border:1px solid var(--line2);border-radius:var(--rs);background:var(--raised)}.limits .row{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink2);margin-bottom:4px}.limits .row b{font:500 11px var(--mono);color:var(--ink)}.limits .bar{margin-bottom:7px}.limits .bar:last-child{margin-bottom:0}
+  .user{display:flex;align-items:center;gap:9px;padding:7px 8px;border:1px solid var(--line2);border-radius:var(--rs);background:var(--raised)}.user .av{width:26px;height:26px}.user div{line-height:1.2;font-size:13px}.user small{display:block;color:var(--ink3);font-size:10.5px}.user .chev{margin-left:auto;color:var(--ink3);font-size:11px}
+  .tip{position:absolute;left:46px;top:3px;height:28px;line-height:28px;padding:0 10px;background:var(--tile);border:1px solid var(--line2);border-radius:8px;color:var(--ink);font-size:12.5px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.5)}.tip kbd{font:10px var(--mono);color:var(--ink3);margin-left:6px}
+  /* новый чат */
+  .nc{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:0 40px 40px;position:relative}
+  .ret{position:absolute;top:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;white-space:nowrap;padding:7px 10px 7px 12px;border:1px solid var(--line2);border-radius:999px;background:var(--panel);font-size:12.5px;color:var(--ink2)}
+  .ret .pill{height:20px}.ret b{color:var(--ink);font-weight:500}.ret .btn{height:24px}
+  .mark{width:48px;height:48px;border-radius:14px;background:linear-gradient(160deg,#2a2a2f,#151517);border:1px solid var(--line2);display:grid;place-items:center;margin-bottom:18px;box-shadow:0 10px 30px rgba(0,0,0,.4)}.mark svg{width:24px;height:24px;stroke:var(--gold);fill:none;stroke-width:2.2;stroke-linecap:round}
+  .nc h2{font:600 28px/1.15 var(--font);letter-spacing:-.015em;margin:0 0 8px}.nc .lead{color:var(--ink2);font-size:13.5px;margin:0 0 22px;text-align:center;max-width:520px}
+  .box{width:min(760px,100%);border:1px solid var(--line2);border-radius:16px;background:var(--panel);padding:14px 14px 10px;position:relative}
+  .box::before{content:"";position:absolute;inset:-1px;border-radius:17px;padding:1px;background:linear-gradient(120deg,rgba(194,122,52,.5),transparent 40%,transparent 60%,rgba(194,122,52,.25));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+  .box .in{color:var(--ink3);font-size:15px;line-height:1.5;min-height:50px;padding:2px 4px 10px}.box .in b{color:var(--ink2);font-weight:400}
+  .box .bar2{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .chip.model .dot{background:var(--accent)}.chip .chev{font-size:10px;color:var(--ink3)}
+  .send{margin-left:auto;display:flex;gap:10px;align-items:center}.send .est{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}.send .go{width:30px;height:30px;border-radius:50%;background:var(--ink);display:grid;place-items:center;color:var(--bg)}.send svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+  .starts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:min(760px,100%);margin-top:14px}
+  .st{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:11px 13px;font-size:12.5px;color:var(--ink2);display:flex;flex-direction:column;gap:6px}.st b{color:var(--ink);font-weight:500;font-size:13px}.st small{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .st:hover{border-color:var(--accent)}
+  .hints{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;width:min(760px,100%);margin-top:22px;font-size:12px;color:var(--ink3)}.hints b{display:block;color:var(--ink2);font-weight:500;margin-bottom:2px}
+  .recent{width:min(760px,100%);margin-top:22px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink3);flex-wrap:wrap}.recent .chip{height:24px;font-size:11.5px;color:var(--ink2)}
+  .status{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:18px;white-space:nowrap;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 10 · новый чат · сайдбар развёрнут / свёрнут</h1>
+  <p class="sub">Пустой лист без «кабины»: знак, вопрос, одно поле с чипами (папка · модель и усилие · права · файл), три быстрых старта, три подсказки о правилах, недавние. Сверху — «Пока вас не было», если есть что решать. Рядом с кнопкой отправки всегда цена хода. <a href="index.html">← все скетчи</a></p>
+
+  <!-- кадр 1: сайдбар развёрнут -->
+  <div class="frame"><div class="app wide">
+    <aside class="side">
+      <div class="ws"><span class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></span>OMG <span class="chev">▾</span><span class="col">⟨</span></div>
+      <div class="newbtn on"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Новый чат<kbd>⌘N</kbd></div>
+      <div class="search"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Найти…<kbd>⌘K</kbd></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg>Чат<span class="b">3</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg>План<span class="m">87 · L1</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg>Стая<span class="m">6 мест</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg>Расход<span class="m" style="color:var(--bad)">Codex 94%</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg>Журнал</div>
+      <div class="grp">Недавние<span class="chev">⌄</span></div>
+      <div class="conv">Оркестратор · H1.5 и прогон<span class="t">14:02</span></div>
+      <div class="conv">Карта проекта · L1<span class="t">вчера</span></div>
+      <div class="conv">Ресёрчер · очередь у Devin<span class="t">вчера</span></div>
+      <div class="conv">Артефакты · 3 к проверке<span class="t">02.10</span></div>
+      <div class="grp">Проекты<span class="chev">⌄</span></div>
+      <div class="nav" style="color:var(--ink)"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg>OMG<span class="m">◆ 2</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg>HARNESS<span class="m">спит</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg>Принтер Brother</div>
+      <div class="foot">
+        <div class="nav"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 00-3 11v3h6v-3a6 6 0 00-3-11z"/><path d="M10 21h4"/></svg>Уйти · делегировать на ночь</div>
+        <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>Настройки</div>
+        <div class="limits"><div class="row"><span>Claude · неделя</span><b>62%</b></div><div class="bar"><i style="width:62%"></i></div><div class="row"><span>Codex · 5 часов</span><b style="color:var(--bad)">94%</b></div><div class="bar"><i class="bad" style="width:94%"></i></div></div>
+        <div class="user"><span class="av">S<i></i></span><div>Serge<small>9616166@gmail.com</small></div><span class="chev">⌄</span></div>
+      </div>
+    </aside>
+    <section class="main" style="grid-template-rows:1fr">
+      <div class="nc">
+        <div class="ret"><span class="pill acc">◆ 2 ждут вас</span><span>Пока вас не было: <b>подпись M0</b> и <b>лимит Codex у воркера 2</b> · 40 мин</span><span class="btn sm">Открыть</span></div>
+        <div class="mark"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+        <h2>Чем займёмся?</h2>
+        <p class="lead">Спросите или поручите. Ничего не начнётся без вас: сначала понимание, потом действие.</p>
+        <div class="box">
+          <div class="in">Например: <b>«что сейчас делает команда?»</b> · <b>«посмотри HARNESS и оцени из 10»</b> · <b>«почини развилку D8.4d»</b></div>
+          <div class="bar2">
+            <span class="chip"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg>в папке: OMG<span class="chev">▾</span></span>
+            <span class="chip model"><span class="dot"></span>Claude · Sonnet · усилие среднее<span class="chev">▾</span></span>
+            <span class="chip"><svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>только читает папку<span class="chev">▾</span></span>
+            <span class="chip"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>файл или снимок</span>
+            <span class="send"><span class="est">ход ≈ 0,05 % · оценка</span><span class="go"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></span>
+          </div>
+        </div>
+        <div class="starts">
+          <div class="st"><small>состояние</small><b>Что сейчас делает команда?</b>кто работает, кто ждёт, что упало — одной страницей</div>
+          <div class="st"><small>план</small><b>Собери план из этого разговора</b>задачи, зависимости, цена — черновик до «Утвердить»</div>
+          <div class="st"><small>проверка</small><b>Проверь лимиты и даты оплат</b>Claude, Codex, Qwen — что кончится первым</div>
+        </div>
+        <div class="hints">
+          <div><b>Папка или комната.</b>В папке агент читает проект; без папки — комната для быстрых дел, без памяти проекта.</div>
+          <div><b>Чат → План.</b>Когда разговор вырастет, агент предложит собрать план; переключить можно и сразу.</div>
+          <div><b>Всё видно.</b>Кто работает, над чем и чего ждёт — в «Сейчас»; цена хода — под полем ввода.</div>
+        </div>
+        <div class="recent"><span>недавние:</span><span class="chip">Оркестратор · H1.5 и прогон</span><span class="chip">Карта проекта</span><span class="chip">Ресёрчер · очередь у Devin</span><span class="chip">Принтер Brother · вчера</span></div>
+        <div class="status"><span>папка omg · 1 846 файлов · индекс 2 мин назад</span><span>claude 62 % · codex 94 %</span><span><span class="kbd">⌘K</span> команды · <span class="kbd">⌘N</span> новый чат</span></div>
+      </div>
+    </section>
+  </div><div class="cap"><span>10 · новый чат · сайдбар развёрнут · «пока вас не было» · быстрые старты</span><span>1280 × 860</span></div></div>
+
+  <!-- кадр 2: рейка -->
+  <div class="frame"><div class="app">
+    <aside class="side">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+      <div class="nav on" style="border:1px solid rgba(194,122,52,.5)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="tip">Новый чат<kbd>⌘N</kbd></span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg><span class="b">3</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg><span class="b">!</span></div>
+      <div class="nav"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg></div>
+      <div class="nav" style="margin-top:8px"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg></div>
+      <div class="foot"><div class="nav"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 00-3 11v3h6v-3a6 6 0 00-3-11z"/><path d="M10 21h4"/></svg></div><div class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></div><div class="nav"><span class="ring"><i></i></span></div><div class="nav"><span class="av">S<i></i></span></div></div>
+    </aside>
+    <section class="main" style="grid-template-rows:1fr">
+      <div class="nc">
+        <div class="mark"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+        <h2>Чем займёмся?</h2>
+        <p class="lead">Комната без папки: быстрые дела, без памяти проекта. Выберите папку, если нужен проект.</p>
+        <div class="box">
+          <div class="in" style="color:var(--ink)">Посмотри HARNESS и оцени из 10, что мешает первому запуску<span style="color:var(--accent)">|</span></div>
+          <div class="bar2">
+            <span class="chip" style="border-color:rgba(194,122,52,.5);color:var(--ink)"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v9H4z"/></svg>без папки → выбрать<span class="chev">▾</span></span>
+            <span class="chip model"><span class="dot"></span>Opus · усилие высокое<span class="chev">▾</span></span>
+            <span class="chip"><svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>только читает<span class="chev">▾</span></span>
+            <span class="send"><span class="est">ход ≈ 0,4 % · оценка</span><span class="go" style="background:var(--accent)"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></span>
+          </div>
+        </div>
+        <div class="starts">
+          <div class="st" style="border-color:var(--accent)"><small>подсказка · по тексту</small><b>Это про папку HARNESS</b>подключить ~/HARNESS к этому чату? Агент прочитает проект перед ответом</div>
+          <div class="st"><small>модель</small><b>Opus — дорого для чтения</b>оценку «из 10» дешевле сделать на Sonnet, придумывать — Opus</div>
+          <div class="st"><small>права</small><b>Только читает</b>ничего не изменит и не запустит без вашего «да»</div>
+        </div>
+        <div class="status"><span>комната · без папки</span><span>claude 62 % · codex 94 %</span><span><span class="kbd">⌘K</span> команды</span></div>
+      </div>
+    </section>
+  </div><div class="cap"><span>10b · новый чат · рейка · набран текст — подсказки по тексту (папка, модель, права)</span><span>1280 × 860</span></div></div>
+</div></body></html>
