@@ -28,6 +28,9 @@ PORT = int(os.environ.get("PORT", "3777"))
 APP_URL = f"http://127.0.0.1:{PORT}"
 DEFAULT_DIR = os.environ.get("CHAT_WORK_DIR", "/Users/Shared/simple-claude-chat")
 LAST_PROJECT_FILE = Path(os.path.expanduser("~/.harness-last-project"))
+# Прототип Harnessy (экраны-скетчи из ~/REPORTS/workbench-design, сборка deploy/build.py) отдаётся с того же адреса, что и API:
+# страницы под /sketches/ ходят в /api/* без CORS. Переопределить папку — HARNESSY_SITE; нет папки — маршрута нет.
+SITE_DIR = Path(os.path.expanduser(os.environ.get("HARNESSY_SITE", "~/REPORTS/workbench-design/deploy/out/site/sketches")))
 NODE = os.environ.get("NODE_BIN") or next((p for p in [os.path.expanduser("~/.local/bin/node"), "/opt/homebrew/bin/node", "/usr/local/bin/node"] if os.path.exists(p)), "node")
 CLAUDE_MODELS = [
     {"id": "claude-sonnet-5", "label": "Sonnet 5"}, {"id": "claude-fable-5-1", "label": "Fable 5.1"},
@@ -782,6 +785,8 @@ class App:
         app.router.add_post("/api/merge", self.api_merge)
         app.router.add_get("/api/pane_transcript", self.pane_transcript)
         app.router.add_get("/api/journal", self.journal_read)
+        if SITE_DIR.is_dir():
+            app.router.add_static("/sketches", SITE_DIR, show_index=False)
 
 
 def main():
@@ -806,6 +811,7 @@ def main():
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
     print(f"[harness] {APP_URL}\n[harness] claude: {CLAUDE_BIN or 'НЕ НАЙДЕН'}; node для моста Codex: {NODE}", flush=True)
+    print(f"[harness] прототип Harnessy: {APP_URL + '/sketches/proto/01-chat.html' if SITE_DIR.is_dir() else 'папки нет — ' + str(SITE_DIR)}", flush=True)
     a = claude_auth()
     print(f"[harness] вход Claude по подписке: {'да (' + str(a.get('authMethod')) + ')' if a.get('loggedIn') else 'НЕТ — выполни в Терминале: claude login'}", flush=True)
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(message)s")
