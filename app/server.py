@@ -925,6 +925,53 @@ class App:
         self.save_panes()
         return web.json_response({"ok": True, "pane": pane.settings(), "team": str(tf)})
 
+    async def seat_create(self, request):
+        """Назначить роль, которой в папке ещё нет (слово владельца 08.10): новое место в team.yaml без разговора — чат начнётся с него.
+        Модель — из запроса, иначе модель разговора без роли, иначе первая Claude; сменить можно сразу в строке ввода."""
+        body = await request.json()
+        role = str(body.get("role") or "")
+        cat = next((c for c in ROLE_CATALOG if c[0] == role), None)
+        if not cat:
+            return web.json_response({"ok": False, "error": f"неизвестная роль {role}"}, status=400)
+        if self.team is None:
+            return web.json_response({"ok": False, "error": "команда папки не читается: " + "; ".join(self.line_errors)}, status=400)
+        same = [p for p in self.registry.panes.values() if p.role == role and p.id != ROOM_ID]
+        if same and not cat[2]:
+            return web.json_response({"ok": False, "error": f"роль «{cat[1]}» в этой папке уже есть ({same[0].label})"}, status=409)
+        model = str(body.get("model") or "").strip()
+        room = self.registry.panes.get(ROOM_ID)
+        if not model:
+            model = (room.model if room and room.model else "") or next((m["id"] for m in self.models.get("claude", []) if m.get("id")), "")
+        vendor = self._vendor_of(model)
+        if not vendor:
+            return web.json_response({"ok": False, "error": "модель не из каталога"}, status=400)
+        mode = str(body.get("mode") or "read")
+        if mode not in MODE_IDS:
+            mode = "read"
+        n = len(same) + 1
+        sid = role if n == 1 else f"{role}{n}"
+        label = cat[1] if n == 1 else f"{cat[1]} {n}"
+        tf = self.team.harness_dir / "team.yaml"
+        try:
+            import yaml
+            d = yaml.safe_load(tf.read_text("utf-8")) or {}
+            seats = d.get("seats") or {}
+            if sid in seats:
+                return web.json_response({"ok": False, "error": f"место {sid} уже есть в team.yaml"}, status=409)
+            seats[sid] = {"role": role, "label": label, "vendor": vendor, "model": model, "mode": mode, "digest": False}
+            d["seats"] = seats
+            tf.write_text("# Манифест команды линии. Места добавляются и из чата («Назначить роль»); комментарии при этом не сохраняются.\n"
+                          + yaml.safe_dump(d, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            return web.json_response({"ok": False, "error": f"team.yaml не записан: {e}"}, status=400)
+        self.team.seats[sid] = Seat(id=sid, role=role, label=label, vendor=vendor, model=model, mode=mode, write_paths=[], worktree=None, digest=False)
+        pane = Pane(id=sid, vendor=vendor, label=label, model=model, mode=mode, cwd=self.project_dir, role=role)
+        self.registry.panes[sid] = pane
+        c = self._new_chat(pane)
+        self.kick(pane)
+        self.save_panes()
+        return web.json_response({"ok": True, "pane": pane.settings(), "chat": self._chat_meta(c)})
+
     async def handoff(self, request):
         """Передать контекст месту текстом: явный text (выбранные владельцем реплики с промптом) или весь разговор места from (по умолчанию «без роли»).
         Между моделями и вендорами переносится только текст — память модели остаётся у прежнего места."""
@@ -1181,6 +1228,7 @@ class App:
         app.router.add_post("/api/room", self.room_set)
         app.router.add_post("/api/room/move", self.room_move)
         app.router.add_post("/api/assign", self.assign_role)
+        app.router.add_post("/api/seats", self.seat_create)
         app.router.add_post("/api/handoff", self.handoff)
         app.router.add_get("/api/chats", self.chats_list)
         app.router.add_get("/api/chats/{id}", self.chat_get)
