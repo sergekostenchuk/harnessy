@@ -100,7 +100,7 @@
   function applyStatus(st){ H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.roleCatalog=st.roleCatalog||[]; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator;
     if(PAGE==='new'){ S.ui.pane='room'; S.ui.fresh=true; S.ui.switched=false; save(); }   // стартовый экран — ВСЕГДА без роли · новый чат; выбор роли или чата отсюда = переход в чат (слово владельца 08.10)
     if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); }
-  async function refreshChats(){ try{ const r=await api('/api/chats'); H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } }
+  async function refreshChats(){ try{ const r=await api('/api/chats'); H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } if(typeof sideChats==='function') sideChats(); }
   async function refreshStatus(){ let st=null; try{ st=await api('/api/status'); }catch(e){} if(st&&Array.isArray(st.panes)){ applyStatus(st); await refreshChats(); hStatus(); if(window.CX) CX.render(); } return st; }
   // лента активного чата — из харнесса (один источник правды для Electron, браузера и сервера); цена хода у старых реплик неизвестна
   let LOADED=null;
@@ -728,8 +728,19 @@
       else if(/^Отправить снимок|^Показать агенту его же снимок/.test(lab)){ const w=document.querySelector('.panel .win.on b'), name=w?w.textContent.trim():'окно'; S.chat.push({role:'me',text:'Показываю окно: '+name,t:now()}); S.chat.push({role:'ai',html:'<p>В прототипе снимок окна не делается. Настоящий агент описал бы, что видит в «'+esc(name)+'», и сверил бы со своими данными.</p>',t:now()}); S.chat=S.chat.slice(-40); save(); log('чат','Показано окно: '+name); render(); toast('Окно «'+esc(name)+'» добавлено в разговор'); } },true);
   }
 
+  // ── боковая панель: чаты папки из харнесса под пунктом «Чат» и «недавние» на стартовом — выбор открывает чат (та же логика, что в свитчере; слово владельца 08.10)
+  async function sideChats(){ let r=null; try{ r=await api('/api/chats'); }catch(e){} if(!r||!Array.isArray(r.chats)) return; const all=r.chats.filter(c=>c.messages>0), list=all.slice(0,8);
+    const rowHTML=c=>'<div class="ps-chat'+(c.active?' act':'')+'" data-chat="'+c.id+'" data-pane="'+c.pane+'" title="'+esc(c.title||'без названия')+' · '+esc(c.label)+'"><i></i><span class="t">'+esc(c.title||'без названия')+'</span><span class="m">'+esc(c.label)+'</span></div>';
+    document.querySelectorAll('aside.side.ps .nav[data-go="chat"]').forEach(nav=>{ nav.parentElement.querySelectorAll('.ps-chats').forEach(x=>x.remove()); const m=nav.querySelector('.m'); if(m) m.textContent=all.length||'';
+      if(document.documentElement.dataset.side==='rail') return; const box=document.createElement('div'); box.className='ps-chats';
+      box.innerHTML=list.map(rowHTML).join('')+(all.length>list.length?'<div class="ps-chat more" data-chat-more>ещё '+(all.length-list.length)+' — в меню чатов</div>':'')+(all.length?'':'<div class="ps-chat more">чатов в папке пока нет</div>'); nav.after(box); });
+    document.querySelectorAll('.recent').forEach(rc=>{ rc.innerHTML='<span>недавние:</span>'+(all.slice(0,4).map(c=>'<span class="chip ps-chat'+(c.active?' act':'')+'" data-chat="'+c.id+'" data-pane="'+c.pane+'"><i></i>'+esc((c.title||'без названия').slice(0,38))+' <small>'+esc(c.label)+'</small></span>').join('')||'<span class="chip" style="opacity:.6">пока нет</span>'); }); }
+  document.addEventListener('click',async e=>{ const c=e.target.closest('.ps-chat[data-chat]'); if(!c) return; e.preventDefault(); e.stopPropagation();
+    let r=null; try{ r=await api('/api/chats/open',{chat:c.dataset.chat,carry:'text'}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
+    S.ui.pane=r.pane.id; S.ui.fresh=false; S.ui.switched=true; save(); if(PAGE==='chat'){ await refreshStatus(); await loadChat(); sideChats(); } else location.href='01-chat.html'; });
+  addEventListener('resize',()=>sideChats());
   // ── запуск
-  composer(); restoreUI(); wireSearch(); refresh();
+  composer(); restoreUI(); wireSearch(); refresh(); sideChats();
   hConnect().finally(async()=>{ S.ui.switched=false; if(cols().length){ if(S.pending){ const q=S.pending.text; S.pending=null;
         if(S.ui.fresh&&H.on&&H.pane&&H.pane.id==='room'){ try{ const r=await api('/api/chats/new',{pane:'room',carry:'none'}); if(r&&r.ok){ await refreshChats(); S.chat=[]; } }catch(e){} }   // новый чат без роли — параллельный прежним
         S.ui.fresh=false; save(); S.chat.push({role:'me',text:q,t:now()}); save(); render(); reply(q); } else render(); } });

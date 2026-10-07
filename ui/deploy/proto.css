@@ -297,3 +297,9 @@ html[data-proto][data-page="chat"] .live-selbar { width:auto; max-width:760px; m
 .cx-dot { width:7px; height:7px; border-radius:50%; background:var(--line2); display:inline-block; flex:none; } .cx-dot.on { background:var(--ok); }
 .cx-sub2 { font:10px var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--ink3); padding:6px 10px 2px; }
 .live-direct .act { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+/* чаты папки в боковой панели и «недавние» на стартовом */
+.ps-chats { display:flex; flex-direction:column; gap:1px; margin:0 0 4px; }
+.ps-chat { display:flex; align-items:center; gap:8px; height:26px; padding:0 9px 0 30px; border-radius:var(--rs,9px); color:var(--ink2); font-size:12px; cursor:pointer; white-space:nowrap; position:relative; }
+.ps-chat:hover { background:var(--raised); color:var(--ink); } .ps-chat i { position:absolute; left:17px; width:6px; height:6px; border-radius:50%; background:var(--line2); } .ps-chat.act i { background:var(--ok); }
+.ps-chat .t { overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0; } .ps-chat .m { font:9.5px var(--mono); color:var(--ink3); flex:none; } .ps-chat.more { color:var(--ink3); cursor:default; } .ps-chat.more:hover { background:transparent; }
+.recent .ps-chat { display:inline-flex; height:26px; padding:0 9px 0 20px; border:1px solid var(--line2); border-radius:7px; background:var(--raised); } .recent .ps-chat i { left:8px; } .recent .ps-chat small { color:var(--ink3); font:9.5px var(--mono); margin-left:4px; }
