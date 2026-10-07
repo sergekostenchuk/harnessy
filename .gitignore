@@ -4,3 +4,5 @@ out/
 *.pyc
 __pycache__/
 desktop/logs/
+data/
+sketches/disarto-shots/ref-composer-menus/
