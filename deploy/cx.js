@@ -31,7 +31,7 @@
     const folder=c.noFolder?'Без папки':(H.on?base(H.project):(c.folder||'OMG'));
     const role=p?(isRoom(p)?'Без роли':L.paneName(p)):'Без роли', rights=p?modeLabel(p.mode):modeLabel(c.rights);
     const model=p&&p.model?modelLabel(p.model):'выбрать модель';   // у разговора без роли модели нет, пока её не выбрали
-    const act=p?((H.active||{})[p.id]):null, meta=(H.chatList||[]).find(x=>x.id===act), chatLabel=meta&&meta.messages?(meta.title||'без названия'):'Новый чат';
+    const act=p?((H.active||{})[p.id]):null, meta=(H.chatList||[]).find(x=>x.id===act), chatLabel=(PAGE==='new'&&S().ui.fresh)?'Новый чат':(meta&&meta.messages?(meta.title||'без названия'):'Новый чат');
     const direct=p&&S().ui.direct&&S().ui.direct[p.id]&&p.role!=='orchestrator'&&!isRoom(p);
     top.innerHTML=chip('folder',c.noFolder?'src':'folder',folder,{title:c.noFolder?'Разговор без папки: модель ничего не читает':'Папка проекта: '+(H.project||'')})+(c.noFolder?'':chip('role','role',role,{title:'Собеседник: роль в папке или без роли'}))+
       (H.on&&p?chip('chat','file',chatLabel,{title:'Чаты: новый, чаты роли, чаты папки'}):'')+(direct?'<span class="cx-chip on" data-cx="rights" title="Вы обращаетесь к роли напрямую, минуя оркестратора — записано в журнал"><b>напрямую</b><i class="x" data-cx-direct-off title="Снова через оркестратора">×</i></span>':'')+
@@ -133,18 +133,18 @@
     const fd=e.target.closest('[data-cx-folder]'); if(fd){ c.folder=fd.dataset.cxFolder; L.save(); L.log('настройка','Проект: '+(c.folder==='room'?'комната без папки':c.folder)); draw(); renderAll(); return; }
     const st=e.target.closest('[data-cx-seat]'); if(st){ const id=st.dataset.cxSeat, p=(H.panes||[]).find(x=>x.id===id), cur=seat();
       if(p&&cur&&p.id!==cur.id&&PAGE==='chat'&&(S().chat||[]).some(m=>m.src==='live')){ pop.__target=p; nav('switch'); return; }   // в чате есть живой разговор — спросить про контекст
-      if(p){ S().ui.pane=p.id; L.save(); L.pickPane(); L.hStatus();
+      if(p){ S().ui.pane=p.id; S().ui.fresh=isRoom(p); S().ui.switched=true; L.save(); L.pickPane(); L.hStatus();
         const meta=(H.chatList||[]).find(x=>x.id===(H.active||{})[p.id]);
         if(PAGE==='new'&&!isRoom(p)&&meta&&meta.messages){ close(); location.href='01-chat.html'; return; }   // у роли уже есть разговор — входим в него; нет — начинаем здесь
         if(PAGE==='chat'&&L.loadChat) L.loadChat();
         L.toast('Собеседник: '+esc(isRoom(p)?'без роли':L.paneName(p))+(p.model?' · '+esc(modelLabel(p.model)):'')+(PAGE==='new'&&!isRoom(p)?' · чата ещё нет, начнём здесь':'')); draw(); renderAll(); }
-      else if(id===ROOM){ S().ui.pane=ROOM; L.save(); H.pane=null; L.hStatus(); close(); renderAll(); L.toast('Без роли — выберите модель'); const b=document.querySelector('.frame.cur .cx-chip[data-cx="model"]')||document.querySelector('.cx-chip[data-cx="model"]'); if(b) open(b,'model'); }
+      else if(id===ROOM){ S().ui.pane=ROOM; S().ui.fresh=true; S().ui.switched=true; L.save(); H.pane=null; L.hStatus(); close(); renderAll(); L.toast('Без роли — выберите модель'); const b=document.querySelector('.frame.cur .cx-chip[data-cx="model"]')||document.querySelector('.cx-chip[data-cx="model"]'); if(b) open(b,'model'); }
       return; }
     if(e.target.closest('[data-cx-direct-off]')){ e.stopPropagation(); const p=seat(); if(p&&S().ui.direct){ delete S().ui.direct[p.id]; L.save(); L.log('чат','Обращение к «'+L.paneName(p)+'» снова через оркестратора'); renderAll(); } return; }
     if(e.target.closest('[data-cx-newchat]')){ const p=seat(); const act=p?(H.chatList||[]).find(c=>c.id===(H.active||{})[p.id]):null; if(p&&!isRoom(p)&&act&&act.messages){ nav('newchat'); return; } await newChat(p,'none'); return; }
     const cr=e.target.closest('[data-cx-carry]'); if(cr){ await newChat(seat(),cr.dataset.cxCarry); return; }
     const oc=e.target.closest('[data-cx-chat]'); if(oc){ let r=null; try{ r=await L.api('/api/chats/open',{chat:oc.dataset.cxChat,carry:'text'}); }catch(x){} if(!r||!r.ok){ L.toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
-      S().ui.pane=r.pane.id; L.save(); await L.refreshStatus(); if(PAGE==='new'&&r.chat.messages){ close(); location.href='01-chat.html'; return; } if(L.loadChat) await L.loadChat(); close(); renderAll(); L.toast('Открыт чат: '+esc(r.chat.title||'без названия')+(r.carried?' · прежний передан текстом':'')); return; }
+      S().ui.pane=r.pane.id; S().ui.fresh=false; S().ui.switched=true; L.save(); await L.refreshStatus(); if(PAGE==='new'&&r.chat.messages){ close(); location.href='01-chat.html'; return; } if(L.loadChat) await L.loadChat(); close(); renderAll(); L.toast('Открыт чат: '+esc(r.chat.title||'без названия')+(r.carried?' · прежний передан текстом':'')); return; }
     const sw=e.target.closest('[data-cx-sw]'); if(sw){ const p=pop.__target; if(!p) return; if(sw.dataset.cxSw==='ctx'){ close(); L.selStart(p.id); return; } S().ui.pane=p.id; L.save(); L.pickPane(); L.hStatus(); L.toast('Собеседник: '+esc(isRoom(p)?'без роли':L.paneName(p))+' · без контекста'); close(); renderAll(); return; }
     const pj=e.target.closest('[data-cx-proj]'); if(pj){ await switchProject(pj.dataset.cxProj); return; }
     if(e.target.closest('[data-cx-nofolder]')){ c.noFolder=true; L.save(); const rm=room(); if(rm&&rm.model){ await L.api('/api/room',{model:rm.model,folder:false}); } S().ui.pane=ROOM; L.save(); await L.refreshStatus(); close(); renderAll(); L.toast('Без папки: модель ничего не читает'); return; }
