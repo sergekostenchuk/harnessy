@@ -80,7 +80,7 @@
   function curHTML(){ const c=H.cur; return '<div class="ai live-msg live-cur'+(c.text?'':' live-typing')+'"><span class="orb"></span><div><div class="thought">'+esc(paneName(H.pane))+' · '+esc(H.pane.model)+' · '+(c.text?'отвечает':'думает…')+'<span class="live-stop">■ стоп</span></div>'+c.tools.map(toolLine).join('')+md(c.text)+'</div></div>'; }
   const askHTML=a=>'<div class="live-msg live-ask'+(a.done?' done':'')+'" data-ask="'+a.id+'"><b>'+esc(a.title)+'</b><small>'+esc(a.detail||'')+'</small>'+(a.done?'<span class="mono">'+(a.done==='allow'?'разрешено':a.done==='deny'?'отказано':'время вышло')+'</span>':'<div class="act"><span class="btn sm p" data-approve="allow">Разрешить</span><span class="btn sm ghost" data-approve="deny">Отказать</span></div>')+'</div>';
   function drawLive(){ if(!H.on) return; cols().forEach(c=>{ c.querySelectorAll('.live-cur, .live-ask').forEach(x=>x.remove()); if(H.cur) c.insertAdjacentHTML('beforeend',curHTML()); Object.values(H.asks).forEach(a=>c.insertAdjacentHTML('beforeend',askHTML(a))); }); hStatus(); if(H.cur||Object.keys(H.asks).length) scrollEnd(); }
-  function finish(ev){ const c=H.cur; H.cur=null;
+  function finish(ev){ const c=H.cur; H.cur=null; setTimeout(()=>dispatchEvent(new CustomEvent('live:done')),0);
     if(c&&(c.text||c.tools.length)){ const u=ev&&ev.usage; S.chat.push({role:'ai',html:c.tools.map(toolLine).join('')+md(c.text),text:c.text,t:now(),src:'live',who:H.pane.id==='room'?'Без роли':paneName(H.pane),pane:H.pane.id,nf:!!(S.cx&&S.cx.noFolder),model:(ev&&ev.model)||H.pane.model,cost:u?{i:u.input,o:u.output,c:u.cacheRead,ms:ev.durationMs}:null}); S.chat=S.chat.slice(-40); save(); }
     if(ev&&ev.type==='error'){ const msg=ev.message||ev.text||ev.error||'ошибка'; S.chat.push({role:'ai',html:'<p>'+esc(msg)+'</p>'+(/not supported|unsupported|недоступн/i.test(msg)?'<p class="live-hint">Эта модель недоступна на подписке — выберите другую в чипе модели.</p>':''),t:now(),src:'err'}); save(); } render(); }
   function hEvent(ev){ const t=ev.type, cur=()=>H.cur||(H.cur={text:'',tools:[]});
@@ -97,7 +97,7 @@
       cols().forEach(c=>c.insertAdjacentHTML('beforeend','<div class="ai live-msg live-direct"><span class="orb"></span><div><div class="thought">обращение к роли напрямую</div><p>«'+esc(paneName(H.pane))+'» — не оркестратор. По умолчанию с ролями говорит оркестратор, вы их чаты читаете. Написать напрямую — явное действие, оно запишется в журнал линии.</p><div class="act"><span class="btn sm p" data-direct="on">Обратиться напрямую к «'+esc(paneName(H.pane))+'»</span><span class="btn sm ghost" data-direct="orch">Написать оркестратору</span></div></div></div>')); scrollEnd(); return; }
     if(!r||!r.ok){ H.cur=null; S.chat.push({role:'ai',html:'<p>Харнесс не принял сообщение: '+esc((r&&r.error)||'нет связи')+'</p>',t:now(),src:'err'}); save(); render(); return; }
     if(r.queued) toast('Место занято — сообщение встало в очередь'); }
-  function applyStatus(st){ H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.roleCatalog=st.roleCatalog||[]; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator;
+  function applyStatus(st){ H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.roleCatalog=st.roleCatalog||[]; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; H.halted=!!st.halted; setTimeout(()=>dispatchEvent(new CustomEvent('live:status')),0);
     if(PAGE==='new'){ S.ui.pane='room'; S.ui.fresh=true; S.ui.switched=false; save(); }   // стартовый экран — ВСЕГДА без роли · новый чат; выбор роли или чата отсюда = переход в чат (слово владельца 08.10)
     if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); }
   async function refreshChats(){ try{ const r=await api('/api/chats'); H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } if(typeof sideChats==='function') sideChats(); }
@@ -112,7 +112,8 @@
     S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:hsys(m)?'sys':'live',who:hsys(m)?(/контекст передан/.test(m.text)?'харнесс · передача':'харнесс · вводная'):(m.role==='peer'?'сосед':who),pane:p.id,model:r.chat.model||p.model,html:md(m.text.replace(/^\[от [^\]]+\]\s*/,'')),text:m.text,t:(m.ts||0)*1000}).slice(-80);
     LOADED=cid; save(); render();
     if(p.id!=='room'&&!r.messages.length){ try{ const o=await api('/api/onboard',{pane:p.id}); if(o&&o.sent){ H.cur={text:'',tools:[]}; drawLive(); toast('Роль получает вводную: кто она, где, с кем работает'); } }catch(e){} } }   // роль без вводной получает её при первом открытии чата (правило движка)
-  async function hConnect(){ if(PAGE!=='chat'&&PAGE!=='new') return; let st=null; try{ st=await api('/api/status'); }catch(e){} if(!st||!Array.isArray(st.panes)||!st.panes.length) return;
+  // подключение к движку на всех экранах: боковая панель, настройки, подключения живут его данными (08.10)
+  async function hConnect(){ let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)||!st.panes.length){ return; }
     H.on=true; applyStatus(st); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
     await refreshChats();
     if(PAGE==='chat'){ if(H.pane&&H.pane.busy) H.cur={text:'',tools:[]};
@@ -784,6 +785,10 @@
     const pc=e.target.closest('[data-pin-chat]'); if(pc){ e.preventDefault(); e.stopPropagation(); if(pc.dataset.cur==='1') await openChatRow(pc.dataset.pinChat,null); else await sideSwitchProject(pc.dataset.pinPath,pc.dataset.pinChat); return; }
     const fr=e.target.closest('.ps-folder[data-folder]'); if(fr){ e.preventDefault(); e.stopPropagation(); if(fr.dataset.cur!=='1') await sideSwitchProject(fr.dataset.folder); return; }
     const c=e.target.closest('.ps-chat[data-pane]'); if(!c||c.classList.contains('hdr')||c.classList.contains('more')) return; e.preventDefault(); e.stopPropagation(); await openChatRow(c.dataset.chat||'',c.dataset.pane); });
+  // меню профиля (скетч 07): всплывает из кнопки профиля в панели; отдельный кадр #f2 не открываем
+  document.addEventListener('click',e=>{ const u=e.target.closest('aside.side.ps [data-go="profile"]'); if(!u) return; e.preventDefault(); e.stopPropagation();
+    const items=[{t:'<b>Локальное окно</b> <small>без входа</small>',dis:true},{t:'Папка: '+esc((H.project||'').split('/').pop()||'не выбрана'),r:'сменить',act:'proj'},{t:'Облик',r:'A · Графит',href:'06-settings.html#p=look'},{t:'Клавиши',r:'⌘/',href:'06-settings.html#p=keys'},{t:'Настройки',r:'⌘,',href:'06-settings.html#p=profile'},{t:'Выйти',r:'на сайте harnessy.ai',dis:true}];
+    laMenu(u.closest('.ps-foot')||u,'профиль',items,it=>{ if(it.href) location.href=it.href; else if(it.act==='proj'){ const pj=document.querySelector('aside.side.ps .ps-proj'); if(pj) pj.click(); } }); },true);
   // папка проекта: строка в шапке (и значок папки в рейке) — меню смены
   document.addEventListener('click',async e=>{ const pj=e.target.closest('aside.side.ps .ps-proj, aside.side.ps [data-folders]'); if(!pj||!H.on) return; e.preventDefault(); e.stopPropagation();
     const items=(H.projects||[]).map(pr=>({t:esc(pr.name)+(pr.current?' <small>текущая</small>':''),r:(pr.seats==null?'':pr.seats+' '+pl(pr.seats,'роль','роли','ролей'))+(pr.git?' · git':''),path:pr.path,dis:!!pr.current})).concat([{t:'Открыть другую папку…',open:true}]);
@@ -797,5 +802,5 @@
         S.ui.fresh=false; save(); S.chat.push({role:'me',text:q,t:now()}); save(); render(); reply(q); } else render(); } });
   addEventListener('resize',()=>{ wireSearch(); badges(); });
   addEventListener('storage',()=>{ load(); refresh(); if(cols().length) render(); if(window.CX) CX.render(); });
-  window.LIVE={get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,selStart};   // для cx.js (поле ввода)
+  window.LIVE={get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,selStart,laMenu,laPath,laMulti};   // для cx.js (поле ввода)
 })();

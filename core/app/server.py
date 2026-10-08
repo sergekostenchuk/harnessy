@@ -22,6 +22,7 @@ from .journal import KINDS, REPLY_KIND, Journal, JournalError
 from .panes import MODE_IDS, MODES, Pane, Registry, TaggedSubscriber
 from .policy import Policy, PolicyError
 from .team import Seat, Team, TeamError, ensure_line, load_team
+from . import connections as conn
 
 ROOT = Path(__file__).resolve().parent.parent
 PORT = int(os.environ.get("PORT", "3777"))
@@ -50,6 +51,24 @@ ROLE_CATALOG = [("orchestrator", "оркестратор", False), ("assistant",
                 ("executor", "воркер", True), ("reviewer", "ревьюер", True), ("tester", "тестер", False), ("researcher", "ресёрчер", False)]
 PROJECTS_FILE = Path(os.path.expanduser("~/.harness-projects.json"))
 PINS_FILE = Path(os.path.expanduser(os.environ.get("HARNESS_PINS_FILE") or "~/.harness-pins.json"))   # закреплённые папки и чаты владельца — общие для всех папок
+SETTINGS_FILE = Path(os.path.expanduser(os.environ.get("HARNESS_SETTINGS_FILE") or "~/.harness-settings.json"))   # настройки владельца («везде»); проектные — <папка>/.harness/state/settings.json
+SETTINGS_APPLIES = {"defaultMode": "режим прав новой роли, если владелец не выбрал"}   # что из настроек движок ИСПОЛНЯЕТ; остальное окно показывает недоступным
+# окно контекста по модели (таблица движка; неизвестная модель — нет данных, не ноль)
+CONTEXT_WINDOWS = (("gpt-5.3-codex-spark", 128_000), ("claude-", 200_000), ("gpt-", 400_000), ("deepseek", 128_000), ("qwen", 128_000), ("glm", 128_000), ("kimi", 256_000))
+HANDOFF_MARKS = ("Прочитай контекст чата от", "Контекст разговора владельца", "Контекст прежнего чата", "Прежний разговор")
+
+
+def context_window(model: str):
+    m = (model or "").lower()
+    for key, n in CONTEXT_WINDOWS:
+        if m.startswith(key) or key in m:
+            return n
+    return None
+
+
+def est_tokens(text: str) -> int:
+    """Оценка размера текста в токенах (русский ≈ 3,2 символа на токен). Оценка, не измерение — так и подписывается."""
+    return int(len(text) / 3.2) + 1 if text else 0
 
 
 def valid_dir(p) -> bool:
@@ -88,6 +107,7 @@ class App:
         self.threads: dict[str, dict] = {}
         self.repo_root: str | None = None
         self.codex.writable_roots = self._writable_roots
+        self.halted = False                      # выключатель владельца: ходы не идут, записи ждут в очереди
 
     def _writable_roots(self, pane: Pane) -> list[str]:
         """Что Codex может писать сверх своей папки: .git проекта (коммиты из worktree) и папку свидетельств."""
@@ -167,6 +187,7 @@ class App:
                 self.registry.update(p, {"model": st.get("model"), "mode": st.get("mode"), "sessionId": st.get("sessionId"), "digest": st.get("digest")}, valid_dir)
                 p.touched = True
         self._load_chats()
+        self._load_halt()
         self.threads = {}
         for r in self.journal.read(limit=0):
             if r.get("kind") == "verdict" and r.get("thread"):
@@ -435,6 +456,8 @@ class App:
 
     async def pump(self, pane: Pane) -> None:
         while not pane.busy:
+            if self.halted:
+                return                                  # выключатель: ничего не теряется — записи остаются в очереди
             recs = self.journal.pending_for(pane.id)
             if not recs:
                 return
@@ -587,6 +610,7 @@ class App:
             "panes": [{**p.settings(), "pending": len(self.journal.pending_for(p.id))} for p in self.registry.panes.values()],
             "roleCatalog": [{"role": r, "label": l, "multi": m} for r, l, m in ROLE_CATALOG],
             "activeChats": self.chats.get("active", {}), "hasOrchestrator": any(p.role == "orchestrator" for p in self.registry.panes.values()),
+            "halted": self.halted,
             "threads": self.threads,
             "auth": {"claude": claude_auth(), "codex": info["account"]},
             "journal": {"lastSeq": self.journal.last_seq, "path": str(self.journal.channel)},
@@ -867,6 +891,181 @@ class App:
             return web.json_response({"ok": False, "error": f"файл закреплённых не записан: {e}"}, status=500)
         return web.json_response({"ok": True, "on": on, "pins": pins})
 
+    # ---------- контекст по месту (образец владельца: «Context window» disarto; решение с ревьюером №3517) ----------
+    async def api_context(self, request):
+        """Что занимает окно модели у места. Измерение — расход последнего хода от провайдера (вход + кэш + выход);
+        части — оценки по текстам: вводная и инструкции · история · переданное; остаток измерения — «система и инструменты модели».
+        Нет хода — нет измерения (так и отдаём), неизвестная модель — окно «нет данных»."""
+        p = self.registry.get(request.match_info["id"])
+        if not p:
+            return web.json_response({"ok": False, "error": "нет такого места"}, status=404)
+        t = p.tokens or {}
+        inp, out, cr = int(t.get("input") or 0), int(t.get("output") or 0), int(t.get("cacheRead") or 0)
+        measured = (inp + cr + out) if t else None
+        seat = self.team.seats.get(p.id) if self.team else None
+        instr = (self.team.instructions_for(seat) if seat else "") + ("\n" + self.role_note(p) if p.id != ROOM_ID else "")
+        history, handoff, onboarding = [], [], 0
+        for i, m in enumerate(p.transcript):
+            text, n = m.get("text") or "", est_tokens(m.get("text") or "")
+            if m.get("role") == "me" and text.startswith(HANDOFF_MARKS):
+                handoff.append({"i": i, "title": text.split("\n")[0][:80], "tokens": n, "ts": int(m.get("ts") or 0)})
+            elif m.get("role") == "peer" and text.startswith("[от харнесс]"):
+                onboarding += n
+            else:
+                history.append({"i": i, "role": m.get("role"), "title": text.split("\n")[0][:80], "tokens": n, "ts": int(m.get("ts") or 0)})
+        e_instr, e_hist, e_hand = est_tokens(instr) + onboarding, sum(x["tokens"] for x in history), sum(x["tokens"] for x in handoff)
+        parts = [{"key": "instructions", "label": "вводная и инструкции", "tokens": e_instr, "est": True},
+                 {"key": "history", "label": "история", "tokens": e_hist, "est": True, "count": len(history)},
+                 {"key": "handoff", "label": "переданное", "tokens": e_hand, "est": True, "count": len(handoff)}]
+        if measured is not None:
+            rest = measured - (e_instr + e_hist + e_hand)
+            parts.append({"key": "system", "label": "система и инструменты модели", "tokens": max(rest, 0), "est": True, "residual": True})
+        used = measured if measured is not None else (e_instr + e_hist + e_hand)
+        window = context_window(p.model)
+        free = (window - used) if window else None
+        if free is not None:
+            parts.append({"key": "free", "label": "свободно", "tokens": max(free, 0), "est": False})
+        c = self._active_chat(p, create=False)
+        return web.json_response({
+            "ok": True, "pane": p.id, "label": p.label, "model": p.model, "window": window, "measured": measured is not None,
+            "used": used, "pct": (round(used * 100 / window, 1) if window else None),
+            "cache": ({"hitPct": round(cr * 100 / (inp + cr)) if (inp + cr) else None, "cached": cr, "new": inp} if t else None),
+            "last": ({"input": inp, "output": out, "cacheRead": cr} if t else None),
+            "parts": parts, "history": history[-60:], "handoff": handoff, "turns": sum(1 for m in p.transcript if m.get("role") == "me"),
+            "chat": (self._chat_meta(c) if c else None), "busy": p.busy,
+        })
+
+    # ---------- выключатель ----------
+    def _halt_path(self) -> Path:
+        return Path(self.project_dir) / ".harness" / "state" / "halt.json"
+
+    def _load_halt(self) -> None:
+        try:
+            self.halted = bool(json.loads(self._halt_path().read_text("utf-8")).get("on"))
+        except (OSError, json.JSONDecodeError, AttributeError):
+            self.halted = False
+
+    async def api_halt(self, request):
+        """«Стоп всем» (настройки → выключатель): идущие ходы прерываются, новые не начинаются, записи ждут в очереди;
+        включить обратно может только владелец (этот же вызов с on=false) — тогда очереди уходят в ход."""
+        body = await request.json()
+        on = bool(body.get("on", True))
+        self.halted = on
+        try:
+            self._halt_path().write_text(json.dumps({"on": on, "ts": int(time.time()), "by": "владелец"}, ensure_ascii=False), encoding="utf-8")
+        except OSError:
+            pass
+        stopped = []
+        for p in self.registry.panes.values():
+            if on and p.busy and p.interrupt:
+                try:
+                    await p.interrupt()
+                    stopped.append(p.id)
+                except Exception:  # noqa: BLE001
+                    pass
+            p.publish({"type": "note", "text": "остановлено владельцем: ходы не идут, сообщения ждут в очереди" if on else "работа возобновлена владельцем"})
+        if not on:
+            for p in self.registry.panes.values():
+                if self.journal.pending_for(p.id):
+                    self.kick(p)
+        pending = {p.id: len(self.journal.pending_for(p.id)) for p in self.registry.panes.values() if self.journal.pending_for(p.id)}
+        return web.json_response({"ok": True, "halted": on, "interrupted": stopped, "pending": pending})
+
+    # ---------- настройки ----------
+    def _settings_project_path(self) -> Path:
+        return Path(self.project_dir) / ".harness" / "state" / "settings.json"
+
+    @staticmethod
+    def _read_json(path: Path) -> dict:
+        try:
+            d = json.loads(path.read_text("utf-8")) if path.exists() else {}
+        except (OSError, json.JSONDecodeError):
+            d = {}
+        return d if isinstance(d, dict) else {}
+
+    def _settings_effective(self) -> dict:
+        owner = self._read_json(SETTINGS_FILE)
+        project = self._read_json(self._settings_project_path()) if self.project_dir else {}
+        return {**owner, **project}
+
+    async def api_settings(self, request):
+        """Настройки: «везде» — файл владельца, «папка» — .harness/state/settings.json; действующее = папка поверх владельца.
+        Движок исполняет только ключи из SETTINGS_APPLIES; прочие хранятся, но окно показывает их недоступными (решение с ревьюером №3517)."""
+        if request.method == "GET":
+            return web.json_response({"ok": True, "owner": self._read_json(SETTINGS_FILE), "project": self._read_json(self._settings_project_path()) if self.project_dir else {},
+                                      "effective": self._settings_effective(), "applies": SETTINGS_APPLIES})
+        body = await request.json()
+        scope = str(body.get("scope") or "owner")
+        patch = body.get("patch")
+        if scope not in ("owner", "project") or not isinstance(patch, dict) or not patch:
+            return web.json_response({"ok": False, "error": "scope: owner или project; patch — объект ключ → значение"}, status=400)
+        for k, v in patch.items():
+            if not isinstance(k, str) or not k.replace("_", "").isalnum() or len(k) > 40:
+                return web.json_response({"ok": False, "error": f"ключ {k!r} не годится"}, status=400)
+            if v is not None and not isinstance(v, (str, int, float, bool, list)):
+                return web.json_response({"ok": False, "error": f"значение {k}: только строка, число, флаг или список"}, status=400)
+            if k == "defaultMode" and v is not None and v not in MODE_IDS:
+                return web.json_response({"ok": False, "error": f"defaultMode: {', '.join(sorted(MODE_IDS))}"}, status=400)
+        path = SETTINGS_FILE if scope == "owner" else self._settings_project_path()
+        if scope == "project" and not self.project_dir:
+            return web.json_response({"ok": False, "error": "папка не открыта"}, status=400)
+        cur = self._read_json(path)
+        for k, v in patch.items():
+            if v is None:
+                cur.pop(k, None)
+            else:
+                cur[k] = v
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(cur, ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError as e:
+            return web.json_response({"ok": False, "error": f"не записано: {e}"}, status=500)
+        return web.json_response({"ok": True, "scope": scope, "saved": cur, "effective": self._settings_effective(), "applies": SETTINGS_APPLIES, "ts": int(time.time())})
+
+    # ---------- подключения и маршруты ----------
+    async def api_connections(self, request):
+        """Провайдеры, которые ведёт движок: вход, число моделей, места, маршрут сети и последняя проверка выхода."""
+        info = await self.codex.info()
+        try:
+            cl = await asyncio.wait_for(asyncio.to_thread(claude_auth), 9)
+        except Exception as e:  # noqa: BLE001
+            cl = {"loggedIn": False, "error": str(e)[:120]}
+        seats = lambda v: [p.id for p in self.registry.panes.values() if p.vendor == v and p.id != ROOM_ID]   # noqa: E731
+        codex_models = info.get("models") or []
+        gpt = [m for m in codex_models if str(m.get("id", "")).startswith("gpt")]
+        other = [m for m in codex_models if not str(m.get("id", "")).startswith("gpt")]
+        providers = [
+            {"id": "claude", "name": "Claude", "kind": "подписка · вход через claude", "auth": cl, "models": len(self.models.get("claude") or []), "seats": seats("claude"), "routable": True, "route": conn.get("claude")},
+            {"id": "codex", "name": "Codex", "kind": "подписка ChatGPT · codex app-server", "auth": info.get("account") or {}, "models": len(gpt), "seats": seats("codex"), "routable": True, "route": conn.get("codex")},
+        ]
+        if other:
+            providers.append({"id": "router", "name": "Роутер провайдеров", "kind": "локальный роутер 127.0.0.1:11435 · Ollama Cloud, Qwen, DeepSeek, GLM, Kimi", "auth": {"loggedIn": True},
+                              "models": len(other), "seats": [], "routable": False, "route": None,
+                              "note": "выход в сеть у роутера свой — движок его маршрут не задаёт"})
+        return web.json_response({"ok": True, "providers": providers, "routes": list(conn.ROUTES)})
+
+    async def api_connections_route(self, request):
+        body = await request.json()
+        vendor = str(body.get("provider") or "")
+        if vendor not in ("claude", "codex"):
+            return web.json_response({"ok": False, "error": "маршрут задаётся только провайдерам, чьи процессы запускает движок: claude, codex"}, status=400)
+        try:
+            cfg = conn.set_route(vendor, str(body.get("route") or "direct"), str(body.get("proxy") or ""), str(body.get("iface") or ""),
+                                 str(body.get("label") or ""), str(body.get("expect") or ""))
+        except ValueError as e:
+            return web.json_response({"ok": False, "error": str(e)}, status=400)
+        if vendor == "codex" and callable(getattr(self.codex, "reset", None)):
+            await self.codex.reset()          # новый процесс Codex получит новое окружение; Claude берёт окружение на каждом ходе
+        return web.json_response({"ok": True, "provider": vendor, "route": cfg, "applies": "со следующего хода" if cfg["route"] != "iface" else "только проверка выхода: трафик идёт системным маршрутом"})
+
+    async def api_connections_check(self, request):
+        body = await request.json()
+        vendor = str(body.get("provider") or "")
+        if vendor not in ("claude", "codex"):
+            return web.json_response({"ok": False, "error": "проверка выхода: claude или codex"}, status=400)
+        res = await asyncio.to_thread(conn.check, vendor)
+        return web.json_response({"ok": True, "provider": vendor, "check": res, "route": conn.get(vendor)})
+
     async def api_projects(self, request):
         try:
             known = json.loads(PROJECTS_FILE.read_text("utf-8")) if PROJECTS_FILE.exists() else []
@@ -1091,7 +1290,7 @@ class App:
         """Назначить роль, которой в папке ещё нет — вызов владельца из интерфейса."""
         body = await request.json()
         try:
-            pane, c = self.create_seat(str(body.get("role") or ""), str(body.get("model") or ""), str(body.get("mode") or "read"),
+            pane, c = self.create_seat(str(body.get("role") or ""), str(body.get("model") or ""), str(body.get("mode") or self._settings_effective().get("defaultMode") or "read"),
                                        by="владелец (интерфейс)", how="владельцем из меню собеседника")
         except ValueError as e:
             msg = str(e)
@@ -1387,6 +1586,13 @@ class App:
         app.router.add_post("/api/assign_role", self.api_assign_role)
         app.router.add_post("/api/handoff", self.handoff)
         app.router.add_get("/api/pins", self.api_pins)
+        app.router.add_get("/api/context/{id}", self.api_context)
+        app.router.add_post("/api/halt", self.api_halt)
+        app.router.add_get("/api/settings", self.api_settings)
+        app.router.add_post("/api/settings", self.api_settings)
+        app.router.add_get("/api/connections", self.api_connections)
+        app.router.add_post("/api/connections/route", self.api_connections_route)
+        app.router.add_post("/api/connections/check", self.api_connections_check)
         app.router.add_post("/api/pins", self.api_pins)
         app.router.add_get("/api/chats", self.chats_list)
         app.router.add_get("/api/chats/{id}", self.chat_get)
@@ -1404,7 +1610,15 @@ def main():
         last = LAST_PROJECT_FILE.read_text("utf-8").strip()
         if valid_dir(last):
             start_dir = last
-    app = web.Application(client_max_size=2_000_000)
+    @web.middleware
+    async def no_cache_static(request, handler):
+        """Окно (статика /sketches) — всегда свежее: без заголовков браузер держал старые live.js/HTML часами (08.10.2026)."""
+        resp = await handler(request)
+        if request.path.startswith("/sketches"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+    app = web.Application(client_max_size=2_000_000, middlewares=[no_cache_static])
     core.routes(app)
 
     async def on_startup(_):

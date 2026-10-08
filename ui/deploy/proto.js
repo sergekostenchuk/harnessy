@@ -91,6 +91,8 @@
   const back=document.createElement('a'); back.className='proto-back'; back.href=PAGES.new; document.body.appendChild(back);   // у кадра без боковой панели — выход назад
   back.addEventListener('click',e=>{ if(cur>0){ e.preventDefault(); show(0); } });
 
+  // «назад» везде: кнопка в шапке экрана — история окна (в Electron нет кнопок браузера)
+  document.querySelectorAll('.frame .main > .top').forEach(top=>{ const b=document.createElement('span'); b.className='proto-hist'; b.title='Назад'; b.textContent='‹'; b.addEventListener('click',()=>{ if(history.length>1) history.back(); else location.href=PAGES.new; }); top.prepend(b); });
   show(location.hash==='#f2'&&frames[1]?1:0);
   addEventListener('resize',fit);
 })();

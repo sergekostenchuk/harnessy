@@ -185,16 +185,37 @@ def build_proto():
     shutil.copy(HERE / "proto.css", dst / "proto.css")
     shutil.copy(HERE / "live.js", dst / "live.js")                    # рабочий слой: состояние, решения, чат, поиск
     shutil.copy(HERE / "cx.js", dst / "cx.js")                        # поле ввода C′: папка · роль · режимы / ＋ · права · модель · усилие · ⓘ
+    for extra in ("ctx.js", "set.js", "conn.js"):                      # модули экранов: контекст чата, настройки, подключения (08.10.2026)
+        if (HERE / extra).exists():
+            shutil.copy(HERE / extra, dst / extra)
     (dst / "proto.js").write_text(rep((HERE / "proto.js").read_text(encoding="utf-8"), "/*IC*/", ic), encoding="utf-8")
     for stem, title in PROTO_PAGES.items():
         t = (src / f"{stem}.html").read_text(encoding="utf-8")
         t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto>')
         t = rep(t, "</head>", '<link rel="stylesheet" href="proto.css"></head>')
-        t = rep(t, "</body>", '<script src="proto.js"></script>\n<script src="live.js"></script>\n<script src="cx.js"></script>\n</body>')
+        t = rep(t, "</body>", '<script src="proto.js"></script>\n<script src="live.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="conn.js"></script>\n</body>')
         t = re.sub(r"<title>.*?</title>", f"<title>Harnessy · {title}</title>", t, count=1, flags=re.S)
         (dst / f"{stem}.html").write_text(t, encoding="utf-8")
     (dst / "index.html").write_text(LAUNCH, encoding="utf-8")
     print(f"прототип из новых экранов: {len(PROTO_PAGES)} экранов → {dst}")
+
+
+def stamp_assets(dst):
+    """Версии к локальным скриптам и стилям (?v=хэш содержимого): после пересборки браузер и Electron берут новое, а не кэш (08.10.2026)."""
+    import hashlib, re
+    def ver(name):
+        f = dst / name
+        return hashlib.sha1(f.read_bytes()).hexdigest()[:8] if f.exists() else None
+    n = 0
+    for html in dst.glob("*.html"):
+        t = html.read_text(encoding="utf-8")
+        def sub(m):
+            v = ver(m.group(2))
+            return f'{m.group(1)}="{m.group(2)}?v={v}"' if v else m.group(0)
+        t2 = re.sub(r'(src|href)="([a-zA-Z0-9_.-]+\.(?:js|css))"', sub, t)
+        if t2 != t:
+            html.write_text(t2, encoding="utf-8"); n += 1
+    print(f"версии ресурсов проставлены: {n} страниц")
 
 
 def main():
@@ -216,6 +237,7 @@ def main():
     print(f"прежний прототип: {OUT / 'sketches' / 'harness-classic.html'} ({(OUT / 'sketches' / 'harness-classic.html').stat().st_size} байт); корень → {PROTO_START}")
     build_sketches()
     build_proto()
+    stamp_assets(OUT / "sketches" / "proto")
 
 
 if __name__ == "__main__":

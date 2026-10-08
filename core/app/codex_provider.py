@@ -15,6 +15,7 @@ from openai_codex.api import AsyncThread
 from openai_codex.generated.v2_all import ThreadReadResponse, ThreadResumeResponse, ThreadStartResponse
 
 from .claude_provider import strip_digest
+from . import connections as conn
 from .panes import APPROVAL_TIMEOUT_SEC, Pane, Registry
 
 HOME = os.path.expanduser("~")
@@ -126,8 +127,9 @@ class CodexProvider:
                 await cur[0].close()
             except Exception:
                 pass
+        penv = conn.proxy_env("codex")
         cfg = CodexConfig(cwd=pane.cwd, client_name="simple_claude_chat", client_title="Simple chat",
-                          config_overrides=self.overrides(pane))
+                          config_overrides=self.overrides(pane), env=({**os.environ, **penv} if penv else None))   # маршрут провайдера (подключения)
         codex = AsyncCodex(config=cfg)
         await codex.__aenter__()
         loop = asyncio.get_running_loop()
@@ -250,6 +252,7 @@ class CodexProvider:
                 if error:
                     raise RuntimeError(str(error.get("message") if isinstance(error, dict) else error))
                 pane.tokens = usage
+                pane.tokens = usage                     # расход последнего хода — для карточки «Контекст»
                 pane.publish({"type": "done", "sessionId": pane.session_id, "model": pane.model, "durationMs": dur, "usage": usage})
         return text
 
@@ -331,6 +334,15 @@ class CodexProvider:
             self.account_cache = {"loggedIn": False, "error": str(e)[:200]}
             self.models_cache = [{"id": "gpt-5.6-sol", "label": "gpt-5.6-sol"}, {"id": "gpt-5.3-codex-spark", "label": "gpt-5.3-codex-spark"}]
         return {"models": self.models_cache, "account": self.account_cache}
+
+    async def reset(self) -> None:
+        """Закрыть процессы мест: следующий ход поднимет их заново (новое окружение, напр. маршрут). Сессии (thread id) сохраняются."""
+        for codex, _ in list(self.clients.values()):
+            try:
+                await codex.close()
+            except Exception:
+                pass
+        self.clients.clear()
 
     async def close(self) -> None:
         for codex in list(self.list_clients.values()):

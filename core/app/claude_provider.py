@@ -12,6 +12,7 @@ from claude_agent_sdk import (
     get_session_messages, list_sessions,
 )
 
+from . import connections as conn
 from .panes import Pane, Registry
 
 HOME = os.path.expanduser("~")
@@ -90,7 +91,7 @@ class ClaudeProvider:
     def options(self, pane: Pane) -> ClaudeAgentOptions:
         kw: dict = dict(
             cwd=pane.cwd, model=pane.model or None, setting_sources=[], strict_mcp_config=True,
-            include_partial_messages=True, env=child_env(), cli_path=CLAUDE_BIN,
+            include_partial_messages=True, env={**child_env(), **conn.proxy_env("claude")}, cli_path=CLAUDE_BIN,   # маршрут провайдера (подключения)
             mcp_servers={"panes": self.bridge.sdk_server(pane)}, resume=pane.session_id,
         )
         allowed = list(PEER_TOOLS)
