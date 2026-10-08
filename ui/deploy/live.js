@@ -108,7 +108,8 @@
     if(!cid){ if(LOADED!==null){ S.chat=[]; save(); } LOADED=cid||'none'; render(); return; }
     let r=null; try{ r=await api('/api/chats/'+cid); }catch(e){} if(!r||!r.messages){ return; }
     const who=p.id==='room'?'Без роли':paneName(p);
-    S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:'live',who:m.role==='peer'?(/^\[от харнесс\] контекст передан/.test(m.text)?'харнесс · передача':/^\[от харнесс\]/.test(m.text)?'харнесс · вводная':'сосед'):who,pane:p.id,model:r.chat.model||p.model,html:md(m.text.replace(/^\[от [^\]]+\]\s*/,'')),text:m.text,t:(m.ts||0)*1000}).slice(-80);
+    const hsys=m=>m.role==='peer'&&/^\[от харнесс\]/.test(m.text);   // заметки харнесса (вводная, передача) — системные: без модели, расхода и действий
+    S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:hsys(m)?'sys':'live',who:hsys(m)?(/контекст передан/.test(m.text)?'харнесс · передача':'харнесс · вводная'):(m.role==='peer'?'сосед':who),pane:p.id,model:r.chat.model||p.model,html:md(m.text.replace(/^\[от [^\]]+\]\s*/,'')),text:m.text,t:(m.ts||0)*1000}).slice(-80);
     LOADED=cid; save(); render();
     if(p.id!=='room'&&!r.messages.length){ try{ const o=await api('/api/onboard',{pane:p.id}); if(o&&o.sent){ H.cur={text:'',tools:[]}; drawLive(); toast('Роль получает вводную: кто она, где, с кем работает'); } }catch(e){} } }   // роль без вводной получает её при первом открытии чата (правило движка)
   async function hConnect(){ if(PAGE!=='chat'&&PAGE!=='new') return; let st=null; try{ st=await api('/api/status'); }catch(e){} if(!st||!Array.isArray(st.panes)||!st.panes.length) return;
