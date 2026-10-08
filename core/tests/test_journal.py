@@ -80,7 +80,7 @@ class JournalTests(unittest.TestCase):
             rec = j2.append(sender="owner", to=["a"], kind="note", text="после обрыва")
             j3 = Journal(d)
             self.assertEqual(j3.get(rec["seq"])["text"], "после обрыва")
-            self.assertEqual([r["seq"] for r in j3.read(limit=0)], [0, 1, rec["seq"]])
+            self.assertEqual([r["seq"] for r in j3.read(limit=0)], [1, rec["seq"]])   # read отдаёт seq > 0: строка протокола не входит
 
     def test_read_filters(self):
         self.j.append(sender="owner", to=["left"], kind="task", text="a", thread="T1")
