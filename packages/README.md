@@ -49,6 +49,11 @@
 | `infra` | Партнёры, VPS, развёртывание VPN | 0.6 |
 | `omg` | Адаптер OMG: назначения, команды, результаты; один владелец запуска | после 0.1 |
 
+## Справочный образец — deepseek-harness (DSH)
+Копия для чтения: `~/REFERENCES/deepseek-harness` (MIT; уведомление — `THIRD_PARTY_NOTICES.md` в корне). Берём решения, не строки:
+цикл агента и сессии (`packages/session`, `packages/core`) — для `runtime`; провайдеры по API со своим циклом инструментов (`packages/llm/*`) — для 0.2;
+учёт токенов и временная шкала (`packages/llm/token-meter`, `packages/client/ui-trajectory`) — для 0.5. Дословный перенос фрагмента — только с записью в уведомления.
+
 ## Канал и роли
 Обмен — `~/.harnessy-review/channel.ndjson` (отдельный от OMG; README и вводные рядом). Оркестратор `claude-orch` (Claude Code), ревьюер
 `codex-reviewer` (чат Codex REVIEW-TS-NJS-Harnessy), воркер `codex-worker` (Codex). Пакеты задач — `packages/tasks/TS-<id>.md`;
