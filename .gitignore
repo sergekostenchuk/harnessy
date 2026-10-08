@@ -10,3 +10,6 @@ ui/sketches/disarto-shots/ref-composer-menus/
 # движок
 core/.venv/
 core/logs/
+# новое ядро (TypeScript)
+node_modules/
+packages/*/dist/
