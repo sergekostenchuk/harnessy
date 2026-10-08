@@ -69,15 +69,16 @@ class RoleAssignmentTests(unittest.TestCase):
         async def go():
             with tempfile.TemporaryDirectory() as d:
                 app = await make_app(d)
+                app.create_seat("orchestrator", by="владелец (тест)")      # первым — оркестратор (правило 08.10.2026: остальные роли после него)
                 pane, chat = app.create_seat("reviewer", by="владелец (тест)", how="тестом")
                 self.assertEqual((pane.id, pane.label, pane.vendor), ("reviewer", "ревьюер", "claude"))
                 team = Path(d, ".harness", "team.yaml").read_text("utf-8")
                 self.assertIn("reviewer:", team)
                 self.assertIn("instructions: roles/reviewer.md", team)
-                assign = records(app, origin="assign")
+                assign = [x for x in records(app, origin="assign") if "ревьюер" in x["text"]]
                 self.assertEqual(len(assign), 1)
                 self.assertIn("инициатор: владелец (тест)", assign[0]["text"])
-                onb = records(app, origin="onboarding")
+                onb = [x for x in records(app, origin="onboarding") if "reviewer" in x["to"]]
                 self.assertEqual(len(onb), 1)
                 self.assertEqual(onb[0]["from"], HARNESS)
                 self.assertIn("reviewer", onb[0]["to"])

@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import secrets, subprocess, time
 import sys
 from pathlib import Path
@@ -21,7 +22,7 @@ from .evidence import check_report, resolve_evidence
 from .journal import KINDS, REPLY_KIND, Journal, JournalError
 from .panes import MODE_IDS, MODES, Pane, Registry, TaggedSubscriber
 from .policy import Policy, PolicyError
-from .team import Seat, Team, TeamError, ensure_line, load_team
+from .team import Seat, Team, TeamError, ensure_line, load_team, seed_orchestrator
 from . import connections as conn
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -50,9 +51,10 @@ ROOM_ID = "room"
 ROLE_CATALOG = [("orchestrator", "оркестратор", False), ("assistant", "ассистент", False), ("architect", "архитектор", False),
                 ("executor", "воркер", True), ("reviewer", "ревьюер", True), ("tester", "тестер", False), ("researcher", "ресёрчер", False)]
 PROJECTS_FILE = Path(os.path.expanduser("~/.harness-projects.json"))
+PROJECTS_ROOT_DEFAULT = os.path.expanduser(os.environ.get("HARNESS_PROJECTS_ROOT") or "~/Harnessy-Projects")   # проекты, созданные оркестратором из разговора без проекта (настройка projectsRoot)
 PINS_FILE = Path(os.path.expanduser(os.environ.get("HARNESS_PINS_FILE") or "~/.harness-pins.json"))   # закреплённые папки и чаты владельца — общие для всех папок
 SETTINGS_FILE = Path(os.path.expanduser(os.environ.get("HARNESS_SETTINGS_FILE") or "~/.harness-settings.json"))   # настройки владельца («везде»); проектные — <папка>/.harness/state/settings.json
-SETTINGS_APPLIES = {"defaultMode": "режим прав новой роли, если владелец не выбрал"}   # что из настроек движок ИСПОЛНЯЕТ; остальное окно показывает недоступным
+SETTINGS_APPLIES = {"defaultMode": "режим прав новой роли, если владелец не выбрал", "projectsRoot": "куда создаётся проект из разговора без проекта"}   # что из настроек движок ИСПОЛНЯЕТ; остальное окно показывает недоступным
 # окно контекста по модели (таблица движка; неизвестная модель — нет данных, не ноль)
 CONTEXT_WINDOWS = (("gpt-5.3-codex-spark", 128_000), ("claude-", 200_000), ("gpt-", 400_000), ("deepseek", 128_000), ("qwen", 128_000), ("glm", 128_000), ("kimi", 256_000))
 HANDOFF_MARKS = ("Прочитай контекст чата от", "Контекст разговора владельца", "Контекст прежнего чата", "Прежний разговор")
@@ -608,7 +610,7 @@ class App:
                      "mergeRoles": self.team.merge_roles if self.team else []},
             "repo": self.repo_root,
             "panes": [{**p.settings(), "pending": len(self.journal.pending_for(p.id))} for p in self.registry.panes.values()],
-            "roleCatalog": [{"role": r, "label": l, "multi": m} for r, l, m in ROLE_CATALOG],
+            "roleCatalog": self._role_catalog(), "noProject": self._room_without_project(), "projectsRoot": self._projects_root(),
             "activeChats": self.chats.get("active", {}), "hasOrchestrator": any(p.role == "orchestrator" for p in self.registry.panes.values()),
             "halted": self.halted,
             "threads": self.threads,
@@ -1096,20 +1098,13 @@ class App:
             return web.json_response({"ok": False, "error": "нужен абсолютный путь папки"}, status=400)
         if any(p.busy for p in self.registry.panes.values()):
             return web.json_response({"ok": False, "error": "идёт ход: создай папку, когда все окна свободны"}, status=409)
-        created = not os.path.isdir(path)
         try:
-            os.makedirs(path, exist_ok=True)
-        except OSError as e:
-            return web.json_response({"ok": False, "error": f"не удалось создать папку: {e}"}, status=400)
-        git_done = False
-        if body.get("git", True) and not gitops.is_repo(path):
-            code, _, err = gitops.run(["init", "-q"], path)
-            git_done = code == 0
-            if code != 0:
-                return web.json_response({"ok": False, "error": f"git init: {err.strip()[:200]}"}, status=400)
-        ensure_line(path)
+            info = self._init_project(path, git=bool(body.get("git", True)), model=str(body.get("model") or ""))
+        except (ValueError, OSError) as e:
+            return web.json_response({"ok": False, "error": f"проект не создан: {e}"}, status=400)
         await self.open_project(path)
-        return web.json_response({"ok": True, "project": path, "created": created, "git": git_done or gitops.is_repo(path), "seats": sum(1 for p in self.registry.panes.values() if p.id != ROOM_ID)})
+        return web.json_response({"ok": True, "project": path, "created": info["created"], "git": info["git"], "orchestrator": info["orchestrator"], "memory": info["memory"],
+                                  "seats": sum(1 for p in self.registry.panes.values() if p.id != ROOM_ID)})
 
     async def room_set(self, request):
         body = await request.json()
@@ -1136,6 +1131,33 @@ class App:
             return web.json_response({"ok": False, "error": "нет разговора без роли — назначать нечему"}, status=400)
         if room.busy:
             return web.json_response({"ok": False, "error": "разговор сейчас отвечает — назначьте роль после ответа"}, status=409)
+        created, how = None, "владельцем из разговора без роли (разговор продолжается в этой роли)"
+        if self._room_without_project():
+            # без проекта доступен только оркестратор: по вызову он создаёт проект, названный по разговору, разворачивает git, .harness и память,
+            # и разговор продолжается в его роли (слово владельца 08.10.2026)
+            if role != "orchestrator":
+                return web.json_response({"ok": False, "error": "без проекта доступен только оркестратор — он создаст проект по разговору"}, status=400)
+            if any(p.busy for p in self.registry.panes.values()):
+                return web.json_response({"ok": False, "error": "идёт ход: создать проект можно, когда все окна свободны"}, status=409)
+            root = self._projects_root(create=True)
+            name = self._project_name_from(room.transcript)
+            path, k = os.path.join(root, name), 2
+            while os.path.exists(path):
+                path, k = os.path.join(root, f"{name}-{k}"), k + 1
+            vendor, model, transcript, carry = room.vendor, room.model, list(room.transcript), room.carry
+            try:
+                self._init_project(path, git=True, model=model, orchestrator=False)   # разговор сам станет оркестратором — место пишется ниже
+            except (ValueError, OSError) as e:
+                return web.json_response({"ok": False, "error": f"проект не создан: {e}"}, status=400)
+            await self.open_project(path)
+            room = self._make_room(model, self._settings_effective().get("defaultMode") or "read", vendor=vendor, quiet=True)
+            if not room:
+                return web.json_response({"ok": False, "error": "разговор не перенесён в новый проект"}, status=400)
+            room.transcript, room.carry, room.session_id = transcript, carry, None   # сессия модели привязана к папке — контекст поедет текстом
+            created = path
+            how = f"из разговора без проекта — проект «{os.path.basename(path)}» создан по этому разговору: git, .harness (команда, политика, журнал), память MEMORY.md"
+        elif role != "orchestrator" and not self._has_orchestrator():
+            return web.json_response({"ok": False, "error": "сначала оркестратор — он разворачивает проект и вводит остальные роли"}, status=400)
         if self.team is None:
             return web.json_response({"ok": False, "error": "команда папки не читается: " + "; ".join(self.line_errors)}, status=400)
         same = [p for p in self.registry.panes.values() if p.role == role and p.id != ROOM_ID]
@@ -1181,17 +1203,126 @@ class App:
             self.post(HARNESS, [OWNER], "status", f"Назначена роль «{label}» ({sid}, {room.model}, {room.mode}) разговору без роли — инициатор: владелец (интерфейс).", origin="assign")
         except JournalError as e:
             print(f"[harness] запись о назначении {sid} не легла в журнал: {e}", file=sys.stderr, flush=True)
-        self._send_onboarding(pane, "владельцем из разговора без роли (разговор продолжается в этой роли)")
+        self._send_onboarding(pane, how)
         self.kick(pane)
         self.save_panes()
-        return web.json_response({"ok": True, "pane": pane.settings(), "team": str(tf)})
+        return web.json_response({"ok": True, "pane": pane.settings(), "team": str(tf), "project": self.project_dir, "created": bool(created)})
+
+    # ---------- проект: «без проекта», каталог ролей, корень проектов, имя по разговору, создание ----------
+    def _no_project(self) -> bool:
+        """Папка по умолчанию движка — не проект."""
+        return self.project_dir == DEFAULT_DIR
+
+    def _room_without_project(self) -> bool:
+        """Разговор без роли «без проекта»: папка по умолчанию или режим «только чат» (окно: пункт «Без проекта»)."""
+        room = self.registry.panes.get(ROOM_ID)
+        return self._no_project() or bool(room and room.mode == "chat")
+
+    def _has_orchestrator(self) -> bool:
+        return any(p.role == "orchestrator" for p in self.registry.panes.values())
+
+    def _role_catalog(self) -> list[dict]:
+        """Каталог ролей с доступностью (правило движка, слово владельца 08.10.2026): без проекта — только оркестратор (по вызову создаст проект
+        по разговору); в проекте остальные роли доступны, когда оркестратор уже есть — он разворачивает проект и вводит роли."""
+        nop, orch = self._room_without_project(), self._has_orchestrator()
+        out = []
+        for r, l, m in ROLE_CATALOG:
+            ok = r == "orchestrator" or (orch and not nop)
+            reason = None if ok else ("без проекта: оркестратор создаст проект по разговору" if nop else "сначала оркестратор — он разворачивает проект и вводит роли")
+            out.append({"role": r, "label": l, "multi": m, "available": ok, "reason": reason})
+        return out
+
+    def _projects_root(self, create: bool = False) -> str:
+        root = os.path.expanduser(str(self._settings_effective().get("projectsRoot") or PROJECTS_ROOT_DEFAULT))
+        if create:
+            os.makedirs(root, exist_ok=True)
+        return root
+
+    def _default_model(self) -> str:
+        room = self.registry.panes.get(ROOM_ID)
+        if room and room.model:
+            return room.model
+        for v in ("claude", "codex"):
+            if v in self.registry.providers:
+                for m in self.models.get(v, []):
+                    if m.get("id"):
+                        return m["id"]
+        return ""
+
+    @staticmethod
+    def project_slug(text: str) -> str:
+        """Имя проекта по первому слову владельца: до четырёх значимых слов, транслит, строчные, дефисы; пусто → proekt-ДДММ-ЧЧММ."""
+        tr = {"а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
+              "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch",
+              "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya"}
+        stop = {"давай", "давайте", "нужно", "надо", "сделай", "сделаем", "хочу", "хотим", "мне", "нам", "и", "в", "на", "с", "по", "для", "это", "что", "как",
+                "у", "о", "а", "но", "я", "ты", "вы", "мы", "не", "бы", "же", "ли", "про", "из", "к", "от", "до", "за", "пожалуйста", "привет", "здравствуй",
+                "здравствуйте", "есть", "будет", "будем", "новый", "новая", "новое", "проект", "the", "a", "an", "of", "for", "and", "in", "on", "with", "to",
+                "let's", "lets", "make", "create", "build", "please", "hi", "hello", "new", "project", "i", "we", "want", "need"}
+        words = []
+        for w in re.findall(r"[\w'-]+", (text or "").lower()):
+            if w in stop or w.isdigit():
+                continue
+            words.append("".join(tr.get(ch, ch) for ch in w))
+            if len(words) == 4:
+                break
+        slug = re.sub(r"[^a-z0-9]+", "-", "-".join(words)).strip("-")[:40].strip("-")
+        return slug or time.strftime("proekt-%d%m-%H%M")
+
+    def _project_name_from(self, transcript: list[dict]) -> str:
+        first = next((m.get("text", "") for m in transcript if m.get("role") == "me"), "")
+        return self.project_slug(first)
+
+    def _init_project(self, path: str, git: bool = True, model: str = "", orchestrator: bool = True) -> dict:
+        """Единственный алгоритм создания проекта — для всех путей (меню, переезд разговора, оркестратор из чата без проекта):
+        папка → git init → .harness (команда, роли, политика обмена, память проекта MEMORY.md) → место оркестратора в team.yaml, если команда пуста.
+        Модель не вызывается: вводную оркестратор получит при первом открытии его чата или при назначении разговора (слово владельца 08.10.2026)."""
+        created = not os.path.isdir(path)
+        os.makedirs(path, exist_ok=True)
+        git_ok = gitops.is_repo(path)
+        if git and not git_ok:
+            code, _, err = gitops.run(["init", "-q"], path)
+            if code != 0:
+                raise ValueError(f"git init: {err.strip()[:200]}")
+            git_ok = True
+        h = ensure_line(path)
+        seeded = False
+        if orchestrator:
+            model = model or self._default_model()
+            vendor = self._vendor_of(model)
+            if vendor:
+                seeded = seed_orchestrator(h, vendor, model, self._settings_effective().get("defaultMode") or "read")
+        return {"created": created, "git": git_ok, "orchestrator": seeded, "memory": str(h / "MEMORY.md")}
+
+    def _memory_sections(self) -> dict[str, str]:
+        """Разделы .harness/MEMORY.md по заголовкам «## …» (ключи строчными) → текст без заглушек в скобках и прочерков."""
+        try:
+            text = (Path(self.project_dir) / ".harness" / "MEMORY.md").read_text("utf-8")
+        except OSError:
+            return {}
+        out, cur = {}, None
+        for line in text.splitlines():
+            if line.startswith("## "):
+                cur = line[3:].strip().lower()
+                out[cur] = ""
+            elif cur is not None:
+                st = line.strip()
+                if st and not st.startswith("(") and st not in ("—", "-", "–"):
+                    out[cur] += line.rstrip() + "\n"
+        return {k: v.strip() for k, v in out.items()}
 
     def _onboarding(self, pane: Pane, how: str) -> str:
-        """Вводная назначенной роли: кто она, что делает, где, когда и кем назначена, кто уже в команде и с кем по политике говорит (слово владельца 08.10.2026)."""
+        """Вводная назначенной роли (слово владельца 08.10.2026): где, что, когда и кем, зачем, что ожидаем, критерии успеха и провала, риски —
+        из памяти проекта .harness/MEMORY.md, инструкций роли, команды, политики обмена и последних записей журнала.
+        Оркестратор в ответ представляется, сообщает, что развёрнуто, и спрашивает владельца, чем будем заниматься."""
         proj = os.path.basename(self.project_dir.rstrip("/")) or self.project_dir
         when = time.strftime("%d.%m.%Y %H:%M")
-        lines = [f"Ты назначен(а) ролью «{pane.label}» в проекте «{proj}» — папка {self.project_dir}"
-                 + (f", git, интеграционная ветка {self.team.integration_branch}" if self.repo_root and self.team else ", без git") + f". Назначил владелец {when} {how}."]
+        mem = self._memory_sections()
+        none = "в памяти проекта пока не записано — уточни у владельца" + ("" if pane.role == "orchestrator" else " или оркестратора")
+        lines = [f"Ты назначен(а) ролью «{pane.label}» в проекте «{proj}». Когда и кем: владелец, {when}, {how}."]
+        lines.append(f"Где: папка {self.project_dir}" + (f", git, интеграционная ветка {self.team.integration_branch}" if self.repo_root and self.team else ", без git")
+                     + f". Память проекта: {self.project_dir}/.harness/MEMORY.md (цель, решения, уроки, риски — читай; дополняется через оркестратора)."
+                     + f" Файл обмена ролей: {self.project_dir}/.harness/state/channel.ndjson — записи «кто → кому · вид · текст».")
         instr = ""
         if self.team and pane.id in self.team.seats:
             instr = self.team.instructions_for(self.team.seats[pane.id]).strip()
@@ -1199,16 +1330,33 @@ class App:
             lines.append("Что делаешь (инструкции роли):\n" + (instr if len(instr) <= 1500 else instr[:1500] + "\n…(полный текст — в .harness/roles)"))
         else:
             lines.append("Инструкций роли в папке пока нет — действуй по общим правилам роли и по командам владельца или оркестратора.")
+        lines.append("Зачем (цель проекта): " + (mem.get("цель") or none) + ".")
+        lines.append("Что ожидаем: " + (mem.get("что ожидаем") or none) + ".")
+        lines.append("Критерии успеха: " + (mem.get("критерии успеха") or none) + ". Критерии провала: " + (mem.get("критерии провала") or none) + ".")
+        lines.append("Риски: " + (mem.get("риски") or none) + ".")
+        rest = [f"{k.capitalize()}:\n{v}" for k, v in mem.items() if v and k not in ("цель", "что ожидаем", "критерии успеха", "критерии провала", "риски")]
+        if rest:
+            txt = "\n\n".join(rest)
+            lines.append("Остальное из памяти проекта:\n" + (txt if len(txt) <= 2500 else txt[:2500] + "\n…(полный текст — в .harness/MEMORY.md)"))
         lines.append(f"Твоя модель: {pane.model}; права: {next((m['label'] for m in MODES if m['id'] == pane.mode), pane.mode)}.")
         team = [f"{p.label} · {p.model} · {next((m['label'] for m in MODES if m['id'] == p.mode), p.mode)}" + (" — ведёт обмен и говорит с владельцем" if p.role == "orchestrator" else "")
                 for p in self.registry.panes.values() if p.id not in (pane.id, ROOM_ID)]
-        lines.append("Кто уже в команде папки: " + ("; ".join(team) if team else "пока никого — ты первая роль") + ".")
+        lines.append("Кто уже в команде проекта: " + ("; ".join(team) if team else "пока никого — ты первая роль") + ".")
         if self.policy:
             summary = self.policy.summary_for(pane.role, {p.id: p.role for p in self.registry.panes.values()}, {p.id: p.label for p in self.registry.panes.values()}).strip()
             if summary:
                 lines.append("С кем и как взаимодействуешь (политика обмена):\n" + summary)
-        lines.append(f"Файл обмена ролей: {self.project_dir}/.harness/state/channel.ndjson — все записи «кто → кому · вид · текст».")
-        lines.append("Прочитай и ответь одной-двумя фразами: кто ты и что готов(а) делать. Задач пока нет — жди команду.")
+        recent = [r for r in self.journal.read(limit=0) if r.get("origin") != "onboarding"][-8:]
+        if recent:
+            lines.append("Что сейчас в журнале (последние записи):\n" + "\n".join(
+                f"№{r.get('seq')} {r.get('from')} → {', '.join(r.get('to') or [])} · {r.get('kind')}: {(r.get('text') or '').strip()[:160]}" for r in recent))
+        else:
+            lines.append("Журнал обмена пока пуст.")
+        if pane.role == "orchestrator":
+            lines.append(f"Ответь владельцу коротко: ты оркестратор и ведёшь команду проекта «{proj}»; что развёрнуто (команда — кто есть, память проекта, "
+                         + ("git, " if self.repo_root else "") + "журнал обмена); что готов(а) начать — и спроси: чем будем заниматься?")
+        else:
+            lines.append("Прочитай и ответь одной-двумя фразами: кто ты и что готов(а) делать. Задач пока нет — жди команду.")
         return "\n\n".join(lines)
 
     def _send_onboarding(self, pane: Pane, how: str) -> None:
@@ -1242,6 +1390,10 @@ class App:
             raise ValueError(f"неизвестная роль {role}")
         if self.team is None:
             raise ValueError("команда папки не читается: " + "; ".join(self.line_errors))
+        if self._no_project():
+            raise ValueError("папка по умолчанию — не проект: создай проект или назначь оркестратора разговору без проекта")
+        if role != "orchestrator" and not self._has_orchestrator():
+            raise ValueError("сначала оркестратор — он разворачивает проект и вводит остальные роли")
         same = [p for p in self.registry.panes.values() if p.role == role and p.id != ROOM_ID]
         if same and not cat[2]:
             raise ValueError(f"роль «{cat[1]}» в этой папке уже есть ({same[0].label})")
@@ -1361,12 +1513,10 @@ class App:
         if body.get("create"):
             if not path or not os.path.isabs(path):
                 return web.json_response({"ok": False, "error": "нужен абсолютный путь папки"}, status=400)
-            os.makedirs(path, exist_ok=True)
-            if body.get("git", True) and not gitops.is_repo(path):
-                code, _, err = gitops.run(["init", "-q"], path)
-                if code != 0:
-                    return web.json_response({"ok": False, "error": f"git init: {err.strip()[:200]}"}, status=400)
-            ensure_line(path)
+            try:
+                self._init_project(path, git=bool(body.get("git", True)), model=room.model)
+            except (ValueError, OSError) as e:
+                return web.json_response({"ok": False, "error": f"проект не создан: {e}"}, status=400)
         if not valid_dir(path):
             return web.json_response({"ok": False, "error": f"папки нет: {path}"}, status=400)
         vendor, model, carry = room.vendor, room.model, (room.carry + "\n\n" if room.carry else "") + self._transcript_text(room)

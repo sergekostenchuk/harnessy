@@ -1,6 +1,6 @@
 // main.js — оболочка Harnessy (Electron). Окно вокруг прототипа, который отдаёт харнесс ~/HARNESS на :3777.
 // Если харнесс не поднят — запускает его сам (run.sh) и ждёт. Окно без Node внутри: contextIsolation + sandbox.
-const { app, BrowserWindow, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, shell, nativeTheme, ipcMain, dialog } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs'), os = require('os'), path = require('path');
 
@@ -38,7 +38,7 @@ const offline = reason => 'data:text/html;charset=utf-8,' + encodeURIComponent(
 async function createWindow() {
   const win = new BrowserWindow({
     width: 1440, height: 920, minWidth: 900, minHeight: 600, title: 'Harnessy', backgroundColor: DARK, show: false,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, preload: path.join(__dirname, 'preload.js') },   // preload: только выбор папки (Finder)
   });
   const log = m => console.log('[harnessy] ' + m);
   win.once('ready-to-show', () => win.show());
@@ -52,6 +52,14 @@ async function createWindow() {
   await win.loadURL(ok ? START : offline('За 20 секунд сервер не поднялся.'));
   log((ok ? 'открыт ' : 'офлайн-страница; ждали ') + START);
 }
+// выбор папки проекта системным диалогом (Finder): страница просит через preload (window.harnessy.pickFolder); новую папку создают кнопкой диалога
+ipcMain.handle('harnessy:pick-folder', async (e, o) => {
+  o = o || {};
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const r = await dialog.showOpenDialog(win, { title: o.title || 'Папка проекта', buttonLabel: o.button || 'Выбрать', message: o.message || '',
+    defaultPath: (o.defaultPath && fs.existsSync(o.defaultPath)) ? o.defaultPath : os.homedir(), properties: ['openDirectory', 'createDirectory'] });
+  return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
+});
 app.whenReady().then(createWindow);
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 app.on('window-all-closed', () => app.quit());

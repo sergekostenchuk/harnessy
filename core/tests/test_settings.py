@@ -42,7 +42,7 @@ class SettingsTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as d:
                 app = await make_empty_app(d)
                 st, r = await call(app.api_settings, method="GET")
-                self.assertEqual((st, r["effective"], list(r["applies"])), (200, {}, ["defaultMode"]))
+                self.assertEqual((st, r["effective"], list(r["applies"])), (200, {}, ["defaultMode", "projectsRoot"]))
                 st, r = await call(app.api_settings, {"scope": "owner", "patch": {"defaultMode": "edit", "quietHours": [23, 8]}})
                 self.assertEqual((st, r["effective"]["defaultMode"], r["effective"]["quietHours"]), (200, "edit", [23, 8]))
                 st, r = await call(app.api_settings, {"scope": "project", "patch": {"defaultMode": "check"}})
@@ -52,6 +52,7 @@ class SettingsTests(unittest.TestCase):
                 self.assertEqual((await call(app.api_settings, {"scope": "x", "patch": {"a": 1}}))[0], 400)
                 self.assertEqual((await call(app.api_settings, {"scope": "owner", "patch": {"bad key!": 1}}))[0], 400)
                 self.assertEqual((await call(app.api_settings, {"scope": "owner", "patch": {"a": {"nested": 1}}}))[0], 400)
+                self.assertEqual((await call(app.seat_create, {"role": "orchestrator", "mode": "read"}))[0], 200)   # первым — оркестратор (правило 08.10.2026)
                 st, r = await call(app.seat_create, {"role": "tester"})
                 self.assertEqual((st, r["pane"]["mode"]), (200, "check"), "роль без режима получает defaultMode из настроек")
                 st, r = await call(app.seat_create, {"role": "architect", "mode": "read"})

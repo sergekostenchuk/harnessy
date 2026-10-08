@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -76,7 +77,29 @@ def ensure_line(project_dir: str) -> Path:
         dst = h / "roles" / src.name
         if not dst.exists():
             shutil.copyfile(src, dst)
+    if not (h / "MEMORY.md").exists():   # память проекта — вики в Markdown (дешевле HTML по контексту, читают и люди, и модели); слово владельца 08.10.2026
+        name = Path(project_dir).name or project_dir
+        (h / "MEMORY.md").write_text((TEMPLATES / "MEMORY.md").read_text("utf-8").replace("{name}", name).replace("{date}", time.strftime("%d.%m.%Y")), encoding="utf-8")
     return h
+
+
+TEAM_HEADER = "# Манифест команды линии. Места добавляются и из чата («Назначить роль»); комментарии при этом не сохраняются.\n"
+
+
+def seed_orchestrator(harness_dir: Path, vendor: str, model: str, mode: str = "read") -> bool:
+    """Новый проект: единственная роль по умолчанию — оркестратор; остальные роли вводит он (слово владельца 08.10.2026).
+    Пишется в team.yaml только если мест ещё нет. Модель не вызывается — вводную оркестратор получит при первом открытии чата."""
+    tf = harness_dir / "team.yaml"
+    try:
+        d = yaml.safe_load(tf.read_text("utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return False
+    if not isinstance(d, dict) or d.get("seats"):
+        return False
+    d["seats"] = {"orchestrator": {"role": "orchestrator", "label": "оркестратор", "vendor": vendor, "model": model, "mode": mode, "digest": False,
+                                   "instructions": "roles/orchestrator.md"}}
+    tf.write_text(TEAM_HEADER + yaml.safe_dump(d, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return True
 
 
 def load_team(harness_dir: Path) -> Team:
