@@ -46,7 +46,8 @@
   /* правая колонка — сцена */
   .visual { position:relative; overflow:hidden; background:var(--bg); min-height:420px; }
   .visual canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
-  .visual video.intro { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; z-index:1; background:#0a0a0c; }   /* ролик-заставка (08.10.2026) */
+  .visual video.intro { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; object-position:center; display:block; z-index:1; background:transparent; }   /* ролик-заставка (08.10.2026): кадр целиком, без обрезки */
+  .visual.v::before { content:""; position:absolute; inset:-40px; background:url(/auth/pour-intro.jpg) center/cover no-repeat; filter:blur(28px) brightness(.5) saturate(1.1); z-index:0; }   /* поля над и под кадром — размытый постер (леттербокс) */
   .visual.v canvas, .visual.v .meter { display:none; } .visual .cap { z-index:2; }
   .cap { position:absolute; top:22px; font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); } .cap b { color:var(--ink2); font-weight:500; }
   .cap.l { left:26px; } .cap.r { right:26px; text-align:right; }
