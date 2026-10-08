@@ -32,6 +32,9 @@ class Bridge:
         to = args.get("to")
         if isinstance(to, str):
             to = [t.strip() for t in to.split(",") if t.strip()]
+        if to and all(t == "owner" for t in to) and str(args.get("kind") or "") == "answer":
+            # ответ владельцу — обычный текст ответа (он в чате); запись answer владельцу политика запрещает всем — не плодим «отклонено» в журнале (урок 08.10)
+            return {"ok": False, "code": "answer_is_text", "error": "владельцу отвечай обычным текстом ответа — он виден ему в чате; send владельцу — только escalation, status или question"}
         try:
             rec = self.app.post(
                 sender=sender, to=to, kind=str(args.get("kind") or ""), text=str(args.get("text") or ""),

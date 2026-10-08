@@ -254,7 +254,15 @@ html[data-proto][data-page="chat"] .cx-top { width:auto; max-width:760px; margin
 .cx-chip:hover { border-color:var(--ink3); } .cx-chip.acc { border-color:rgba(194,122,52,.5); } .cx-chip.acc svg { stroke:var(--accent); } .cx-chip.on { background:var(--accent-soft); border-color:transparent; color:var(--ink); } .cx-chip.dim { opacity:.55; }
 .cx-plus { width:30px; height:30px; border-radius:9px; border:1px solid var(--line2); display:grid; place-items:center; color:var(--ink2); background:var(--raised); font-size:16px; cursor:pointer; flex:none; } .cx-plus:hover { border-color:var(--accent); color:var(--ink); }
 .cx-info { width:26px; height:26px; border-radius:50%; border:1px solid var(--line2); display:grid; place-items:center; color:var(--ink3); font:500 11px var(--mono); cursor:pointer; flex:none; } .cx-info:hover { color:var(--ink); border-color:var(--ink3); }
-.cx-go { width:32px; height:32px; border-radius:50%; background:var(--ink); color:var(--bg); display:grid; place-items:center; cursor:pointer; flex:none; } .cx-go svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.cx-go { width:32px; height:32px; border-radius:50%; background:var(--ink); color:var(--bg); display:grid; place-items:center; cursor:pointer; flex:none; }
+/* кнопка ввода: три состояния — пусто (приглушена), готово (↑), идёт ход (■ стоп в бегущем кольце; клик или Esc останавливает) */
+.cx-go.off { opacity:.35; cursor:default; }
+.cx-go.busy { position:relative; background:transparent; color:var(--ink); }
+.cx-go.busy::before { content:""; position:absolute; inset:0; border-radius:50%; background:conic-gradient(var(--accent) 0 30%, var(--line2) 30% 100%); animation:cx-spin .9s linear infinite; }
+.cx-go.busy::after { content:""; position:absolute; inset:2px; border-radius:50%; background:var(--bg); }
+.cx-go.busy .sq { position:relative; z-index:1; display:block; width:10px; height:10px; border-radius:2px; background:var(--ink); }
+.cx-go.busy:hover .sq { background:var(--accent); }
+@keyframes cx-spin { to { transform:rotate(360deg); } } .cx-go svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 .cx-pop { position:absolute; z-index:40; width:372px; max-height:620px; overflow-y:auto; overflow-x:hidden; padding:6px; border:1px solid var(--line2); border-radius:12px; background:var(--raised); box-shadow:0 18px 50px rgba(0,0,0,.55); scrollbar-width:none; box-sizing:border-box; } .cx-pop::-webkit-scrollbar { display:none; }
 .cx-hd { font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); padding:8px 10px 4px; display:flex; gap:8px; align-items:center; } .cx-hd small { margin-left:auto; letter-spacing:0; text-transform:none; font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .cx-hd.back { cursor:pointer; color:var(--ink2); text-transform:none; letter-spacing:0; font:500 12.5px var(--font); padding:6px 8px 8px; } .cx-hd.back svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.8; } .cx-hd.back:hover { color:var(--ink); }

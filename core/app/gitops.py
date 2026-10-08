@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import os
 import subprocess
 from pathlib import Path
 
@@ -20,6 +21,13 @@ def run(args: list[str], cwd: str | Path, timeout: int = 60) -> tuple[int, str, 
 def is_repo(path: str | Path) -> bool:
     code, out, _ = run(["rev-parse", "--is-inside-work-tree"], path)
     return code == 0 and out == "true"
+
+
+def own_repo(path: str | Path) -> bool:
+    """Своя рабочая копия: корень репозитория — сама папка. Папка внутри чужого репозитория — не свой git
+    (урок 08.10.2026: проект, созданный внутри ~/Harnessy, принял репозиторий харнесса за свой)."""
+    root = repo_root(path)
+    return bool(root) and os.path.realpath(root) == os.path.realpath(str(path))
 
 
 def repo_root(path: str | Path) -> str | None:

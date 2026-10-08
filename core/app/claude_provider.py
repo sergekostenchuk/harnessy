@@ -2,6 +2,7 @@
 разговор продолжается через resume. Ходит по подписке: SDK использует вход `claude login`."""
 from __future__ import annotations
 
+import sys
 import os
 import time
 from pathlib import Path
@@ -177,7 +178,9 @@ class ClaudeProvider:
                 elif isinstance(m, ResultMessage):
                     pane.session_id = m.session_id or pane.session_id
                     if m.is_error:
-                        raise RuntimeError(m.result or "ошибка модели")
+                        print(f"[harness] {pane.id}: результат модели с ошибкой: subtype={getattr(m, 'subtype', None)!r} result={m.result!r} "
+                              f"turns={getattr(m, 'num_turns', None)}", file=sys.stderr, flush=True)   # причина в лог: голое «ошибка модели» не диагностируется
+                        raise RuntimeError(m.result or f"ошибка модели ({getattr(m, 'subtype', None) or 'без подробностей'})")
                     if not streamed:
                         final = assistant_text or (m.result or "")
                         if final:

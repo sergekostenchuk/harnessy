@@ -125,6 +125,40 @@ class ProjectInitTests(unittest.TestCase):
             self.assertTrue(r["project"].endswith("bota-zapisi-vrachu-telegram-2"))
         asyncio.run(go())
 
+    def test_project_inside_foreign_repo_gets_own_git(self):
+        async def go():
+            outer = self._dir("outer")
+            self.assertEqual(server.gitops.run(["init", "-q"], outer)[0], 0)
+            app = await make_app(self._dir("base2"))
+            app.claude = app.fake
+            path = os.path.join(outer, "sub")
+            st, r = await call(app.project_create, {"path": path})
+            self.assertEqual(st, 200, r)
+            self.assertTrue((Path(path) / ".git").is_dir(), "внутри чужого репозитория проект получает свой git")
+            self.assertEqual(os.path.realpath(app.repo_root), os.path.realpath(path))
+            self.assertFalse(server.gitops.own_repo(os.path.join(outer)) is False)
+            self.assertTrue(server.gitops.own_repo(outer))
+            self.assertFalse(server.gitops.own_repo(os.path.join(outer, "nope")) if os.path.isdir(os.path.join(outer, "nope")) else False)
+            # открытие папки внутри чужого репозитория без своего git — «без git» и предупреждение
+            inner = os.path.join(outer, "plain")
+            os.makedirs(inner)
+            await app.open_project(inner)
+            self.assertIsNone(app.repo_root)
+            self.assertTrue(any("чужого git" in e for e in app.line_errors))
+        asyncio.run(go())
+
+    def test_send_answer_to_owner_is_text_not_journal(self):
+        async def go():
+            app = await make_app(self._dir("ans"))
+            app.create_seat("orchestrator", by="тест")
+            before = app.journal.last_seq
+            r = await app.bridge.do_send("orchestrator", {"to": "owner", "kind": "answer", "text": "привет"})
+            self.assertEqual((r["ok"], r["code"]), (False, "answer_is_text"))
+            self.assertEqual(app.journal.last_seq, before, "ни answer, ни «отклонено» в журнал не ложатся")
+            r = await app.bridge.do_send("orchestrator", {"to": "owner", "kind": "status", "text": "готов"})
+            self.assertTrue(r["ok"], r)
+        asyncio.run(go())
+
     def test_project_slug(self):
         self.assertEqual(App.project_slug("Давай сделаем бота для записи к врачу на Telegram"), "bota-zapisi-vrachu-telegram")
         self.assertEqual(App.project_slug("Hello, let's build a landing page for cafe"), "landing-page-cafe")

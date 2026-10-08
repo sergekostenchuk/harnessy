@@ -159,7 +159,9 @@ class App:
         self.claude.registry = self.registry
         self.codex.registry = self.registry
         # git и worktree мест
-        self.repo_root = gitops.repo_root(path) if gitops.is_repo(path) else None
+        self.repo_root = gitops.repo_root(path) if gitops.own_repo(path) else None   # только свой репозиторий: папка внутри чужого git — «без git»
+        if self.repo_root is None and gitops.is_repo(path):
+            self.line_errors.append(f"папка лежит внутри чужого git-репозитория ({gitops.repo_root(path)}): свой git не создан — создайте проект заново или выполните git init в папке")
         wanted = [s for s in seats if s.worktree]
         if wanted and not self.repo_root:
             self.line_errors.append("папка проекта не git-репозиторий: worktree не созданы, все места работают в корне")
@@ -478,6 +480,7 @@ class App:
                 # (после смены модели или нового сообщения); реплики из ленты места убираем, чтобы при повторе не задвоились. Урок 07.10.2026.
                 del pane.transcript[n:]
                 print(f"[harness] {pane.id}: {e}", file=sys.stderr, flush=True)
+                pane.publish({"type": "error", "text": (str(e) or "ход не состоялся")[:400]})   # окно должно выйти из «думает…» и показать причину (урок 08.10: вопрос «завис»)
                 pane.publish({"type": "note", "text": f"{len(work)} запис{'ь' if len(work) == 1 else 'и'} остались в очереди и уйдут со следующим ходом"})
                 return
             self.journal.advance(pane.id, recs[-1]["seq"])
@@ -497,7 +500,7 @@ class App:
             if r.get("score") is not None:
                 head += f" · балл {r['score']}, раунд {r.get('round')}"
             lines.append(head + "]\n" + r["text"])
-        lines.append("Как отвечать: на question — send kind=answer с reply_to=<seq>; на task — send kind=status; на review-request — "
+        lines.append("Как отвечать: владельцу — обычным текстом ответа (он в чате); на question роли — send kind=answer с reply_to=<seq>; на task — send kind=status; на review-request — "
                      "send kind=verdict с score и round. Если не ответишь сам, твой итоговый текст уйдёт автоматически как ответ "
                      "на question и task; на review-request автоответа нет.")
         return "\n\n".join(lines)
@@ -1088,7 +1091,7 @@ class App:
                     n = len(d.get("seats") or {})
                 except Exception:  # noqa: BLE001
                     n = None
-            out.append({"path": path, "name": os.path.basename(path.rstrip("/")) or path, "hasTeam": os.path.exists(tf), "seats": n, "git": gitops.is_repo(path), "current": path == self.project_dir})
+            out.append({"path": path, "name": os.path.basename(path.rstrip("/")) or path, "hasTeam": os.path.exists(tf), "seats": n, "git": gitops.own_repo(path), "current": path == self.project_dir})
         return web.json_response({"current": self.project_dir, "projects": out})
 
     async def project_create(self, request):
@@ -1279,7 +1282,7 @@ class App:
         Модель не вызывается: вводную оркестратор получит при первом открытии его чата или при назначении разговора (слово владельца 08.10.2026)."""
         created = not os.path.isdir(path)
         os.makedirs(path, exist_ok=True)
-        git_ok = gitops.is_repo(path)
+        git_ok = gitops.own_repo(path)   # внутри чужого репозитория — свой git init (вложенный репозиторий), иначе проект унаследует чужой корень
         if git and not git_ok:
             code, _, err = gitops.run(["init", "-q"], path)
             if code != 0:
@@ -1754,6 +1757,7 @@ class App:
 
 def main():
     os.makedirs(DEFAULT_DIR, exist_ok=True)
+    os.makedirs(PROJECTS_ROOT_DEFAULT, exist_ok=True)   # корень новых проектов: диалог Finder и меню открываются в нём
     core = App()
     start_dir = DEFAULT_DIR
     if LAST_PROJECT_FILE.exists():

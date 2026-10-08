@@ -26,13 +26,15 @@
   function build(box){ if(!box.__cx||box.__cxBuilt) return; box.__cxBuilt=true;
     const top=document.createElement('div'); top.className='cx-top'; box.before(top);
     const att=document.createElement('div'); att.className='cx-att'; box.insertBefore(att, box.querySelector('.in'));
-    const bar=box.querySelector('.bar2'), bot=document.createElement('div'); bot.className='cx-bot'; if(bar) bar.replaceWith(bot); else box.appendChild(bot); }
+    const bar=box.querySelector('.bar2'), bot=document.createElement('div'); bot.className='cx-bot'; if(bar) bar.replaceWith(bot); else box.appendChild(bot);
+    const ta=box.__cx.ta; if(ta) ta.addEventListener('input',()=>{ const g=box.querySelector('.cx-go'); if(g&&!g.classList.contains('busy')) g.classList.toggle('off',!ta.value.trim()); }); }
   function render(box){ const c=cx(), p=seat(), top=box.previousElementSibling, bot=box.querySelector('.cx-bot'), att=box.querySelector('.cx-att'); if(!top||!bot) return;
     const folder=c.noFolder?'Без проекта':(H.on?base(H.project):(c.folder||'OMG'));
     const role=p?(isRoom(p)?'Без роли':L.paneName(p)):'Без роли', rights=p?modeLabel(p.mode):modeLabel(c.rights);
     const model=p&&p.model?modelLabel(p.model):'выбрать модель';   // у разговора без роли модели нет, пока её не выбрали
     const act=p?((H.active||{})[p.id]):null, meta=(H.chatList||[]).find(x=>x.id===act), chatLabel=(PAGE==='new'&&S().ui.fresh)?'Новый чат':(meta&&meta.messages?(meta.title||'без названия'):'Новый чат');
     const direct=p&&S().ui.direct&&S().ui.direct[p.id]&&p.role!=='orchestrator'&&!isRoom(p);
+    const busy=!!(L.busy&&L.busy()), empty=!(box.__cx.ta&&box.__cx.ta.value.trim());   // кнопка ввода: по образцу Claude Desktop/Codex — явное «идёт ход» и остановка той же кнопкой (слово владельца 08.10)
     // слева — где и какой разговор (папка · чат · включённые режимы), справа — кто (роль), в порядке чтения после модели (слово владельца 08.10)
     top.innerHTML=chip('folder',c.noFolder?'src':'folder',folder,{title:c.noFolder?'Разговор без проекта: модель ничего не читает':'Проект: '+(H.project||'')})+
       (H.on&&p?chip('chat','file',chatLabel,{title:'Чаты: новый, чаты роли, чаты проекта'}):'')+
@@ -41,8 +43,10 @@
     att.innerHTML=c.att.map((a,i)=>'<span class="cx-chip on" title="'+esc(a.name)+'">'+svg(a.kind)+'<b>'+esc(a.name)+'</b><i class="x" data-cx-att="'+i+'" title="Убрать">×</i></span>').join(''); att.style.display=c.att.length?'':'none';
     bot.innerHTML='<span class="cx-plus" data-cx="plus" title="Добавить и настроить">＋</span>'+chip('rights','lock',rights,{title:'Права · применяются к месту'})+'<span class="cx-sp"></span>'+
       chip('model','model',model,{cls:'acc'+(p&&p.model?'':' empty'),title:p&&p.model?'Модель: вендор → модель':'Модель ещё не выбрана'})+chip('effort','bolt','Усилие: —',{cls:'dim',title:'Усилие пока недоступно: харнесс не передаёт его месту'})+
-      '<span class="cx-info" data-cx="info" title="Информация: клавиши, примеры, права, расход">i</span><span class="cx-go" data-cx="go" title="Отправить · Enter">'+svg('up')+'</span>';
+      '<span class="cx-info" data-cx="info" title="Информация: клавиши, примеры, права, расход">i</span><span class="cx-go'+(busy?' busy':(empty?' off':''))+'" data-cx="go" title="'+(busy?'Остановить · Esc':'Отправить · Enter')+'">'+(busy?'<i class="sq"></i>':svg('up'))+'</span>';
     if(box.__cx.ta) box.__cx.ta.placeholder=p&&!isRoom(p)?'Написать: '+L.paneName(p)+'…':'Написать сообщение…'; }
+  function setBusy(on){ document.querySelectorAll('.cx-go').forEach(g=>{ if(g.classList.contains('busy')===!!on) return; g.classList.toggle('busy',!!on); g.title=on?'Остановить · Esc':'Отправить · Enter'; g.innerHTML=on?'<i class="sq"></i>':svg('up');
+    const box=g.closest('.box'), ta=box&&box.__cx&&box.__cx.ta; g.classList.toggle('off',!on&&!(ta&&ta.value.trim())); }); }
   function renderAll(){ document.querySelectorAll('.box').forEach(b=>{ if(b.__cx){ build(b); render(b); } }); }
 
   // ── всплывающая панель: одна, от чипа; поле внизу — открывается вверх; внутри переходы с «Назад»
@@ -77,7 +81,7 @@
       return hd('Проект','проект или без проекта')+prs.map(pr=>row(svg('folder')+'<b>'+esc(pr.name)+'</b>',{on:!c.noFolder&&pr.current,a:' data-cx-proj="'+esc(pr.path)+'"',q:pr.name+' '+pr.path,title:pr.path,r:(pr.seats==null?'?':pr.seats)+' ролей'+(pr.git?' · git':'')})).join('')+
         row(svg('src')+'<b>Без проекта</b>',{on:c.noFolder,a:' data-cx-nofolder',r:'только чат'})+hd('ещё')+row('＋ Создать проект (папка + git)…',{a:' data-cx-nav="mkdir"'})+row('Открыть существующий проект…',{a:' data-cx-nav="opendir"'})+
         note(c.noFolder?'Без проекта модель ничего не читает и не меняет — это разговор. Назначьте ему оркестратора (меню «Собеседник») — он создаст проект по разговору; или перенесите разговор в проект под ответом.':'Проект с ролями показывает роли и их последние настройки; без ролей — разговор без роли, модель выбирается отдельно.'); },
-    mkdir(){ return hd('Создать проект')+(window.harnessy&&window.harnessy.pickFolder?row(svg('folder')+'<b>Выбрать в Finder…</b>',{a:' data-cx-finder="mkdir"',r:'новую папку — кнопкой диалога'}):'')+'<input class="cx-find cx-path" placeholder="/Users/…/имя-проекта" value="'+esc(H.homeHint||'')+'">'+row('Создать и открыть',{a:' data-cx-mkdir',on:false})+note('Проект — это папка: создаётся с git, памятью проекта (.harness/MEMORY.md) и одной ролью — оркестратором; остальные роли вводит он.'); },
+    mkdir(){ return hd('Создать проект')+(window.harnessy&&window.harnessy.pickFolder?row(svg('folder')+'<b>Выбрать в Finder…</b>',{a:' data-cx-finder="mkdir"',r:'новую папку — кнопкой диалога'}):'')+'<input class="cx-find cx-path" placeholder="/Users/…/имя-проекта" value="'+esc((H.projectsRoot?H.projectsRoot+'/':H.homeHint)||'')+'">'+row('Создать и открыть',{a:' data-cx-mkdir',on:false})+note('Проект — это папка: создаётся с git, памятью проекта (.harness/MEMORY.md) и одной ролью — оркестратором; остальные роли вводит он.'); },
     opendir(){ return hd('Открыть проект')+(window.harnessy&&window.harnessy.pickFolder?row(svg('folder')+'<b>Выбрать в Finder…</b>',{a:' data-cx-finder="opendir"'}):'')+'<input class="cx-find cx-path" placeholder="/Users/…/проект">'+row('Открыть',{a:' data-cx-opendir'})+note('Папка без команды откроется с пустой командой: первой назначается роль оркестратора, остальные вводит он.'); },
     role(){ const ss=seats(), cur=seat(), rm=room();
       return hd('Собеседник',H.on?base(H.project)+' · '+(ss.length?ss.length+' ролей':'ролей нет'):'харнесс не подключён')+
@@ -125,7 +129,7 @@
   document.addEventListener('click',async e=>{ const c=cx();
     const off=e.target.closest('[data-cx-off]'); if(off){ e.stopPropagation(); c.modes[off.dataset.cxOff]=false; L.save(); renderAll(); return; }
     const rm=e.target.closest('[data-cx-att]'); if(rm){ e.stopPropagation(); c.att.splice(+rm.dataset.cxAtt,1); L.save(); renderAll(); return; }
-    const ch=e.target.closest('[data-cx]'); if(ch&&!e.target.closest('.cx-pop')){ const k=ch.dataset.cx; if(k==='go'){ const box=ch.closest('.box'); if(box&&box.__cx) box.__cx.send(); return; } if(ch.classList.contains('dim')){ open(ch,'effort'); return; }
+    const ch=e.target.closest('[data-cx]'); if(ch&&!e.target.closest('.cx-pop')){ const k=ch.dataset.cx; if(k==='go'){ if(L.busy&&L.busy()){ L.stop&&L.stop(); return; } if(ch.classList.contains('off')) return; const box=ch.closest('.box'); if(box&&box.__cx) box.__cx.send(); return; } if(ch.classList.contains('dim')){ open(ch,'effort'); return; }
       if(k==='folder'&&H.on){ H.projects=null; L.api('/api/projects').then(r=>{ H.projects=r.projects||[]; H.homeHint=(r.current||'').replace(/\/[^/]*$/,'/'); if(pop&&stack[stack.length-1]==='folder') draw(); }).catch(()=>{ H.projects=[]; if(pop) draw(); }); }
       open(ch,k); return; }
     if(!pop||!pop.contains(e.target)) return;
@@ -152,7 +156,7 @@
       if(r.created){ c.noFolder=false; (S().chat||[]).forEach(x=>{ if(x.pane==='room') x.nf=false; }); H.projects=null; L.log('настройка','Проект создан по разговору: '+base(r.project||'')); L.toast('Проект «'+esc(base(r.project||''))+'» создан по разговору — оркестратор отвечает'); }
       S().ui.pane=r.pane.id; S().ui.fresh=false; S().ui.switched=true; L.save(); L.log('настройка','Роль назначена: '+r.pane.label+' · '+r.pane.model); if(PAGE==='new'){ close(); location.href='01-chat.html'; return; }   // новая роль получила вводную — входим в её чат
       await L.refreshStatus(); if(L.loadChat) await L.loadChat(); close(); renderAll(); L.toast('Роль назначена: '+esc(r.pane.label)+' · '+esc(modelLabel(r.pane.model))); return; }
-    const fnd=e.target.closest('[data-cx-finder]'); if(fnd){ let p=null; try{ p=await window.harnessy.pickFolder({title:fnd.dataset.cxFinder==='mkdir'?'Папка нового проекта':'Папка проекта',message:fnd.dataset.cxFinder==='mkdir'?'Выберите папку или создайте новую кнопкой диалога':'',defaultPath:H.homeHint||''}); }catch(x){} const inp=pop&&pop.querySelector('input.cx-path'); if(p&&inp){ inp.value=p; inp.focus(); } return; }
+    const fnd=e.target.closest('[data-cx-finder]'); if(fnd){ let p=null; try{ p=await window.harnessy.pickFolder({title:fnd.dataset.cxFinder==='mkdir'?'Папка нового проекта':'Папка проекта',message:fnd.dataset.cxFinder==='mkdir'?'Выберите папку или создайте новую кнопкой диалога':'',defaultPath:(fnd.dataset.cxFinder==='mkdir'&&H.projectsRoot)||H.homeHint||''}); }catch(x){} const inp=pop&&pop.querySelector('input.cx-path'); if(p&&inp){ inp.value=p; inp.focus(); } return; }
     const pj=e.target.closest('[data-cx-proj]'); if(pj){ await switchProject(pj.dataset.cxProj); return; }
     if(e.target.closest('[data-cx-nofolder]')){ c.noFolder=true; L.save(); const rm=room(); if(rm&&rm.model){ await L.api('/api/room',{model:rm.model,folder:false}); } S().ui.pane=ROOM; L.save(); await L.refreshStatus(); close(); renderAll(); L.toast('Без проекта: модель ничего не читает'); return; }
     if(e.target.closest('[data-cx-mkdir]')||e.target.closest('[data-cx-opendir]')){ const inp=pop.querySelector('input.cx-path'), path=(inp&&inp.value.trim())||''; if(!path){ inp&&inp.focus(); return; }
@@ -180,5 +184,5 @@
     const val=patch.mode?modeLabel(patch.mode):modelLabel(patch.model); L.log('настройка',what+' «'+L.paneName(p)+'»: '+val); L.toast(what+' «'+esc(L.paneName(p))+'»: '+esc(val)); L.hStatus(); draw(); renderAll(); }
   function pick(kind){ const inp=document.createElement('input'); inp.type='file'; if(kind==='dir') inp.webkitdirectory=true; else inp.multiple=true; inp.style.display='none'; document.body.appendChild(inp);
     inp.addEventListener('change',()=>{ const c=cx(), fs=[...inp.files]; if(kind==='dir'&&fs.length){ const d=(fs[0].webkitRelativePath||'').split('/')[0]||'папка'; c.att.push({kind:'folder',name:d+' · '+fs.length+' файлов'}); } else fs.slice(0,8).forEach(f=>c.att.push({kind:'file',name:f.name})); L.save(); renderAll(); inp.remove(); }); inp.click(); close(); }
-  window.CX={render:renderAll,close}; renderAll();
+  window.CX={setBusy,render:renderAll,close}; renderAll();
 })();
