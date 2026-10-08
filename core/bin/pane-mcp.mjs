@@ -68,22 +68,22 @@ async function callTool(name, args) {
   log('вызов ' + name + ' ' + JSON.stringify(args).slice(0, 200));
   try {
     if (name === 'send') {
-      const { d } = await post('/api/send', { from: PANE_ID, ...args });
+      const { d } = await post('/api/send', { ...args, from: PANE_ID });
       if (!d.ok) return err('Отказ: ' + (d.error || 'неизвестная ошибка'));
       return ok(`Запись #${d.seq} отправлена ${(d.to || []).join(', ')}; тред ${d.thread || 'без треда'}.`);
     }
     if (name === 'ask') {
-      const { d } = await post('/api/ask', { from: PANE_ID, ...args });
+      const { d } = await post('/api/ask', { ...args, from: PANE_ID });
       if (!d.ok) return err('Ответа нет: ' + (d.error || 'неизвестная ошибка'));
       return ok(d.reply || '(пустой ответ)');
     }
     if (name === 'merge') {
-      const { d } = await post('/api/merge', { from: PANE_ID, ...args });
+      const { d } = await post('/api/merge', { ...args, from: PANE_ID });
       if (!d.ok) return err('Слияние отклонено: ' + (d.error || 'неизвестная ошибка'));
       return ok(`Слито: ${String(d.sha).slice(0, 12)} → ${String(d.mergeSha).slice(0, 12)} в ${d.branch}.`);
     }
     if (name === 'assign_role') {
-      const { d } = await post('/api/assign_role', { from: PANE_ID, ...args });
+      const { d } = await post('/api/assign_role', { ...args, from: PANE_ID });
       if (!d.ok) return err('Отказ: ' + (d.error || 'неизвестная ошибка'));
       return ok(`Назначена роль «${d.label}» (${d.pane}, ${d.model}, ${d.mode}) по поручению №${d.mandate}; вводная отправлена.`);
     }
