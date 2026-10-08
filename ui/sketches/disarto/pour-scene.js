@@ -44,7 +44,7 @@
 
     function size(){ cw=Math.max(60,cv.clientWidth); ch=Math.max(60,cv.clientHeight); dpr=Math.min(2,window.devicePixelRatio||1);
       cv.width=O.width=Math.round(cw*dpr); cv.height=O.height=Math.round(ch*dpr);
-      k=Math.max(.3,Math.min(1.4,Math.min(cw/DW,ch/DH))); ox=(cw-DW*k)*(opt.ax==null?.5:opt.ax); oy=(ch-DH*k)*(opt.ay==null?.5:opt.ay);
+      k=Math.max(.3,Math.min(opt.kmax||1.4,Math.min(cw/DW,ch/DH)));   // kmax — для крупных рендеров (эскиз 23) ox=(cw-DW*k)*(opt.ax==null?.5:opt.ax); oy=(ch-DH*k)*(opt.ay==null?.5:opt.ay);
       const t=document.createElement('canvas'); t.width=t.height=Math.round(24*dpr); const tc=t.getContext('2d'); tc.fillStyle='#1c1c20'; tc.fillRect(0,0,Math.max(1,dpr),Math.max(1,dpr)); grid=cx.createPattern(t,'repeat'); dirty=true; }
     const design=g=>g.setTransform(dpr*k,0,0,dpr*k,ox*dpr,oy*dpr);
 
@@ -202,6 +202,6 @@
     if(document.fonts&&document.fonts.load){ document.fonts.load('600 14px Fraunces').then(()=>{dirty=true;}); }
     if(opt.onState) opt.onState('idle'); if(opt.onLevel) opt.onLevel(0,'idle');
     requestAnimationFrame(loop);
-    return {start,confirm,deny,reset,state:()=>S.mode,level:()=>S.p};
+    return {start,confirm,deny,reset,state:()=>S.mode,level:()=>S.p,layer:()=>O,landed:()=>S.on&&S.s1>=1,geom:()=>({k,ox,oy,dpr})};   // layer — слой предметов без фона (эскиз 23: струны)
   };
 })();
