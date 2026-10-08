@@ -83,7 +83,12 @@
     <div class="meter"><span>налито</span><div class="ticks" id="tk"></div><b id="pct">0 %</b></div>
   </section>
 </div>
-<script>(function(){ var v=document.getElementById('intro'); if(!v) return; var vis=v.closest('.visual'); v.addEventListener('playing',function(){ vis.classList.add('v'); }); var pl=v.play(); if(pl&&pl.catch) pl.catch(function(){}); })();</script>
+<script>(function(){ var v=document.getElementById('intro'); if(!v) return; var vis=v.closest('.visual'); v.muted=true;
+  var go=function(){ var pl=v.play(); if(pl&&pl.catch) pl.catch(function(){}); };
+  v.addEventListener('playing',function(){ vis.classList.add('v'); });
+  v.addEventListener('canplay',go); v.addEventListener('loadeddata',go); if(v.readyState>=3) go();   // запуск, когда источник готов (ранний play() срывается загрузкой)
+  ['pointerdown','keydown','touchstart'].forEach(function(e){ document.addEventListener(e,function(){ if(v.paused) go(); },{once:true,passive:true}); });   // запасной запуск по первому действию
+})();</script>
 <script>%%POUR_JS%%</script>
 <script>
 (function(){
