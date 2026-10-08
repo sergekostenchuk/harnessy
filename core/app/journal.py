@@ -96,6 +96,15 @@ class Journal:
 
     def _write(self, rec: dict) -> None:
         line = json.dumps(rec, ensure_ascii=False) + "\n"
+        try:   # оборванный хвост (запись без перевода строки, напр. после падения) — новая запись начинается с новой строки, иначе склеится и пропадёт при перечтении (находка ревьюера TS-02, 09.10.2026)
+            with self.channel.open("rb") as rf:
+                rf.seek(0, os.SEEK_END)
+                if rf.tell() > 0:
+                    rf.seek(-1, os.SEEK_END)
+                    if rf.read(1) != b"\n":
+                        line = "\n" + line
+        except OSError:
+            pass
         with self.channel.open("a", encoding="utf-8") as f:
             f.write(line)
             f.flush()

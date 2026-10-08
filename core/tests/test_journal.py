@@ -69,6 +69,19 @@ class JournalTests(unittest.TestCase):
         r = j2.append(sender="owner", to=["left"], kind="task", text="b")
         self.assertEqual(r["seq"], 2)
 
+    def test_truncated_tail_does_not_swallow_next_record(self):
+        """Класс дефекта: после оборванной последней строки (без LF) новая запись склеивалась с хвостом и исчезала при перечтении."""
+        with tempfile.TemporaryDirectory() as d:
+            j = Journal(d)
+            j.append(sender="owner", to=["a"], kind="note", text="первая")
+            with open(j.channel, "a", encoding="utf-8") as f:
+                f.write('{"seq": 2, "id": "x", "ts": "t", "from": "owner", "to": ["a"], "kind": "no')   # обрыв без перевода строки
+            j2 = Journal(d)
+            rec = j2.append(sender="owner", to=["a"], kind="note", text="после обрыва")
+            j3 = Journal(d)
+            self.assertEqual(j3.get(rec["seq"])["text"], "после обрыва")
+            self.assertEqual([r["seq"] for r in j3.read(limit=0)], [0, 1, rec["seq"]])
+
     def test_read_filters(self):
         self.j.append(sender="owner", to=["left"], kind="task", text="a", thread="T1")
         self.j.append(sender="owner", to=["left"], kind="note", text="b", thread="T2")
