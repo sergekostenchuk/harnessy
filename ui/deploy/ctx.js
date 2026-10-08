@@ -12,7 +12,8 @@
   const ago=ts=>{ if(!ts) return ''; const s=Math.max(0,Math.round(Date.now()/1000-ts)); return s<60?'только что':s<3600?Math.round(s/60)+' мин назад':s<86400?Math.round(s/3600)+' ч назад':Math.round(s/86400)+' д назад'; };
   const SH={instructions:'i',system:'s',history:'h',handoff:'d',free:'f'};   // ступени графита; коньяк — только подсветка
   async function refresh(){ const p=L.H.pane; if(!L.H.on||!p){ paint(null); return; } let r=null; try{ r=await L.api('/api/context/'+encodeURIComponent(p.id)); }catch(e){} CTX=(r&&r.ok)?r:null; paint(CTX); }
-  function paint(c){ document.querySelectorAll('.frame .status').forEach(st=>{ const sp=st.querySelectorAll(':scope > span'); if(sp.length<2) return;
+  function paint(c){ if(!L.H.on) return;   // без движка строка состояния остаётся нарисованной (демонстрация на сайте)
+    document.querySelectorAll('.frame .status').forEach(st=>{ const sp=st.querySelectorAll(':scope > span'); if(sp.length<2) return;
       const p=L.H.pane; sp[0].innerHTML='<i></i>'+(L.H.halted?'остановлено владельцем':p&&p.busy?'отвечает…':L.H.on?'готов':'движок не подключён');
       sp[1].classList.add('live-ctx'); sp[1].setAttribute('data-ctx','1'); sp[1].title='Контекст этого чата — открыть карточку';
       sp[1].textContent=!c?'контекст · нет данных':(c.pct!=null?'контекст '+c.pct+' %'+(c.measured?'':' · оценка'):'контекст '+fmt(c.used)+' · окно модели неизвестно'); }); }
