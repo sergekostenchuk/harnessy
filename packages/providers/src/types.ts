@@ -1,0 +1,63 @@
+export type Mode = 'chat'|'read'|'check'|'web'|'ask'|'edit'|'all';
+export type Vendor = 'claude'|'codex';
+export interface Seat { id:string; vendor:Vendor; label:string; model:string; mode:Mode; cwd:string; sessionId:string|null; writePaths:string[]; worktree:string|null }
+export interface Usage {input:number|null;output:number|null;cacheRead:number|null}
+export type TurnEvent =
+ | {type:'delta';text:string}|{type:'tool';name:string;detail:string}|{type:'toolError';text:string}
+ | {type:'approval';id:string;title:string;detail:string}|{type:'approvalResolved';id:string;decision:'allow'|'deny'|'timeout'}
+ | {type:'done';sessionId:string|null;model:string;durationMs:number;usage:Usage}|{type:'error';text:string};
+export type ToolResult={ok:true;text:string}|{ok:false;error:string;code?:string};
+export type Kind='task'|'status'|'question'|'answer'|'review-request'|'verdict'|'blocker'|'escalation'|'note'|'stop'|'resume'|'digest'|'proposal'|'decision'|'report';
+export interface SendArgs {to:string;kind:Kind;text:string;thread?:string;reply_to?:number;evidence?:string[];score?:number;round?:number;sha?:string}
+export interface AskArgs {to:string;text:string;thread?:string}
+export interface ReadPaneArgs {pane:string;last_n?:number}
+export interface MergeArgs {sha:string;message?:string}
+export interface AssignRoleArgs {role:string;model?:string;mode?:Mode}
+export interface PeerTools {
+ send(a:SendArgs):Promise<ToolResult>;ask(a:AskArgs):Promise<ToolResult>;readPane(a:ReadPaneArgs):Promise<ToolResult>;
+ merge(a:MergeArgs):Promise<ToolResult>;assignRole(a:AssignRoleArgs):Promise<ToolResult>
+}
+export type RouteEnv=Partial<Record<'HTTPS_PROXY'|'HTTP_PROXY'|'ALL_PROXY'|'https_proxy'|'http_proxy'|'all_proxy',string>>;
+export const FORBIDDEN_ENV={claude:['ANTHROPIC_API_KEY','CLAUDECODE','CLAUDE_CODE_SIMPLE'],codex:['OPENAI_API_KEY']} as const;
+export interface TurnHandle {interrupt():Promise<void>;steer(text:string):Promise<void>}
+export interface TurnContext {
+ signal:AbortSignal;publish(ev:TurnEvent):void;askApproval(title:string,detail:string):Promise<boolean>;
+ session(id:string):void;setHandle(h:TurnHandle|null):void;env:RouteEnv;roleNote:string;
+ peers:{id:string;label:string;vendor:Vendor}[];tools:PeerTools;relayDepth:number;projectDir:string|null;appUrl:string;
+ registerProcessToken(token:string):void;revokeProcessToken(token:string):void;writableRoots:string[]
+}
+export type ErrorCode='no_binary'|'not_logged_in'|'session_missing'|'model_unsupported'|'protocol'|'transport_lost'|'cancelled'|'busy'|'cwd_changed'|'turn_failed'|'unknown_request'|'models_unavailable';
+export class ProviderError extends Error {
+ code:ErrorCode;vendorText:string;sessionId:string|null;
+ constructor(code:ErrorCode,vendorText:string,sessionId:string|null=null){super(vendorText);this.name='ProviderError';this.code=code;this.vendorText=vendorText;this.sessionId=sessionId}
+}
+export interface Provider {
+ readonly vendor:Vendor;runTurn(seat:Seat,message:string,ctx:TurnContext):Promise<{text:string;sessionId:string|null}>;
+ listSessions(cwd:string):Promise<{id:string;title:string;updated:number}[]>;
+ sessionMessages(cwd:string,id:string):Promise<{role:'me'|'ai';text:string}[]>;
+ auth():Promise<{loggedIn:boolean;[k:string]:unknown}>;models():Promise<{id:string;label:string}[]>;
+ reset():Promise<void>;close():Promise<void>
+}
+export function record(v:unknown):v is Record<string,unknown>{return typeof v==='object'&&v!==null&&!Array.isArray(v)}
+export function snapshot(seat:Seat,ctx:TurnContext):Seat {
+ if(!record(seat)||typeof seat.id!=='string'||!seat.id||typeof seat.cwd!=='string'||!seat.cwd||!['claude','codex'].includes(seat.vendor)||!['chat','read','check','web','ask','edit','all'].includes(seat.mode)||
+ typeof seat.model!=='string'||typeof seat.label!=='string'||!Array.isArray(seat.writePaths)||!seat.writePaths.every(p=>typeof p==='string')||
+ !(seat.sessionId===null||typeof seat.sessionId==='string')||!(seat.worktree===null||typeof seat.worktree==='string'))
+ throw new ProviderError('protocol','invalid Seat');
+ if(!record(ctx)||!ctx.signal||typeof ctx.signal.addEventListener!=='function'||typeof ctx.signal.aborted!=='boolean'||
+ !record(ctx.env)||!record(ctx.tools)||!Array.isArray(ctx.peers)||!ctx.peers.every(p=>record(p)&&typeof p.id==='string'&&typeof p.label==='string'&&['claude','codex'].includes(p.vendor as string))||
+ !Array.isArray(ctx.writableRoots)||!ctx.writableRoots.every(p=>typeof p==='string')||typeof ctx.roleNote!=='string'||typeof ctx.relayDepth!=='number'||
+ !(ctx.projectDir===null||typeof ctx.projectDir==='string')||typeof ctx.appUrl!=='string'||
+ ['publish','askApproval','session','setHandle','registerProcessToken','revokeProcessToken'].some(k=>typeof (ctx as unknown as Record<string,unknown>)[k]!=='function')||
+ ['send','ask','readPane','merge','assignRole'].some(k=>typeof (ctx.tools as unknown as Record<string,unknown>)[k]!=='function'))
+ throw new ProviderError('protocol','invalid TurnContext');
+ return {...seat,writePaths:[...seat.writePaths]};
+}
+export async function approval(ctx:TurnContext,title:string,detail:string,requestSignal:AbortSignal=ctx.signal):Promise<boolean>{
+ const signal=AbortSignal.any([ctx.signal,requestSignal]);
+ if(signal.aborted)return false;
+ let stop:()=>void=()=>{};
+ const cancelled=new Promise<boolean>(resolve=>{stop=()=>resolve(false);signal.addEventListener('abort',stop,{once:true})});
+ try{const allowed=await Promise.race([Promise.resolve().then(()=>signal.aborted?false:ctx.askApproval(title,detail)).catch(()=>false),cancelled]);return allowed===true&&!signal.aborted}
+ finally{signal.removeEventListener('abort',stop)}
+}
