@@ -6,7 +6,7 @@ import {childEnv} from '../env.ts';
 import {codexMode,MODES} from '../modes.ts';
 import {CHAT_INSTRUCTIONS,codexTeamNote,mergeMessages} from '../text.ts';
 import {RpcClient,spawnTransport,type TransportFactory} from './client.ts';
-import {argumentsFor,BASE_OVERRIDES,overrides,userServers,sparkRouter} from './overrides.ts';
+import {argumentsFor,BASE_OVERRIDES,overrides,userServers,sparkRouter,tomlKey} from './overrides.ts';
 import {serverRequest} from './protocol.ts';
 interface ProcessRecord {client:RpcClient;cwd:string;peers:string;token:string;revoke:()=>void}
 interface Active {seat:Seat;ctx:TurnContext;client:RpcClient|null;threadId:string|null;turnId:string|null;stopRequested:boolean;reject:(e:ProviderError)=>void}
@@ -127,7 +127,7 @@ export class CodexProvider implements Provider {
  }
  private async createListClient(cwd:string){
  const old=this.lists.get(cwd);if(old)return old;const generation=this.generation;
- const servers=await this.deps.servers(),off=[...BASE_OVERRIDES,...new Set([...servers,'panes','sol-spark-router'])].map((s,i)=>i<BASE_OVERRIDES.length?s:'mcp_servers.'+JSON.stringify(s)+'.enabled=false');
+ const servers=await this.deps.servers(),off=[...BASE_OVERRIDES,...new Set([...servers,'panes','sol-spark-router'])].map((s,i)=>i<BASE_OVERRIDES.length?s:'mcp_servers.'+tomlKey(s)+'.enabled=false');
  const client=new RpcClient(this.deps.transportFactory({cwd,args:argumentsFor(off),env:childEnv('codex',{},this.deps.env)}));
  client.setServerHandler((m,p)=>serverRequest(m,p,null,null,null));
  client.onFailure(()=>{
