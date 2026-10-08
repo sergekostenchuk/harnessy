@@ -65,15 +65,15 @@
   document.addEventListener('click',e=>{ if(pop&&!pop.contains(e.target)&&!e.target.closest('[data-cx]')) close(); },true);
   addEventListener('keydown',e=>{ if(e.key==='Escape'&&pop) close(); });
 
-  const TITLES={folder:'Место',mkdir:'Создать проект',opendir:'Открыть проект',role:'Собеседник',switch:'Переключение',chat:'Чаты',newchat:'Новый чат',rights:'Права',model:'Модель',effort:'Усилие',plus:'Добавить и настроить',files:'Файлы и папки',shot:'Снимок экрана',sources:'Другие источники',tools:'Инструменты и субагенты',cmds:'Команды и навыки',info:'Информация'};
+  const TITLES={folder:'Проект',mkdir:'Создать проект',opendir:'Открыть проект',role:'Собеседник',switch:'Переключение',chat:'Чаты',newchat:'Новый чат',rights:'Права',model:'Модель',effort:'Усилие',plus:'Добавить и настроить',files:'Файлы и папки',shot:'Снимок экрана',sources:'Другие источники',tools:'Инструменты и субагенты',cmds:'Команды и навыки',info:'Информация'};
   const hd=(t,r)=>'<div class="cx-hd"><span>'+t+'</span>'+(r?'<small>'+r+'</small>':'')+'</div>';
   const row=(html,o)=>{ o=o||{}; return '<div class="cx-row'+(o.on?' on':'')+(o.dis?' dis':'')+'"'+(o.a||'')+(o.q?' data-q="'+esc(o.q)+'"':'')+(o.title?' title="'+esc(o.title)+'"':'')+'>'+html+(o.on?'<span class="ck">✓</span>':'')+(o.r?'<small>'+o.r+'</small>':'')+'</div>'; };
   const note=t=>'<div class="cx-note">'+t+'</div>';
   const tog=(k,on)=>'<span class="cx-tog'+(on?' on':'')+'" data-cx-tog="'+k+'" title="'+(on?'Выключить':'Включить')+'"></span>';
   const VIEWS={
     folder(){ const c=cx(), prs=H.projects;
-      if(!H.on) return hd('Место')+note('Харнесс не подключён — проекты появятся, когда он запущен.');
-      if(!prs) return hd('Место')+note('читаю список папок…');
+      if(!H.on) return hd('Проект')+note('Харнесс не подключён — проекты появятся, когда он запущен.');
+      if(!prs) return hd('Проект')+note('читаю список проектов…');
       return hd('Проект','проект или без проекта')+prs.map(pr=>row(svg('folder')+'<b>'+esc(pr.name)+'</b>',{on:!c.noFolder&&pr.current,a:' data-cx-proj="'+esc(pr.path)+'"',q:pr.name+' '+pr.path,title:pr.path,r:(pr.seats==null?'?':pr.seats)+' ролей'+(pr.git?' · git':'')})).join('')+
         row(svg('src')+'<b>Без проекта</b>',{on:c.noFolder,a:' data-cx-nofolder',r:'только чат'})+hd('ещё')+row('＋ Создать проект (папка + git)…',{a:' data-cx-nav="mkdir"'})+row('Открыть существующий проект…',{a:' data-cx-nav="opendir"'})+
         note(c.noFolder?'Без проекта модель ничего не читает и не меняет — это разговор. Назначьте ему оркестратора (меню «Собеседник») — он создаст проект по разговору; или перенесите разговор в проект под ответом.':'Проект с ролями показывает роли и их последние настройки; без ролей — разговор без роли, модель выбирается отдельно.'); },
@@ -169,6 +169,7 @@
   async function newChat(p,carry){ if(!p){ L.toast('Сначала выберите собеседника'); return; } if(carry==='summary') L.toast('Пишу выжимку прежнего чата…'); let r=null; try{ r=await L.api('/api/chats/new',{pane:p.id,carry}); }catch(x){} if(!r||!r.ok){ L.toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
     await L.refreshStatus(); if(L.loadChat) await L.loadChat(); close(); renderAll(); L.log('чат','Новый чат: '+(isRoom(p)?'без роли':L.paneName(p))+(r.carried?' · контекст передан':'')); L.toast('Новый чат · '+esc(isRoom(p)?'без роли':L.paneName(p))+(r.carried?' · прежний передан':'')); }
   async function switchProject(path){ const c=cx(); let r=null; try{ r=await L.api('/api/project',{path}); }catch(x){} if(!r||!r.ok){ L.toast('Проект не открылся: '+esc((r&&r.error)||'нет связи')); return; }
+    const rm=room(); if(rm&&rm.model&&rm.mode==='chat'){ try{ await L.api('/api/room',{model:rm.model,folder:true}); }catch(x){} }   // разговор был «без проекта» — выбор проекта возвращает его в проект (иначе движок считает «без проекта»)
     c.noFolder=false; L.save(); S().ui.pane=null; L.save(); await L.refreshStatus(); H.projects=null; close(); renderAll(); L.log('настройка','Проект: '+base(path)); L.toast('Проект: '+esc(base(path))+(seats().length?' · ролей '+seats().length:' · ролей нет')); }
   async function setSeat(patch,what){ const p=seat(), c=cx();
     if((!p||isRoom(p))&&patch.model&&H.on){ let r=null; try{ r=await L.api('/api/room',{model:patch.model,folder:!c.noFolder}); }catch(x){} if(!r||!r.ok){ L.toast('Харнесс не принял: '+esc((r&&r.error)||'нет связи')); return; }
