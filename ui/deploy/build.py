@@ -142,7 +142,7 @@ def build_sketches():
     dst.mkdir(parents=True)
     n = 0
     for f in sorted(src.iterdir()):
-        if f.is_file() and f.suffix in (".html", ".css", ".js") and "-before-" not in f.name:
+        if f.is_file() and f.suffix in (".html", ".css", ".js", ".jpg", ".png", ".webp") and "-before-" not in f.name:   # картинки эскизов (фото-база заставки)
             shutil.copy(f, dst / f.name); n += 1
     audit = ROOT / "synthesis" / "audit-unload-051026.md"
     if audit.exists():
