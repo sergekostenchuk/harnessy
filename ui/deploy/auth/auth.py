@@ -300,6 +300,8 @@ GG_SVG = '<svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2
 
 
 LOGIN_HTML, POUR_JS = "", ""
+# статика страницы входа: ролик-заставка и постер (слово владельца 08.10.2026); Range — чтобы браузер мог перематывать и зацикливать
+STATIC_FILES = {"/auth/pour-intro.mp4": ("pour-intro.mp4", "video/mp4"), "/auth/pour-intro.jpg": ("pour-intro.jpg", "image/jpeg")}
 _HERE = os.path.dirname(os.path.abspath(__file__))
 try:
     LOGIN_HTML = open(os.path.join(_HERE, "login.html"), encoding="utf-8").read()
@@ -494,11 +496,53 @@ class H(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.do_GET()
 
+    def r_static(self, name, ctype):
+        """Файл из папки сервиса: целиком или кусок по Range (206); кэш на сутки."""
+        path = os.path.join(_HERE, name)
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            return self._send(404, "нет файла", "text/plain; charset=utf-8")
+        start, end = 0, size - 1
+        rng = self.headers.get("Range", "")
+        m = re.match(r"bytes=(\d*)-(\d*)$", rng.strip())
+        partial = False
+        if m and (m.group(1) or m.group(2)):
+            if m.group(1):
+                start = int(m.group(1)); end = int(m.group(2)) if m.group(2) else size - 1
+            else:
+                start = max(0, size - int(m.group(2)))
+            end = min(end, size - 1)
+            if start > end or start >= size:
+                self.send_response(416); self.send_header("Content-Range", f"bytes */{size}"); self.end_headers(); return
+            partial = True
+        length = end - start + 1
+        self.send_response(206 if partial else 200)
+        self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(length)); self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Cache-Control", "public, max-age=86400")
+        if partial:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        with open(path, "rb") as f:
+            f.seek(start)
+            left = length
+            while left > 0:
+                chunk = f.read(min(1 << 16, left))
+                if not chunk:
+                    break
+                try:
+                    self.wfile.write(chunk)
+                except (BrokenPipeError, ConnectionResetError):
+                    return
+                left -= len(chunk)
+
     def do_GET(self):
         u = urllib.parse.urlsplit(self.path)
         q = dict(urllib.parse.parse_qsl(u.query, keep_blank_values=True))
         p = u.path
         try:
+            if p in STATIC_FILES:
+                return self.r_static(*STATIC_FILES[p])
             if p == "/auth/check":
                 return self.r_check()
             if p == "/auth/login":

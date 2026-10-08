@@ -46,6 +46,8 @@
   /* правая колонка — сцена */
   .visual { position:relative; overflow:hidden; background:var(--bg); min-height:420px; }
   .visual canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .visual video.intro { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; z-index:1; background:#0a0a0c; }   /* ролик-заставка (08.10.2026) */
+  .visual.v canvas, .visual.v .meter { display:none; } .visual .cap { z-index:2; }
   .cap { position:absolute; top:22px; font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); } .cap b { color:var(--ink2); font-weight:500; }
   .cap.l { left:26px; } .cap.r { right:26px; text-align:right; }
   .meter { position:absolute; left:8%; right:8%; bottom:26px; display:flex; align-items:center; gap:12px; font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); }
@@ -74,12 +76,14 @@
     <div class="foot">Нет доступа или что-то не так? <a href="%%CONTACT%%" target="_blank" rel="noopener">Напишите владельцу →</a></div>
   </section>
   <section class="visual" aria-hidden="true">
+    <video id="intro" class="intro" autoplay muted loop playsinline preload="auto" poster="/auth/pour-intro.jpg"><source src="/auth/pour-intro.mp4" type="video/mp4"></video>
     <canvas id="pour"></canvas>
     <div class="cap l">harnessy · закрытый прототип</div>
     <div class="cap r" id="hud"></div>
     <div class="meter"><span>налито</span><div class="ticks" id="tk"></div><b id="pct">0 %</b></div>
   </section>
 </div>
+<script>(function(){ var v=document.getElementById('intro'); if(!v) return; var vis=v.closest('.visual'); v.addEventListener('playing',function(){ vis.classList.add('v'); }); var pl=v.play(); if(pl&&pl.catch) pl.catch(function(){}); })();</script>
 <script>%%POUR_JS%%</script>
 <script>
 (function(){
