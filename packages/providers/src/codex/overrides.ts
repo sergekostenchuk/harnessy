@@ -22,10 +22,13 @@ export async function userServers():Promise<string[]>{
 export async function sparkRouter():Promise<string[]|null>{
  const dir=homedir()+'/.codex/tools/sol-spark-router';try{await access(dir+'/.venv/bin/python');await access(dir+'/server.py');return [dir+'/.venv/bin/python',dir+'/server.py']}catch{return null}
 }
+// Имя таблицы в -c: голый ключ TOML без кавычек, если имя из [A-Za-z0-9_-]; иначе в кавычках. Codex 0.160.0 отвергает
+// `mcp_servers."node_repl".enabled=false` («invalid transport»: кавычки создают новую пустую запись) — найдено живой пробой 09.10.2026.
+export function tomlKey(name:string):string{return /^[A-Za-z0-9_-]+$/.test(name)?name:JSON.stringify(name)}
 export function overrides(seat:Seat,ctx:TurnContext,token:string,servers:string[],router:string[]|null=null):string[]{
  const bridge=fileURLToPath(new URL('../../bin/pane-mcp.mjs',import.meta.url));
  const env={PANE_ID:seat.id,APP_URL:ctx.appUrl,SEATS:ctx.peers.map(p=>p.id+':'+p.label).join(';').replaceAll('"',''),PANE_TOKEN:token};
- const out=[...BASE_OVERRIDES,...servers.filter(n=>n!=='panes'&&n!=='sol-spark-router').map(n=>'mcp_servers.'+JSON.stringify(n)+'.enabled=false'),
+ const out=[...BASE_OVERRIDES,...servers.filter(n=>n!=='panes'&&n!=='sol-spark-router').map(n=>'mcp_servers.'+tomlKey(n)+'.enabled=false'),
  'mcp_servers.panes.enabled=true','mcp_servers.panes.command='+tomlValue(process.execPath),'mcp_servers.panes.args='+tomlValue([bridge]),'mcp_servers.panes.env='+tomlValue(env)];
  out.push('sandbox_workspace_write.writable_roots='+tomlValue(ctx.writableRoots));
  if(router)out.push('mcp_servers.sol-spark-router.enabled=true','mcp_servers.sol-spark-router.command='+tomlValue(router[0]),'mcp_servers.sol-spark-router.args='+tomlValue([router[1]]),'mcp_servers.sol-spark-router.startup_timeout_sec=20','mcp_servers.sol-spark-router.tool_timeout_sec=3600');
