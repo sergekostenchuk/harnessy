@@ -786,7 +786,7 @@
     const fr=e.target.closest('.ps-folder[data-folder]'); if(fr){ e.preventDefault(); e.stopPropagation(); if(fr.dataset.cur!=='1') await sideSwitchProject(fr.dataset.folder); return; }
     const c=e.target.closest('.ps-chat[data-pane]'); if(!c||c.classList.contains('hdr')||c.classList.contains('more')) return; e.preventDefault(); e.stopPropagation(); await openChatRow(c.dataset.chat||'',c.dataset.pane); });
   // меню профиля (скетч 07): всплывает из кнопки профиля в панели; отдельный кадр #f2 не открываем
-  document.addEventListener('click',e=>{ const u=e.target.closest('aside.side.ps [data-go="profile"]'); if(!u) return; e.preventDefault(); e.stopPropagation();
+  document.addEventListener('click',e=>{ const u=e.target.closest('aside.side.ps [data-go="profile"]'); if(!u) return; e.preventDefault(); e.stopImmediatePropagation();
     const items=[{t:'<b>Локальное окно</b> <small>без входа</small>',dis:true},{t:'Папка: '+esc((H.project||'').split('/').pop()||'не выбрана'),r:'сменить',act:'proj'},{t:'Облик',r:'A · Графит',href:'06-settings.html#p=look'},{t:'Клавиши',r:'⌘/',href:'06-settings.html#p=keys'},{t:'Настройки',r:'⌘,',href:'06-settings.html#p=profile'},{t:'Выйти',r:'на сайте harnessy.ai',dis:true}];
     laMenu(u.closest('.ps-foot')||u,'профиль',items,it=>{ if(it.href) location.href=it.href; else if(it.act==='proj'){ const pj=document.querySelector('aside.side.ps .ps-proj'); if(pj) pj.click(); } }); },true);
   // папка проекта: строка в шапке (и значок папки в рейке) — меню смены

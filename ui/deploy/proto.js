@@ -61,7 +61,8 @@
     if(e.target.closest('[data-col]')){ toggleSide(); return; }
     const fd=e.target.closest('.grp.fold'); if(fd){ const f=fd.dataset.fold, open=!foldOpen(f); try{ localStorage.setItem(FOLD_KEY+':'+f,open?'1':'0'); }catch(x){} renderSide(); dispatchEvent(new Event('resize')); return; }
     const g=e.target.closest('[data-go]'); if(!g) return; const k=g.dataset.go;
-    if(k==='profile'){ if(KEY==='set'&&frames[1]) show(1); else location.href=PAGES.set+'#f2'; return; }
+    if(k==='profile'){ if(window.LIVE) return;   // меню профиля рисует рабочий слой (live.js); старый кадр с тремя меню — только без движка
+      if(KEY==='set'&&frames[1]) show(1); else location.href=PAGES.set+'#f2'; return; }
     if(k===KEY){ if(frames.length>1&&cur) show(0); return; }
     if(PAGES[k]){ e.preventDefault(); e.stopPropagation(); location.href=PAGES[k]; } },true);
   addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&!e.altKey&&e.key.toLowerCase()==='n'&&KEY!=='new'){ e.preventDefault(); location.href=PAGES.new; } });
