@@ -9,7 +9,7 @@ import {RpcClient,spawnTransport,type TransportFactory} from './client.ts';
 import {argumentsFor,BASE_OVERRIDES,overrides,userServers,sparkRouter} from './overrides.ts';
 import {serverRequest} from './protocol.ts';
 interface ProcessRecord {client:RpcClient;cwd:string;peers:string;token:string;revoke:()=>void}
-interface Active {seat:Seat;ctx:TurnContext;client:RpcClient|null;threadId:string|null;turnId:string|null;reject:(e:ProviderError)=>void}
+interface Active {seat:Seat;ctx:TurnContext;client:RpcClient|null;threadId:string|null;turnId:string|null;stopRequested:boolean;reject:(e:ProviderError)=>void}
 export interface CodexDependencies {transportFactory:TransportFactory;servers:()=>Promise<string[]>;router:()=>Promise<string[]|null>;env:NodeJS.ProcessEnv;cwd:string}
 export class CodexProvider implements Provider {
  readonly vendor='codex' as const;private deps:CodexDependencies;
@@ -45,14 +45,14 @@ export class CodexProvider implements Provider {
  const busy=this.active.get(seat.id);if(busy)throw new ProviderError(busy.seat.cwd===seat.cwd?'busy':'cwd_changed',busy.seat.cwd===seat.cwd?'место занято':'папка окна изменилась во время хода',seat.sessionId);
  let resolve!:(value:{text:string;usage:Usage;durationMs:number})=>void,reject!:(e:ProviderError)=>void;
  const ended=new Promise<{text:string;usage:Usage;durationMs:number}>((a,b)=>{resolve=a;reject=b});void ended.catch(()=>{});
- const active:Active={seat,ctx,client:null,threadId:null,turnId:null,reject};this.active.set(seat.id,active);
+ const active:Active={seat,ctx,client:null,threadId:null,turnId:null,stopRequested:false,reject};this.active.set(seat.id,active);
  let ready!:(id:string|null)=>void;const turnReady=new Promise<string|null>(r=>{ready=r});
  let terminal=false,settled=false,sessionId=seat.sessionId,text='',streamed=false;const items:string[]=[];
  let usage:Usage={input:null,output:null,cacheRead:null};let unsubscribe=()=>{},unfailure=()=>{};
  const started=Date.now(),lifetime=new AbortController(),startup=new AbortController();
  const startupContext={...ctx,signal:AbortSignal.any([ctx.signal,startup.signal])};
  const approvalContext={...ctx,signal:AbortSignal.any([ctx.signal,lifetime.signal])};
- const handle={interrupt:async()=>{if(this.active.get(seat.id)!==active||settled)throw new ProviderError('cancelled','ход не активен',sessionId);if(!active.turnId){startup.abort();return}if(active.client&&active.threadId)await active.client.request('turn/interrupt',{threadId:active.threadId,turnId:active.turnId})},
+ const handle={interrupt:async()=>{if(this.active.get(seat.id)!==active||settled)throw new ProviderError('cancelled','ход не активен',sessionId);if(!active.turnId){active.stopRequested=true;startup.abort();return}if(active.client&&active.threadId)await active.client.request('turn/interrupt',{threadId:active.threadId,turnId:active.turnId})},
  steer:async(text:string)=>{if(this.active.get(seat.id)!==active||settled||!active.client||!active.turnId||!active.threadId||ctx.signal.aborted)throw new ProviderError('cancelled','ход не активен',sessionId);
  await active.client.request('turn/steer',{threadId:active.threadId,input:[{type:'text',text}],expectedTurnId:active.turnId})}};
  const stop=()=>{void handle.interrupt().catch(e=>reject(asError(e,sessionId)))};
@@ -108,7 +108,7 @@ export class CodexProvider implements Provider {
  const start=requireRecord(await client.request('turn/start',{threadId:sessionId,input:[{type:'text',text:message}],sandboxPolicy:mode.sandboxPolicy,approvalPolicy:mode.approvalPolicy},startupContext.signal),'turn start');
  const turn=requireRecord(start.turn,'turn');if(typeof turn.id!=='string'||!turn.id)throw new ProviderError('protocol','missing turn id',sessionId);
  active.turnId=turn.id;ready(turn.id);for(const q of queued)receive(q.method,q.params);
- if(ctx.signal.aborted&&!settled)await handle.interrupt();
+ if((active.stopRequested||ctx.signal.aborted)&&!settled)await handle.interrupt();
  const result=await ended;terminal=true;ctx.publish({type:'done',sessionId,model:seat.model,durationMs:result.durationMs,usage:result.usage});
  return {text:result.text,sessionId};
  }catch(e){

@@ -191,3 +191,27 @@ test('Codex peer snapshot keeps cache signature and spawned SEATS consistent dur
  entered=false;const second=provider.runTurn(f.seat,'two',f.ctx);await until(()=>entered);finish();await second;
  assert.equal(h.transports.length,2);assert.ok(bridgeEnv(h.options[1]!.args).SEATS!.includes('new-peer'));await provider.close();
 });
+
+test('interrupt after turn/start RPC resolves but before await continuation interrupts the actual turn',async()=>{
+ const f=fixture();let stopped=false,interrupt:Promise<void>|null=null;
+ const h=codexHarness(t=>{
+ const base=t.responder;t.responder=(method,params,transport)=>method==='turn/start'?{turn:{id:'turn-'+(++transport.turn)}}:base(method,params,transport);
+ const emit=t.emit.bind(t);t.emit=message=>{
+ emit(message);
+ if(record(message)&&record(message.result)&&record(message.result.turn)&&message.result.turn.id==='turn-1'){
+ stopped=true;interrupt=f.handle!.interrupt();
+ // RPC resolution already happened, but runTurn has not assigned active.turnId.
+ assert.equal(t.requests.some(r=>r.method==='turn/interrupt'),false)
+ }
+ }
+ });
+ const provider=new CodexProvider(h.deps),run=provider.runTurn(f.seat,'x',f.ctx);void run.catch(()=>{});
+ try{
+ await until(()=>h.transports[0]?.requests.some(r=>r.method==='turn/interrupt')===true);
+ await interrupt;await run;
+ const transport=h.transports[0]!;assert.equal(stopped,true);assert.equal(f.controller.signal.aborted,false);
+ const requests=transport.requests.filter(r=>r.method==='turn/interrupt');assert.equal(requests.length,1);
+ assert.deepEqual(requests[0]!.params,{threadId:'thread',turnId:'turn-1'});
+ assert.equal(terminals(f.events).length,1);assert.equal(f.events.at(-1)?.type,'done');assert.equal(f.handle,null)
+ }finally{await provider.close()}
+});
