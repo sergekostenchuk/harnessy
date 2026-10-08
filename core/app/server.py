@@ -632,6 +632,8 @@ class App:
         if any(p.busy for p in self.registry.panes.values()):
             return web.json_response({"ok": False, "error": "идёт ход: смени папку, когда все окна свободны"}, status=409)
         await self.open_project(path)
+        if body.get("project") and not os.environ.get("HARNESS_NO_LAST"):
+            self._remember_project(path, str(body.get("project")))
         for p in self.registry.panes.values():
             self.kick(p)
         return web.json_response({"ok": True, "project": path, "changed": True, "lineErrors": self.line_errors,
@@ -796,18 +798,62 @@ class App:
         return web.json_response({"ok": True, "chat": self._chat_meta(c), "pane": p.settings(), "carried": bool(carry_text)})
 
     # ---------- папки, комната, роли по ходу ----------
-    def _remember_project(self, path: str) -> None:
+    # ---------- проекты: именованные группы рабочих папок (слово владельца 08.10.2026: «проект → папка → чат») ----------
+    def _load_projects(self) -> list[dict]:
+        """~/.harness-projects.json: {"v":2,"projects":[{name, root, folders:[...]}]}; старый формат (список папок) читается как проект на папку."""
         try:
-            known = json.loads(PROJECTS_FILE.read_text("utf-8")) if PROJECTS_FILE.exists() else []
+            data = json.loads(PROJECTS_FILE.read_text("utf-8")) if PROJECTS_FILE.exists() else []
         except (OSError, json.JSONDecodeError):
-            known = []
-        if path not in known:
-            known.append(path)
-            try:
-                PROJECTS_FILE.write_text(json.dumps(known, ensure_ascii=False, indent=1), encoding="utf-8")
-            except OSError:
-                pass
+            data = []
+        out: list[dict] = []
+        if isinstance(data, list):
+            for path in data:
+                if isinstance(path, str) and path:
+                    out.append({"name": os.path.basename(path.rstrip("/")) or path, "root": path, "folders": [path]})
+        elif isinstance(data, dict) and isinstance(data.get("projects"), list):
+            for pr in data["projects"]:
+                if isinstance(pr, dict) and pr.get("root") and pr.get("name"):
+                    out.append({"name": str(pr["name"])[:60], "root": str(pr["root"]), "folders": [f for f in (pr.get("folders") or []) if isinstance(f, str)]})
+        # гигиена: проект, чьего корня нет на диске (стёртые временные папки), выпадает из реестра при следующей записи
+        return [pr for pr in out if os.path.isdir(pr["root"])]
 
+    def _save_projects(self, projs: list[dict]) -> None:
+        try:
+            PROJECTS_FILE.write_text(json.dumps({"v": 2, "projects": projs}, ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+
+    def _remember_project(self, path: str, project: str | None = None) -> None:
+        """Открытая папка попадает в проект: по подсказке (имя), иначе в проект, чей корень — её предок, иначе становится своим проектом."""
+        path = os.path.realpath(path)
+        projs = self._load_projects()
+        for pr in projs:
+            pr["root"] = os.path.realpath(pr["root"])
+            pr["folders"] = list(dict.fromkeys(os.path.realpath(f) for f in pr["folders"]))
+        if any(path in pr["folders"] for pr in projs):
+            return
+        target = next((pr for pr in projs if project and pr["name"] == project), None)
+        if target is None:
+            target = next((pr for pr in projs if path == pr["root"] or path.startswith(pr["root"].rstrip("/") + "/")), None)
+        if target is None:
+            target = {"name": os.path.basename(path) or path, "root": path, "folders": []}
+            projs.append(target)
+        target["folders"].append(path)
+        self._save_projects(projs)
+
+    def _seats_in(self, path: str):
+        """Число мест в папке: открытая — по реестру, прочие — по team.yaml; нет файла — None (нет данных)."""
+        if self.project_dir and os.path.realpath(path) == os.path.realpath(self.project_dir):
+            return sum(1 for p in self.registry.panes.values() if p.id != ROOM_ID)
+        tf = os.path.join(path, ".harness", "team.yaml")
+        if not os.path.exists(tf):
+            return None
+        try:
+            import yaml
+            d = yaml.safe_load(open(tf, encoding="utf-8")) or {}
+            return len(d.get("seats") or {})
+        except Exception:  # noqa: BLE001
+            return None
     def _vendor_of(self, model: str) -> str | None:
         return next((v for v, ms in self.models.items() if v in self.registry.providers and any(m["id"] == model for m in ms)), None)
 
@@ -1067,28 +1113,76 @@ class App:
         return web.json_response({"ok": True, "provider": vendor, "check": res, "route": conn.get(vendor)})
 
     async def api_projects(self, request):
-        try:
-            known = json.loads(PROJECTS_FILE.read_text("utf-8")) if PROJECTS_FILE.exists() else []
-        except (OSError, json.JSONDecodeError):
-            known = []
+        """Проекты и их папки: зарегистрированные + найденные подпапки корня с .harness; флаги current у папки и проекта."""
+        cur = os.path.realpath(self.project_dir) if self.project_dir else ""
         out = []
-        for path in dict.fromkeys([self.project_dir, *known]):
-            if not valid_dir(path):
-                continue
-            n = None
-            tf = os.path.join(path, ".harness", "team.yaml")
-            if path == self.project_dir:
-                n = sum(1 for p in self.registry.panes.values() if p.id != ROOM_ID)
-            elif os.path.exists(tf):
-                try:
-                    import yaml
-                    d = yaml.safe_load(open(tf, encoding="utf-8")) or {}
-                    n = len(d.get("seats") or {})
-                except Exception:  # noqa: BLE001
-                    n = None
-            out.append({"path": path, "name": os.path.basename(path.rstrip("/")) or path, "hasTeam": os.path.exists(tf), "seats": n, "git": gitops.is_repo(path), "current": path == self.project_dir})
+        for pr in self._load_projects():
+            root = os.path.realpath(pr["root"])
+            cand = list(pr["folders"]) + ([root] if not pr["folders"] else [])
+            try:
+                for e in sorted(os.scandir(root), key=lambda e: e.name)[:200]:
+                    if e.is_dir() and not e.name.startswith(".") and os.path.isdir(os.path.join(e.path, ".harness")):
+                        cand.append(e.path)
+            except OSError:
+                pass
+            folders, seen = [], set()
+            for f in cand:
+                rf = os.path.realpath(f)
+                if rf in seen or not valid_dir(rf):
+                    continue
+                seen.add(rf)
+                folders.append({"path": rf, "name": os.path.basename(rf) or rf, "current": rf == cur, "seats": self._seats_in(rf), "git": gitops.is_repo(rf),
+                                "registered": any(os.path.realpath(x) == rf for x in pr["folders"]), "hasTeam": os.path.exists(os.path.join(rf, ".harness", "team.yaml"))})
+            out.append({"name": pr["name"], "root": root, "current": any(f["current"] for f in folders), "folders": folders})
+        if cur and not any(pr["current"] for pr in out):   # открытая папка вне реестра (например, тесты) — показать как свой проект
+            out.insert(0, {"name": os.path.basename(cur) or cur, "root": cur, "current": True, "unregistered": True,
+                           "folders": [{"path": cur, "name": os.path.basename(cur) or cur, "current": True, "seats": self._seats_in(cur), "git": gitops.is_repo(cur), "registered": False, "hasTeam": True}]})
         return web.json_response({"current": self.project_dir, "projects": out})
 
+    async def projects_create(self, request):
+        """Новый проект: имя и корневая папка (существующая или создать). Папки проекта добавляются открытием/созданием с подсказкой project."""
+        body = await request.json()
+        name = str(body.get("name") or "").strip()[:60]
+        root = os.path.expanduser(str(body.get("root") or "").strip())
+        if not name or not root or not os.path.isabs(root):
+            return web.json_response({"ok": False, "error": "нужны имя проекта и абсолютный путь корневой папки"}, status=400)
+        if not os.path.isdir(root):
+            if not body.get("create"):
+                return web.json_response({"ok": False, "error": "корневой папки нет"}, status=404)
+            try:
+                os.makedirs(root, exist_ok=True)
+            except OSError as e:
+                return web.json_response({"ok": False, "error": f"не удалось создать папку: {e}"}, status=400)
+        root = os.path.realpath(root)
+        projs = self._load_projects()
+        if any(pr["name"].lower() == name.lower() for pr in projs):
+            return web.json_response({"ok": False, "error": f"проект «{name}» уже есть"}, status=409)
+        if any(os.path.realpath(pr["root"]) == root for pr in projs):
+            return web.json_response({"ok": False, "error": "эта папка уже корень другого проекта"}, status=409)
+        projs.append({"name": name, "root": root, "folders": []})
+        self._save_projects(projs)
+        return web.json_response({"ok": True, "project": {"name": name, "root": root, "folders": []}})
+
+    async def projects_edit(self, request):
+        """Переименовать (name → newName) или убрать проект из реестра (remove: true). Папки на диске не трогаются."""
+        body = await request.json()
+        name = str(body.get("project") or "").strip()
+        projs = self._load_projects()
+        pr = next((x for x in projs if x["name"] == name), None)
+        if not pr:
+            return web.json_response({"ok": False, "error": "нет такого проекта"}, status=404)
+        if body.get("remove"):
+            projs.remove(pr)
+            self._save_projects(projs)
+            return web.json_response({"ok": True, "removed": name})
+        new = str(body.get("name") or "").strip()[:60]
+        if not new:
+            return web.json_response({"ok": False, "error": "нужно новое имя"}, status=400)
+        if any(x["name"].lower() == new.lower() and x is not pr for x in projs):
+            return web.json_response({"ok": False, "error": f"проект «{new}» уже есть"}, status=409)
+        pr["name"] = new
+        self._save_projects(projs)
+        return web.json_response({"ok": True, "project": pr})
     async def project_create(self, request):
         body = await request.json()
         path = os.path.expanduser(str(body.get("path") or "").strip())
@@ -1109,6 +1203,8 @@ class App:
                 return web.json_response({"ok": False, "error": f"git init: {err.strip()[:200]}"}, status=400)
         ensure_line(path)
         await self.open_project(path)
+        if body.get("project") and not os.environ.get("HARNESS_NO_LAST"):
+            self._remember_project(path, str(body.get("project")))
         return web.json_response({"ok": True, "project": path, "created": created, "git": git_done or gitops.is_repo(path), "seats": sum(1 for p in self.registry.panes.values() if p.id != ROOM_ID)})
 
     async def room_set(self, request):
@@ -1577,6 +1673,8 @@ class App:
         app.router.add_get("/api/pane_transcript", self.pane_transcript)
         app.router.add_get("/api/journal", self.journal_read)
         app.router.add_get("/api/projects", self.api_projects)
+        app.router.add_post("/api/projects/create", self.projects_create)
+        app.router.add_post("/api/projects/edit", self.projects_edit)
         app.router.add_post("/api/project/create", self.project_create)
         app.router.add_post("/api/room", self.room_set)
         app.router.add_post("/api/room/move", self.room_move)
