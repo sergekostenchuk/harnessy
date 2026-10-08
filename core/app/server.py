@@ -73,6 +73,27 @@ def est_tokens(text: str) -> int:
     return int(len(text) / 3.2) + 1 if text else 0
 
 
+ALLOWED_HOSTS = {f"localhost:{PORT}", f"127.0.0.1:{PORT}", f"[::1]:{PORT}"}
+ORIGIN_ERRORS = {"host_denied": "запрос не с локального адреса окна", "origin_denied": "запрос с чужой страницы отклонён",
+                 "content_type": "тело запроса должно быть application/json"}
+
+
+def check_browser_origin(method: str, path: str, headers) -> tuple[int, str] | None:
+    """Для изменяющих запросов (POST и GET /api/sessions/<id>): Host — только локальный адрес окна (X-Forwarded-Host не читается);
+    Origin, если прислан браузером, — только http://<тот же адрес>, чужой или null → 403; POST /api/* — только application/json
+    (чужая страница без preflight такой запрос прислать не может). Отсутствие Origin допустимо: локальные клиенты (мост, curl)."""
+    if not (method == "POST" or (method == "GET" and path.startswith("/api/sessions/"))):
+        return None
+    if (headers.get("Host") or "") not in ALLOWED_HOSTS:
+        return 403, "host_denied"
+    origin = headers.get("Origin")
+    if origin is not None and origin not in {f"http://{h}" for h in ALLOWED_HOSTS}:
+        return 403, "origin_denied"
+    if method == "POST" and path.startswith("/api/") and (headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
+        return 415, "content_type"
+    return None
+
+
 def valid_dir(p) -> bool:
     return isinstance(p, str) and os.path.isabs(p) and os.path.isdir(p)
 
@@ -1765,6 +1786,15 @@ def main():
         if valid_dir(last):
             start_dir = last
     @web.middleware
+    async def browser_origin(request, handler):
+        """Подлинность окна (находка ревьюера TS-05 №55, 09.10.2026): чужая страница в браузере владельца могла слать запросы на localhost:3777."""
+        err = check_browser_origin(request.method, request.path, request.headers)
+        if err:
+            status, code = err
+            return web.json_response({"ok": False, "code": code, "error": ORIGIN_ERRORS[code]}, status=status)
+        return await handler(request)
+
+    @web.middleware
     async def no_cache_static(request, handler):
         """Окно (статика /sketches) — всегда свежее: без заголовков браузер держал старые live.js/HTML часами (08.10.2026)."""
         resp = await handler(request)
@@ -1772,7 +1802,7 @@ def main():
             resp.headers["Cache-Control"] = "no-cache"
         return resp
 
-    app = web.Application(client_max_size=2_000_000, middlewares=[no_cache_static])
+    app = web.Application(client_max_size=2_000_000, middlewares=[browser_origin, no_cache_static])
     core.routes(app)
 
     async def on_startup(_):
