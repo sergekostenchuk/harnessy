@@ -47,7 +47,7 @@
   .visual { position:relative; overflow:hidden; background:var(--bg); min-height:420px; }
   .visual canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
   .visual video.intro { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; object-position:center; display:block; z-index:1; background:transparent; }   /* ролик-заставка (08.10.2026): кадр целиком, без обрезки */
-  .visual.v::before { content:""; position:absolute; inset:-40px; background:url(/auth/pour-intro.jpg) center/cover no-repeat; filter:blur(28px) brightness(.5) saturate(1.1); z-index:0; }   /* поля над и под кадром — размытый постер (леттербокс) */
+  .visual.vid::before { content:""; position:absolute; inset:-40px; background:url(/auth/pour-intro.jpg) center/cover no-repeat; filter:blur(28px) brightness(.5) saturate(1.1); z-index:0; }   /* поля над и под кадром — размытый постер (леттербокс) */
   .visual.v canvas, .visual.v .meter { display:none; } .visual .cap { z-index:2; }
   .cap { position:absolute; top:22px; font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); } .cap b { color:var(--ink2); font-weight:500; }
   .cap.l { left:26px; } .cap.r { right:26px; text-align:right; }
@@ -84,11 +84,12 @@
     <div class="meter"><span>налито</span><div class="ticks" id="tk"></div><b id="pct">0 %</b></div>
   </section>
 </div>
-<script>(function(){ var v=document.getElementById('intro'); if(!v) return; var vis=v.closest('.visual'); v.muted=true;
+<script>(function(){ var v=document.getElementById('intro'); if(!v) return; var vis=v.closest('.visual'); v.muted=true; vis.classList.add('vid');
   var go=function(){ var pl=v.play(); if(pl&&pl.catch) pl.catch(function(){}); };
   v.addEventListener('playing',function(){ vis.classList.add('v'); });
   v.addEventListener('canplay',go); v.addEventListener('loadeddata',go); if(v.readyState>=3) go();   // запуск, когда источник готов (ранний play() срывается загрузкой)
   ['pointerdown','keydown','touchstart'].forEach(function(e){ document.addEventListener(e,function(){ if(v.paused) go(); },{once:true,passive:true}); });   // запасной запуск по первому действию
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden&&v.paused) go(); }); v.addEventListener('pause',function(){ if(!v.ended&&!document.hidden) setTimeout(function(){ if(v.paused&&!document.hidden) go(); },800); });   // браузер приостановил — возобновить
 })();</script>
 <script>%%POUR_JS%%</script>
 <script>
