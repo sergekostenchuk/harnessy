@@ -49,6 +49,7 @@ ROOM_ID = "room"
 ROLE_CATALOG = [("orchestrator", "оркестратор", False), ("assistant", "ассистент", False), ("architect", "архитектор", False),
                 ("executor", "воркер", True), ("reviewer", "ревьюер", True), ("tester", "тестер", False), ("researcher", "ресёрчер", False)]
 PROJECTS_FILE = Path(os.path.expanduser("~/.harness-projects.json"))
+PINS_FILE = Path(os.path.expanduser(os.environ.get("HARNESS_PINS_FILE") or "~/.harness-pins.json"))   # закреплённые папки и чаты владельца — общие для всех папок
 
 
 def valid_dir(p) -> bool:
@@ -156,7 +157,8 @@ class App:
         saved = self.journal.load_panes()
         if isinstance(saved.get(ROOM_ID), dict) and saved[ROOM_ID].get("model"):
             self._make_room(saved[ROOM_ID].get("model"), saved[ROOM_ID].get("mode") or "read", vendor=saved[ROOM_ID].get("vendor"), quiet=True)
-        self._remember_project(path)
+        if not os.environ.get("HARNESS_NO_LAST"):   # тесты (временные папки) список папок владельца не засоряют
+            self._remember_project(path)
         for p in self.registry.panes.values():
             st = saved.get(p.id) or {}
             if st.get("vendor") in self.registry.providers and st.get("vendor") != p.vendor:
@@ -812,6 +814,59 @@ class App:
         text = "\n\n".join(parts)
         return text if len(text) <= limit else "…" + text[-limit:]
 
+    # ---------- закреплённые ----------
+    def _load_pins(self) -> list[dict]:
+        try:
+            data = json.loads(PINS_FILE.read_text("utf-8")) if PINS_FILE.exists() else []
+        except (OSError, json.JSONDecodeError):
+            data = []
+        return [p for p in data if isinstance(p, dict) and p.get("kind") in ("folder", "chat") and p.get("path")]
+
+    @staticmethod
+    def _pin_key(p: dict) -> tuple:
+        return (p["kind"], p["path"], p.get("chat") or "")
+
+    async def api_pins(self, request):
+        """Закреплённые папки и чаты (боковая панель, блок «закреплённые»). GET — список; POST {kind, path, chat?, on?} — закрепить/снять.
+        Правила движка: kind — folder или chat; папка должна существовать; закрепить можно только чат ОТКРЫТОЙ папки
+        (название и роль берутся из записи чата, не со слов окна); без on — переключение, с on — явно."""
+        if request.method == "GET":
+            cur = os.path.realpath(self.project_dir)
+            return web.json_response({"pins": [dict(p, current=(os.path.realpath(p["path"]) == cur)) for p in self._load_pins()]})
+        body = await request.json()
+        kind = str(body.get("kind") or "")
+        path = os.path.realpath(os.path.expanduser(str(body.get("path") or "").strip())) if body.get("path") else ""   # пути — только через realpath (/var → /private/var на macOS)
+        chat = str(body.get("chat") or "").strip()
+        if kind not in ("folder", "chat") or not body.get("path"):
+            return web.json_response({"ok": False, "error": "kind: folder или chat; path обязателен"}, status=400)
+        if not valid_dir(path):
+            return web.json_response({"ok": False, "error": "нет такой папки"}, status=404)
+        entry = {"kind": kind, "path": path, "name": os.path.basename(path) or path}
+        if kind == "chat":
+            if not chat:
+                return web.json_response({"ok": False, "error": "для чата нужен chat (id)"}, status=400)
+            if path != os.path.realpath(self.project_dir):
+                return web.json_response({"ok": False, "error": "закрепить можно только чат открытой папки"}, status=400)
+            c = self.chats["chats"].get(chat)
+            if not c:
+                return web.json_response({"ok": False, "error": "нет такого чата"}, status=404)
+            m = self._chat_meta(c)
+            entry.update({"chat": chat, "title": (m["title"] or "")[:80], "label": m["label"], "pane": m["pane"]})
+        pins = self._load_pins()
+        key = self._pin_key(entry)
+        idx = next((i for i, p in enumerate(pins) if self._pin_key(p) == key), None)
+        on = body.get("on")
+        on = (idx is None) if on is None else bool(on)
+        if on and idx is None:
+            pins.append(entry)
+        elif not on and idx is not None:
+            pins.pop(idx)
+        try:
+            PINS_FILE.write_text(json.dumps(pins, ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError as e:
+            return web.json_response({"ok": False, "error": f"файл закреплённых не записан: {e}"}, status=500)
+        return web.json_response({"ok": True, "on": on, "pins": pins})
+
     async def api_projects(self, request):
         try:
             known = json.loads(PROJECTS_FILE.read_text("utf-8")) if PROJECTS_FILE.exists() else []
@@ -1331,6 +1386,8 @@ class App:
         app.router.add_post("/api/onboard", self.onboard)
         app.router.add_post("/api/assign_role", self.api_assign_role)
         app.router.add_post("/api/handoff", self.handoff)
+        app.router.add_get("/api/pins", self.api_pins)
+        app.router.add_post("/api/pins", self.api_pins)
         app.router.add_get("/api/chats", self.chats_list)
         app.router.add_get("/api/chats/{id}", self.chat_get)
         app.router.add_post("/api/chats/new", self.chats_new)

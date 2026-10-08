@@ -316,3 +316,16 @@ html[data-proto][data-page="chat"] .live-selbar { width:auto; max-width:760px; m
 .ps-chat.hdr { height:20px; margin-top:3px; padding-left:17px; color:var(--ink3); font:9.5px var(--mono); letter-spacing:.08em; text-transform:uppercase; cursor:default; } .ps-chat.hdr:hover { background:transparent; } .ps-chat.hdr i { display:none; }
 .ps-chat.busy i { background:#c27a34; box-shadow:0 0 0 3px rgba(194,122,52,.18); }
 aside.side.ps .ps-proj { cursor:pointer; } aside.side.ps .ps-head { position:relative; } aside.side.ps .ps-head .live-menu.la { left:0; right:0; min-width:0; top:calc(100% - 4px); white-space:normal; } aside.side.ps .ps-head .live-menu.la div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* боковая панель 08.10: папки раскрываются (пункты проекта + чаты), закрепление по наведению, низ: уйти · настройки · использовано → расход · профиль */
+.ps-folder { display:flex; align-items:center; gap:7px; height:28px; padding:0 9px 0 6px; border-radius:var(--rs,9px); color:var(--ink2); font-size:13px; cursor:pointer; white-space:nowrap; position:relative; }
+.ps-folder:hover { background:var(--raised); color:var(--ink); } .ps-folder.cur { color:var(--ink); }
+.ps-folder .chev { width:12px; text-align:center; color:var(--ink3); font-size:12px; flex:none; } .ps-folder > svg { width:15px; height:15px; flex:none; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.ps-folder .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; } .ps-folder .m { font:9.5px var(--mono); color:var(--ink3); flex:none; }
+.ps-fold-body { display:flex; flex-direction:column; gap:1px; margin:0 0 6px; }
+aside.side.ps .ps-fold-body .nav.psub { height:26px; padding-left:30px; font-size:12.5px; } aside.side.ps .ps-fold-body .nav.psub svg { width:14px; height:14px; }
+.ps-pin { position:absolute; right:6px; top:50%; margin-top:-8px; width:16px; height:16px; display:grid; opacity:0; place-items:center; color:var(--ink3); border-radius:4px; }   /* всегда в разметке (кликабелен тачпадом), виден при наведении */ .ps-pin svg { width:11px; height:11px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.pinnable:hover .ps-pin, .ps-pin.on { opacity:1; } .pinnable:hover .m { visibility:hidden; } .ps-pin:hover { color:var(--ink); background:var(--tile); } .ps-pin.on { color:#c27a34; }
+.ps-chat.pin .t { color:var(--ink2); } .ps-chat.pin:hover .t { color:var(--ink); }
+aside.side.ps .ps-foot .nav { height:28px; } aside.side.ps .limits.on { border-color:#c27a34; }
+aside.side.ps .ps-scroll { min-height:50%; }
