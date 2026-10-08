@@ -1,0 +1,12 @@
+{
+  "left": {
+    "model": "модель",
+    "sessionId": "s",
+    "enabled": false,
+    "limit": 0,
+    "messages": [
+      "раз",
+      "два 🙂"
+    ]
+  }
+}

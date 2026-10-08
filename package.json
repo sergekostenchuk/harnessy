@@ -3,10 +3,18 @@
   "private": true,
   "version": "0.1.0-dev",
   "description": "Harnessy — окно владельца над командой ИИ-агентов. Новое ядро: packages/* (TypeScript); окно и оболочка: ui/",
-  "workspaces": ["packages/*"],
-  "engines": { "node": ">=22" },
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "node --test \"packages/*/src/**/*.test.ts\"",
+    "test": "npm run build && node --test \"packages/*/src/**/*.test.ts\"",
     "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "@types/node": "22.20.5"
   }
 }
