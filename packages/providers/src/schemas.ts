@@ -6,12 +6,12 @@ export const schemas={
  ask:z.strictObject({to:z.string(),text:z.string(),thread:z.string().optional()}),
  read_pane:z.strictObject({pane:z.string(),last_n:z.int().min(1).max(100).optional()}),
  merge:z.strictObject({sha:z.string(),message:z.string().optional()}),
- assign_role:z.strictObject({role:z.string(),model:z.string().optional(),mode:z.enum(modes).optional()})
+ assign_role:z.strictObject({role:z.string(),model:z.string().optional(),mode:z.enum(modes).optional(),specialization:z.strictObject({title:z.string().max(60),text:z.string().max(20000)}).optional()})
 };
 export const descriptions={
  send:'Отправить запись другому окну и продолжить работу, не дожидаясь ответа. Ответ на чужую question — kind=answer с reply_to, на task — status, на review-request — verdict с score (0..10), round и evidence=[путь к отчёту]. review-request обязан нести sha коммита. Адресат получит запись следующим ходом. Пиши полный самодостаточный текст: адресат не видит твоей переписки.',
  ask:'Задать вопрос другому окну и дождаться ответа. Адресат ответит, когда дойдёт до вопроса в своей очереди; ожидание может занять минуты. Для поручений и статусов пользуйся send.',
  read_pane:'Прочитать последние реплики разговора в другом окне.',
  merge:'Слить принятый коммит в интеграционную ветку проекта. Пройдёт только SHA, у которого есть принятый вердикт; корень проекта должен быть на интеграционной ветке и без незакоммиченных правок. Право слияния — по merge_roles манифеста.',
- assign_role:'Назначить в команду папки новую роль (orchestrator, assistant, architect, executor, reviewer, tester, researcher). Пройдёт только у оркестратора и только в ходе, начатом поручением владельца; новая роль получит вводную от харнесса. Модель — по умолчанию модель разговора без роли или первая Claude; режим прав: chat, read, check, web, ask, edit, all.'
+ assign_role:'Назначить в команду папки новую роль (orchestrator, assistant, architect, executor, reviewer, tester, researcher). Пройдёт только у оркестратора и только в ходе, начатом поручением владельца; новая роль получит вводную от харнесса. Модель — по умолчанию модель разговора без роли или первая Claude; режим прав: chat, read, check, web, ask, edit, all. Необязательная specialization: {title (до 60 символов), text (до 20000 символов)} задаёт предметные инструкции места; права определяет роль.'
 };

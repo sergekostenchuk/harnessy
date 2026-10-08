@@ -12,7 +12,7 @@ export interface SendArgs {to:string;kind:Kind;text:string;thread?:string;reply_
 export interface AskArgs {to:string;text:string;thread?:string}
 export interface ReadPaneArgs {pane:string;last_n?:number}
 export interface MergeArgs {sha:string;message?:string}
-export interface AssignRoleArgs {role:string;model?:string;mode?:Mode}
+export interface AssignRoleArgs {role:string;model?:string;mode?:Mode;specialization?:{title:string;text:string}}
 export interface PeerTools {
  send(a:SendArgs):Promise<ToolResult>;ask(a:AskArgs):Promise<ToolResult>;readPane(a:ReadPaneArgs):Promise<ToolResult>;
  merge(a:MergeArgs):Promise<ToolResult>;assignRole(a:AssignRoleArgs):Promise<ToolResult>

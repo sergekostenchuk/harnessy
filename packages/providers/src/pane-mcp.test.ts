@@ -22,3 +22,24 @@ test('MCP bridge missing token never falls back to anonymous request',async()=>{
  const result=await bridge([{id:1,method:'tools/call',params:{name:'send',arguments:{to:'reviewer',kind:'status',text:'x'}}}],null);
  assert.equal(result.requests.length,0);assert.equal((result.replies[0]?.result as {isError:boolean}).isError,true);
 });
+
+test('assign_role specialization appears in Codex schema and HTTP body; invalid values never reach HTTP',async()=>{
+ const specialization={title:'Юрист по договорам',text:'Проверяй условия договора.'};
+ const good={role:'reviewer',mode:'read',specialization};
+ const boundary={role:'reviewer',specialization:{title:'x'.repeat(60),text:'x'.repeat(20000)}};
+ const bad=[
+  {...good,from:'owner'}, {...good,specialization:{...specialization,mode:'all'}},
+  {...good,specialization:{title:'x'.repeat(61),text:'x'}}, {...good,specialization:{title:'x',text:'x'.repeat(20001)}},
+  {...good,specialization:{title:'x'}}, {...good,specialization:{title:1,text:'x'}}, {...good,specialization:null}
+ ];
+ const result=await bridge([{id:0,method:'tools/list'},...[good,boundary,...bad].map((args,i)=>({id:i+1,method:'tools/call',params:{name:'assign_role',arguments:args}}))]);
+ assert.equal(result.requests.length,2);
+ for(const [i,args] of [good,boundary].entries()){
+  const request=result.requests[i]!;assert.equal(new URL(String(request.url)).pathname,'/api/assign_role');
+  assert.deepEqual(JSON.parse(String(request.body)),{...args,from:'worker'});
+ }
+ const list=result.replies.find(r=>r.id===0)!.result as {tools:{name:string;inputSchema:{properties:Record<string,unknown>}}[]};
+ const spec=list.tools.find(t=>t.name==='assign_role')!.inputSchema.properties.specialization as {additionalProperties:boolean;properties:{title:{maxLength:number};text:{maxLength:number}};required:string[]};
+ assert.equal(spec.additionalProperties,false);assert.deepEqual(spec.required,['title','text']);assert.equal(spec.properties.title.maxLength,60);assert.equal(spec.properties.text.maxLength,20000);
+ for(let id=3;id<=bad.length+2;id++)assert.equal((result.replies.find(r=>r.id===id)!.result as {isError:boolean}).isError,true);
+});
