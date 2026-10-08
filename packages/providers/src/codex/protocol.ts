@@ -2,7 +2,18 @@ import {approval,ProviderError,record,type TurnContext} from '../types.ts';
 import {toolDetail} from '../text.ts';
 export async function serverRequest(method:string,input:unknown,ctx:TurnContext|null,threadId:string|null,turnId:string|null):Promise<unknown>{
  const p=record(input)?input:{};
- const current=!!ctx&&p.threadId===threadId&&turnId!==null&&(!('turnId'in p)||p.turnId===null||p.turnId===turnId)&&!ctx.signal.aborted;
+ const turnRequired=['item/commandExecution/requestApproval','item/fileChange/requestApproval','item/permissions/requestApproval'].includes(method);
+ const elicitation=method==='mcpServer/elicitation/request';
+ if(turnRequired||elicitation){
+ const validThread=typeof p.threadId==='string'&&!!p.threadId&&p.threadId===threadId;
+ const validTurn=typeof p.turnId==='string'&&!!p.turnId&&p.turnId===turnId||elicitation&&p.turnId===null;
+ if(!validThread||!validTurn){
+ const text='protocol: неверные идентификаторы запроса разрешения '+method;
+ ctx?.publish({type:'toolError',text});console.error('[providers:codex] protocol');
+ throw new ProviderError('protocol',text,threadId)
+ }
+ }
+ const current=!!ctx&&!ctx.signal.aborted;
  const ask=async(title:string,detail:string)=>current&&ctx?approval(ctx,title,detail):false;
  if(method==='item/commandExecution/requestApproval'){
  const command=Array.isArray(p.command)?p.command.join(' '):String(p.command??'');

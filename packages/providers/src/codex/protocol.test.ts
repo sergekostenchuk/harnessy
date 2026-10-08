@@ -22,7 +22,7 @@ test('panes elicitation masquerades ask owner; exact own bridge does not',async(
  for(const args of [{...base,serverName:'other'},{...base,_meta:null},{...base,_meta:{codex_approval_kind:'other'}}]){
  assert.deepEqual(await serverRequest('mcpServer/elicitation/request',args,f.ctx,'t','v'),{action:'decline',content:null,_meta:null})
  }
- assert.equal(asks,3);assert.deepEqual(await serverRequest('mcpServer/elicitation/request',{...base,turnId:'old'},f.ctx,'t','v'),{action:'decline',content:null,_meta:null});assert.equal(asks,3);
+ assert.equal(asks,3);await assert.rejects(serverRequest('mcpServer/elicitation/request',{...base,turnId:'old'},f.ctx,'t','v'),e=>e instanceof ProviderError&&e.code==='protocol');assert.equal(asks,3);
 });
 test('unknown request is typed failure without owner question',async()=>{
  const f=fixture();let asked=false;f.ctx.askApproval=async()=>{asked=true;return true};

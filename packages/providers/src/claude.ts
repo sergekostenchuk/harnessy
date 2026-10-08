@@ -2,16 +2,17 @@ import {execFile} from 'node:child_process';
 import {query,listSessions,getSessionMessages,type Options,type SDKUserMessage,type Query} from '@anthropic-ai/claude-agent-sdk';
 import {ProviderError,snapshot,approval,record,type Seat,type TurnContext,type Provider} from './types.ts';
 import {vendorError,asError} from './errors.ts';
+import {waitWithSignal} from './cancellation.ts';
 import {claudeBinary,childEnv} from './env.ts';
 import {MODES,pathRules,SAFE_BASH,PEER_TOOLS} from './modes.ts';
 import {SYSTEM_CHAT,peerNote,claudeTeamNote,toolDetail,mergeMessages} from './text.ts';
 import {sdkServer} from './tools.ts';
 export interface ClaudeDependencies {
  queryFn:typeof query;listSessionsFn:typeof listSessions;getSessionMessagesFn:typeof getSessionMessages;
- findBinary:()=>Promise<string|null>;authStatus:(binary:string,env:NodeJS.ProcessEnv)=>Promise<unknown>;env:NodeJS.ProcessEnv
+ findBinary:()=>Promise<string|null>;authStatus:(binary:string,env:NodeJS.ProcessEnv,signal?:AbortSignal)=>Promise<unknown>;env:NodeJS.ProcessEnv
 }
-function authStatus(binary:string,env:NodeJS.ProcessEnv):Promise<unknown>{
- return new Promise((resolve,reject)=>execFile(binary,['auth','status'],{env,timeout:15000},(error,stdout)=>{
+function authStatus(binary:string,env:NodeJS.ProcessEnv,signal?:AbortSignal):Promise<unknown>{
+ return new Promise((resolve,reject)=>execFile(binary,['auth','status'],{env,timeout:15000,...(signal?{signal}:{})},(error,stdout)=>{
   try{const value:unknown=JSON.parse(stdout);if(!record(value)||typeof value.loggedIn!=='boolean')throw new Error('invalid auth status');resolve(value)}
   catch{reject(new ProviderError(error&&'code'in error&&error.code==='ENOENT'?'no_binary':'protocol','invalid claude auth status'))}
  }))
@@ -39,25 +40,26 @@ export class ClaudeProvider implements Provider {
  async runTurn(input:Seat,message:string,ctx:TurnContext){
  const seat=snapshot(input,ctx);if(seat.vendor!=='claude')throw new ProviderError('protocol','wrong provider');
  if(this.active.has(seat.id))throw new ProviderError('busy','место занято',seat.sessionId);
- let sessionId=seat.sessionId,sessionSeen=false,text='',assistant='',streamed=false,terminal=false,interrupted=false;
+ let sessionId=seat.sessionId,sessionSeen=false,text='',assistant='',streamed=false,terminal=false;
  const abort=new AbortController();const active={query:null as Query|null,abort};this.active.set(seat.id,active);
  const stop=()=>{void active.query?.interrupt().catch(()=>{});abort.abort()};ctx.signal.addEventListener('abort',stop,{once:true});const started=Date.now();
  const turnContext={...ctx,signal:AbortSignal.any([ctx.signal,abort.signal])};
- const handle={interrupt:async()=>{if(this.active.get(seat.id)!==active||terminal)throw new ProviderError('cancelled','ход не активен',sessionId);interrupted=true;if(active.query)await active.query.interrupt()},
+ const handle={interrupt:async()=>{if(this.active.get(seat.id)!==active||terminal)throw new ProviderError('cancelled','ход не активен',sessionId);if(active.query)await active.query.interrupt();else abort.abort()},
  steer:async(text:string)=>{if(this.active.get(seat.id)!==active||terminal||!active.query||turnContext.signal.aborted)throw new ProviderError('cancelled','ход не активен',sessionId);
  const prompt:SDKUserMessage={type:'user',message:{role:'user',content:text},parent_tool_use_id:null,priority:'now',origin:{kind:'human'}};
  await active.query.streamInput((async function*(){yield prompt})())}};
  let release:()=>void=()=>{};
  try{
  ctx.setHandle(handle);if(ctx.signal.aborted||abort.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
- const binary=await this.deps.findBinary();if(!binary)throw new ProviderError('no_binary','claude не найден; задай CLAUDE_BIN',sessionId);
- const auth=await this.deps.authStatus(binary,childEnv('claude',ctx.env,this.deps.env));if(!record(auth)||typeof auth.loggedIn!=='boolean')throw new ProviderError('protocol','invalid claude auth status',sessionId);
+ const binary=await waitWithSignal(()=>this.deps.findBinary(),turnContext.signal);if(!binary)throw new ProviderError('no_binary','claude не найден; задай CLAUDE_BIN',sessionId);
+ const auth=await waitWithSignal(()=>this.deps.authStatus(binary,childEnv('claude',ctx.env,this.deps.env),turnContext.signal),turnContext.signal);if(!record(auth)||typeof auth.loggedIn!=='boolean')throw new ProviderError('protocol','invalid claude auth status',sessionId);
  if(!auth.loggedIn)throw new ProviderError('not_logged_in','Claude не вошёл в учётную запись',sessionId);
  if(ctx.signal.aborted||abort.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
  const keepOpen=new Promise<void>(resolve=>{release=resolve});
  const first:SDKUserMessage={type:'user',message:{role:'user',content:message},parent_tool_use_id:null};
- active.query=this.deps.queryFn({prompt:(async function*(){yield first;await keepOpen})(),options:{...claudeOptions(seat,turnContext,binary,this.deps.env),abortController:abort}});
- if(interrupted)await active.query.interrupt();
+ const options={...claudeOptions(seat,turnContext,binary,this.deps.env),abortController:abort};
+ if(turnContext.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
+ active.query=this.deps.queryFn({prompt:(async function*(){yield first;await keepOpen})(),options});
  for await(const raw of active.query){
  const m=raw as unknown;if(!record(m)||typeof m.type!=='string')throw new ProviderError('protocol','invalid Claude message',sessionId);
  const main=m.parent_tool_use_id==null;

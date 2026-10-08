@@ -1,14 +1,15 @@
 import {randomBytes} from 'node:crypto';
 import {ProviderError,snapshot,record,type Seat,type TurnContext,type Provider,type Usage} from '../types.ts';
 import {asError,requireRecord,vendorError} from '../errors.ts';
+import {waitWithSignal} from '../cancellation.ts';
 import {childEnv} from '../env.ts';
 import {codexMode,MODES} from '../modes.ts';
 import {CHAT_INSTRUCTIONS,codexTeamNote,mergeMessages} from '../text.ts';
 import {RpcClient,spawnTransport,type TransportFactory} from './client.ts';
 import {argumentsFor,BASE_OVERRIDES,overrides,userServers,sparkRouter} from './overrides.ts';
 import {serverRequest} from './protocol.ts';
-interface ProcessRecord {client:RpcClient;cwd:string;token:string;revoke:()=>void}
-interface Active {seat:Seat;ctx:TurnContext;client:RpcClient|null;threadId:string|null;turnId:string|null;interruptRequested:boolean;reject:(e:ProviderError)=>void}
+interface ProcessRecord {client:RpcClient;cwd:string;peers:string;token:string;revoke:()=>void}
+interface Active {seat:Seat;ctx:TurnContext;client:RpcClient|null;threadId:string|null;turnId:string|null;reject:(e:ProviderError)=>void}
 export interface CodexDependencies {transportFactory:TransportFactory;servers:()=>Promise<string[]>;router:()=>Promise<string[]|null>;env:NodeJS.ProcessEnv;cwd:string}
 export class CodexProvider implements Provider {
  readonly vendor='codex' as const;private deps:CodexDependencies;
@@ -17,9 +18,11 @@ export class CodexProvider implements Provider {
  constructor(deps:Partial<CodexDependencies>={}){this.deps={transportFactory:spawnTransport,servers:userServers,router:sparkRouter,env:process.env,cwd:process.cwd(),...deps}}
  private async dispose(id:string,r:ProcessRecord){if(this.clients.get(id)===r)this.clients.delete(id);r.revoke();await r.client.close()}
  private async process(seat:Seat,ctx:TurnContext){
- const old=this.clients.get(seat.id);if(old&&old.cwd===seat.cwd)return old.client;
+ const peers=JSON.stringify(ctx.peers.map(p=>[p.id,p.label,p.vendor]).sort((a,b)=>a[0]!.localeCompare(b[0]!)));
+ if(ctx.signal.aborted)throw new ProviderError('cancelled','ход отменён');
+ const old=this.clients.get(seat.id);if(old&&old.cwd===seat.cwd&&old.peers===peers&&!old.client.closed)return old.client;
  if(old)await this.dispose(seat.id,old);
- const generation=this.generation,servers=await this.deps.servers(),router=await this.deps.router();
+ const generation=this.generation,servers=await waitWithSignal(()=>this.deps.servers(),ctx.signal),router=await waitWithSignal(()=>this.deps.router(),ctx.signal);
  if(ctx.signal.aborted||generation!==this.generation)throw new ProviderError('cancelled','ход отменён');
  const token=randomBytes(32).toString('hex');let registered=false,revoked=false;
  const revoke=()=>{if(registered&&!revoked){revoked=true;ctx.revokeProcessToken(token)}};
@@ -27,40 +30,44 @@ export class CodexProvider implements Provider {
  try{
  ctx.registerProcessToken(token);registered=true;
  client=new RpcClient(this.deps.transportFactory({cwd:seat.cwd,args:argumentsFor(overrides(seat,ctx,token,servers,router)),env:childEnv('codex',ctx.env,this.deps.env),secrets:[token]}),[token]);
- client.setServerHandler((m,p)=>serverRequest(m,p,null,null,null));
- const entry={client,cwd:seat.cwd,token,revoke};this.clients.set(seat.id,entry);
+ client.setServerHandler((m,p)=>serverRequest(m,p,ctx,null,null));
+ const entry={client,cwd:seat.cwd,peers,token,revoke};this.clients.set(seat.id,entry);
+ client.onFailure(()=>{if(this.clients.get(seat.id)===entry)this.clients.delete(seat.id);revoke();void entry.client.close().catch(()=>{})});
  await client.initialize(ctx.signal);
  if(generation!==this.generation||ctx.signal.aborted)throw new ProviderError('cancelled','процесс закрыт во время запуска');
+ if(client.closed)throw new ProviderError('transport_lost','процесс закрыт во время запуска');
  return client;
  }catch(e){if(this.clients.get(seat.id)?.client===client)this.clients.delete(seat.id);revoke();await client?.close();if(generation!==this.generation)throw new ProviderError('cancelled','процесс закрыт во время запуска');throw e}
  }
  async runTurn(input:Seat,message:string,ctx:TurnContext){
  const seat=snapshot(input,ctx);if(seat.vendor!=='codex')throw new ProviderError('protocol','wrong provider');
+ ctx={...ctx,peers:ctx.peers.map(p=>({...p}))};
  const busy=this.active.get(seat.id);if(busy)throw new ProviderError(busy.seat.cwd===seat.cwd?'busy':'cwd_changed',busy.seat.cwd===seat.cwd?'место занято':'папка окна изменилась во время хода',seat.sessionId);
  let resolve!:(value:{text:string;usage:Usage;durationMs:number})=>void,reject!:(e:ProviderError)=>void;
  const ended=new Promise<{text:string;usage:Usage;durationMs:number}>((a,b)=>{resolve=a;reject=b});void ended.catch(()=>{});
- const active:Active={seat,ctx,client:null,threadId:null,turnId:null,interruptRequested:false,reject};this.active.set(seat.id,active);
+ const active:Active={seat,ctx,client:null,threadId:null,turnId:null,reject};this.active.set(seat.id,active);
  let ready!:(id:string|null)=>void;const turnReady=new Promise<string|null>(r=>{ready=r});
  let terminal=false,settled=false,sessionId=seat.sessionId,text='',streamed=false;const items:string[]=[];
  let usage:Usage={input:null,output:null,cacheRead:null};let unsubscribe=()=>{},unfailure=()=>{};
- const started=Date.now(),lifetime=new AbortController();
+ const started=Date.now(),lifetime=new AbortController(),startup=new AbortController();
+ const startupContext={...ctx,signal:AbortSignal.any([ctx.signal,startup.signal])};
  const approvalContext={...ctx,signal:AbortSignal.any([ctx.signal,lifetime.signal])};
- const handle={interrupt:async()=>{if(this.active.get(seat.id)!==active||settled)throw new ProviderError('cancelled','ход не активен',sessionId);active.interruptRequested=true;if(active.client&&active.threadId&&active.turnId)await active.client.request('turn/interrupt',{threadId:active.threadId,turnId:active.turnId})},
+ const handle={interrupt:async()=>{if(this.active.get(seat.id)!==active||settled)throw new ProviderError('cancelled','ход не активен',sessionId);if(!active.turnId){startup.abort();return}if(active.client&&active.threadId)await active.client.request('turn/interrupt',{threadId:active.threadId,turnId:active.turnId})},
  steer:async(text:string)=>{if(this.active.get(seat.id)!==active||settled||!active.client||!active.turnId||!active.threadId||ctx.signal.aborted)throw new ProviderError('cancelled','ход не активен',sessionId);
  await active.client.request('turn/steer',{threadId:active.threadId,input:[{type:'text',text}],expectedTurnId:active.turnId})}};
  const stop=()=>{void handle.interrupt().catch(e=>reject(asError(e,sessionId)))};
  ctx.signal.addEventListener('abort',stop,{once:true});
  try{
- ctx.setHandle(handle);if(ctx.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
- const client=await this.process(seat,ctx);active.client=client;
- const account=requireRecord(await client.request('account/read',{refreshToken:false},ctx.signal),'account response');
+ ctx.setHandle(handle);if(startupContext.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
+ const client=await this.process(seat,startupContext);active.client=client;
+ const account=requireRecord(await client.request('account/read',{refreshToken:false},startupContext.signal),'account response');
  if(account.account===null)throw new ProviderError('not_logged_in','Codex не вошёл в ChatGPT',sessionId);
  const identity=requireRecord(account.account,'account');if(typeof identity.type!=='string')throw new ProviderError('protocol','missing account type',sessionId);
  if(identity.type!=='chatgpt')throw new ProviderError('not_logged_in','Codex не вошёл в ChatGPT',sessionId);
  const mode=codexMode(seat,ctx),block=ctx.roleNote.trim()?ctx.roleNote.trim()+'\n\n':'';
  const params={cwd:seat.cwd,...(seat.model?{model:seat.model}:{}),sandbox:mode.sandbox,approvalPolicy:mode.approvalPolicy,
  developerInstructions:block+(seat.mode==='chat'?CHAT_INSTRUCTIONS:codexTeamNote(seat,ctx)+MODES[seat.mode].tail)};
- const thread= requireRecord(await client.request(seat.sessionId?'thread/resume':'thread/start',seat.sessionId?{threadId:seat.sessionId,...params}:params,ctx.signal),'thread response');
+ const thread= requireRecord(await client.request(seat.sessionId?'thread/resume':'thread/start',seat.sessionId?{threadId:seat.sessionId,...params}:params,startupContext.signal),'thread response');
  const data=requireRecord(thread.thread,'thread');if(typeof data.id!=='string'||!data.id)throw new ProviderError('protocol','missing thread id',sessionId);
  sessionId=data.id;active.threadId=sessionId;ctx.session(sessionId);
  client.setServerHandler(async(m,p)=>{await turnReady;return serverRequest(m,p,this.active.get(seat.id)===active&&!settled?approvalContext:null,active.threadId,active.turnId)});
@@ -97,19 +104,20 @@ export class CodexProvider implements Provider {
  }catch(e){settled=true;reject(asError(e,sessionId))}
  };
  unsubscribe=client.onNotification(receive);unfailure=client.onFailure(e=>reject(e));
- const start=requireRecord(await client.request('turn/start',{threadId:sessionId,input:[{type:'text',text:message}],sandboxPolicy:mode.sandboxPolicy,approvalPolicy:mode.approvalPolicy},ctx.signal),'turn start');
+ if(startupContext.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
+ const start=requireRecord(await client.request('turn/start',{threadId:sessionId,input:[{type:'text',text:message}],sandboxPolicy:mode.sandboxPolicy,approvalPolicy:mode.approvalPolicy},startupContext.signal),'turn start');
  const turn=requireRecord(start.turn,'turn');if(typeof turn.id!=='string'||!turn.id)throw new ProviderError('protocol','missing turn id',sessionId);
  active.turnId=turn.id;ready(turn.id);for(const q of queued)receive(q.method,q.params);
- if((active.interruptRequested||ctx.signal.aborted)&&!settled)await handle.interrupt();
+ if(ctx.signal.aborted&&!settled)await handle.interrupt();
  const result=await ended;terminal=true;ctx.publish({type:'done',sessionId,model:seat.model,durationMs:result.durationMs,usage:result.usage});
  return {text:result.text,sessionId};
  }catch(e){
- const err=asError(e,sessionId);if(!terminal){terminal=true;ctx.publish({type:'error',text:err.vendorText})}
- if(active.client&&(err.code==='transport_lost'||err.code==='protocol'||ctx.signal.aborted)){
- const r=this.clients.get(seat.id);if(r)await this.dispose(seat.id,r)
+ const err=startup.signal.aborted?new ProviderError('cancelled','ход отменён',sessionId):asError(e,sessionId);if(!terminal){terminal=true;ctx.publish({type:'error',text:err.vendorText})}
+ if(active.client&&(err.code==='transport_lost'||err.code==='protocol'||err.code==='cancelled'||ctx.signal.aborted)){
+ const r=this.clients.get(seat.id);if(r?.client===active.client)await this.dispose(seat.id,r)
  }throw err;
  }finally{
- lifetime.abort();ready(null);unsubscribe();unfailure();active.client?.setServerHandler((m,p)=>serverRequest(m,p,null,null,null));
+ lifetime.abort();startup.abort();ready(null);unsubscribe();unfailure();active.client?.setServerHandler((m,p)=>serverRequest(m,p,null,null,null));
  ctx.signal.removeEventListener('abort',stop);this.active.delete(seat.id);ctx.setHandle(null)
  }
  }
@@ -121,7 +129,13 @@ export class CodexProvider implements Provider {
  const old=this.lists.get(cwd);if(old)return old;const generation=this.generation;
  const servers=await this.deps.servers(),off=[...BASE_OVERRIDES,...new Set([...servers,'panes','sol-spark-router'])].map((s,i)=>i<BASE_OVERRIDES.length?s:'mcp_servers.'+JSON.stringify(s)+'.enabled=false');
  const client=new RpcClient(this.deps.transportFactory({cwd,args:argumentsFor(off),env:childEnv('codex',{},this.deps.env)}));
- client.setServerHandler((m,p)=>serverRequest(m,p,null,null,null));try{await client.initialize();if(generation!==this.generation)throw new ProviderError('cancelled','процесс закрыт');this.lists.set(cwd,client);return client}catch(e){await client.close();throw e}
+ client.setServerHandler((m,p)=>serverRequest(m,p,null,null,null));
+ client.onFailure(()=>{
+ if(this.lists.get(cwd)===client){this.lists.delete(cwd);if(cwd===this.deps.cwd)this.modelsCache=null}
+ void client.close().catch(()=>{})
+ });
+ try{await client.initialize();if(generation!==this.generation)throw new ProviderError('cancelled','процесс закрыт');if(client.closed)throw new ProviderError('transport_lost','процесс закрыт во время запуска');this.lists.set(cwd,client);return client}
+ catch(e){if(this.lists.get(cwd)===client)this.lists.delete(cwd);await client.close();throw e}
  }
  async listSessions(cwd:string){
  try{const client=await this.listClient(cwd);const out:{id:string;title:string;updated:number}[]=[];let cursor:string|null=null;
@@ -153,7 +167,7 @@ export class CodexProvider implements Provider {
  do{const res=requireRecord(await client.request('model/list',cursor?{cursor}:{}),'model list');if(!Array.isArray(res.data))throw new ProviderError('protocol','missing models');
  for(const raw of res.data){const m=requireRecord(raw,'model');if(typeof m.model!=='string'||typeof m.displayName!=='string')throw new ProviderError('protocol','invalid model');out.push({id:m.model,label:m.displayName})}
  if(res.nextCursor!==null&&typeof res.nextCursor!=='string')throw new ProviderError('protocol','invalid models cursor');if(cursor!==null&&cursor===res.nextCursor)throw new ProviderError('protocol','repeated models cursor');cursor=res.nextCursor;
- }while(cursor);this.modelsCache=out;return out;
+ }while(cursor);if(this.lists.get(this.deps.cwd)===client&&!client.closed)this.modelsCache=out;return out;
  }catch(e){throw new ProviderError('models_unavailable',asError(e).vendorText)}
  }
  async reset(){this.generation++;this.modelsCache=null;const clients=[...this.clients.entries()];this.clients.clear();

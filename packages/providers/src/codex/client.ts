@@ -33,7 +33,8 @@ export class RpcClient {
  private pending=new Map<string,Pending>();private retired=new Set<string>();private sequence=0;private failure:ProviderError|null=null;
  private notifications=new Set<(method:string,params:unknown)=>void>();private failures=new Set<(e:ProviderError)=>void>();
  private serverHandler:((method:string,params:unknown,id:string|number)=>Promise<unknown>)|null=null;
- private transport:Transport;private secrets:string[];
+ private transport:Transport;private secrets:string[];private closing:Promise<void>|null=null;
+ get closed(){return this.failure!==null}
  constructor(transport:Transport,secrets:string[]=[]) {this.transport=transport;this.secrets=secrets;
  transport.onLine(line=>this.receive(line));transport.onClose(e=>this.fail(e))
  }
@@ -76,5 +77,8 @@ export class RpcClient {
  onNotification(cb:(method:string,params:unknown)=>void){this.notifications.add(cb);return ()=>this.notifications.delete(cb)}
  onFailure(cb:(e:ProviderError)=>void){this.failures.add(cb);if(this.failure)cb(this.failure);return ()=>this.failures.delete(cb)}
  setServerHandler(cb:(method:string,params:unknown,id:string|number)=>Promise<unknown>){this.serverHandler=cb}
- async close(){this.fail(new ProviderError('transport_lost','app-server closed'));await this.transport.close()}
+ close():Promise<void>{
+ if(!this.closing){this.closing=Promise.resolve().then(()=>this.transport.close());this.fail(new ProviderError('transport_lost','app-server closed'))}
+ return this.closing
+ }
 }
