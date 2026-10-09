@@ -26,7 +26,7 @@ export class Pane {
  id:string;vendor:Vendor|'human';label:string;model:string;mode:Mode;cwd:string;role:string;writePaths:string[];digest:boolean;
  worktree:string|null=null;branch:string|null=null;sessionId:string|null=null;busy=false;touched=false;revision=0;
  readonly uncommitted=new Set<TranscriptMessage>();transcript:TranscriptMessage[]=[];seen:Record<string,number>={};carry='';tokens:Usage|null=null;handle:TurnHandle|null=null;
- recoveryNote:string|null=null;recoveryError:RuntimeEvent|null=null;uncertainNote:string|null=null;status:'idle'|'recovering'|'uncertain'='idle';readonly approvals=new Map<string,Approval>();relayDepth=0;
+ recoveryNote:string|null=null;recoveryError:RuntimeEvent|null=null;uncertainNote:string|null=null;status:'idle'|'recovering'|'uncertain'='idle';readonly approvals=new Map<string,Approval>();
  private bus:EventBus;private clock:Clock;
  constructor(init:PaneInit,bus:EventBus,clock:Clock=systemClock){this.bus=bus;this.clock=clock;this.id=init.id;this.vendor=init.vendor;this.label=init.label;this.model=init.model;this.mode=init.mode??'chat';this.cwd=init.cwd;this.role=init.role??'';this.writePaths=[...(init.writePaths??[])];this.digest=init.digest??false}
  publish(event:RuntimeEvent):void{this.bus.publish(this.id,event)}

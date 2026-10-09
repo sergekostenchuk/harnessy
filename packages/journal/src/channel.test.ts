@@ -317,3 +317,13 @@ test('58: internal agent effects preserve identity/policy/ack while ordinary sen
 test('59: rejection of a removed sender completes without an undeliverable note',()=>{
  const f=fixture(ackPolicy);try{const r=f.agent('tester',{to:'worker',kind:'report',text:'ждёт'});delete f.roles.tester;const rejected=f.channel.rejectAck(r.seq);assert.equal(rejected.kind,'rejected');assert.equal(f.channel.pendingAcks().length,0);assert.equal(f.journal.repliesTo(r.seq).filter(r=>r.origin==='ack').length,0);assert.throws(()=>f.channel.rejectAck(r.seq),error('ack_closed'))}finally{f.close()}
 });
+
+
+test('R2/2: internal auto denial links rejection to source and seat; ordinary send cannot forge it',()=>{
+ const f=fixture('version: 1\nroutes: [{from: "*", to: "*", kinds: [question]}]\nobserve: {}\n');try{
+ const q=f.agent('assistant',{to:'worker',kind:'question',text:'вопрос',thread:'Q'});
+ assert.throws(()=>f.channel.postAgentEffect({to:'assistant',kind:'answer',text:'ответ',reply_to:q.seq},{seat:'worker',trust:'agent'},'auto'),error('policy_denied'));
+ const rejected=f.journal.repliesTo(q.seq)[0]!;assert.equal(rejected.from,'harness');assert.equal(rejected.kind,'rejected');assert.equal(rejected.origin,'auto:worker');assert.equal(rejected.thread,'Q');
+ const seq=f.journal.lastSeq;assert.throws(()=>f.agent('worker',{to:'assistant',kind:'answer',text:'подделка',reply_to:q.seq,origin:'auto:worker'} as never),error('initiator_invalid'));assert.equal(f.journal.lastSeq,seq);
+ }finally{f.close()}
+});

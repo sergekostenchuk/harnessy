@@ -60,3 +60,20 @@ test('61: pending verdict suppresses nudge, interrupted question keeps partial a
 for(const raw of ['{broken','{}','{"reviews":[{"sid":"worker","reviewSeq":1}],"merges":[]}','{"reviews":[],"merges":[{"stage":"completed"}]}'])test('60: malformed actions refuses opening without clearing state or calling model: '+raw,async t=>{
  const h=await setup(t);await h.runtime.close();const path=join(h.dir,'.harness','state','actions.json');fs.writeFileSync(path,raw);const f=new FakeProvider(),r=new Runtime({...h.deps,providers:{claude:f}},createActions());t.after(()=>r.close());await assert.rejects(r.openProject(h.dir),(e:unknown)=>e instanceof RuntimeError&&e.code==='actions_invalid');assert.equal(fs.readFileSync(path,'utf8'),raw);assert.equal(f.calls.length,0);
 });
+
+
+test('R2/2: durable auto policy rejection survives failed effects marker and restart without duplicate or model',async t=>{
+ let armed=true;const io:StateIO={read:diskIO.read,write(path,text){if(armed&&path.endsWith('chats.json')){const raw=JSON.parse(text);if(Object.values(raw.chats as Record<string,{transcript:{runtime?:{effectsPending:boolean}}[]}>).some(c=>c.transcript.some(m=>m.runtime?.effectsPending===false))){armed=false;throw Error('effects marker failed')}}diskIO.write(path,text)}};
+ const h=await setup(t,{deps:{stateIO:io},before:dir=>fs.writeFileSync(join(dir,'.harness','comms-policy.yaml'),'version: 1\nroutes: [{from: assistant, to: assistant, kinds: [question]}]\nobserve: {}\n')}),r=h.runtime;
+ const q=r.channel.post({to:'worker',kind:'question',text:'вопрос',thread:'Q'},{seat:'peer',trust:'agent'});await r.idle();assert.equal(r.registry.get('worker')!.status,'recovering');assert.equal(h.provider.calls.length,1);
+ const rejected=r.journal.read({limit:0}).filter(a=>a.kind==='rejected');assert.equal(rejected.length,1);assert.equal(rejected[0]!.reply_to,q.seq);assert.equal(rejected[0]!.origin,'auto:worker');assert.equal(rejected[0]!.thread,'Q');
+ await r.close();const f=new FakeProvider(),next=await createRuntime({...h.deps,providers:{claude:f}},createActions());t.after(()=>next.close());await next.idle();await next.kick('worker');assert.equal(f.calls.length,0);assert.equal(next.registry.get('worker')!.status,'idle');
+ assert.deepEqual(next.journal.read({limit:0}).filter(a=>a.kind==='rejected').map(a=>a.seq),[rejected[0]!.seq]);assert.equal(next.project.state.results(next.registry.get('worker')!)[0]!.runtime.effectsPending,false);
+});
+
+test('R2/2: rejection belongs to both source record and replying seat, never suppresses its neighbour',async t=>{
+ const h=await setup(t,{seats:seats+'\n  third: {role: assistant, vendor: claude, label: третий, model: w1, mode: read}',before:dir=>fs.writeFileSync(join(dir,'.harness','comms-policy.yaml'),'version: 1\nroutes: [{from: assistant, to: assistant, kinds: [question]}]\nobserve: {}\n')}),r=h.runtime;
+ const a=r.channel.post({to:['worker','peer'],kind:'question',text:'оба отвечают'},{seat:'third',trust:'agent'});await r.idle();
+ const b=r.channel.post({to:'worker',kind:'question',text:'другой вопрос'},{seat:'third',trust:'agent'});await r.idle();
+ assert.deepEqual(r.journal.read({limit:0}).filter(a=>a.kind==='rejected').map(r=>[r.reply_to,r.origin]),[[a.seq,'auto:worker'],[a.seq,'auto:peer'],[b.seq,'auto:worker']]);
+});

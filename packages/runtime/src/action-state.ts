@@ -1,17 +1,25 @@
 import {RuntimeError,object} from './errors.ts';
 import type {ProjectState} from './types.ts';
+import type {Record_} from '@harnessy/journal';
+export const MAX_ASK_DEPTH=3;
 export interface ReviewAction {sid:string;reviewSeq:number;firstTurnInstanceId:string;stage:'awaiting'|'nudged'|'escalated'|'closed'}
 export interface MergeAction {
  key:string;stage:'intent'|'completed'|'failed'|'uncertain';sha:string;branch:string;message:string;beforeHead:string;alreadyMerged:boolean;
  initiator:{seat:string;trust:'owner'|'agent';role:string;label:string};verdict:{seq:number;thread:string;score:number};
  result?:{sha:string;mergeSha:string};error?:string;
 }
-export interface ActionState {reviews:ReviewAction[];merges:MergeAction[]}
+export interface ActionState {reviews:ReviewAction[];merges:MergeAction[];askDepths?:{fromSeq:number;questions:{seq:number;depth:number}[]}}
 const full=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{40}$/.test(v);
 const seq=(v:unknown)=>Number.isSafeInteger(v)&&Number(v)>0;
 export function readActions(p:ProjectState):ActionState {
  const raw=p.state.readActions(),fail=():never=>{throw new RuntimeError('actions_invalid','действия не читаются: неверная форма actions.json',409)};
  if(!object(raw)||!Array.isArray(raw.reviews)||!Array.isArray(raw.merges))return fail();
+ if(raw.askDepths!==undefined){
+ const d=raw.askDepths;if(!object(d)||!seq(d.fromSeq)||!Array.isArray(d.questions))return fail();
+ if(d.questions.some(q=>!object(q)||!seq(q.seq)||Number(q.seq)<Number(d.fromSeq)||!Number.isInteger(q.depth)||Number(q.depth)<1||Number(q.depth)>MAX_ASK_DEPTH))return fail();
+ if(new Set(d.questions.map(q=>q.seq)).size!==d.questions.length)return fail();
+ for(const q of d.questions){const r=p.journal.get(Number(q.seq));if(!r||r.kind!=='question'||r.origin!=='ask')return fail()}
+ }
  const reviews=raw.reviews,merges=raw.merges;
  if(reviews.some(r=>!object(r)||typeof r.sid!=='string'||!r.sid||!seq(r.reviewSeq)||typeof r.firstTurnInstanceId!=='string'||!r.firstTurnInstanceId||!['awaiting','nudged','escalated','closed'].includes(String(r.stage))))return fail();
  if(new Set(reviews.map(r=>r.sid+':'+r.reviewSeq)).size!==reviews.length)return fail();
@@ -30,3 +38,22 @@ export function readActions(p:ProjectState):ActionState {
 }
 export function saveReview(p:ProjectState,r:ReviewAction):void {const state=readActions(p),at=state.reviews.findIndex(a=>a.sid===r.sid&&a.reviewSeq===r.reviewSeq);if(at<0)state.reviews.push(r);else state.reviews[at]=r;p.state.saveActions(state)}
 export function saveMerge(p:ProjectState,m:MergeAction):void {const state=readActions(p),at=state.merges.findIndex(a=>a.key===m.key);if(at<0)state.merges.push(m);else state.merges[at]=m;p.state.saveActions(state)}
+
+// The boundary distinguishes legacy questions from a new question whose depth write failed.
+// Persist it before post(): later delivery must never treat an incomplete new ask as depth zero.
+export function prepareAskDepth(p:ProjectState):void {
+ const state=readActions(p);if(!state.askDepths)p.state.saveActions({...state,askDepths:{fromSeq:p.journal.lastSeq+1,questions:[]}})
+}
+export function saveAskDepth(p:ProjectState,questionSeq:number,depth:number):void {
+ const state=readActions(p);if(!state.askDepths)throw new RuntimeError('actions_invalid','глубина вопроса #'+questionSeq+' не сохранена');
+ state.askDepths.questions.push({seq:questionSeq,depth});p.state.saveActions(state)
+}
+export function askDeliveryDepth(p:ProjectState,records:readonly Record_[]):number {
+ const questions=records.filter(r=>r.kind==='question'&&r.origin==='ask');if(!questions.length)return 0;
+ const state=readActions(p);let depth=0;
+ for(const r of questions){const saved=state.askDepths?.questions.find(q=>q.seq===r.seq);
+ if(saved)depth=Math.max(depth,saved.depth);
+ else if(state.askDepths&&r.seq>=state.askDepths.fromSeq)throw new RuntimeError('actions_invalid','глубина вопроса #'+r.seq+' не сохранена')
+ }
+ return depth
+}

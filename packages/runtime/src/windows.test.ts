@@ -53,7 +53,12 @@ test('10/23: persisted cwd is not a restoration capability; legacy missing diges
  const {mkdtempSync,rmSync}=await import('node:fs'),{tmpdir}=await import('node:os');const outside=mkdtempSync(join(tmpdir(),'harnessy-forged-cwd-'));t.after(()=>rmSync(outside,{recursive:true,force:true}));const h=await harness(t,{seats:'  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read, digest: true}',before:dir=>writeFileSync(join(dir,'.harness','state','panes.json'),JSON.stringify({worker:{model:'w1',cwd:outside,mode:'read'}}))});assert.equal(h.runtime.registry.get('worker')!.cwd,h.dir);assert.equal(h.runtime.registry.get('worker')!.digest,false)
 });
 
-test('48: active relayDepth snapshot does not change when a port stages depth of the next batch',async t=>{let depth=-1;const actions:RuntimeActions={...completedActions,async ask(_a,ctx){depth=ctx.relayDepth;return {ok:true,reply:'ответ',seq:1}}};const {runtime:r,provider:f}=await harness(t,{actions});const p=r.registry.get('worker')!;p.relayDepth=2;f.onRun=async(_s,_m,ctx)=>{assert.equal(ctx.relayDepth,2);p.relayDepth=3;await ctx.tools.ask({to:'peer',text:'вопрос'});return {text:'готово',sessionId:null}};r.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await r.idle();assert.equal(depth,2);assert.equal(p.relayDepth,3)});
+test('48: runtime action keeps its depth when provider mutates its context; next ordinary turn starts at zero',async t=>{
+ let depth=-1;const actions:RuntimeActions={...completedActions,async ask(_a,ctx){depth=ctx.relayDepth;return {ok:true,reply:'ответ',seq:1}}};const {runtime:r,provider:f}=await harness(t,{actions});
+ f.onRun=async(_s,_m,ctx)=>{assert.equal(ctx.relayDepth,2);ctx.relayDepth=3;await ctx.tools.ask({to:'peer',text:'вопрос'});return {text:'готово',sessionId:null}};
+ await r.runTurn('worker','работа',{relayDepth:2});await r.idle();assert.equal(depth,2);f.onRun=null;
+ r.postOwner({to:'worker',kind:'task',text:'обычное поручение'},OWNER);await r.idle();assert.equal(f.calls.at(-1)!.ctx.relayDepth,0);
+});
 
 test('37: runtime itself loads default catalog metadata when no catalog injected',async t=>{const h=await harness(t,{seats:'  worker: {role: executor, vendor: claude, label: воркер, model: "", mode: read}'});await h.runtime.close();const {models:_,...deps}=h.deps,f=new FakeProvider(),r=await createRuntime({...deps,providers:{claude:f}},completedActions);t.after(()=>r.close());assert.equal(f.modelCalls,1);assert.equal(f.calls.length,0);assert.equal(r.registry.get('worker')!.model,'w1')});
 

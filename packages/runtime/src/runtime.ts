@@ -1,3 +1,4 @@
+import {askDeliveryDepth} from './action-state.ts';
 import {makeRoom,makeRoomIn,roomSet,roomMove,assignRoomRole} from './rooms.ts';
 import {createSeat,ensureSeatMaterialized,onboard,restoreAssignments,roleCatalog,type CreateSeatInput} from './roles.ts';
 import {chatsList,chatGet,chatsNew,chatsOpen,meta} from './chats.ts';
@@ -171,7 +172,8 @@ export class Runtime {
  if(p.materializing.has(id))throw new RuntimeError('recovering','назначение роли не завершено');
  if(pane.status!=='idle')throw new RuntimeError(pane.status,'ход не активен');
  const entries=options.entries??[],records=deepFreeze(entries.map(e=>e.record)),injected:TranscriptMessage[]=[];
- pane.busy=true;pane.touched=true;pane.revision++;const relayDepth=options.relayDepth??pane.relayDepth;pane.relayDepth=0;
+ const relayDepth=Math.max(options.relayDepth??0,askDeliveryDepth(p,records));
+ pane.busy=true;pane.touched=true;pane.revision++;
  const scope=this.scopes.create(p.dir,id,randomUUID()),controller=new AbortController();let releaseReset!:()=>void,finish!:()=>void;
  const turn:ActiveTurn={scope,controller,pane,records,deliverySeq:Math.max(0,...entries.map(e=>e.deliverySeq)),relayDepth,attemptNumber:0,handle:null,started:false,stopRequested:false,terminal:null,partial:'',finished:new Promise(r=>{finish=r}),finish:()=>finish(),timer:undefined,resetWait:new Promise(r=>{releaseReset=r}),releaseReset:()=>releaseReset(),result:null,injected};p.active.set(id,turn);this.stateEvent(p,pane);
  let success=false,terminalSent=false;
@@ -221,7 +223,7 @@ export class Runtime {
  throw e
  }finally{
  this.scopes.revoke(scope);if(!turn.stopRequested)this.actions.cancelAsks(scope,'turn_ended');this.clock.clearTimeout(turn.timer);
- if(p.active.get(id)===turn){p.active.delete(id);pane.busy=false;pane.handle=null;if(!turn.result)pane.relayDepth=Math.max(pane.relayDepth,turn.relayDepth);this.stateEvent(p,pane)}
+ if(p.active.get(id)===turn){p.active.delete(id);pane.busy=false;pane.handle=null;this.stateEvent(p,pane)}
  if(success&&!p.closed&&!options.entries&&pane.status==='idle')void this.kick(id);turn.finish()
  }
  }

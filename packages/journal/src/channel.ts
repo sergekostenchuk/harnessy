@@ -30,8 +30,8 @@ export class Channel {
  if(changed){const record=this.deps.journal.append({sender:'harness',to:['*'],kind:'policy',text:'политика связи перечитана: версия '+policy.version,policy:policy.version});this.emit({type:'posted',record,initiator:{seat:'harness',trust:'harness'}})}
  return policy.broken?null:policy.snapshot()
  }
- private reject(sender:string,to:string[],kind:string,reason:string,version:number){
- const rec=this.deps.journal.append({sender:'harness',to:['owner'],kind:'rejected',text:sender+' → '+to.join(', ')+' '+kind+': '+reason,policy:version});
+ private reject(sender:string,to:string[],kind:string,reason:string,version:number,replyTo?:number|null,origin?:string){
+ const rec=this.deps.journal.append({sender:'harness',to:['owner'],kind:'rejected',text:sender+' → '+to.join(', ')+' '+kind+': '+reason,policy:version,...(replyTo!=null?{reply_to:replyTo}:{}),...(origin?{origin}:{})});
  this.emit({type:'rejected',record:rec,sender,reason})
  }
  private write(input:AgentPostInput|CorePostInput,initiator:Initiator,core:boolean,ackDecision?:Record_,agentOrigin?:'ask'|'auto'):Record_ {
@@ -78,7 +78,7 @@ export class Channel {
  }
  const view=this.policySnapshot(),version=view?.version??this.deps.policy?.version??0;
  let pending=false,bounds:Bounds={};
- const deny=(reason:string,message=reason):never=>{this.reject(sender,to,input.kind,reason,version);throw new JournalError('policy_denied',message)};
+ const deny=(reason:string,message=reason):never=>{this.reject(sender,to,input.kind,reason,version,agentOrigin==='auto'?reply:undefined,agentOrigin==='auto'?'auto:'+sender:undefined);throw new JournalError('policy_denied',message)};
  if(!core){
  if(!view)deny(POLICY_BROKEN_REASON,POLICY_BROKEN);
  const fromRole=this.role(sender);

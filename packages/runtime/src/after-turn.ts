@@ -7,7 +7,7 @@ export async function afterTurn(ctx:AfterTurnContext):Promise<'completed'>{
  for(const r of records){
  if(['owner','harness'].includes(r.from))continue;
  if(r.kind==='question'||r.kind==='task'){
- if(!pythonTrim(text)||p.journal.repliesTo(r.seq).some(a=>a.from===pane.id))continue;
+ if(!pythonTrim(text)||p.journal.repliesTo(r.seq).some(a=>a.from===pane.id||a.from==='harness'&&a.kind==='rejected'&&a.origin==='auto:'+pane.id))continue;
  try{p.channel.postAgentEffect({to:[r.from],kind:r.kind==='question'?'answer':'status',text,thread:r.thread,reply_to:r.seq},{seat:pane.id,trust:'agent'},'auto')}
  catch(e){if(!(e instanceof JournalError)||e.code==='write_failed')throw e;pane.publish({type:'toolError',text:'автоответ не записан: '+e.message})}
  }else if(r.kind==='review-request'&&!readActions(p).reviews.some(a=>a.sid===pane.id&&a.reviewSeq===r.seq))saveReview(p,{sid:pane.id,reviewSeq:r.seq,firstTurnInstanceId:turnInstanceId,stage:'awaiting'});
