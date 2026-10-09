@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync,appendFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {createActions} from '@harnessy/runtime';
+import {GitOps,execute} from '@harnessy/projects';
+import {ProviderError} from '@harnessy/providers';
 import {fixture,call,deferred,until,OWNER} from './test-helpers.ts';
 const seats='  orch: {role: orchestrator, vendor: claude, label: оркестратор, model: w1, mode: read}\n  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read}';
 const keys=(object:object)=>Object.keys(object).sort();
@@ -88,4 +90,50 @@ test('19: sessions failures keep provider 200/404 forms and truncate by Unicode 
  const h=await fixture(t);h.provider.listSessions=async()=>{throw Error('🦊'.repeat(301))};h.provider.onMessages=async()=>{throw Error('🦊'.repeat(301))};
  const list=await call(h.api,'/api/sessions?pane=worker');assert.equal(list.status,200);assert.deepEqual(list.body,{sessions:[],error:'🦊'.repeat(300)});
  const open=await call(h.api,'/api/sessions/open',{body:{pane:'worker',id:'missing'}});assert.equal(open.status,404);assert.deepEqual(open.body,{error:'🦊'.repeat(300)});assert.equal(h.runtime.registry.get('worker')!.sessionId,null)
+});
+
+
+function delayedInit(fail=false){
+ const entered=deferred(),release=deferred();
+ const gitops=new GitOps(async(args,cwd,timeout=60)=>{
+ if(args[0]==='init'){entered.resolve();await release.promise;if(fail)return {code:1,stdout:'',stderr:'forced init failure'}}
+ const result=await execute('git',args,cwd,timeout*1000);return {...result,stdout:result.stdout.trim(),stderr:result.stderr.trim()}
+ });
+ return {gitops,entered,release}
+}
+
+test('65/r2-1: a new room starts during init; project/create returns 409 without closing or cancelling it',{timeout:10_000},async t=>{
+ const gate=delayedInit(),started=deferred<AbortSignal>(),finish=deferred<{text:string;sessionId:null}>();t.after(()=>{gate.release.resolve();finish.resolve({text:'готово',sessionId:null})});
+ const h=await fixture(t,{deps:{gitops:gate.gitops}}),original=h.runtime.project;
+ h.provider.onRun=async(_seat,_message,ctx)=>{ctx.modelStarted?.();ctx.signal.addEventListener('abort',()=>finish.resolve({text:'',sessionId:null}),{once:true});started.resolve(ctx.signal);return finish.promise};
+ const creating=call(h.api,'/api/project/create',{body:{path:join(h.dir,'new-project'),git:true,model:'w1'}});await gate.entered.promise;
+ assert.equal((await call(h.api,'/api/room',{body:{model:'w1',folder:h.dir}})).status,200);
+ assert.equal((await call(h.api,'/api/chat',{body:{pane:'room',message:'ход нового места'}})).status,200);const signal=await started.promise;
+ assert.equal(signal.aborted,false);assert.equal(h.runtime.registry.get('room')!.busy,true);gate.release.resolve();
+ const created=await creating;assert.equal(created.status,409);assert.deepEqual(created.body,{ok:false,error:'идёт ход: создай папку, когда все окна свободны'});
+ assert.equal(h.runtime.project,original);assert.equal(original.closed,false);assert.equal(signal.aborted,false);assert.equal(h.runtime.registry.get('room')!.busy,true);assert.equal(original.editing.size,0);assert.equal(h.provider.closes,0);
+ finish.resolve({text:'готово',sessionId:null});await h.runtime.idle();assert.equal(h.provider.calls.length,1);assert.equal(h.runtime.journal.pendingFor('room').length,0)
+});
+
+for(const halted of [false,true])test('65/r2-2: failed init releases owner-ack delivery'+(halted?' while respecting halt':' and resumes it without another kick'),{timeout:10_000},async t=>{
+ const gate=delayedInit(true);t.after(()=>gate.release.resolve());
+ const h=await fixture(t,{deps:{gitops:gate.gitops},actions:createActions(),seats:'  worker: {role: executor, vendor: claude, model: w1, mode: read}\n  peer: {role: reviewer, vendor: claude, model: w1, mode: read}',before:dir=>writeFileSync(join(dir,'.harness/comms-policy.yaml'),'version: 1\nroutes:\n  - {from: executor, to: reviewer, kinds: [question], trigger: owner-ack}\n  - {from: reviewer, to: executor, kinds: [answer]}\nobserve: {}\n')}),original=h.runtime.project;
+ const question=h.runtime.channel.post({to:'peer',kind:'question',text:'вопрос, ожидающий владельца'},{seat:'worker',trust:'agent'});await until(()=>h.runtime.registry.get('worker')!.approvals.has('ack:'+question.seq));
+ const creating=call(h.api,'/api/project/create',{body:{path:join(h.dir,'new-project'),git:true}});await gate.entered.promise;
+ const allowed=await call(h.api,'/api/approve',{body:{pane:'worker',id:'ack:'+question.seq,decision:'allow'}});assert.deepEqual(allowed.body,{ok:true,error:null});assert.equal(allowed.status,200);
+ await h.runtime.idle();assert.equal(original.pumps.size,0);assert.equal(h.runtime.journal.pendingFor('peer').length,1);assert.equal(h.provider.calls.length,0);
+ if(halted)assert.equal((await call(h.api,'/api/halt',{body:{on:true}})).status,200);
+ gate.release.resolve();const failed=await creating;assert.equal(failed.status,400);assert.deepEqual(Object.keys(failed.body).sort(),['error','ok']);assert.equal(failed.body.ok,false);assert.match(failed.body.error,/^проект не создан: .*forced init failure/);
+ await h.runtime.idle();assert.equal(h.runtime.project,original);assert.equal(original.closed,false);assert.equal(original.editing.size,0);assert.equal(original.halted,halted);
+ if(halted){assert.equal(h.provider.calls.length,0);assert.equal(h.runtime.journal.pendingFor('peer').length,1)}
+ else {const calls=h.provider.calls.filter(c=>c.seat.id==='peer');assert.equal(calls.length,1);assert.match(calls[0]!.message,/вопрос, ожидающий владельца/);assert.equal(h.runtime.journal.pendingFor('peer').length,0);assert.equal(h.runtime.registry.get('peer')!.status,'idle')}
+});
+
+test('65/r2-2: resuming queues after failed init does not repeat a new room turn with an uncertain effect',{timeout:10_000},async t=>{
+ const gate=delayedInit(true);t.after(()=>gate.release.resolve());const h=await fixture(t,{deps:{gitops:gate.gitops}}),original=h.runtime.project;
+ h.provider.onRun=async(_seat,_message,ctx)=>{ctx.modelStarted?.();throw new ProviderError('transport_lost','connection lost after effect')};
+ const creating=call(h.api,'/api/project/create',{body:{path:join(h.dir,'new-project'),git:true}});await gate.entered.promise;
+ assert.equal((await call(h.api,'/api/room',{body:{model:'w1',folder:h.dir}})).status,200);assert.equal((await call(h.api,'/api/chat',{body:{pane:'room',message:'возможный внешний эффект'}})).status,200);await h.runtime.idle();
+ const pane=h.runtime.registry.get('room')!;assert.equal(pane.status,'uncertain');assert.equal(original.state.attempts.room!.status,'uncertain');assert.equal(h.provider.calls.length,1);
+ gate.release.resolve();assert.equal((await creating).status,400);await h.runtime.idle();assert.equal(h.runtime.project,original);assert.equal(original.closed,false);assert.equal(original.editing.size,0);assert.equal(pane.status,'uncertain');assert.equal(original.state.attempts.room!.status,'uncertain');assert.equal(h.provider.calls.length,1);assert.equal(h.runtime.journal.pendingFor('room').length,1)
 });

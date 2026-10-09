@@ -95,14 +95,17 @@ export class Runtime {
  this.requireOwner(initiator);const p=this.project,path=expandUser(pythonTrim(String(input.path||'')));
  if(!path||!isAbsolute(path)||[...path].length>400)throw new RuntimeError('path_invalid','нужен абсолютный путь папки',400);
  return this.changeProject(async()=>{
- this.same(p);const hold=reserve(p,[...p.registry.panes.values()],'идёт ход: создай папку, когда все окна свободны');
+ this.same(p);const busyText='идёт ход: создай папку, когда все окна свободны';let hold=reserve(p,[...p.registry.panes.values()],busyText);
  try{
  let info:Awaited<ReturnType<typeof initProject>>;
  try{info=await initProject(path,{git:input.git===undefined||pyTruthy(input.git),model:String(input.model||'')},{...(this.deps.gitops?{gitops:this.deps.gitops}:{}),catalog:structuredClone(p.registry.models),...(p.registry.get('room')?.model?{roomModel:p.registry.get('room')!.model}:{}),settings:structuredClone(this.settings.effective())})}
  catch(e){throw new RuntimeError('project_failed','проект не создан: '+message(e),400,{cause:e})}
- this.same(p);await this.openProjectLocked(path,{expected:p});const next=this.project;
+ this.same(p);
+ // Reacquire for the current seats synchronously; closing marks the project closed before the next await.
+ hold.release();hold=reserve(p,[...p.registry.panes.values()],busyText);
+ await this.openProjectLocked(path,{expected:p});const next=this.project;
  return {ok:true as const,project:next.dir,...info,seats:[...next.registry.panes.values()].filter(p=>p.id!=='room').length}
- }finally{hold.release()}
+ }finally{hold.release();if(this.current===p&&!p.closed)for(const id of p.registry.ids)void this.kick(id)}
  })
  }
  async closeProject():Promise<void>{return this.changeProject(()=>this.closeProjectLocked())}
