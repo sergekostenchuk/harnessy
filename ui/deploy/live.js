@@ -25,12 +25,14 @@
     clearTimeout(toastT); toastT=setTimeout(()=>toastEl.classList.remove('on'),undo?6500:2600); }
 
   // ── счётчики «ждут вас» на всех экранах: рейка, выдвижная панель, плашка нового чата
-  function badges(){ const n=waiting().length;
+  // при подключённом движке «ждут вас» — только настоящие карточки мест (pendingApprovals из /api/status); демо-решения — лишь без движка (Kimi UX-1 №85 п.1)
+  function waitList(){ const L=window.LIVE; if(L&&L.H&&L.H.on) return (L.H.panes||[]).filter(p=>p.id!=='room'&&p.pendingApprovals>0).map(p=>'карточка у «'+paneName(p)+'»'); return waiting().map(d=>DEC[d].toLowerCase()); }
+  function badges(){ const list=waitList(), n=list.length;
     document.querySelectorAll('aside.side .nav[data-go="now"]').forEach(el=>{ let b=el.querySelector('.b'); if(!b){ b=document.createElement('span'); b.className='b'; el.appendChild(b); } b.textContent=n; b.style.display=n?'':'none'; });
     document.querySelectorAll('.m-drawer a.m-i[href="14-now.html"]').forEach(el=>{ let b=el.querySelector('small'); if(!b){ b=document.createElement('small'); el.appendChild(b); } b.textContent=n||''; });
     document.querySelectorAll('.ret').forEach(r=>{ r.style.display=n?'':'none'; const p=r.querySelector('.pill'); if(p) p.textContent='◆ '+n+' '+plural(n)+' вас';
-      const tx=r.querySelector('span:not(.pill):not(.btn)'); if(tx&&n) tx.innerHTML='Пока вас не было: '+waiting().map(d=>'<b>'+esc(DEC[d].toLowerCase())+'</b>').join(' и ');
-      const b=r.querySelector('.btn'); if(b&&!b.dataset.live){ b.dataset.live=1; b.style.cursor='pointer'; b.addEventListener('click',()=>location.href='14-now.html'); } }); }
+      const tx=r.querySelector('span:not(.pill):not(.btn)'); if(tx&&n) tx.innerHTML='Пока вас не было: '+list.map(t=>'<b>'+esc(t)+'</b>').join(' и ');
+      const b=r.querySelector('.btn'); if(b&&!b.dataset.live){ b.dataset.live=1; b.style.cursor='pointer'; b.addEventListener('click',()=>location.href=(window.LIVE&&window.LIVE.H.on)?'01-chat.html':'14-now.html'); } }); }
 
   // ── «Сейчас»: решение принимается кнопкой в строке или в раскрытой карточке
   let curD=null;
@@ -103,20 +105,24 @@
     if(!r||!r.ok){ H.cur=null; S.chat.push({role:'ai',html:'<p>Харнесс не принял сообщение: '+esc((r&&r.error)||'нет связи')+'</p>',t:now(),src:'err'}); save(); render(); return; }
     if(r.queued) toast('Место занято — сообщение встало в очередь'); }
   function applyStatus(st){ H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.roleCatalog=st.roleCatalog||[]; H.noProject=!!st.noProject; H.projectsRoot=st.projectsRoot||''; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; H.halted=!!st.halted; setTimeout(()=>dispatchEvent(new CustomEvent('live:status')),0);
+    if(PAGE==='new') document.querySelectorAll('.status > span:first-child').forEach(el=>{ el.textContent=H.noProject?'без проекта · модель ничего не читает':'папка '+((H.project||'').split('/').filter(Boolean).pop()||'проект')+(st.repo?' · git':'')+' · ролей '+(H.panes||[]).filter(p=>p.id!=='room').length; });   // строка папки — от движка, не статика скетча (Kimi UX-1 №85 п.2)
+    badges();
     if(PAGE==='new'){ S.ui.pane='room'; S.ui.fresh=true; S.ui.switched=false; save(); }   // стартовый экран — ВСЕГДА без роли · новый чат; выбор роли или чата отсюда = переход в чат (слово владельца 08.10)
     if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); }
   async function refreshChats(){ try{ const r=await api('/api/chats'); H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } if(typeof sideChats==='function') sideChats(); }
   async function refreshStatus(){ let st=null; try{ st=await api('/api/status'); }catch(e){} if(st&&Array.isArray(st.panes)){ applyStatus(st); await refreshChats(); hStatus(); if(window.CX) CX.render(); } return st; }
   // лента активного чата — из харнесса (один источник правды для Electron, браузера и сервера); цена хода у старых реплик неизвестна
-  let LOADED=null;
+  let LOADED=null; const ONB={};
+  // вводная роли при первом открытии её чата — в том числе когда чата ещё нет (место посеяно при создании проекта; Kimi UX-1 №85 п.4); движок повторно не шлёт
+  async function onboardOnce(p){ if(!p||p.id==='room'||ONB[p.id]) return; ONB[p.id]=1; try{ const o=await api('/api/onboard',{pane:p.id}); if(o&&o.sent){ H.cur={text:'',tools:[]}; drawLive(); toast('Роль получает вводную: кто она, где, с кем работает'); } }catch(e){} }
   async function loadChat(){ if(!H.on||PAGE!=='chat') return; const p=H.pane, cid=p?(H.active||{})[p.id]:null;
-    if(!cid){ if(LOADED!==null){ S.chat=[]; save(); } LOADED=cid||'none'; render(); return; }
+    if(!cid){ if(LOADED!==null){ S.chat=[]; save(); } LOADED=cid||'none'; render(); if(p&&!p.busy) await onboardOnce(p); return; }
     let r=null; try{ r=await api('/api/chats/'+cid); }catch(e){} if(!r||!r.messages){ return; }
     const who=p.id==='room'?'Без роли':paneName(p);
     const hsys=m=>m.role==='peer'&&/^\[от харнесс\]/.test(m.text);   // заметки харнесса (вводная, передача) — системные: без модели, расхода и действий
     S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:hsys(m)?'sys':'live',who:hsys(m)?(/контекст передан/.test(m.text)?'харнесс · передача':'харнесс · вводная'):(m.role==='peer'?'сосед':who),pane:p.id,model:r.chat.model||p.model,html:md(m.text.replace(/^\[от [^\]]+\]\s*/,'')),text:m.text,t:(m.ts||0)*1000}).slice(-80);
     LOADED=cid; save(); render();
-    if(p.id!=='room'&&!r.messages.length){ try{ const o=await api('/api/onboard',{pane:p.id}); if(o&&o.sent){ H.cur={text:'',tools:[]}; drawLive(); toast('Роль получает вводную: кто она, где, с кем работает'); } }catch(e){} } }   // роль без вводной получает её при первом открытии чата (правило движка)
+    if(p.id!=='room'&&!r.messages.length&&!p.busy) await onboardOnce(p); }   // роль без вводной получает её при первом открытии чата (правило движка)
   // подключение к движку на всех экранах: боковая панель, настройки, подключения живут его данными (08.10)
   async function hConnect(){ let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)||!st.panes.length){ return; }
     H.on=true; applyStatus(st); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }

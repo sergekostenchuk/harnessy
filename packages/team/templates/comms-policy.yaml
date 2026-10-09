@@ -1,0 +1,84 @@
+# Политика связи линии: кто кому какие записи пишет и чьи разговоры читает.
+# Проверяется сервером на каждой записи (send, ask), на чтении (read_pane) и на сводке соседей.
+# Маршруты именуют РОЛИ, не места: у двух мест с одной ролью права одинаковые.
+# Правка файла подхватывается на лету; каждая запись журнала несёт версию политики, по которой прошла.
+version: 1
+default: deny
+kinds: [task, status, question, answer, review-request, verdict, blocker, escalation, note, stop, resume, digest, proposal, decision, report]
+
+routes:
+  # владелец пишет всем и всё
+  - from: owner
+    to: "*"
+    kinds: "*"
+
+  # ассистент — голос владельца: читает и пишет всем, но не подтверждает owner-ack и не нажимает «разрешить»
+  - from: assistant
+    to: "*"
+    kinds: "*"
+
+  # оркестратор управляет: задачи, вопросы, ответы, стоп, решения — всем
+  - from: orchestrator
+    to: "*"
+    kinds: [task, question, answer, stop, resume, decision, note, digest]
+
+  # архитектор: предложения и решения оркестратору, ответы тем, кто спросил; задач не ставит
+  - from: architect
+    to: [orchestrator, owner]
+    kinds: [proposal, decision, note, answer, question, report]
+  - from: architect
+    to: [executor, reviewer, tester, researcher]
+    kinds: [answer, note, question]
+
+  # исполнитель: статусы и вопросы наверх, запросы ревью и тестов, вопросы архитектору и ресерчеру
+  - from: executor
+    to: [orchestrator, owner]
+    kinds: [status, question, blocker, answer, note]
+  - from: executor
+    to: [reviewer, tester]
+    kinds: [review-request, question, answer, status, note]
+  - from: executor
+    to: [architect, researcher]
+    kinds: [question, note]
+
+  # ревьюер: вердикт только в ответ на review-request, с порогом и лимитом раундов
+  - from: reviewer
+    to: executor
+    kinds: [verdict]
+    trigger: reply-to:review-request
+    bounds: {max_rounds: 3, accept_score: 9}
+  - from: reviewer
+    to: [executor, architect, tester]
+    kinds: [question, answer, note]
+  - from: reviewer
+    to: [orchestrator, owner]
+    kinds: [escalation, status, report, question, answer]
+
+  # тестер: отчёты исполнителю и оркестратору, вопросы; задач не ставит
+  - from: tester
+    to: [executor, orchestrator, owner]
+    kinds: [report, question, answer, note, escalation]
+  - from: tester
+    to: [architect, reviewer]
+    kinds: [question, answer, note]
+
+  # ресерчер: отчёт и ответ тому, кто спросил
+  - from: researcher
+    to: "*"
+    kinds: [report, answer, question, note]
+
+  # все могут эскалировать владельцу
+  - from: "*"
+    to: owner
+    kinds: [escalation, status, question]
+
+# наблюдение: чьи разговоры роль может читать через read_pane и получать в сводке соседей
+observe:
+  owner: "*"
+  assistant: "*"
+  orchestrator: "*"
+  architect: "*"
+  reviewer: [executor]
+  tester: [executor]
+  executor: []
+  researcher: []
