@@ -6,3 +6,4 @@ export {Channel} from './channel.ts';
 export type {ChannelDeps} from './channel.ts';
 export {KINDS,SYSTEM_KINDS,REPLY_KIND,JournalError,normalizeReplyTo} from './types.ts';
 export type {Kind,JournalCode,Record_,DeliveryEntry,AppendInput,Initiator,AgentPostInput,CorePostInput,ThreadState,Route,Decision,ChannelEvent,PolicyView} from './types.ts';
+export {compatJson,parseCompat,orderedClone,orderedKeys,localIso,pythonTrim} from './compat-json.ts';
