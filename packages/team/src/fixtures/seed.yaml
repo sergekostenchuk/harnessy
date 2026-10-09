@@ -1,0 +1,15 @@
+# Манифест команды линии. Места добавляются и из чата («Назначить роль»); комментарии при этом не сохраняются.
+version: 1
+project: ''
+integration_branch: main
+merge_roles:
+- orchestrator
+seats:
+  orchestrator:
+    role: orchestrator
+    label: оркестратор
+    vendor: claude
+    model: model
+    mode: read
+    digest: false
+    instructions: roles/orchestrator.md
