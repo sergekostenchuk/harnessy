@@ -412,7 +412,7 @@
       this.conv.value = sessions.some(s => s.id === cur) ? cur : '';
     }
     async open(id) {
-      const r = await fetch('/api/sessions/' + id + '?pane=' + this.id);
+      const r = await fetch('/api/sessions/open', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pane:this.id, id})});
       if (!r.ok) { this.meta('Не удалось открыть разговор', true); return; }
       const { messages } = await r.json();
       this.s.sessionId = id; save(); this.report();

@@ -1,0 +1,91 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdirSync,writeFileSync,appendFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {createActions} from '@harnessy/runtime';
+import {fixture,call,deferred,until,OWNER} from './test-helpers.ts';
+const seats='  orch: {role: orchestrator, vendor: claude, label: оркестратор, model: w1, mode: read}\n  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read}';
+const keys=(object:object)=>Object.keys(object).sort();
+
+test('1/19: golden pins/settings/project/dir/halt/room forms via actual HTTP ports',async t=>{
+ const h=await fixture(t);assert.deepEqual((await call(h.api,'/api/pins')).body,{pins:[]});
+ const pin=await call(h.api,'/api/pins',{body:{kind:'folder',path:h.dir}});assert.deepEqual(keys(pin.body),['ok','on','pins']);assert.equal(pin.body.on,true);assert.equal(pin.body.pins[0].current,undefined);assert.equal((await call(h.api,'/api/pins')).body.pins[0].current,true);
+ assert.deepEqual((await call(h.api,'/api/pins',{body:{}})).body,{ok:false,error:'kind: folder или chat; path обязателен'});
+ const before=await call(h.api,'/api/settings');assert.deepEqual(before.body,{ok:true,owner:{},project:{},effective:{},applies:{defaultMode:'режим прав новой роли, если владелец не выбрал',projectsRoot:'куда создаётся проект из разговора без проекта'}});
+ assert.deepEqual((await call(h.api,'/api/settings',{body:{scope:'bad',patch:{a:1}}})).body,{ok:false,error:'scope: owner или project; patch — объект ключ → значение'});
+ const setting=await call(h.api,'/api/settings',{raw:'{"scope":"project","patch":{"defaultMode":"ask","float":1.0}}'});assert.equal(setting.status,200);assert.deepEqual(setting.body.saved,{defaultMode:'ask',float:1});assert.equal(setting.body.effective.defaultMode,'ask');assert.deepEqual(keys(setting.body),['applies','effective','ok','saved','scope','ts']);
+ assert.deepEqual((await call(h.api,'/api/dir?cwd='+encodeURIComponent(h.dir))).body,{ok:true,cwd:h.dir,hasHarness:true});assert.equal((await call(h.api,'/api/dir')).status,400);
+ assert.deepEqual((await call(h.api,'/api/project',{body:{path:h.dir}})).body,{ok:true,project:h.dir,changed:false});
+ const halt=await call(h.api,'/api/halt',{body:{on:true}});assert.deepEqual(halt.body,{ok:true,halted:true,interrupted:[],pending:{}});
+ const room=await call(h.api,'/api/room',{body:{model:'w1',folder:h.dir}});assert.equal(room.status,200);assert.deepEqual(keys(room.body),['ok','pane']);assert.equal(room.body.pane.id,'room');
+ const projects=await call(h.api,'/api/projects');assert.equal(projects.body.current,h.dir);assert.equal(projects.body.projects[0].seats,1);assert.equal(projects.body.projects[0].hasTeam,true);
+ const unknown=await call(h.api,'/api/context/nope');assert.deepEqual(unknown.body,{ok:false,error:'нет такого места'});assert.equal(unknown.status,404);
+ assert.equal((await call(h.api,'/api/context/worker')).body.ok,true);
+});
+
+test('1/19/68: chat direct and handoff selection forms, journal, chats and transcript use real delivered histories',async t=>{
+ const h=await fixture(t,{seats});
+ const direct=await call(h.api,'/api/chat',{body:{pane:'worker',message:'задача'}});assert.equal(direct.status,409);assert.deepEqual(direct.body,{ok:false,needDirect:true,error:'«воркер» — не оркестратор: обращение напрямую требует явного подтверждения'});
+ for(const message of ['первый','второй']){const chat=await call(h.api,'/api/chat',{body:{pane:'worker',message,direct:true}});assert.equal(chat.status,200);assert.deepEqual(keys(chat.body),['ok','queued','seq','thread']);await h.runtime.idle()}
+ const selection=await call(h.api,'/api/handoff',{body:{from:'worker',to:'orch'}});assert.equal(selection.status,409);assert.deepEqual(selection.body,{ok:false,needSelection:true,answers:2,error:'в чате 2 ответа(ов) модели — выберите, что передать'});
+ const transfer=await call(h.api,'/api/handoff',{body:{from:'worker',to:['orch','orch'],text:'выбранное',kind:'note'}});assert.equal(transfer.status,200);assert.deepEqual(keys(transfer.body),['answers','chars','names','ok','seq','to']);assert.equal(transfer.body.to.length,1);assert.equal(transfer.body.chars,9);await h.runtime.idle();
+ const log=await call(h.api,'/api/journal?since=bad&limit=0');assert.equal(log.body.records.length,h.runtime.journal.lastSeq);assert.deepEqual(keys(log.body),['cursors','lastSeq','records','threads']);assert.equal(log.body.records.at(-1).origin,'handoff');assert.equal((await call(h.api,'/api/journal?since=0&limit=0')).body.records.length,log.body.records.length);
+ const list=await call(h.api,'/api/chats');assert.deepEqual(keys(list.body),['active','chats']);const id=list.body.active.worker;const chat=await call(h.api,'/api/chats/'+id);assert.deepEqual(keys(chat.body),['chat','messages']);assert.equal(chat.body.messages.filter((m:any)=>m.role==='ai').length,2);
+ assert.deepEqual(keys(chat.body.chat),['active','closed','created','id','label','last','messages','model','pane','role','title','vendor']);
+ const opened=await call(h.api,'/api/chats/open',{body:{chat:id}});assert.deepEqual(keys(opened.body),['already','chat','ok','pane']);
+ const fresh=await call(h.api,'/api/chats/new',{body:{pane:'worker',carry:'text'}});assert.equal(fresh.status,200);assert.deepEqual(keys(fresh.body),['carried','chat','ok','pane']);assert.equal(fresh.body.carried,true);
+ assert.equal((await call(h.api,'/api/chats/missing')).status,404);assert.deepEqual((await call(h.api,'/api/interrupt',{body:{pane:'worker'}})).body,{ok:false,error:'нечего прерывать'});
+ const steer=await call(h.api,'/api/steer',{body:{pane:'worker',message:'вмешательство'}});assert.equal(steer.status,409);assert.equal(steer.body.code,'steer_failed');assert.equal(h.runtime.journal.pendingFor('worker').length,0)
+});
+
+test('1: project creation/assign new and replaced/seats/onboard keep distinct Python forms',async t=>{
+ const h=await fixture(t);const path=join(h.dir,'project');const created=await call(h.api,'/api/project/create',{body:{path,model:'w1',git:true}});
+ assert.equal(created.status,200);assert.deepEqual(keys(created.body),['created','git','memory','ok','orchestrator','project','seats']);assert.equal(created.body.created,true);assert.equal(created.body.git,true);assert.equal(created.body.seats,1);
+ await h.runtime.idle();await call(h.api,'/api/halt',{body:{on:true}});
+ assert.equal((await call(h.api,'/api/room',{body:{model:'w1',folder:path}})).status,200);
+ const assigned=await call(h.api,'/api/assign',{body:{role:'assistant',model:'w1'}});assert.equal(assigned.status,200);assert.deepEqual(keys(assigned.body),['created','ok','pane','project','team']);assert.equal(assigned.body.created,false);
+ const replacement=await call(h.api,'/api/assign',{body:{role:'assistant',model:'w1'}});assert.equal(replacement.status,200);assert.deepEqual(keys(replacement.body),['chat','ok','pane','replaced']);
+ const seat=await call(h.api,'/api/seats',{body:{role:'executor',model:'w1'}});assert.equal(seat.status,200);assert.deepEqual(keys(seat.body),['chat','ok','pane']);
+ assert.equal((await call(h.api,'/api/seats',{body:{role:'assistant',model:'w1'}})).status,409);
+ const onboard=await call(h.api,'/api/onboard',{body:{pane:seat.body.pane.id}});assert.deepEqual(onboard.body,{ok:true,already:true});assert.equal((await call(h.api,'/api/onboard',{body:{pane:'room'}})).status,404);
+});
+
+test('11/25/66/68: POST open sessions preserves forms and rejects stale read after turn/project, GET and HEAD never invoke provider',async t=>{
+ const h=await fixture(t);assert.deepEqual((await call(h.api,'/api/sessions?pane=worker')).body,{sessions:[{id:'old',title:'прежний',updated:1}]});assert.equal((await call(h.api,'/api/sessions')).status,400);
+ const opened=await call(h.api,'/api/sessions/open',{body:{pane:'worker',id:'old'}});assert.deepEqual(opened.body,{id:'old',messages:[{role:'ai',text:'прежний ответ'}]});assert.equal(h.runtime.registry.get('worker')!.sessionId,'old');
+ const gate=deferred<{role:'ai';text:string}[]>();h.provider.onMessages=()=>gate.promise;const read=call(h.api,'/api/sessions/open',{body:{pane:'worker',id:'other'}});await until(()=>h.provider.messageCalls===2);await h.runtime.runTurn('worker','новый ход');gate.resolve([{role:'ai',text:'старый результат'}]);const stale=await read;assert.equal(stale.status,409);assert.equal(stale.body.code,'stale_session');assert.notEqual(h.runtime.registry.get('worker')!.sessionId,'other');
+ const gate2=deferred<{role:'ai';text:string}[]>();h.provider.onMessages=()=>gate2.promise;const read2=call(h.api,'/api/sessions/open',{body:{pane:'worker',id:'foreign'}});await until(()=>h.provider.messageCalls===3);const dir=join(h.dir,'next');mkdirSync(dir);await h.runtime.projectSet(dir,{},OWNER);gate2.resolve([{role:'ai',text:'чужой проект'}]);assert.equal((await read2).body.code,'project_changed');assert.equal(h.runtime.registry.ids.length,0);
+});
+
+test('8/19/68: owner-ack append failure is 500 J with card retained, retry succeeds and late approve has legacy form',async t=>{
+ let armed=false;const h=await fixture(t,{seats:'  worker: {role: executor, vendor: claude, model: w1, mode: read}\n  peer: {role: reviewer, vendor: claude, model: w1, mode: read}',actions:createActions(),before:dir=>writeFileSync(join(dir,'.harness/comms-policy.yaml'),'version: 1\nroutes: [{from: executor, to: reviewer, kinds: [note], trigger: owner-ack}]\nobserve: {}\n'),deps:{journalOptions:{fs:{appendFileSync(path,data,options){if(armed&&String(data).includes('"kind": "ack"')){armed=false;throw Error('disk failed')}appendFileSync(path,data,options)}}}}});
+ await h.runtime.halt(true,OWNER);const rec=h.runtime.channel.post({to:'peer',kind:'note',text:'ожидает'},{seat:'worker',trust:'agent'});await until(()=>h.runtime.registry.get('worker')!.approvals.size===1);armed=true;
+ const bad=await call(h.api,'/api/approve',{body:{pane:'worker',id:'ack:'+rec.seq,decision:'allow'}});assert.equal(bad.status,500);assert.equal(bad.body.code,'write_failed');assert.equal(h.runtime.registry.get('worker')!.approvals.size,1);
+ assert.deepEqual((await call(h.api,'/api/approve',{body:{pane:'worker',id:'ack:'+rec.seq,decision:'allow'}})).body,{ok:true,error:null});assert.deepEqual((await call(h.api,'/api/approve',{body:{pane:'worker',id:'ack:'+rec.seq,decision:'allow'}})).body,{ok:false,error:'вопрос уже закрыт'});
+});
+
+
+test('68: saved opposite owner-ack decision remains deny and returns 409 ack_closed after partial failure',async t=>{
+ let failNote=false;const h=await fixture(t,{seats:'  worker: {role: executor, vendor: claude, model: w1, mode: read}\n  peer: {role: reviewer, vendor: claude, model: w1, mode: read}',actions:createActions(),before:dir=>writeFileSync(join(dir,'.harness/comms-policy.yaml'),'version: 1\nroutes: [{from: executor, to: reviewer, kinds: [note], trigger: owner-ack}]\nobserve: {}\n'),deps:{journalOptions:{fs:{appendFileSync(path,data,options){if(failNote&&String(data).includes('"origin": "ack"'))throw Error('note failed');appendFileSync(path,data,options)}}}}});
+ await h.runtime.halt(true,OWNER);const rec=h.runtime.channel.post({to:'peer',kind:'note',text:'ожидает'},{seat:'worker',trust:'agent'});await until(()=>h.runtime.registry.get('worker')!.approvals.size===1);failNote=true;
+ const denied=await call(h.api,'/api/approve',{body:{pane:'worker',id:'ack:'+rec.seq,decision:'deny'}});assert.equal(denied.status,500);assert.equal(denied.body.code,'write_failed');assert.equal(h.runtime.registry.get('worker')!.approvals.size,1);
+ failNote=false;const opposite=await call(h.api,'/api/approve',{body:{pane:'worker',id:'ack:'+rec.seq,decision:'allow'}});assert.equal(opposite.status,409);assert.equal(opposite.body.code,'ack_closed');assert.equal(h.runtime.registry.get('worker')!.approvals.size,0);assert.equal(h.runtime.journal.repliesTo(rec.seq).some(r=>r.kind==='ack'),false)
+});
+
+test('68: recovering and uncertain owner edits return 409 J without moving cursor or invoking model',async t=>{
+ const h=await fixture(t),pane=h.runtime.registry.get('worker')!;for(const status of ['recovering','uncertain'] as const){pane.status=status;const reply=await call(h.api,'/api/chats/new',{body:{pane:'worker'}});assert.equal(reply.status,409);assert.equal(reply.body.code,status);assert.equal(reply.body.ok,false)}
+ assert.equal(h.provider.calls.length,0);assert.deepEqual(h.runtime.journal.cursors,{})
+});
+
+
+test('1: room move preserves conversation while destination message uses its own journal via HTTP',async t=>{
+ const h=await fixture(t);await call(h.api,'/api/room',{body:{model:'w1',folder:h.dir}});await call(h.api,'/api/chat',{body:{pane:'room',message:'исходный разговор'}});await h.runtime.idle();const before=h.provider.calls.length;
+ const path=join(h.dir,'moved');mkdirSync(path);const moved=await call(h.api,'/api/room/move',{body:{path}});assert.equal(moved.status,200);assert.deepEqual(keys(moved.body),['carried','ok','pane','project']);assert.equal(moved.body.carried,true);assert.equal(moved.body.project,path);
+ const next=await call(h.api,'/api/chat',{body:{pane:'room',message:'новая запись'}});assert.equal(next.status,200);assert.equal(next.body.seq,1);await h.runtime.idle();assert.equal(h.provider.calls.length,before+1);assert.match(h.provider.calls.at(-1)!.message,/новая запись/);assert.equal(h.runtime.registry.get('room')!.carry,'')
+});
+
+test('19: sessions failures keep provider 200/404 forms and truncate by Unicode codepoints',async t=>{
+ const h=await fixture(t);h.provider.listSessions=async()=>{throw Error('🦊'.repeat(301))};h.provider.onMessages=async()=>{throw Error('🦊'.repeat(301))};
+ const list=await call(h.api,'/api/sessions?pane=worker');assert.equal(list.status,200);assert.deepEqual(list.body,{sessions:[],error:'🦊'.repeat(300)});
+ const open=await call(h.api,'/api/sessions/open',{body:{pane:'worker',id:'missing'}});assert.equal(open.status,404);assert.deepEqual(open.body,{error:'🦊'.repeat(300)});assert.equal(h.runtime.registry.get('worker')!.sessionId,null)
+});

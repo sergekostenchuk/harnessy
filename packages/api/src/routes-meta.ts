@@ -1,0 +1,45 @@
+import {join} from 'node:path';
+import {statSync} from 'node:fs';
+import {MODES,pyTruthy} from '@harnessy/team';
+import {KINDS} from '@harnessy/journal';
+import {projectsRoot,validDir,ROUTES} from '@harnessy/projects';
+import {RuntimeError,type Runtime,type ProjectState} from '@harnessy/runtime';
+import {CLAUDE_MODELS,CODEX_FALLBACK} from './catalog.ts';
+import {OWNER,string,integer,type Route} from './routes.ts';
+import {json,slice,text} from './responses.ts';
+export function sameProject(r:Runtime,p:ProjectState):void {if(p.closed||r.project!==p)throw new RuntimeError('project_changed','проект сменился',409)}
+export const threads=(p:ProjectState)=>Object.fromEntries(p.channel.threads);
+export async function metadata(r:Runtime,connections=false){
+ const p=r.project;
+ const [cl,cx,models]=await Promise.allSettled([r.auth('claude'),r.auth('codex'),r.models('codex',CODEX_FALLBACK)]);
+ sameProject(r,p);
+ const claude=cl.status==='fulfilled'?cl.value:{loggedIn:false,error:slice(text(cl.reason),connections?120:300)};
+ const raw=cx.status==='fulfilled'?cx.value:{loggedIn:false,error:slice(text(cx.reason),300)};
+ const codex={loggedIn:pyTruthy(raw.loggedIn),email:raw.email??null,plan:raw.plan??'',...(raw.error?{error:raw.error}:{})};
+ return {p,claude,codex,models:models.status==='fulfilled'?models.value:structuredClone(CODEX_FALLBACK)}
+}
+export function metaRoutes(r:Runtime):Route[]{return [
+ {method:'GET',path:'/api/status',handle:async()=>{
+ const {p,claude,codex,models}=await metadata(r);
+ return json({project:p.dir,defaultDir:r.defaultDir,models:{claude:CLAUDE_MODELS,codex:models},modes:MODES,kinds:KINDS,
+ ownerKinds:['task','question','note','stop','resume','decision'],lineErrors:[...p.lineErrors],policy:{version:p.policy?.version??null,path:p.policy?.path??null},
+ team:{path:p.team?join(p.team.harnessDir,'team.yaml'):null,integrationBranch:p.team?.integrationBranch??null,mergeRoles:p.team?.mergeRoles??[]},repo:p.repoRoot,
+ panes:[...p.registry.panes.values()].map(pane=>({...pane.settings(),pending:p.journal.pendingFor(pane.id).length})),
+ roleCatalog:r.roleCatalog(),noProject:p.dir===r.defaultDir||p.registry.get('room')?.mode==='chat',projectsRoot:projectsRoot(r.settings.effective()),activeChats:{...p.state.chats.active},hasOrchestrator:[...p.registry.panes.values()].some(p=>p.role==='orchestrator'),halted:p.halted,threads:threads(p),auth:{claude,codex},journal:{lastSeq:p.journal.lastSeq,path:p.journal.channelPath}})
+ }},
+ {method:'GET',path:'/api/dir',handle:({query})=>{const cwd=query.get('cwd')??'';if(!validDir(cwd))return json({ok:false,error:'папки нет или это не папка: '+cwd},400);let hasHarness=false;try{hasHarness=statSync(join(cwd,'.harness')).isDirectory()}catch{}return json({ok:true,cwd,hasHarness})}},
+ {method:'GET',path:'/api/projects',handle:async()=>{const p=r.project,data=await r.projectRegistry.listProjects(p.dir);sameProject(r,p);for(const row of data.projects)if(row.current)row.seats=[...p.registry.panes.values()].filter(p=>p.id!=='room').length;return json(data)}},
+ {method:'GET',path:'/api/journal',handle:({query})=>{let since=integer(query.get('since')??'0',NaN),limit=integer(query.get('limit')??'100',NaN);if(!Number.isFinite(since)||!Number.isFinite(limit)){since=0;limit=100}const p=r.project;return json({records:p.journal.read({since,limit,thread:query.get('thread')||null}),lastSeq:p.journal.lastSeq,cursors:p.journal.cursors,threads:threads(p)})}},
+ {method:'GET',path:'/api/connections',handle:async()=>{
+ const {p,claude,codex,models}=await metadata(r,true),seats=(v:string)=>[...p.registry.panes.values()].filter(p=>p.vendor===v&&p.id!=='room').map(p=>p.id),other=models.filter(m=>!m.id.startsWith('gpt'));
+ const providers:Record<string,unknown>[]=[{id:'claude',name:'Claude',kind:'подписка · вход через claude',auth:claude,models:CLAUDE_MODELS.length,seats:seats('claude'),routable:true,route:r.connections.get('claude')},{id:'codex',name:'Codex',kind:'подписка ChatGPT · codex app-server',auth:codex,models:models.length-other.length,seats:seats('codex'),routable:true,route:r.connections.get('codex')}];
+ if(other.length)providers.push({id:'router',name:'Роутер провайдеров',kind:'локальный роутер 127.0.0.1:11435 · Ollama Cloud, Qwen, DeepSeek, GLM, Kimi',auth:{loggedIn:true},models:other.length,seats:[],routable:false,route:null,note:'выход в сеть у роутера свой — движок его маршрут не задаёт'});
+ return json({ok:true,providers,routes:ROUTES})
+ }},
+ {method:'POST',path:'/api/connections/route',handle:async({body})=>{
+ const v=string(body.provider);if(v!=='claude'&&v!=='codex')return json({ok:false,error:'маршрут задаётся только провайдерам, чьи процессы запускает движок: claude, codex'},400);
+ const {processRestartNeeded:_,...route}=await r.setRoute(v,{route:string(body.route)||'direct',proxy:string(body.proxy),iface:string(body.iface),label:string(body.label),expect:string(body.expect)},OWNER);
+ return json({ok:true,provider:v,route,applies:route.route==='iface'?'только проверка выхода: трафик идёт системным маршрутом':'со следующего хода'})
+ }},
+ {method:'POST',path:'/api/connections/check',handle:async({body})=>{const v=string(body.provider);if(v!=='claude'&&v!=='codex')return json({ok:false,error:'проверка выхода: claude или codex'},400);const p=r.project,check=await r.connections.check(v);sameProject(r,p);return json({ok:true,provider:v,check,route:r.connections.get(v)})}}
+]}
