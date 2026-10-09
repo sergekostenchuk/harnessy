@@ -1,7 +1,7 @@
 import {withPathLock,canonicalPath} from '@harnessy/team';
 import {execute} from './gitops.ts';
 import {ownerPaths,readObject,writeJson,object,pythonTrim} from './files.ts';
-import {orderedClone} from './compat-json.ts';
+import {orderedClone} from '@harnessy/journal';
 import {ProjectError} from './errors.ts';
 import type {RouteConfig,RouteEnv,CheckResult,CurlRunner} from './types.ts';
 export const ROUTES=['direct','proxy','iface'] as const;
