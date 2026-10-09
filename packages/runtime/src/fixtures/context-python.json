@@ -1,0 +1,305 @@
+{
+  "rootKeys": [
+    "ok",
+    "pane",
+    "label",
+    "model",
+    "window",
+    "measured",
+    "used",
+    "pct",
+    "cache",
+    "last",
+    "parts",
+    "history",
+    "handoff",
+    "turns",
+    "chat",
+    "busy"
+  ],
+  "saved": {
+    "chats": {
+      "c0001": {
+        "id": "c0001",
+        "pane": "assistant",
+        "title": "История: ассистент",
+        "created": 1791499000,
+        "closed": null,
+        "model": "w1",
+        "vendor": "claude",
+        "sessionId": "private-session-assistant",
+        "transcript": [
+          {
+            "role": "me",
+            "text": "Первый вопрос: assistant",
+            "ts": 1791499001.125
+          },
+          {
+            "role": "ai",
+            "text": "Первый ответ: assistant",
+            "ts": 1791499002.875
+          }
+        ],
+        "carry": "Прежний контекст: assistant"
+      },
+      "c0002": {
+        "id": "c0002",
+        "pane": "researcher",
+        "title": "История: ресёрчер",
+        "created": 1791499000,
+        "closed": null,
+        "model": "w1",
+        "vendor": "claude",
+        "sessionId": "private-session-researcher",
+        "transcript": [
+          {
+            "role": "me",
+            "text": "Первый вопрос: researcher",
+            "ts": 1791499001.125
+          },
+          {
+            "role": "ai",
+            "text": "Первый ответ: researcher",
+            "ts": 1791499002.875
+          }
+        ],
+        "carry": "Прежний контекст: researcher"
+      },
+      "c0003": {
+        "id": "c0003",
+        "pane": "executor3",
+        "title": "История: воркер 3",
+        "created": 1791499000,
+        "closed": null,
+        "model": "w1",
+        "vendor": "claude",
+        "sessionId": "private-session-executor3",
+        "transcript": [
+          {
+            "role": "me",
+            "text": "Первый вопрос: executor3",
+            "ts": 1791499001.125
+          },
+          {
+            "role": "ai",
+            "text": "Первый ответ: executor3",
+            "ts": 1791499002.875
+          }
+        ],
+        "carry": "Прежний контекст: executor3"
+      },
+      "c0004": {
+        "id": "c0004",
+        "pane": "room",
+        "title": "История: без роли",
+        "created": 1791499000,
+        "closed": null,
+        "model": "w1",
+        "vendor": "claude",
+        "sessionId": "private-session-room",
+        "transcript": [
+          {
+            "role": "me",
+            "text": "Первый вопрос: room",
+            "ts": 1791499001.125
+          },
+          {
+            "role": "ai",
+            "text": "Первый ответ: room",
+            "ts": 1791499002.875
+          }
+        ],
+        "carry": "Прежний контекст: room"
+      }
+    },
+    "active": {
+      "assistant": "c0001",
+      "researcher": "c0002",
+      "executor3": "c0003",
+      "room": "c0004"
+    }
+  },
+  "panes": {
+    "room": {
+      "model": "w1",
+      "mode": "chat",
+      "sessionId": "private-session-room",
+      "digest": false,
+      "vendor": "claude"
+    }
+  },
+  "before": {
+    "assistant": {
+      "id": "c0001",
+      "pane": "assistant",
+      "label": "ассистент",
+      "role": "assistant",
+      "title": "История: ассистент",
+      "created": 1791499000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 2,
+      "last": 1791499002,
+      "active": true
+    },
+    "researcher": {
+      "id": "c0002",
+      "pane": "researcher",
+      "label": "ресёрчер",
+      "role": "researcher",
+      "title": "История: ресёрчер",
+      "created": 1791499000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 2,
+      "last": 1791499002,
+      "active": true
+    },
+    "executor3": {
+      "id": "c0003",
+      "pane": "executor3",
+      "label": "воркер 3",
+      "role": "executor",
+      "title": "История: воркер 3",
+      "created": 1791499000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 2,
+      "last": 1791499002,
+      "active": true
+    },
+    "room": {
+      "id": "c0004",
+      "pane": "room",
+      "label": "без роли",
+      "role": "room",
+      "title": "История: без роли",
+      "created": 1791499000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 2,
+      "last": 1791499002,
+      "active": true
+    }
+  },
+  "after": {
+    "assistant": {
+      "id": "c0001",
+      "pane": "assistant",
+      "label": "ассистент",
+      "role": "assistant",
+      "title": "История: ассистент",
+      "created": 1791499000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 4,
+      "last": 1791500000,
+      "active": true
+    },
+    "researcher": {
+      "id": "c0002",
+      "pane": "researcher",
+      "label": "ресёрчер",
+      "role": "researcher",
+      "title": "История: ресёрчер",
+      "created": 1791499000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 4,
+      "last": 1791500000,
+      "active": true
+    },
+    "executor3": {
+      "id": "c0003",
+      "pane": "executor3",
+      "label": "воркер 3",
+      "role": "executor",
+      "title": "История: воркер 3",
+      "created": 1791499000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 4,
+      "last": 1791500000,
+      "active": true
+    },
+    "room": {
+      "id": "c0004",
+      "pane": "room",
+      "label": "без роли",
+      "role": "room",
+      "title": "История: без роли",
+      "created": 1791499000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 4,
+      "last": 1791500000,
+      "active": true
+    }
+  },
+  "firstTurn": {
+    "assistant": {
+      "id": "c1a11db89b7d0001",
+      "pane": "assistant",
+      "label": "ассистент",
+      "role": "assistant",
+      "title": "Новая задача: assistant",
+      "created": 1791500000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 2,
+      "last": 1791500000,
+      "active": true
+    },
+    "researcher": {
+      "id": "c1a11db89b7d0002",
+      "pane": "researcher",
+      "label": "ресёрчер",
+      "role": "researcher",
+      "title": "Новая задача: researcher",
+      "created": 1791500000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 2,
+      "last": 1791500000,
+      "active": true
+    },
+    "executor3": {
+      "id": "c1a11db89b7d0003",
+      "pane": "executor3",
+      "label": "воркер 3",
+      "role": "executor",
+      "title": "Новая задача: executor3",
+      "created": 1791500000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 2,
+      "last": 1791500000,
+      "active": true
+    },
+    "room": {
+      "id": "c1a11db89b7d0004",
+      "pane": "room",
+      "label": "без роли",
+      "role": "room",
+      "title": "Новая задача: room",
+      "created": 1791500000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "messages": 2,
+      "last": 1791500000,
+      "active": true
+    }
+  }
+}
