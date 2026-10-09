@@ -3,7 +3,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setImmediate as immediate} from 'node:timers/promises';
 import type {TestContext} from 'node:test';
-import {Connections,ProjectRegistry} from '@harnessy/projects';
+import {Connections,ProjectRegistry,Settings,Pins} from '@harnessy/projects';
 import type {Provider,Seat,TurnContext,Vendor} from '@harnessy/providers';
 import {createRuntime,type Runtime,type RuntimeDeps,type RuntimeActions,type RuntimeEvent,type Clock} from './index.ts';
 export const OWNER={seat:'owner',trust:'owner'} as const;
@@ -29,6 +29,6 @@ export async function harness(t:TestContext,options:{seats?:string;deps?:Partial
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-runtime-')));mkdirSync(join(dir,'.harness','state'),{recursive:true});
  const seats=options.seats??'  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read, digest: false}';
  writeFileSync(join(dir,'.harness','team.yaml'),'version: 1\nintegration_branch: main\nseats:\n'+seats+'\n');options.before?.(dir);
- const provider=new FakeProvider(),clock=new FakeClock();const deps:RuntimeDeps={projectDir:dir,appUrl:'http://127.0.0.1:9000',providers:{claude:provider},clock,models:{claude:[{id:'w1'},{id:'w2'}],codex:[{id:'c1'}]},connections:new Connections(join(dir,'connections.json')),projectRegistry:new ProjectRegistry({projects:join(dir,'projects.json'),lastProject:join(dir,'last')},{noLast:true}),...options.deps};
+ const provider=new FakeProvider(),clock=new FakeClock();const deps:RuntimeDeps={projectDir:dir,appUrl:'http://127.0.0.1:9000',providers:{claude:provider},clock,models:{claude:[{id:'w1'},{id:'w2'}],codex:[{id:'c1'}]},connections:new Connections(join(dir,'connections.json')),projectRegistry:new ProjectRegistry({projects:join(dir,'projects.json'),lastProject:join(dir,'last')},{noLast:true}),settings:current=>new Settings(join(dir,'owner-settings.json'),current),pins:(current,meta)=>new Pins(join(dir,'pins.json'),current,meta),...options.deps};
  const runtime=await createRuntime(deps,options.actions??completedActions);t.after(async()=>{await runtime.close();rmSync(dir,{recursive:true,force:true})});await runtime.idle();return {runtime,provider,clock,dir,deps}
 }

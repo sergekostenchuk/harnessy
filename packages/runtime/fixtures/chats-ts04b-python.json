@@ -1,0 +1,50 @@
+{
+  "chats": {
+    "c1a11e000001abcd": {
+      "id": "c1a11e000001abcd",
+      "pane": "worker",
+      "title": "Тема 🧠",
+      "created": 1791500000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "sessionId": "old-session",
+      "transcript": [
+        {
+          "role": "me",
+          "text": "Первая строка\nUnicode 🧠",
+          "ts": 1791500000.125,
+          "extra": {
+            "whole_float": 1.0,
+            "negative_zero": -0.0,
+            "small": 1e-07,
+            "large": 1e+16,
+            "integer": 12
+          }
+        },
+        {
+          "role": "ai",
+          "text": "Ответ",
+          "ts": 1791500001.0,
+          "usage": {
+            "input": null,
+            "output": 0,
+            "cacheRead": null
+          },
+          "durationMs": 0,
+          "foreign_key": [
+            "сохранить",
+            1.0
+          ]
+        }
+      ],
+      "carry": "Прежний контекст",
+      "foreign_meta": {
+        "kept": true
+      }
+    }
+  },
+  "active": {
+    "worker": "c1a11e000001abcd"
+  }
+}
