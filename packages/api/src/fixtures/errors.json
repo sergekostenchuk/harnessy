@@ -1,0 +1,132 @@
+[
+  {
+    "path": "/api/panes/nope",
+    "status": 404,
+    "response": {
+      "error": "нет окна"
+    },
+    "body": {}
+  },
+  {
+    "path": "/api/context/nope",
+    "status": 404,
+    "response": {
+      "ok": false,
+      "error": "нет такого места"
+    }
+  },
+  {
+    "path": "/api/chats/nope",
+    "status": 404,
+    "response": {
+      "error": "нет такого чата"
+    }
+  },
+  {
+    "path": "/api/chats/new",
+    "status": 404,
+    "response": {
+      "ok": false,
+      "error": "нет такого места"
+    },
+    "body": {
+      "pane": "nope"
+    }
+  },
+  {
+    "path": "/api/chats/open",
+    "status": 404,
+    "response": {
+      "ok": false,
+      "error": "нет такого чата"
+    },
+    "body": {
+      "chat": "nope"
+    }
+  },
+  {
+    "path": "/api/pins",
+    "status": 400,
+    "response": {
+      "ok": false,
+      "error": "kind: folder или chat; path обязателен"
+    },
+    "body": {}
+  },
+  {
+    "path": "/api/settings",
+    "status": 400,
+    "response": {
+      "ok": false,
+      "error": "scope: owner или project; patch — объект ключ → значение"
+    },
+    "body": {}
+  },
+  {
+    "path": "/api/connections/check",
+    "status": 400,
+    "response": {
+      "ok": false,
+      "error": "проверка выхода: claude или codex"
+    },
+    "body": {}
+  },
+  {
+    "path": "/api/seats",
+    "status": 400,
+    "response": {
+      "ok": false,
+      "error": "неизвестная роль "
+    },
+    "body": {}
+  },
+  {
+    "path": "/api/onboard",
+    "status": 404,
+    "response": {
+      "ok": false,
+      "error": "нет такого места или это разговор без роли"
+    },
+    "body": {}
+  },
+  {
+    "path": "/api/handoff",
+    "status": 404,
+    "response": {
+      "ok": false,
+      "error": "нет такого места"
+    },
+    "body": {}
+  },
+  {
+    "path": "/api/approve",
+    "status": 404,
+    "response": {
+      "error": "нет окна"
+    },
+    "body": {}
+  },
+  {
+    "path": "/api/interrupt",
+    "status": 404,
+    "response": {
+      "error": "нет окна"
+    },
+    "body": {}
+  },
+  {
+    "path": "/api/sessions",
+    "status": 400,
+    "response": {
+      "error": "нет окна"
+    }
+  },
+  {
+    "path": "/api/sessions/open",
+    "status": 400,
+    "response": {
+      "error": "нет окна"
+    },
+    "body": {}
+  }
+]

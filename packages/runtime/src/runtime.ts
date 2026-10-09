@@ -1,3 +1,7 @@
+import {reserve} from './operations.ts';
+import {isAbsolute} from 'node:path';
+import {expandUser,initProject} from '@harnessy/projects';
+import {pyTruthy} from '@harnessy/team';
 import {askDeliveryDepth} from './action-state.ts';
 import {makeRoom,makeRoomIn,roomSet,roomMove,assignRoomRole} from './rooms.ts';
 import {createSeat,ensureSeatMaterialized,onboard,restoreAssignments,roleCatalog,type CreateSeatInput} from './roles.ts';
@@ -40,9 +44,15 @@ export class Runtime {
  private pane(id:string,p=this.project):Pane{const pane=p.registry.get(id);if(!pane)throw new RuntimeError('pane_unknown','нет окна',404);return pane}
  labelOf(id:string,p=this.project){return id==='owner'?'владелец':id==='harness'?'харнесс':p.registry.get(id)?.label??id}
  subscribe(selector:Selector){if('pane' in selector)this.pane(selector.pane!);return this.project.bus.subscribe(selector)}
- async openProject(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>}={}):Promise<void> {
+ private async changeProject<T>(operation:()=>Promise<T>):Promise<T> {
  const previous=this.opening;let release!:()=>void;this.opening=new Promise(r=>{release=r});await previous;
- try{if(options.expected)this.same(options.expected);await this.closeProject();const generation=++this.generation,path=realpathSync(dir),harness=await ensureLine(path),lineErrors:string[]=[];let team=null,policy=null;
+ try{return await operation()}finally{release()}
+ }
+ async openProject(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean}={}):Promise<void> {
+ return this.changeProject(()=>this.openProjectLocked(dir,options))
+ }
+ private async openProjectLocked(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean}):Promise<void> {
+ if(options.expected)this.same(options.expected);await this.closeProjectLocked();const generation=++this.generation,path=realpathSync(dir),harness=await ensureLine(path),lineErrors:string[]=[];let team=null,policy=null;
  try{team=loadTeam(harness);lineErrors.push(...team.warnings)}catch(e){lineErrors.push(message(e))}
  try{policy=new Policy(join(harness,'comms-policy.yaml'))}catch(e){lineErrors.push(message(e))}
  let registry!:Registry,owner!:Pane;
@@ -69,10 +79,37 @@ export class Runtime {
  if(attempt&&!matched){pane.status='uncertain';try{state.uncertain(pane.id)}catch(e){lineErrors.push(message(e))}const first=attempt.recordSeqs[0]??0,last=attempt.recordSeqs.at(-1)??0;pane.uncertainNote='ход мог быть выполнен до перезапуска; записи #'+first+'–#'+last+' остались в очереди и уйдут с вашим следующим сообщением';pane.publish({type:'note',text:pane.uncertainNote})}
  else {await this.recover(p,pane)}
  }
- p.starting=false;if(!halted)for(const pane of registry.panes.values())if(pane.status==='idle'&&!p.materializing.has(pane.id))await this.resumeQueue(pane.id,p);
- }finally{release()}
+ p.starting=false;if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if(pane.status==='idle'&&!p.materializing.has(pane.id))await this.resumeQueue(pane.id,p);
  }
- async closeProject():Promise<void>{const p=this.current;if(!p||p.closed)return;p.closed=true;this.actions.closeProject?.(p);const turns=[...p.active.values()];
+ async projectSet(path:string,options:{reload?:boolean},initiator:Initiator){
+ this.requireOwner(initiator);const p=this.project;
+ if(!validDir(path))throw new RuntimeError('path_invalid','папки нет или это не папка: '+path,400);
+ return this.changeProject(async()=>{
+ this.same(p);if(path===p.dir&&!options.reload)return {ok:true as const,project:path,changed:false as const};
+ const hold=reserve(p,[...p.registry.panes.values()],'идёт ход: смени папку, когда все окна свободны');
+ try{if(!validDir(path))throw new RuntimeError('path_invalid','папки нет или это не папка: '+path,400);await this.openProjectLocked(path,{expected:p});const next=this.project;return {ok:true as const,project:next.dir,changed:true as const,lineErrors:[...next.lineErrors],panes:[...next.registry.panes.values()].map(p=>p.settings())}}
+ finally{hold.release()}
+ })
+ }
+ async projectCreate(input:{path?:unknown;git?:unknown;model?:unknown},initiator:Initiator){
+ this.requireOwner(initiator);const p=this.project,path=expandUser(pythonTrim(String(input.path||'')));
+ if(!path||!isAbsolute(path)||[...path].length>400)throw new RuntimeError('path_invalid','нужен абсолютный путь папки',400);
+ return this.changeProject(async()=>{
+ this.same(p);const busyText='идёт ход: создай папку, когда все окна свободны';let hold=reserve(p,[...p.registry.panes.values()],busyText);
+ try{
+ let info:Awaited<ReturnType<typeof initProject>>;
+ try{info=await initProject(path,{git:input.git===undefined||pyTruthy(input.git),model:String(input.model||'')},{...(this.deps.gitops?{gitops:this.deps.gitops}:{}),catalog:structuredClone(p.registry.models),...(p.registry.get('room')?.model?{roomModel:p.registry.get('room')!.model}:{}),settings:structuredClone(this.settings.effective())})}
+ catch(e){throw new RuntimeError('project_failed','проект не создан: '+message(e),400,{cause:e})}
+ this.same(p);
+ // Reacquire for the current seats synchronously; closing marks the project closed before the next await.
+ hold.release();hold=reserve(p,[...p.registry.panes.values()],busyText);
+ await this.openProjectLocked(path,{expected:p});const next=this.project;
+ return {ok:true as const,project:next.dir,...info,seats:[...next.registry.panes.values()].filter(p=>p.id!=='room').length}
+ }finally{hold.release();if(this.current===p&&!p.closed)for(const id of p.registry.ids)void this.kick(id)}
+ })
+ }
+ async closeProject():Promise<void>{return this.changeProject(()=>this.closeProjectLocked())}
+ private async closeProjectLocked():Promise<void>{const p=this.current;if(!p||p.closed)return;p.closed=true;this.actions.closeProject?.(p);const turns=[...p.active.values()];
  for(const turn of turns)this.cancelTurn(turn.pane.id,'project_closed',p);
  p.owner.denyApprovals();p.bus.close();this.tokens.clear();this.scopes.clear();
  let failure:unknown;try{await Promise.all(Object.values(this.deps.providers).map(provider=>provider.close()))}catch(e){failure=e}
@@ -255,7 +292,10 @@ export class Runtime {
  }
  async setRoute(vendor:Vendor,config:{route?:string;proxy?:string;iface?:string;label?:string;expect?:string},initiator:Initiator){this.requireOwner(initiator);const p=this.project,previous=p.routeJobs.get(vendor);const job=(async()=>{await previous;this.same(p);const result=await this.connections.setRoute(vendor,config.route??'direct',config.proxy??'',config.iface??'',config.label??'',config.expect??'');this.same(p);if(result.processRestartNeeded)await this.resetVendor(vendor,p);return result})();p.routeJobs.set(vendor,job);try{return await job}finally{if(p.routeJobs.get(vendor)===job)p.routeJobs.delete(vendor)}}
  async auth(vendor:Vendor){await this.waitVendor(this.project,vendor);return this.provider(vendor).auth()}
- async models(vendor:Vendor){const p=this.project;await this.waitVendor(p,vendor);const models=await this.provider(vendor).models();this.same(p);p.registry.models[vendor]=models;return models}
+ async models(vendor:Vendor,fallback?:{id:string;label:string}[]){const p=this.project;await this.waitVendor(p,vendor);let models:{id:string;label:string}[];
+ try{models=await this.provider(vendor).models()}catch(e){this.same(p);if(!fallback)throw e;models=structuredClone(fallback)}
+ this.same(p);if(!models.length&&fallback)models=structuredClone(fallback);p.registry.models[vendor]=models;return models
+ }
  async listSessions(id:string){const p=this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);return this.provider(pane.vendor).listSessions(pane.cwd)}
  async sessionMessages(id:string,sessionId:string){const p=this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);return this.provider(pane.vendor).sessionMessages(pane.cwd,sessionId)}
  async openSession(id:string,sessionId:string,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);if(pane.busy||p.editing.has(id)||p.materializing.has(id))throw new RuntimeError('busy',pane.label+' занято: идёт ход');const {revision,vendor,cwd}=pane;const msgs=await this.provider(vendor).sessionMessages(cwd,sessionId);
