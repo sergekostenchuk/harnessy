@@ -1,0 +1,30 @@
+{
+  "chats": {
+    "c1a11db89b7dbeef": {
+      "id": "c1a11db89b7dbeef",
+      "pane": "worker",
+      "title": "Первая реплика",
+      "created": 1791500000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "sessionId": "s1",
+      "transcript": [
+        {
+          "role": "me",
+          "text": "Первая реплика\nпродолжение",
+          "ts": 1791500000.125
+        },
+        {
+          "role": "ai",
+          "text": "Ответ 🧠",
+          "ts": 1791500000.125
+        }
+      ],
+      "carry": ""
+    }
+  },
+  "active": {
+    "worker": "c1a11db89b7dbeef"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "chats": {
+    "c1a11db89b7dbeef": {
+      "id": "c1a11db89b7dbeef",
+      "pane": "worker",
+      "title": "Первая реплика",
+      "created": 1791500000,
+      "closed": null,
+      "model": "w1",
+      "vendor": "claude",
+      "sessionId": "s1",
+      "transcript": [
+        {
+          "role": "me",
+          "text": "Первая реплика\nпродолжение",
+          "ts": 1791500000.125
+        },
+        {
+          "role": "ai",
+          "text": "Ответ 🧠",
+          "ts": 1791500000.125
+        },
+        {
+          "role": "ai",
+          "text": "float целый",
+          "ts": 1.0
+        },
+        {
+          "role": "ai",
+          "text": "минус ноль",
+          "ts": -0.0
+        },
+        {
+          "role": "peer",
+          "text": "малый",
+          "ts": 1e-07
+        },
+        {
+          "role": "ai",
+          "text": "большой",
+          "ts": 1e+16
+        }
+      ],
+      "carry": "",
+      "extra": {
+        "2": [
+          1.0
+        ],
+        "1": [
+          -0.0
+        ]
+      }
+    }
+  },
+  "active": {
+    "worker": "c1a11db89b7dbeef"
+  }
+}

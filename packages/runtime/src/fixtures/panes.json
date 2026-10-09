@@ -1,0 +1,9 @@
+{
+  "worker": {
+    "model": "w1",
+    "mode": "read",
+    "sessionId": "s1",
+    "digest": false,
+    "vendor": "claude"
+  }
+}
