@@ -820,7 +820,7 @@
     const items=(H.projects||[]).map(pr=>({t:esc(pr.name)+(pr.current?' <small>текущая</small>':''),r:(pr.seats==null?'':pr.seats+' '+pl(pr.seats,'роль','роли','ролей'))+(pr.git?' · git':''),path:pr.path,dis:!!pr.current})).concat([{t:'Открыть другой проект…',open:true}]);
     const hd=pj.closest('.ps-head')||pj;   // якорь — вся шапка: aside режет по краю, меню шириной в панель
     laMenu(hd,'проект',items,async it=>{ if(it.open){ laPath(hd,'открыть проект',H.homeHint||'',p=>sideSwitchProject(p),'Открыть'); return; } await sideSwitchProject(it.path); }); });
-  addEventListener('resize',()=>sideChats());
+  let RSZ; addEventListener('resize',()=>{ clearTimeout(RSZ); RSZ=setTimeout(()=>sideChats(),300); });   // не ходить в движок на каждый пиксель ресайза (Kimi UX-5 №129)
   // ── запуск
   composer(); restoreUI(); wireSearch(); refresh(); sideChats();
   hConnect().finally(async()=>{ S.ui.switched=false; if(cols().length){ if(S.pending){ const q=S.pending.text; S.pending=null;
