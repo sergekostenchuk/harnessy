@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {invokeTool} from '../../providers/src/tools.ts';
 import type {TurnContext} from '@harnessy/providers';
 import {harness,OWNER,until,deferred} from './test-helpers.ts';
-import {unavailableActions,type TurnScope,type RuntimeActions} from './index.ts';
+import {failedActions} from './test-helpers.ts';
+import {type TurnScope,type RuntimeActions} from './index.ts';
 
 test('48/98: raw Python bridge results and Claude PeerTools text share one scope-checked implementation',async t=>{
  const {runtime:r,provider:f}=await harness(t),gate=deferred<{text:string;sessionId:string}>();let ctx!:TurnContext;f.onRun=async(_s,_m,c)=>{ctx=c;c.modelStarted?.();c.registerProcessToken('token');return gate.promise};r.postOwner({to:'worker',kind:'task',text:'поручение'},OWNER);await until(()=>f.calls.length===1);const scope=r.validateBridge('worker','token');
@@ -17,11 +18,11 @@ test('48/98: raw Python bridge results and Claude PeerTools text share one scope
 });
 
 test('48: unavailable raw actions and SDK tools preserve typed refusal',async t=>{
- const h=await harness(t,{actions:unavailableActions}),{runtime:r,provider:f}=h,gate=deferred<{text:string;sessionId:string}>();let ctx!:TurnContext;f.onRun=async(_s,_m,c)=>{ctx=c;c.modelStarted?.();return gate.promise};r.postOwner({to:'worker',kind:'task',text:'поручение'},OWNER);await until(()=>f.calls.length===1);const scope=r.project.active.get('worker')!.scope;
- for(const [raw,tool,name] of [[r.ask(scope,{to:'peer',text:'вопрос'}),ctx.tools.ask({to:'peer',text:'вопрос'}),'ask'],[r.merge(scope,{sha:'x'}),ctx.tools.merge({sha:'x'}),'merge'],[r.assignRole(scope,{role:'tester'}),ctx.tools.assignRole({role:'tester'}),'assign_role']] as const){const expected={ok:false,code:'unavailable',error:'действие недоступно: '+name};assert.deepEqual(await raw,expected);assert.deepEqual(await tool,expected)}
+ const h=await harness(t,{actions:failedActions}),{runtime:r,provider:f}=h,gate=deferred<{text:string;sessionId:string}>();let ctx!:TurnContext;f.onRun=async(_s,_m,c)=>{ctx=c;c.modelStarted?.();return gate.promise};r.postOwner({to:'worker',kind:'task',text:'поручение'},OWNER);await until(()=>f.calls.length===1);const scope=r.project.active.get('worker')!.scope;
+ for(const [raw,tool,name] of [[r.ask(scope,{to:'peer',text:'вопрос'}),ctx.tools.ask({to:'peer',text:'вопрос'}),'ask'],[r.merge(scope,{sha:'x'}),ctx.tools.merge({sha:'x'}),'merge'],[r.assignRole(scope,{role:'tester'}),ctx.tools.assignRole({role:'tester'}),'assign_role']] as const){const expected={ok:false,code:'unavailable',error:'действие недоступно: '+name};assert.deepEqual(await raw,expected);assert.deepEqual(await tool,{...expected,error:(name==='ask'?'Ответа нет: ':name==='merge'?'Слияние отклонено: ':'')+expected.error})}
  gate.resolve({text:'готово',sessionId:'s1'});await r.idle()
 });
 
-test('48: empty ask result translates to exact Python tool fallback',async t=>{const actions:RuntimeActions={...unavailableActions,async ask(){return {ok:true,reply:'',seq:1}},async afterTurn(){return 'completed'}};const {runtime:r,provider:f}=await harness(t,{actions});let value:unknown;f.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();value=await ctx.tools.ask({to:'peer',text:'вопрос'});return {text:'готово',sessionId:null}};r.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await r.idle();assert.deepEqual(value,{ok:true,text:'(пустой ответ)'})});
+test('48: empty ask result translates to exact Python tool fallback',async t=>{const actions:RuntimeActions={...failedActions,async ask(){return {ok:true,reply:'',seq:1}},async afterTurn(){return 'completed'}};const {runtime:r,provider:f}=await harness(t,{actions});let value:unknown;f.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();value=await ctx.tools.ask({to:'peer',text:'вопрос'});return {text:'готово',sessionId:null}};r.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await r.idle();assert.deepEqual(value,{ok:true,text:'(пустой ответ)'})});
 
 test('48: raw send accepts Python recipient list and refuses forged from before write',async t=>{const {runtime:r,provider:f}=await harness(t);f.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();const scope=r.project.active.get('worker')!.scope;const sent=await r.send(scope,{to:['owner'],kind:'status',text:'список'});assert.deepEqual(sent,{ok:true,seq:2,thread:null,to:['owner']});const forged=await r.send(scope,{to:'owner',kind:'status',text:'подделка',from:'owner'} as never);assert.equal(!forged.ok&&forged.code,'initiator_invalid');assert.equal(r.journal.lastSeq,2);return {text:'готово',sessionId:null}};r.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await r.idle()});

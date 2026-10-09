@@ -1,5 +1,5 @@
 import type {Provider,Vendor,TurnHandle,AskArgs,MergeArgs,AssignRoleArgs,Usage,Mode} from '@harnessy/providers';
-import type {Record_,Channel,Journal,JournalOptions,Policy} from '@harnessy/journal';
+import type {Record_,Channel,Journal,JournalOptions,Policy,Initiator} from '@harnessy/journal';
 import type {Team} from '@harnessy/team';
 import type {Connections,ProjectRegistry,GitOps,Settings,Pins} from '@harnessy/projects';
 import type {Pane,Registry} from './pane.ts';
@@ -21,9 +21,12 @@ export type ReadPaneResult=BridgeFailure|{ok:true;text:string};
 export type AskResult=BridgeFailure|{ok:true;reply:string;seq:number};
 export type MergeResult=BridgeFailure|{ok:true;sha:string;mergeSha:string;branch:string;thread?:string};
 export type AssignRoleResult=BridgeFailure|{ok:true;pane:string;label:string;model:string;mode:Mode;mandate:number};
+export interface OwnerMergeContext {readonly runtime:Runtime;readonly project:ProjectState;readonly initiator:Initiator;assertActive():void}
 export interface RuntimeActions {
  ask(args:AskArgs,ctx:ActionContext):Promise<AskResult>;
  merge(args:MergeArgs,ctx:ActionContext):Promise<MergeResult>;
+ mergeOwner?(args:MergeArgs,ctx:OwnerMergeContext):Promise<MergeResult>;
+ closeProject?(project:ProjectState):void;
  assignRole(args:AssignRoleArgs,ctx:ActionContext):Promise<AssignRoleResult>;
  afterTurn(ctx:AfterTurnContext):Promise<'completed'|'unavailable'>;
  restorePendingAcks(ctx:{runtime:Runtime;project:ProjectState}):Promise<void>;

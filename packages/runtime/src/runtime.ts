@@ -71,7 +71,7 @@ export class Runtime {
  p.starting=false;if(!halted)for(const pane of registry.panes.values())if(pane.status==='idle'&&!p.materializing.has(pane.id))await this.resumeQueue(pane.id,p);
  }finally{release()}
  }
- async closeProject():Promise<void>{const p=this.current;if(!p||p.closed)return;p.closed=true;const turns=[...p.active.values()];
+ async closeProject():Promise<void>{const p=this.current;if(!p||p.closed)return;p.closed=true;this.actions.closeProject?.(p);const turns=[...p.active.values()];
  for(const turn of turns)this.cancelTurn(turn.pane.id,'project_closed',p);
  p.owner.denyApprovals();p.bus.close();this.tokens.clear();this.scopes.clear();
  let failure:unknown;try{await Promise.all(Object.values(this.deps.providers).map(provider=>provider.close()))}catch(e){failure=e}
@@ -129,7 +129,7 @@ export class Runtime {
  if(p.state.attempts[pane.id]){pane.status='uncertain';return false}pane.status=complete?'idle':'recovering';if(complete){pane.recoveryError=null;pane.recoveryNote=null};return complete
  }catch(e){pane.status='recovering';if(throwErrors)throw e;this.report(p,pane,e);return false}
  }
- private actionContext(p:ProjectState,turn:ActiveTurn):ActionContext {return Object.freeze({runtime:this,scope:turn.scope,turnRecords:turn.records,relayDepth:turn.relayDepth,assertActive:()=>{this.same(p);this.scopes.assert(turn.scope)}})}
+ private actionContext(p:ProjectState,turn:ActiveTurn):ActionContext {return Object.freeze({runtime:this,scope:turn.scope,turnRecords:turn.records,relayDepth:turn.relayDepth,assertActive:()=>{this.scopes.assert(turn.scope);this.same(p)}})}
  private async scoped<T>(scope:TurnScope,fn:(p:ProjectState,ctx:ActionContext)=>T|Promise<T>):Promise<T|BridgeFailure> {
  try{this.scopes.assert(scope);const p=this.project,turn=p.active.get(scope.seatId);if(!turn||turn.scope!==scope)throw new RuntimeError('turn_ended','ход не активен',403);const ctx=this.actionContext(p,turn);ctx.assertActive();return await fn(p,ctx)}
  catch(e){return {ok:false,code:e instanceof RuntimeError||e instanceof JournalError||e instanceof ProviderError?e.code:'invalid',error:message(e)}}
@@ -147,14 +147,15 @@ export class Runtime {
  })}
  ask(scope:TurnScope,args:AskArgs):Promise<AskResult>{return this.scoped(scope,(_p,ctx)=>this.actions.ask(args,ctx))}
  merge(scope:TurnScope,args:MergeArgs):Promise<MergeResult>{return this.scoped(scope,(_p,ctx)=>this.actions.merge(args,ctx))}
+ async mergeOwner(args:MergeArgs,initiator:Initiator):Promise<MergeResult>{this.requireOwner(initiator);const p=this.project;if(!this.actions.mergeOwner)throw new RuntimeError('actions_required','порт действий обязателен',500);try{return await this.actions.mergeOwner(args,{runtime:this,project:p,initiator:Object.freeze({...initiator}),assertActive:()=>{this.same(p);this.requireOwner(initiator)}})}catch(e){return {ok:false,code:e instanceof RuntimeError||e instanceof JournalError?e.code:'merge_failed',error:message(e)}}}
  assignRole(scope:TurnScope,args:AssignRoleArgs):Promise<AssignRoleResult>{return this.scoped(scope,(_p,ctx)=>this.actions.assignRole(args,ctx))}
  toolsFor(scope:TurnScope):PeerTools {
  this.scopes.assert(scope);const p=this.project,turn=p.active.get(scope.seatId);if(!turn||turn.scope!==scope)throw new RuntimeError('turn_ended','ход не активен',403);
  return {
  send:async a=>{const r=await this.send(scope,a);return r.ok?{ok:true,text:'Запись #'+r.seq+' отправлена '+r.to.join(', ')+'; тред '+(r.thread||'без треда')+'.'}:r},
  readPane:a=>this.readPane(scope,a),
- ask:async a=>{const r=await this.ask(scope,a);return r.ok?{ok:true,text:r.reply||'(пустой ответ)'}:r},
- merge:async a=>{const r=await this.merge(scope,a);return r.ok?{ok:true,text:'Слито: '+r.sha.slice(0,12)+' → '+r.mergeSha.slice(0,12)+' в '+r.branch+'.'}:r},
+ ask:async a=>{const r=await this.ask(scope,a);return r.ok?{ok:true,text:r.reply||'(пустой ответ)'}:{...r,error:'Ответа нет: '+r.error}},
+ merge:async a=>{const r=await this.merge(scope,a);return r.ok?{ok:true,text:'Слито: '+r.sha.slice(0,12)+' → '+r.mergeSha.slice(0,12)+' в '+r.branch+'.'}:{...r,error:'Слияние отклонено: '+r.error}},
  assignRole:async a=>{const r=await this.assignRole(scope,a);return r.ok?{ok:true,text:'Назначена роль «'+r.label+'» ('+r.pane+', '+r.model+', '+r.mode+') по поручению №'+r.mandate+'; вводная отправлена.'}:r}
  }
  }
@@ -219,7 +220,7 @@ export class Runtime {
  if(!terminalSent&&!p.closed)this.report(p,pane,e instanceof ProviderError&&e.code==='cancelled'?new RuntimeError('cancelled','ход отменён'):e);
  throw e
  }finally{
- this.scopes.revoke(scope);this.clock.clearTimeout(turn.timer);
+ this.scopes.revoke(scope);if(!turn.stopRequested)this.actions.cancelAsks(scope,'turn_ended');this.clock.clearTimeout(turn.timer);
  if(p.active.get(id)===turn){p.active.delete(id);pane.busy=false;pane.handle=null;if(!turn.result)pane.relayDepth=Math.max(pane.relayDepth,turn.relayDepth);this.stateEvent(p,pane)}
  if(success&&!p.closed&&!options.entries&&pane.status==='idle')void this.kick(id);turn.finish()
  }
@@ -232,7 +233,7 @@ export class Runtime {
  if(turn.handle)this.interruptHandle(turn.pane,turn.handle);
  turn.timer=this.clock.setTimeout(()=>{if(p.active.get(id)===turn)void this.resetVendor(turn.pane.vendor as Vendor,p).catch(e=>this.report(p,turn.pane,e))},30_000);return true
  }
- interrupt(id:string,initiator:Initiator){this.requireOwner(initiator);const pane=this.pane(id);pane.denyApprovals();return this.cancelTurn(id,'interrupt')?{ok:true}:{ok:false,error:'нечего прерывать'}}
+ interrupt(id:string,initiator:Initiator){this.requireOwner(initiator);const pane=this.pane(id);if(this.cancelTurn(id,'interrupt'))return {ok:true};pane.denyApprovals();return {ok:false,error:'нечего прерывать'}}
  approve(id:string,approvalId:string,decision:'allow'|'deny',initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=id==='owner'?p.owner:this.pane(id,p),ok=pane.resolveApproval(approvalId,decision==='allow');return {ok,error:ok?null:'вопрос уже закрыт'}}
  async halt(on:boolean,initiator:Initiator){this.requireOwner(initiator);const p=this.project;let failure:unknown;if(on){p.halted=true;try{p.state.saveHalt(true)}catch(e){failure=e}}else{p.state.saveHalt(false);p.halted=false}const interrupted:string[]=[];
  for(const pane of p.registry.panes.values()){if(on&&this.cancelTurn(pane.id,'halt',p))interrupted.push(pane.id);pane.publish({type:'note',text:on?'остановлено владельцем: ходы не идут, сообщения ждут в очереди':'работа возобновлена владельцем'});if(!on){this.clearUncertain(p,pane);void this.kick(pane.id)}}

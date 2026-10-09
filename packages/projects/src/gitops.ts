@@ -12,6 +12,8 @@ export function execute(binary:string,args:string[],cwd:string|undefined,timeout
  })
 })}
 const systemGit:GitRunner=async(args,cwd,timeout=60)=>{const r=await execute('git',args,cwd,timeout*1000);return {...r,stdout:r.stdout.trim(),stderr:r.stderr.trim()}};
+export interface MergeFacts {head:string;sha:string;branch:string;alreadyMerged:boolean;mergeSha:string|null}
+export type BeforeMerge=(facts:Readonly<MergeFacts>)=>void;
 type MergeRecovery={recovery?:'aborted'|'committed'|'unchanged'|'failed';cause?:{code:ProjectCode;vendorText:string}};
 export type MergeResult=({ok:true;mergeSha:string|null;sha:string;alreadyMerged?:true}|{ok:false;code:'merge_failed';error:string})&MergeRecovery;
 class LockedGitOps {
@@ -49,18 +51,27 @@ class LockedGitOps {
  if((await this.run(['merge-base','--is-ancestor',sha,branch],root)).code!==0)return null;
  const r=await this.run(['rev-list','--merges','--ancestry-path','--reverse',sha+'..'+branch],root);return r.code===0?r.stdout.split(/\s+/)[0]||sha:sha
  }
- async mergeInto(root:string,sha:string,branch:string,message:string):Promise<MergeResult>{assertPathLock(this.lock,root);
+ async mergeInto(root:string,sha:string,branch:string,message:string,beforeMerge?:BeforeMerge):Promise<MergeResult>{assertPathLock(this.lock,root);
  const failure=(error:string):MergeResult=>({ok:false,code:'merge_failed',error});const br=await this.currentBranch(root);
  if(br!==branch)return failure('корень проекта на ветке '+(br??'None')+', а не '+branch+'; переключи ветку и повтори');
  const status=await this.run(['status','--porcelain','--untracked-files=no'],root);if(status.code!==0)return failure('git status не отвечает');if(status.stdout)return failure('в корне проекта есть незакоммиченные правки; сначала закоммить или убери их');
  const full=await this.resolveSha(root,sha);if(!full)return failure('коммита '+sha+' нет в репозитории');
- if((await this.run(['merge-base','--is-ancestor',full,branch],root)).code===0)return {ok:true,sha:full,alreadyMerged:true,mergeSha:await this.mergeCommitFor(root,full,branch)};
+ const already=(await this.run(['merge-base','--is-ancestor',full,branch],root)).code===0;
+ const mergeSha=already?await this.mergeCommitFor(root,full,branch):null;
  const before=await this.head(root);if(!before)return failure('слияние не подтверждено: HEAD не найден');
+ // Synchronous callback: no await between authority/persistence and the first mutation.
+ beforeMerge?.(Object.freeze({head:before,sha:full,branch,alreadyMerged:already,mergeSha}));
+ if(already)return {ok:true,sha:full,alreadyMerged:true,mergeSha};
  try{
  const r=await this.run(['merge','--no-ff','--no-edit','-m',message,full],root);
  if(r.code!==0)return await this.recoverMerge(root,before,full,branch,new ProjectError('tool_failed',r.stderr.split('\n').at(-1)||'конфликт'));
  return await this.verifyMerge(root,before,full,branch)
  }catch(e){return this.recoverMerge(root,before,full,branch,e)}
+ }
+ async confirmMerge(root:string,before:string,full:string,branch:string):Promise<string|null>{
+ const history=await this.run(['rev-list','--merges',branch],root);if(history.code!==0)return null;
+ for(const sha of history.stdout.split(/\s+/).filter(Boolean)){const parents=await this.run(['rev-list','--parents','-n','1',sha],root);if(parents.code===0&&parents.stdout===[sha,before,full].join(' '))return sha}
+ return null
  }
  private async verifyMerge(root:string,before:string,full:string,branch:string):Promise<MergeResult>{
  const failure=(error:string):MergeResult=>({ok:false,code:'merge_failed',error:'слияние не подтверждено: '+error});
@@ -113,7 +124,8 @@ export class GitOps {
  ensureExclude(root:string,pattern:string){return this.withLock(root,g=>g.ensureExclude(root,pattern))}
  ensureWorktree(root:string,seat:string,relPath:string,baseBranch:string){return this.withLock(root,g=>g.ensureWorktree(root,seat,relPath,baseBranch))}
  mergeCommitFor(root:string,sha:string,branch:string){return this.withLock(root,g=>g.mergeCommitFor(root,sha,branch))}
- mergeInto(root:string,sha:string,branch:string,message:string){return this.withLock(root,g=>g.mergeInto(root,sha,branch,message))}
+ mergeInto(root:string,sha:string,branch:string,message:string,beforeMerge?:BeforeMerge){return this.withLock(root,g=>g.mergeInto(root,sha,branch,message,beforeMerge))}
+ confirmMerge(root:string,before:string,full:string,branch:string){return this.withLock(root,g=>g.confirmMerge(root,before,full,branch))}
 }
 export const gitops=new GitOps();
 export const run=gitops.run.bind(gitops),isRepo=gitops.isRepo.bind(gitops),ownRepo=gitops.ownRepo.bind(gitops),repoRoot=gitops.repoRoot.bind(gitops),head=gitops.head.bind(gitops),currentBranch=gitops.currentBranch.bind(gitops),branchExists=gitops.branchExists.bind(gitops),commitExists=gitops.commitExists.bind(gitops),resolveSha=gitops.resolveSha.bind(gitops),ensureExclude=gitops.ensureExclude.bind(gitops),ensureWorktree=gitops.ensureWorktree.bind(gitops),mergeCommitFor=gitops.mergeCommitFor.bind(gitops),mergeInto=gitops.mergeInto.bind(gitops);

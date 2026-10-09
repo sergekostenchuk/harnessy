@@ -59,6 +59,8 @@ export class StateStore {
  if(!adopt){pane.sessionId=null;pane.transcript=chat.transcript;pane.carry=carry;pane.seen={};pane.revision++}
  return chat
  }
+ readActions():unknown {const path=join(this.dir,'.harness','state','actions.json');try{return this.read(path)}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return {reviews:[],merges:[]};throw new RuntimeError('actions_invalid','действия не читаются: '+message(e),409,{cause:e})}}
+ saveActions(value:unknown):void{this.write(join(this.dir,'.harness','state','actions.json'),value,2)}
  readMaterializations():unknown {try{return this.read(this.materializationPath)}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return [];throw new RuntimeError('materialization_invalid','назначения ролей не читаются: '+message(e),409,{cause:e})}}
  saveMaterializations(value:unknown):void{this.write(this.materializationPath,value,2)}
  activeChat(pane:Pane,create=true):Chat|null {const id=this.chats.active[pane.id],existing=id?this.chats.chats[id]:null;return existing??(create?this.newChat(pane,'',true):null)}

@@ -300,3 +300,20 @@ test('verdict confirmation resumes durable effects without new deliverySeq: '+fa
  assert.deepEqual(again.journal.pendingFor('owner').map(e=>e.deliverySeq),expected);
  }finally{f.close()}
 });
+
+
+test('58: internal agent effects preserve identity/policy/ack while ordinary send cannot forge origin',()=>{
+ const f=fixture(ackPolicy);try{
+ const ask=f.channel.postAgentEffect({to:'architect',kind:'question',text:'вопрос'},{seat:'worker',trust:'agent'},'ask');assert.equal(ask.from,'worker');assert.equal(ask.origin,'ask');
+ const auto=f.channel.postAgentEffect({to:'worker',kind:'answer',text:'ответ',reply_to:ask.seq},{seat:'architect',trust:'agent'},'auto');assert.equal(auto.from,'architect');assert.equal(auto.origin,'auto');
+ const pending=f.channel.postAgentEffect({to:'worker',kind:'answer',text:'ждёт'},{seat:'tester',trust:'agent'},'auto');assert.equal(pending.ack,'pending');
+ assert.throws(()=>f.channel.postAgentEffect({to:'worker',kind:'task',text:'нельзя'},{seat:'reviewer',trust:'agent'},'auto'),error('policy_denied'));
+ assert.throws(()=>f.agent('worker',{to:'architect',kind:'question',text:'подделка',origin:'ask'} as never),error('initiator_invalid'));
+ assert.throws(()=>f.channel.postAgentEffect({to:'worker',kind:'note',text:'подделка'},{seat:'harness',trust:'agent'},'auto'),error('initiator_invalid'));
+ assert.throws(()=>f.channel.postAgentEffect({to:'worker',kind:'note',text:'подделка'},{seat:'tester',trust:'agent'},'merge' as never),error('initiator_invalid'));
+ }finally{f.close()}
+});
+
+test('59: rejection of a removed sender completes without an undeliverable note',()=>{
+ const f=fixture(ackPolicy);try{const r=f.agent('tester',{to:'worker',kind:'report',text:'ждёт'});delete f.roles.tester;const rejected=f.channel.rejectAck(r.seq);assert.equal(rejected.kind,'rejected');assert.equal(f.channel.pendingAcks().length,0);assert.equal(f.journal.repliesTo(r.seq).filter(r=>r.origin==='ack').length,0);assert.throws(()=>f.channel.rejectAck(r.seq),error('ack_closed'))}finally{f.close()}
+});

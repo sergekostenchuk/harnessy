@@ -14,6 +14,11 @@ export class Channel {
  on(handler:(event:ChannelEvent)=>void):()=>void {this.handlers.add(handler);return ()=>this.handlers.delete(handler)}
  private emit(event:ChannelEvent){for(const handler of this.handlers)try{handler(freeze(event))}catch{console.error('[journal] обработчик события завершился с ошибкой')}}
  post(input:AgentPostInput,initiator:Initiator&{trust:'agent'}):Record_ {return this.write(input,initiator,false)}
+ postAgentEffect(input:AgentPostInput,initiator:Initiator&{trust:'agent'},origin:'ask'|'auto'):Record_ {
+ if(origin!=='ask'&&origin!=='auto')throw new JournalError('initiator_invalid','служебные поля записи задаёт ядро');
+ return this.write(input,initiator,false,undefined,origin)
+ }
+ ackDecision(seq:number):Record_|null {return this.pending(seq).resolution}
  postCore(input:CorePostInput,initiator:Initiator&{trust:'owner'|'harness'}):Record_ {return this.write(input,initiator,true)}
  private validateInitiator(initiator:Initiator,core:boolean){
  if(!object(initiator)||typeof initiator.seat!=='string'||!initiator.seat||(core?!(initiator.trust==='owner'&&initiator.seat==='owner'||initiator.trust==='harness'&&initiator.seat==='harness'):initiator.trust!=='agent'||['owner','harness'].includes(initiator.seat)||this.deps.roleOf(initiator.seat)===null))throw new JournalError('initiator_invalid','инициатора записи задаёт ядро')
@@ -29,7 +34,7 @@ export class Channel {
  const rec=this.deps.journal.append({sender:'harness',to:['owner'],kind:'rejected',text:sender+' → '+to.join(', ')+' '+kind+': '+reason,policy:version});
  this.emit({type:'rejected',record:rec,sender,reason})
  }
- private write(input:AgentPostInput|CorePostInput,initiator:Initiator,core:boolean,ackDecision?:Record_):Record_ {
+ private write(input:AgentPostInput|CorePostInput,initiator:Initiator,core:boolean,ackDecision?:Record_,agentOrigin?:'ask'|'auto'):Record_ {
  if(!object(input))throw new JournalError('to_invalid','адресат — имя места или список мест');
  const form=validateForm(input);this.validateInitiator(initiator,core);requireKind(input.kind,core);
  const keys=core?CORE_KEYS:AGENT_KEYS;
@@ -85,7 +90,7 @@ export class Channel {
  if(input.kind==='verdict'&&bounds.max_rounds&&input.round!>Number(bounds.max_rounds))deny('раунд '+input.round+' больше max_rounds='+String(bounds.max_rounds)+' треда '+String(input.thread||target?.thread)+'; эскалируй владельцу');
  const record=this.deps.journal.append({sender,to,kind:input.kind,text:form.text,thread:input.thread??null,reply_to:reply,evidence:form.evidence,policy:version,
  ...(input.score!==undefined?{score:input.score}:{}),...(input.round!==undefined?{round:input.round}:{}),...(sha!==undefined?{sha}:{}),
- ...(core&&coreInput.origin!=null?{origin:coreInput.origin}:{}),...(core&&coreInput.merged!=null?{merged:coreInput.merged}:{}),
+ ...(core&&coreInput.origin!=null?{origin:coreInput.origin}:agentOrigin?{origin:agentOrigin}:{}),...(core&&coreInput.merged!=null?{merged:coreInput.merged}:{}),
  ...(input.kind==='verdict'?{accepted:bounds.accept_score!=null&&input.score!>=Number(bounds.accept_score),bounds:Object.keys(bounds).length?bounds:null}:{}),...(pending?{ack:'pending' as const}:{})});
  const announce=()=>{this.emit({type:'posted',record,initiator:{...initiator}});
  if(pending){this.emit({type:'pendingAck',record});return}
@@ -131,6 +136,7 @@ export class Channel {
  }
  private finishRejection(record:Record_,rejected:Record_):Record_ {
  this.ackEvent(rejected,'rejected',()=>this.emit({type:'rejected',record:rejected,sender:record.from,reason:'владелец не подтвердил'}));
+ if(this.deps.roleOf(record.from)===null){this.ackEvent(rejected,'notification',()=>{});return rejected}
  const text='Запись #'+record.seq+' ('+record.kind+') владелец не подтвердил, она не доставлена.';
  const note=this.deps.journal.read({limit:0}).find(r=>r.seq>rejected.seq&&r.kind==='note'&&r.from==='harness'&&r.origin==='ack'&&r.text===text&&r.to.length===1&&r.to[0]===record.from&&(r.reply_to===record.seq||r.reply_to===null));
  if(note)this.ackEvent(rejected,'notification',()=>{this.emit({type:'posted',record:note,initiator:{seat:'harness',trust:'harness'}});this.emit({type:'delivered',record:note,deliverySeq:note.seq})});

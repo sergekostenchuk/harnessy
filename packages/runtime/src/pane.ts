@@ -8,14 +8,17 @@ import type {Vendor,TurnHandle,Usage,Seat} from '@harnessy/providers';
 import type {EventBus} from './events.ts';
 import {timestampMessage,type TranscriptMessage} from './state.ts';
 export const APPROVAL_TIMEOUT_MS=900_000;
+export type ApprovalDecision='allow'|'deny'|'timeout';
+export type DurableDecision=(decision:ApprovalDecision)=>{decision:ApprovalDecision;error?:Error};
 export class Approval {
  readonly future:Promise<boolean>;private resolve!:(allow:boolean)=>void;private timer:unknown;private ended=false;
- readonly id:string;readonly pane:Pane;readonly title:string;readonly detail:string;private clock:Clock;
- constructor(id:string,pane:Pane,title:string,detail:string,timeout:number,clock:Clock){
- this.id=id;this.pane=pane;this.title=title;this.detail=detail;this.clock=clock;
- this.future=new Promise(r=>{this.resolve=r});this.timer=clock.setTimeout(()=>this.finish('timeout'),timeout)
+ readonly id:string;readonly pane:Pane;readonly title:string;readonly detail:string;private clock:Clock;private durable:DurableDecision|undefined;
+ constructor(id:string,pane:Pane,title:string,detail:string,timeout:number,clock:Clock,durable?:DurableDecision){
+ this.id=id;this.pane=pane;this.title=title;this.detail=detail;this.clock=clock;this.durable=durable;
+ this.future=new Promise(r=>{this.resolve=r});this.timer=clock.setTimeout(()=>{try{this.finish('timeout')}catch{/* Durable failure keeps the card open; its handler published the error. */}},timeout)
  }
- finish(decision:'allow'|'deny'|'timeout'):boolean {if(this.ended)return false;this.ended=true;this.clock.clearTimeout(this.timer);this.pane.approvals.delete(this.id);this.pane.publish({type:'approvalResolved',id:this.id,decision});this.resolve(decision==='allow');return true}
+ finish(requested:ApprovalDecision):boolean {if(this.ended)return false;const saved=this.durable?.(requested)??{decision:requested};this.ended=true;this.clock.clearTimeout(this.timer);this.pane.approvals.delete(this.id);this.pane.publish({type:'approvalResolved',id:this.id,decision:saved.decision});this.resolve(saved.decision==='allow');if(saved.error)throw saved.error;return true}
+ detach():void {if(this.ended)return;this.ended=true;this.clock.clearTimeout(this.timer);this.pane.approvals.delete(this.id);this.resolve(false)}
  event():RuntimeEvent{return {type:'approval',id:this.id,title:this.title,detail:this.detail}}
 }
 export interface PaneInit {id:string;vendor:Vendor|'human';label:string;model:string;mode?:Mode;cwd:string;role?:string;writePaths?:string[];digest?:boolean}
@@ -33,7 +36,7 @@ export class Pane {
  providerSeat():Seat{if(this.vendor==='human')throw new RuntimeError('no_provider','нет провайдера: human');return {id:this.id,vendor:this.vendor,label:this.label,model:this.model,mode:this.mode,cwd:this.cwd,sessionId:this.sessionId,writePaths:[...this.writePaths],worktree:this.worktree}}
  askApproval(title:string,detail:string,timeout=APPROVAL_TIMEOUT_MS):Promise<boolean>{let id:string;do{id=randomBytes(6).toString('hex')}while(this.approvals.has(id));const a=new Approval(id,this,title,detail,timeout,this.clock);this.approvals.set(id,a);this.publish(a.event());return a.future}
  resolveApproval(id:string,allow:boolean):boolean{return this.approvals.get(id)?.finish(allow?'allow':'deny')??false}
- denyApprovals():void{for(const a of [...this.approvals.values()])a.finish('deny')}
+ denyApprovals():void{for(const a of [...this.approvals.values()])try{a.finish('deny')}catch{/* A failed journal decision stays open; it must not prevent turn cancellation. */}}
 }
 export function validDir(path:string):boolean{try{return statSync(path).isDirectory()}catch{return false}}
 export class Registry {

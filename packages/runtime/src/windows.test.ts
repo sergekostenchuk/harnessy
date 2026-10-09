@@ -56,3 +56,10 @@ test('10/23: persisted cwd is not a restoration capability; legacy missing diges
 test('48: active relayDepth snapshot does not change when a port stages depth of the next batch',async t=>{let depth=-1;const actions:RuntimeActions={...completedActions,async ask(_a,ctx){depth=ctx.relayDepth;return {ok:true,reply:'ответ',seq:1}}};const {runtime:r,provider:f}=await harness(t,{actions});const p=r.registry.get('worker')!;p.relayDepth=2;f.onRun=async(_s,_m,ctx)=>{assert.equal(ctx.relayDepth,2);p.relayDepth=3;await ctx.tools.ask({to:'peer',text:'вопрос'});return {text:'готово',sessionId:null}};r.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await r.idle();assert.equal(depth,2);assert.equal(p.relayDepth,3)});
 
 test('37: runtime itself loads default catalog metadata when no catalog injected',async t=>{const h=await harness(t,{seats:'  worker: {role: executor, vendor: claude, label: воркер, model: "", mode: read}'});await h.runtime.close();const {models:_,...deps}=h.deps,f=new FakeProvider(),r=await createRuntime({...deps,providers:{claude:f}},completedActions);t.after(()=>r.close());assert.equal(f.modelCalls,1);assert.equal(f.calls.length,0);assert.equal(r.registry.get('worker')!.model,'w1')});
+
+
+test('48/TS-04c: missing actions refuses before opening or any provider call',async t=>{
+ const h=await harness(t),calls=h.provider.calls.length,models=h.provider.modelCalls;
+ await assert.rejects(createRuntime(h.deps,undefined as never),(e:unknown)=>e instanceof RuntimeError&&e.code==='actions_required');
+ assert.equal(h.provider.calls.length,calls);assert.equal(h.provider.modelCalls,models);
+});
