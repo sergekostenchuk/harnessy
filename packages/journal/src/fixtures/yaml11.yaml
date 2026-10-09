@@ -1,0 +1,17 @@
+version: 1
+version: 7
+default: deny
+base: &base
+  from: executor
+  to: reviewer
+  kinds: [review-request]
+flags: &flags
+  yes_value: yes
+  no_value: no
+  on_value: on
+  off_value: off
+routes:
+  - <<: *base
+    bounds: *flags
+observe:
+  executor: [reviewer]
