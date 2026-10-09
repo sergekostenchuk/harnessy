@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,renameSync} from 'node:fs';
 import {join} from 'node:path';
 import {Journal} from '@harnessy/journal';
+import {ProviderError} from '@harnessy/providers';
 import {createRuntime,diskIO,type StateIO,type RuntimeActions} from './index.ts';
 import {harness,OWNER,completedActions,FakeProvider,collect} from './test-helpers.ts';
 
@@ -44,4 +45,28 @@ for(const missing of ['missing-seq','missing-runtime','wrong-delivery','foreign-
  const h=await harness(t);h.runtime.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await h.runtime.idle();const p=h.runtime.registry.get('worker')!,result=h.runtime.project.state.results(p)[0]!;
  result.runtime.effectsPending=true;const fields:Record<string,string>={'missing-nextSeen':'nextSeen','missing-recordSeqs':'recordSeqs','missing-id':'turnInstanceId','missing-interrupted':'interrupted','missing-effectsPending':'effectsPending'};if(fields[missing])delete (result.runtime as unknown as Record<string,unknown>)[fields[missing]!];if(missing==='missing-delivery')delete (result as unknown as Record<string,unknown>).deliverySeq;if(missing==='missing-seq')result.runtime.recordSeqs=[999];if(missing==='wrong-delivery')result.deliverySeq=100;if(missing==='missing-runtime')delete (result as unknown as Record<string,unknown>).runtime;if(missing==='foreign-record'){const foreign=h.runtime.journal.append({sender:'owner',to:['owner'],kind:'note',text:'чужая'});result.runtime.recordSeqs=[foreign.seq];result.deliverySeq=foreign.seq}
  h.runtime.project.state.saveChats(h.runtime.registry);await h.runtime.close();const next=new FakeProvider(),r=await createRuntime({...h.deps,providers:{claude:next}},completedActions);t.after(()=>r.close());await r.kick('worker');assert.equal(next.calls.length,0);assert.equal(r.registry.get('worker')!.status,'recovering');assert.equal(r.journal.cursors.worker,1)
+});
+
+// ревью №111 п.1: обрыв транспорта после modelStarted — исход неопределён, повтор только по действию владельца
+for(const code of ['transport_lost','protocol'] as const)test('46/111: '+code+' after modelStarted keeps durable uncertain; other agent and restart never repeat the model',async t=>{
+ const h=await harness(t);let effects=0;h.provider.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();effects++;throw new ProviderError(code,'обрыв после запуска')};
+ const {events}=collect(h.runtime);const rec=h.runtime.postOwner({to:'worker',kind:'task',text:'могло выполниться'},OWNER);await h.runtime.idle();
+ const pane=h.runtime.registry.get('worker')!;assert.equal(h.provider.calls.length,1);assert.equal(effects,1);assert.equal(pane.status,'uncertain');assert.equal(pane.busy,false);
+ assert.equal(h.runtime.project.state.attempts.worker?.status,'uncertain');assert.deepEqual(h.runtime.project.state.attempts.worker?.recordSeqs,[rec.seq]);assert.equal(h.runtime.journal.pendingFor('worker').length,1);assert.equal(h.runtime.journal.cursors.worker??0,0);
+ assert.ok(events.some(e=>e.type==='note'&&e.pane==='worker'&&/ход мог быть выполнен до перезапуска; записи #\d+–#\d+/.test(String((e as {text?:string}).text))));assert.equal(events.filter(e=>e.type==='error'&&e.pane==='worker').length,1);
+ assert.equal(JSON.parse(readFileSync(join(h.dir,'.harness','state','attempts.json'),'utf8')).worker.status,'uncertain');
+ h.runtime.journal.append({sender:'peer',to:['worker'],kind:'question',text:'от другого агента'});await h.runtime.kick('worker');await h.runtime.idle();assert.equal(h.provider.calls.length,1);
+ await h.runtime.close();const next=new FakeProvider(),second=await createRuntime({...h.deps,providers:{claude:next}},completedActions);t.after(()=>second.close());await second.idle();await second.kick('worker');assert.equal(next.calls.length,0);assert.equal(second.registry.get('worker')!.status,'uncertain');
+ second.postOwner({to:'worker',kind:'task',text:'повтори'},OWNER);await second.idle();assert.equal(next.calls.length,1);assert.equal(second.project.state.attempts.worker,undefined);assert.equal(second.journal.pendingFor('worker').length,0)
+});
+
+test('46/111: failure before modelStarted clears the attempt and the queue recovers normally',async t=>{
+ const h=await harness(t);let first=true;h.provider.onRun=async(seat,m,ctx)=>{if(first){first=false;throw new ProviderError('transport_lost','обрыв до запуска')}ctx.modelStarted?.();ctx.publish({type:'done',sessionId:'s1',model:seat.model,durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'ответ '+m.length,sessionId:'s1'}};
+ h.runtime.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await h.runtime.idle();const pane=h.runtime.registry.get('worker')!;assert.equal(pane.status,'idle');assert.equal(h.runtime.project.state.attempts.worker,undefined);assert.equal(h.runtime.journal.pendingFor('worker').length,1);
+ h.runtime.journal.append({sender:'peer',to:['worker'],kind:'question',text:'от другого агента'});await h.runtime.kick('worker');await h.runtime.idle();assert.equal(h.provider.calls.length,2);assert.equal(h.runtime.journal.pendingFor('worker').length,0)
+});
+
+test('44/111: session_missing retry resets the start mark, so a pre-start failure of attempt 2 is not uncertain',async t=>{
+ const h=await harness(t);h.runtime.registry.get('worker')!.sessionId='old';let n=0;h.provider.onRun=async(_s,_m,ctx)=>{n++;if(n===1){ctx.modelStarted?.();throw new ProviderError('session_missing','нет сессии','old')}throw new ProviderError('transport_lost','обрыв до запуска второй попытки')};
+ h.runtime.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await h.runtime.idle();assert.equal(n,2);assert.equal(h.runtime.registry.get('worker')!.status,'idle');assert.equal(h.runtime.project.state.attempts.worker,undefined);assert.equal(h.runtime.journal.pendingFor('worker').length,1)
 });

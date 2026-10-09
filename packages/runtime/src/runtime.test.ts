@@ -23,7 +23,9 @@ test('11/29/37: failed turn rolls back only inbox; carry and digest remain for r
  const policy=join(h.dir,'.harness','comms-policy.yaml');writeFileSync(policy,'version: 2\nroutes: []\nobserve: {executor: "*"}\n');
  f.onRun=async(_seat,_text,ctx)=>{ctx.modelStarted?.();p.record('me','вмешательство, сохранить');ctx.publish({type:'error',text:'ошибка модели'});throw new ProviderError('turn_failed','ошибка модели')};
  const {events}=collect(r);r.postOwner({to:'worker',kind:'task',text:'задание'},OWNER);await r.idle();assert.deepEqual(p.transcript.map(m=>m.text),['раньше','вмешательство, сохранить']);assert.equal(p.carry,'старый разговор');assert.deepEqual(p.seen,{});assert.equal(r.journal.pendingFor('worker').length,1);assert.equal(terminals(events).length,1);assert.equal(terminals(events)[0]!.message,'ошибка модели');assert.ok(events.some(e=>e.type==='note'&&String(e.text).startsWith('1 запись остались')));
- f.onRun=null;await r.kick('worker');assert.match(f.calls[1]!.message,/старый разговор/);assert.match(f.calls[1]!.message,/соседнее/);assert.equal(p.carry,'');assert.equal(p.seen.peer,1);assert.equal(r.journal.pendingFor('worker').length,0)
+ // отказ ПОСЛЕ modelStarted — исход неопределён (ревью №111): обычный kick модель не повторяет, повтор — по сообщению владельца, с сохранённым контекстом
+ f.onRun=null;assert.equal(p.status,'uncertain');await r.kick('worker');assert.equal(f.calls.length,1);
+ r.postOwner({to:'worker',kind:'task',text:'повтори'},OWNER);await r.idle();assert.equal(f.calls.length,2);assert.match(f.calls[1]!.message,/старый разговор/);assert.match(f.calls[1]!.message,/соседнее/);assert.match(f.calls[1]!.message,/задание/);assert.equal(p.carry,'');assert.equal(p.seen.peer,1);assert.equal(r.journal.pendingFor('worker').length,0)
 });
 
 test('38: missing provider is typed, leaves queue and releases pane',async t=>{
