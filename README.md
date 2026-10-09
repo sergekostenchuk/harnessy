@@ -8,6 +8,25 @@ The owner's window over a team of AI agents: roles (seats) with their own instru
 
 Русская версия: [README.ru.md](README.ru.md).
 
+## Architecture at a glance
+
+```mermaid
+flowchart TB
+  subgraph UI["Window · ui/ (unchanged when the core switches)"]
+    E["Electron · ui/desktop"] --> W["Web window · ui/deploy"]
+  end
+  W <-->|"HTTP + SSE · 127.0.0.1:3777"| API["api · the window contract (TS-05) — today core/ in Python"]
+  API --> RT["runtime · queues, turns, recovery, scope"]
+  RT --> PV["providers · Claude · Codex"]
+  RT --> J["journal · exchange log, policy, evidence"]
+  RT --> T["team · seats and roles"]
+  RT --> PJ["projects · git, worktrees, routes"]
+  RT --> CX["context · briefings, digests, measurements"]
+  J & T & PJ & RT --> F[("project/.harness/ — the single source of truth")]
+  PV --> CL["Claude Code (Agent SDK)"]
+  PV --> CO["Codex app-server (JSON-RPC)"]
+```
+
 ## Run (today)
 
 ```bash
@@ -75,41 +94,71 @@ The model produces text and events; it does not touch the world directly.
 - **The window is a web app** served by the engine itself from `ui/deploy/out/site` under `/sketches`: the live layer (`live.js`, `cx.js`, `ctx.js`, `set.js`, `conn.js`) talks to the engine over HTTP and SSE (`/api/events`) on `127.0.0.1:3777`. Requests are protected by Host/Origin/`Sec-Fetch-Site`/Content-Type checks so a foreign page in the browser cannot drive the engine **[code]**.
 - **Backend = packages.** Today the engine is `core/` (Python). The `api` package (TS-05, **[contract]**) reproduces the same routes and JSON forms byte for byte on top of `runtime`, `projects` and `journal`, and `core/run.sh` becomes a shim that starts the Node entry point, so neither the window nor Electron changes when the core switches (TS-06).
 
-## Roadmap: publishing projects and connecting models
+## Roadmap: publishing projects and connecting models **[plan]**
 
-Harnessy plans to embed two infrastructure services: **deployment** of applications to servers and managed proxy connectivity to AI providers. In the module map (`packages/README.md`) these are the `network` package (release 0.2: network routes, proxy/VPN, mandatory routing, egress diagnostics) and the `infra` package (release 0.6: partners, VPS, deployment).
+Two infrastructure services inside Harnessy, under the same rules as the core: intent before effect, operation state in files, paid actions only after explicit confirmation. In the module map these are `network` (0.2: network routes, proxy/VPN, mandatory routing, egress diagnostics) and `infra` (0.6: partners, VPS, deployment).
 
 ### Publishing projects
 
-The user will pick a server, a configuration and a location, see the price and start publishing with one button. Harnessy will create or attach a VPS, prepare the environment, deploy the application, set up the address and HTTPS, verify that it works and show the URL. Later publications will update the application without creating a new server.
+**What the owner sees:** server, configuration, location, price → one "Publish" button → step-by-step progress → the URL. A later publication updates the application on the same server; no new server is created.
 
-Recommended implementation:
-- The VPS provider's API — to create and manage the server.
-- Coolify — as the execution layer for publishing behind Harnessy's own interface; it provides an API and tooling for managing servers and deployments [1][2].
-- For the MVP — one provider, a Git repository with a Dockerfile, and the user's own account. Selling infrastructure inside Harnessy can be added later through a reseller programme.
+**What Harnessy does:** creates or attaches a VPS, prepares the environment, deploys the application, sets up the address and HTTPS, verifies that it works, shows the URL.
+
+| layer | with | role |
+|---|---|---|
+| server | the VPS provider's API | create, attach, delete the server |
+| publishing | Coolify — API and CLI [1][2] | the deployment execution layer behind Harnessy's own interface |
+| application | a Git repository with a Dockerfile | what exactly is published |
+| accounts | the user's own account at the provider | MVP: one provider; selling infrastructure inside Harnessy comes later via a reseller programme |
+
+```mermaid
+flowchart LR
+  O["Owner"] -->|"server · configuration · location · price → Publish"| H["Harnessy · infra"]
+  H -->|"operation intent before the first effect"| S[("project/.harness/state")]
+  H -->|"create or attach"| V["VPS provider API"]
+  V --> M["Server"]
+  H -->|"environment · deploy · address · HTTPS"| C["Coolify"]
+  C --> M
+  M --> A["Application"]
+  H -->|"health check"| A
+  H -->|"URL · progress · errors"| O
+  H -.->|"re-publish = update, not a new server"| C
+```
 
 ### Proxy traffic for models
 
-The user will be able to enable a proxy separately for a chosen AI provider, pick the exit country and set a spending limit. Routing will affect only the required connections, not all Harnessy traffic. (The groundwork exists: per-provider routes, egress checks and expected-IP verification live in the `projects` package and on the "Connections" screen.)
+**What the owner sees:** on the "Connections" screen, per provider — a proxy switch, the exit country, a spending limit and the egress check state.
 
-Recommended implementation:
-- A partner Reseller API — to issue separate accesses to users, cap traffic and collect statistics. DataImpulse and NSTData describe such capabilities [3][4].
-- ISP/static or residential sticky — the primary options for testing; mobile — an additional mode when needed.
-- Master partner keys stay on the backend; the user receives a limited access.
-- Before enabling, the exit IP, country and health of the chosen service are checked. On failure the route never silently falls back to a direct connection.
+**What Harnessy does:** routes only the chosen provider's connections (the `claude`/`codex` processes of its seats) and leaves all other traffic alone; before enabling, checks the exit IP, country and health; on failure it stops and reports — there is no silent fallback to a direct connection. The groundwork is already in the code: per-provider routes, the expected exit and its verification in the `projects` package and on the "Connections" screen **[code]**.
+
+| layer | with | role |
+|---|---|---|
+| access | a partner Reseller API — DataImpulse, NSTData [3][4] | issue a separate access per user, cap traffic, collect statistics |
+| exit type | ISP/static, residential sticky; mobile when needed | the primary options for testing |
+| keys | master partner keys stay on the backend; the user gets a limited access | secrets never leave the server |
+| accounting | model access, proxy traffic and infrastructure — separately | no mixed bills |
+
+```mermaid
+flowchart LR
+  O["Owner"] -->|"provider · country · limit → Enable"| H["Harnessy · network"]
+  H -->|"sub-access · limit · statistics"| R["Partner Reseller API"]
+  H -->|"check: IP · country · health"| X{"exit OK?"}
+  X -->|"yes"| P["the provider's processes at the seats"]
+  P -->|"only their connections"| E["Exit in the chosen country"]
+  E --> AI["AI provider"]
+  X -->|"no"| O
+  P -.->|"failure: stop and report, never a direct connection"| O
+```
 
 ### Common principles
 
-Paid actions require explicit confirmation. Harnessy persists the state of operations, shows progress and errors, prevents buying a resource twice, and keeps "delete the application" separate from "delete the server".
+- Paid actions only after explicit confirmation.
+- Operation state lives in files; progress and errors are visible; a resource is never bought twice.
+- "Delete the application" and "delete the server" are different actions.
+- Models, proxy traffic and servers are accounted separately.
+- An exit country is not a guarantee of access to an AI service; compatibility and acceptable use are verified per provider.
 
-Model access, proxy traffic and server infrastructure are accounted separately. Choosing an exit country is not presented as a guarantee of access to an AI service; compatibility and acceptable use are verified per provider.
-
-Sources:
-[1] List | Coolify Docs — https://coolify.io/docs/api/endpoints/resources/list-resources
-[2] coollabsio/coolify-cli — https://github.com/coollabsio/coolify-cli
-[3] Reseller API — managing sub-users and traffic — DataImpulse — https://help.dataimpulse.com/en/articles/15931714-reseller-api-managing-sub-users-and-traffic
-[4] Proxy Reseller Program — White Label Proxy Solutions — https://www.nstdata.io/resell
-[5] VPS providers with partner APIs — https://www.perplexity.ai/search/80ea31d4-d563-4a34-ae4c-78bbee15e87d
+Sources: [1] Coolify Docs, List resources — https://coolify.io/docs/api/endpoints/resources/list-resources · [2] coollabsio/coolify-cli — https://github.com/coollabsio/coolify-cli · [3] DataImpulse, Reseller API — https://help.dataimpulse.com/en/articles/15931714-reseller-api-managing-sub-users-and-traffic · [4] NSTData, Proxy Reseller Program — https://www.nstdata.io/resell · [5] VPS providers with partner APIs — https://www.perplexity.ai/search/80ea31d4-d563-4a34-ae4c-78bbee15e87d
 
 ## Where to look
 
