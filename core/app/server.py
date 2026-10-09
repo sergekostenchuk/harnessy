@@ -1720,6 +1720,12 @@ class App:
         r = await self.bridge.do_ask(sender, body)
         return web.json_response(r, status=200 if r.get("ok") else 409)
 
+    async def api_owner_merge(self, request):
+        """Слияние владельцем из окна (договор TS-05, строка 67): инициатор — владелец по факту маршрута, поле from в теле не читается; мост /api/merge остаётся местам."""
+        body = await request.json()
+        r = await self.bridge.do_merge(OWNER, {"sha": body.get("sha"), "message": body.get("message")})
+        return web.json_response(r, status=200 if r.get("ok") else 409)
+
     async def api_merge(self, request):
         body = await request.json()
         sender = str(body.get("from") or "")
@@ -1757,6 +1763,7 @@ class App:
         app.router.add_post("/api/send", self.api_send)
         app.router.add_post("/api/ask", self.api_ask)
         app.router.add_post("/api/merge", self.api_merge)
+        app.router.add_post("/api/owner/merge", self.api_owner_merge)
         app.router.add_get("/api/pane_transcript", self.pane_transcript)
         app.router.add_get("/api/journal", self.journal_read)
         app.router.add_get("/api/projects", self.api_projects)
