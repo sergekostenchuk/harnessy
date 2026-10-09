@@ -59,6 +59,7 @@ export class ClaudeProvider implements Provider {
  const first:SDKUserMessage={type:'user',message:{role:'user',content:message},parent_tool_use_id:null};
  const options={...claudeOptions(seat,turnContext,binary,this.deps.env),abortController:abort};
  if(turnContext.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
+ ctx.modelStarted?.();
  active.query=this.deps.queryFn({prompt:(async function*(){yield first;await keepOpen})(),options});
  for await(const raw of active.query){
  const m=raw as unknown;if(!record(m)||typeof m.type!=='string')throw new ProviderError('protocol','invalid Claude message',sessionId);

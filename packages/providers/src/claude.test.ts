@@ -82,3 +82,10 @@ test('Claude sessions strip digest and merge consecutive assistant messages',asy
  assert.deepEqual(await provider.sessionMessages('/project','s'),[{role:'me',text:'hi'},{role:'ai',text:'one\ntwo'}]);
  assert.deepEqual(await provider.models(),[]);assert.equal((await provider.auth()).loggedIn,true);
 });
+
+test('[TS-04a:47] Claude modelStarted runs once immediately before queryFn',async()=>{
+ const f=fixture('claude'),h=harness([init,done]),order:string[]=[],original=h.deps.queryFn!;let started=0;
+ f.ctx.modelStarted=()=>{started++;order.push('started');assert.equal(h.options.length,0)};
+ const provider=new ClaudeProvider({...h.deps,queryFn:args=>{assert.equal(started,1);order.push('query');return original(args)}});
+ await provider.runTurn(f.seat,'x',f.ctx);assert.deepEqual(order,['started','query']);assert.equal(started,1);assert.equal(terminals(f.events).length,1);await provider.close()
+});

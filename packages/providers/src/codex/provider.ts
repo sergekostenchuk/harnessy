@@ -43,8 +43,8 @@ export class CodexProvider implements Provider {
  const seat=snapshot(input,ctx);if(seat.vendor!=='codex')throw new ProviderError('protocol','wrong provider');
  ctx={...ctx,peers:ctx.peers.map(p=>({...p}))};
  const busy=this.active.get(seat.id);if(busy)throw new ProviderError(busy.seat.cwd===seat.cwd?'busy':'cwd_changed',busy.seat.cwd===seat.cwd?'место занято':'папка окна изменилась во время хода',seat.sessionId);
- let resolve!:(value:{text:string;usage:Usage;durationMs:number})=>void,reject!:(e:ProviderError)=>void;
- const ended=new Promise<{text:string;usage:Usage;durationMs:number}>((a,b)=>{resolve=a;reject=b});void ended.catch(()=>{});
+ let resolve!:(value:{text:string;usage:Usage;durationMs:number;interrupted:boolean})=>void,reject!:(e:ProviderError)=>void;
+ const ended=new Promise<{text:string;usage:Usage;durationMs:number;interrupted:boolean}>((a,b)=>{resolve=a;reject=b});void ended.catch(()=>{});
  const active:Active={seat,ctx,client:null,threadId:null,turnId:null,stopRequested:false,reject};this.active.set(seat.id,active);
  let ready!:(id:string|null)=>void;const turnReady=new Promise<string|null>(r=>{ready=r});
  let terminal=false,settled=false,sessionId=seat.sessionId,text='',streamed=false;const items:string[]=[];
@@ -98,19 +98,20 @@ export class CodexProvider implements Provider {
  reject(vendorError('codex',error.message,undefined,error.codexErrorInfo,sessionId));}
  else if(turn.status==='completed'||turn.status==='interrupted'){
  if(!streamed){text=items.join('\n');if(text)ctx.publish({type:'delta',text})}
- resolve({text,usage,durationMs:typeof turn.durationMs==='number'?turn.durationMs:Date.now()-started})
+ resolve({text,usage,durationMs:typeof turn.durationMs==='number'?turn.durationMs:Date.now()-started,interrupted:turn.status==='interrupted'})
  }else throw new ProviderError('protocol','invalid terminal status',sessionId)
  }
  }catch(e){settled=true;reject(asError(e,sessionId))}
  };
  unsubscribe=client.onNotification(receive);unfailure=client.onFailure(e=>reject(e));
  if(startupContext.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
+ ctx.modelStarted?.();
  const start=requireRecord(await client.request('turn/start',{threadId:sessionId,input:[{type:'text',text:message}],sandboxPolicy:mode.sandboxPolicy,approvalPolicy:mode.approvalPolicy},startupContext.signal),'turn start');
  const turn=requireRecord(start.turn,'turn');if(typeof turn.id!=='string'||!turn.id)throw new ProviderError('protocol','missing turn id',sessionId);
  active.turnId=turn.id;ready(turn.id);for(const q of queued)receive(q.method,q.params);
  if((active.stopRequested||ctx.signal.aborted)&&!settled)await handle.interrupt();
  const result=await ended;terminal=true;ctx.publish({type:'done',sessionId,model:seat.model,durationMs:result.durationMs,usage:result.usage});
- return {text:result.text,sessionId};
+ return {text:result.text,sessionId,...(result.interrupted?{interrupted:true}:{})};
  }catch(e){
  const err=startup.signal.aborted?new ProviderError('cancelled','ход отменён',sessionId):asError(e,sessionId);if(!terminal){terminal=true;ctx.publish({type:'error',text:err.vendorText})}
  if(active.client&&(err.code==='transport_lost'||err.code==='protocol'||err.code==='cancelled'||ctx.signal.aborted)){

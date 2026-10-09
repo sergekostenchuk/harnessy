@@ -21,7 +21,7 @@ export type RouteEnv=Partial<Record<'HTTPS_PROXY'|'HTTP_PROXY'|'ALL_PROXY'|'http
 export const FORBIDDEN_ENV={claude:['ANTHROPIC_API_KEY','CLAUDECODE','CLAUDE_CODE_SIMPLE'],codex:['OPENAI_API_KEY']} as const;
 export interface TurnHandle {interrupt():Promise<void>;steer(text:string):Promise<void>}
 export interface TurnContext {
- signal:AbortSignal;publish(ev:TurnEvent):void;askApproval(title:string,detail:string):Promise<boolean>;
+ modelStarted?():void;signal:AbortSignal;publish(ev:TurnEvent):void;askApproval(title:string,detail:string):Promise<boolean>;
  session(id:string):void;setHandle(h:TurnHandle|null):void;env:RouteEnv;roleNote:string;
  peers:{id:string;label:string;vendor:Vendor}[];tools:PeerTools;relayDepth:number;projectDir:string|null;appUrl:string;
  registerProcessToken(token:string):void;revokeProcessToken(token:string):void;writableRoots:string[]
@@ -32,7 +32,7 @@ export class ProviderError extends Error {
  constructor(code:ErrorCode,vendorText:string,sessionId:string|null=null){super(vendorText);this.name='ProviderError';this.code=code;this.vendorText=vendorText;this.sessionId=sessionId}
 }
 export interface Provider {
- readonly vendor:Vendor;runTurn(seat:Seat,message:string,ctx:TurnContext):Promise<{text:string;sessionId:string|null}>;
+ readonly vendor:Vendor;runTurn(seat:Seat,message:string,ctx:TurnContext):Promise<{text:string;sessionId:string|null;interrupted?:boolean}>;
  listSessions(cwd:string):Promise<{id:string;title:string;updated:number}[]>;
  sessionMessages(cwd:string,id:string):Promise<{role:'me'|'ai';text:string}[]>;
  auth():Promise<{loggedIn:boolean;[k:string]:unknown}>;models():Promise<{id:string;label:string}[]>;
@@ -45,7 +45,7 @@ export function snapshot(seat:Seat,ctx:TurnContext):Seat {
  !(seat.sessionId===null||typeof seat.sessionId==='string')||!(seat.worktree===null||typeof seat.worktree==='string'))
  throw new ProviderError('protocol','invalid Seat');
  if(!record(ctx)||!ctx.signal||typeof ctx.signal.addEventListener!=='function'||typeof ctx.signal.aborted!=='boolean'||
- !record(ctx.env)||!record(ctx.tools)||!Array.isArray(ctx.peers)||!ctx.peers.every(p=>record(p)&&typeof p.id==='string'&&typeof p.label==='string'&&['claude','codex'].includes(p.vendor as string))||
+ (ctx.modelStarted!==undefined&&typeof ctx.modelStarted!=='function')||!record(ctx.env)||!record(ctx.tools)||!Array.isArray(ctx.peers)||!ctx.peers.every(p=>record(p)&&typeof p.id==='string'&&typeof p.label==='string'&&['claude','codex'].includes(p.vendor as string))||
  !Array.isArray(ctx.writableRoots)||!ctx.writableRoots.every(p=>typeof p==='string')||typeof ctx.roleNote!=='string'||typeof ctx.relayDepth!=='number'||
  !(ctx.projectDir===null||typeof ctx.projectDir==='string')||typeof ctx.appUrl!=='string'||
  ['publish','askApproval','session','setHandle','registerProcessToken','revokeProcessToken'].some(k=>typeof (ctx as unknown as Record<string,unknown>)[k]!=='function')||
