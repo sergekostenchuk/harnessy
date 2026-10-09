@@ -16,6 +16,15 @@ export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:
 export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;status?:'uncertain'}
 export interface Chat {id:string;pane:string;title:string;created:number;closed:number|null;model:string;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;[key:string]:unknown}
 export function jsonClone<T>(value:T):T{return parseCompat(compatJson(value)) as T}
+const CONVERSATION_FIELDS=new Set(['role','text','ts','usage','durationMs']);
+// Execution receipts belong to the source seat and journal, never to transferred history.
+export function conversationHistory(messages:readonly TranscriptMessage[]):TranscriptMessage[] {
+ return jsonClone(messages.map(message=>{
+  const copy=orderedClone(message);
+  for(const key of orderedKeys(copy))if(!CONVERSATION_FIELDS.has(key))delete copy[key];
+  return copy;
+ }));
+}
 interface Chats {chats:Record<string,Chat>;active:Record<string,string>}
 export function timestampMessage(role:string,text:string,ms:number):TranscriptMessage {
  const seconds=ms/1000,number=Number.isInteger(seconds)?seconds.toFixed(1):String(seconds);

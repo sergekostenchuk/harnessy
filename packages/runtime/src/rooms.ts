@@ -7,7 +7,7 @@ import {RuntimeError,message} from './errors.ts';
 import {Pane,validDir} from './pane.ts';
 import {owner,free,reserve,same} from './operations.ts';
 import {chatSnapshot,assignConversation,roomWithoutProject,type CreateSeatInput} from './roles.ts';
-import {jsonClone,type Chat} from './state.ts';
+import {jsonClone,conversationHistory,type Chat} from './state.ts';
 import {meta} from './chats.ts';
 import type {Runtime} from './runtime.ts';
 import type {ProjectState} from './types.ts';
@@ -38,7 +38,7 @@ function transferRoom(runtime:Runtime,p:ProjectState,source:Chat,mode:string,fai
  const room=makeRoomIn(p,runtime,source.model,mode,source.vendor as Vendor);if(!room)throw new RuntimeError('room_missing',failure,400);
  const moved=source.cwd!==p.dir,copy=moved?moveInput(p,source):source;
  // The active chat of the destination folder is independent of the source chat.
- p.state.newChat(room);room.transcript=jsonClone(copy.transcript);room.carry=copy.carry;room.sessionId=!moved&&source.vendor===room.vendor?source.sessionId:null;
+ p.state.newChat(room);room.transcript=conversationHistory(copy.transcript);room.carry=copy.carry;room.sessionId=!moved&&source.vendor===room.vendor?source.sessionId:null;
  p.state.savePanes(p.registry,p.journal);return room;
 }
 function initDeps(runtime:Runtime,p:ProjectState,room:Pane){return {...(runtime.deps.gitops?{gitops:runtime.deps.gitops}:{}),catalog:p.registry.models,roomModel:room.model,settings:runtime.settings.effective(),vendorOf:(model:string)=>vendorOf(p,model)}}

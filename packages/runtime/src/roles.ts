@@ -4,7 +4,7 @@ import {withPathLock,addSeatLocked,ensureSeatFileLocked,loadTeam,readManifest,ma
 import {onboarding,transcriptText} from '@harnessy/context';
 import {pythonTrim,type Initiator} from '@harnessy/journal';
 import {object,RuntimeError,deepFreeze,message} from './errors.ts';
-import {jsonClone,type Chat} from './state.ts';
+import {jsonClone,conversationHistory,type Chat} from './state.ts';
 import {closeChat,meta} from './chats.ts';
 import {owner,same,free} from './operations.ts';
 import type {Pane} from './pane.ts';
@@ -74,7 +74,7 @@ function input(runtime:Runtime,p:ProjectState,args:CreateSeatInput,existing?:Sea
 }
 export function chatSnapshot(p:ProjectState,pane:Pane):Chat {
  const old=p.state.activeChat(pane,false),base=old?jsonClone(old):{id:p.state.newChatId(),pane:pane.id,title:'',created:Math.floor(p.now()/1000),closed:null,model:pane.model,vendor:pane.vendor,sessionId:pane.sessionId,transcript:[],carry:pane.carry};
- return jsonClone({...base,model:pane.model,vendor:pane.vendor,sessionId:pane.sessionId,transcript:pane.transcript,carry:pane.carry,cwd:pane.cwd});
+ return jsonClone({...base,model:pane.model,vendor:pane.vendor,sessionId:pane.sessionId,transcript:conversationHistory(pane.transcript),carry:pane.carry,cwd:pane.cwd});
 }
 function matches(seat:Seat,i:SeatInput,op:Assignment):boolean {
  const instructions=op.files.seat?.path??i.instructions.path;
@@ -99,7 +99,7 @@ function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,original:Assig
    const source=op.source.chat,old=p.state.activeChat(pane,false);
    if(old&&old.id!==op.operationId)closeChat(p,pane,'none');
    c=p.state.newChat(pane,op.source.carry,false,op.operationId);
-   if(source){const originalVendor=pane.vendor;pane.transcript=jsonClone(source.transcript);pane.carry=op.source.carry;
+   if(source){const originalVendor=pane.vendor;pane.transcript=conversationHistory(source.transcript);pane.carry=op.source.carry;
     pane.sessionId=source.vendor===originalVendor&&source.cwd===pane.cwd?source.sessionId:null;pane.vendor=source.vendor as Vendor;pane.model=source.model;
     c.transcript=pane.transcript;c.carry=pane.carry;c.sessionId=pane.sessionId;c.vendor=pane.vendor;c.model=pane.model;
    }
