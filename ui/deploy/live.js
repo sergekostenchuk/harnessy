@@ -116,7 +116,7 @@
   // лента активного чата — из харнесса (один источник правды для Electron, браузера и сервера); цена хода у старых реплик неизвестна
   let LOADED=null; const ONB={};
   // вводная роли при первом открытии её чата — в том числе когда чата ещё нет (место посеяно при создании проекта; Kimi UX-1 №85 п.4); движок повторно не шлёт
-  async function onboardOnce(p){ if(!p||p.id==='room'||ONB[p.id]) return; ONB[p.id]=1; try{ const o=await api('/api/onboard',{pane:p.id}); if(o&&o.sent){ H.cur={text:'',tools:[]}; drawLive(); toast('Роль получает вводную: кто она, где, с кем работает'); } }catch(e){} }
+  async function onboardOnce(p){ if(!p||p.id==='room'||ONB[p.id]) return; ONB[p.id]=1; try{ const o=await api('/api/onboard',{pane:p.id}); if(o&&o.sent){ toast('Роль получает вводную: кто она, где, с кем работает'); await refreshStatus(); if(H.pane&&H.pane.busy){ H.cur={text:'',tools:[]}; drawLive(); } else await loadChat(); } }catch(e){} }
   async function loadChat(){ if(!H.on||PAGE!=='chat') return; const p=H.pane, cid=p?(H.active||{})[p.id]:null;
     if(!cid){ if(LOADED!==null){ S.chat=[]; save(); } LOADED=cid||'none'; render(); if(p&&!p.busy) await onboardOnce(p); return; }
     let r=null; try{ r=await api('/api/chats/'+cid); }catch(e){} if(!r||!r.messages){ return; }
@@ -126,7 +126,7 @@
     LOADED=cid; save(); render();
     if(p.id!=='room'&&!r.messages.length&&!p.busy) await onboardOnce(p); }   // роль без вводной получает её при первом открытии чата (правило движка)
   // подключение к движку на всех экранах: боковая панель, настройки, подключения живут его данными (08.10)
-  async function hConnect(){ let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)||!st.panes.length){ return; }
+  async function hConnect(){ let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)){ return; }   /* движок подключён, если статус есть — даже без единого места: иначе чистая машина (первый запуск) остаётся в демо-режиме и проект создать нельзя */
     H.on=true; applyStatus(st); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
     await refreshChats();
     if(PAGE==='chat'){ if(H.pane&&H.pane.busy) H.cur={text:'',tools:[]};
