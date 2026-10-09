@@ -602,8 +602,9 @@ class App:
             full = f"{digest}\n\n---\nСообщение тебе:\n{message}" if digest else message
             if digest:
                 pane.publish({"type": "note", "text": f"в сообщение добавлена сводка соседей ({len(digest)} символов)"})
+            pane.last_usage = None                                   # расход именно этого хода, не прежнего
             text = await self.provider(pane).run_turn(pane, full, depth)
-            pane.record("ai", text)
+            pane.record("ai", text, pane.last_usage)                  # цена хода — в реплике чата (Kimi UX-3 №106 п.1)
             self.after_turn(pane, pane.turn_records, text)
             return text
         except asyncio.CancelledError:
@@ -828,6 +829,8 @@ class App:
 
     # ---------- папки, комната, роли по ходу ----------
     def _remember_project(self, path: str) -> None:
+        if os.environ.get("HARNESS_NO_LAST"):                      # тесты: не писать временные папки в реестр проектов владельца (09.10: 104 tmp-записи)
+            return
         try:
             known = json.loads(PROJECTS_FILE.read_text("utf-8")) if PROJECTS_FILE.exists() else []
         except (OSError, json.JSONDecodeError):

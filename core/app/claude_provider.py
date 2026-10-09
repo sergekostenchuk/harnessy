@@ -188,6 +188,7 @@ class ClaudeProvider:
                             pane.publish({"type": "delta", "text": final})
                     u = m.usage or {}
                     pane.tokens = {"input": u.get("input_tokens"), "output": u.get("output_tokens"), "cacheRead": u.get("cache_read_input_tokens")}
+                    pane.last_usage = {"usage": dict(pane.tokens), "durationMs": m.duration_ms or int((time.time() - started) * 1000)}
                     pane.publish({"type": "done", "sessionId": pane.session_id, "model": pane.model,
                                   "durationMs": m.duration_ms or int((time.time() - started) * 1000), "usage": pane.tokens})
         return text

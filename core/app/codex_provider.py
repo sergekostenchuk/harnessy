@@ -251,8 +251,8 @@ class CodexProvider:
                 dur = turn.get("durationMs") or int((time.time() - started) * 1000)
                 if error:
                     raise RuntimeError(str(error.get("message") if isinstance(error, dict) else error))
-                pane.tokens = usage
                 pane.tokens = usage                     # расход последнего хода — для карточки «Контекст»
+                pane.last_usage = {"usage": usage, "durationMs": dur}   # и в реплику ai чата
                 pane.publish({"type": "done", "sessionId": pane.session_id, "model": pane.model, "durationMs": dur, "usage": usage})
         return text
 

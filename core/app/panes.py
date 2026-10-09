@@ -58,6 +58,7 @@ class Pane:
     interrupt: Callable[[], Awaitable[None]] | None = None
     steer: Callable[[str], Awaitable[None]] | None = None
     tokens: dict = field(default_factory=dict)
+    last_usage: dict | None = None            # расход и длительность последнего хода (от провайдера на done) — уходит в реплику ai чата
     carry: str = ""                                          # прежний разговор, который войдёт в следующее сообщение (переезд «без папки» → папка)
     turn_records: list = field(default_factory=list)
     replied: set = field(default_factory=set)
@@ -72,9 +73,9 @@ class Pane:
             except asyncio.QueueFull:
                 self.subscribers.discard(q)
 
-    def record(self, role: str, text: str) -> None:
+    def record(self, role: str, text: str, extra: dict | None = None) -> None:
         if text and text.strip():
-            self.transcript.append({"role": role, "text": text, "ts": time.time()})
+            self.transcript.append({"role": role, "text": text, "ts": time.time(), **(extra or {})})   # extra: usage/durationMs у реплики ai (цена хода живёт в чате, не в окне)
 
     def settings(self) -> dict:
         return {
