@@ -94,7 +94,7 @@ The model produces text and events; it does not touch the world directly.
 - **The window is a web app** served by the engine itself from `ui/deploy/out/site` under `/sketches`: the live layer (`live.js`, `cx.js`, `ctx.js`, `set.js`, `conn.js`) talks to the engine over HTTP and SSE (`/api/events`) on `127.0.0.1:3777`. Requests are protected by Host/Origin/`Sec-Fetch-Site`/Content-Type checks so a foreign page in the browser cannot drive the engine **[code]**.
 - **Backend = packages.** Today the engine is `core/` (Python). The `api` package (TS-05, **[contract]**) reproduces the same routes and JSON forms byte for byte on top of `runtime`, `projects` and `journal`, and `core/run.sh` becomes a shim that starts the Node entry point, so neither the window nor Electron changes when the core switches (TS-06).
 
-## Roadmap: publishing projects and connecting models **[plan]**
+## Roadmap: publishing, connecting models, payments and learning **[plan]**
 
 Two infrastructure services inside Harnessy, under the same rules as the core: intent before effect, operation state in files, paid actions only after explicit confirmation. In the module map these are `network` (0.2: network routes, proxy/VPN, mandatory routing, egress diagnostics) and `infra` (0.6: partners, VPS, deployment).
 
@@ -149,6 +149,33 @@ flowchart LR
   X -->|"no"| O
   P -.->|"failure: stop and report, never a direct connection"| O
 ```
+
+### Paying for subscriptions and APIs, turnkey accounts
+
+**What the owner sees:** in "Connections", next to a provider — "Get a subscription / API key" and "Set up an account for me": pick the provider and plan, see the price with the fee, confirm — and a working login appears at the seat without manual hassle.
+
+**What Harnessy does:** pays for the model subscription or API key through a partner, registers the account turnkey when needed (creating or buying an e-mail, a phone number, receiving verification codes, attaching a payment card), hands the credentials to the user and stores them the way the `claude`/`codex` programs store their logins today — the core holds no keys.
+
+| layer | with | role |
+|---|---|---|
+| payment | a partner for paying model subscriptions and APIs (to be found) | process the payment where direct payment is unavailable; Harnessy fee |
+| account | e-mail, number, verification codes, card — via partner services | turnkey registration; nothing happens without the owner's confirmation |
+| accounting | subscriptions, API keys, accounts — separate lines | no mixing with proxy or servers |
+| acceptable use | each provider's rules | checked before ordering; Harnessy does not promise to bypass restrictions |
+
+### Learning
+
+**What the owner sees:** a "Learning" section in the window and on the site: articles, videos and presentations on working with Harnessy (first launch, team and roles, journal and verdicts, publishing), plus two courses — vibe coding and AI for a product owner.
+
+**What Harnessy does:** keeps the materials together with the product — every new capability gets an article and a short video; the courses are built from the same scenarios as the acceptance (our own team's work inside Harnessy); the materials live outside the core and are updated with releases.
+
+| format | what |
+|---|---|
+| articles | step-by-step scenarios of the window and the core, answers to owners' questions |
+| videos | short recordings of real walks along the user paths |
+| presentations | product overview for teams and partners |
+| "vibe coding" course | how to give tasks to a team of agents, read the journal, accept milestones |
+| "AI for the owner" course | models, subscriptions, context, spending, safety — on Harnessy examples |
 
 ### Common principles
 
