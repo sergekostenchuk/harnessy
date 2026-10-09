@@ -134,7 +134,8 @@
       es.onerror=()=>{ if(H.link!=='lost'){ H.link='lost'; hStatus(); toast('Связь с движком потеряна — переподключаюсь…'); } };   // видимое состояние вместо молчаливого обрыва (Kimi UX-4 №126 п.3)
       es.onopen=()=>{ if(H.link==='lost'){ H.link='ok'; hStatus(); toast('Связь восстановлена'); refreshStatus(); } };
       hStatus(); await loadChat(); }
-    if(/21-journal\.html$/.test(location.pathname)) journalLive();   // экран «Журнал» — лента линии из движка, не заготовка (Kimi UX-7 №133 п.1)
+    if(/21-journal\.html$/.test(location.pathname)) journalLive();
+    if(PAGE==='now') nowLive();   // «Сейчас» — открытые карточки подтверждений из движка, не демо-решения (Kimi UX-7 №133 п.5)   // экран «Журнал» — лента линии из движка, не заготовка (Kimi UX-7 №133 п.1)
     if(window.CX) CX.render(); }
 
   // ── чат: настоящее поле ввода; разговор хранится; ответы — по сценарию и так и подписаны (или от настоящей модели через мост)
@@ -856,5 +857,19 @@
     const tf=e.target.closest('[data-jthread]'); if(tf){ e.stopPropagation(); JR.thread=tf.dataset.jthread||null; if(window.HX&&HX.close) HX.close(); journalDraw(); return; }
     const mg=e.target.closest('[data-jmerge]'); if(mg){ e.stopPropagation(); if(!confirm('Слить '+mg.dataset.jmerge.slice(0,7)+' в интеграционную ветку по вердикту #'+mg.dataset.jseq+'? Движок пропустит только SHA с принятым вердиктом; корень проекта должен быть без незакоммиченных правок.')) return; mg.textContent='Сливаю…'; let r=null; try{ r=await api('/api/merge',{from:'owner',sha:mg.dataset.jmerge,message:'слияние из окна по вердикту #'+mg.dataset.jseq}); }catch(x){} if(!r||!r.ok){ toast('Слияние не прошло: '+esc((r&&r.error)||'нет связи')); mg.textContent='Слить '+mg.dataset.jmerge.slice(0,7); return; } toast('Влито: '+esc(String(r.mergeSha||r.sha||'').slice(0,10))); if(window.HX&&HX.close) HX.close(); journalFetch(); return; }
     const li=e.target.closest('.li.jl[data-seq]'); if(li&&window.HX){ e.stopPropagation(); const r=JR.records.find(x=>String(x.seq)===li.dataset.seq); if(r) HX.open(li,jcard(r),{w:660,h:520}); } },true);
+  // ── «Сейчас» при подключённом движке: «Чей ход» = открытые карточки подтверждений (SSE approval/approvalResolved, при подключении движок шлёт открытые), «Разрешить/Отказать» → /api/approve
+  const NOW={cards:new Map(),es:null};
+  function nowDraw(){ const lst=(document.querySelector('#v-turn .li.head')||{}).parentElement; if(!lst) return; const cards=[...NOW.cards.values()];
+    const head='<div class="li head"><span>кто просит</span><span>что</span><span>ждёт</span><span>главное действие</span><span></span></div>';
+    lst.innerHTML=head+(cards.length?cards.map(c=>'<div class="li" data-ap="'+esc(c.id)+'" data-ap-pane="'+esc(c.pane)+'"><span><span class="o need"></span>&nbsp; '+esc(who(c.pane))+'</span><div><b>'+esc(c.title||'подтверждение')+'</b><small>'+esc((c.detail||'').slice(0,160))+'</small></div><span class="m">с '+esc(c.since)+'</span><span><span class="btn sm p" data-ap-decision="allow">Разрешить</span> <span class="btn sm ghost" data-ap-decision="deny">Отказать</span></span><span></span></div>').join(''):'<div class="empty">Сейчас вас никто не ждёт: открытых карточек подтверждения нет. Вопросы и решения ролей — в журнале линии (экран «Журнал»).</div>');
+    document.querySelectorAll('#v-turn .nums b.acc, #v-away .nums b.acc').forEach(b=>b.textContent=cards.length);
+    ['#v-week','#v-away'].forEach(sel=>{ const l=(document.querySelector(sel+' .li.head')||{}).parentElement; if(l&&!l.dataset.live){ l.dataset.live='1'; l.innerHTML='<div class="empty">При подключённом движке этот список не рисуется: решения и события линии — в журнале (экран «Журнал»), карточки подтверждений — во вкладке «Чей ход».</div>'; } });
+    const st=document.querySelector('.frame .top .st'); if(st) st.innerHTML='<i'+(cards.length?' style="background:var(--accent)"':'')+'></i>'+(cards.length?cards.length+' '+plural(cards.length)+' вас':'никто не ждёт')+' · движок'; }
+  function nowLive(){ if(!H.on||NOW.es) return; NOW.es=new EventSource('/api/events/all'); nowDraw();
+    NOW.es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='approval'){ NOW.cards.set(ev.pane+'|'+ev.id,{pane:ev.pane,id:ev.id,title:ev.title,detail:ev.detail,since:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}); nowDraw(); }
+      else if(ev.type==='approvalResolved'){ NOW.cards.delete(ev.pane+'|'+ev.id); nowDraw(); } };
+    NOW.es.onerror=()=>{ const st=document.querySelector('.frame .top .st'); if(st) st.innerHTML='<i></i>связь потеряна · переподключение…'; }; }
+  document.addEventListener('click',async e=>{ const b=e.target.closest('[data-ap-decision]'); if(!b||PAGE!=='now'||!H.on) return; e.preventDefault(); e.stopPropagation(); const li=b.closest('[data-ap]'); if(!li) return;
+    let r=null; try{ r=await api('/api/approve',{pane:li.dataset.apPane,id:li.dataset.ap,decision:b.dataset.apDecision}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; } toast(b.dataset.apDecision==='allow'?'Разрешено':'Отказано'); NOW.cards.delete(li.dataset.apPane+'|'+li.dataset.ap); nowDraw(); },true);
   window.LIVE={stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,selStart,laMenu,laPath,laMulti};   // для cx.js (поле ввода)
 })();
