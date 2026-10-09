@@ -6,9 +6,10 @@ import {fixture} from '../test-support.ts';
 test('quoted/dotted MCP names and TOML strings cannot inject overrides',()=>{
  assert.deepEqual(configServers('[mcp_servers."a.b"]\ncommand="x"\n[mcp_servers.other]\ncommand="y"'),['a.b','other']);
  const f=fixture();f.seat.cwd='/path with "quotes"';f.ctx.appUrl='http://localhost/"quoted"';
- const values=overrides(f.seat,f.ctx,'fictional-token',['a.b','panes'],null),args=argumentsFor(values);
+ const values=overrides(f.seat,f.ctx,'fictional-token',['a.b','panes','node_repl'],null),args=argumentsFor(values);
  assert.equal(args[0],'app-server');assert.ok(args.filter(a=>a==='-c').length===values.length);
  assert.ok(values.includes('mcp_servers."a.b".enabled=false'));
+ assert.ok(values.includes('mcp_servers.node_repl.enabled=false'),'голый ключ TOML — без кавычек (Codex 0.160.0 отвергал кавычки: invalid transport)');
  const envLine=values.find(s=>s.startsWith('mcp_servers.panes.env='))!;
  const parsed=parse(envLine) as {mcp_servers:{panes:{env:Record<string,string>}}};
  assert.equal(parsed.mcp_servers.panes.env.PANE_TOKEN,'fictional-token');assert.equal(parsed.mcp_servers.panes.env.PANE_ID,'worker');

@@ -17,3 +17,18 @@ test('all five tools use kernel-bound identity; optional undefined is removed',a
  assert.equal(seen.length,5);assert.ok(!Object.hasOwn(seen[0] as object,'thread'));
  f.controller.abort();assert.equal((await invokeTool('merge',{sha:'abc'},f.ctx)).ok,false);assert.equal(seen.length,5);
 });
+
+test('assign_role specialization crosses Claude tool layer intact; strict bounds reject before kernel',async()=>{
+ const f=fixture('claude'),seen:unknown[]=[];f.ctx.tools.assignRole=async a=>{seen.push(a);return {ok:true,text:'assigned'}};
+ const specialization={title:'Юрист по договорам',text:'Проверяй условия договора.'};
+ const args={role:'reviewer',mode:'read' as const,specialization};
+ assert.equal((await invokeTool('assign_role',args,f.ctx)).ok,true);assert.deepEqual(seen,[args]);
+ const boundary={role:'reviewer',specialization:{title:'x'.repeat(60),text:'x'.repeat(20000)}};
+ assert.equal((await invokeTool('assign_role',boundary,f.ctx)).ok,true);assert.deepEqual(seen[1],boundary);
+ for(const bad of [
+  {...args,from:'owner'}, {...args,specialization:{...specialization,mode:'all'}},
+  {...args,specialization:{title:'x'.repeat(61),text:'x'}}, {...args,specialization:{title:'x',text:'x'.repeat(20001)}},
+  {...args,specialization:{title:'x'}}, {...args,specialization:{title:1,text:'x'}}, {...args,specialization:null}
+ ])await assert.rejects(invokeTool('assign_role',bad,f.ctx));
+ assert.equal(seen.length,2);
+});
