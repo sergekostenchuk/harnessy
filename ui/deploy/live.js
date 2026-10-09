@@ -15,6 +15,7 @@
   function log(kind,text){ S.log.unshift({t:now(),kind,text,page:PAGE}); S.log=S.log.slice(0,200); save(); if(window.renderJournal) window.renderJournal(); }
   const waiting=()=>WAIT.filter(d=>!S.dec[d]);
   const plural=n=>n===1?'ждёт':'ждут';
+  const rolesN=n=>n+' '+(n%10===1&&n%100!==11?'роль':(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'роли':'ролей'));
   load();
 
   // ── всплывающая строка с «Отменить»
@@ -105,7 +106,7 @@
     if(!r||!r.ok){ H.cur=null; S.chat.push({role:'ai',html:'<p>Харнесс не принял сообщение: '+esc((r&&r.error)||'нет связи')+'</p>',t:now(),src:'err'}); save(); render(); return; }
     if(r.queued) toast('Место занято — сообщение встало в очередь'); }
   function applyStatus(st){ H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.roleCatalog=st.roleCatalog||[]; H.noProject=!!st.noProject; H.projectsRoot=st.projectsRoot||''; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; H.halted=!!st.halted; setTimeout(()=>dispatchEvent(new CustomEvent('live:status')),0);
-    if(PAGE==='new') document.querySelectorAll('.status > span:first-child').forEach(el=>{ el.textContent=H.noProject?'без проекта · модель ничего не читает':'папка '+((H.project||'').split('/').filter(Boolean).pop()||'проект')+(st.repo?' · git':'')+' · ролей '+(H.panes||[]).filter(p=>p.id!=='room').length; });   // строка папки — от движка, не статика скетча (Kimi UX-1 №85 п.2)
+    if(PAGE==='new') document.querySelectorAll('.status > span:first-child').forEach(el=>{ el.textContent=(H.noProject||!!(S.cx&&S.cx.noFolder))?'без проекта · модель ничего не читает':'папка '+((H.project||'').split('/').filter(Boolean).pop()||'проект')+(st.repo?' · git':'')+' · ролей '+(H.panes||[]).filter(p=>p.id!=='room').length; });   // строка папки — от движка, не статика скетча (Kimi UX-1 №85 п.2)
     badges();
     if(PAGE==='new'){ S.ui.pane='room'; S.ui.fresh=true; S.ui.switched=false; save(); }   // стартовый экран — ВСЕГДА без роли · новый чат; выбор роли или чата отсюда = переход в чат (слово владельца 08.10)
     if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); }
@@ -199,7 +200,7 @@
   document.addEventListener('click',async e=>{ const la=e.target.closest('[data-la]'); if(!la) return; e.stopPropagation(); const m=S.chat[+la.dataset.i]; if(!m) return; const kind=la.dataset.la, anchor=la.closest('.live-acts');
     if(kind==='copy'){ try{ await navigator.clipboard.writeText(m.text||la.closest('.ai').innerText); toast('Скопировано'); }catch(x){ toast('Не удалось скопировать'); } return; }
     if(!H.on) { toast('Харнесс не подключён'); return; }
-    if(kind==='assign'){ const taken=(H.panes||[]).filter(p=>p.id!=='room'); const items=(H.roleCatalog||[]).map(r=>{ const n=taken.filter(p=>p.role===r.role).length; const busy=n>0&&!r.multi, off=r.available===false; return {t:esc(r.label)+(n>0&&r.multi?' '+(n+1):''),r:off?esc(r.reason||'сначала оркестратор'):busy?'занята · передайте контекст':(n?'ещё одно место':(H.noProject?'создаст проект по разговору':'свободна')),dis:busy||off,role:r.role}; });
+    if(kind==='assign'){ const nf=H.noProject||!!(S.cx&&S.cx.noFolder); const taken=nf?[]:(H.panes||[]).filter(p=>p.id!=='room');   // без проекта места фонового проекта не «заняты» (Kimi UX-2 №96 п.1) const items=(H.roleCatalog||[]).map(r=>{ const n=taken.filter(p=>p.role===r.role).length; const busy=n>0&&!r.multi, off=r.available===false; return {t:esc(r.label)+(n>0&&r.multi?' '+(n+1):''),r:off?esc(r.reason||'сначала оркестратор'):busy?'занята · передайте контекст':(n?'ещё одно место':(H.noProject?'создаст проект по разговору':'свободна')),dis:busy||off,role:r.role}; });
       laMenu(anchor,'назначить роль разговору',items,async it=>{ let r=null; try{ r=await api('/api/assign',{role:it.role}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
         const pn=(r.project||'').split('/').pop(); if(r.created){ if(S.cx) S.cx.noFolder=false; S.chat.forEach(x=>{ if(x.pane==='room') x.nf=false; }); H.projects=null; }
         S.ui.pane=r.pane.id; save(); await refreshStatus(); await loadChat(); log('настройка',(r.created?'Проект создан по разговору: '+pn+' · ':'')+'Роль назначена: '+r.pane.label+' · '+r.pane.model); toast(r.created?'Проект «'+esc(pn)+'» создан по разговору — оркестратор отвечает':'Роль назначена: '+esc(r.pane.label)+' — разговор продолжается от её имени'); }); return; }
@@ -212,7 +213,7 @@
     // новые проекты — в корень проектов движка, не рядом с текущим (урок 08.10: проект лёг внутрь репозитория harnessy)
     if(kind==='mkdir'){ const def=(H.projectsRoot?H.projectsRoot+'/':(H.project||'').replace(/\/[^/]*$/,'/'))+'novyi-proekt'; laPath(anchor,'создать проект и git',def,async path=>{ let r=null; try{ r=await api('/api/room/move',{path,create:true,git:true}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
         if(S.cx) S.cx.noFolder=false; S.ui.pane='room'; save(); await refreshStatus(); S.chat.forEach(x=>{ if(x.pane==='room') x.nf=false; }); save(); render(); log('настройка','Разговор переехал в новый проект '+path.split('/').pop()); toast('Проект создан (git, память, оркестратор), разговор переехал: '+esc(path.split('/').pop())+(r.carried?' · прежний разговор уйдёт следующим сообщением':'')); }); return; }
-    if(kind==='move'){ let pr=null; try{ pr=await api('/api/projects'); }catch(x){} const items=((pr&&pr.projects)||[]).map(p=>({t:esc(p.name),r:(p.seats==null?'?':p.seats)+' ролей'+(p.git?' · git':''),path:p.path}));
+    if(kind==='move'){ let pr=null; try{ pr=await api('/api/projects'); }catch(x){} const items=((pr&&pr.projects)||[]).map(p=>({t:esc(p.name),r:(p.seats==null?'? ролей':rolesN(p.seats))+(p.git?' · git':''),path:p.path}));
       laMenu(anchor,'перейти с разговором в проект',items,async it=>{ let r=null; try{ r=await api('/api/room/move',{path:it.path}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
         if(S.cx) S.cx.noFolder=false; S.ui.pane='room'; save(); await refreshStatus(); S.chat.forEach(x=>{ if(x.pane==='room') x.nf=false; }); save(); render(); log('настройка','Разговор переехал в проект '+it.t); toast('Разговор переехал: '+it.t+(r.carried?' · прежний разговор уйдёт следующим сообщением':'')); }); return; } });
   function reply(q){ if(H.on&&!H.pane){ cols().forEach(c=>c.insertAdjacentHTML('beforeend','<div class="ai live-msg"><span class="orb"></span><div><div class="thought">без роли · модель не выбрана</div><p>Выберите модель в строке ввода — тогда отправлю.</p></div></div>')); scrollEnd(); S.draft=q; save(); return; }
