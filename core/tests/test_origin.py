@@ -20,6 +20,8 @@ class OriginTests(unittest.TestCase):
         self.assertEqual(check_browser_origin("POST", "/api/approve", {"Host": H, "Origin": "https://foreign.example", "Content-Type": JSON}), (403, "origin_denied"))
         self.assertEqual(check_browser_origin("POST", "/api/approve", {"Host": H, "Origin": "null", "Content-Type": JSON}), (403, "origin_denied"))
         self.assertEqual(check_browser_origin("GET", "/api/sessions/abc", {"Host": H, "Origin": "https://foreign.example"}), (403, "origin_denied"))   # GET, меняющий состояние
+        self.assertEqual(check_browser_origin("GET", "/api/sessions/abc", {"Host": H, "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "image"}), (403, "origin_denied"))   # <img> без Origin
+        self.assertIsNone(check_browser_origin("GET", "/api/sessions/abc", {"Host": H, "Sec-Fetch-Site": "same-origin"}))
 
     def test_foreign_host_and_wrong_content_type_denied(self):
         self.assertEqual(check_browser_origin("POST", "/api/chat", {"Host": "evil.example:3777", "Content-Type": JSON}), (403, "host_denied"))

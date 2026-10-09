@@ -89,6 +89,8 @@ def check_browser_origin(method: str, path: str, headers) -> tuple[int, str] | N
     origin = headers.get("Origin")
     if origin is not None and origin not in {f"http://{h}" for h in ALLOWED_HOSTS}:
         return 403, "origin_denied"
+    if origin is None and (headers.get("Sec-Fetch-Site") or "").lower() in ("cross-site", "same-site"):   # браузерный GET без Origin (<img>, no-cors) — уточнение ревьюера №57
+        return 403, "origin_denied"
     if method == "POST" and path.startswith("/api/") and (headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
         return 415, "content_type"
     return None
