@@ -1,0 +1,65 @@
+# Манифест команды линии. Копируется в <проект>/.harness/team.yaml при первом открытии папки.
+# Место (seat) = роль + вендор + модель + режим доступа. Права идут за ролью (см. comms-policy.yaml),
+# смена вендора или модели у места прав не меняет. Владелец — место owner без колонки.
+# worktree: у места своя рабочая копия на ветке seat/<место>; без него место работает в корне проекта.
+# merge_roles: кто вправе сливать принятые вехи в integration_branch инструментом merge.
+version: 1
+project: ""
+integration_branch: main
+merge_roles: [orchestrator]
+seats:
+  assistant:
+    role: assistant
+    label: ассистент
+    vendor: claude
+    model: claude-sonnet-5
+    mode: read
+    digest: true
+  orchestrator:
+    role: orchestrator
+    label: оркестратор
+    vendor: claude
+    model: claude-fable-5-1
+    mode: edit
+    digest: true
+  architect:
+    role: architect
+    label: архитектор
+    vendor: codex
+    model: gpt-6-astra
+    mode: check
+    write_paths: [docs]
+    digest: false
+  executor:
+    role: executor
+    label: исполнитель
+    vendor: codex
+    model: gpt-5.6-sol
+    mode: ask
+    worktree: .worktrees/executor
+    digest: false
+  reviewer:
+    role: reviewer
+    label: ревьюер
+    vendor: claude
+    model: claude-opus-5
+    mode: check
+    worktree: .worktrees/reviewer
+    digest: false
+  tester:
+    role: tester
+    label: тестер
+    vendor: codex
+    model: gpt-5.3-codex-spark
+    mode: check
+    worktree: .worktrees/tester
+    write_paths: [tests]
+    digest: false
+  researcher:
+    role: researcher
+    label: ресерчер
+    vendor: claude
+    model: claude-haiku-4-5-20251001
+    mode: web
+    write_paths: [docs/research]
+    digest: false
