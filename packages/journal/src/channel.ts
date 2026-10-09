@@ -8,7 +8,7 @@ export interface ChannelDeps {journal:Journal;policy:Policy|null;projectDir:stri
 const AGENT_KEYS=['to','kind','text','thread','reply_to','evidence','score','round','sha'];
 const CORE_KEYS=[...AGENT_KEYS,'origin','merged'];
 export class Channel {
- private emittedAckEvents=new Set<string>();private deps:ChannelDeps;private handlers=new Set<(event:ChannelEvent)=>void>();private states=new Map<string,ThreadState>();
+ private emittedAckEvents=new Set<string>();private announcedVerdictEffects=new Set<string>();private deps:ChannelDeps;private handlers=new Set<(event:ChannelEvent)=>void>();private states=new Map<string,ThreadState>();
  constructor(deps:ChannelDeps){this.deps=deps;this.restoreThreads()}
  get threads():ReadonlyMap<string,ThreadState>{this.restoreThreads();return new Map([...this.states].map(([key,value])=>[key,freeze({...value})]))}
  on(handler:(event:ChannelEvent)=>void):()=>void {this.handlers.add(handler);return ()=>this.handlers.delete(handler)}
@@ -92,9 +92,13 @@ export class Channel {
  this.emit({type:'delivered',record,deliverySeq:record.seq});if(record.kind==='verdict')this.noteVerdict(record)};
  if(ackDecision)this.ackEvent(ackDecision,'notification',announce);else announce();return record
  }
- private ackEvent(decision:Record_,event:string,publish:()=>void){
+ private ackEvent(decision:Record_,event:string,publish:()=>void,finish?:()=>void){
  const key=decision.seq+':'+decision.id+':'+event;
- if(!this.deps.journal.ackEventRecorded(decision,event)&&!this.emittedAckEvents.has(key)){this.emittedAckEvents.add(key);publish()}
+ if(!this.deps.journal.ackEventRecorded(decision,event)){
+ if(!this.emittedAckEvents.has(key)){this.emittedAckEvents.add(key);publish()}
+ // A published event does not prove that the durable effects finished.
+ finish?.()
+ }
  this.deps.journal.markAckEvent(decision,event)
  }
  private pending(seq:number):{record:Record_;resolution:Record_|null}{
@@ -116,8 +120,8 @@ export class Channel {
  }
  const ack=resolution??this.deps.journal.append({sender:'owner',to:[record.from],kind:'ack',text:'подтверждено #'+seq,reply_to:seq,policy:this.deps.policy?.version??0});
  this.deps.journal.markAcked(seq);this.ackEvent(ack,'confirmed',()=>{
- this.emit({type:'posted',record:ack,initiator:{seat:'owner',trust:'owner'}});this.emit({type:'delivered',record,deliverySeq:ack.seq});if(record.kind==='verdict')this.noteVerdict(record)
- });return ack
+ this.emit({type:'posted',record:ack,initiator:{seat:'owner',trust:'owner'}});this.emit({type:'delivered',record,deliverySeq:ack.seq})
+ },()=>{if(record.kind==='verdict')this.noteVerdict(record)});return ack
  }
  rejectAck(seq:number):Record_ {
  const {record,resolution}=this.pending(seq);
@@ -153,9 +157,13 @@ export class Channel {
  const bounds=record.bounds??{},max=bounds.max_rounds;
  const line='Тред '+record.thread+': вердикт #'+record.seq+' от '+this.deps.labelOf(record.from)+', балл '+record.score+', раунд '+record.round+(max?' из '+String(max):'')+(record.accepted?' — принято.':' — не принято.');
  const orchestrators=this.deps.liveSeats().filter(seat=>this.deps.roleOf(seat)==='orchestrator'&&seat!==record.from);
- try{
- if(orchestrators.length)this.postCore({to:orchestrators,kind:'status',text:line,thread:record.thread,origin:'verdict'},{seat:'harness',trust:'harness'});
- if(!record.accepted&&max&&(record.round??0)>=Number(max))this.postCore({to:['owner',...orchestrators],kind:'escalation',text:'Тред '+record.thread+': раунды ревью исчерпаны ('+String(max)+'), веха не принята. Нужно решение владельца.',thread:record.thread,origin:'verdict'},{seat:'harness',trust:'harness'})
- }catch(e){if(!(e instanceof JournalError))throw e;console.error('[harness] статус вердикта не записан: '+e.message)}
+ const effect=(kind:'status'|'escalation',to:string[],text:string)=>{
+ const existing=this.deps.journal.repliesTo(record.seq).find(r=>r.from==='harness'&&r.kind===kind&&r.thread===record.thread&&r.origin==='verdict');
+ if(!existing){const written=this.postCore({to,kind,text,thread:record.thread,reply_to:record.seq,origin:'verdict'},{seat:'harness',trust:'harness'});this.announcedVerdictEffects.add(written.id);return}
+ // A failed append may have reached disk before its events were published.
+ if(!this.announcedVerdictEffects.has(existing.id)){this.announcedVerdictEffects.add(existing.id);this.emit({type:'posted',record:existing,initiator:{seat:'harness',trust:'harness'}});this.emit({type:'delivered',record:existing,deliverySeq:existing.seq})}
+ };
+ if(orchestrators.length)effect('status',orchestrators,line);
+ if(!record.accepted&&max&&(record.round??0)>=Number(max))effect('escalation',['owner',...orchestrators],'Тред '+record.thread+': раунды ревью исчерпаны ('+String(max)+'), веха не принята. Нужно решение владельца.');
  }
 }

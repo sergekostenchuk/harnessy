@@ -266,3 +266,37 @@ for(const outcome of ['handled','rejected'] as const)test('steer '+outcome+' is 
  f.journal.append({sender:'owner',to:['worker'],kind:'note',text:'steer cannot make owner card',origin:'steer',ack:'pending'});assert.deepEqual(f.channel.pendingAcks(),[]);
  }finally{f.close()}
 });
+
+for(const restart of [false,true])for(const fault of ['receipt','before-escalation','escalation-fsync'] as const)
+test('verdict confirmation resumes durable effects without new deliverySeq: '+fault+(restart?', restart':''),()=>{
+ let armed=false,kind='',receiptFd=-1;
+ const f=fixture(verdictAckPolicy,{fs:{
+ openSync:(...args:Parameters<typeof openSync>)=>{const fd=openSync(...args);if(String(args[0]).endsWith('ack-events.json.tmp'))receiptFd=fd;return fd},
+ appendFileSync:(...args:Parameters<typeof appendFileSync>)=>{kind=(JSON.parse(String(args[1]).trim()) as {kind:string}).kind;if(armed&&fault==='before-escalation'&&kind==='escalation'){armed=false;throw Error('escalation append fault')}appendFileSync(...args)},
+ fsyncSync:fd=>{fsyncSync(fd);if(armed&&(fault==='receipt'&&fd===receiptFd||fault==='escalation-fsync'&&kind==='escalation')){armed=false;throw Error(fault+' fault')}}
+ }});
+ try{
+ const request=f.request(),verdict=f.agent('reviewer',{to:'worker',kind:'verdict',text:'3/10',reply_to:request.seq,score:3,round:3,evidence:[f.report()]});
+ armed=true;assert.throws(()=>f.channel.confirmAck(verdict.seq),error('write_failed'));assert.equal(armed,false);
+ const ack=f.journal.read({kinds:['ack']})[0]!,before=f.journal.read({kinds:['status','escalation']}).filter(r=>r.origin==='verdict');
+ assert.deepEqual(before.map(r=>r.kind),fault==='before-escalation'?['status']:['status','escalation']);
+ assert.ok(before.every(r=>r.reply_to===verdict.seq&&r.thread===verdict.thread));
+ if(fault!=='receipt'){assert.equal(f.journal.ackEventRecorded(ack,'confirmed'),false);assert.deepEqual(f.channel.pendingAcks().map(r=>r.seq),[verdict.seq])}
+ const last=f.journal.lastSeq;f.journal.advance('orchestrator',last);f.journal.advance('owner',last);
+ const target=restart?reopen(f):{journal:f.journal,channel:f.channel},events:ChannelEvent[]=[];target.channel.on(e=>events.push(e));
+ assert.equal(target.channel.confirmAck(verdict.seq).seq,ack.seq);
+ const after=target.journal.read({kinds:['status','escalation']}).filter(r=>r.origin==='verdict');
+ assert.deepEqual(after.map(r=>r.kind),['status','escalation']);assert.equal(after[0]!.seq,before[0]!.seq);
+ if(before[1])assert.equal(after[1]!.seq,before[1].seq);
+ assert.ok(after.every(r=>r.reply_to===verdict.seq&&r.thread===verdict.thread));
+ const expected=fault==='before-escalation'?[after[1]!.seq]:[];
+ assert.deepEqual(target.journal.pendingFor('orchestrator').map(e=>e.deliverySeq),expected);
+ assert.deepEqual(target.journal.pendingFor('owner').map(e=>e.deliverySeq),expected);
+ if(fault!=='receipt')assert.equal(events.filter(e=>e.type==='delivered'&&e.record.kind==='escalation').length,1);
+ assert.equal(target.journal.ackEventRecorded(ack,'confirmed'),true);assert.deepEqual(target.channel.pendingAcks(),[]);
+ const seq=target.journal.lastSeq,count=events.length;target.channel.confirmAck(verdict.seq);assert.equal(target.journal.lastSeq,seq);assert.equal(events.length,count);
+ const again=reopen(f);again.channel.confirmAck(verdict.seq);assert.equal(again.journal.lastSeq,seq);assert.deepEqual(again.channel.pendingAcks(),[]);
+ assert.deepEqual(again.journal.pendingFor('orchestrator').map(e=>e.deliverySeq),expected);
+ assert.deepEqual(again.journal.pendingFor('owner').map(e=>e.deliverySeq),expected);
+ }finally{f.close()}
+});
