@@ -4,8 +4,9 @@ import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {Journal} from '@harnessy/journal';
 import {ProviderError,type TurnContext} from '@harnessy/providers';
-import {createRuntime,RuntimeError,unavailableActions,type RuntimeActions} from './index.ts';
+import {createRuntime,RuntimeError,type RuntimeActions} from './index.ts';
 import {harness,OWNER,collect,until,deferred,completedActions,FakeProvider} from './test-helpers.ts';
+import {failedActions} from './test-helpers.ts';
 const terminals=(events:{type:string;[k:string]:unknown}[])=>events.filter(e=>['done','error'].includes(e.type)&&e.pane==='worker');
 
 test('1/2: owner task gets Tseq; busy queue is batched; one terminal per turn',async t=>{
@@ -40,7 +41,7 @@ for(const bothFail of [false,true])test('38/44: session_missing retries once, on
 });
 
 test('48: unavailable port leaves effects durable; real port completes once after restart without model',async t=>{
- const {runtime:r,deps,dir}=await harness(t,{actions:unavailableActions});r.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await r.idle();assert.equal(r.journal.pendingFor('worker').length,0);assert.equal(r.registry.get('worker')!.status,'recovering');assert.equal(r.project.state.results(r.registry.get('worker')!)[0]!.runtime.effectsPending,true);
+ const {runtime:r,deps,dir}=await harness(t,{actions:failedActions});r.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await r.idle();assert.equal(r.journal.pendingFor('worker').length,0);assert.equal(r.registry.get('worker')!.status,'recovering');assert.equal(r.project.state.results(r.registry.get('worker')!)[0]!.runtime.effectsPending,true);
  await r.close();const provider=new FakeProvider();let effects=0;const actions={...completedActions,async afterTurn(){effects++;return 'completed' as const}};const resumed=await createRuntime({...deps,providers:{claude:provider}},actions);t.after(()=>resumed.close());await resumed.idle();await resumed.kick('worker');assert.equal(provider.calls.length,0);assert.equal(effects,1);assert.equal(resumed.project.state.results(resumed.registry.get('worker')!)[0]!.runtime.effectsPending,false);assert.equal(JSON.parse(readFileSync(join(dir,'.harness','state','attempts.json'),'utf8')).worker,undefined)
 });
 
@@ -78,9 +79,9 @@ test('38/49: bad chats/halt and removed active seat have diagnostics and safe de
 });
 
 test('48: unavailable pending ack is visible in errors, not silently dropped',async t=>{
- const h=await harness(t,{actions:unavailableActions,seats:'  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read}\n  peer: {role: reviewer, vendor: claude, label: ревьюер, model: w1, mode: read}',before:dir=>{
+ const h=await harness(t,{actions:failedActions,seats:'  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read}\n  peer: {role: reviewer, vendor: claude, label: ревьюер, model: w1, mode: read}',before:dir=>{
  writeFileSync(join(dir,'.harness','comms-policy.yaml'),'version: 1\nroutes: [{from: executor, to: reviewer, kinds: [note], trigger: owner-ack}]\nobserve: {}\n')
- }});h.runtime.channel.post({to:'peer',kind:'note',text:'подтверди'},{seat:'worker',trust:'agent'});await until(()=>h.runtime.lineErrors.some(e=>e==='восстановление карточек подтверждения недоступно в этой сборке'));assert.equal(h.runtime.channel.pendingAcks().length,1);await h.runtime.close();const r=await createRuntime(h.deps,unavailableActions);t.after(()=>r.close());assert.ok(r.lineErrors.includes('восстановление карточек подтверждения недоступно в этой сборке'))
+ }});h.runtime.channel.post({to:'peer',kind:'note',text:'подтверди'},{seat:'worker',trust:'agent'});await until(()=>h.runtime.lineErrors.some(e=>e==='восстановление карточек подтверждения недоступно в этой сборке'));assert.equal(h.runtime.channel.pendingAcks().length,1);await h.runtime.close();const r=await createRuntime(h.deps,failedActions);t.after(()=>r.close());assert.ok(r.lineErrors.includes('восстановление карточек подтверждения недоступно в этой сборке'))
 });
 
-test('48/49: unavailable effects remain visible to subscription opened after restart',async t=>{const h=await harness(t,{actions:unavailableActions});h.runtime.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await h.runtime.idle();await h.runtime.close();const provider=new FakeProvider(),r=await createRuntime({...h.deps,providers:{claude:provider}},unavailableActions);t.after(()=>r.close());const sub=r.subscribe({pane:'worker'}),event=await sub.events[Symbol.asyncIterator]().next();assert.equal(event.value.text,'обработка после хода недоступна в этой сборке');assert.equal(provider.calls.length,0);sub.close()});
+test('48/49: unavailable effects remain visible to subscription opened after restart',async t=>{const h=await harness(t,{actions:failedActions});h.runtime.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await h.runtime.idle();await h.runtime.close();const provider=new FakeProvider(),r=await createRuntime({...h.deps,providers:{claude:provider}},failedActions);t.after(()=>r.close());const sub=r.subscribe({pane:'worker'}),event=await sub.events[Symbol.asyncIterator]().next();assert.equal(event.value.text,'обработка после хода недоступна в этой сборке');assert.equal(provider.calls.length,0);sub.close()});

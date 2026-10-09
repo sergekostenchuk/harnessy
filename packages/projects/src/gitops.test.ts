@@ -100,3 +100,12 @@ test('[r2:1] an escaped internal git operation loses ownership when its acquisit
  await assert.rejects(escaped(),/блокировка пути не действует/);assert.ok(await g.head(t.root));
  }finally{t.close()}
 });
+
+
+test('64: beforeMerge sees actual HEAD under lock; a thrown persistence/scope check forbids mutation',async()=>{
+ const t=temp(),g=new GitOps();try{const base=repo(t.root);git(t.root,'checkout','-qb','feature');writeFileSync(join(t.root,'new.txt'),'new');git(t.root,'add','.');git(t.root,'commit','-qm','new');const sha=git(t.root,'rev-parse','HEAD');git(t.root,'checkout','-q','main');
+ await assert.rejects(g.mergeInto(t.root,sha,'main','m',facts=>{assert.deepEqual(facts,{head:base,sha,branch:'main',alreadyMerged:false,mergeSha:null});throw Error('intent write failed')}),/intent write failed/);assert.equal(git(t.root,'rev-parse','HEAD'),base);assert.equal(existsSync(join(t.root,'.git/MERGE_HEAD')),false);
+ let checked=0;const r=await g.mergeInto(t.root,sha,'main','m',()=>{checked++});assert.ok(r.ok&&r.mergeSha);assert.equal(checked,1);if(r.ok)assert.equal(await g.confirmMerge(t.root,base,sha,'main'),r.mergeSha);
+ const repeat=await g.mergeInto(t.root,sha,'main','m',facts=>{assert.equal(facts.alreadyMerged,true);checked++});assert.ok(repeat.ok&&repeat.alreadyMerged);assert.equal(checked,2);assert.equal(await g.confirmMerge(t.root,base,'a'.repeat(40),'main'),null);
+ }finally{t.close()}
+});

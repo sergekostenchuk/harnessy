@@ -3,9 +3,9 @@
 Живое ядро проекта Harnessy. Node 22+, исходные TypeScript-модули без трансформации. Зависимости — только `@harnessy/providers`, `journal`, `team`, `projects`, `context` версии 0.1.0 и встроенные модули Node.
 
 ```ts
-import {createRuntime, unavailableActions, withRoleActions} from '@harnessy/runtime';
+import {createRuntime, createActions} from '@harnessy/runtime';
 
-const runtime = await createRuntime({projectDir, appUrl, providers}, withRoleActions(unavailableActions));
+const runtime = await createRuntime({projectDir, appUrl, providers}, createActions());
 const owner = {seat: 'owner', trust: 'owner'} as const; // привязку задаёт API
 runtime.postOwner({to: 'executor', kind: 'task', text: 'Поручение'}, owner);
 ```
@@ -14,11 +14,11 @@ runtime.postOwner({to: 'executor', kind: 'task', text: 'Поручение'}, ow
 
 ## Порты действий и срок полномочий
 
-Второй аргумент `createRuntime(deps, actions)` обязателен. `RuntimeActions` содержит `ask`, `merge`, `assignRole`, `afterTurn`, `restorePendingAcks`, `cancelAsks`. Первые три получают неизменяемый `ActionContext`: `scope`, глубокий снимок `turnRecords`, глубину текущего хода и `assertActive()`. После ожидания порт обязан вызвать **тот же** `assertActive()` непосредственно перед защищённым эффектом. Поручение берётся из `turnRecords`, а не из аргументов инструмента.
+Второй аргумент `createRuntime(deps, actions)` обязателен. `createActions()` собирает настоящие порты; для тестов можно передать явные дублёры `RuntimeActions`. `RuntimeActions` содержит `ask`, `merge`, `assignRole`, `afterTurn`, `restorePendingAcks`, `cancelAsks`, а также lifecycle `closeProject` и доверенный вход `mergeOwner`. Первые три получают неизменяемый `ActionContext`: `scope`, глубокий снимок `turnRecords`, глубину текущего хода и `assertActive()`. После ожидания порт обязан вызвать **тот же** `assertActive()` непосредственно перед защищённым эффектом. Поручение берётся из `turnRecords`, а не из аргументов инструмента.
 
 `send/readPane/ask/merge/assignRole(scope,args)` возвращают исходные формы Python-моста: `send → {ok,seq,thread,to}`, `readPane → {ok,text}`, `ask → {ok,reply,seq}`, `merge → {ok,sha,mergeSha,branch,thread?}`, `assignRole → {ok,pane,label,model,mode,mandate}`. Отказ: `{ok:false,code,error}`. `toolsFor(scope)` переводит эти результаты в `PeerTools {ok,text}` по `bridge.py`; HTTP-слою разбирать текст не нужно. `send` принимает строку адресатов или список; `from` определяется только scope. Лишнее поле `from` отвергается Channel.
 
-`unavailableActions` возвращает явный `unavailable` для ещё не подключённых действий TS-04b/c. `afterTurn → 'unavailable'` оставляет долговечный флаг незавершённых эффектов; очередь продвигается, модель повторно не запускается. Непустой `Channel.pendingAcks()` при недоступном восстановлении даёт `error` владельцу и `lineErrors`.
+Временная сборка `unavailableActions` удалена. Настоящий `afterTurn` завершает эффекты без новой модели; явный тестовый порт может вернуть `unavailable`, оставив effectsPending для восстановления.
 
 `validateBridge(from,token)` возвращает текущий неизменяемый `TurnScope`. Токен привязан к поколению проекта, месту и вендору процесса. Верный токен простаивающего процесса даёт `turn_ended`; неизвестный, отозванный, чужой или от другого вендора — `token_invalid`. Регистрация/отзыв процесса живут дольше хода; старые callbacks не могут зарегистрировать токен после reset/смены проекта. После отмены все старые инструменты сразу получают `turn_ended`.
 
@@ -51,7 +51,7 @@ runtime.postOwner({to: 'executor', kind: 'task', text: 'Поручение'}, ow
 
 `Pane.settings()`/`persist()`, panes.json, halt.json и обычные chats.json соответствуют Python: порядок ключей, Unicode, разделители, indent 2 без LF, float-формы timestamps. Сериализатор — общий `@harnessy/journal`; projects использует его же. Исключения формата — новые поля deliverySeq/runtime/usage/durationMs у ai, attempts.json и seat-materialization.json. Секреты процесса в эти файлы не записываются.
 
-`deps.stateIO` обслуживает chats/halt/attempts/seat-materialization; `deps.journalOptions.fs` — channel/cursors/panes/ack-events. Оба порта используются тестами отказов записи. По умолчанию записи состояния атомарны, с fsync файла и каталога.
+`deps.stateIO` обслуживает chats/halt/attempts/seat-materialization/actions; `deps.journalOptions.fs` — channel/cursors/panes/ack-events. Оба порта используются тестами отказов записи. По умолчанию записи состояния атомарны, с fsync файла и каталога.
 
 ## Проверки поведения
 
@@ -81,3 +81,20 @@ runtime.postOwner({to: 'executor', kind: 'task', text: 'Поручение'}, ow
 Регрессии TS-04b: chats/rooms/roles/handoff/owner-chat.test.ts и team/templates.test.ts. Мосты — invokeTool и отдельный процесс pane-mcp с подменённым fetch (без сети/моделей); окна восстановления — write before/after, два перезапуска, полная исходная операция при изменённых defaults, подмена файла и манифеста, queued scope/target/session/project. fixtures/chats-ts04b-python.json создан Python json.dumps(ensure_ascii=False, indent=2), без LF; содержит Unicode, float-формы, расход и неизвестные поля, сравнение побайтное.
 
 Название чата: первая строка первой me, иначе первой непустой ai; при вводной без такого текста — «вводная роли». Пустое имя/эта заглушка переименовываются при следующей синхронизации; осмысленное имя сохраняется. Длина — 60 кодовых точек, me имеет приоритет перед ai в одной синхронизации (уточнение №128).
+
+
+## Действия TS-04c
+
+`ask` пишет question через внутренний `Channel.postAgentEffect`: автор остаётся агентом, действуют форма, политика и owner-ack. Обычный send не может задать origin. Ожидание связано с исходным scope и завершается только answer от выбранного адресата, с нужными reply_to и to, после доставки подтверждённого ответа. Глубины 0/1/2 разрешены, 3 запрещена; глубина привязана к seq каждого question origin=ask в actions.json, при доставке берётся максимум по фактической пачке. Ожидающий owner-ack вопрос не меняет глубину обычного хода; достижимость в графе закрывает A→B→C→A. Таймаут 1800 с, отмена и смена проекта снимают ожидание; поздний ответ не создаёт peerReply. Текст peerReply ограничен 4000 кодовыми точками.
+
+Карточка `ack:<seq>` восстанавливается с остатком 86400 с по времени записи. Если решения ещё нет, владелец выбирает allow/deny. Долговечный ack/rejected завершает именно сохранённое решение, даже после срока или противоположного нажатия. Решение и обязательные эффекты сохраняются до approvalResolved. Ошибка записи оставляет карточку открытой и публикует error; она не мешает остановить модель. Закрытие проекта отсоединяет журналовые карточки без нового решения; у удалённого отправителя карточка принадлежит owner, недоставляемая note пропускается.
+
+`afterTurn` дедуплицирует автоответы по автору/reply_to; явный ответ подавляет auto. Question получает answer, task — status; владелец видит обычный текст чата. Отказ политики виден через toolError и завершает эффект; harness/rejected связан reply_to с исходной записью и origin=auto:<sid> с отвечавшим местом, поэтому восстановление не повторяет отказ; write_failed переводит место в recovering. Review-request остаётся ожидающим после note/status, любой сохранённый verdict (включая pending) закрывает напоминание. Первый ход даёт точную note nudge, следующий другой turnInstanceId — escalation; записи связаны reply_to с запросом. Повтор эффекта и append до отметки не создают дубль. Interrupted сохраняет автоответ из имеющегося текста, но не ставит месту новый nudge.
+
+`mergeOwner(args, initiator)` требует доверенного владельца; агентский merge требует активного scope и роль из mergeRoles. Оба используют подтверждённое принятие из Channel.threads и последний подтверждённый принятый вердикт для SHA. Default message и статус сохраняют тексты Python. GitOps вызывает синхронный beforeMerge внутри блокировки после чтений, непосредственно перед первой мутацией: проверяются проект/scope, роль и SHA, затем сохраняется намерение. После старта Git результат и статус завершаются в исходном проекте независимо от остановки; повтор SHA не создаёт новый коммит.
+
+`actions.json` дополнительно хранит askDepths `{fromSeq,questions:[{seq,depth}]}`. Граница fromSeq сохраняется до новой записи вопроса: сбой сохранения его глубины запрещает запуск, в том числе после перезапуска. Старые вопросы до этой границы не восстанавливают прежнюю цепочку SDK. Поле места relayDepth удалено.
+
+`actions.json` хранит reviews `{sid,reviewSeq,firstTurnInstanceId,stage}` и merges со снимком инициатора/вердикта, полным SHA, веткой, сообщением, исходным HEAD и результатом. Восстановление намерения без результата доказывает слияние по нужным родителям коммита на ветке; при доказанном исходе дописывает только результат/статус, при неоднозначном — сохраняет merge_uncertain, показывает владельцу и не повторяет Git. Восстановление карточек не вмешивается в ещё идущее слияние. Повреждённое состояние даёт actions_invalid, без сброса; Python новый файл не читает, panes.json/halt.json прежние.
+
+Регрессии: ask.test.ts, owner-acks.test.ts, after-turn.test.ts, merge.test.ts, плюс channel.test.ts/gitops.test.ts. Модели — дублёры, часы — FakeClock, записи — StateIO/Journal IO, Git — настоящие временные репозитории. Старые проверки временной сборки используют явный тестовый порт failedActions; ошибки PeerTools ask/merge теперь имеют точные префиксы Python, исходные формы HTTP-моста прежние.
