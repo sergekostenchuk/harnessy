@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdirSync,readFileSync} from 'node:fs';
+import {mkdirSync,readFileSync,writeFileSync,symlinkSync,lstatSync} from 'node:fs';
 import {join} from 'node:path';
 import {Settings} from './settings.ts';
 import {parseCompat,compatJson,orderedClone} from './compat-json.ts';
@@ -23,5 +23,13 @@ test('[19,26,30] nonprintable key errors use Python repr and owner write failure
  const t=temp();try{const s=new Settings(join(t.root,'settings.json'));
  for(const [key,repr] of [['a\u200db',"'a\\u200db'"],['a\u0085b',"'a\\x85b'"],['a\nb',"'a\\nb'"]])await assert.rejects(s.patch('owner',{[key!]:1}),failure('invalid_settings','ключ '+repr+' не годится'));
  const directory=join(t.root,'directory');mkdirSync(directory);await assert.rejects(new Settings(directory).patch('owner',{key:1}),e=>failure('write_failed')(e)&&(e as Error).message.startsWith('не записано: '));
+ }finally{t.close()}
+});
+
+test('[r2:3] parallel settings patches via a file symlink preserve the link and both updates',async()=>{
+ const t=temp();try{const real=join(t.root,'real.json'),alias=join(t.root,'alias.json');writeFileSync(real,'{"existing": true}');symlinkSync('real.json',alias);
+ await Promise.all([new Settings(alias).patch('owner',{first:1}),new Settings(real).patch('owner',{second:2})]);
+ assert.equal(lstatSync(alias).isSymbolicLink(),true);assert.deepEqual(readFileSync(alias),readFileSync(real));assert.deepEqual(new Settings(real).effective(),{existing:true,first:1,second:2});
+ const target=join(t.root,'new','target.json'),dangling=join(t.root,'dangling.json');symlinkSync(target,dangling);await new Settings(dangling).patch('owner',{created:1});assert.equal(lstatSync(dangling).isSymbolicLink(),true);assert.deepEqual(readFileSync(dangling),readFileSync(target));
  }finally{t.close()}
 });

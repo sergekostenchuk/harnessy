@@ -24,7 +24,15 @@ test('[20,24] fake curl states: changed, mismatch, failed, parse failure; iface 
 test('[24,33] equal-clock route update invalidates in-flight check; reverse completions use completion seq',async()=>{
  const t=temp();try{const path=join(t.root,'connections.json'),pending:((r:CommandResult)=>void)[]=[],c=new Connections(path,{now:()=>1000,curl:args=>args.at(-1)!.includes('ipify')?new Promise(r=>pending.push(r)):Promise.resolve(response('{}'))});
  await c.setRoute('claude','proxy','http://a:1');const old=c.check('claude');await c.setRoute('claude','proxy','http://b:2');const bytes=readFileSync(path);pending[0]!(response('{"ip":"1.1.1.1"}\n0.1'));assert.equal((await old).state,'stale');assert.deepEqual(readFileSync(path),bytes);
- const first=c.check('claude'),second=c.check('claude');pending[2]!(response('{"ip":"2.2.2.2"}\n0.1'));const b=await second;pending[1]!(response('{"ip":"3.3.3.3"}\n0.1'));const a=await first;assert.ok(a.seq!>b.seq!);assert.equal(c.get('claude').lastCheck!.ip,'3.3.3.3');
+ const first=c.check('claude'),second=c.check('claude');pending[2]!(response('{"ip":"2.2.2.2"}\n0.1'));const b=await second;assert.equal(b.state,'checked');assert.equal(b.prevIp,undefined);pending[1]!(response('{"ip":"3.3.3.3"}\n0.1'));const a=await first;assert.ok(a.seq!>b.seq!);assert.equal(a.state,'changed');assert.equal(a.prevIp,'2.2.2.2');assert.equal(c.get('claude').lastCheck!.ip,'3.3.3.3');assert.equal(c.get('claude').lastCheck!.state,'changed');assert.equal(c.get('claude').lastCheck!.prevIp,'2.2.2.2');
  writeFileSync(path,'{"codex":{"route":"direct"}}');assert.equal(c.get('codex').rev,0);assert.equal(c.get('codex').seq,0);
+ }finally{t.close()}
+});
+
+test('[r2:4] reverse completions compare the latest stored IP, including a return to the initial IP',async()=>{
+ const t=temp();try{const pending:((r:CommandResult)=>void)[]=[],c=new Connections(join(t.root,'connections.json'),{curl:args=>args.at(-1)!.includes('ipify')?new Promise(r=>pending.push(r)):Promise.resolve(response('{}'))});
+ await c.setRoute('claude');const initial=c.check('claude');pending[0]!(response('{"ip":"1.1.1.1"}\n0.1'));await initial;
+ const first=c.check('claude'),second=c.check('claude');pending[2]!(response('{"ip":"2.2.2.2"}\n0.1'));assert.equal((await second).prevIp,'1.1.1.1');pending[1]!(response('{"ip":"1.1.1.1"}\n0.1'));const last=await first;assert.equal(last.state,'changed');assert.equal(last.prevIp,'2.2.2.2');assert.equal(c.get('claude').lastCheck!.state,'changed');
+ const same=c.check('claude');pending[3]!(response('{"ip":"1.1.1.1"}\n0.1'));const unchanged=await same;assert.equal(unchanged.state,'checked');assert.equal(unchanged.prevIp,undefined);
  }finally{t.close()}
 });

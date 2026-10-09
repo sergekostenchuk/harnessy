@@ -8,10 +8,10 @@ import type {OwnerPaths,ProjectInfo} from './types.ts';
 export class ProjectRegistry {
  private paths:Pick<OwnerPaths,'projects'|'lastProject'>;private options:{noLast?:boolean;gitops?:GitOps;currentSeats?:()=>number};
  constructor(paths:Pick<OwnerPaths,'projects'|'lastProject'>=ownerPaths(),options:{noLast?:boolean;gitops?:GitOps;currentSeats?:()=>number}={}){this.paths=paths;this.options=options}
- async rememberProject(path:string):Promise<void>{if(this.options.noLast??!!process.env.HARNESS_NO_LAST)return;return withPathLock(this.paths.projects,()=>{
- const loaded=readJson(this.paths.projects),known=Array.isArray(loaded)?loaded.filter(x=>typeof x==='string'):[];
- if(!known.includes(path)){known.push(path);writeJson(this.paths.projects,known)}
- return withPathLock(this.paths.lastProject,()=>{try{mkdirSync(dirname(this.paths.lastProject),{recursive:true});atomicWrite(this.paths.lastProject,path)}catch(e){throw new ProjectError('write_failed','не записано: '+String(e),500,e)}})
+ async rememberProject(path:string):Promise<void>{if(this.options.noLast??!!process.env.HARNESS_NO_LAST)return;return withPathLock(this.paths.projects,lock=>{
+ const loaded=readJson(lock.path),known=Array.isArray(loaded)?loaded.filter(x=>typeof x==='string'):[];
+ if(!known.includes(path)){known.push(path);writeJson(lock.path,known)}
+ return withPathLock(this.paths.lastProject,last=>{try{mkdirSync(dirname(last.path),{recursive:true});atomicWrite(last.path,path)}catch(e){throw new ProjectError('write_failed','не записано: '+String(e),500,e)}})
  })}
  async listProjects(current:string|null):Promise<{current:string|null;projects:ProjectInfo[]}>{
  const raw=readJson(this.paths.projects),known=Array.isArray(raw)?raw:[],out:ProjectInfo[]=[],git=this.options.gitops??gitops;

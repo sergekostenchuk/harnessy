@@ -5,24 +5,30 @@ import {ROLE_CATALOG,type Vendor,type Mode} from './catalog.ts';
 import {TeamError,message} from './errors.ts';
 import {TEAM_HEADER} from './strings.ts';
 import {readManifest,teamFrom} from './manifest.ts';
-import {withPathLock,atomicWrite} from './locks.ts';
+import {withPathLock,assertPathLock,atomicWrite,type PathLock} from './locks.ts';
 import {dumpYaml,mapping,pyDefault,pyString,type YMap} from './yaml-compat.ts';
 import type {FileOptions,AddSeatArgs,Seat} from './types.ts';
 export const TEMPLATES=fileURLToPath(new URL('../templates/',import.meta.url));
 const names=['team-empty.yaml','comms-policy.yaml','MEMORY.md',...ROLE_CATALOG.map(r=>'roles/'+r.role+'.md')];
-export async function ensureLine(projectDir:string,options:FileOptions={}):Promise<string>{return withPathLock(projectDir,()=>{
+export async function ensureLine(projectDir:string,options:FileOptions={}):Promise<string>{return withPathLock(projectDir,lock=>ensureLineLocked(lock,projectDir,options))}
+/** Internal composition; requires ownership of the project root. */
+export function ensureLineLocked(lock:PathLock,projectDir:string,options:FileOptions={}):string{
+ assertPathLock(lock,projectDir);
  const sources=new Map<string,Buffer>();for(const name of names){try{sources.set(name,readFileSync(join(options.templatesDir??TEMPLATES,name)))}catch(e){throw new TeamError('template_missing','шаблон не найден: '+name,e)}}
  const h=join(projectDir,'.harness');try{mkdirSync(join(h,'roles'),{recursive:true});mkdirSync(join(h,'state'),{recursive:true});
  const now=options.now?.()??new Date(),date=[now.getDate(),now.getMonth()+1,now.getFullYear()].map((v,i)=>String(v).padStart(i===2?4:2,'0')).join('.');
  for(const [name,bytes] of sources){const target=join(h,name==='team-empty.yaml'?'team.yaml':name),body=name==='MEMORY.md'?bytes.toString('utf8').replaceAll('{name}',basename(projectDir)||projectDir).replaceAll('{date}',date):bytes;
  try{writeFileSync(target,body,{flag:'wx'})}catch(e){if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e}}
  }catch(e){throw new TeamError('write_failed','не записано: '+message(e),e)}return h
-})}
+}
 function save(h:string,data:YMap,options:FileOptions){try{atomicWrite(join(h,'team.yaml'),TEAM_HEADER+dumpYaml(data),options.replace)}catch(e){throw new TeamError('write_failed','team.yaml не записан: '+message(e),e)}}
-export async function seedOrchestrator(h:string,vendor:Vendor,model:string,mode:Mode='read',options:FileOptions={}):Promise<{seeded:true}|{seeded:false;reason:'seats_present'}>{return withPathLock(dirname(h),()=>{
+export async function seedOrchestrator(h:string,vendor:Vendor,model:string,mode:Mode='read',options:FileOptions={}){return withPathLock(dirname(h),lock=>seedOrchestratorLocked(lock,h,vendor,model,mode,options))}
+/** Internal composition; requires ownership of the project root. */
+export function seedOrchestratorLocked(lock:PathLock,h:string,vendor:Vendor,model:string,mode:Mode='read',options:FileOptions={}):{seeded:true}|{seeded:false;reason:'seats_present'}{
+ assertPathLock(lock,dirname(h));
  const data=readManifest(h),seats=data.get('seats') as YMap;if(seats.size)return {seeded:false,reason:'seats_present'};
  data.set('seats',new Map([['orchestrator',new Map<string,unknown>([['role','orchestrator'],['label','оркестратор'],['vendor',vendor],['model',model],['mode',mode],['digest',false],['instructions','roles/orchestrator.md']])]]));teamFrom(data,h);save(h,data,options);return {seeded:true}
-})}
+}
 export async function addSeat(h:string,args:AddSeatArgs,options:FileOptions={}):Promise<Seat>{return withPathLock(dirname(h),()=>{
  const cat=ROLE_CATALOG.find(c=>c.role===args.role);if(!cat)throw new TeamError('role_unknown','неизвестная роль '+args.role);
  const data=readManifest(h),seats=data.get('seats') as YMap,same=[...seats].filter(([sid,r])=>mapping(r)&&pyString(pyDefault(r.get('role'),sid))===args.role);

@@ -1,7 +1,7 @@
 export * from './types.ts';
 export * from './errors.ts';
 export * from './strings.ts';
-export * from './gitops.ts';
+export {GitOps,execute,gitops,run,isRepo,ownRepo,repoRoot,head,currentBranch,branchExists,commitExists,resolveSha,ensureExclude,ensureWorktree,mergeCommitFor,mergeInto,type MergeResult} from './gitops.ts';
 export * from './project.ts';
 export * from './slug.ts';
 export * from './registry.ts';

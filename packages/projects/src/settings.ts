@@ -1,5 +1,5 @@
 import {join} from 'node:path';
-import {withPathLock,MODE_IDS} from '@harnessy/team';
+import {withPathLock,canonicalPath,MODE_IDS} from '@harnessy/team';
 import {ownerPaths,readObject,writeJson,object,truthy} from './files.ts';
 import {orderedClone,orderedKeys} from './compat-json.ts';
 import {ProjectError} from './errors.ts';
@@ -20,7 +20,8 @@ export class Settings {
  for(const key of orderedKeys(patch)){const value=patch[key];if([...key].length>40||!(/^[\p{L}\p{N}]+$/u.test(key.replaceAll('_',''))))throw new ProjectError('invalid_settings','ключ '+repr(key)+' не годится');
  if(value!==null&&!['string','number','boolean'].includes(typeof value)&&!Array.isArray(value))throw new ProjectError('invalid_settings','значение '+key+': только строка, число, флаг или список');
  if(key==='defaultMode'&&value!==null&&!MODE_IDS.includes(value as never))throw new ProjectError('invalid_settings','defaultMode: '+[...MODE_IDS].sort().join(', '))}
- const project=this.currentProject(),path=scope==='owner'?this.ownerFile:project?join(project,'.harness','state','settings.json'):null;if(!path)throw new ProjectError('invalid_settings','папка не открыта');
+ const project=this.currentProject(),selected=scope==='owner'?this.ownerFile:project?join(project,'.harness','state','settings.json'):null;if(!selected)throw new ProjectError('invalid_settings','папка не открыта');
+ const path=canonicalPath(selected);
  return withPathLock(scope==='project'?project!:path,()=>{
  const cur=readObject(path),saved=orderedClone(cur);for(const key of orderedKeys(patch)){if(patch[key]===null)delete saved[key];else Object.defineProperty(saved,key,{value:patch[key],enumerable:true,configurable:true,writable:true})}
  const ordered=orderedClone(cur,saved);for(const key of orderedKeys(ordered))if(!Object.hasOwn(saved,key))delete ordered[key];writeJson(path,ordered);
