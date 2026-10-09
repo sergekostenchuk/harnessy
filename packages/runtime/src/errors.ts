@@ -1,6 +1,6 @@
 export class RuntimeError extends Error {
- readonly code:string;readonly status:number;
- constructor(code:string,message:string,status=409,options?:ErrorOptions){super(message,options);this.code=code;this.status=status;this.name='RuntimeError'}
+ readonly code:string;readonly status:number;readonly fields:Readonly<Record<string,unknown>>;
+ constructor(code:string,message:string,status=409,options?:ErrorOptions & {fields?:Record<string,unknown>}){super(message,options);this.code=code;this.status=status;this.fields=Object.freeze({...options?.fields});this.name='RuntimeError'}
 }
 export const message=(e:unknown)=>e instanceof Error?e.message:String(e);
 export const slice=(s:string,n:number)=>[...s].slice(0,n).join('');

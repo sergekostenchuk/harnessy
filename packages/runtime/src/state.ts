@@ -15,16 +15,26 @@ export interface TranscriptMessage {role:string;text:string;ts:number;[key:strin
 export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}
 export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;status?:'uncertain'}
 export interface Chat {id:string;pane:string;title:string;created:number;closed:number|null;model:string;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;[key:string]:unknown}
+export function jsonClone<T>(value:T):T{return parseCompat(compatJson(value)) as T}
+const CONVERSATION_FIELDS=new Set(['role','text','ts','usage','durationMs']);
+// Execution receipts belong to the source seat and journal, never to transferred history.
+export function conversationHistory(messages:readonly TranscriptMessage[]):TranscriptMessage[] {
+ return jsonClone(messages.map(message=>{
+  const copy=orderedClone(message);
+  for(const key of orderedKeys(copy))if(!CONVERSATION_FIELDS.has(key))delete copy[key];
+  return copy;
+ }));
+}
 interface Chats {chats:Record<string,Chat>;active:Record<string,string>}
 export function timestampMessage(role:string,text:string,ms:number):TranscriptMessage {
  const seconds=ms/1000,number=Number.isInteger(seconds)?seconds.toFixed(1):String(seconds);
  return parseCompat('{"role":'+JSON.stringify(role)+',"text":'+JSON.stringify(text)+',"ts":'+number+'}') as TranscriptMessage
 }
 export class StateStore {
- readonly chatsPath:string;readonly haltPath:string;readonly attemptsPath:string;
+ readonly chatsPath:string;readonly haltPath:string;readonly attemptsPath:string;readonly materializationPath:string;
  chats:Chats={chats:{},active:{}};attempts:Record<string,Attempt>={};readonly undurable=new Set<string>();
  readonly dir:string;private io:StateIO;private clock:Clock;private id:()=>string;
- constructor(dir:string,io:StateIO,clock:Clock,id:()=>string=()=>randomBytes(2).toString('hex')){this.dir=dir;this.io=io;this.clock=clock;this.id=id;const base=join(dir,'.harness','state');this.chatsPath=join(base,'chats.json');this.haltPath=join(base,'halt.json');this.attemptsPath=join(base,'attempts.json')}
+ constructor(dir:string,io:StateIO,clock:Clock,id:()=>string=()=>randomBytes(2).toString('hex')){this.dir=dir;this.io=io;this.clock=clock;this.id=id;const base=join(dir,'.harness','state');this.chatsPath=join(base,'chats.json');this.haltPath=join(base,'halt.json');this.attemptsPath=join(base,'attempts.json');this.materializationPath=join(base,'seat-materialization.json')}
  private read(path:string):unknown {return parseCompat(this.io.read(path))}
  private write(path:string,data:unknown,indent?:number):void{try{this.io.write(path,compatJson(data,indent))}catch(e){throw new RuntimeError('write_failed','состояние не сохранено: '+message(e),500,{cause:e})}}
  load(registry:Registry,lineErrors:string[]):boolean {
@@ -41,14 +51,20 @@ export class StateStore {
  catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT'){lineErrors.push('attempts.json не читается: '+message(e));for(const id of registry.ids)this.attempts[id]={turnInstanceId:'unreadable',recordSeqs:[],startedAt:this.clock.now(),status:'uncertain'}}}
  try{const raw=this.read(this.haltPath);if(!object(raw)||typeof raw.on!=='boolean')throw Error('неверная форма');return raw.on}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')lineErrors.push('halt.json не читается: '+message(e));return false}
  }
- activeChat(pane:Pane,create=true):Chat|null {const id=this.chats.active[pane.id],existing=id?this.chats.chats[id]:null;if(existing)return existing;if(!create)return null;
- let cid:string;do{cid='c'+this.clock.now().toString(16)+this.id()}while(Object.hasOwn(this.chats.chats,cid));
- const chat:Chat={id:cid,pane:pane.id,title:'',created:Math.floor(this.clock.now()/1000),closed:null,model:pane.model,vendor:pane.vendor,sessionId:pane.sessionId,transcript:pane.transcript,carry:pane.carry};
- this.chats.chats=orderedClone(this.chats.chats,{[cid]:chat});this.chats.active=orderedClone(this.chats.active,{[pane.id]:cid});return chat
+ newChatId():string {for(let n=0;n<100;n++){const cid='c'+Math.floor(this.clock.now()).toString(16)+this.id();if(!/^c[0-9a-f]+$/.test(cid))throw new RuntimeError('chat_id_invalid','неверный идентификатор чата');if(!Object.hasOwn(this.chats.chats,cid))return cid}throw new RuntimeError('chat_exists','идентификатор чата уже существует',409)}
+ newChat(pane:Pane,carry='',adopt=false,id=this.newChatId()):Chat {
+ if(Object.hasOwn(this.chats.chats,id))throw new RuntimeError('chat_exists','чат уже существует',409);
+ const chat:Chat={id,pane:pane.id,title:'',created:Math.floor(this.clock.now()/1000),closed:null,model:pane.model,vendor:pane.vendor,sessionId:adopt?pane.sessionId:null,transcript:adopt?pane.transcript:[],carry:adopt?(pane.carry||carry):carry};
+ this.chats.chats=orderedClone(this.chats.chats,{[id]:chat});this.chats.active=orderedClone(this.chats.active,{[pane.id]:id});
+ if(!adopt){pane.sessionId=null;pane.transcript=chat.transcript;pane.carry=carry;pane.seen={};pane.revision++}
+ return chat
  }
+ readMaterializations():unknown {try{return this.read(this.materializationPath)}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return [];throw new RuntimeError('materialization_invalid','назначения ролей не читаются: '+message(e),409,{cause:e})}}
+ saveMaterializations(value:unknown):void{this.write(this.materializationPath,value,2)}
+ activeChat(pane:Pane,create=true):Chat|null {const id=this.chats.active[pane.id],existing=id?this.chats.chats[id]:null;return existing??(create?this.newChat(pane,'',true):null)}
  sync(registry:Registry):void {for(const p of registry.panes.values()){const c=this.activeChat(p,!!(p.transcript.length||p.sessionId));if(!c)continue;
  c.transcript=p.transcript.filter(m=>!p.uncommitted.has(m));c.sessionId=p.sessionId;c.model=p.model;c.vendor=p.vendor;c.carry=p.carry;
- if(!c.title){const first=p.transcript.find(m=>m.role==='me')?.text??'';c.title=slice(pythonTrim(first).split('\n')[0]??'',60)||(p.transcript.some(m=>m.role==='peer'&&m.text.startsWith('[от харнесс]'))?'вводная роли':'')}
+ if(!c.title||c.title==='вводная роли'){const first=p.transcript.find(m=>m.role==='me')?.text||p.transcript.find(m=>m.role==='ai'&&pythonTrim(m.text))?.text||'';c.title=slice(pythonTrim(first).split('\n')[0]??'',60)||(p.transcript.some(m=>m.role==='peer'&&m.text.startsWith('[от харнесс]'))?'вводная роли':'')}
  }}
  saveChats(registry:Registry):void{this.sync(registry);this.write(this.chatsPath,this.chats,2)}
  savePanes(registry:Registry,journal:Journal):void {journal.savePanes(Object.fromEntries([...registry.panes].map(([id,p])=>[id,p.persist()])));this.saveChats(registry)}

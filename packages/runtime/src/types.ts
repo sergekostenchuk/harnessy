@@ -1,7 +1,7 @@
 import type {Provider,Vendor,TurnHandle,AskArgs,MergeArgs,AssignRoleArgs,Usage,Mode} from '@harnessy/providers';
 import type {Record_,Channel,Journal,JournalOptions,Policy} from '@harnessy/journal';
 import type {Team} from '@harnessy/team';
-import type {Connections,ProjectRegistry,GitOps} from '@harnessy/projects';
+import type {Connections,ProjectRegistry,GitOps,Settings,Pins} from '@harnessy/projects';
 import type {Pane,Registry} from './pane.ts';
 import type {Runtime} from './runtime.ts';
 import type {EventBus} from './events.ts';
@@ -32,7 +32,7 @@ export interface RuntimeActions {
 export interface RuntimeDeps {
  projectDir:string;providers:Partial<Record<Vendor,Provider>>;appUrl:string;models?:ModelCatalog;clock?:Clock;
  connections?:Connections;projectRegistry?:ProjectRegistry;gitops?:GitOps;stateIO?:StateIO;journalOptions?:JournalOptions;
- id?:()=>string;
+ id?:()=>string;defaultDir?:string;settings?:Settings|((currentProject:()=>string|null)=>Settings);pins?:Pins|((currentProject:()=>string|null,chatMeta:(id:string)=>import('@harnessy/projects').ChatMeta|null)=>Pins);
 }
 export interface ActiveTurn {
  scope:TurnScope;controller:AbortController;pane:Pane;records:TurnRecords;deliverySeq:number;
@@ -40,7 +40,7 @@ export interface ActiveTurn {
  finished:Promise<void>;finish():void;timer:unknown;resetWait:Promise<void>;releaseReset():void;result:ResultMessage|null;injected:import('./state.ts').TranscriptMessage[];
 }
 export interface ProjectState {
- generation:number;dir:string;closed:boolean;team:Team|null;repoRoot:string|null;policy:Policy|null;journal:Journal;channel:Channel;
+ generation:number;dir:string;closed:boolean;starting:boolean;now:()=>number;editing:Map<string,symbol>;materializing:Set<string>;team:Team|null;repoRoot:string|null;policy:Policy|null;journal:Journal;channel:Channel;
  registry:Registry;owner:Pane;bus:EventBus;state:StateStore;lineErrors:string[];halted:boolean;
  active:Map<string,ActiveTurn>;pumps:Map<string,Promise<void>>;resets:Map<Vendor,Promise<void>>;routeJobs:Map<Vendor,Promise<unknown>>;processEpoch:Map<Vendor,number>;wakeups:Set<string>;
 }

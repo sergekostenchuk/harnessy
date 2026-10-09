@@ -1,11 +1,11 @@
-import {readFileSync,mkdirSync,writeFileSync,existsSync,unlinkSync} from 'node:fs';
-import {join,dirname,basename,isAbsolute} from 'node:path';
+import {readFileSync,mkdirSync,writeFileSync,existsSync,unlinkSync,lstatSync} from 'node:fs';
+import {join,dirname,basename,isAbsolute,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {ROLE_CATALOG,type Vendor,type Mode} from './catalog.ts';
 import {TeamError,message} from './errors.ts';
 import {TEAM_HEADER} from './strings.ts';
 import {readManifest,teamFrom} from './manifest.ts';
-import {withPathLock,assertPathLock,atomicWrite,type PathLock} from './locks.ts';
+import {withPathLock,assertPathLock,atomicWrite,canonicalPath,type PathLock} from './locks.ts';
 import {dumpYaml,mapping,pyDefault,pyString,type YMap} from './yaml-compat.ts';
 import type {FileOptions,AddSeatArgs,Seat} from './types.ts';
 export const TEMPLATES=fileURLToPath(new URL('../templates/',import.meta.url));
@@ -29,18 +29,41 @@ export function seedOrchestratorLocked(lock:PathLock,h:string,vendor:Vendor,mode
  const data=readManifest(h),seats=data.get('seats') as YMap;if(seats.size)return {seeded:false,reason:'seats_present'};
  data.set('seats',new Map([['orchestrator',new Map<string,unknown>([['role','orchestrator'],['label','оркестратор'],['vendor',vendor],['model',model],['mode',mode],['digest',false],['instructions','roles/orchestrator.md']])]]));teamFrom(data,h);save(h,data,options);return {seeded:true}
 }
-export async function addSeat(h:string,args:AddSeatArgs,options:FileOptions={}):Promise<Seat>{return withPathLock(dirname(h),()=>{
+/** Only the fixed file of a saved seat can be recovered; unrelated files stay refused. */
+export function ensureSeatFileLocked(lock:PathLock,h:string,sid:string,content:string,acceptExisting=false):boolean {
+ assertPathLock(lock,dirname(h));
+ if(!/^[a-z][a-z0-9_-]{0,30}$/.test(sid))throw new TeamError('team_invalid','недопустимое имя места');
+ const relative='roles/seats/'+sid+'.md',path=join(h,relative);
+ if(!canonicalPath(path).startsWith(canonicalPath(h)+sep))throw new TeamError('seat_file_exists','файл места уже существует: '+relative);
+ mkdirSync(dirname(path),{recursive:true});
+ try{writeFileSync(path,content,{encoding:'utf8',flag:'wx'});return true}catch(e){
+  if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e;
+  if(!acceptExisting||!lstatSync(path).isFile()||readFileSync(path,'utf8')!==content)throw new TeamError('seat_file_exists','файл места уже существует: '+relative,e);
+  return false;
+ }
+}
+export interface SeatMaterial {sid:string;instructions:string|null;file:{path:string;content:string}|null;acceptExisting?:boolean}
+export async function addSeat(h:string,args:AddSeatArgs,options:FileOptions={}):Promise<Seat>{
+ return withPathLock(dirname(h),lock=>addSeatLocked(lock,h,args,options));
+}
+/** Synchronous composition: the caller owns the project lock and any saved assignment. */
+export function addSeatLocked(lock:PathLock,h:string,args:AddSeatArgs,options:FileOptions={},material?:SeatMaterial):Seat {
+ assertPathLock(lock,dirname(h));
  const cat=ROLE_CATALOG.find(c=>c.role===args.role);if(!cat)throw new TeamError('role_unknown','неизвестная роль '+args.role);
  const data=readManifest(h),seats=data.get('seats') as YMap,same=[...seats].filter(([sid,r])=>mapping(r)&&pyString(pyDefault(r.get('role'),sid))===args.role);
  if(same.length&&!cat.multi){const [sid,raw]=same[0]!;throw new TeamError('role_taken','роль «'+cat.label+'» в этой папке уже есть ('+pyString(pyDefault((raw as YMap).get('label'),sid))+')')}
- const n=same.length+1,sid=args.role+(n===1?'':n);if(seats.has(sid))throw new TeamError('seat_exists','место '+sid+' уже есть в team.yaml');
+ const n=same.length+1,sid=args.role+(n===1?'':n);if(material&&material.sid!==sid)throw new TeamError('seat_exists','место '+material.sid+' уже есть в team.yaml');if(seats.has(sid))throw new TeamError('seat_exists','место '+sid+' уже есть в team.yaml');
  const spec=args.specialization;if(spec!==undefined&&(!spec||typeof spec.title!=='string'||[...spec.title].length<1||[...spec.title].length>60||typeof spec.text!=='string'||[...spec.text].length<1||[...spec.text].length>20000))throw new TeamError('specialization_invalid','специализация: title — строка 1–60 символов, text — строка 1–20000 символов');
  const base='roles/'+args.role+'.md',candidate=args.instructions??base;let instructions:string|null=existsSync(isAbsolute(candidate)?candidate:join(h,candidate))?candidate:null;
+ if(material)instructions=material.instructions;
  const label=(spec?.title||args.label||cat.label)+(n===1?'':' '+n),raw=new Map<string,unknown>([['role',args.role],['label',label],['vendor',args.vendor],['model',args.model],['mode',args.mode],['digest',false]]);
- if(spec)instructions='roles/seats/'+sid+'.md';if(instructions)raw.set('instructions',instructions);seats.set(sid,raw);const seat=teamFrom(data,h).seats[sid]!;
+ if(spec)instructions='roles/seats/'+sid+'.md';if(material&&material.instructions!==instructions)throw new TeamError('team_invalid','не совпадают инструкции сохранённого назначения');if(instructions)raw.set('instructions',instructions);seats.set(sid,raw);const seat=teamFrom(data,h).seats[sid]!;
  let created:string|undefined;try{
- if(spec){const path=join(h,instructions!),baseText=existsSync(join(h,base))?readFileSync(join(h,base),'utf8'):'';mkdirSync(dirname(path),{recursive:true});
- try{writeFileSync(path,baseText+'\n\n'+spec.text,{encoding:'utf8',flag:'wx'});created=path}catch(e){if((e as NodeJS.ErrnoException).code==='EEXIST')throw new TeamError('seat_file_exists','файл места уже существует: '+instructions,e);throw e}}
+ if(spec){const relative='roles/seats/'+sid+'.md',expected=material?.file;
+ if(material&&(!expected||expected.path!==relative))throw new TeamError('team_invalid','не совпадает файл сохранённого назначения');
+ const content=expected?.content??((existsSync(join(h,base))?readFileSync(join(h,base),'utf8'):'')+'\n\n'+spec.text);
+ if(ensureSeatFileLocked(lock,h,sid,content,material?.acceptExisting))created=join(h,relative);
+ }
  save(h,data,options);return seat
  }catch(e){if(created)unlinkSync(created);if(e instanceof TeamError)throw e;throw new TeamError('write_failed','team.yaml не записан: '+message(e),e)}
-})}
+}
