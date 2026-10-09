@@ -43,3 +43,15 @@ test('[26] missing tool and real bounded subprocess timeout are typed',async()=>
  await assert.rejects(execute('/nonexistent/harnessy-tool',[],undefined,100),failure('tool_missing'));
  await assert.rejects(execute(process.execPath,['-e','setInterval(()=>{},1000)'],undefined,25),failure('tool_timeout'));
 });
+
+test('[25] concurrent merges from two instances and a symlink share the canonical root lock',async()=>{
+ const t=temp();try{const base=repo(t.root),sha:string[]=[];
+ for(const name of ['one','two']){git(t.root,'checkout','-qb',name,base);writeFileSync(join(t.root,name+'.txt'),name);git(t.root,'add','.');git(t.root,'commit','-qm',name);sha.push(git(t.root,'rev-parse','HEAD'))}
+ git(t.root,'checkout','-q','main');const alias=join(t.root,'alias');symlinkSync(t.root,alias,'dir');
+ const [one,two]=await Promise.all([new GitOps().mergeInto(t.root,sha[0]!,'main','one'),new GitOps().mergeInto(alias,sha[1]!,'main','two')]);
+ assert.ok(one.ok&&two.ok);if(!one.ok||!two.ok)return;
+ assert.deepEqual(git(t.root,'rev-list','--parents','-n','1',one.mergeSha!).split(' '),[one.mergeSha,base,sha[0]]);
+ assert.deepEqual(git(t.root,'rev-list','--parents','-n','1',two.mergeSha!).split(' '),[two.mergeSha,one.mergeSha,sha[1]]);
+ assert.equal(git(t.root,'rev-parse','HEAD'),two.mergeSha);
+ }finally{t.close()}
+});

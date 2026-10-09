@@ -1,0 +1,141 @@
+seats: {}
+strings:
+- '0'
+- '01'
+- '0x10'
+- 0o10
+- '0b10'
+- 1e3
+- 1.0e3
+- '1.0e+3'
+- '1:20'
+- '-1:20'
+- '.5'
+- '5.'
+- '+1'
+- y
+- n
+- 'yes'
+- 'No'
+- 'null'
+- 'Null'
+- 'NULL'
+- '~'
+- '2026-10-09'
+- '12:30'
+- a,b
+- a[b]
+- a{b}
+- a:b
+- 'a: b'
+- 'a #b'
+- a#b
+- ' leading'
+- 'trailing '
+- -dash
+- ?q
+- :x
+- '---'
+- '...'
+- '!tag'
+- 'line
+
+  next'
+- '
+
+  leading'
+- 'trailing
+
+  '
+- 'two
+
+
+  lines'
+- "tab\tline"
+- "cr\rline"
+- "escape\e"
+- "nul\0"
+- next line
+- 'line   separator'
+- 'para   separator'
+- emoji😀
+- "\uFEFFbom"
+keys:
+  '0': value
+  '01': value
+  '0x10': value
+  0o10: value
+  '0b10': value
+  1e3: value
+  1.0e3: value
+  '1.0e+3': value
+  '1:20': value
+  '-1:20': value
+  '.5': value
+  '5.': value
+  '+1': value
+  y: value
+  n: value
+  'yes': value
+  'No': value
+  'null': value
+  'Null': value
+  'NULL': value
+  '~': value
+  '2026-10-09': value
+  '12:30': value
+  a,b: value
+  a[b]: value
+  a{b}: value
+  a:b: value
+  'a: b': value
+  'a #b': value
+  a#b: value
+  ' leading': value
+  'trailing ': value
+  -dash: value
+  ?q: value
+  :x: value
+  '---': value
+  '...': value
+  '!tag': value
+  ? 'line
+
+    next'
+  : value
+  ? '
+
+    leading'
+  : value
+  ? 'trailing
+
+    '
+  : value
+  ? 'two
+
+
+    lines'
+  : value
+  "tab\tline": value
+  "cr\rline": value
+  "escape\e": value
+  "nul\0": value
+  next line: value
+  ? 'line     separator'
+  : value
+  ? 'para     separator'
+  : value
+  emoji😀: value
+  "\uFEFFbom": value
+nested:
+- some: data
+  empty: []
+  scalar: 'x
+
+    y'
+floats:
+- 1.0
+- 1.0e-07
+- 1.0e+16
+- 0.0001
+- -0.0

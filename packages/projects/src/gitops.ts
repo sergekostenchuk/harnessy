@@ -3,6 +3,7 @@ import {existsSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {dirname,isAbsolute,relative,sep,join,resolve} from 'node:path';
 import {canonicalPath,withPathLock} from '@harnessy/team';
 import {ProjectError} from './errors.ts';
+import {writeDirectory} from './files.ts';
 import type {GitRunner,CommandResult} from './types.ts';
 export function execute(binary:string,args:string[],cwd:string|undefined,timeoutMs:number):Promise<CommandResult>{return new Promise((done,fail)=>{
  execFile(binary,args,{...(cwd?{cwd}:{}),timeout:timeoutMs,encoding:'utf8',maxBuffer:16*1024*1024},(error,stdout,stderr)=>{
@@ -36,7 +37,7 @@ export class GitOps {
  const listed=await this.run(['worktree','list','--porcelain','-z'],root);return listed.code===0&&listed.stdout.split('\0').some(line=>line==='worktree '+path)};
  if(existsSync(path)){if(await belongs())return {path,note:null};return {path:null,note:relPath+' существует, но это не worktree этого репозитория'}}
  if(!await this.branchExists(root,baseBranch))return {path:null,note:'нет ветки '+baseBranch+': сделай первый коммит, потом worktree появятся'};
- await this.run(['worktree','prune'],root);mkdirSync(dirname(path),{recursive:true});
+ await this.run(['worktree','prune'],root);writeDirectory(dirname(path));
  const args=await this.branchExists(root,branch)?['worktree','add',path,branch]:['worktree','add','-b',branch,path,baseBranch];
  const result=await this.run(args,root);if(result.code!==0)return {path:null,note:'worktree '+relPath+' не создан: '+(result.stderr.split('\n').at(-1)||'ошибка git')};
  if(!await belongs())return {path:null,note:relPath+' существует, но это не worktree этого репозитория'};

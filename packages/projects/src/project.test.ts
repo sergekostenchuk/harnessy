@@ -28,3 +28,8 @@ test('[17,21] registry preserves string order, raw closed seats, noLast forbids 
  writeFileSync(join(h,'team.yaml'),'seats: [');assert.equal((await r.listProjects(a)).projects[1]!.seats,null);
  }finally{t.close()}
 });
+
+test('[26] project directory write failure returns ProjectError with the original OS cause',async()=>{
+ const t=temp();try{const path=join(t.root,'file');writeFileSync(path,'kept');await assert.rejects(initProject(path),e=>e instanceof Error&&'code' in e&&e.code==='write_failed'&&e.message.startsWith('не записано: ')&&e.cause instanceof Error);assert.equal(readFileSync(path,'utf8'),'kept')
+ }finally{t.close()}
+});

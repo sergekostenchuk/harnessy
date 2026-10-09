@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,realpathSync,readFileSync,writeFileSync,rmSync,unlinkSync,mkdirSync,symlinkSync,existsSync,cpSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {fileURLToPath} from 'node:url';
 import {loadTeam,ensureLine,seedOrchestrator,addSeat,instructionsFor,roleOf,TeamError,TEMPLATES,TEAM_HEADER,dumpYaml,parseYaml,withPathLock} from './index.ts';
 const temp=()=>realpathSync(mkdtempSync(join(tmpdir(),'harnessy-team-'))),failure=(code:string,text?:string)=>(e:unknown)=>e instanceof TeamError&&e.code===code&&(!text||e.message===text);
 const defaults={vendor:'claude' as const,model:'model',mode:'read' as const};
@@ -50,4 +49,10 @@ test('[23] seed and ensureLine share a lock; retained unsupported vendors count 
 test('[21] PyYAML golden edge fields preserve multiline, wrapping, numeric key order and y',()=>{
  const expected=readFileSync(new URL('./fixtures/edge.yaml',import.meta.url),'utf8');assert.equal(TEAM_HEADER+dumpYaml(parseYaml(expected)),expected);
  const value=parseYaml('seats: {}\nflags: [yes, no, y, n, on, off]') as Map<string,unknown>;assert.deepEqual(value.get('flags'),[true,false,'y','n',true,false]);
+});
+
+test('[21] PyYAML scalar corpus keeps numeric strings, control characters and multiline mapping keys',()=>{
+ const expected=readFileSync(new URL('./fixtures/scalars.yaml',import.meta.url),'utf8');assert.equal(dumpYaml(parseYaml(expected)),expected);
+ const parsed=parseYaml('seats: {}\nvalues: [1e3, 1.0e3, 08, 0xdead, 1.0e+3, 1:20]') as Map<string,unknown>;
+ assert.deepEqual(parsed.get('values'),['1e3','1.0e3','08',57005,1000,80]);
 });

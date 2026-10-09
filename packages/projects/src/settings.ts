@@ -4,7 +4,11 @@ import {ownerPaths,readObject,writeJson,object,truthy} from './files.ts';
 import {orderedClone,orderedKeys} from './compat-json.ts';
 import {ProjectError} from './errors.ts';
 import {SETTINGS_APPLIES,SETTINGS_SCOPE} from './strings.ts';
-function repr(key:string){const quote=key.includes("'")&&!key.includes('"')?'"':"'";return quote+key.replaceAll('\\','\\\\').replaceAll(quote,'\\'+quote).replaceAll('\n','\\n').replaceAll('\r','\\r').replaceAll('\t','\\t')+quote}
+function repr(key:string){
+ const quote=key.includes("'")&&!key.includes('"')?'"':"'";
+ return quote+[...key].map(ch=>{if(ch===quote||ch==='\\')return '\\'+ch;if(ch==='\n')return '\\n';if(ch==='\r')return '\\r';if(ch==='\t')return '\\t';
+ if(ch!==' '&&/[\p{C}\p{Z}]/u.test(ch)){const n=ch.codePointAt(0)!;return '\\'+(n<=0xff?'x':n<=0xffff?'u':'U')+n.toString(16).padStart(n<=0xff?2:n<=0xffff?4:8,'0')}return ch}).join('')+quote
+}
 export class Settings {
  private ownerFile:string;private currentProject:()=>string|null;private now:()=>number;
  constructor(ownerFile=ownerPaths().settings,currentProject:()=>string|null=()=>null,now=()=>Date.now()){this.ownerFile=ownerFile;this.currentProject=currentProject;this.now=now}

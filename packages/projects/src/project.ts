@@ -1,15 +1,15 @@
-import {mkdirSync,existsSync} from 'node:fs';
+import {existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {ensureLine,seedOrchestrator,withPathLock,MODE_IDS,type Seat,type Mode,type Vendor,type FileOptions} from '@harnessy/team';
 import {gitops,GitOps} from './gitops.ts';
-import {expandUser,validDir} from './files.ts';
+import {expandUser,validDir,writeDirectory} from './files.ts';
 import {ProjectError} from './errors.ts';
 export type Catalog=Partial<Record<Vendor,{id:string;label?:string}[]>>;
 export function defaultModel({roomModel,catalog}:{roomModel?:string;catalog:Catalog}):string {if(roomModel)return roomModel;for(const vendor of ['claude','codex'] as const){const model=catalog[vendor]?.find(m=>m.id);if(model)return model.id}return ''}
 export function projectsRoot(settings:Record<string,unknown>,env:NodeJS.ProcessEnv=process.env){return expandUser(String(settings.projectsRoot||env.HARNESS_PROJECTS_ROOT||'~/Harnessy-Projects'))}
 export interface InitDeps {gitops?:GitOps;defaultModel?:()=>string;vendorOf?:(model:string)=>Vendor|null;catalog?:Catalog;roomModel?:string;settings?:Record<string,unknown>;files?:FileOptions}
 export async function initProject(path:string,options:{git?:boolean;model?:string;orchestrator?:boolean}={},deps:InitDeps={}){return withPathLock(path,async()=>{
- const created=!validDir(path);mkdirSync(path,{recursive:true});const git=deps.gitops??gitops;let gitOk=await git.ownRepo(path);
+ const created=!validDir(path);writeDirectory(path);const git=deps.gitops??gitops;let gitOk=await git.ownRepo(path);
  if(options.git!==false&&!gitOk){const result=await git.run(['init','-q'],path);if(result.code!==0)throw new ProjectError('tool_failed','git init: '+[...result.stderr.trim()].slice(0,200).join(''));gitOk=true}
  const h=await ensureLine(path,deps.files);let seeded=false;
  if(options.orchestrator!==false){const model=options.model||deps.defaultModel?.()||defaultModel({...(deps.roomModel?{roomModel:deps.roomModel}:{}),catalog:deps.catalog??{}}),vendor=deps.vendorOf?.(model)??(['claude','codex'] as const).find(v=>deps.catalog?.[v]?.some(m=>m.id===model));
@@ -17,7 +17,7 @@ export async function initProject(path:string,options:{git?:boolean;model?:strin
  return {created,git:gitOk,orchestrator:seeded,memory:join(h,'MEMORY.md')}
 })}
 export async function uniqueProject(root:string,name:string,options:Parameters<typeof initProject>[1]={},deps:InitDeps={}){return withPathLock(root,async()=>{
- mkdirSync(root,{recursive:true});let path=join(root,name),n=2;while(existsSync(path))path=join(root,name+'-'+n++);const result=await initProject(path,options,deps);return {path,...result}
+ writeDirectory(root);let path=join(root,name),n=2;while(existsSync(path))path=join(root,name+'-'+n++);const result=await initProject(path,options,deps);return {path,...result}
 })}
 export function writableRoots(repo:string|null,hasWorktree:boolean):string[]{return repo?[...(hasWorktree?[join(repo,'.git')]:[]),join(repo,'.harness','evidence')]:[]}
 export async function openProjectGit(projectDir:string,seats:readonly Seat[]|Record<string,Seat>,integrationBranch:string,git:GitOps=gitops){return withPathLock(projectDir,async()=>{
@@ -26,7 +26,7 @@ export async function openProjectGit(projectDir:string,seats:readonly Seat[]|Rec
  for(const s of list){cwdBySeat[s.id]=projectDir;worktreeBySeat[s.id]=null;branchBySeat[s.id]=null}
  if(!repo&&await git.isRepo(projectDir))lineErrors.push('папка лежит внутри чужого git-репозитория ('+await git.repoRoot(projectDir)+'): свой git не создан — создайте проект заново или выполните git init в папке');
  const wanted=list.filter(s=>s.worktree);if(wanted.length&&!repo)lineErrors.push('папка проекта не git-репозиторий: worktree не созданы, все места работают в корне');
- if(repo){mkdirSync(join(repo,'.harness','evidence'),{recursive:true});for(const p of ['.harness/state/','.harness/evidence/','.harness/digests/','.harness/logs/'])await git.ensureExclude(repo,p);
+ if(repo){writeDirectory(join(repo,'.harness','evidence'));for(const p of ['.harness/state/','.harness/evidence/','.harness/digests/','.harness/logs/'])await git.ensureExclude(repo,p);
  for(const s of wanted){const r=await git.ensureWorktree(repo,s.id,s.worktree!,integrationBranch);if(r.path){cwdBySeat[s.id]=r.path;worktreeBySeat[s.id]=r.path;branchBySeat[s.id]='seat/'+s.id}else lineErrors.push(s.id+': '+r.note)}}
  return {repoRoot:repo,cwdBySeat,worktreeBySeat,branchBySeat,lineErrors}
 })}

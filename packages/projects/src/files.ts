@@ -15,6 +15,7 @@ export function ownerPaths(env:NodeJS.ProcessEnv=process.env,home=homedir()):Own
 }
 export function readJson(path:string):unknown {try{return parseCompat(readFileSync(path,'utf8'))}catch{return null}}
 export function readObject(path:string):JsonObject {const data=readJson(path);return object(data)?data:{}}
+export function writeDirectory(path:string){try{mkdirSync(path,{recursive:true})}catch(e){throw new ProjectError('write_failed','не записано: '+(e instanceof Error?e.message:String(e)),500,e)}}
 export function writeJson(path:string,data:unknown,prefix='не записано: '){try{mkdirSync(dirname(path),{recursive:true});atomicWrite(path,compatJson(data,1))}catch(e){throw new ProjectError('write_failed',prefix+(e instanceof Error?e.message:String(e)),500,e)}}
 export function text(value:unknown){return String(value??'')}
 export {pythonTrim};

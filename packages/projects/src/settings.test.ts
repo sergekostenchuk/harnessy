@@ -18,3 +18,10 @@ test('[19,30,36] settings precedence, whole-patch validation, Unicode, deletion 
 test('[21] owner JSON golden bytes retain Unicode, numeric keys, float spelling, indent1 and no LF',()=>{
  const text=readFileSync(new URL('./fixtures/owner.json',import.meta.url),'utf8'),value=parseCompat(text);assert.equal(compatJson(value,1),text);assert.equal(compatJson(orderedClone(value as Record<string,unknown>),1),text);
 });
+
+test('[19,26,30] nonprintable key errors use Python repr and owner write failure is typed',async()=>{
+ const t=temp();try{const s=new Settings(join(t.root,'settings.json'));
+ for(const [key,repr] of [['a\u200db',"'a\\u200db'"],['a\u0085b',"'a\\x85b'"],['a\nb',"'a\\nb'"]])await assert.rejects(s.patch('owner',{[key!]:1}),failure('invalid_settings','ключ '+repr+' не годится'));
+ const directory=join(t.root,'directory');mkdirSync(directory);await assert.rejects(new Settings(directory).patch('owner',{key:1}),e=>failure('write_failed')(e)&&(e as Error).message.startsWith('не записано: '));
+ }finally{t.close()}
+});
