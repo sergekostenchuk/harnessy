@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {writeFileSync,unlinkSync,symlinkSync} from 'node:fs';
+import {writeFileSync,unlinkSync,symlinkSync,appendFileSync,fsyncSync,openSync} from 'node:fs';
 import {join} from 'node:path';
 import {Journal} from './journal.ts';
 import {Channel} from './channel.ts';
@@ -196,5 +196,73 @@ test('Channel refusal priority stays form, kind, recipients, verdict, target, ev
  assert.throws(()=>f.agent('reviewer',{to:'worker',kind:'verdict',text:'x',score:true,round:1,reply_to:999} as never),error('score_invalid'));
  assert.throws(()=>f.agent('reviewer',{to:'worker',kind:'verdict',text:'x',score:9,round:1,reply_to:999}),error('reply_to_missing'));
  const rr=f.request();f.deps.policy=null;assert.throws(()=>f.agent('reviewer',{to:'worker',kind:'verdict',text:'x',score:9,round:1,reply_to:rr.seq}),error('evidence_required'))
+ }finally{f.close()}
+});
+
+
+for(const restart of [false,true])test('ack written but fsync failed resumes delivered exactly once'+(restart?' after restart':''),()=>{
+ let armed=false,kind='';const f=fixture(ackPolicy,{fs:{appendFileSync:(...args:Parameters<typeof appendFileSync>)=>{kind=(JSON.parse(String(args[1]).trim()) as {kind:string}).kind;appendFileSync(...args)},fsyncSync:fd=>{fsyncSync(fd);if(armed&&kind==='ack'){armed=false;throw Error('ack fsync fault')}}}});
+ try{
+ const held=f.agent('tester',{to:'worker',kind:'report',text:'held'});f.events.length=0;armed=true;
+ assert.throws(()=>f.channel.confirmAck(held.seq),error('write_failed'));assert.deepEqual(f.events,[]);
+ assert.deepEqual(f.channel.pendingAcks().map(r=>r.seq),[held.seq]);
+ const target=restart?reopen(f):{journal:f.journal,channel:f.channel};const events:ChannelEvent[]=restart?[]:f.events;
+ if(restart)target.channel.on(e=>events.push(e));
+ const ack=target.channel.confirmAck(held.seq);assert.equal(ack.kind,'ack');
+ assert.deepEqual(events.filter(e=>e.type==='delivered').map(e=>[e.record.seq,e.deliverySeq]),[[held.seq,ack.seq]]);
+ assert.equal(target.journal.read({kinds:['ack']}).length,1);assert.deepEqual(target.channel.pendingAcks(),[]);
+ const count=events.length;target.channel.confirmAck(held.seq);assert.equal(events.length,count);
+ const again=reopen(f),after:ChannelEvent[]=[];again.channel.on(e=>after.push(e));again.channel.confirmAck(held.seq);assert.deepEqual(after,[]);
+ assert.deepEqual(again.journal.pendingFor('worker').map(e=>e.deliverySeq),[ack.seq]);
+ }finally{f.close()}
+});
+
+for(const retry of ['reject','confirm'] as const)for(const restart of [false,true])for(const fault of ['before-note','note-fsync'] as const)
+ test('rejected decision resumes missing notification: '+fault+', '+retry+(restart?', restart':''),()=>{
+ let armed=false,kind='';const f=fixture(ackPolicy,{fs:{appendFileSync:(...args:Parameters<typeof appendFileSync>)=>{
+ kind=(JSON.parse(String(args[1]).trim()) as {kind:string}).kind;
+ if(armed&&kind==='note'&&fault==='before-note'){armed=false;throw Error('note append fault')}appendFileSync(...args)
+ },fsyncSync:fd=>{fsyncSync(fd);if(armed&&kind==='note'&&fault==='note-fsync'){armed=false;throw Error('note fsync fault')}}}});
+ try{
+ const held=f.agent('tester',{to:'worker',kind:'report',text:'held'});f.events.length=0;armed=true;
+ assert.throws(()=>f.channel.rejectAck(held.seq),error('write_failed'));
+ assert.equal(f.events.filter(e=>e.type==='rejected').length,1);assert.equal(f.events.filter(e=>e.type==='delivered').length,0);
+ assert.deepEqual(f.channel.pendingAcks().map(r=>r.seq),[held.seq]);
+ const target=restart?reopen(f):{journal:f.journal,channel:f.channel},events:ChannelEvent[]=restart?[]:f.events;
+ if(restart)target.channel.on(e=>events.push(e));
+ const resolution=retry==='reject'?target.channel.rejectAck(held.seq):target.channel.confirmAck(held.seq);
+ assert.equal(resolution.kind,'rejected');assert.equal(target.journal.read({kinds:['rejected']}).length,1);
+ const notes=target.journal.read({kinds:['note']}).filter(r=>r.origin==='ack');assert.equal(notes.length,1);const note=notes[0]!;
+ assert.equal(note.reply_to,held.seq);assert.deepEqual(note.to,['tester']);assert.equal(note.text,'Запись #'+held.seq+' (report) владелец не подтвердил, она не доставлена.');
+ assert.deepEqual(events.filter(e=>e.type==='delivered').map(e=>e.record.seq),[note.seq]);
+ assert.equal(events.filter(e=>e.type==='rejected').length,restart?0:1);assert.deepEqual(target.channel.pendingAcks(),[]);
+ assert.throws(()=>target.channel.rejectAck(held.seq),error('ack_closed'));assert.throws(()=>target.channel.confirmAck(held.seq),error('ack_closed'));
+ const again=reopen(f);assert.deepEqual(again.channel.pendingAcks(),[]);assert.throws(()=>again.channel.confirmAck(held.seq),error('ack_closed'));
+ assert.equal(again.journal.pendingFor('worker').some(e=>e.record.seq===held.seq),false);assert.equal(again.journal.pendingFor('tester').filter(e=>e.record.seq===note.seq).length,1);
+ }finally{f.close()}
+});
+
+test('ack event receipt failure cannot publish delivered twice on retry or after repaired restart',()=>{
+ let armed=false,receiptFd=-1;const f=fixture(ackPolicy,{fs:{openSync:(...args:Parameters<typeof openSync>)=>{const fd=openSync(...args);if(String(args[0]).endsWith('ack-events.json.tmp'))receiptFd=fd;return fd},fsyncSync:fd=>{fsyncSync(fd);if(armed&&fd===receiptFd){armed=false;throw Error('receipt fsync fault')}}}});
+ try{
+ const held=f.agent('tester',{to:'worker',kind:'report',text:'held'});f.events.length=0;armed=true;
+ assert.throws(()=>f.channel.confirmAck(held.seq),error('write_failed'));assert.equal(f.events.filter(e=>e.type==='delivered').length,1);
+ const ack=f.channel.confirmAck(held.seq);assert.equal(f.events.filter(e=>e.type==='delivered').length,1);
+ const again=reopen(f),events:ChannelEvent[]=[];again.channel.on(e=>events.push(e));assert.equal(again.channel.confirmAck(held.seq).seq,ack.seq);assert.deepEqual(events,[]);
+ }finally{f.close()}
+});
+
+for(const outcome of ['handled','rejected'] as const)test('steer '+outcome+' is absent from every pending queue/counter across restart; ordinary tasks remain',()=>{
+ const f=fixture();try{
+ const steer=f.core({to:'worker',kind:'task',text:'owner interruption',origin:'steer'});
+ f.journal.append({sender:outcome==='handled'?'worker':'harness',to:['owner'],kind:outcome==='handled'?'status':'rejected',text:outcome,reply_to:steer.seq,origin:'steer'});
+ for(const seat of [...f.deps.liveSeats(),'owner'])assert.equal(f.journal.pendingFor(seat).length,0);
+ assert.equal(f.journal.cursors.worker??0,0);assert.equal(reopen(f).journal.pendingFor('worker').length,0);
+ const ordinary=f.core({to:'worker',kind:'task',text:'ordinary'});
+ f.core({to:'*',kind:'note',text:'out-of-queue',origin:'steer'});
+ assert.deepEqual(f.journal.pendingFor('worker').map(e=>e.record.seq),[ordinary.seq]);
+ const again=reopen(f);assert.deepEqual(again.journal.pendingFor('worker').map(e=>e.record.seq),[ordinary.seq]);assert.equal(again.journal.cursors.worker??0,0);
+ again.journal.advance('worker',ordinary.seq);assert.equal(reopen(f).journal.pendingFor('worker').length,0);
+ f.journal.append({sender:'owner',to:['worker'],kind:'note',text:'steer cannot make owner card',origin:'steer',ack:'pending'});assert.deepEqual(f.channel.pendingAcks(),[]);
  }finally{f.close()}
 });

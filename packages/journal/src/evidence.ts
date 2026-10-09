@@ -1,19 +1,36 @@
 import {realpathSync,lstatSync,readlinkSync,readFileSync,existsSync,statSync} from 'node:fs';
-import {resolve,dirname,basename,relative,isAbsolute,join} from 'node:path';
+import {dirname,basename,relative,isAbsolute,parse,sep} from 'node:path';
 import {pythonTrim} from './compat-json.ts';
 import {JournalError} from './types.ts';
 const SECTIONS=['Ran','Skipped','Planned','Manual'];
-// Like Path.resolve(strict=False), resolve existing ancestors of a missing file.
-function realPath(path:string,links=0):string {
- if(links>40)throw new Error('слишком много символических ссылок');
- try{return realpathSync(path)}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT'&&(e as NodeJS.ErrnoException).code!=='ENOTDIR')throw e;
- try{if(lstatSync(path).isSymbolicLink())return realPath(resolve(dirname(path),readlinkSync(path)),links+1)}catch(err){if((err as NodeJS.ErrnoException).code!=='ENOENT'&&(err as NodeJS.ErrnoException).code!=='ENOTDIR')throw err}
- const parent=dirname(path);if(parent===path)return path;return join(realPath(parent,links),basename(path))
+// Resolve components in filesystem order: a symlink is followed before a later '..'.
+function realPath(path:string,links={count:0}):{path:string;missing:boolean} {
+ const absolute=isAbsolute(path)?path:process.cwd()+sep+path;let current=parse(absolute).root,missing=false;
+ const parts=absolute.slice(current.length).split(sep);
+ for(const part of parts){
+ if(!part||part==='.'||part==='..'){
+ if(!missing&&!statSync(current).isDirectory())throw new Error('компонент пути не является каталогом');
+ if(part==='..')current=dirname(current);continue
  }
+ const candidate=current.endsWith(sep)?current+part:current+sep+part;
+ try{
+ const stat=lstatSync(candidate);
+ if(stat.isSymbolicLink()){
+ if(++links.count>40)throw new Error('слишком много символических ссылок');
+ const target=readlinkSync(candidate),result=realPath(isAbsolute(target)?target:current+sep+target,links);current=result.path;missing||=result.missing;
+ }else current=realpathSync(candidate);
+ }catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e;current=candidate;missing=true}
+ }
+ return {path:current,missing}
 }
 export function resolveEvidence(projectRoot:string,path:unknown):string|null {
  if(typeof path!=='string'||!pythonTrim(path))return null;
- try{const root=realPath(resolve(projectRoot)),target=realPath(resolve(root,path)),rel=relative(root,target);return rel==='..'||rel.startsWith('..'+(process.platform==='win32'?'\\':'/'))||isAbsolute(rel)?null:target}catch{return null}
+ try{
+ const root=realPath(projectRoot).path,raw=isAbsolute(path)?path:root+sep+path,target=realPath(raw),canonical=target.missing?target.path:realpathSync.native(raw),rel=relative(root,canonical);
+ if(rel==='..'||rel.startsWith('..'+sep)||isAbsolute(rel))return null;
+ // A missing prefix followed by '..' must not make an existing, different file pass.
+ return target.missing?raw:canonical
+ }catch{return null}
 }
 export function checkReport(path:string):string|null {
  if(!existsSync(path)||!statSync(path).isFile())return 'файла отчёта нет: '+path;
@@ -23,7 +40,7 @@ export function checkReport(path:string):string|null {
  const missing=SECTIONS.filter(section=>!found.has(section.toLowerCase()));return missing.length?'в отчёте '+basename(path)+' нет разделов: '+missing.join(', ')+' (контракт Ran / Skipped / Planned / Manual)':null
 }
 export function evidenceDir(projectRoot:string,thread:string,round:number):string {
- const path=resolveEvidence(projectRoot,isAbsolute(thread)?join(thread,'r'+round):join('.harness','evidence',thread,'r'+round));if(!path)throw new JournalError('evidence_outside','путь свидетельства вне проекта: '+thread);return path
+ const path=resolveEvidence(projectRoot,(isAbsolute(thread)?thread:'.harness'+sep+'evidence'+sep+thread)+sep+'r'+round);if(!path)throw new JournalError('evidence_outside','путь свидетельства вне проекта: '+thread);return realPath(path).path
 }
 export class Evidence {
  readonly projectRoot:string;constructor(projectRoot:string){this.projectRoot=projectRoot}

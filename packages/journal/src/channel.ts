@@ -8,7 +8,7 @@ export interface ChannelDeps {journal:Journal;policy:Policy|null;projectDir:stri
 const AGENT_KEYS=['to','kind','text','thread','reply_to','evidence','score','round','sha'];
 const CORE_KEYS=[...AGENT_KEYS,'origin','merged'];
 export class Channel {
- private deps:ChannelDeps;private handlers=new Set<(event:ChannelEvent)=>void>();private states=new Map<string,ThreadState>();
+ private emittedAckEvents=new Set<string>();private deps:ChannelDeps;private handlers=new Set<(event:ChannelEvent)=>void>();private states=new Map<string,ThreadState>();
  constructor(deps:ChannelDeps){this.deps=deps;this.restoreThreads()}
  get threads():ReadonlyMap<string,ThreadState>{this.restoreThreads();return new Map([...this.states].map(([key,value])=>[key,freeze({...value})]))}
  on(handler:(event:ChannelEvent)=>void):()=>void {this.handlers.add(handler);return ()=>this.handlers.delete(handler)}
@@ -29,7 +29,7 @@ export class Channel {
  const rec=this.deps.journal.append({sender:'harness',to:['owner'],kind:'rejected',text:sender+' → '+to.join(', ')+' '+kind+': '+reason,policy:version});
  this.emit({type:'rejected',record:rec,sender,reason})
  }
- private write(input:AgentPostInput|CorePostInput,initiator:Initiator,core:boolean):Record_ {
+ private write(input:AgentPostInput|CorePostInput,initiator:Initiator,core:boolean,ackDecision?:Record_):Record_ {
  if(!object(input))throw new JournalError('to_invalid','адресат — имя места или список мест');
  const form=validateForm(input);this.validateInitiator(initiator,core);requireKind(input.kind,core);
  const keys=core?CORE_KEYS:AGENT_KEYS;
@@ -87,26 +87,51 @@ export class Channel {
  ...(input.score!==undefined?{score:input.score}:{}),...(input.round!==undefined?{round:input.round}:{}),...(sha!==undefined?{sha}:{}),
  ...(core&&coreInput.origin!=null?{origin:coreInput.origin}:{}),...(core&&coreInput.merged!=null?{merged:coreInput.merged}:{}),
  ...(input.kind==='verdict'?{accepted:bounds.accept_score!=null&&input.score!>=Number(bounds.accept_score),bounds:Object.keys(bounds).length?bounds:null}:{}),...(pending?{ack:'pending' as const}:{})});
- this.emit({type:'posted',record,initiator:{...initiator}});
- if(pending){this.emit({type:'pendingAck',record});return record}
- this.emit({type:'delivered',record,deliverySeq:record.seq});if(record.kind==='verdict')this.noteVerdict(record);return record
+ const announce=()=>{this.emit({type:'posted',record,initiator:{...initiator}});
+ if(pending){this.emit({type:'pendingAck',record});return}
+ this.emit({type:'delivered',record,deliverySeq:record.seq});if(record.kind==='verdict')this.noteVerdict(record)};
+ if(ackDecision)this.ackEvent(ackDecision,'notification',announce);else announce();return record
+ }
+ private ackEvent(decision:Record_,event:string,publish:()=>void){
+ const key=decision.seq+':'+decision.id+':'+event;
+ if(!this.deps.journal.ackEventRecorded(decision,event)&&!this.emittedAckEvents.has(key)){this.emittedAckEvents.add(key);publish()}
+ this.deps.journal.markAckEvent(decision,event)
  }
  private pending(seq:number):{record:Record_;resolution:Record_|null}{
+ this.deps.journal.flushAckEvents();
  const record=this.deps.journal.get(seq);if(!record)throw new JournalError('reply_to_missing','нет записи #'+seq);
  if(record.ack!=='pending')throw new JournalError('ack_not_pending','запись #'+seq+' не ждёт подтверждения владельца');
  return {record,resolution:ackResolution(record,this.deps.journal.repliesTo(seq))}
  }
- pendingAcks():Record_[]{return this.deps.journal.read({limit:0}).filter(record=>record.ack==='pending'&&!ackResolution(record,this.deps.journal.repliesTo(record.seq)))}
+ private ackComplete(resolution:Record_):boolean{return this.deps.journal.ackEventRecorded(resolution,resolution.kind==='ack'?'confirmed':'notification')}
+ pendingAcks():Record_[]{this.deps.journal.flushAckEvents();return this.deps.journal.read({limit:0}).filter(record=>{
+ if(record.origin==='steer'||record.ack!=='pending')return false;
+ const resolution=ackResolution(record,this.deps.journal.repliesTo(record.seq));return !resolution||!this.ackComplete(resolution)
+ })}
  confirmAck(seq:number):Record_ {
- const {record,resolution}=this.pending(seq);if(resolution?.kind==='ack')return resolution;if(resolution)throw new JournalError('ack_closed','запись #'+seq+' уже отклонена владельцем');
- const ack=this.deps.journal.append({sender:'owner',to:[record.from],kind:'ack',text:'подтверждено #'+seq,reply_to:seq,policy:this.deps.policy?.version??0});
- this.deps.journal.markAcked(seq);this.emit({type:'posted',record:ack,initiator:{seat:'owner',trust:'owner'}});this.emit({type:'delivered',record,deliverySeq:ack.seq});if(record.kind==='verdict')this.noteVerdict(record);return ack
+ const {record,resolution}=this.pending(seq);
+ if(resolution?.kind==='rejected'){
+ if(this.ackComplete(resolution))throw new JournalError('ack_closed','запись #'+seq+' уже отклонена владельцем');
+ return this.finishRejection(record,resolution)
+ }
+ const ack=resolution??this.deps.journal.append({sender:'owner',to:[record.from],kind:'ack',text:'подтверждено #'+seq,reply_to:seq,policy:this.deps.policy?.version??0});
+ this.deps.journal.markAcked(seq);this.ackEvent(ack,'confirmed',()=>{
+ this.emit({type:'posted',record:ack,initiator:{seat:'owner',trust:'owner'}});this.emit({type:'delivered',record,deliverySeq:ack.seq});if(record.kind==='verdict')this.noteVerdict(record)
+ });return ack
  }
  rejectAck(seq:number):Record_ {
- const {record,resolution}=this.pending(seq);if(resolution)throw new JournalError('ack_closed','решение по записи #'+seq+' уже принято');
- const rejected=this.deps.journal.append({sender:'harness',to:['owner'],kind:'rejected',text:'#'+seq+' '+record.kind+' от '+record.from+' отклонено владельцем',reply_to:seq});
- this.emit({type:'rejected',record:rejected,sender:record.from,reason:'владелец не подтвердил'});
- this.postCore({to:[record.from],kind:'note',text:'Запись #'+seq+' ('+record.kind+') владелец не подтвердил, она не доставлена.',thread:record.thread??null,origin:'ack'},{seat:'harness',trust:'harness'});return rejected
+ const {record,resolution}=this.pending(seq);
+ if(resolution&&(resolution.kind==='ack'||this.ackComplete(resolution)))throw new JournalError('ack_closed','решение по записи #'+seq+' уже принято');
+ const rejected=resolution??this.deps.journal.append({sender:'harness',to:['owner'],kind:'rejected',text:'#'+seq+' '+record.kind+' от '+record.from+' отклонено владельцем',reply_to:seq});
+ return this.finishRejection(record,rejected)
+ }
+ private finishRejection(record:Record_,rejected:Record_):Record_ {
+ this.ackEvent(rejected,'rejected',()=>this.emit({type:'rejected',record:rejected,sender:record.from,reason:'владелец не подтвердил'}));
+ const text='Запись #'+record.seq+' ('+record.kind+') владелец не подтвердил, она не доставлена.';
+ const note=this.deps.journal.read({limit:0}).find(r=>r.seq>rejected.seq&&r.kind==='note'&&r.from==='harness'&&r.origin==='ack'&&r.text===text&&r.to.length===1&&r.to[0]===record.from&&(r.reply_to===record.seq||r.reply_to===null));
+ if(note)this.ackEvent(rejected,'notification',()=>{this.emit({type:'posted',record:note,initiator:{seat:'harness',trust:'harness'}});this.emit({type:'delivered',record:note,deliverySeq:note.seq})});
+ else this.write({to:[record.from],kind:'note',text,thread:record.thread??null,reply_to:record.seq,origin:'ack'},{seat:'harness',trust:'harness'},true,rejected);
+ return rejected
  }
  private applyVerdict(record:Record_){
  if(!record.thread)return;const state=this.states.get(record.thread)??{rounds:0,accepted:false,lastScore:null,sha:null,merged:null};

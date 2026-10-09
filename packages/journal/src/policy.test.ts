@@ -52,3 +52,15 @@ test('[28] reload swaps only fully validated immutable snapshot and retains brok
  f.reload('version: 7\nroutes: [{from: a, to: b, kinds: note}]');assert.equal(p.maybeReload(),true);assert.equal(p.broken,false);assert.equal(p.version,7);assert.equal(p.error,null);assert.equal(old.version,1);assert.equal(p.maybeReload(),false)
  }finally{f.close()}
 });
+
+for(const fault of ['corrupt','deleted'] as const)test('broken '+fault+' policy denies observation to agents until restored',()=>{
+ const f=fixture();try{
+ const summary=f.policy.summaryFor('assistant',f.roles,{});assert.equal(f.policy.canObserve('assistant','executor'),true);
+ if(fault==='corrupt')f.reload('routes: [');else unlinkSync(f.policyPath);
+ assert.throws(()=>f.policy.maybeReload(),PolicyError);assert.equal(f.policy.broken,true);
+ assert.equal(f.policy.canObserve('assistant','executor'),false);assert.equal(f.policy.canObserve('owner','executor'),true);
+ assert.equal(f.policy.summaryFor('assistant',f.roles,{}),summary);assert.equal(f.policy.snapshot().canObserve('assistant','executor'),true);
+ f.reload(readFileSync(join(fixtureDir,'comms-policy.yaml'),'utf8'));assert.equal(f.policy.maybeReload(),true);
+ assert.equal(f.policy.canObserve('assistant','executor'),true);assert.equal(f.policy.broken,false);
+ }finally{f.close()}
+});

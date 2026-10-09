@@ -68,5 +68,5 @@ export class Policy implements PolicyView {
  if(this._broken||mtime!==this.mtime){this.load();return true}return false
  }
  routeFor(from:string,to:string,kind:string){return this.view.routeFor(from,to,kind)}allowedKinds(from:string,to:string){return this.view.allowedKinds(from,to)}checkSend(from:string,to:string,kind:string){return this._broken?{allow:false,pending:false,reason:'политика связи не читается; исправь comms-policy.yaml',route:null,bounds:{},trigger:null}:this.view.checkSend(from,to,kind)}
- canObserve(role:string,targetRole:string){return this.view.canObserve(role,targetRole)}summaryFor(role:string,seatRoles:Record<string,string>,labels:Record<string,string>){return this.view.summaryFor(role,seatRoles,labels)}
+ canObserve(role:string,targetRole:string){return role==='owner'||!this._broken&&this.view.canObserve(role,targetRole)}summaryFor(role:string,seatRoles:Record<string,string>,labels:Record<string,string>){return this.view.summaryFor(role,seatRoles,labels)}
 }
