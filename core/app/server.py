@@ -734,8 +734,9 @@ class App:
             if not c:
                 continue
             c["transcript"], c["sessionId"], c["model"], c["vendor"], c["carry"] = p.transcript, p.session_id, p.model, p.vendor, p.carry
-            if not c.get("title"):
-                first = next((m["text"] for m in p.transcript if m["role"] == "me"), "")
+            if not c.get("title") or c["title"] == "вводная роли":                    # заглушка уступает первому осмысленному тексту (Kimi UX-4 №126 п.5)
+                first = next((m["text"] for m in p.transcript if m["role"] == "me"), "") or \
+                    next((m["text"] for m in p.transcript if m["role"] == "ai" and (m.get("text") or "").strip()), "")
                 c["title"] = first.strip().split("\n")[0][:60] or ("вводная роли" if any(m["role"] == "peer" and m["text"].startswith("[от харнесс]") for m in p.transcript) else "")
         try:
             self.journal._save_json(self._chats_path(), self.chats)

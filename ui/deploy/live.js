@@ -71,7 +71,7 @@
   const modelName=id=>{ for(const v of Object.values(H.models||{})){ const m=(v||[]).find(x=>x.id===id); if(m&&m.label) return m.label; } return id||'модель не выбрана'; };   // человеческое имя модели из каталога движка (Kimi UX-3 №106 п.4)
   function hStatus(){ if(PAGE!=='chat') return; const p=H.pane; if(H.on) document.querySelectorAll('.frame .top > b').forEach(b=>b.textContent=(p?(p.id==='room'?'Без роли':paneName(p)):'Без роли')+' · '+((H.project||'').split('/').filter(Boolean).pop()||'проект'));
     document.querySelectorAll('.frame .top .st').forEach(s=>{ if(!p) return;
-      s.innerHTML='<i></i>'+(H.cur?'думает':'подключено')+' · '+esc(p.label)+' · '+esc(modelName(p.model))+' · '+esc(p.mode)+' <span class="live-pick" title="Выбрать место">▾</span>'; s.classList.toggle('live-busy',!!H.cur); });
+      s.innerHTML='<i></i>'+(H.link==='lost'?'связь потеряна · переподключение…':(H.cur?'думает':'подключено'))+' · '+esc(p.label)+' · '+esc(modelName(p.model))+' · '+esc(p.mode)+' <span class="live-pick" title="Выбрать место">▾</span>'; s.classList.toggle('live-busy',!!H.cur); });
     if(!p&&H.on) document.querySelectorAll('.frame .top .st').forEach(s=>{ s.innerHTML='<i></i>подключено · без роли · модель не выбрана <span class="live-pick" title="Выбрать место">▾</span>'; }); }
   function pickMenu(st){ document.querySelectorAll('.st .live-menu').forEach(m=>m.remove()); const m=document.createElement('div'); m.className='live-menu'; st.style.position='relative';
     m.innerHTML=H.panes.map(p=>'<div data-pane="'+p.id+'"'+(H.pane&&p.id===H.pane.id?' class="on"':'')+'>'+(H.pane&&p.id===H.pane.id?'✓ ':'')+esc(p.id==='room'?'Без роли':paneName(p))+' <small>· '+esc(p.vendor==='claude'?'Claude':'Codex')+' · '+esc(modelName(p.model))+'</small></div>').join(''); st.appendChild(m);
@@ -131,6 +131,8 @@
     await refreshChats();
     if(PAGE==='chat'){ if(H.pane&&H.pane.busy) H.cur={text:'',tools:[]};
       const es=new EventSource('/api/events/all'); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
+      es.onerror=()=>{ if(H.link!=='lost'){ H.link='lost'; hStatus(); toast('Связь с движком потеряна — переподключаюсь…'); } };   // видимое состояние вместо молчаливого обрыва (Kimi UX-4 №126 п.3)
+      es.onopen=()=>{ if(H.link==='lost'){ H.link='ok'; hStatus(); toast('Связь восстановлена'); refreshStatus(); } };
       hStatus(); await loadChat(); }
     if(window.CX) CX.render(); }
 
@@ -167,11 +169,12 @@
   let SEL=null;
   const plain=m=>m.text||String(m.html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
   function selStart(to,opts){ opts=opts||{}; const ids=Array.isArray(to)?to:[to]; const idx=S.chat.map((m,i)=>i).filter(i=>S.chat[i].role==='me'||S.chat[i].src==='live'); if(!idx.length){ toast('Передавать нечего — разговор пуст'); return; } SEL={to:ids,sw:opts.sw!==false,checked:new Set(idx)}; render(); }   // sw: переключиться после передачи (свитчер ролей) или остаться (меню под ответом)
+  const selChars=()=>[...(SEL?SEL.checked:[])].reduce((a,i)=>a+plain(S.chat[i]||{}).length,0);   // объём передачи (Kimi UX-4 №126 п.7)
   function selBar(){ document.querySelectorAll('.live-selbar').forEach(x=>x.remove()); if(!SEL) return; const tos=(H.panes||[]).filter(p=>SEL.to.includes(p.id)); if(!tos.length){ SEL=null; return; } const toName=tos.map(p=>esc(paneName(p))).join(', '); const from=H.pane?(H.pane.id==='room'?'разговора без роли':paneName(H.pane)):'разговора без роли';
     document.querySelectorAll('.frame .box').forEach(box=>{ const bar=document.createElement('div'); bar.className='live-selbar';
-      bar.innerHTML='<div class="t">передать контекст → <b>'+toName+'</b> · выбрано <b class="n">'+SEL.checked.size+'</b> · отметьте реплики галочками</div><input class="live-f" value="'+esc('Прочитай контекст чата от '+from+' и жди команду.')+'"><div class="acts"><span class="btn sm p" data-sel="go">'+(SEL.sw?'Передать и переключиться':'Передать')+'</span><span class="btn sm ghost" data-sel="all">Все</span><span class="btn sm ghost" data-sel="none">Ничего</span><span class="btn sm ghost" data-sel="cancel">Отмена</span></div>';
+      bar.innerHTML='<div class="t">передать контекст → <b>'+toName+'</b> · выбрано <b class="n">'+SEL.checked.size+'</b> · <span class="ch">≈ '+fmtN(selChars())+' знаков</span> · адресат прочитает и ответит (один ход) · отметьте реплики галочками</div><input class="live-f" value="'+esc('Прочитай контекст чата от '+from+' и жди команду.')+'"><div class="acts"><span class="btn sm p" data-sel="go">'+(SEL.sw?'Передать и переключиться':'Передать')+'</span><span class="btn sm ghost" data-sel="all">Все</span><span class="btn sm ghost" data-sel="none">Ничего</span><span class="btn sm ghost" data-sel="cancel">Отмена</span></div>';
       const top=box.previousElementSibling&&box.previousElementSibling.classList.contains('cx-top')?box.previousElementSibling:box; top.before(bar); }); }
-  document.addEventListener('click',async e=>{ const ck=e.target.closest('[data-ck]'); if(ck&&SEL){ const i=+ck.dataset.ck; if(ck.checked) SEL.checked.add(i); else SEL.checked.delete(i); document.querySelectorAll('.live-selbar .n').forEach(n=>n.textContent=SEL.checked.size); return; }
+  document.addEventListener('click',async e=>{ const ck=e.target.closest('[data-ck]'); if(ck&&SEL){ const i=+ck.dataset.ck; if(ck.checked) SEL.checked.add(i); else SEL.checked.delete(i); document.querySelectorAll('.live-selbar .n').forEach(n=>n.textContent=SEL.checked.size); document.querySelectorAll('.live-selbar .ch').forEach(x=>x.textContent='≈ '+fmtN(selChars())+' знаков'); return; }
     const sb=e.target.closest('[data-sel]'); if(!sb||!SEL) return; const k=sb.dataset.sel;
     if(k==='cancel'){ SEL=null; render(); return; }
     if(k==='all'||k==='none'){ SEL.checked=new Set(k==='all'?S.chat.map((m,i)=>i).filter(i=>S.chat[i].role==='me'||S.chat[i].src==='live'):[]); render(); return; }
@@ -207,9 +210,9 @@
       laMenu(anchor,'назначить роль разговору',items,async it=>{ let r=null; try{ r=await api('/api/assign',{role:it.role}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
         const pn=(r.project||'').split('/').pop(); if(r.created){ if(S.cx) S.cx.noFolder=false; S.chat.forEach(x=>{ if(x.pane==='room') x.nf=false; }); H.projects=null; }
         S.ui.pane=r.pane.id; save(); await refreshStatus(); await loadChat(); log('настройка',(r.created?'Проект создан по разговору: '+pn+' · ':'')+'Роль назначена: '+r.pane.label+' · '+r.pane.model); toast(r.created?'Проект «'+esc(pn)+'» создан по разговору — оркестратор отвечает':'Роль назначена: '+esc(r.pane.label)+' — разговор продолжается от её имени'); }); return; }
-    if(kind==='handoff'){ const me=H.pane?H.pane.id:'room'; const items=(H.panes||[]).filter(p=>p.id!=='room'&&p.id!==me).map(p=>({t:esc(paneName(p)),r:esc(p.model)+(p.busy?' · отвечает':''),id:p.id}));
+    if(kind==='handoff'){ const me=H.pane?H.pane.id:'room'; const items=(H.panes||[]).filter(p=>p.id!=='room'&&p.id!==me).map(p=>({t:esc(paneName(p)),r:esc(modelName(p.model))+(p.busy?' · отвечает':''),id:p.id}));
       // правило — в движке: один ответ → уходит целиком сразу; два и больше → 409 needSelection → плашка выбора, владелец остаётся здесь
-      laMulti(anchor,'передать контекст в чат',items,'Передать',async picked=>{ const ids=picked.map(x=>x.id), names=picked.map(x=>x.t).join(', '); let r=null; try{ r=await api('/api/handoff',{to:ids,from:me,kind:'note'}); }catch(x){}
+      laMulti(anchor,'передать контекст в чат · адресат прочитает и ответит (один ход модели)',items,'Передать',async picked=>{ const ids=picked.map(x=>x.id), names=picked.map(x=>x.t).join(', '); let r=null; try{ r=await api('/api/handoff',{to:ids,from:me,kind:'note'}); }catch(x){}
         if(r&&r.needSelection){ selStart(ids,{sw:false}); toast('В чате '+r.answers+' ответа(ов) — отметьте, что передать, и поправьте промпт'); return; }
         if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
         noteHandoff(r); log('чат','Контекст передан: '+names); toast('Контекст передан: '+names+' · запись №'+r.seq+' — вы остались в этом чате'); }); return; }
