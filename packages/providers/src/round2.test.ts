@@ -9,7 +9,7 @@ import {fixture,codexHarness,HOLD,until,terminals} from './test-support.ts';
 import {bridge} from './bridge-test-support.ts';
 
 for(const stage of ['binary','auth'] as const)test('early Claude interrupt during '+stage+' cancels without query',async()=>{
- const f=fixture('claude');let finish!:()=>void,entered=false,queries=0,auths=0;
+ const f=fixture('claude');let starts=0;f.ctx.modelStarted=()=>{starts++};let finish!:()=>void,entered=false,queries=0,auths=0;
  const provider=new ClaudeProvider({
  findBinary:()=>stage==='binary'?new Promise(r=>{entered=true;finish=()=>r('/fake/claude')}):Promise.resolve('/fake/claude'),
  authStatus:(_binary,_env,signal)=>{auths++;assert.equal(signal?.aborted,false);return stage==='auth'?new Promise(r=>{entered=true;finish=()=>r({loggedIn:true})}):Promise.resolve({loggedIn:true})},
@@ -18,11 +18,11 @@ for(const stage of ['binary','auth'] as const)test('early Claude interrupt durin
  const run=provider.runTurn(f.seat,'x',f.ctx),cancelled=assert.rejects(run,e=>e instanceof ProviderError&&e.code==='cancelled');
  await until(()=>entered);await f.handle!.interrupt();await cancelled;
  assert.equal(f.controller.signal.aborted,false);assert.equal(f.handle,null);assert.equal(terminals(f.events).length,1);
- finish();await new Promise<void>(r=>setImmediate(r));assert.equal(queries,0);assert.equal(auths,stage==='binary'?0:1);await provider.close();
+ finish();await new Promise<void>(r=>setImmediate(r));assert.equal(queries,0);assert.equal(starts,0);assert.equal(auths,stage==='binary'?0:1);await provider.close();
 });
 
 for(const stage of ['servers','router'] as const)test('early Codex interrupt during '+stage+' cancels without process',async()=>{
- const f=fixture(),h=codexHarness();let finish!:()=>void,entered=false;
+ const f=fixture(),h=codexHarness();let starts=0;f.ctx.modelStarted=()=>{starts++};let finish!:()=>void,entered=false;
  const provider=new CodexProvider({...h.deps,
  servers:()=>stage==='servers'?new Promise(r=>{entered=true;finish=()=>r([])}):Promise.resolve([]),
  router:()=>stage==='router'?new Promise(r=>{entered=true;finish=()=>r(null)}):Promise.resolve(null)
@@ -30,7 +30,7 @@ for(const stage of ['servers','router'] as const)test('early Codex interrupt dur
  const run=provider.runTurn(f.seat,'x',f.ctx),cancelled=assert.rejects(run,e=>e instanceof ProviderError&&e.code==='cancelled');
  await until(()=>entered);await f.handle!.interrupt();await cancelled;
  finish();await new Promise<void>(r=>setImmediate(r));
- assert.equal(h.transports.length,0);assert.equal(f.tokens.length,0);assert.equal(f.handle,null);assert.equal(terminals(f.events).length,1);await provider.close();
+ assert.equal(h.transports.length,0);assert.equal(starts,0);assert.equal(f.tokens.length,0);assert.equal(f.handle,null);assert.equal(terminals(f.events).length,1);await provider.close();
 });
 
 for(const vendor of ['claude','codex'] as const)test('early '+vendor+' interrupt wins synchronous discovery failure without unhandled rejection',async()=>{
@@ -42,13 +42,13 @@ for(const vendor of ['claude','codex'] as const)test('early '+vendor+' interrupt
 });
 
 for(const method of ['initialize','account/read','thread/start','thread/resume'])test('early Codex interrupt awaiting '+method+' closes process without turn/start',async()=>{
- const f=fixture();if(method==='thread/resume')f.seat.sessionId='thread';
+ const f=fixture();let starts=0;f.ctx.modelStarted=()=>{starts++};if(method==='thread/resume')f.seat.sessionId='thread';
  const h=codexHarness(t=>{const base=t.responder;t.responder=(m,p,t)=>m===method?HOLD:base(m,p,t)}),provider=new CodexProvider(h.deps);
  const run=provider.runTurn(f.seat,'x',f.ctx),cancelled=assert.rejects(run,e=>e instanceof ProviderError&&e.code==='cancelled');
  await until(()=>h.transports[0]?.requests.some(r=>r.method===method)===true);
  await f.handle!.interrupt();await cancelled;
  const t=h.transports[0]!;assert.equal(t.closed,true);assert.equal(t.requests.some(r=>r.method==='turn/start'),false);
- assert.equal(t.requests.some(r=>r.method==='turn/interrupt'),false);assert.deepEqual(f.revoked,f.tokens);assert.equal(f.tokens.length,1);
+ assert.equal(t.requests.some(r=>r.method==='turn/interrupt'),false);assert.equal(starts,0);assert.deepEqual(f.revoked,f.tokens);assert.equal(f.tokens.length,1);
  const request=t.requests.find(r=>r.method===method)!;t.emit({id:request.id,result:method==='initialize'?{}:{thread:{id:'thread'}}});
  await new Promise<void>(r=>setImmediate(r));assert.equal(t.requests.some(r=>r.method==='turn/start'),false);
  assert.equal(f.handle,null);assert.equal(terminals(f.events).length,1);await provider.close();assert.deepEqual(f.revoked,f.tokens);
@@ -183,7 +183,7 @@ test('Codex peer label/vendor changes replace client; peer order alone preserves
 });
 
 test('Codex peer snapshot keeps cache signature and spawned SEATS consistent during config wait',async()=>{
- const f=fixture(),h=codexHarness();let finish!:()=>void,entered=false;
+ const f=fixture(),h=codexHarness();let starts=0;f.ctx.modelStarted=()=>{starts++};let finish!:()=>void,entered=false;
  const provider=new CodexProvider({...h.deps,servers:()=>new Promise(r=>{entered=true;finish=()=>r([])})});
  const run=provider.runTurn(f.seat,'one',f.ctx);await until(()=>entered);
  f.ctx.peers.push({id:'new-peer',label:'New',vendor:'claude'});finish();f.seat.sessionId=(await run).sessionId;
@@ -214,4 +214,12 @@ test('interrupt after turn/start RPC resolves but before await continuation inte
  assert.deepEqual(requests[0]!.params,{threadId:'thread',turnId:'turn-1'});
  assert.equal(terminals(f.events).length,1);assert.equal(f.events.at(-1)?.type,'done');assert.equal(f.handle,null)
  }finally{await provider.close()}
+});
+
+test('[TS-04a:47] malformed optional modelStarted refuses before a process or query',async()=>{
+ for(const vendor of ['claude','codex'] as const)for(const value of [null,42]){
+ const f=fixture(vendor),h=codexHarness();Object.assign(f.ctx,{modelStarted:value});let queries=0;
+ const p=vendor==='claude'?new ClaudeProvider({queryFn:(()=>{queries++;throw Error('must not launch')}) as typeof query}):new CodexProvider(h.deps);
+ await assert.rejects(p.runTurn(f.seat,'x',f.ctx),e=>e instanceof ProviderError&&e.code==='protocol');assert.equal(h.transports.length,0);assert.equal(queries,0);await p.close()
+ }
 });

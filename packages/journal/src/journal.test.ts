@@ -4,7 +4,7 @@ import {readFileSync,writeFileSync,appendFileSync,mkdirSync,copyFileSync,fsyncSy
 import {join} from 'node:path';
 import {Journal} from './journal.ts';
 import {JournalError,KINDS} from './types.ts';
-import {localIso} from './compat-json.ts';
+import {localIso,compatJson,parseCompat,orderedClone,orderedKeys,pythonTrim} from './index.ts';
 import {PROTOCOL_TEXT} from './strings.ts';
 import {temp,fixture,fixtureDir,error} from './test-support.ts';
 process.env.TZ='UTC';
@@ -123,4 +123,10 @@ test('write fault before append and partial fragment recover with no lost valid 
  fail=true;assert.throws(()=>j.append({sender:'owner',to:'left',kind:'note',text:'fail'}),error('write_failed'));assert.equal(j.diagnostics.confirmedSeq,0);
  fail=false;assert.equal(j.append({sender:'owner',to:'left',kind:'note',text:'after'}).seq,1);assert.deepEqual(new Journal(t.root).read({limit:0}).map(r=>r.text),['after'])
  }finally{t.close()}}
+});
+
+test('[TS-04a:49] public state helpers retain Python JSON key order and whitespace semantics',()=>{
+ const bytes=readFileSync(join(fixtureDir,'python-state/numeric-panes.json'),'utf8'),value=parseCompat(bytes) as Record<string,unknown>;
+ assert.equal(compatJson(orderedClone(value),2),bytes);assert.deepEqual(orderedKeys(value),['2','1']);assert.deepEqual(orderedKeys(value['2'] as object),['9','1']);assert.deepEqual(orderedKeys(value['1'] as object),['__proto__']);
+ assert.equal(pythonTrim('\u0085 текст \u001f'),'текст');assert.equal(pythonTrim('\ufeff'),'\ufeff')
 });

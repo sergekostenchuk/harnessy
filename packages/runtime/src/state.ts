@@ -1,0 +1,73 @@
+import {readFileSync,mkdirSync,openSync,fsyncSync,closeSync} from 'node:fs';
+import {dirname,join} from 'node:path';
+import {randomBytes} from 'node:crypto';
+import {atomicWrite} from '@harnessy/team';
+import {compatJson,parseCompat,orderedClone,orderedKeys,pythonTrim,type Journal} from '@harnessy/journal';
+import {object,message,RuntimeError,slice} from './errors.ts';
+import type {Pane,Registry} from './pane.ts';
+import type {Clock} from './types.ts';
+export interface StateIO {read(path:string):string;write(path:string,text:string):void}
+export const diskIO:StateIO={read:path=>new TextDecoder('utf-8',{fatal:true}).decode(readFileSync(path)),write(path,text){
+ mkdirSync(dirname(path),{recursive:true});atomicWrite(path,text);const fd=openSync(dirname(path),'r');try{fsyncSync(fd)}finally{closeSync(fd)}
+}};
+export interface Receipt {turnInstanceId:string;recordSeqs:number[];effectsPending:boolean;interrupted:boolean;nextSeen:Record<string,number>}
+export interface TranscriptMessage {role:string;text:string;ts:number;[key:string]:unknown}
+export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}
+export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;status?:'uncertain'}
+export interface Chat {id:string;pane:string;title:string;created:number;closed:number|null;model:string;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;[key:string]:unknown}
+interface Chats {chats:Record<string,Chat>;active:Record<string,string>}
+export function timestampMessage(role:string,text:string,ms:number):TranscriptMessage {
+ const seconds=ms/1000,number=Number.isInteger(seconds)?seconds.toFixed(1):String(seconds);
+ return parseCompat('{"role":'+JSON.stringify(role)+',"text":'+JSON.stringify(text)+',"ts":'+number+'}') as TranscriptMessage
+}
+export class StateStore {
+ readonly chatsPath:string;readonly haltPath:string;readonly attemptsPath:string;
+ chats:Chats={chats:{},active:{}};attempts:Record<string,Attempt>={};readonly undurable=new Set<string>();
+ readonly dir:string;private io:StateIO;private clock:Clock;private id:()=>string;
+ constructor(dir:string,io:StateIO,clock:Clock,id:()=>string=()=>randomBytes(2).toString('hex')){this.dir=dir;this.io=io;this.clock=clock;this.id=id;const base=join(dir,'.harness','state');this.chatsPath=join(base,'chats.json');this.haltPath=join(base,'halt.json');this.attemptsPath=join(base,'attempts.json')}
+ private read(path:string):unknown {return parseCompat(this.io.read(path))}
+ private write(path:string,data:unknown,indent?:number):void{try{this.io.write(path,compatJson(data,indent))}catch(e){throw new RuntimeError('write_failed','состояние не сохранено: '+message(e),500,{cause:e})}}
+ load(registry:Registry,lineErrors:string[]):boolean {
+ try{const raw=this.read(this.chatsPath);if(!object(raw)||!object(raw.chats)||!object(raw.active)||!Object.values(raw.active).every(v=>typeof v==='string'))throw Error('неверная форма');
+ const chats=raw.chats as Record<string,Chat>,active=orderedClone(raw.active as Record<string,string>);
+ for(const id of orderedKeys(chats)){const c=chats[id];if(!object(c)||typeof c.pane!=='string'||!Array.isArray(c.transcript)||!c.transcript.every(m=>object(m)&&typeof m.role==='string'&&typeof m.text==='string'&&typeof m.ts==='number'))throw Error('неверная форма чата '+id)}
+ this.chats={chats,active};for(const [pid,cid] of Object.entries(active)){const pane=registry.get(pid),c=chats[cid];if(!pane||!c||c.pane!==pid){delete active[pid];continue}
+ pane.sessionId=typeof c.sessionId==='string'&&c.sessionId?c.sessionId:null;pane.transcript=c.transcript;pane.carry=typeof c.carry==='string'?c.carry:'';
+ if(c.vendor==='claude'||c.vendor==='codex')pane.vendor=c.vendor;if(typeof c.model==='string'&&c.model)pane.model=c.model;
+ const last=[...c.transcript].reverse().find(m=>object(m.runtime)&&object(m.runtime.nextSeen));if(last&&object(last.runtime)&&object(last.runtime.nextSeen))pane.seen={...last.runtime.nextSeen} as Record<string,number>
+ }
+ }catch(e){this.chats={chats:{},active:{}};if((e as NodeJS.ErrnoException).code!=='ENOENT')lineErrors.push('chats.json не читается: '+message(e))}
+ try{const raw=this.read(this.attemptsPath);if(!object(raw)||!Object.values(raw).every(v=>object(v)&&typeof v.turnInstanceId==='string'&&Array.isArray(v.recordSeqs)&&v.recordSeqs.every(n=>Number.isSafeInteger(n)&&Number(n)>0)&&typeof v.startedAt==='number'))throw Error('неверная форма');this.attempts=raw as unknown as Record<string,Attempt>}
+ catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT'){lineErrors.push('attempts.json не читается: '+message(e));for(const id of registry.ids)this.attempts[id]={turnInstanceId:'unreadable',recordSeqs:[],startedAt:this.clock.now(),status:'uncertain'}}}
+ try{const raw=this.read(this.haltPath);if(!object(raw)||typeof raw.on!=='boolean')throw Error('неверная форма');return raw.on}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')lineErrors.push('halt.json не читается: '+message(e));return false}
+ }
+ activeChat(pane:Pane,create=true):Chat|null {const id=this.chats.active[pane.id],existing=id?this.chats.chats[id]:null;if(existing)return existing;if(!create)return null;
+ let cid:string;do{cid='c'+this.clock.now().toString(16)+this.id()}while(Object.hasOwn(this.chats.chats,cid));
+ const chat:Chat={id:cid,pane:pane.id,title:'',created:Math.floor(this.clock.now()/1000),closed:null,model:pane.model,vendor:pane.vendor,sessionId:pane.sessionId,transcript:pane.transcript,carry:pane.carry};
+ this.chats.chats=orderedClone(this.chats.chats,{[cid]:chat});this.chats.active=orderedClone(this.chats.active,{[pane.id]:cid});return chat
+ }
+ sync(registry:Registry):void {for(const p of registry.panes.values()){const c=this.activeChat(p,!!(p.transcript.length||p.sessionId));if(!c)continue;
+ c.transcript=p.transcript.filter(m=>!p.uncommitted.has(m));c.sessionId=p.sessionId;c.model=p.model;c.vendor=p.vendor;c.carry=p.carry;
+ if(!c.title){const first=p.transcript.find(m=>m.role==='me')?.text??'';c.title=slice(pythonTrim(first).split('\n')[0]??'',60)||(p.transcript.some(m=>m.role==='peer'&&m.text.startsWith('[от харнесс]'))?'вводная роли':'')}
+ }}
+ saveChats(registry:Registry):void{this.sync(registry);this.write(this.chatsPath,this.chats,2)}
+ savePanes(registry:Registry,journal:Journal):void {journal.savePanes(Object.fromEntries([...registry.panes].map(([id,p])=>[id,p.persist()])));this.saveChats(registry)}
+ saveHalt(on:boolean):void{this.write(this.haltPath,{on,ts:Math.floor(this.clock.now()/1000),by:'владелец'})}
+ startAttempt(pane:Pane,attempt:Attempt):void {this.attempts=orderedClone(this.attempts,{[pane.id]:attempt});this.write(this.attemptsPath,this.attempts,2)}
+ clearAttempt(id:string):void {if(!Object.hasOwn(this.attempts,id))return;const next=orderedClone(this.attempts);delete next[id];this.write(this.attemptsPath,next,2);this.attempts=next}
+ uncertain(id:string):void {const a=this.attempts[id];if(a&&a.status!=='uncertain'){const next=orderedClone(this.attempts,{[id]:{...a,status:'uncertain' as const}});this.write(this.attemptsPath,next,2);this.attempts=next}}
+ commitResult(pane:Pane,registry:Registry,result:ResultMessage):void {
+ if(!pane.transcript.some(m=>object(m.runtime)&&m.runtime.turnInstanceId===result.runtime.turnInstanceId))pane.transcript.push(result);
+ this.undurable.add(result.runtime.turnInstanceId);this.saveChats(registry);this.undurable.delete(result.runtime.turnInstanceId)
+ }
+ results(pane:Pane):ResultMessage[]{return Object.values(this.chats.chats).filter(c=>c.pane===pane.id).flatMap(c=>c.transcript.filter(m=>m.role==='ai'&&(Object.hasOwn(m,'runtime')||Object.hasOwn(m,'deliverySeq'))) as ResultMessage[])}
+ finishEffects(result:ResultMessage,registry:Registry):void {result.runtime.effectsPending=false;try{this.saveChats(registry)}catch(e){result.runtime.effectsPending=true;throw e}}
+ validate(result:ResultMessage,pane:Pane,journal:Journal):void {
+ const rt=result.runtime,fail=():never=>{throw new RuntimeError('recovering','записи сохранённого ответа не совпадают с журналом',409)};
+ if(!object(rt)||typeof rt.turnInstanceId!=='string'||!rt.turnInstanceId||typeof rt.effectsPending!=='boolean'||typeof rt.interrupted!=='boolean'||!object(rt.nextSeen)||!Object.values(rt.nextSeen).every(n=>Number.isSafeInteger(n)&&Number(n)>=0)||!Array.isArray(rt.recordSeqs)||new Set(rt.recordSeqs).size!==rt.recordSeqs.length||!Number.isSafeInteger(result.deliverySeq)||result.deliverySeq<0)fail();
+ let max=0;for(const seq of rt.recordSeqs){if(!Number.isSafeInteger(seq)||seq<=0)fail();const r=journal.get(seq);if(!r||r.from===pane.id||r.origin==='steer'||!r.to.some(t=>t===pane.id||t==='*')||['protocol','rejected','ack','policy'].includes(r.kind))fail();
+ const decision=r!.ack==='pending'?journal.repliesTo(seq).find(a=>a.seq>seq&&(a.kind==='ack'&&a.from==='owner'||a.kind==='rejected'&&a.from==='harness'&&a.to.includes('owner'))):null;
+ const delivered=r!.ack==='pending'?decision?.kind==='ack'?decision.seq:undefined:r!.seq;if(delivered===undefined)fail();max=Math.max(max,delivered!)
+ }if(max!==result.deliverySeq)fail()
+ }
+}

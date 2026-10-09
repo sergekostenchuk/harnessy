@@ -1,7 +1,7 @@
 import {join} from 'node:path';
 import {withPathLock,canonicalPath,MODE_IDS} from '@harnessy/team';
 import {ownerPaths,readObject,writeJson,object,truthy} from './files.ts';
-import {orderedClone,orderedKeys} from './compat-json.ts';
+import {orderedClone,orderedKeys} from '@harnessy/journal';
 import {ProjectError} from './errors.ts';
 import {SETTINGS_APPLIES,SETTINGS_SCOPE} from './strings.ts';
 function repr(key:string){

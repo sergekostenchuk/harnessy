@@ -91,3 +91,12 @@ test('models pagination and failure are independent of account; history strips d
  const fail=codexHarness(t=>{const base=t.responder;t.responder=(m,p,t)=>{if(m==='model/list')throw Error('catalog unavailable');return base(m,p,t)}});
  const q=new CodexProvider(fail.deps);await assert.rejects(q.models(),e=>e instanceof ProviderError&&e.code==='models_unavailable');assert.equal((await q.auth()).loggedIn,true);await q.close();
 });
+
+for(const status of ['completed','interrupted'] as const)test('[TS-04a:47] Codex modelStarted precedes turn/start and result carries '+status,async()=>{
+ const f=fixture(),order:string[]=[];let started=0;
+ f.ctx.modelStarted=()=>{started++;order.push('started')};
+ const h=codexHarness(t=>{const base=t.responder;t.responder=(m,p,t)=>{if(m!=='turn/start'){assert.equal(started,0);return base(m,p,t)}
+ assert.equal(started,1);order.push('turn/start');const id='turn-'+(++t.turn);queueMicrotask(()=>t.notify('turn/completed',{threadId:'thread',turn:{id,status}}));return {turn:{id}}
+ }}),provider=new CodexProvider(h.deps);
+ const result=await provider.runTurn(f.seat,'x',f.ctx);assert.equal(result.interrupted,status==='interrupted'?true:undefined);assert.deepEqual(order,['started','turn/start']);assert.equal(started,1);assert.equal(terminals(f.events).length,1);await provider.close()
+});

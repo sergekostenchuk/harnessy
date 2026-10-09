@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdirSync,readFileSync,writeFileSync,symlinkSync,lstatSync} from 'node:fs';
 import {join} from 'node:path';
 import {Settings} from './settings.ts';
-import {parseCompat,compatJson,orderedClone} from './compat-json.ts';
+import {parseCompat,compatJson,orderedClone} from '@harnessy/journal';
 import {temp,failure} from './test-support.ts';
 test('[19,30,36] settings precedence, whole-patch validation, Unicode, deletion and list contents',async()=>{
  const t=temp();try{const project=join(t.root,'project');mkdirSync(project);const path=join(t.root,'settings.json'),s=new Settings(path,()=>project,()=>1234000);

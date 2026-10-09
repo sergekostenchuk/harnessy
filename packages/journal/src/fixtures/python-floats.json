@@ -1,0 +1,39 @@
+{
+  "chats": {
+    "c1": {
+      "id": "c1",
+      "pane": "executor",
+      "transcript": [
+        {
+          "role": "me",
+          "text": "Владелец 🧠",
+          "ts": 1.0
+        },
+        {
+          "role": "ai",
+          "text": "",
+          "ts": -0.0
+        },
+        {
+          "role": "peer",
+          "text": "малый",
+          "ts": 1e-07
+        },
+        {
+          "role": "ai",
+          "text": "большой",
+          "ts": 1e+16
+        },
+        {
+          "role": "ai",
+          "text": "дробный",
+          "ts": 1791500000.125
+        }
+      ],
+      "created": 1
+    }
+  },
+  "active": {
+    "executor": "c1"
+  }
+}

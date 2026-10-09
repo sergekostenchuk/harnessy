@@ -1,0 +1,1 @@
+{"id": "worker", "vendor": "claude", "label": "воркер", "role": "executor", "model": "w1", "mode": "read", "cwd": "/project", "sessionId": "s1", "digest": false, "busy": false, "writePaths": ["src"], "worktree": null, "branch": null, "touched": true, "pendingApprovals": 0}

@@ -2,7 +2,7 @@ import {readFileSync,mkdirSync,statSync} from 'node:fs';
 import {dirname,join,isAbsolute} from 'node:path';
 import {homedir} from 'node:os';
 import {atomicWrite,canonicalPath,pyTruthy} from '@harnessy/team';
-import {parseCompat,compatJson,pythonTrim} from './compat-json.ts';
+import {parseCompat,compatJson,pythonTrim} from '@harnessy/journal';
 import {ProjectError} from './errors.ts';
 import type {OwnerPaths,JsonObject} from './types.ts';
 export function object(v:unknown):v is JsonObject{return !!v&&typeof v==='object'&&!Array.isArray(v)}
