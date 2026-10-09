@@ -82,10 +82,13 @@ def check_browser_origin(method: str, path: str, headers) -> tuple[int, str] | N
     """Для изменяющих запросов (POST и GET /api/sessions/<id>): Host — только локальный адрес окна (X-Forwarded-Host не читается);
     Origin, если прислан браузером, — только http://<тот же адрес>, чужой или null → 403; POST /api/* — только application/json
     (чужая страница без preflight такой запрос прислать не может). Отсутствие Origin допустимо: локальные клиенты (мост, curl)."""
-    if not (method == "POST" or (method == "GET" and path.startswith("/api/sessions/"))):
+    if not path.startswith("/api/"):
         return None
-    if (headers.get("Host") or "") not in ALLOWED_HOSTS:
+    if (headers.get("Host") or "") not in ALLOWED_HOSTS:   # Host — для ВСЕХ /api/*, включая чтение и поток событий (DNS rebinding читает данные; вердикт №60)
         return 403, "host_denied"
+    mutating = method == "POST" or (method in ("GET", "HEAD") and path.startswith("/api/sessions/"))   # HEAD aiohttp ведёт в GET-обработчик (вердикт №60)
+    if not mutating:
+        return None
     origin = headers.get("Origin")
     if origin is not None and origin not in {f"http://{h}" for h in ALLOWED_HOSTS}:
         return 403, "origin_denied"
