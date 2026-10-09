@@ -55,7 +55,7 @@ export class StateStore {
  activeChat(pane:Pane,create=true):Chat|null {const id=this.chats.active[pane.id],existing=id?this.chats.chats[id]:null;return existing??(create?this.newChat(pane,'',true):null)}
  sync(registry:Registry):void {for(const p of registry.panes.values()){const c=this.activeChat(p,!!(p.transcript.length||p.sessionId));if(!c)continue;
  c.transcript=p.transcript.filter(m=>!p.uncommitted.has(m));c.sessionId=p.sessionId;c.model=p.model;c.vendor=p.vendor;c.carry=p.carry;
- if(!c.title){const first=p.transcript.find(m=>m.role==='me')?.text??'';c.title=slice(pythonTrim(first).split('\n')[0]??'',60)||(p.transcript.some(m=>m.role==='peer'&&m.text.startsWith('[от харнесс]'))?'вводная роли':'')}
+ if(!c.title||c.title==='вводная роли'){const first=p.transcript.find(m=>m.role==='me')?.text||p.transcript.find(m=>m.role==='ai'&&pythonTrim(m.text))?.text||'';c.title=slice(pythonTrim(first).split('\n')[0]??'',60)||(p.transcript.some(m=>m.role==='peer'&&m.text.startsWith('[от харнесс]'))?'вводная роли':'')}
  }}
  saveChats(registry:Registry):void{this.sync(registry);this.write(this.chatsPath,this.chats,2)}
  savePanes(registry:Registry,journal:Journal):void {journal.savePanes(Object.fromEntries([...registry.panes].map(([id,p])=>[id,p.persist()])));this.saveChats(registry)}

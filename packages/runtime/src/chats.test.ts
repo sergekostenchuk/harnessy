@@ -82,3 +82,11 @@ test('20 ОКНА: in-flight session read cannot overwrite a chat reserved by a 
  const read=r.openSession('worker','external',OWNER),lock=withPathLock(r.project.dir,async()=>{entered.resolve();await held.promise});await entered.promise;
  const next=r.chatsNew({pane:'worker',carry:'none'},OWNER);msgs.resolve([{role:'ai',text:'чужая сессия'}]);await assert.rejects(read,error('stale_session'));held.resolve();await lock;await next;assert.equal(r.registry.get('worker')!.sessionId,null);assert.equal(r.registry.get('worker')!.transcript.length,0);
 });
+
+test('20/128: onboarding placeholder yields to first nonempty ai; meaningful title persists, me wins initial selection',async t=>{
+ const {runtime:r}=await harness(t),pane=r.registry.get('worker')!;pane.record('peer','[от харнесс] вводная');r.project.state.savePanes(r.registry,r.journal);const first=r.project.state.activeChat(pane,false)!;assert.equal(first.title,'вводная роли');
+ pane.transcript.push({role:'ai',text:'  \n ',ts:0});r.project.state.savePanes(r.registry,r.journal);assert.equal(first.title,'вводная роли');pane.record('ai','  Ответ модели 🧠\nпродолжение');r.project.state.savePanes(r.registry,r.journal);assert.equal(first.title,'Ответ модели 🧠');
+ pane.record('me','Поздний владелец');r.project.state.savePanes(r.registry,r.journal);assert.equal(first.title,'Ответ модели 🧠');
+ await r.chatsNew({pane:'worker',carry:'none'},OWNER);pane.record('ai','Ответ раньше синхронизации');pane.record('me','  🧠'.repeat(61)+'\nвторая строка');r.project.state.savePanes(r.registry,r.journal);const second=r.project.state.activeChat(pane,false)!;assert.equal(second.title,[...pane.transcript[1]!.text.trim().split('\n')[0]!].slice(0,60).join(''));assert.equal([...second.title].length,60);assert.notEqual(second.title,'Ответ раньше синхронизации');
+ second.title='вводная роли';r.project.state.savePanes(r.registry,r.journal);assert.equal(second.title,[...pane.transcript[1]!.text.trim().split('\n')[0]!].slice(0,60).join(''));
+});
