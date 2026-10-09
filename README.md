@@ -75,6 +75,42 @@ The model produces text and events; it does not touch the world directly.
 - **The window is a web app** served by the engine itself from `ui/deploy/out/site` under `/sketches`: the live layer (`live.js`, `cx.js`, `ctx.js`, `set.js`, `conn.js`) talks to the engine over HTTP and SSE (`/api/events`) on `127.0.0.1:3777`. Requests are protected by Host/Origin/`Sec-Fetch-Site`/Content-Type checks so a foreign page in the browser cannot drive the engine **[code]**.
 - **Backend = packages.** Today the engine is `core/` (Python). The `api` package (TS-05, **[contract]**) reproduces the same routes and JSON forms byte for byte on top of `runtime`, `projects` and `journal`, and `core/run.sh` becomes a shim that starts the Node entry point, so neither the window nor Electron changes when the core switches (TS-06).
 
+## Roadmap: publishing projects and connecting models
+
+Harnessy plans to embed two infrastructure services: **deployment** of applications to servers and managed proxy connectivity to AI providers. In the module map (`packages/README.md`) these are the `network` package (release 0.2: network routes, proxy/VPN, mandatory routing, egress diagnostics) and the `infra` package (release 0.6: partners, VPS, deployment).
+
+### Publishing projects
+
+The user will pick a server, a configuration and a location, see the price and start publishing with one button. Harnessy will create or attach a VPS, prepare the environment, deploy the application, set up the address and HTTPS, verify that it works and show the URL. Later publications will update the application without creating a new server.
+
+Recommended implementation:
+- The VPS provider's API — to create and manage the server.
+- Coolify — as the execution layer for publishing behind Harnessy's own interface; it provides an API and tooling for managing servers and deployments [1][2].
+- For the MVP — one provider, a Git repository with a Dockerfile, and the user's own account. Selling infrastructure inside Harnessy can be added later through a reseller programme.
+
+### Proxy traffic for models
+
+The user will be able to enable a proxy separately for a chosen AI provider, pick the exit country and set a spending limit. Routing will affect only the required connections, not all Harnessy traffic. (The groundwork exists: per-provider routes, egress checks and expected-IP verification live in the `projects` package and on the "Connections" screen.)
+
+Recommended implementation:
+- A partner Reseller API — to issue separate accesses to users, cap traffic and collect statistics. DataImpulse and NSTData describe such capabilities [3][4].
+- ISP/static or residential sticky — the primary options for testing; mobile — an additional mode when needed.
+- Master partner keys stay on the backend; the user receives a limited access.
+- Before enabling, the exit IP, country and health of the chosen service are checked. On failure the route never silently falls back to a direct connection.
+
+### Common principles
+
+Paid actions require explicit confirmation. Harnessy persists the state of operations, shows progress and errors, prevents buying a resource twice, and keeps "delete the application" separate from "delete the server".
+
+Model access, proxy traffic and server infrastructure are accounted separately. Choosing an exit country is not presented as a guarantee of access to an AI service; compatibility and acceptable use are verified per provider.
+
+Sources:
+[1] List | Coolify Docs — https://coolify.io/docs/api/endpoints/resources/list-resources
+[2] coollabsio/coolify-cli — https://github.com/coollabsio/coolify-cli
+[3] Reseller API — managing sub-users and traffic — DataImpulse — https://help.dataimpulse.com/en/articles/15931714-reseller-api-managing-sub-users-and-traffic
+[4] Proxy Reseller Program — White Label Proxy Solutions — https://www.nstdata.io/resell
+[5] VPS providers with partner APIs — https://www.perplexity.ai/search/80ea31d4-d563-4a34-ae4c-78bbee15e87d
+
 ## Where to look
 
 - `packages/README.md` — rules of the new core, storage principle, module map, the main acceptance scenario (our own team's work reproduced inside Harnessy).
