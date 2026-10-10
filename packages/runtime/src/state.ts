@@ -93,7 +93,8 @@ export class StateStore {
  private writeAttempts(next:Record<string,Attempt>):void {
   if(!this.damagedFingerprint){this.write(this.attemptsPath,next,2);return}
   // Every writer preserves the damaged original, including turns of unrelated seats.
-  const repair=this.attemptsPath+'.repair',backup=this.attemptsPath+'.damaged-'+this.clock.now()+'-'+this.damagedFingerprint,rename=this.io.rename??diskIO.rename!;
+  // A failed fsync may leave a completed rename; a retry must use a fresh archive name.
+  const repair=this.attemptsPath+'.repair',backup=this.attemptsPath+'.damaged-'+this.clock.now()+'-'+this.damagedFingerprint+'-'+randomBytes(16).toString('hex'),rename=this.io.rename??diskIO.rename!;
   this.write(repair,next,2);
   try{
    try{rename(this.attemptsPath,backup)}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e}
