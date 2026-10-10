@@ -27,6 +27,31 @@ def rep(t, old, new, n=1):
     return t.replace(old, new)
 
 
+JS_KEYWORD_AFTER_COMMENT = re.compile(r"\b(const|let|var|function|return|await|if|for|while)\b\s*[=( ].*[;{]")
+
+
+def check_eaten_code(files):
+    """Класс дефекта (трижды: runtime.ts, live.js 9230fa6, live.js:211 Kimi №199): комментарий `//` внутри однострочника
+    съедает код после себя — синтаксис цел, объявление исчезает, обработчик падает в окне. Сборка падает на такой строке."""
+    bad = []
+    for f in files:
+        for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            pos = 0
+            while True:
+                i = line.find("//", pos)
+                if i < 0:
+                    break
+                pos = i + 2
+                before = line[:i]
+                if before.endswith(":") or before.count("'") % 2 or before.count('"') % 2 or before.count("`") % 2:
+                    continue
+                if JS_KEYWORD_AFTER_COMMENT.search(line[i + 2:]):
+                    bad.append(f"{f.name}:{n}: код после комментария — {line[i:i+90]!r}")
+                break
+    if bad:
+        sys.exit("сборка остановлена, комментарий съел код:\n  " + "\n  ".join(bad))
+
+
 def embed_responsive(t):
     """Адаптив в мастер: CSS перед первым </style>, JS перед строкой с resize-слушателем."""
     if MARK in t:
@@ -172,6 +197,7 @@ LAUNCH = ('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name
 def build_proto():
     """Прототип из новых экранов: копия скетчей в режиме прототипа (proto.css + proto.js) → out/site/sketches/proto.
     Исходники в sketches/disarto остаются листами с пояснениями; прототип всегда выводится из них."""
+    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "proto.js", "responsive.js") if (HERE / n).exists()])
     src = ROOT / "sketches" / "disarto"
     dst = OUT / "sketches" / "proto"
     if dst.exists():
