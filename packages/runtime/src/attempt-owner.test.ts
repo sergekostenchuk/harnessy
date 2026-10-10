@@ -141,6 +141,35 @@ test('100: non-UTF8 attempts are archived exactly; unknown queue is never silent
  const backup=readdirSync(join(h.dir,'.harness','state')).find(path=>path.startsWith('attempts.json.damaged-'))!;assert.deepEqual(readFileSync(join(h.dir,'.harness','state',backup)),bytes);assert.equal(r.waiting('worker'),null);
 });
 
+for(const bytes of [Buffer.from('{original damaged bytes'),Buffer.from([0xff,0x80,0x00,0x42])])for(const outcome of ['done','cancelled','uncertain'])test('TS-07 r2/1: unrelated room '+outcome+' archives damaged attempts before the provider starts ('+bytes.toString('hex')+')',async t=>{
+ const h=await harness(t,{before:dir=>writeFileSync(join(dir,'.harness','state','attempts.json'),bytes)}),r=h.runtime,worker=r.waiting('worker')!;
+ const backups=()=>readdirSync(join(h.dir,'.harness','state')).filter(name=>name.startsWith('attempts.json.damaged-')).map(name=>readFileSync(join(h.dir,'.harness','state',name)));
+ h.provider.onRun=async(seat,_text,ctx)=>{
+  assert.equal(seat.id,'room');assert.equal(backups().length,1);assert.deepEqual(backups()[0],bytes);
+  if(outcome==='cancelled')throw new ProviderError('cancelled','cancelled before model start');
+  ctx.modelStarted?.();if(outcome==='uncertain')throw new ProviderError('transport_lost','possible external effect');
+  ctx.publish({type:'done',model:seat.model,sessionId:'room-session',durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'room result',sessionId:'room-session'};
+ };
+ r.roomSet({model:'w1',folder:false},OWNER);r.chat({pane:'room',message:'unrelated room turn'},OWNER);await r.idle();
+ assert.equal(h.provider.calls.length,1);assert.equal(h.provider.calls[0]!.seat.id,'room');assert.deepEqual(backups(),[bytes]);assert.equal(r.waiting('worker')!.turnInstanceId,worker.turnInstanceId);assert.equal(r.registry.get('worker')!.status,'uncertain');
+ const saved=JSON.parse(readFileSync(r.project.state.attemptsPath,'utf8'));assert.equal(saved.worker.turnInstanceId,worker.turnInstanceId);assert.equal(saved.room?.status,outcome==='uncertain'?'uncertain':undefined);
+ if(outcome==='uncertain')assert.ok(r.waiting('room'));else assert.equal(saved.room,undefined);
+ if(outcome!=='cancelled'){
+  await r.close();const provider=new FakeProvider(),restored=await createRuntime({...h.deps,providers:{claude:provider}},completedActions);t.after(()=>restored.close());await restored.idle();
+  assert.equal(provider.calls.length,0);assert.equal(restored.waiting('worker')!.turnInstanceId,worker.turnInstanceId);assert.deepEqual(backups(),[bytes]);
+ }
+});
+
+for(const cut of ['archive','promote'])test('TS-07 r2/1: unrelated room cannot start through a failed '+cut+'; retry preserves its neighbors',async t=>{
+ let armed=true;const io:StateIO={read:diskIO.read,write:diskIO.write,rename(from,to){if(armed&&(cut==='archive'?to.includes('.damaged-'):from.endsWith('.repair'))){armed=false;throw Error('archive/promotion unavailable')}diskIO.rename!(from,to)}};
+ const bytes=Buffer.from('{original bytes before unrelated room');
+ const h=await harness(t,{before:dir=>writeFileSync(join(dir,'.harness','state','attempts.json'),bytes),deps:{stateIO:io}}),r=h.runtime,worker=r.waiting('worker')!;
+ r.roomSet({model:'w1',folder:false},OWNER);r.chat({pane:'room',message:'first room message'},OWNER);await r.idle();assert.equal(h.provider.calls.length,0);assert.equal(r.waiting('worker')!.turnInstanceId,worker.turnInstanceId);
+ const originalOrBackup=readdirSync(join(h.dir,'.harness','state')).filter(name=>name==='attempts.json'||name.startsWith('attempts.json.damaged-')).map(name=>readFileSync(join(h.dir,'.harness','state',name)));assert.ok(originalOrBackup.some(raw=>raw.equals(bytes)));
+ r.chat({pane:'room',message:'owner retries room'},OWNER);await r.idle();assert.equal(h.provider.calls.length,1);assert.equal(h.provider.calls[0]!.seat.id,'room');assert.equal(r.waiting('worker')!.turnInstanceId,worker.turnInstanceId);
+ const backup=readdirSync(join(h.dir,'.harness','state')).find(name=>name.startsWith('attempts.json.damaged-'))!;assert.deepEqual(readFileSync(join(h.dir,'.harness','state',backup)),bytes);
+});
+
 for(const cut of ['clear-after','done-before','done-fsync'])test('98: durable retry intent at '+cut+' delivers once across two restarts',async t=>{
  let armed=false,fsyncCut=false;const io:StateIO={read:diskIO.read,write(path,text){if(armed&&cut==='clear-after'&&path.endsWith('attempts.json')&&!JSON.parse(text).worker){armed=false;diskIO.write(path,text);throw Error(cut)}diskIO.write(path,text)}};
  const h=await harness(t,{before:seed,deps:{stateIO:io,journalOptions:{fs:{appendFileSync(fd,line,encoding){const data=JSON.parse(String(line));if(armed&&cut.startsWith('done-')&&data.attempt?.done){armed=false;if(cut==='done-before')throw Error(cut);fsyncCut=true}appendFileSync(fd,line,encoding)},fsyncSync(fd){fsyncSync(fd);if(fsyncCut){fsyncCut=false;throw Error(cut)}}}}}}),r=h.runtime;armed=true;await assert.rejects(decision(r,'retry'));await r.close();

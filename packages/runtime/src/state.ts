@@ -90,11 +90,20 @@ export class StateStore {
   }
   return attempt.deliverySeq===undefined||attempt.deliverySeq===boundary?boundary:null
  }
- startAttempt(pane:Pane,attempt:Attempt):void {this.attempts=orderedClone(this.attempts,{[pane.id]:attempt});this.write(this.attemptsPath,this.attempts,2)}
- clearAttempt(id:string):void {if(!Object.hasOwn(this.attempts,id))return;const next=orderedClone(this.attempts);delete next[id];
-  if(this.damagedFingerprint){const repair=this.attemptsPath+'.repair',backup=this.attemptsPath+'.damaged-'+this.clock.now()+'-'+this.damagedFingerprint;this.write(repair,next,2);try{(this.io.rename??diskIO.rename!)(this.attemptsPath,backup);(this.io.rename??diskIO.rename!)(repair,this.attemptsPath)}catch(e){throw new RuntimeError('write_failed','состояние не сохранено: '+this.attemptsPath+': '+message(e),500,{cause:e})}this.damagedFingerprint=null}
-  else this.write(this.attemptsPath,next,2);this.attempts=next}
- uncertain(id:string):void {const a=this.attempts[id];if(a&&a.status!=='uncertain'){const next=orderedClone(this.attempts,{[id]:{...a,status:'uncertain' as const}});this.write(this.attemptsPath,next,2);this.attempts=next}}
+ private writeAttempts(next:Record<string,Attempt>):void {
+  if(!this.damagedFingerprint){this.write(this.attemptsPath,next,2);return}
+  // Every writer preserves the damaged original, including turns of unrelated seats.
+  const repair=this.attemptsPath+'.repair',backup=this.attemptsPath+'.damaged-'+this.clock.now()+'-'+this.damagedFingerprint,rename=this.io.rename??diskIO.rename!;
+  this.write(repair,next,2);
+  try{
+   try{rename(this.attemptsPath,backup)}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e}
+   rename(repair,this.attemptsPath);
+  }catch(e){throw new RuntimeError('write_failed','состояние не сохранено: '+this.attemptsPath+': '+message(e),500,{cause:e})}
+  this.damagedFingerprint=null;
+ }
+ startAttempt(pane:Pane,attempt:Attempt):void {const next=orderedClone(this.attempts,{[pane.id]:attempt});this.writeAttempts(next);this.attempts=next}
+ clearAttempt(id:string):void {if(!Object.hasOwn(this.attempts,id))return;const next=orderedClone(this.attempts);delete next[id];this.writeAttempts(next);this.attempts=next}
+ uncertain(id:string):void {const a=this.attempts[id];if(a&&a.status!=='uncertain'){const next=orderedClone(this.attempts,{[id]:{...a,status:'uncertain' as const}});this.writeAttempts(next);this.attempts=next}}
  commitResult(pane:Pane,registry:Registry,result:ResultMessage):void {
  if(!pane.transcript.some(m=>object(m.runtime)&&m.runtime.turnInstanceId===result.runtime.turnInstanceId))pane.transcript.push(result);
  this.undurable.add(result.runtime.turnInstanceId);this.saveChats(registry);this.undurable.delete(result.runtime.turnInstanceId)
