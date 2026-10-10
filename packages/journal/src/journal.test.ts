@@ -10,6 +10,13 @@ import {temp,fixture,fixtureDir,error} from './test-support.ts';
 process.env.TZ='UTC';
 const fixed={now:()=>new Date('2026-10-09T00:00:00.123Z'),id:(ms:number)=>ms.toString(16)+'-abcdef'};
 
+test('TS-07/98: internal attempt metadata is last and survives reload without changing ordinary record bytes',()=>{
+ const t=temp();try{const j=new Journal(t.root,fixed),a=j.append({sender:'harness',to:['owner'],kind:'note',origin:'attempt',text:'решение',thread:'attempt:turn-a',attempt:{pane:'worker',turnInstanceId:'turn-a',action:'skip',deliverySeq:7,done:false}});
+ assert.equal(Object.keys(a).at(-1),'attempt');assert.deepEqual(new Journal(t.root,fixed).get(a.seq)!.attempt,a.attempt);assert.equal(j.pendingFor('worker').length,0);
+ const ordinary=j.append({sender:'owner',to:['worker'],kind:'task',text:'обычная'});assert.equal(Object.hasOwn(ordinary,'attempt'),false);assert.equal(Object.keys(ordinary).at(-1),'policy');assert.equal(readFileSync(j.channelPath,'utf8').split('\n').at(-2),compatJson(ordinary));
+ }finally{t.close()}
+});
+
 test('[01] protocol first line matches Python bytes and closed kinds',()=>{
  const t=temp();try{const j=new Journal(t.root,fixed),line=readFileSync(j.channelPath,'utf8');
  assert.equal(line,readFileSync(join(fixtureDir,'python-state/channel.ndjson'),'utf8').split('\n')[0]+'\n');

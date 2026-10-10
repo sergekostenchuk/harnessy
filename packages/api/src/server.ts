@@ -28,7 +28,7 @@ export function createApi(options:ApiOptions){
  if(method!=='GET'&&!head){writeReply(res,plain('405: Method Not Allowed',405,{Allow:'GET,HEAD'}));return}
  const id=path.slice('/api/events/'.length);if(!['all','owner'].includes(id)&&!r.registry.get(id)){writeReply(res,json({error:'нет окна'},404),head);return}
  if(head){res.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','X-Accel-Buffering':'no','Cache-Control':'no-cache'});res.end();return}
- const sub=r.subscribe(id==='all'?{all:true}:id==='owner'?{owner:true}:{pane:id});await serveSse(request,res,sub,r.clock,streams);return
+ const sub=r.subscribe(id==='all'?{all:true}:id==='owner'?{owner:true}:{pane:id});await serveSse(request,res,sub,r.clock,streams,id==='all');return
  }
  const matching=routes.map(route=>({route,params:match(route,path)})).filter(x=>x.params);
  const chosen=matching.find(x=>x.route.method===method||head&&x.route.method==='GET');
