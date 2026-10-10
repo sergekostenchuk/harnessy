@@ -24,13 +24,23 @@ test('11/29/37: failed turn rolls back only inbox; carry and digest remain for r
  const policy=join(h.dir,'.harness','comms-policy.yaml');writeFileSync(policy,'version: 2\nroutes: []\nobserve: {executor: "*"}\n');
  f.onRun=async(_seat,_text,ctx)=>{ctx.modelStarted?.();p.record('me','вмешательство, сохранить');ctx.publish({type:'error',text:'ошибка модели'});throw new ProviderError('turn_failed','ошибка модели')};
  const {events}=collect(r);r.postOwner({to:'worker',kind:'task',text:'задание'},OWNER);await r.idle();assert.deepEqual(p.transcript.map(m=>m.text),['раньше','вмешательство, сохранить']);assert.equal(p.carry,'старый разговор');assert.deepEqual(p.seen,{});assert.equal(r.journal.pendingFor('worker').length,1);assert.equal(terminals(events).length,1);assert.equal(terminals(events)[0]!.message,'ошибка модели');assert.ok(events.some(e=>e.type==='note'&&String(e.text).startsWith('1 запись остались')));
- // отказ ПОСЛЕ modelStarted — исход неопределён (ревью №111): обычный kick модель не повторяет, повтор — по сообщению владельца, с сохранённым контекстом
+ // TS-07: сообщение пополняет очередь; повтор — только по отдельному решению владельца.
  f.onRun=null;assert.equal(p.status,'uncertain');await r.kick('worker');assert.equal(f.calls.length,1);
- r.postOwner({to:'worker',kind:'task',text:'повтори'},OWNER);await r.idle();assert.equal(f.calls.length,2);assert.match(f.calls[1]!.message,/старый разговор/);assert.match(f.calls[1]!.message,/соседнее/);assert.match(f.calls[1]!.message,/задание/);assert.equal(p.carry,'');assert.equal(p.seen.peer,1);assert.equal(r.journal.pendingFor('worker').length,0)
+ r.postOwner({to:'worker',kind:'task',text:'повтори'},OWNER);await r.idle();assert.equal(f.calls.length,1);await r.attempt('worker',{project:h.dir,turnInstanceId:r.waiting('worker')!.turnInstanceId,action:'retry'},OWNER);await r.idle();assert.equal(f.calls.length,2);assert.match(f.calls[1]!.message,/старый разговор/);assert.match(f.calls[1]!.message,/соседнее/);assert.match(f.calls[1]!.message,/задание/);assert.equal(p.carry,'');assert.equal(p.seen.peer,1);assert.equal(r.journal.pendingFor('worker').length,0)
 });
 
 test('38: missing provider is typed, leaves queue and releases pane',async t=>{
  const {runtime:r}=await harness(t,{deps:{providers:{}}}),{events}=collect(r);r.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await r.idle();assert.equal(r.journal.pendingFor('worker').length,1);assert.equal(r.registry.get('worker')!.busy,false);assert.equal(terminals(events).length,1);assert.equal(terminals(events)[0]!.message,'нет провайдера: claude');assert.equal(terminals(events)[0]!.code,'no_provider')
+});
+
+for(const [name,error,code] of [
+ ['ordinary Error',new Error('сбой записи'),'internal'],
+ ['provider error',new ProviderError('transport_lost','транспорт потерян'),'internal'],
+ ['RuntimeError',new RuntimeError('recovering','местные действия не завершены'),'recovering']
+] as const)test('75: report keeps a string code for '+name,async t=>{
+ const {runtime:r,provider:f}=await harness(t),{events}=collect(r);f.onRun=async()=>{throw error};
+ r.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await r.idle();
+ const failures=terminals(events);assert.equal(failures.length,1);assert.equal(failures[0]!.code,code);assert.equal(failures[0]!.message,error.message)
 });
 
 for(const bothFail of [false,true])test('38/44: session_missing retries once, one final terminal; bothFail='+bothFail,async t=>{

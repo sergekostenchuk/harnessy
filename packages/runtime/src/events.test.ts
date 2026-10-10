@@ -29,3 +29,16 @@ test('14: approval deny resolves once and owner trust cannot be forged by agent'
 });
 
 test('49: missing or masquerading subscription selector refuses',()=>{const bus=new EventBus(()=>[]);for(const value of [{},{all:false},{owner:false},{pane:3},{all:true,pane:'x'}])assert.throws(()=>bus.subscribe(value as never));assert.equal(bus.subscribers,0)});
+
+test('76: a throwing getter cannot interrupt all subscribers or detach their queues',async()=>{
+ const bus=new EventBus(()=>[]),first=bus.subscribe({all:true}),single=bus.subscribe({pane:'worker'}),second=bus.subscribe({all:true});
+ const iterators=[first,single,second].map(sub=>sub.events[Symbol.asyncIterator]());
+ const event={type:'note',get text():string{throw Error('bad payload')}};
+ assert.doesNotThrow(()=>bus.publish('worker',event));
+ const received=await Promise.all(iterators.map(iter=>iter.next()));
+ const fallback={type:'error',code:'unserializable',message:'событие не представимо: note',pane:'worker'};
+ assert.deepEqual(received[0]!.value,fallback);assert.equal(received[1]!.value,event);assert.deepEqual(received[2]!.value,fallback);
+ bus.publish('worker',{type:'note',text:'следующее'});
+ for(const iter of iterators)assert.equal((await iter.next()).value.text,'следующее');
+ assert.equal(bus.subscribers,3);assert.equal([first,single,second].some(sub=>sub.closed.aborted),false);bus.close()
+});

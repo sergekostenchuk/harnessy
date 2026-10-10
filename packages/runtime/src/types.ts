@@ -9,6 +9,7 @@ import type {StateStore,StateIO,ResultMessage} from './state.ts';
 export interface Clock {now():number;setTimeout(fn:()=>void,ms:number):unknown;clearTimeout(timer:unknown):void}
 export const systemClock:Clock={now:Date.now,setTimeout(fn,ms){const t=setTimeout(fn,ms);t.unref();return t},clearTimeout(t){clearTimeout(t as ReturnType<typeof setTimeout>)}};
 export type RuntimeEvent={type:string;[field:string]:unknown};
+export interface Waiting {status:'uncertain'|'recovering';recordSeqs:number[];startedAt:number|null;turnInstanceId:string;actions:('retry'|'skip'|'finish')[]}
 export type ModelCatalog=Partial<Record<Vendor,{id:string;label?:string}[]>>;
 export interface TurnScope {readonly projectDir:string;readonly seatId:string;readonly turnInstanceId:string}
 export type TurnRecords=readonly Readonly<Record_>[];
@@ -43,7 +44,7 @@ export interface ActiveTurn {
  finished:Promise<void>;finish():void;timer:unknown;resetWait:Promise<void>;releaseReset():void;result:ResultMessage|null;injected:import('./state.ts').TranscriptMessage[];
 }
 export interface ProjectState {
- generation:number;dir:string;closed:boolean;starting:boolean;now:()=>number;editing:Map<string,symbol>;materializing:Set<string>;team:Team|null;repoRoot:string|null;policy:Policy|null;journal:Journal;channel:Channel;
+ generation:number;dir:string;closed:boolean;starting:boolean;now:()=>number;editing:Map<string,symbol>;materializing:Set<string>;restoreFailed:Map<string,string>;team:Team|null;repoRoot:string|null;policy:Policy|null;journal:Journal;channel:Channel;
  registry:Registry;owner:Pane;bus:EventBus;state:StateStore;lineErrors:string[];halted:boolean;
  active:Map<string,ActiveTurn>;pumps:Map<string,Promise<void>>;resets:Map<Vendor,Promise<void>>;routeJobs:Map<Vendor,Promise<unknown>>;processEpoch:Map<Vendor,number>;wakeups:Set<string>;
 }

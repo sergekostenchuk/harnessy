@@ -56,7 +56,27 @@
 
   // ── мост к харнессу: если страницу отдал сам харнесс (~/HARNESS, :3777), чат идёт к настоящей модели по подписке, ответ — потоком событий
   const H={on:false,panes:[],pane:null,cur:null,asks:{}};
-  const api=(p,body)=>fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined).then(r=>r.json());
+  const api=(p,body)=>{ const project=H.project; return fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined).then(r=>r.json()).then(r=>{
+    if(r.waiting&&(r.project||project)===H.project){ const id=typeof r.pane==='string'?r.pane:(r.pane&&r.pane.id)||body&&body.pane||(p.match(/^\/api\/panes\/([^/]+)/)||[])[1]; const pane=(H.panes||[]).find(x=>x.id===id); if(pane){ pane.waiting=r.waiting; showWaiting(pane,r.waiting,r.project||project); } }
+    if(r.code==='restore_failed'&&r.project===H.project) showRestore(r.project,r.error);
+    return r; }); };
+  // TS-07: waiting controls bind the click to the displayed project and episode.
+  const warningSeen=new Set();
+  function warningEvent(ev){ if(!ev.warning) return false; const key=H.project+'\u0000'+ev.pane+'\u0000'+ev.warning; if(warningSeen.has(key)) return true; warningSeen.add(key); return false; }
+  function consumeState(ev){ const pane=(H.panes||[]).find(p=>p.id===ev.pane); if(pane) Object.assign(pane,ev);
+    if(ev.status==='idle'){ const prefix=H.project+'\u0000'+ev.pane+'\u0000'; for(const key of warningSeen) if(key.startsWith(prefix)) warningSeen.delete(key); const card=document.getElementById('live-waiting'); if(card&&card.dataset.pane===ev.pane&&card.dataset.project===H.project) card.remove(); }
+    else if(pane&&ev.waiting) showWaiting(pane,ev.waiting,H.project); if(typeof sideChats==='function') sideChats(); }
+  function waitingControls(p,info,project,compact=false){ const seqs=info.recordSeqs||[],range=seqs.length?'#'+seqs[0]+'–#'+seqs[seqs.length-1]:'вся очередь',damaged=String(info.turnInstanceId).startsWith('unreadable:'),name=paneName(p);
+    const detail=info.status==='recovering'?'Ответ сохранён. Восстановление завершит местные действия без вызова модели.':damaged?'Состав прежней попытки неизвестен: attempts.json повреждён; модель получит всю очередь места заново.':!(info.actions||[]).includes('skip')?'Граница прежней доставки неизвестна; повтор отправит модели всю очередь места.':'Записи '+range+' будут отправлены «'+name+'» ещё раз при повторе. При пропуске уйдут только более поздние задания.';
+    const buttons=(info.actions||[]).map(action=>'<button type="button" class="btn sm ghost" data-attempt-action="'+esc(action)+'" data-attempt-pane="'+esc(p.id)+'" data-attempt-project="'+esc(project)+'" data-attempt-id="'+esc(info.turnInstanceId)+'">'+({retry:'Повторить',skip:'Пропустить',finish:'Повторить восстановление'}[action]||esc(action))+'</button>').join('');
+    return '<div class="live-attempt-controls" style="white-space:normal"><small>'+esc((compact?name+' · '+range+'. ':'')+detail)+'</small><div class="act" style="display:flex;flex-wrap:wrap;gap:4px">'+buttons+'</div></div>'; }
+  function showWaiting(p,info,project){ if(!info||project!==H.project) return; let card=document.getElementById('live-waiting'); if(!card){ card=document.createElement('div'); card.id='live-waiting'; card.className='live-toast on'; document.body.appendChild(card); }
+    card.style.maxWidth='520px';card.style.whiteSpace='normal';card.style.display='block';card.dataset.pane=p.id; card.dataset.project=project; card.innerHTML='<b>'+esc(paneName(p))+' · '+(info.status==='recovering'?'восстановление ответа':'итог хода неизвестен')+'</b>'+waitingControls(p,info,project); }
+  function showRestore(project,error){ let card=document.getElementById('live-waiting'); if(!card){card=document.createElement('div');card.id='live-waiting';card.className='live-toast on';document.body.appendChild(card)}card.dataset.pane='';card.dataset.project=project;card.innerHTML='<span>'+esc(error)+'</span><button type="button" class="btn sm ghost" data-attempt-reload="'+esc(project)+'">Повторить восстановление проекта</button>'; }
+  document.addEventListener('click',async e=>{ const button=e.target.closest('[data-attempt-action], [data-attempt-reload]'); if(!button) return; e.preventDefault(); e.stopImmediatePropagation(); if(button.disabled) return; const requestedProject=button.dataset.attemptReload||button.dataset.attemptProject;button.disabled=true;
+    let r=null; try{ r=button.dataset.attemptReload?await api('/api/project',{path:button.dataset.attemptReload,reload:true}):await api('/api/panes/'+encodeURIComponent(button.dataset.attemptPane)+'/attempt',{project:button.dataset.attemptProject,turnInstanceId:button.dataset.attemptId,action:button.dataset.attemptAction}); }catch(x){} finally{button.disabled=false}
+    if(H.project!==requestedProject) return; if(!r||!r.ok){ toast('Не вышло: '+esc(r&&r.error||'нет связи')); return; } const card=document.getElementById('live-waiting'); if(card) card.remove(); await refreshStatus(); await refreshChats(); sideChats(); });
+  // End TS-07 waiting controls.
   function md(t){ const parts=esc(t).split(/```/); let out='';          // минимальная разметка ответа: абзацы, списки, **жирный**, `код`, блоки кода
     parts.forEach((p,i)=>{ if(i%2){ out+='<pre>'+p.replace(/^[a-zA-Z0-9_-]*\n/,'')+'</pre>'; return; }
       out+=p.split(/\n{2,}/).map(par=>{ par=par.replace(/^\n+|\n+$/g,''); if(!par) return '';
@@ -92,6 +112,7 @@
     if(c&&(c.text||c.tools.length)){ const u=ev&&ev.usage; S.chat.push({role:'ai',html:c.tools.map(toolLine).join('')+md(c.text),text:c.text,t:now(),src:'live',who:H.pane.id==='room'?'Без роли':paneName(H.pane),pane:H.pane.id,nf:!!(S.cx&&S.cx.noFolder),model:(ev&&ev.model)||H.pane.model,cost:u?{i:u.input,o:u.output,c:u.cacheRead,ms:ev.durationMs}:null}); S.chat=S.chat.slice(-40); save(); }
     if(ev&&ev.type==='error'){ const msg=ev.message||ev.text||ev.error||'ошибка'; S.chat.push({role:'ai',html:'<p>'+esc(msg)+'</p>'+(/not supported|unsupported|недоступн/i.test(msg)?'<p class="live-hint">Эта модель недоступна на подписке — выберите другую в чипе модели.</p>':''),t:now(),src:'err'}); save(); } render(); }
   function hEvent(ev){ const t=ev.type, cur=()=>H.cur||(H.cur={text:'',tools:[]});
+    if((t==='note'||t==='error')&&warningEvent(ev)) return;
     if(t==='delta'){ cur().text+=ev.text||''; drawLive(); }
     else if(t==='tool'){ cur().tools.push({text:'▸ '+ev.name+(ev.detail?': '+ev.detail:'')}); drawLive(); }
     else if(t==='toolError'){ cur().tools.push({text:'✕ '+(ev.text||''),err:true}); drawLive(); }
@@ -130,7 +151,7 @@
     H.on=true; applyStatus(st); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
     await refreshChats();
     if(PAGE==='chat'){ if(H.pane&&H.pane.busy) H.cur={text:'',tools:[]};
-      const es=new EventSource('/api/events/all'); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
+      const es=new EventSource('/api/events/all'); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='state') consumeState(ev); if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
       es.onerror=()=>{ if(H.link!=='lost'){ H.link='lost'; hStatus(); toast('Связь с движком потеряна — переподключаюсь…'); } };   // видимое состояние вместо молчаливого обрыва (Kimi UX-4 №126 п.3)
       es.onopen=()=>{ if(H.link==='lost'){ H.link='ok'; hStatus(); toast('Связь восстановлена'); refreshStatus(); } };
       hStatus(); await loadChat(); }
@@ -783,8 +804,8 @@
     const pinBtn=(kind,path,chat)=>'<span class="ps-pin'+(pinned(kind,path,chat)?' on':'')+'" data-pin-toggle="'+kind+'" data-path="'+esc(path)+'"'+(chat?' data-chat-id="'+chat+'"':'')+' title="'+(pinned(kind,path,chat)?'Снять закрепление':'Закрепить')+'">'+PIN+'</span>';
     // роль → её активный чат (один на роль); закрытые — счётчиком; роль без чата открывается с вводной (правило движка)
     const roleRow=p=>{ const c=all.find(x=>x.pane===p.id&&x.active), closed=all.filter(x=>x.pane===p.id&&!x.active).length;
-      return '<div class="ps-chat role pinnable'+(c?' act':'')+(p.busy?' busy':'')+'" data-chat="'+(c?c.id:'')+'" data-pane="'+p.id+'" title="'+esc(paneName(p))+' · '+esc(c?(c.title||'вводная роли'):'чата ещё нет — откроется с вводной')+(closed?' · закрытых: '+closed:'')+'"><i></i><span class="t">'+esc(paneName(p))+'</span><span class="s">'+esc(c?(c.title||'вводная роли'):'новый чат')+'</span>'+(closed?'<span class="m">+'+closed+'</span>':'')+(c?pinBtn('chat',cur,c.id):'')+'</div>'; };
-    const roomRow=c=>'<div class="ps-chat pinnable'+(c.active?' act':'')+'" data-chat="'+c.id+'" data-pane="room" title="'+esc(c.title||'без названия')+' · без роли"><i></i><span class="s one">'+esc(c.title||'без названия')+'</span>'+pinBtn('chat',cur,c.id)+'</div>';
+      return '<div class="ps-chat role pinnable'+(c?' act':'')+(p.busy?' busy':'')+'" data-chat="'+(c?c.id:'')+'" data-pane="'+p.id+'" title="'+esc(paneName(p))+' · '+esc(c?(c.title||'вводная роли'):'чата ещё нет — откроется с вводной')+(closed?' · закрытых: '+closed:'')+'"><i></i><span class="t">'+esc(paneName(p))+'</span><span class="s">'+esc(c?(c.title||'вводная роли'):'новый чат')+'</span>'+(closed?'<span class="m">+'+closed+'</span>':'')+(c?pinBtn('chat',cur,c.id):'')+'</div>'+(p.waiting?waitingControls(p,p.waiting,cur,true):''); };
+    const roomRow=c=>{ const room=H.panes.find(p=>p.id==='room'); return '<div class="ps-chat pinnable'+(c.active?' act':'')+'" data-chat="'+c.id+'" data-pane="room" title="'+esc(c.title||'без названия')+' · без роли"><i></i><span class="s one">'+esc(c.title||'без названия')+'</span>'+pinBtn('chat',cur,c.id)+'</div>'+(c.active&&room&&room.waiting?waitingControls(room,room.waiting,cur,true):''); };
     const shown=rooms.slice(0,5);
     const chatsHTML=seats.map(roleRow).join('')+(seats.length&&rooms.length?'<div class="ps-chat hdr">без роли</div>':'')+shown.map(roomRow).join('')
       +(rooms.length>shown.length?'<div class="ps-chat more">ещё '+(rooms.length-shown.length)+' — в списке чатов у поля ввода</div>':'')+(seats.length||rooms.length?'':'<div class="ps-chat more">в проекте пока нет ролей и чатов</div>');

@@ -71,6 +71,7 @@ export class Journal {
  if(reply!==null){const target=this.get(reply);if(!target)throw new JournalError('reply_to_missing','нет записи #'+String(reply));if(thread===null)thread=target.thread??null}
  const now=this.now();const rec:Record_={seq:this.lastSeq+1,id:this.id(now.getTime()),ts:localIso(now),from:input.sender,to:form.to,kind:input.kind,thread,reply_to:reply,text:form.text,evidence:form.evidence,policy:input.policy??0};
  for(const key of ['score','round','origin','accepted','bounds','ack','sha','merged'] as const)if(input[key]!==null&&input[key]!==undefined)Object.assign(rec,{[key]:input[key]});
+ if(input.attempt!==undefined)rec.attempt={...input.attempt};
  return this.write(rec)
  }
  get(seq:number):Record_|null {this.recover();for(let i=this.records.length-1;i>=0;i--)if(this.records[i]!.seq===seq)return this.records[i]!;return null}

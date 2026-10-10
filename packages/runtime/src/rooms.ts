@@ -44,7 +44,7 @@ function transferRoom(runtime:Runtime,p:ProjectState,source:Chat,mode:string,fai
 function initDeps(runtime:Runtime,p:ProjectState,room:Pane){return {...(runtime.deps.gitops?{gitops:runtime.deps.gitops}:{}),catalog:p.registry.models,roomModel:room.model,settings:runtime.settings.effective(),vendorOf:(model:string)=>vendorOf(p,model)}}
 export async function roomMove(runtime:Runtime,input:{path?:unknown;create?:unknown;git?:unknown},initiator:Initiator) {
  const p=owner(runtime,initiator),room=p.registry.get('room');if(!room?.model)throw new RuntimeError('room_missing','нет разговора без роли',400);
- const hold=reserve(p,[...p.registry.panes.values()],'идёт ход: переезд, когда все окна свободны'),source=chatSnapshot(p,room),path=expandUser(pythonTrim(String(input.path||'')));
+ const hold=reserve(p,[...p.registry.panes.values()],'идёт ход: переезд, когда все окна свободны',true),source=chatSnapshot(p,room),path=expandUser(pythonTrim(String(input.path||'')));
  try {
   if(pyTruthy(input.create)){
    if(!path||!isAbsolute(path))throw new RuntimeError('path_invalid','нужен абсолютный путь папки',400);
@@ -59,11 +59,11 @@ export async function assignRoomRole(runtime:Runtime,input:CreateSeatInput,initi
  const p=owner(runtime,initiator),role=String(input.role||'');
  if(!runtime.roleCatalog().some(c=>c.role===role))throw new RuntimeError('role_unknown','неизвестная роль '+role,400);
  const room=p.registry.get('room');if(!room?.model)throw new RuntimeError('room_missing','нет разговора без роли — назначать нечему',400);
- free(p,room,'разговор сейчас отвечает — назначьте роль после ответа');
+ free(p,room,'разговор сейчас отвечает — назначьте роль после ответа',roomWithoutProject(runtime,p));
  const source=chatSnapshot(p,room);let how='владельцем из разговора без роли (разговор продолжается в этой роли)';
  if(roomWithoutProject(runtime,p)){
   if(role!=='orchestrator')throw new RuntimeError('no_project','без проекта доступен только оркестратор — он создаст проект по разговору',400);
-  const hold=reserve(p,[...p.registry.panes.values()],'идёт ход: создать проект можно, когда все окна свободны');
+  const hold=reserve(p,[...p.registry.panes.values()],'идёт ход: создать проект можно, когда все окна свободны',true);
   try{
    let path:string;
    try{const root=projectsRoot(runtime.settings.effective()),name=projectNameFrom(source.transcript,()=>new Date(runtime.clock.now()));path=(await uniqueProject(root,name,{git:true,model:room.model,orchestrator:false},initDeps(runtime,p,room))).path}

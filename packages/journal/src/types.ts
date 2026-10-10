@@ -7,10 +7,11 @@ export class JournalError extends Error {
  readonly code:JournalCode;readonly maybeWritten?:true;
  constructor(code:JournalCode,message:string,maybeWritten?:true){super(message);this.name='JournalError';this.code=code;if(maybeWritten)this.maybeWritten=maybeWritten}
 }
-export interface Record_ {seq:number;id:string;ts:string;from:string;to:string[];kind:string;thread:string|null;reply_to:number|null;text:string;evidence:string[];policy:number;score?:number;round?:number;origin?:string;accepted?:boolean;bounds?:Bounds|null;ack?:'pending';sha?:string;merged?:string;version?:number;kinds?:string[]}
+export interface AttemptDecision {pane:string;turnInstanceId:string;action:'retry'|'skip'|'finish';deliverySeq:number|null;done:boolean}
+export interface Record_ {seq:number;id:string;ts:string;from:string;to:string[];kind:string;thread:string|null;reply_to:number|null;text:string;evidence:string[];policy:number;score?:number;round?:number;origin?:string;accepted?:boolean;bounds?:Bounds|null;ack?:'pending';sha?:string;merged?:string;version?:number;kinds?:string[];attempt?:AttemptDecision}
 export type Bounds=Readonly<Record<string,unknown>>;
 export interface DeliveryEntry {record:Record_;deliverySeq:number}
-export interface AppendInput {sender:string;to:string|string[];kind:string;text:string;thread?:string|null;reply_to?:number|null;evidence?:string[]|null;policy?:number;score?:number|null;round?:number|null;origin?:string|null;accepted?:boolean|null;bounds?:Bounds|null;ack?:'pending'|null;sha?:string|null;merged?:string|null}
+export interface AppendInput {sender:string;to:string|string[];kind:string;text:string;thread?:string|null;reply_to?:number|null;evidence?:string[]|null;policy?:number;score?:number|null;round?:number|null;origin?:string|null;accepted?:boolean|null;bounds?:Bounds|null;ack?:'pending'|null;sha?:string|null;merged?:string|null;attempt?:AttemptDecision}
 export interface Initiator {seat:string;trust:'owner'|'harness'|'agent'}
 export interface AgentPostInput {to:string|string[];kind:Kind;text:string;thread?:string|null;reply_to?:number|null;evidence?:string[]|null;score?:number;round?:number;sha?:string}
 export interface CorePostInput extends Omit<AgentPostInput,'kind'> {kind:Kind|typeof SYSTEM_KINDS[number];origin?:string;merged?:string}
