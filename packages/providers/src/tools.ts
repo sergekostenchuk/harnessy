@@ -6,6 +6,7 @@ function compact<T extends object>(value:T):{[K in keyof T]:Exclude<T[K],undefin
  return Object.fromEntries(Object.entries(value).filter(([,v])=>v!==undefined)) as {[K in keyof T]:Exclude<T[K],undefined>}
 }
 export async function invokeTool(name:string,input:unknown,ctx:TurnContext):Promise<ToolResult>{
+ const invoke=async():Promise<ToolResult>=>{
  if(ctx.signal.aborted)return {ok:false,error:'ход отменён',code:'cancelled'};
  switch(name){
  case 'propose_seats':return ctx.tools.proposeSeats(compact(schemas.propose_seats.parse(input)));
@@ -17,6 +18,7 @@ export async function invokeTool(name:string,input:unknown,ctx:TurnContext):Prom
  case 'assign_role':return ctx.tools.assignRole(compact(schemas.assign_role.parse(input)));
  default:return {ok:false,error:'нет такого инструмента',code:'unknown_request'}
  }
+ };return ctx.traceTool?ctx.traceTool(name,input,invoke):invoke();
 }
 export function sdkServer(ctx:TurnContext){
  const tools=Object.entries(schemas).map(([name,schema])=>tool(name,descriptions[name as keyof typeof descriptions],schema.shape,async input=>{

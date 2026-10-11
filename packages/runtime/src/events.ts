@@ -3,11 +3,12 @@ export type Selector={pane:string;owner?:never;all?:never}|{owner:true;pane?:nev
 export interface Subscription {events:AsyncIterable<RuntimeEvent>;closed:AbortSignal;close():void}
 interface Listener {selector:Selector;push(pane:string,ev:RuntimeEvent,replay?:boolean):void;close():void}
 export class EventBus {
+ observer:((pane:string,event:RuntimeEvent)=>RuntimeEvent)|null=null;
  private listeners=new Set<Listener>();private ended=false;
  private replay:()=>{pane:string;event:RuntimeEvent;replay?:boolean}[];readonly capacity:number;
  constructor(replay:()=>{pane:string;event:RuntimeEvent;replay?:boolean}[],capacity=4000){this.replay=replay;this.capacity=capacity}
  get subscribers(){return this.listeners.size}
- publish(pane:string,event:RuntimeEvent):void {if(!this.ended)for(const listener of [...this.listeners])listener.push(pane,event)}
+ publish(pane:string,event:RuntimeEvent):void {try{event=this.observer?.(pane,event)??event}catch{}if(!this.ended)for(const listener of [...this.listeners])listener.push(pane,event)}
  subscribe(selector:Selector):Subscription {
  if(!selector||Object.keys(selector).length!==1||!('pane' in selector&&typeof selector.pane==='string'&&selector.pane||'all' in selector&&selector.all===true||'owner' in selector&&selector.owner===true))throw new TypeError('неверная подписка');
  const controller=new AbortController(),queue:RuntimeEvent[]=[],waiters:((v:IteratorResult<RuntimeEvent>)=>void)[]=[];

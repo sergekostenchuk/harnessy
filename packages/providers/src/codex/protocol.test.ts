@@ -34,3 +34,9 @@ test('elicitation cannot invent required form fields after owner approval',async
  assert.deepEqual(await serverRequest('mcpServer/elicitation/request',{threadId:'t',turnId:'v',serverName:'other',mode:'form',requestedSchema:{type:'object',required:['name']}},f.ctx,'t','v'),{action:'decline',content:null,_meta:null});
  assert.deepEqual(await serverRequest('mcpServer/elicitation/request',{threadId:'t',turnId:'v',serverName:'other',mode:'url'},f.ctx,'t','v'),{action:'accept',content:null,_meta:null});
 });
+
+test('234: declined and invalid Codex permissions are rejected tool results, including refusal before MCP execution',async()=>{
+ const f=fixture(),traces:any[]=[];f.ctx.traceEvent=e=>traces.push(e);f.ctx.askApproval=async()=>false;
+ await serverRequest('item/commandExecution/requestApproval',{threadId:'t',turnId:'v',command:'fixture'},f.ctx,'t','v');await serverRequest('item/permissions/requestApproval',{threadId:'t',turnId:'v',permissions:{bad:true}},f.ctx,'t','v');await serverRequest('mcpServer/elicitation/request',{threadId:'t',turnId:'v',serverName:'other'},f.ctx,'t','v');assert.equal(traces.filter(e=>e.phase==='result').length,3);assert.ok(traces.filter(e=>e.phase==='result').every(e=>e.outcome==='rejected'&&e.reason==='approval_policy'));
+ const before=traces.length;await assert.rejects(serverRequest('item/commandExecution/requestApproval',{threadId:'foreign',turnId:'v'},f.ctx,'t','v'));assert.equal(traces.length,before);
+});

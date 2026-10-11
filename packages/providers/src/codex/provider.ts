@@ -97,6 +97,12 @@ export class CodexProvider implements Provider {
  if(method==='item/agentMessage/delta'){if(typeof p.delta!=='string')throw new ProviderError('protocol','missing delta',sessionId);text+=p.delta;streamed=true;ctx.publish({type:'delta',text:p.delta})}
  else if(method==='item/started'||method==='item/completed'){
  const item=requireRecord(p.item,'item');
+ if(['commandExecution','fileChange','mcpToolCall','webSearch'].includes(String(item.type))&&typeof item.id==='string'){
+ const name=item.type==='mcpToolCall'?String(item.server)+'.'+String(item.tool):String(item.type),status=String(item.status??'').toLowerCase(),error=typeof item.error==='string'?item.error:record(item.error)?String(item.error.message??''):'';
+ const denied=/declin|deni|reject|approval|permission/.test(status+' '+error.toLowerCase()),failed=denied||status.includes('fail')||!!error||typeof item.exitCode==='number'&&item.exitCode!==0;
+ ctx.traceEvent?.({id:item.id,name,phase:method==='item/started'?'call':'result',data:item,outcome:denied?'rejected':failed?'failed':'ok',...(failed?{reason:denied?'approval_policy':'provider_error',error:error||status}:{})});
+ }
+
  if(method==='item/started'){
  if(item.type==='commandExecution')ctx.publish({type:'tool',name:'Bash',detail:(Array.isArray(item.command)?item.command.join(' '):String(item.command??'')).slice(0,200)});
  else if(item.type==='fileChange')ctx.publish({type:'tool',name:'Edit',detail:Array.isArray(item.changes)?item.changes.filter(record).map(c=>String(c.path??'')).join(', ').slice(0,200):''});

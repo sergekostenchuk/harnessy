@@ -70,6 +70,7 @@ export class ClaudeProvider implements Provider {
  async runTurn(input:Seat,message:string,ctx:TurnContext){
  const seat=snapshot(input,ctx);if(seat.vendor!=='claude')throw new ProviderError('protocol','wrong provider');
  if(this.active.has(seat.id))throw new ProviderError('busy','место занято',seat.sessionId);
+ const tracedTools=new Map<string,string>();
  let sessionId=seat.sessionId,sessionSeen=false,text='',assistant='',streamed=false,terminal=false;
  const abort=new AbortController();const active={query:null as Query|null,abort};this.active.set(seat.id,active);
  const stop=()=>{void active.query?.interrupt().catch(()=>{});abort.abort()};ctx.signal.addEventListener('abort',stop,{once:true});const started=Date.now();
@@ -108,11 +109,11 @@ export class ClaudeProvider implements Provider {
  }else if(m.type==='assistant'){
  if(!record(m.message)||!Array.isArray(m.message.content))throw new ProviderError('protocol','invalid assistant message',sessionId);
  for(const b of m.message.content){if(!record(b))continue;if(b.type==='text'&&typeof b.text==='string')assistant+=b.text;
- else if(b.type==='tool_use'&&typeof b.name==='string')ctx.publish({type:'tool',name:b.name,detail:toolDetail(b.input)})}
+ else if(b.type==='tool_use'&&typeof b.name==='string'){ctx.publish({type:'tool',name:b.name,detail:toolDetail(b.input)});if(typeof b.id==='string'&&!b.name.startsWith('mcp__panes__')){tracedTools.set(b.id,b.name);ctx.traceEvent?.({id:b.id,name:b.name,phase:'call',data:b.input})}}}
  }else if(m.type==='user'){
- const content=record(m.message)?m.message.content:null;if(Array.isArray(content))for(const b of content)if(record(b)&&b.type==='tool_result'&&b.is_error){
+ const content=record(m.message)?m.message.content:null;if(Array.isArray(content))for(const b of content)if(record(b)&&b.type==='tool_result'){
  const detail=typeof b.content==='string'?b.content:Array.isArray(b.content)?b.content.filter(record).map(x=>typeof x.text==='string'?x.text:'').join(' '):'';
- ctx.publish({type:'toolError',text:(detail||'ошибка инструмента').slice(0,300)})
+ if(b.is_error)ctx.publish({type:'toolError',text:(detail||'ошибка инструмента').slice(0,300)});const id=String(b.tool_use_id??''),name=tracedTools.get(id);if(name){ctx.traceEvent?.({id,name,phase:'result',data:b.content,outcome:b.is_error?'failed':'ok',...(b.is_error?{reason:'provider_error',error:detail}:{})});tracedTools.delete(id)}
  }
  }else if(m.type==='result'){
  if(typeof m.session_id!=='string'||!m.session_id||typeof m.is_error!=='boolean')throw new ProviderError('protocol','invalid Claude result',sessionId);

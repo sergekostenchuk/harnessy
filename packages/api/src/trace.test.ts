@@ -1,0 +1,57 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {join} from 'node:path';
+import {fixture,call,OWNER,until,sse,deferred} from './test-helpers.ts';
+import {promotionInput} from '../../runtime/src/test-helpers.ts';
+import {invokeTool} from '../../providers/src/tools.ts';
+import {serverRequest} from '../../providers/src/codex/protocol.ts';
+import {TraceStore} from '../../runtime/src/trace.ts';
+function click(h:Awaited<ReturnType<typeof fixture>>){const traceId=randomUUID(),spanId=randomUUID(),binding={project:h.runtime.project.dir,instanceId:h.runtime.project.trace.instanceId};return {body:{action:'Назначить оркестратора',page:'chat',traceId,spanId,binding},headers:{'X-Harness-Trace-Id':traceId,'X-Harness-Span-Id':spanId,'X-Harness-Project':encodeURIComponent(binding.project),'X-Harness-Instance':binding.instanceId}}}
+
+test('233–239: click → promotion HTTP → turn → propose_seats → rejected Codex approval is one chain with durable refs',async t=>{
+ const h=await fixture(t);h.runtime.roomSet({model:'w1'},OWNER);h.runtime.registry.get('room')!.record('me','Design a fixture building');const a=click(h);assert.equal((await call(h.api,'/api/trace',{body:a.body})).status,200);
+ const events=await sse(h.api);t.after(()=>events.close());h.provider.onRun=async(_seat,_message,ctx)=>{ctx.modelStarted?.();const proposed=await invokeTool('propose_seats',{seats:[{kind:'worker',label:'Analyst',vendor:'claude',model:'w1',mode:'read',intro:'Read fixture'}]},ctx);assert.equal(proposed.ok,true);const decision=await serverRequest('item/commandExecution/requestApproval',{threadId:'t',turnId:'v',command:'fixture-command'},ctx,'t','v');assert.deepEqual(decision,{decision:'decline'});ctx.publish({type:'done',sessionId:null,model:'w1',durationMs:4,usage:{input:2,output:1,cacheRead:0}});return {text:'Approval was denied',sessionId:null}};
+ const input=promotionInput(h.runtime),request=call(h.api,'/api/chats/'+input.chat+'/orchestrator',{body:input,headers:a.headers});
+ await until(()=>[...h.runtime.registry.panes.values()].some(p=>p.approvals.size>0));const pane=[...h.runtime.registry.panes.values()].find(p=>p.approvals.size>0)!;pane.resolveApproval([...pane.approvals.keys()][0]!,false);const reply=await request;assert.equal(reply.status,200,reply.text);assert.equal(reply.headers['x-harness-trace-id'],a.body.traceId);await h.runtime.idle();
+ const response=await call(h.api,'/api/trace?traceId='+a.body.traceId);assert.equal(response.status,200);const rows=response.body.records as any[];
+ for(const kind of ['ui.action','http.request','http.response','turn.start','turn.end','tool.call','tool.result','queue.posted','queue.taken','approval.shown','approval.resolved'])assert.ok(rows.some(r=>r.kind===kind),kind);
+ assert.ok(rows.some(r=>r.kind==='tool.result'&&r.outcome==='rejected'&&r.reason.code==='approval_policy'));assert.ok(rows.some(r=>r.kind==='tool.result'&&r.refs.proposalId));assert.ok(rows.some(r=>r.kind==='turn.end'&&r.data.usage.input===2));assert.ok(rows.some(r=>r.refs.journalSeq));assert.ok(rows.every(r=>r.project===h.dir&&r.traceId===a.body.traceId));assert.ok(rows.every(r=>r.spanId!==r.parentSpanId));assert.ok(rows.some(r=>r.refs.attemptId));
+ await until(()=>events.frames.some(e=>e.type==='done'));assert.equal(events.frames.find(e=>e.type==='done')?.traceId,a.body.traceId);
+ const seq=rows.find(r=>r.refs.journalSeq).refs.journalSeq;assert.ok((await call(h.api,'/api/trace?journalSeq='+seq)).body.records.some((r:any)=>r.kind==='ui.action'));
+ const restarted=new TraceStore(h.dir);t.after(()=>restarted.close());assert.ok((await restarted.read({traceId:a.body.traceId})).some(r=>r.reason.code==='approval_policy'));
+ const cli=execFileSync(process.execPath,[new URL('../bin/trace.ts',import.meta.url).pathname,a.body.traceId],{cwd:h.dir,encoding:'utf8'});assert.match(cli,/harnessy:\/\/trace\//);assert.match(cli,/tool.result · rejected.*approval_policy/);
+});
+
+test('238: missing, forged or stale UI binding is rejected before a trace can enter another project or engine incarnation',async t=>{
+ const h=await fixture(t),a=click(h);for(const binding of [undefined,{project:h.dir},{...a.body.binding,instanceId:randomUUID()},{...a.body.binding,project:'/foreign'}]){assert.equal((await call(h.api,'/api/trace',{body:{...a.body,binding}})).status,409)}
+ for(const patch of [{traceId:'invalid'},{spanId:'invalid'},{action:'<img>'},{kind:'tool.result'},{kind:'ui.outcome',outcome:'rejected',reason:'invented'},{page:'../foreign'},{parentSpanId:'fake'}])assert.equal((await call(h.api,'/api/trace',{body:{...a.body,...patch}})).status,400);
+ assert.equal((await call(h.api,'/api/trace?traceId='+a.body.traceId)).body.records.length,0);const before=h.runtime.project.trace.instanceId;await h.runtime.projectSet(h.dir,{reload:true},OWNER);assert.notEqual(h.runtime.project.trace.instanceId,before);assert.equal((await call(h.api,'/api/trace',{body:a.body})).status,409);assert.equal((await call(h.api,'/api/chat',{headers:a.headers,body:{pane:'worker',message:'must not run'}})).status,409);assert.equal(h.provider.calls.length,0);
+ for(const q of ['traceId=invalid','outcome=invented','since=yesterday','journalSeq=-1'])assert.equal((await call(h.api,'/api/trace?'+q)).status,400);
+});
+
+test('238: a delayed HTTP read completes its span in the original store after project switch',async t=>{
+ const h=await fixture(t),a=click(h),old=h.runtime.project.trace,gate=deferred<any>();let entered=false;h.provider.auth=()=>{entered=true;return gate.promise};const request=call(h.api,'/api/connections',{headers:a.headers});await until(()=>entered);
+ const next=join(h.dir,'other');mkdirSync(join(next,'.harness/state'),{recursive:true});writeFileSync(join(next,'.harness/team.yaml'),'version: 1\nintegration_branch: main\nseats: {}\n');await h.runtime.openProject(next);gate.resolve({loggedIn:true});await request;assert.ok((await old.read({traceId:a.body.traceId})).some(r=>r.kind==='http.response'));assert.equal((await h.runtime.project.trace.read({traceId:a.body.traceId})).length,0);
+});
+
+test('238: owner trace controls validate whole patch, exclude project overrides, stop and resume writes',async t=>{
+ const h=await fixture(t);for(const patch of [{traceEnabled:'true'},{traceMaxMiB:0},{traceMaxMiB:129},{traceMaxMiB:1.5}])assert.equal((await call(h.api,'/api/settings',{body:{scope:'owner',patch}})).body.ok,false);
+ assert.equal((await call(h.api,'/api/settings',{body:{scope:'project',patch:{traceEnabled:false}}})).body.ok,false);writeFileSync(join(h.dir,'.harness/state/settings.json'),JSON.stringify({traceEnabled:false,traceMaxMiB:1}));assert.equal(h.runtime.settings.effective().traceEnabled,undefined);
+ assert.equal((await call(h.api,'/api/settings',{body:{scope:'owner',patch:{traceEnabled:false,traceMaxMiB:2}}})).body.ok,true);let a=click(h);await call(h.api,'/api/trace',{body:a.body});assert.equal((await call(h.api,'/api/trace?traceId='+a.body.traceId)).body.records.length,0);assert.equal((await call(h.api,'/api/status')).body.trace.enabled,false);
+ await call(h.api,'/api/settings',{body:{scope:'owner',patch:{traceEnabled:true}}});a=click(h);await call(h.api,'/api/trace',{body:a.body});assert.equal((await call(h.api,'/api/trace?traceId='+a.body.traceId)).body.records.length,1);assert.equal(h.runtime.project.trace.status.maxBytes,2*1024*1024);
+});
+
+test('234/238: limits 429 and provider errors retain typed reasons without credentials',async t=>{
+ const h=await fixture(t),provider=h.provider as any;provider.limits=async()=>({ok:false,code:'limits_rate_limited',reason:'token=short-secret /outside/creds',retryAfter:300});await call(h.api,'/api/limits');const row=(await h.runtime.project.trace.read()).find(r=>r.kind==='limits.measurement'&&r.outcome==='failed');assert.ok(row);assert.equal(row.reason.code,'rate_limited');const bytes=readFileSync(h.runtime.project.trace.path,'utf8');assert.ok(!bytes.includes('short-secret'));assert.ok(!bytes.includes('/outside/creds'));
+});
+
+test('233/234: a tool-posted journal record carries the chain into the next model turn',async t=>{
+ const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: orchestrator, vendor: claude, model: w1, mode: read}\n  worker: {kind: worker, role: executor, vendor: claude, model: w1, mode: read}'}),a=click(h);await call(h.api,'/api/trace',{body:a.body});h.provider.onRun=async(seat,_m,ctx)=>{ctx.modelStarted?.();if(seat.id==='lead'){const sent=await invokeTool('send',{to:'worker',kind:'task',text:'fixture work'},ctx);assert.equal(sent.ok,true,JSON.stringify(sent))}return {text:'done',sessionId:null}};const response=await call(h.api,'/api/chat',{body:{pane:'lead',message:'fixture'},headers:a.headers});assert.equal(response.status,200,response.text);await h.runtime.idle();const rows=await h.runtime.project.trace.read({traceId:a.body.traceId});assert.deepEqual(rows.filter(r=>r.kind==='turn.start').map(r=>r.pane).sort(),['lead','worker']);const posted=rows.find(r=>r.kind==='queue.posted'&&r.pane==='lead'),worker=rows.find(r=>r.kind==='turn.start'&&r.pane==='worker');assert.ok(posted&&worker);assert.equal(worker.parentSpanId,posted.spanId);
+});
+
+test('234: provider completion without a tool result is explicitly unavailable, not a successful tool',async t=>{const h=await fixture(t);h.provider.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();ctx.traceEvent?.({id:'missing',name:'Write',phase:'call'});return {text:'done',sessionId:null}};await h.runtime.runTurn('worker','fixture');const rows=await h.runtime.project.trace.read();assert.ok(rows.some(r=>r.kind==='tool.result'&&r.outcome==='failed'&&r.reason.code==='unavailable'));});
+
+test('234: an HTTP refusal records the typed policy reason and user-facing error',async t=>{const h=await fixture(t),a=click(h);const reply=await call(h.api,'/api/seats/owner',{headers:a.headers,body:{from:'lead'}});assert.equal(reply.status,403);const row=(await h.runtime.project.trace.read({traceId:a.body.traceId})).find(r=>r.kind==='http.response')!;assert.equal(row.reason.code,'approval_policy');assert.match(row.reason.text,/владелец/);assert.equal((row.data as any).route,'/api/seats/owner');});

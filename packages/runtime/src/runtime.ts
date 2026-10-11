@@ -1,3 +1,4 @@
+import {TraceStore,currentTrace,traceReason,type TraceContext} from './trace.ts';
 import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
 import {propose,proposals,confirm,create,createOwnerSeat,restoreProposals,type ProposalInput,type ProposalRef,type OwnerSeatInput} from './proposals.ts';
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
@@ -33,18 +34,35 @@ const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Ini
 type AttemptDecision=NonNullable<Record_['attempt']>;
 export class Runtime {
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
- private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();
+ private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();
  readonly deps:RuntimeDeps;readonly actions:RuntimeActions;
  constructor(deps:RuntimeDeps,actions:RuntimeActions){this.deps=deps;this.actions=actions;
  if(!actions||['ask','merge','assignRole','afterTurn','restorePendingAcks','cancelAsks'].some(k=>typeof (actions as unknown as Record<string,unknown>)[k]!=='function'))throw new RuntimeError('actions_required','порт действий обязателен',500);
  this.clock=deps.clock??systemClock;this.connections=deps.connections??new Connections();this.projectRegistry=deps.projectRegistry??new ProjectRegistry();this.defaultDir=canonicalPath(deps.defaultDir??process.env.CHAT_WORK_DIR??'/Users/Shared/simple-claude-chat');
  const current=()=>this.current&&!this.current.closed?this.current.dir:null;
  this.settings=typeof deps.settings==='function'?deps.settings(current):deps.settings??new Settings(undefined,current);
- this.pins=typeof deps.pins==='function'?deps.pins(current,id=>this.chatMeta(id)):deps.pins??new Pins(undefined,current,id=>this.chatMeta(id))
+ this.pins=typeof deps.pins==='function'?deps.pins(current,id=>this.chatMeta(id)):deps.pins??new Pins(undefined,current,id=>this.chatMeta(id));this.traceSettings()
+ }
+ private traceSettings(){try{const owner=this.settings.effective();this.traceConfig={enabled:owner.traceEnabled!==false,maxBytes:Number.isSafeInteger(owner.traceMaxMiB)&&Number(owner.traceMaxMiB)>=1&&Number(owner.traceMaxMiB)<=128?Number(owner.traceMaxMiB)*1024*1024:16*1024*1024}}catch{}}
+ traceTool<T>(scope:TurnScope,name:string,args:unknown,run:()=>Promise<T>){this.scopes.assert(scope);const p=this.project;return p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId))}
+ private traceProvider(p:ProjectState,pane:string,turn:string,event:NonNullable<TurnContext['traceEvent']> extends (e:infer E)=>void?E:never){const parent=p.trace.forTurn(turn),key=turn+':'+event.id;let spans=this.toolSpans.get(p);if(!spans){spans=new Map();this.toolSpans.set(p,spans)}
+  if(event.phase==='call'){const span=p.trace.record('tool.call',{actor:'model:'+pane,data:{name:event.name,args:event.data}},parent);spans.set(key,{span,started:this.clock.now()})}
+  else{const previous=spans.get(key),span=previous?.span??p.trace.record('tool.call',{actor:'model:'+pane,data:{name:event.name}},parent);p.trace.end(span,'tool.result',{actor:'model:'+pane,outcome:event.outcome??'ok',reason:event.reason?traceReason(event.reason,event.error):{code:'none',text:''},durationMs:previous?this.clock.now()-previous.started:null,data:{name:event.name,result:event.data}});spans.delete(key)}
+ }
+ private toolSpans=new WeakMap<ProjectState,Map<string,{span:TraceContext;started:number}>>();
+ private finishTraceTools(p:ProjectState,turn:string){const spans=this.toolSpans.get(p);if(!spans)return;for(const [key,value] of spans)if(key.startsWith(turn+':')){p.trace.end(value.span,'tool.result',{actor:value.span.pane?'model:'+value.span.pane:'engine',outcome:p.closed?'cancelled':'failed',reason:{code:p.closed?'cancelled':'unavailable',text:'Источник не передал результат инструмента до завершения хода'},durationMs:this.clock.now()-value.started});spans.delete(key)}}
+ private traceEvents(p:ProjectState){const approvals=new Map<string,TraceContext>();p.bus.observer=(pane,event)=>{const current=currentTrace(),parent=current?.store===p.trace?current:p.trace.forTurn(p.active.get(pane)?.scope.turnInstanceId);let span=parent;
+  if(event.type==='approval'){span=p.trace.record('approval.shown',{pane,data:{name:event.title},refs:parent?.turnInstanceId?{attemptId:parent.turnInstanceId}:{}},parent);approvals.set(pane+':'+event.id,span)}
+  else if(event.type==='approvalResolved'){const previous=approvals.get(pane+':'+event.id);span=p.trace.record('approval.resolved',{pane,outcome:event.decision==='allow'?'ok':event.decision==='timeout'?'timeout':'rejected',reason:{code:event.decision==='allow'?'none':event.decision==='timeout'?'timeout':'owner_denied',text:String(event.decision)}},previous??parent);approvals.delete(pane+':'+event.id)}
+  else if(event.type==='queued'&&object(event.record)){span=p.trace.record('queue.enqueued',{pane,refs:{journalSeq:Number(event.record.seq)},data:{pending:event.pending}},p.trace.forJournal(Number(event.record.seq))??parent)}
+  else if(event.type==='state'&&event.waiting)span=p.trace.record('queue.waiting',{pane,data:{status:event.status}},parent);
+  else if(event.type==='error'||event.type==='toolError')span=p.trace.record('error.provider',{pane,outcome:'failed',reason:traceReason(event.code,String(event.message??event.text??''))},parent);
+  return span?{...event,traceId:span.traceId,spanId:span.spanId,project:p.dir}:event;
+ };
  }
  get project():ProjectState{if(!this.current||this.current.closed)throw new RuntimeError('project_closed','проект закрыт');return this.current}
  get registry(){return this.project.registry}get owner(){return this.project.owner}get journal(){return this.project.journal}get channel(){return this.project.channel}get lineErrors(){return [...this.project.lineErrors]}get halted(){return this.project.halted}
- private quota(p:ProjectState){let store=this.quotas.get(p);if(!store){store=new LimitsStore(p.dir,this.clock,this.deps.providers,()=>{if(!p.closed)p.bus.publish('owner',{type:'limits',...store!.snapshot()})},this.deps.limitsCacheDir);this.quotas.set(p,store)}return store}
+ private quota(p:ProjectState){let store=this.quotas.get(p);if(!store){store=new LimitsStore(p.dir,this.clock,this.deps.providers,()=>{if(!p.closed)p.bus.publish('owner',{type:'limits',...store!.snapshot()})},this.deps.limitsCacheDir,(vendor,result)=>{p.trace.record('limits.measurement',{outcome:result.ok?'ok':result.code==='limits_not_applicable'?'rejected':'failed',reason:result.ok?{code:'none',text:''}:traceReason(result.code,result.reason),data:{vendor,status:result.ok?'ok':result.code,...(result.ok?{windows:result.windows}:{})}})});this.quotas.set(p,store)}return store}
  limitsSnapshot(){return this.quota(this.project).snapshot()}
  async limits(){const p=this.project,store=this.quota(p);await store.refresh();this.same(p);return store.snapshot()}
  private provider(vendor:Vendor|'human'){const provider=vendor==='human'?null:this.deps.providers[vendor];if(!provider)throw new RuntimeError('no_provider','нет провайдера: '+vendor,503);return provider}
@@ -88,8 +106,9 @@ export class Runtime {
  const freshRoom=saved.room===undefined&&!registry.get('room')&&team!==null&&!Object.keys(team.seats).length;if(freshRoom)makeRoomIn({registry,dir:path,bus},this,roomModel||'',path===this.defaultDir?'chat':'read');
  const state=new StateStore(path,this.deps.stateIO??diskIO,this.clock,this.deps.id);const halted=state.load(registry,lineErrors);
  if(saved.room===undefined&&roomModel&&!registry.get('room')&&makeRoomIn({registry,dir:path,bus},this,roomModel,path===this.defaultDir?'chat':'read'))state.savePanes(registry,journal);
- const p:ProjectState={generation,dir:path,closed:false,starting:true,now:()=>this.clock.now(),editing:new Map(),materializing:new Set(),restoreFailed:new Map(),team,repoRoot:git.repoRoot,policy,journal,channel,registry,owner,bus,state,lineErrors,halted,active:new Map(),pumps:new Map(),resets:new Map(),routeJobs:new Map(),processEpoch:new Map(),wakeups:new Set()};
- this.current=p;channel.on(event=>{if(!p.closed)this.onChannel(p,event)});
+ const trace=new TraceStore(path,()=>this.traceConfig,()=>this.clock.now());this.traces.add(trace);await trace.restore();
+ const p:ProjectState={trace,generation,dir:path,closed:false,starting:true,now:()=>this.clock.now(),editing:new Map(),materializing:new Set(),restoreFailed:new Map(),team,repoRoot:git.repoRoot,policy,journal,channel,registry,owner,bus,state,lineErrors,halted,active:new Map(),pumps:new Map(),resets:new Map(),routeJobs:new Map(),processEpoch:new Map(),wakeups:new Set()};
+ this.current=p;this.traceEvents(p);channel.on(event=>{if(!p.closed)this.onChannel(p,event)});
  try{await this.projectRegistry.rememberProject(path)}catch(e){lineErrors.push(message(e))}
  await this.actions.restorePendingAcks({runtime:this,project:p});
  await restoreProposals(this,p);
@@ -141,6 +160,8 @@ export class Runtime {
  for(const turn of turns)turn.releaseReset();await Promise.all(turns.map(t=>t.finished));if(failure)throw failure
  }
  private onChannel(p:ProjectState,event:ChannelEvent):void {
+ if(event.type==='rejected')p.trace.record('queue.rejected',{outcome:'rejected',reason:{code:'approval_policy',text:event.reason}});
+ if(event.type==='posted')p.trace.record('queue.posted',{refs:{journalSeq:event.record.seq},data:{kind:event.record.kind,from:event.record.from,to:event.record.to,text:event.record.text}});
  if(event.type==='posted')p.registry.get(event.initiator.seat)?.publish({type:'sent',record:event.record});
  if(event.type==='rejected')p.registry.get(event.sender)?.publish({type:'toolError',text:'политика: '+event.reason});
  if(event.type==='pendingAck'){void this.actions.restorePendingAcks({runtime:this,project:p}).catch(e=>this.report(p,p.owner,e));return}
@@ -211,7 +232,7 @@ export class Runtime {
  if(!await this.recover(p,pane))return false;
  while(!p.closed&&!p.halted&&!pane.busy){if(p.state.attempts[pane.id]?.status==='uncertain'||pane.status==='uncertain')return false;
  const entries=p.journal.pendingFor(pane.id).filter(e=>e.record.origin!=='steer');if(!entries.length)return true;
- const records=entries.map(e=>e.record),work=records.filter(r=>r.kind!=='stop');pane.publish({type:'delivered',records});
+ const records=entries.map(e=>e.record),work=records.filter(r=>r.kind!=='stop');for(const record of work)p.trace.record('queue.taken',{pane:pane.id,refs:{journalSeq:record.seq}},p.trace.forJournal(record.seq));pane.publish({type:'delivered',records});
  if(!work.length){p.journal.advance(pane.id,Math.max(...entries.map(e=>e.deliverySeq)));continue}
  try{await this.runTurn(pane.id,renderInbox(work,id=>this.labelOf(id,p)),{entries,project:p})}catch(e){if(!p.closed){pane.publish({type:'note',text:queueNote(work.length)});this.stateEvent(p,pane)}return false}
  if(pane.status==='recovering')return false
@@ -279,6 +300,10 @@ export class Runtime {
  context(id:string){const p=this.project,pane=this.pane(id,p),chat=p.state.activeChat(pane,false);return contextCard(pane,{instructionText:p.team&&p.team.seats[id]?instructionsFor(p.team,p.team.seats[id]!):'',roleNote:this.roleNote(p,pane),chat:chat?{...meta(p,chat)}:null})}
  private async waitVendor(p:ProjectState,vendor:Vendor|'human'):Promise<void>{if(vendor==='human')return;while(p.resets.has(vendor)||p.routeJobs.has(vendor)){await Promise.all([p.resets.get(vendor),p.routeJobs.get(vendor)]);this.same(p)}}
  async runTurn(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol}={}):Promise<string> {
+ const p=options.project??this.project,parent=options.entries?.length?p.trace.parentForJournal(options.entries.map(e=>e.record.seq)):currentTrace(),turnInstanceId=randomUUID(),started=this.clock.now(),span=p.trace.record('turn.start',{actor:'model:'+id,pane:id,chat:p.state.chats.active[id]??null,turnInstanceId,refs:{attemptId:turnInstanceId}},parent);
+ return p.trace.run(span,async()=>{try{const text=await this.runTurnCore(id,messageText,options),result=p.registry.get(id)?.transcript.find(m=>object(m.runtime)&&m.runtime.turnInstanceId===turnInstanceId);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:result?.outcome==='interrupted'?'cancelled':result?.outcome==='error'?'failed':'ok',reason:result?.outcome==='error'?traceReason(result.errorCode,'Ошибка провайдера'):{code:'none',text:''},durationMs:this.clock.now()-started,data:{model:result?.model,usage:result?.usage}});return text}catch(e){const reason=traceReason((e as {code?:string}).code,message(e));p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:reason.code==='cancelled'?'cancelled':reason.code==='timeout'?'timeout':'failed',reason,durationMs:this.clock.now()-started});throw e}finally{this.finishTraceTools(p,turnInstanceId)}});
+ }
+ private async runTurnCore(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol}={}):Promise<string> {
  const p=options.project??this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);this.same(p);
  if(p.starting)throw new RuntimeError('project_opening','проект открывается',409);
  if(firstOpenPending(p,pane))throw new RuntimeError('role_not_opened','Откройте чат роли, чтобы она получила вводную',409);
@@ -291,7 +316,7 @@ export class Runtime {
  const relayDepth=Math.max(options.relayDepth??0,askDeliveryDepth(p,records));
  if(!pane.model)throw new RuntimeError('model_required','Сначала выберите модель разговора',400);
  pane.busy=true;pane.touched=true;pane.revision++;const launchModel=pane.model,launchEpoch=pane.sessionEpoch;
- const scope=this.scopes.create(p.dir,id,randomUUID()),controller=new AbortController();let releaseReset!:()=>void,finish!:()=>void;
+ const scope=this.scopes.create(p.dir,id,currentTrace()?.turnInstanceId??randomUUID()),controller=new AbortController();let releaseReset!:()=>void,finish!:()=>void;
  const turn:ActiveTurn={scope,controller,pane,vendor:pane.vendor,records,deliverySeq:Math.max(0,...entries.map(e=>e.deliverySeq)),relayDepth,attemptNumber:0,handle:null,started:false,stopRequested:false,terminal:null,partial:'',finished:new Promise(r=>{finish=r}),finish:()=>finish(),timer:undefined,resetWait:new Promise(r=>{releaseReset=r}),releaseReset:()=>releaseReset(),result:null,injected};p.active.set(id,turn);this.stateEvent(p,pane);
  let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null,transferSaved=false;
  try{
@@ -309,7 +334,7 @@ export class Runtime {
  p.state.startAttempt(pane,{turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),startedAt:this.clock.now(),deliverySeq:turn.deliverySeq});
  const current=()=>!p.closed&&p.active.get(id)===turn;
  let attempt=0,earlySession:string|null=null;
- const ctx:TurnContext={signal:controller.signal,modelStarted:()=>{if(current()){
+ const ctx:TurnContext={traceTool:(name,args,run)=>p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId)),traceEvent:event=>{if(current())this.traceProvider(p,id,scope.turnInstanceId,event)},signal:controller.signal,modelStarted:()=>{if(current()){
   const notices:TranscriptMessage[]=[];
   const transferNotice=transfer&&!transferSaved?{...timestampMessage('peer','[от харнесс] '+transferLabel(transfer),this.clock.now()),contextTransfer:{...transfer,turnInstanceId:scope.turnInstanceId}}:null;
   const teamNotice=knowledge&&teamText&&!teamSaved?{...timestampMessage('peer','[от харнесс] '+teamText,this.clock.now()),teamKnowledge:{project:p.dir,chat:knowledge.chat,team:knowledge.team,turnInstanceId:scope.turnInstanceId}}:null;
@@ -320,8 +345,8 @@ export class Runtime {
   turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
  }},publish:event=>{
  if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:event.text,sessionId:pane.sessionId}:event;return}
- if(turn.stopRequested)return;if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;pane.publish(event)
- },askApproval:(title,detail)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return pane.askApproval(title,detail)},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;if(transfer&&!turn.started){earlySession=sid;return}pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
+ if(turn.stopRequested)return;if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
+ },askApproval:(title,detail)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.askApproval(title,detail))},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;if(transfer&&!turn.started){earlySession=sid;return}pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
  if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(pane,handle)
  },env:this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[...p.registry.panes.values()].map(p=>({id:p.id,label:p.label,vendor:p.vendor as Vendor})),tools:this.toolsFor(scope),relayDepth:turn.relayDepth,projectDir:p.dir,appUrl:this.deps.appUrl,
  registerProcessToken:token=>{if(!p.closed&&(p.processEpoch.get(vendor)??0)===epoch)this.tokens.register(token,p.generation,id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,id,vendor),writableRoots:writableRoots(p.repoRoot,!!pane.worktree)};
@@ -430,7 +455,7 @@ export class Runtime {
  settingsGet(initiator:Initiator){this.requireOwner(initiator);return this.settings.get()}
  async settingsPatch(scope:unknown,patch:unknown,initiator:Initiator){this.requireOwner(initiator);
  if(object(patch)&&Object.keys(TRANSFER_DEFAULTS).some(key=>Object.hasOwn(patch,key))){if(scope&&scope!=='owner')throw new RuntimeError('context_settings_invalid','настройки переноса: только область owner',400);try{transferSettings(patch)}catch(e){throw new RuntimeError('context_settings_invalid',message(e),400)}}
- return this.settings.patch(scope,patch)}
- async close(){await this.closeProject()}
+ const result=await this.settings.patch(scope,patch);this.traceSettings();return result}
+ async close(){try{await this.closeProject()}finally{await Promise.all([...this.traces].map(t=>t.close()))}}
 }
 export async function createRuntime(deps:RuntimeDeps,actions:RuntimeActions):Promise<Runtime>{const runtime=new Runtime(deps,actions);await runtime.openProject(deps.projectDir);return runtime}

@@ -44,6 +44,7 @@ export interface ActiveTurn {
  finished:Promise<void>;finish():void;timer:unknown;resetWait:Promise<void>;releaseReset():void;result:ResultMessage|null;injected:import('./state.ts').TranscriptMessage[];
 }
 export interface ProjectState {
+ trace:import("./trace.ts").TraceStore;
  generation:number;dir:string;closed:boolean;starting:boolean;now:()=>number;editing:Map<string,symbol>;materializing:Set<string>;restoreFailed:Map<string,string>;team:Team|null;repoRoot:string|null;policy:Policy|null;journal:Journal;channel:Channel;
  registry:Registry;owner:Pane;bus:EventBus;state:StateStore;lineErrors:string[];halted:boolean;
  active:Map<string,ActiveTurn>;pumps:Map<string,Promise<void>>;resets:Map<Vendor,Promise<void>>;routeJobs:Map<Vendor,Promise<unknown>>;processEpoch:Map<Vendor,number>;wakeups:Set<string>;
