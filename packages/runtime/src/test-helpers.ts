@@ -34,3 +34,16 @@ export async function harness(t:TestContext,options:{seats?:string;deps?:Partial
 }
 
 export const failedActions:RuntimeActions={...completedActions,ask:async()=>({ok:false,code:"unavailable",error:"действие недоступно: ask"}),merge:async()=>({ok:false,code:"unavailable",error:"действие недоступно: merge"}),assignRole:async()=>({ok:false,code:"unavailable",error:"действие недоступно: assign_role"}),async afterTurn({pane}){pane.recoveryNote="обработка после хода недоступна в этой сборке";pane.publish({type:"note",text:pane.recoveryNote});return "unavailable"},async restorePendingAcks({project}){if(project.channel.pendingAcks().length){const text="восстановление карточек подтверждения недоступно в этой сборке";if(!project.lineErrors.includes(text))project.lineErrors.push(text);project.owner.publish({type:"error",message:text,sessionId:null})}}};
+
+// Historical materialization fixtures enter the internal mechanism, never the closed owner/agent door.
+export async function savedAssignment(runtime:Runtime,args:import('./roles.ts').CreateSeatInput){
+ const {assign}=await import('./roles.ts'),{meta}=await import('./chats.ts'),p=runtime.project;
+ const result=await assign(runtime,p,args,{by:'владелец (интерфейс)',how:'сохранённое назначение',assert(){if(runtime.project!==p||p.closed)throw Error('project changed')}});
+ return {ok:true as const,pane:result.pane.settings(),chat:meta(p,result.chat)};
+}
+
+export async function savedConversationAssignment(runtime:Runtime,args:import('./roles.ts').CreateSeatInput){
+ const {assignConversation,chatSnapshot}=await import('./roles.ts'),{meta}=await import('./chats.ts'),p=runtime.project;
+ const result=await assignConversation(runtime,p,args,chatSnapshot(p,p.registry.get('room')!),'сохранённое назначение из разговора');
+ return {pane:result.result.pane.settings(),chat:meta(p,result.result.chat),replaced:result.replaced};
+}

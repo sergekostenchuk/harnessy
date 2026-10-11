@@ -6,7 +6,7 @@ import {Journal,type Initiator} from '@harnessy/journal';
 import {ProviderError} from '@harnessy/providers';
 import {withPathLock} from '@harnessy/team';
 import {createRuntime,diskIO,RuntimeError,withRoleActions,type StateIO} from './index.ts';
-import {completedActions,collect,deferred,FakeProvider,harness,OWNER,until} from './test-helpers.ts';
+import {savedAssignment,completedActions,collect,deferred,FakeProvider,harness,OWNER,until} from './test-helpers.ts';
 
 const error=(code:string)=>(e:unknown)=>e instanceof RuntimeError&&e.code===code;
 function seed(dir:string,id='old-turn',pane='worker',delivery=true){
@@ -67,7 +67,7 @@ test('72/96/101: uncertain room can move or become an orchestrator without disca
 
 test('72: saved materialization failure differs from active materialization and reload/switch stays available',async t=>{
  let fail=true;const io:StateIO={read:diskIO.read,write(path,text){if(fail&&path.endsWith('seat-materialization.json')&&text.includes('"team": true'))throw Error('manifest stage write');diskIO.write(path,text)}};
- const h=await harness(t,{seats:'  orchestrator: {role: orchestrator, vendor: claude, label: оркестратор, model: w1, mode: read}',deps:{stateIO:io},actions:withRoleActions(completedActions)}),r=h.runtime;await assert.rejects(r.createSeat({role:'assistant'},OWNER),/manifest stage write/);await r.close();
+ const h=await harness(t,{seats:'  orchestrator: {role: orchestrator, vendor: claude, label: оркестратор, model: w1, mode: read}',deps:{stateIO:io},actions:withRoleActions(completedActions)}),r=h.runtime;await assert.rejects(savedAssignment(r,{role:'assistant'}),/manifest stage write/);await r.close();
  const reopened=await createRuntime(h.deps,withRoleActions(completedActions));t.after(()=>reopened.close());assert.equal(reopened.project.materializing.size,0);assert.ok(reopened.project.restoreFailed.size>0);
  const sid=[...reopened.project.restoreFailed.keys()][0]!;assert.throws(()=>reopened.chat({pane:sid,message:'не запускать'},OWNER),error('restore_failed'));assert.throws(()=>reopened.paneSet(sid,{model:'w2'},OWNER),error('restore_failed'));await assert.rejects(reopened.runTurn(sid,'не запускать'),error('restore_failed'));await assert.rejects(reopened.onboard(sid,OWNER),error('restore_failed'));await assert.rejects(reopened.ensureSeatMaterialized(sid,OWNER),error('restore_failed'));
  const destination=join(h.dir,'other');mkdirSync(destination);await reopened.projectSet(destination,{},OWNER);fail=false;await reopened.projectSet(h.dir,{},OWNER);await reopened.idle();assert.equal(reopened.project.restoreFailed.size,0);

@@ -6,9 +6,10 @@ import type {Runtime} from './runtime.ts';
 import type {ProjectState} from './types.ts';
 import {jsonClone,type Chat} from './state.ts';
 import type {Pane} from './pane.ts';
+import {makeRoomIn} from './rooms.ts';
 
 export const SUMMARY_PROMPT='Напиши краткую выжимку этого разговора для передачи в новый чат той же роли: что решено, что сделано, открытые вопросы, чего ждёт владелец. Коротко, списком, без вступления.';
-export interface ChatMeta {id:string;pane:string;label:string;role:string|null;title:string;created:number;closed:number|null;model:string;vendor:string;messages:number;last:number;active:boolean}
+export interface ChatMeta {id:string;pane:string;label:string;role:string|null;title:string;created:number;closed:number|null;model:string|null;vendor:string;messages:number;last:number;active:boolean}
 export function meta(p:ProjectState,c:Chat):ChatMeta {
  const pane=p.registry.get(c.pane),last=c.transcript.at(-1);
  return {id:c.id,pane:c.pane,label:pane?.label??c.pane,role:pane?.role??null,title:c.title||'',created:c.created,closed:c.closed??null,model:c.model,vendor:c.vendor,messages:c.transcript.length,last:last?.ts?Math.trunc(last.ts):c.created,active:p.state.chats.active[c.pane]===c.id};
@@ -28,7 +29,7 @@ export function chatGet(runtime:Runtime,id:string,initiator:Initiator) {
  const p=owner(runtime,initiator),c=find(p,id);p.state.saveChats(p.registry);return {chat:meta(p,c),messages:jsonClone(c.transcript)};
 }
 export async function chatsNew(runtime:Runtime,input:{pane?:unknown;carry?:unknown},initiator:Initiator) {
- const p=owner(runtime,initiator),pane=place(p,String(input.pane||'')),carry=String(input.carry||'text');free(p,pane);
+ const p=owner(runtime,initiator),pid=String(input.pane||'');if(pid==='room'&&!p.registry.get('room'))makeRoomIn(p,runtime,'',p.dir===runtime.defaultDir?'chat':'read');const pane=place(p,pid),carry=String(input.carry||'text');free(p,pane);
  if(!['text','summary','none'].includes(carry))throw new RuntimeError('carry_invalid','carry: text, summary или none',400);
  const hold=reserve(p,[pane]),old=p.state.activeChat(pane,false),oldId=old?.id,revision=pane.revision;
  let carryText='',done=false;
@@ -49,7 +50,7 @@ export async function chatsNew(runtime:Runtime,input:{pane?:unknown;carry?:unkno
    if(pane.status!=='idle')throw new RuntimeError('recovering','ответ модели сохранён; завершается восстановление доставки');
    const snapshot=jsonClone(p.state.chats),saved={sessionId:pane.sessionId,transcript:pane.transcript,carry:pane.carry,seen:pane.seen};
    try {
-    p.state.sync(p.registry);
+    if(old)p.state.sync(p.registry);
     if(pane.id!=='room'){if(carry==='summary'&&old?.transcript.length)old.closed=Math.floor(runtime.clock.now()/1000);else carryText=closeChat(p,pane,carry)}
     const c=p.state.newChat(pane,carryText);p.state.savePanes(p.registry,p.journal);done=true;return {ok:true as const,chat:meta(p,c),pane:pane.settings(),carried:!!carryText};
    }catch(e){p.state.chats=snapshot;Object.assign(pane,saved);throw e}
@@ -66,7 +67,7 @@ export async function chatsOpen(runtime:Runtime,input:{chat?:unknown;carry?:unkn
    const carried=pane.id==='room'?'':closeChat(p,pane,String(input.carry||'text'));
    c.closed=null;p.state.chats.active[pane.id]=c.id;pane.sessionId=c.sessionId;pane.transcript=c.transcript;pane.carry=pythonTrim((c.carry||'')+(carried?'\n\n'+carried:''));pane.seen={};pane.revision++;
    if((c.vendor==='claude'||c.vendor==='codex')&&p.registry.providers.has(c.vendor))pane.vendor=c.vendor;
-   if(c.model)pane.model=c.model;
+   if(c.model===null)pane.model='';else if(c.model)pane.model=c.model;
    p.state.savePanes(p.registry,p.journal);done=true;return {ok:true as const,chat:meta(p,c),pane:pane.settings(),carried:!!carried};
   }catch(e){p.state.chats=snapshot;Object.assign(pane,saved);throw e}
  });}finally{hold.release();if(done&&!p.closed)await runtime.resumeQueue(pane.id,p)}

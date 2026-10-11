@@ -21,7 +21,8 @@ test('1/16/19/70: status missing values, failed auth/catalog, static Claude mode
  const a=await call(h.api,'/api/status');assert.equal(a.status,200);assert.equal('ok' in a.body,false);assert.equal(a.body.defaultDir,h.runtime.defaultDir);assert.equal(a.body.panes[0].model,'old-model');assert.equal(h.runtime.registry.get('codex')!.model,'old-model');
  assert.deepEqual(a.body.auth,{claude:{loggedIn:false,error:'claude не найден; задай CLAUDE_BIN'},codex:{loggedIn:false,email:null,plan:'',error:'нет входа'}});
  assert.deepEqual(a.body.models,{claude:[{id:'claude-opus-5-5',label:'Opus 5.5'},{id:'claude-fable-5-1',label:'Fable 5.1'},{id:'claude-sonnet-5-5',label:'Sonnet 5.5'},{id:'claude-haiku-5-5',label:'Haiku 5.5'},{id:'claude-haiku-4-5-20251001',label:'Haiku 4.5'}],codex:[{id:'gpt-5.6-sol',label:'gpt-5.6-sol'},{id:'gpt-5.3-codex-spark',label:'gpt-5.3-codex-spark'}]});
- assert.deepEqual(a.body.activeChats,{});assert.deepEqual(a.body.threads,{});assert.equal(a.body.repo,null);assert.deepEqual(a.body.journal,{lastSeq:0,path:join(h.dir,'.harness/state/channel.ndjson')});
+ assert.deepEqual(Object.keys(a.body.activeChats),['codex']);const chat=await call(h.api,'/api/chats/'+a.body.activeChats.codex);assert.equal(chat.body.chat.messages,0);assert.equal(chat.body.chat.model,'old-model'); // 83: empty chats exist before the first reply.
+assert.deepEqual(a.body.threads,{});assert.equal(a.body.repo,null);assert.deepEqual(a.body.journal,{lastSeq:0,path:join(h.dir,'.harness/state/channel.ndjson')});
  const p=h.runtime.project;p.team=null;p.policy=null;const absent=await call(h.api,'/api/status');assert.deepEqual(absent.body.policy,{version:null,path:null});assert.deepEqual(absent.body.team,{path:null,integrationBranch:null,mergeRoles:[]});
  const conn=await call(h.api,'/api/connections');assert.equal(conn.body.providers[0].auth.error,'claude не найден; задай CLAUDE_BIN');assert.deepEqual(conn.body.providers[1].auth,a.body.auth.codex);
 });

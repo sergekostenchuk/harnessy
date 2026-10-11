@@ -1,8 +1,8 @@
 export interface TranscriptMessage {readonly role:string;readonly text:string;readonly ts?:number}
-export interface SeatView {readonly id:string;readonly role:string;readonly label:string;readonly model:string;readonly mode:string;readonly writePaths:readonly string[];readonly worktree:string|null;readonly branch:string|null}
+export interface SeatView {readonly id:string;readonly role:string;readonly kind?:string|null;readonly label:string;readonly model:string;readonly mode:string;readonly writePaths:readonly string[];readonly worktree:string|null;readonly branch:string|null}
 export interface TeamView {readonly integrationBranch:string;readonly mergeRoles:readonly string[]}
 export interface RoleNoteDeps {readonly projectDir:string;readonly repoRoot:string|null;readonly team:TeamView|null;readonly instructionText:string;readonly policySummary:string|null}
-export interface PeerView {readonly id:string;readonly role:string;readonly label:string;readonly model:string;readonly mode:string}
+export interface PeerView {readonly id:string;readonly role:string;readonly kind?:string|null;readonly label:string;readonly model:string;readonly mode:string}
 export interface JournalPreview {readonly seq:number;readonly from:string;readonly to:readonly string[];readonly kind:string;readonly text:string;readonly origin?:string|null}
 export interface OnboardingDeps extends RoleNoteDeps {readonly memoryText:string;readonly peers:readonly PeerView[];readonly records:readonly JournalPreview[];readonly now:Date;readonly modeLabels:Readonly<Record<string,string>>}
 export interface DigestViewer {readonly id:string;readonly digest:boolean;readonly seen:Readonly<Record<string,number>>}

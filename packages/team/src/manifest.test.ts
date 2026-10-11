@@ -10,11 +10,11 @@ test('[1-6,26] manifest form, names, modes, paths and exact errors; empty model 
  const root=temp();try{const h=await ensureLine(root),file=join(h,'team.yaml'),put=(s:string)=>writeFileSync(file,s);
  for(const [source,message] of [
  ['seats: []','team.yaml: нужен раздел seats (таблица мест; может быть пустой)'],['seats: {owner: {}}','team.yaml: недопустимое имя места «owner» (латиница, цифры, - и _; не owner/harness/all)'],
- ['seats: {worker: x}','team.yaml: место worker должно быть таблицей'],['seats: {worker: {vendor: claude, mode: wrong}}','team.yaml: у места worker режим «wrong», допустимы chat, read, check, web, ask, edit, all'],
- ['seats: {worker: {vendor: codex, write_paths: [a..b]}}','team.yaml: write_paths у места worker — список относительных путей без ..'],['seats: {worker: {vendor: codex, worktree: /tmp}}','team.yaml: worktree у места worker — относительный путь внутри проекта'],
+ ['seats: {worker: x}','team.yaml: место worker должно быть таблицей'],['seats: {worker: {role: executor, vendor: claude, mode: wrong}}','team.yaml: у места worker режим «wrong», допустимы chat, read, check, web, ask, edit, all'],
+ ['seats: {worker: {role: executor, vendor: codex, write_paths: [a..b]}}','team.yaml: write_paths у места worker — список относительных путей без ..'],['seats: {worker: {role: executor, vendor: codex, worktree: /tmp}}','team.yaml: worktree у места worker — относительный путь внутри проекта'],
  ['seats: {}\nmerge_roles: nope','team.yaml: merge_roles — список ролей']
  ]){put(source!);assert.throws(()=>loadTeam(h),failure('team_invalid',message))}
- put('seats:\n  worker: {vendor: codex, model: null, write_paths: [src/], role: executor}\n  foreign: {vendor: kimi, mode: BAD}');const t=loadTeam(h);assert.equal(t.seats.worker!.model,'');assert.deepEqual(t.seats.worker!.writePaths,['src']);assert.equal(roleOf(t,'worker'),'executor');assert.equal(roleOf(t,'absent'),null);assert.equal(t.warnings[0],'место foreign: вендор «kimi» здесь не ведётся (допустимы claude, codex) — место пропущено');
+ put('seats:\n  worker: {vendor: codex, model: null, write_paths: [src/], role: executor}\n  foreign: {vendor: kimi, mode: BAD}');const t=loadTeam(h);assert.equal(t.seats.worker!.model,'');assert.deepEqual(t.seats.worker!.writePaths,['src']);assert.equal(roleOf(t,'worker'),'worker');assert.equal(roleOf(t,'absent'),null);assert.equal(t.warnings[0],'место foreign: вендор «kimi» здесь не ведётся (допустимы claude, codex) — место пропущено');
  put('seats: {foreign: {vendor: kimi}}');assert.throws(()=>loadTeam(h),e=>e instanceof TeamError&&e.message.startsWith('team.yaml: нет ни одного места, которое здесь можно вести'));
  for(const source of ['seats: [','!!python/object/apply:os.system [bad]','version: nope\nseats: {}']){put(source);assert.throws(()=>loadTeam(h),failure('team_yaml'))}
  writeFileSync(file,Buffer.from([0xff]));assert.throws(()=>loadTeam(h),failure('team_yaml'));unlinkSync(file);assert.throws(()=>loadTeam(h),failure('team_missing'));await assert.rejects(seedOrchestrator(h,'claude','m'),failure('team_missing'));
@@ -24,7 +24,7 @@ test('[1-6,26] manifest form, names, modes, paths and exact errors; empty model 
 test('[7,8,21,32] templates never overwrite, missing template preflight, seed has exact Python bytes',async()=>{
  const root=temp();try{const project=join(root,'проект'),h=await ensureLine(project,{now:()=>new Date(2026,9,9,12)});assert.match(readFileSync(join(h,'MEMORY.md'),'utf8'),/Создан 09.10.2026/);
  assert.deepEqual(readFileSync(join(h,'team.yaml')),readFileSync(join(TEMPLATES,'team-empty.yaml')));writeFileSync(join(h,'roles','reviewer.md'),'owner edit');await ensureLine(project);assert.equal(readFileSync(join(h,'roles','reviewer.md'),'utf8'),'owner edit');
- assert.deepEqual(await seedOrchestrator(h,'claude','model'),{seeded:true});const bytes=readFileSync(join(h,'team.yaml'));assert.deepEqual(bytes,readFileSync(new URL('./fixtures/seed.yaml',import.meta.url)));
+ assert.deepEqual(await seedOrchestrator(h,'claude','model'),{seeded:true});const bytes=readFileSync(join(h,'team.yaml'));assert.equal(bytes.toString('utf8'),readFileSync(new URL('./fixtures/seed.yaml',import.meta.url),'utf8')+'    kind: orchestrator\n');
  assert.deepEqual(await seedOrchestrator(h,'codex','other'),{seeded:false,reason:'seats_present'});assert.deepEqual(readFileSync(join(h,'team.yaml')),bytes);
  const broken=join(root,'templates');cpSync(TEMPLATES,broken,{recursive:true});unlinkSync(join(broken,'roles','tester.md'));await assert.rejects(ensureLine(join(root,'new'),{templatesDir:broken}),failure('template_missing','шаблон не найден: roles/tester.md'));assert.equal(existsSync(join(root,'new','.harness')),false);
  }finally{rmSync(root,{recursive:true,force:true})}

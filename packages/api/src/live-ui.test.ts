@@ -17,7 +17,7 @@ const plain=(value:unknown)=>JSON.parse(JSON.stringify(value));
 type Data=Record<string,any>;
 function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;storage?:Map<string,string>}={}){
  const storage=options.storage??new Map<string,string>(),requests:{path:string;body:Data|undefined}[]=[],toasts:string[]=[],clicks:((event:Data)=>unknown)[]=[],pagehide:(()=>void)[]=[],pageshow:((event:Data)=>unknown)[]=[],elements=new Map<string,Data>(),rows:Data[]=[];
- const H:Data={on:true,project:'/project-a',active:{worker:'chat-a'},panes:[{id:'worker',label:'воркер',model:'w1',vendor:'claude',role:'orchestrator',busy:false},{id:'room',label:'без роли',model:'w1',vendor:'claude'}],cur:null,asks:{},kinds:['question','note','verdict'],projects:[]};H.pane=H.panes[0];
+ const H:Data={on:true,project:'/project-a',active:{worker:'chat-a'},panes:[{id:'worker',label:'воркер',model:'w1',vendor:'claude',role:'orchestrator',kind:'orchestrator',busy:false},{id:'room',label:'без роли',model:'w1',vendor:'claude'}],cur:null,asks:{},kinds:['question','note','verdict'],projects:[]};H.pane=H.panes[0];
  const S:Data={ui:{pane:'worker',direct:{worker:true}},chat:[],cx:{noFolder:false},draft:null},ta:Data={value:'question',style:{}};let rendered=0;
  const column={querySelectorAll:()=>[],classList:{toggle(){}},insertAdjacentHTML(){}};
  const document={getElementById(id:string){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',dataset:{},remove(){elements.delete(id)},parentElement:{querySelector:()=>({textContent:''})},querySelector:()=>null,insertAdjacentHTML(){},replaceWith(){},cloneNode(){return this}});return elements.get(id)!},
@@ -117,7 +117,7 @@ for(const place of ['worker','room'])for(const page of ['chat','new'])test('135:
  view.H.project='/projects/next';render(box);assert.match(top.innerHTML,/<b>next<\/b>/);assert.doesNotMatch(top.innerHTML,/<b>chat-test<\/b>/);
  view.H.noProject=true;view.S.cx.noFolder=false;render(box);assert.match(top.innerHTML,/<b>Без проекта<\/b>/);assert.equal(view.S.cx.noFolder,true);
 });
-function withOrchestrator(view:ReturnType<typeof ui>){view.H.panes[0].role='executor';view.H.panes.push({id:'orchestrator',label:'оркестратор',role:'orchestrator',vendor:'claude',model:'w1'});view.H.active.orchestrator='c-orch'}
+function withOrchestrator(view:ReturnType<typeof ui>){view.H.panes[0].role='executor';view.H.panes[0].kind='worker';view.H.panes.push({id:'orchestrator',label:'оркестратор',role:'orchestrator',kind:'orchestrator',vendor:'claude',model:'w1'});view.H.active.orchestrator='c-orch'}
 for(const change of ['pane','project','chat','away-back','pagehide'])test('TS-08 r2/1: orchestrator card retains its target through delayed history and cancels on '+change,async t=>{
  const h=await fixture(t,{seats:directSeats}),history=deferred<Data>(),view=ui({fetch:async(path,body)=>path==='/api/chats/c-orch'?history.promise:(await call(h.api,path,{...(body?{body}:{})})).body});
  withOrchestrator(view);view.S.draft='ONLY for orchestrator';const sending=view.direct()('orch');await until(()=>view.requests.some(r=>r.path==='/api/chats/c-orch'));
@@ -275,7 +275,7 @@ function firstPaint(html:string,storage=new Map<string,string>(),page='chat'){
  return {...view,root,attrs,timers,nodes,side,folders,project,head,status,storage,boot:view.sandbox.HARNESS_BOOT,paint:view.sandbox.paint,
   demoVisible:()=>!attrs.has('data-live-pending'),deadline(){for(const [id,timer] of timers)if(timer.ms===1500){timers.delete(id);timer.fn()}}};
 }
-const realStatus=()=>({project:'/real/project',panes:[{id:'worker',label:'Настоящий оркестратор',model:'w1',vendor:'claude',role:'orchestrator',busy:false}],activeChats:{worker:'c-real'},models:{},auth:{token:'must-not-cache'}});
+const realStatus=()=>({project:'/real/project',panes:[{id:'worker',label:'Настоящий оркестратор',model:'w1',vendor:'claude',role:'orchestrator',kind:'orchestrator',busy:false}],activeChats:{worker:'c-real'},models:{},auth:{token:'must-not-cache'}});
 
 function historyDOM(v:ReturnType<typeof firstPaint>,html='<div class="frame"><div class="main"><div class="top"><b>Project A</b><span class="st"></span></div><div class="feed"><div class="col"></div></div></div></div>'){
  const d=dom(html),all=v.sandbox.document.querySelectorAll,one=v.sandbox.document.querySelector;
@@ -438,13 +438,14 @@ test('TS-09a.1 r2: real HTTP return replaces project A feed with B history and r
 
 for(const current of ['no-active-chat','empty-active-chat','no-pane'])test('TS-09a.1 r2: '+current+' restores an empty feed without real onboarding or a model call',async t=>{
  const h=await fixture(t,current==='no-pane'?{seats:'  {}'}:{}),v=firstPaint(bootHtml,new Map(),'chat'),d=historyDOM(v);
+ if(current==='no-pane'){h.runtime.registry.panes.clear();h.runtime.project.state.chats={chats:{},active:{}}} // Explicit legacy absence; an empty project now has a saved room.
  if(current==='empty-active-chat')assert.equal((await call(h.api,'/api/chats/new',{body:{pane:'worker',carry:'none'}})).body.ok,true);
  v.sandbox.fetch=async(path:string,options?:{body:string})=>{const body=options?.body?JSON.parse(options.body):undefined;v.requests.push({path,body});return {json:async()=>(await call(h.api,path,body?{body}:{})).body}};
  runInContext(part(live,'  // лента активного чата','  // подключение к движку'),v.context);
  v.paint.apply((await call(h.api,'/api/status')).body,v.boot.capture(),true);d.document.querySelector('.col')!.innerHTML='<div class="ai live-msg">OLD ANSWER</div>';v.S.chat=[{role:'ai',text:'OLD ANSWER',html:'OLD ANSWER'}];
  v.pagehide[0]!();await v.pageshow[0]!({persisted:true});await h.runtime.idle();
  assert.doesNotMatch(d.document.querySelector('.feed')!.textContent,/OLD ANSWER/);assert.equal(v.S.chat.length,0);assert.equal(h.provider.calls.length,0);assert.equal(v.requests.some(r=>r.body||r.path==='/api/onboard'),false);
- assert.equal(v.requests.some(r=>r.path.startsWith('/api/chats/')&&!r.path.endsWith('/new')),current==='empty-active-chat');
+ assert.equal(v.requests.some(r=>r.path.startsWith('/api/chats/')&&!r.path.endsWith('/new')),current!=='no-pane'); // 83: a real place now has a saved empty chat even without messages.
 });
 
 for(const change of ['pane','chat','pagehide'])test('TS-09a.1 r2: a late restored history cannot repaint after '+change,async()=>{
@@ -455,4 +456,10 @@ for(const change of ['pane','chat','pagehide'])test('TS-09a.1 r2: a late restore
  v.functions.invalidateBinding();if(change==='pane'){v.S.ui.pane='room';v.sandbox.pickPane()}if(change==='chat')v.H.active.worker='chat-c';if(change==='pagehide')v.pagehide[0]!();
  if(change!=='pagehide')await v.functions.loadChat({onboard:false,visible:true});history.resolve({messages:[{role:'ai',text:'STALE RETURNED HISTORY'}]});await restored;
  const text=d.document.querySelector('.feed')!.textContent;assert.doesNotMatch(text,/STALE RETURNED HISTORY|OLD A/);if(change!=='pagehide')assert.match(text,/CURRENT SELECTION/);assert.equal(v.requests.some(r=>r.body),false);
+});
+
+test('153: the direct-to-orchestrator card selects verified kind and ignores an orchestrator-shaped worker',async t=>{
+ const h=await fixture(t,{seats:'  orchestrator: {kind: worker, role: orchestrator, label: Ложный руководитель, vendor: claude, model: w1, mode: read}\n  lead: {kind: orchestrator, role: юрист, label: Тимлид, vendor: claude, model: w1, mode: read}'});
+ const view=ui({fetch:async(path,body)=>(await call(h.api,path,{...(body?{body}:{})})).body}),status=(await call(h.api,'/api/status')).body;
+ view.H.project=h.dir;view.H.panes=status.panes;view.H.active=status.activeChats;view.S.ui.pane='orchestrator';view.H.pane=view.H.panes[0];view.S.draft='Задача только тимлиду';assert.equal(await view.direct()('orch'),true);await h.runtime.idle();assert.equal(view.requests.find(r=>r.path==='/api/chat')!.body!.pane,'lead');assert.equal(h.provider.calls.length,1);assert.equal(h.provider.calls[0]!.seat.id,'lead');
 });

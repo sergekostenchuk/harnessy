@@ -1,4 +1,5 @@
 export * from './types.ts';
+export * from './kinds.ts';
 export * from './errors.ts';
 export * from './catalog.ts';
 export * from './manifest.ts';

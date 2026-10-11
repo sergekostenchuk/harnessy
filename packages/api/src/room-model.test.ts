@@ -20,8 +20,8 @@ for(const route of ['select','create','move','move-create'] as const)for(const o
 
 test('122/128: a fresh project with no previous room leaves the model unselected, never the first catalogue entry',async t=>{
  const h=await fixture(t),path=join(h.dir,'new');await initProject(path,{git:false,orchestrator:false});assert.equal(h.runtime.registry.get('room'),null);
- const response=await call(h.api,'/api/project',{body:{path}});assert.equal(response.status,200);assert.equal(h.runtime.registry.get('room'),null);const status=await call(h.api,'/api/status');assert.ok(status.body.models.claude.length);assert.equal(status.body.panes.some((p:any)=>p.id==='room'),false);
- const rejected=await call(h.api,'/api/chat',{body:{pane:'room',message:'question'}});assert.equal(rejected.status,404);assert.equal(rejected.body.error,'нет окна');assert.equal(h.provider.calls.length,0);
+ const response=await call(h.api,'/api/project',{body:{path}});assert.equal(response.status,200);assert.equal(h.runtime.registry.get('room')!.model,'');const status=await call(h.api,'/api/status');assert.ok(status.body.models.claude.length);assert.equal(status.body.panes.some((p:any)=>p.id==='room'),true);
+ const rejected=await call(h.api,'/api/chat',{body:{pane:'room',message:'question'}});assert.equal(rejected.status,400);assert.equal(rejected.body.code,'model_required');assert.equal(h.provider.calls.length,0); // 102: the empty conversation is now saved before model selection.
 });
 
 test('122/128: an unreadable saved room selection is not overwritten by a catalogue default or another project',async t=>{

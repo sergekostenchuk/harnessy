@@ -42,21 +42,21 @@ test('1/19/68: chat direct and handoff selection forms, journal, chats and trans
 
 test('1: project creation/assign new and replaced/seats/onboard keep distinct Python forms',async t=>{
  const h=await fixture(t);const path=join(h.dir,'project');const created=await call(h.api,'/api/project/create',{body:{path,model:'w1',git:true}});
- assert.equal(created.status,200);assert.deepEqual(keys(created.body),['created','git','memory','ok','orchestrator','project','seats']);assert.equal(created.body.created,true);assert.equal(created.body.git,true);assert.equal(created.body.seats,1);
+ assert.equal(created.status,200);assert.deepEqual(keys(created.body),['created','git','memory','ok','orchestrator','project','seats']);assert.equal(created.body.created,true);assert.equal(created.body.git,true);assert.equal(created.body.seats,0);
  await h.runtime.idle();await call(h.api,'/api/halt',{body:{on:true}});
  assert.equal((await call(h.api,'/api/room',{body:{model:'w1',folder:path}})).status,200);
- const assigned=await call(h.api,'/api/assign',{body:{role:'assistant',model:'w1'}});assert.equal(assigned.status,200);assert.deepEqual(keys(assigned.body),['created','ok','pane','project','team']);assert.equal(assigned.body.created,false);
- const replacement=await call(h.api,'/api/assign',{body:{role:'assistant',model:'w1'}});assert.equal(replacement.status,200);assert.deepEqual(keys(replacement.body),['chat','ok','pane','replaced']);
- const seat=await call(h.api,'/api/seats',{body:{role:'executor',model:'w1'}});assert.equal(seat.status,200);assert.deepEqual(keys(seat.body),['chat','ok','pane']);
+ const assigned=await call(h.api,'/api/assign',{body:{role:'orchestrator',model:'w1'}});assert.equal(assigned.status,200);assert.deepEqual(keys(assigned.body),['created','ok','pane','project','team']);assert.equal(assigned.body.created,false);
+ const replacement=await call(h.api,'/api/assign',{body:{role:'orchestrator',model:'w1'}});assert.equal(replacement.status,200);assert.deepEqual(keys(replacement.body),['chat','ok','pane','replaced']);
+ const seat=await call(h.api,'/api/seats',{body:{role:'executor',model:'w1'}});assert.equal(seat.status,409);assert.deepEqual(seat.body,{ok:false,code:'proposal_required',error:'участников создаёт оркестратор по подтверждённому предложению'});
  assert.equal((await call(h.api,'/api/seats',{body:{role:'assistant',model:'w1'}})).status,409);
- const onboard=await call(h.api,'/api/onboard',{body:{pane:seat.body.pane.id}});assert.deepEqual(onboard.body,{ok:true,already:true});assert.equal((await call(h.api,'/api/onboard',{body:{pane:'room'}})).status,404);
+ const onboard=await call(h.api,'/api/onboard',{body:{pane:assigned.body.pane.id}});assert.deepEqual(onboard.body,{ok:true,already:true});assert.equal((await call(h.api,'/api/onboard',{body:{pane:'room'}})).status,404);
 });
 
 test('11/25/66/68: POST open sessions preserves forms and rejects stale read after turn/project, GET and HEAD never invoke provider',async t=>{
  const h=await fixture(t);assert.deepEqual((await call(h.api,'/api/sessions?pane=worker')).body,{sessions:[{id:'old',title:'прежний',updated:1}]});assert.equal((await call(h.api,'/api/sessions')).status,400);
  const opened=await call(h.api,'/api/sessions/open',{body:{pane:'worker',id:'old'}});assert.deepEqual(opened.body,{id:'old',messages:[{role:'ai',text:'прежний ответ'}]});assert.equal(h.runtime.registry.get('worker')!.sessionId,'old');
  const gate=deferred<{role:'ai';text:string}[]>();h.provider.onMessages=()=>gate.promise;const read=call(h.api,'/api/sessions/open',{body:{pane:'worker',id:'other'}});await until(()=>h.provider.messageCalls===2);await h.runtime.runTurn('worker','новый ход');gate.resolve([{role:'ai',text:'старый результат'}]);const stale=await read;assert.equal(stale.status,409);assert.equal(stale.body.code,'stale_session');assert.notEqual(h.runtime.registry.get('worker')!.sessionId,'other');
- const gate2=deferred<{role:'ai';text:string}[]>();h.provider.onMessages=()=>gate2.promise;const read2=call(h.api,'/api/sessions/open',{body:{pane:'worker',id:'foreign'}});await until(()=>h.provider.messageCalls===3);const dir=join(h.dir,'next');mkdirSync(dir);await h.runtime.projectSet(dir,{},OWNER);gate2.resolve([{role:'ai',text:'чужой проект'}]);assert.equal((await read2).body.code,'project_changed');assert.equal(h.runtime.registry.ids.length,0);
+ const gate2=deferred<{role:'ai';text:string}[]>();h.provider.onMessages=()=>gate2.promise;const read2=call(h.api,'/api/sessions/open',{body:{pane:'worker',id:'foreign'}});await until(()=>h.provider.messageCalls===3);const dir=join(h.dir,'next');mkdirSync(dir);await h.runtime.projectSet(dir,{},OWNER);gate2.resolve([{role:'ai',text:'чужой проект'}]);assert.equal((await read2).body.code,'project_changed');assert.deepEqual(h.runtime.registry.ids,['room']);
 });
 
 test('8/19/68: owner-ack append failure is 500 J with card retained, retry succeeds and late approve has legacy form',async t=>{

@@ -8,7 +8,7 @@ import {temp,repo,git,failure,response} from './test-support.ts';
 import {withPathLock,type Seat} from '@harnessy/team';
 import {setImmediate as tick} from 'node:timers/promises';
 import {ProjectError} from './errors.ts';
-const seat:Seat={id:'executor',role:'executor',label:'воркер',vendor:'codex',model:'model',mode:'ask',digest:false,writePaths:[],instructions:null,worktree:'.worktrees/executor'};
+const seat:Seat={id:'executor',role:'executor',kind:'worker',label:'воркер',vendor:'codex',model:'model',mode:'ask',digest:false,writePaths:[],instructions:null,worktree:'.worktrees/executor'};
 test('[10-12,22] real worktree ownership, branch, symlink boundary and repeated opening',async()=>{
  const t=temp(),outside=temp(),g=new GitOps();try{
  git(t.root,'init','-q','-b','main');assert.equal((await g.ensureWorktree(t.root,'executor','.worktrees/executor','main')).note,'нет ветки main: сделай первый коммит, потом worktree появятся');repo(t.root);

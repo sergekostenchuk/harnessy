@@ -41,7 +41,7 @@ test('35/63: pending accepted verdict gives no merge authority; latest confirmat
 test('24/63: no repo, role denial, unknown SHA and tracked dirt return typed failures before Git mutation',async t=>{
  const plain=await harness(t,{actions:createActions()});const none=await plain.runtime.mergeOwner({sha:'a'.repeat(40)},OWNER);assert.equal(!none.ok&&none.code,'no_repo');
  const h=await setup(t),r=h.runtime;verdict(r,h.sha);fs.writeFileSync(join(h.dir,'base.txt'),'dirty');const dirty=await r.mergeOwner({sha:h.sha},OWNER);assert.equal(!dirty.ok&&dirty.code,'merge_failed');assert.equal(h.merges(),0);assert.equal(statuses(r).length,0);fs.writeFileSync(join(h.dir,'base.txt'),'base');await r.halt(false,OWNER);await r.idle();let refusal:MergeResult|undefined;
- h.provider.onRun=async(s,_m,c)=>{c.modelStarted?.();if(s.id==='worker')refusal=await r.merge(r.project.active.get('worker')!.scope,{sha:h.sha});return {text:'done',sessionId:null}};r.postOwner({to:'worker',kind:'task',text:'попытка'},OWNER);await r.idle();assert.deepEqual(refusal,{ok:false,code:'policy_denied',error:'слияние разрешено ролям orchestrator, owner, а не executor'});assert.equal(h.merges(),0);
+ h.provider.onRun=async(s,_m,c)=>{c.modelStarted?.();if(s.id==='worker')refusal=await r.merge(r.project.active.get('worker')!.scope,{sha:h.sha});return {text:'done',sessionId:null}};r.postOwner({to:'worker',kind:'task',text:'попытка'},OWNER);await r.idle();assert.deepEqual(refusal,{ok:false,code:'policy_denied',error:'слияние разрешено ролям orchestrator, owner, а не worker'});assert.equal(h.merges(),0);
 });
 
 test('60/64: intent write failure forbids merge; retry sees unchanged HEAD and creates exactly one commit',async t=>{

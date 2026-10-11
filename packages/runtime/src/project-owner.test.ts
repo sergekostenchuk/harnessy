@@ -24,5 +24,7 @@ test('65: owner switch preserves exact no-op/open forms and rejects agent before
 test('65: project creation initializes actual git and manifest, then opens that project',async t=>{
  const {runtime:r}=await harness(t),dir=target(t),path=join(dir,'new');
  await assert.rejects(r.projectCreate({path},{seat:'worker',trust:'agent'}),(e:unknown)=>e instanceof RuntimeError&&e.code==='policy_denied');assert.equal(existsSync(path),false);
- const result=await r.projectCreate({path,model:'w1'},OWNER);assert.equal(result.created,true);assert.equal(result.git,true);assert.equal(result.orchestrator,true);assert.equal(result.seats,1);assert.equal(r.project.dir,path);assert.ok(existsSync(join(path,'.git')));assert.ok(existsSync(join(path,'.harness','team.yaml')));
+ // 102: owner cancelled automatic orchestration; creation only opens a conversation.
+ const result=await r.projectCreate({path,model:'w1'},OWNER);assert.equal(result.created,true);assert.equal(result.git,true);assert.equal(result.orchestrator,false);assert.equal(result.seats,0);
+ assert.equal(r.project.dir,path);assert.ok(existsSync(join(path,'.git')));assert.ok(existsSync(join(path,'.harness','team.yaml')));
 });

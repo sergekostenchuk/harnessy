@@ -4,7 +4,7 @@ import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {createRuntime,diskIO,withRoleActions,type Runtime,type StateIO} from './index.ts';
 import {jsonClone,type TranscriptMessage} from './state.ts';
-import {harness,OWNER,FakeProvider,completedActions} from './test-helpers.ts';
+import {savedConversationAssignment,harness,OWNER,FakeProvider,completedActions} from './test-helpers.ts';
 const seats='  orchestrator: {role: orchestrator, vendor: claude, label: оркестратор, model: w1, mode: read, digest: false}';
 const actions=withRoleActions(completedActions);
 type Harness=Awaited<ReturnType<typeof harness>>;
@@ -21,11 +21,11 @@ function copiedAnswer(r:Runtime,sid:string,source:TranscriptMessage){
  for(const key of ['runtime','deliverySeq','sourceOnly'])assert.equal(Object.hasOwn(result,key),false,key+' must remain in the source');
 }
 
-test('TS-04b r2: chat(room) → new executor preserves conversation but cannot recover the room receipt',async t=>{
+test('TS-04b r2: saved chat(room) → executor assignment preserves conversation but cannot recover the room receipt',async t=>{
  const h=await harness(t,{seats,actions}),r=h.runtime;h.clock.advance(875);r.roomSet({model:'w1'},OWNER);
  const sent=r.chat({pane:'room',message:'История комнаты 🧠'},OWNER);await r.idle();assert.equal(sent.seq,1);
  const source=answer(r,'room'),sourceChat=r.project.state.chats.active.room!;source.sourceOnly={privateReceipt:'room'};r.project.state.savePanes(r.registry,r.journal);
- await r.halt(true,OWNER);const assigned=await r.assignRoomRole({role:'executor'},OWNER);await r.idle();
+ await r.halt(true,OWNER);const assigned=await savedConversationAssignment(r,{role:'executor'});await r.idle();
  copiedAnswer(r,'executor',source);assert.equal(r.registry.get('executor')!.status,'idle');assert.equal(r.journal.pendingFor('executor').length,1);assert.equal(r.project.state.results(r.registry.get('executor')!).length,0);
  const snapshot=JSON.parse(readFileSync(r.project.state.materializationPath,'utf8'))[0].source.chat.transcript.find((m:TranscriptMessage)=>m.role==='ai');assert.equal(Object.hasOwn(snapshot,'runtime'),false);assert.equal(Object.hasOwn(snapshot,'deliverySeq'),false);
  assert.equal(Object.hasOwn(r.project.state.chats.chats[sourceChat]!.transcript[1]!,'runtime'),true);assert.match(readFileSync(r.project.state.chatsPath,'utf8'),/"ts": 1791500001\.0/);
@@ -77,7 +77,7 @@ test('TS-04b r2: replay of an older assignment intent strips source receipts and
  let armed=false;const io:StateIO={read:diskIO.read,write(path,text){diskIO.write(path,text);if(armed&&path.endsWith('seat-materialization.json')){armed=false;throw Error('after intent')}}};
  const h=await harness(t,{seats,actions,deps:{stateIO:io}}),r=h.runtime;r.roomSet({model:'w1'},OWNER);
  h.provider.onRun=async(seat,_text,ctx)=>{ctx.modelStarted?.();ctx.publish({type:'done',sessionId:null,model:seat.model,durationMs:0,usage:{input:null,output:0,cacheRead:0}});return {text:'Ответ без расхода',sessionId:null}};
- r.chat({pane:'room',message:'Исходный разговор до сбоя'},OWNER);await r.idle();const source=answer(r,'room');await r.halt(true,OWNER);armed=true;await assert.rejects(r.assignRoomRole({role:'executor'},OWNER),/after intent/);
+ r.chat({pane:'room',message:'Исходный разговор до сбоя'},OWNER);await r.idle();const source=answer(r,'room');await r.halt(true,OWNER);armed=true;await assert.rejects(savedConversationAssignment(r,{role:'executor'}),/after intent/);
  // Emulate an older saved intent containing an actual source turn receipt.
  const intents=JSON.parse(readFileSync(r.project.state.materializationPath,'utf8'));intents[0].source.chat.transcript[1]=jsonClone(source);writeFileSync(r.project.state.materializationPath,JSON.stringify(intents));
  await r.close();const {runtime:next,provider:f}=await reopen(t,h);assert.equal(f.calls.length,0);copiedAnswer(next,'executor',source);assert.equal(next.registry.get('executor')!.status,'idle');assert.equal(next.journal.pendingFor('executor').length,1);assert.equal(next.project.state.results(next.registry.get('executor')!).length,0);

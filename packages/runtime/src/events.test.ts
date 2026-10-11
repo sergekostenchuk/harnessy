@@ -9,7 +9,7 @@ import {harness,FakeClock,OWNER} from './test-helpers.ts';
 test('14/22/49: approvals replay before live events; timeout and late decision; newly added pane visible to all',async t=>{
  const {runtime:r,clock}=await harness(t),p=r.registry.get('worker')!,approval=p.askApproval('команда','подробности'),id=[...p.approvals.keys()][0]!;
  const sub=r.subscribe({all:true}),events=sub.events[Symbol.asyncIterator]();p.publish({type:'delta',text:'live'});assert.deepEqual((await events.next()).value,{type:'approval',id,title:'команда',detail:'подробности',pane:'worker'});assert.equal((await events.next()).value.type,'delta');
- const newPane=r.registry.add({id:'extra',role:'tester',vendor:'claude',label:'тестер',model:'w1',mode:'read',digest:false,writePaths:[],instructions:null,worktree:null});newPane.publish({type:'note',text:'новое место'});assert.equal((await events.next()).value.pane,'extra');
+ const newPane=r.registry.add({id:'extra',role:'tester',kind:'tester',vendor:'claude',label:'тестер',model:'w1',mode:'read',digest:false,writePaths:[],instructions:null,worktree:null});newPane.publish({type:'note',text:'новое место'});assert.equal((await events.next()).value.pane,'extra');
  clock.advance(900_000);assert.equal(await approval,false);assert.equal((await events.next()).value.decision,'timeout');assert.deepEqual(r.approve('worker',id,'allow',OWNER),{ok:false,error:'вопрос уже закрыт'});sub.close();assert.equal(sub.closed.aborted,true)
 });
 
@@ -20,7 +20,7 @@ test('22/49: capacity 4000 overflow closes whole subscription, discards queue an
 
 test('22/32/49: project switch closes pane, owner, all streams and resolves their pending next',async t=>{
  const {runtime:r}=await harness(t);const subscriptions=[r.subscribe({pane:'worker'}),r.subscribe({owner:true}),r.subscribe({all:true})],waits=subscriptions.map(s=>s.events[Symbol.asyncIterator]().next());
- const other=mkdtempSync(join(tmpdir(),'harnessy-event-switch-'));t.after(()=>rmSync(other,{recursive:true,force:true}));await r.openProject(other);assert.equal(subscriptions.every(s=>s.closed.aborted),true);assert.equal((await Promise.all(waits)).every(v=>v.done),true);assert.equal(r.registry.ids.length,0)
+ const other=mkdtempSync(join(tmpdir(),'harnessy-event-switch-'));t.after(()=>rmSync(other,{recursive:true,force:true}));await r.openProject(other);assert.equal(subscriptions.every(s=>s.closed.aborted),true);assert.equal((await Promise.all(waits)).every(v=>v.done),true);assert.deepEqual(r.registry.ids,['room']);assert.equal(r.registry.get('room')!.model,'')
 });
 
 test('14: approval deny resolves once and owner trust cannot be forged by agent',async t=>{

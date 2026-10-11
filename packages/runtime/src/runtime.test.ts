@@ -63,12 +63,12 @@ test('26/33/48: immutable scope/records, process token survives idle, stale tool
  gate.resolve({text:'ответ',sessionId:'s1'});await r.idle();assert.throws(()=>r.validateBridge('worker','secret-process'),(e:unknown)=>e instanceof RuntimeError&&e.code==='turn_ended');const late=await ctx.tools.send({to:'owner',kind:'status',text:'поздно'});assert.equal(late.ok,false);assert.equal(!late.ok&&late.code,'turn_ended');ctx.revokeProcessToken('secret-process');assert.throws(()=>r.validateBridge('worker','secret-process'),(e:unknown)=>e instanceof RuntimeError&&e.code==='token_invalid')
 });
 
-test('33: actions receive frozen owner mandate and recheck scope after await',async t=>{
+test('33: ask action receives a frozen scope and rechecks it after await',async t=>{
  const gate=deferred(),inAction=deferred();let effect=0;
- const actions:RuntimeActions={...completedActions,async assignRole(_args,ctx){assert.equal(Object.isFrozen(ctx.turnRecords),true);assert.equal(Object.isFrozen(ctx.turnRecords[0]!.to),true);assert.throws(()=>{(ctx.turnRecords as unknown as unknown[]).push({from:'owner'})});inAction.resolve();await gate.promise;ctx.assertActive();effect++;return {ok:true,pane:'tester',label:'тестер',model:'w1',mode:'read',mandate:1}}};
+ const actions:RuntimeActions={...completedActions,async ask(_args,ctx){assert.equal(Object.isFrozen(ctx.turnRecords),true);assert.equal(Object.isFrozen(ctx.turnRecords[0]!.to),true);assert.throws(()=>{(ctx.turnRecords as unknown as unknown[]).push({from:'owner'})});inAction.resolve();await gate.promise;ctx.assertActive();effect++;return {ok:true,reply:'ответ',seq:1}}};
  const {runtime:r,provider:f}=await harness(t,{actions});let result:unknown;
- f.onRun=async(_seat,_text,ctx)=>{ctx.modelStarted?.();result=await ctx.tools.assignRole({role:'tester'});return {text:'ответ',sessionId:'s1'}};
- r.postOwner({to:'worker',kind:'task',text:'поручение'},OWNER);await inAction.promise;r.interrupt('worker',OWNER);gate.resolve();await r.idle();assert.equal(effect,0);assert.deepEqual(result,{ok:false,code:'turn_ended',error:'ход не активен'})
+ f.onRun=async(_seat,_text,ctx)=>{ctx.modelStarted?.();result=await ctx.tools.ask({to:'peer',text:'вопрос'});return {text:'ответ',sessionId:'s1'}};
+ r.postOwner({to:'worker',kind:'task',text:'поручение'},OWNER);await inAction.promise;r.interrupt('worker',OWNER);gate.resolve();await r.idle();assert.equal(effect,0);assert.deepEqual(result,{ok:false,code:'turn_ended',error:'Ответа нет: ход не активен'})
 });
 
 test('48: PeerTools send normalizes reply_to=0, forbids owner answer; read is policy bound even after YAML breaks',async t=>{
@@ -85,7 +85,7 @@ test('48: PeerTools send normalizes reply_to=0, forbids owner answer; read is po
 
 test('38/49: bad chats/halt and removed active seat have diagnostics and safe defaults',async t=>{
  const h=await harness(t,{before:dir=>{writeFileSync(join(dir,'.harness','state','chats.json'),'{bad');writeFileSync(join(dir,'.harness','state','halt.json'),'[]')}});assert.equal(h.runtime.halted,false);assert.ok(h.runtime.lineErrors.some(s=>s.startsWith('chats.json не читается: ')));assert.ok(h.runtime.lineErrors.some(s=>s.startsWith('halt.json не читается: ')));
- await h.runtime.close();writeFileSync(join(h.dir,'.harness','state','chats.json'),JSON.stringify({chats:{c1:{id:'c1',pane:'gone',transcript:[]}},active:{gone:'c1'}}));const r=await createRuntime(h.deps,completedActions);t.after(()=>r.close());assert.equal(r.project.state.chats.chats.c1!.pane,'gone');assert.deepEqual(r.project.state.chats.active,{})
+ await h.runtime.close();writeFileSync(join(h.dir,'.harness','state','chats.json'),JSON.stringify({chats:{c1:{id:'c1',pane:'gone',transcript:[]}},active:{gone:'c1'}}));const r=await createRuntime(h.deps,completedActions);t.after(()=>r.close());assert.equal(r.project.state.chats.chats.c1!.pane,'gone');assert.equal(r.project.state.chats.active.gone,undefined);assert.ok(r.project.state.chats.active.worker)
 });
 
 test('48: unavailable pending ack is visible in errors, not silently dropped',async t=>{

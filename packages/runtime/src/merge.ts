@@ -7,7 +7,7 @@ import type {ActionContext,OwnerMergeContext,MergeResult,ProjectState} from './t
 import type {Runtime} from './runtime.ts';
 const HARNESS={seat:'harness',trust:'harness'} as const;
 type Context=ActionContext|OwnerMergeContext;
-function actor(ctx:Context){const p='project' in ctx?ctx.project:ctx.runtime.project,seat='scope' in ctx?ctx.scope.seatId:'owner',role=seat==='owner'?'owner':p.registry.get(seat)?.role??seat;return {p,seat,role}}
+function actor(ctx:Context){const p='project' in ctx?ctx.project:ctx.runtime.project,seat='scope' in ctx?ctx.scope.seatId:'owner',role=seat==='owner'?'owner':p.registry.roleOf(seat)??'unknown';return {p,seat,role}}
 function permission(p:ProjectState,role:string):void {const allowed=new Set([...(p.team?.mergeRoles??['orchestrator']),'owner']);if(!allowed.has(role))throw new RuntimeError('policy_denied','слияние разрешено ролям '+[...allowed].sort().join(', ')+', а не '+role)}
 function accepted(p:ProjectState,sha:string):Record_ {
  const threads=p.channel.threads;
@@ -19,7 +19,7 @@ function announce(p:ProjectState,m:MergeAction):MergeResult {
  if(!m.result)throw new RuntimeError('merge_uncertain','слияние не подтверждено');
  const thread=m.verdict.thread,mergeSha=m.result.mergeSha;
  if(!p.journal.read({limit:0,thread}).some(r=>r.from==='harness'&&r.kind==='status'&&r.origin==='merge'&&r.sha===m.sha&&r.merged===mergeSha)){
- const others=[...p.registry.panes.values()].filter(a=>a.role==='orchestrator'&&a.id!==m.initiator.seat).map(a=>a.id);
+ const others=[...p.registry.panes.values()].filter(a=>a.kind==='orchestrator'&&a.id!==m.initiator.seat).map(a=>a.id);
  p.channel.postCore({to:['owner',...others],kind:'status',text:'Тред '+thread+': коммит '+m.sha.slice(0,12)+' слит в '+m.branch+' как '+mergeSha.slice(0,12)+' ('+m.initiator.label+').',thread,origin:'merge',sha:m.sha,merged:mergeSha},HARNESS);
  }
  return {ok:true,sha:m.sha,mergeSha,branch:m.branch,thread};

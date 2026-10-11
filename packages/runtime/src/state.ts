@@ -16,7 +16,7 @@ export interface TranscriptMessage {role:string;text:string;ts:number;model?:str
 export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;outcome:'error';errorCode:string}
 export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}
 export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;deliverySeq?:number;status?:'uncertain'}
-export interface Chat {id:string;pane:string;title:string;created:number;closed:number|null;model:string;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;turns?:AnalyticalTurn[];[key:string]:unknown}
+export interface Chat {id:string;pane:string;title:string;created:number;closed:number|null;model:string|null;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;turns?:AnalyticalTurn[];[key:string]:unknown}
 export function jsonClone<T>(value:T):T{return parseCompat(compatJson(value)) as T}
 const CONVERSATION_FIELDS=new Set(['role','text','ts','model','usage','durationMs']);
 // Execution receipts belong to the source seat and journal, never to transferred history.
@@ -46,7 +46,7 @@ export class StateStore {
  for(const id of orderedKeys(chats)){const c=chats[id];if(!object(c)||typeof c.pane!=='string'||!Array.isArray(c.transcript)||!c.transcript.every(m=>object(m)&&typeof m.role==='string'&&typeof m.text==='string'&&typeof m.ts==='number'))throw Error('неверная форма чата '+id)}
  this.chats={chats,active};for(const [pid,cid] of Object.entries(active)){const pane=registry.get(pid),c=chats[cid];if(!pane||!c||c.pane!==pid){delete active[pid];continue}
  pane.sessionId=typeof c.sessionId==='string'&&c.sessionId?c.sessionId:null;pane.transcript=c.transcript;pane.carry=typeof c.carry==='string'?c.carry:'';
- if(c.vendor==='claude'||c.vendor==='codex')pane.vendor=c.vendor;if(typeof c.model==='string'&&c.model)pane.model=c.model;
+ if(c.vendor==='claude'||c.vendor==='codex')pane.vendor=c.vendor;if(c.model===null)pane.model='';else if(typeof c.model==='string'&&c.model)pane.model=c.model;
  const last=[...c.transcript].reverse().find(m=>object(m.runtime)&&object(m.runtime.nextSeen));if(last&&object(last.runtime)&&object(last.runtime.nextSeen))pane.seen={...last.runtime.nextSeen} as Record<string,number>
  }
  }catch(e){this.chats={chats:{},active:{}};if((e as NodeJS.ErrnoException).code!=='ENOENT')lineErrors.push('chats.json не читается: '+message(e))}
@@ -59,7 +59,7 @@ export class StateStore {
  newChatId():string {for(let n=0;n<100;n++){const cid='c'+Math.floor(this.clock.now()).toString(16)+this.id();if(!/^c[0-9a-f]+$/.test(cid))throw new RuntimeError('chat_id_invalid','неверный идентификатор чата');if(!Object.hasOwn(this.chats.chats,cid))return cid}throw new RuntimeError('chat_exists','идентификатор чата уже существует',409)}
  newChat(pane:Pane,carry='',adopt=false,id=this.newChatId()):Chat {
  if(Object.hasOwn(this.chats.chats,id))throw new RuntimeError('chat_exists','чат уже существует',409);
- const chat:Chat={id,pane:pane.id,title:'',created:Math.floor(this.clock.now()/1000),closed:null,model:pane.model,vendor:pane.vendor,sessionId:adopt?pane.sessionId:null,transcript:adopt?pane.transcript:[],carry:adopt?(pane.carry||carry):carry};
+ const chat:Chat={id,pane:pane.id,title:'',created:Math.floor(this.clock.now()/1000),closed:null,model:pane.model||null,vendor:pane.vendor,sessionId:adopt?pane.sessionId:null,transcript:adopt?pane.transcript:[],carry:adopt?(pane.carry||carry):carry};
  this.chats.chats=orderedClone(this.chats.chats,{[id]:chat});this.chats.active=orderedClone(this.chats.active,{[pane.id]:id});
  if(!adopt){pane.sessionId=null;pane.transcript=chat.transcript;pane.carry=carry;pane.seen={};pane.revision++}
  return chat
@@ -69,8 +69,8 @@ export class StateStore {
  readMaterializations():unknown {try{return this.read(this.materializationPath)}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return [];throw new RuntimeError('materialization_invalid','назначения ролей не читаются: '+message(e),409,{cause:e})}}
  saveMaterializations(value:unknown):void{this.write(this.materializationPath,value,2)}
  activeChat(pane:Pane,create=true):Chat|null {const id=this.chats.active[pane.id],existing=id?this.chats.chats[id]:null;return existing??(create?this.newChat(pane,'',true):null)}
- sync(registry:Registry):void {for(const p of registry.panes.values()){const c=this.activeChat(p,!!(p.transcript.length||p.sessionId));if(!c)continue;
- c.transcript=p.transcript.filter(m=>!p.uncommitted.has(m));c.sessionId=p.sessionId;c.model=p.model;c.vendor=p.vendor;c.carry=p.carry;
+ sync(registry:Registry):void {for(const p of registry.panes.values()){const c=this.activeChat(p,true);if(!c)continue;
+ c.transcript=p.transcript.filter(m=>!p.uncommitted.has(m));c.sessionId=p.sessionId;c.model=p.model||null;c.vendor=p.vendor;c.carry=p.carry;
  if(!c.title||c.title==='вводная роли'){const first=p.transcript.find(m=>m.role==='me')?.text||p.transcript.find(m=>m.role==='ai'&&pythonTrim(m.text))?.text||'';c.title=slice(pythonTrim(first).split('\n')[0]??'',60)||(p.transcript.some(m=>m.role==='peer'&&m.text.startsWith('[от харнесс]'))?'вводная роли':'')}
  }}
  saveChats(registry:Registry):void{this.sync(registry);this.write(this.chatsPath,this.chats,2)}

@@ -10,7 +10,7 @@ const fixture=(name:string)=>readFileSync(new URL('./fixtures/'+name,import.meta
 test('10/23/45: Pane.settings/persist and panes/halt/chats bytes match Python AST golden',async t=>{
  const h=await harness(t,{deps:{id:()=> 'beef'},seats:'  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read, write_paths: [src], digest: false}'}),{runtime:r,dir}=h,p=r.registry.get('worker')!;
  p.sessionId='s1';p.touched=true;p.record('me','Первая реплика\nпродолжение');p.record('ai','Ответ 🧠');r.project.state.savePanes(r.registry,r.journal);r.project.state.saveHalt(true);
- const expected=JSON.parse(fixture('settings.json'));expected.cwd=dir;assert.equal(compatJson(p.settings()),compatJson(expected));
+ const expected=JSON.parse(fixture('settings.json'));expected.cwd=dir;expected.kind='worker';assert.equal(compatJson(p.settings()),compatJson(expected));
  assert.equal(readFileSync(join(dir,'.harness','state','panes.json'),'utf8'),fixture('panes.json'));assert.equal(readFileSync(join(dir,'.harness','state','halt.json'),'utf8'),fixture('halt.json'));assert.equal(readFileSync(join(dir,'.harness','state','chats.json'),'utf8'),fixture('chats.json'))
 });
 
