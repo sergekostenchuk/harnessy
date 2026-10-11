@@ -132,11 +132,16 @@
   function renderWaiting(){const card=document.getElementById('live-waiting');if(card&&card.dataset.pane)card.remove();
     if(PAGE==='now'){nowDraw();return}if(PAGE==='chat'&&H.pane&&H.pane.waiting)showWaiting(H.pane,H.pane.waiting,H.project);}
   function showRestore(project,error){ let card=document.getElementById('live-waiting'); if(!card){card=document.createElement('div');card.id='live-waiting';card.className='live-toast on';document.body.appendChild(card)}card.dataset.pane='';card.dataset.project=project;card.innerHTML='<span>'+esc(error)+'</span><button type="button" class="btn sm ghost" data-attempt-reload="'+esc(project)+'">Повторить восстановление проекта</button>'; }
-  document.addEventListener('click',async e=>{ const button=e.target.closest('[data-attempt-action], [data-attempt-reload]'); if(!button) return; e.preventDefault(); e.stopImmediatePropagation(); if(button.disabled) return; const requestedProject=button.dataset.attemptReload||button.dataset.attemptProject;button.disabled=true;
-    let r=null; try{ r=button.dataset.attemptReload?await api('/api/project',{path:button.dataset.attemptReload,reload:true}):await api('/api/panes/'+encodeURIComponent(button.dataset.attemptPane)+'/attempt',{project:button.dataset.attemptProject,turnInstanceId:button.dataset.attemptId,action:button.dataset.attemptAction}); }catch(x){} finally{button.disabled=false}
+  const attemptRequests=new Set(),attemptKey=b=>JSON.stringify([b.dataset.attemptProject,b.dataset.attemptPane,b.dataset.attemptId]);
+  document.addEventListener('click',async e=>{ const button=e.target.closest('[data-attempt-action], [data-attempt-reload]'); if(!button) return; e.preventDefault(); e.stopImmediatePropagation(); if(button.disabled) return;
+    const key=button.dataset.attemptReload?null:attemptKey(button);if(key&&(attemptRequests.has(key)||PAGE==='now'&&nowAttemptDisabled(button)))return;
+    const requestedProject=button.dataset.attemptReload||button.dataset.attemptProject,generation=PAGE==='now'?NOW.generation:null;button.disabled=true;if(key)attemptRequests.add(key);if(PAGE==='now')nowDraw();
+    try{let r=null; try{ r=button.dataset.attemptReload?await api('/api/project',{path:button.dataset.attemptReload,reload:true}):await api('/api/panes/'+encodeURIComponent(button.dataset.attemptPane)+'/attempt',{project:button.dataset.attemptProject,turnInstanceId:button.dataset.attemptId,action:button.dataset.attemptAction}); }catch(x){}
+    if(PAGE==='now'&&!nowCurrent(requestedProject,generation))return;
     if(H.project!==requestedProject) return; if(!r||!r.ok){ toast('Не вышло: '+esc(r&&r.error||'нет связи')); return; }
     const pane=(H.panes||[]).find(p=>p.id===button.dataset.attemptPane);if(pane&&pane.waiting&&pane.waiting.turnInstanceId===button.dataset.attemptId)pane.waiting=null;
-    if(button.dataset.attemptReload){const card=document.getElementById('live-waiting');if(card)card.remove()}else renderWaiting();await refreshStatus();await refreshChats();if(PAGE==='chat')await loadChat();sideChats(); });
+    if(button.dataset.attemptReload){const card=document.getElementById('live-waiting');if(card)card.remove()}else renderWaiting();await refreshStatus();await refreshChats();if(PAGE==='chat')await loadChat();sideChats();
+    }finally{button.disabled=false;if(key)attemptRequests.delete(key);if(PAGE==='now')nowDraw()} });
   // End TS-07 waiting controls.
   let bindingGeneration=0,bindingIdentity='',bindingNavigation=0;
   const settingJobs=new Map();
@@ -1487,6 +1492,8 @@
   // ── «Сейчас» при подключённом движке: TS-15c, HTTP status + journal; SSE only invalidates the confirmed project.
   const NOW={project:null,binding:0,generation:0,alive:true,es:null,job:null,queued:false,data:null,error:null,filter:'all',shown:100,sending:false,dialog:null};
   const nowCurrent=(project,generation)=>NOW.alive&&H.on&&!H.snapshotOnly&&NOW.project===project&&H.project===project&&NOW.binding===(H.confirmedProjectGeneration||0)&&NOW.generation===generation;
+  function nowAttemptDisabled(button){const b=button.dataset,place=NOW.data&&NOW.data.status.panes.find(p=>p.id===b.attemptPane),waiting=place&&place.waiting,dialog=NOW.dialog;
+    return !!NOW.error||!nowCurrent(b.attemptProject,NOW.generation)||!waiting||waiting.turnInstanceId!==b.attemptId||!waiting.actions.includes(b.attemptAction)||attemptRequests.has(attemptKey(button))||!!button.closest('.ovl')&&(!dialog||dialog.key!=='waiting:'+b.attemptPane+':'+b.attemptId||!nowCurrent(dialog.project,dialog.generation));}
   const nowDate=ts=>new Date(ts).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   const nowAge=ts=>ts==null?'время начала неизвестно':Math.max(0,Math.floor((Date.now()-ts)/60000))+' мин';
   function nowReset(){NOW.generation++;NOW.project=H.project;NOW.binding=H.confirmedProjectGeneration||0;NOW.job=null;NOW.queued=false;NOW.data=null;NOW.error=null;NOW.filter='all';NOW.shown=100;NOW.sending=false;if(NOW.dialog){if(window.HX)HX.close();NOW.dialog=null}}
@@ -1539,7 +1546,8 @@
     const st=document.querySelector('.frame .top .st');if(st)st.textContent=ready?(count?count+' '+plural(count)+' вас':'никто не ждёт')+' · журнал и статус':empty;
     const spec=document.querySelector('.spec-banner');if(spec)spec.textContent='Частично · решения и события — данные проекта. Нет данных о времени ухода, отложенных решениях и прогнозе завершения.';
     document.querySelectorAll('[data-ap-decision]').forEach(b=>b.disabled=!!NOW.error||NOW.sending||!NOW.alive);
-    if(NOW.error||!NOW.alive)document.querySelectorAll('[data-attempt-action], [data-now-open], [data-now-record], [data-now-first]').forEach(b=>b.disabled=true);
+    document.querySelectorAll('[data-attempt-action]').forEach(b=>b.disabled=nowAttemptDisabled(b));
+    if(NOW.error||!NOW.alive)document.querySelectorAll('[data-now-open], [data-now-record], [data-now-first]').forEach(b=>b.disabled=true);
     if(NOW.dialog&&!NOW.sending){const item=[...pending,...resolved].find(p=>p.key===NOW.dialog.key);if(NOW.dialog.type!=='record'&&!item){if(window.HX)HX.close();NOW.dialog=null}}
   }
   function nowOpen(element,item){
@@ -1548,6 +1556,7 @@
     const actions=item.type==='approval'?'<div class="act"><button class="btn p" data-ap-decision="allow">Разрешить</button><button class="btn ghost" data-ap-decision="deny">Отказать</button></div>':'';
     const body=item.type==='waiting'?waitingControls(item.place,item.place.waiting,NOW.project):'<p>'+esc(item.ts==null?'время начала неизвестно':nowDate(item.ts))+'</p>'+md(item.record?item.record.text:item.detail||'')+(item.answer&&item.answer!==item.record?'<h4>Ответ · №'+item.answer.seq+'</h4>'+md(item.answer.text):'');
     if(window.HX)HX.open(element,header+body+actions+'<p data-now-action-error role="status"></p><a class="btn sm ghost" href="21-journal.html">Журнал проекта →</a>',{w:660,h:530,hide:false});
+    nowDraw();
   }
   function nowLive(){if(PAGE!=='now'||!H.on||H.snapshotOnly||!NOW.alive)return;if(!NOW.es){NOW.es=subscribeLiveEvents();NOW.es.onmessage=e=>{let ev;try{ev=JSON.parse(e.data)}catch{return}if(ev.type==='teamProposals'&&ev.project===H.project){void proposalsFetch();if(typeof knowledgeFetch==='function')void knowledgeFetch()}if(['approval','approvalResolved','state','sent','done','note','error','teamProposals','owner','queued'].includes(ev.type))void nowFetch()};NOW.es.onopen=()=>{void nowFetch();if(typeof proposalsFetch==='function')void proposalsFetch()};NOW.es.onerror=()=>{NOW.error='Связь потеряна. Повторите чтение.';nowDraw()};syncLiveEvents()}return nowFetch(false)}
   // TS-15c Now lifecycle.

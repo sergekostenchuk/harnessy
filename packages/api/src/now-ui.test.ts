@@ -119,6 +119,45 @@ test('134/167: Now finishes saved delivery without another model call; HTTP jour
  const reopened=nowUI(async(path,body)=>(await call(h.api,path,{body})).body);reopened.H.project=h.dir;await reopened.start();assert.equal(reopened.functions.items().resolved.length,1);assert.match(reopened.find('#v-week .lst').textContent,/завершить восстановление/);
 });
 
+for(const failure of ['journal','sse'])for(const action of ['retry','skip','finish'])test('167 round 2: open waiting overlay recovers after '+failure+' and sends '+action+' through HTTP',async t=>{
+ const h=await fixture(t,action==='finish'?{actions:{...completedActions,async afterTurn(){throw Error('delivery failed')}}}:{});
+ if(action!=='finish')h.provider.onRun=async(_seat,_text,ctx)=>{ctx.modelStarted?.();throw new ProviderError('transport_lost','unknown result')};
+ await call(h.api,'/api/chat',{body:{pane:'worker',message:'recover waiting'}});await h.runtime.idle();h.provider.onRun=null;h.runtime.actions.afterTurn=completedActions.afterTurn;
+ let broken=false;const v=nowUI(async(path,body)=>broken&&path.startsWith('/api/journal')?{ok:false,error:'temporary read failure'}:(await call(h.api,path,{body})).body);v.H.project=h.dir;await v.start();
+ await v.find('#v-turn [data-now-open]').emit('click');const button=v.find('.ovl [data-attempt-action="'+action+'"]');assert.equal(button.disabled,false);
+ if(failure==='journal'){broken=true;await v.functions.fetch()}else v.streams[0].onerror({});
+ assert.equal(button.disabled,true);await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+ if(failure==='journal'){broken=false;await v.functions.fetch()}else {v.streams[0].onopen({});await settled(v)}
+ assert.equal(v.functions.state.error,null);assert.equal(v.find('.ovl [data-attempt-action="'+action+'"]'),button);assert.equal(button.disabled,false);assert.equal(v.find('#v-week [data-attempt-action="'+action+'"]').disabled,false);
+ await button.emit('click');await h.runtime.idle();await v.functions.fetch();const writes=v.requests.filter(r=>r.body);assert.equal(writes.length,1);assert.equal(writes[0]!.path,'/api/panes/worker/attempt');assert.equal(writes[0]!.body.action,action);assert.equal(writes[0]!.body.project,h.dir);
+ assert.equal(h.runtime.waiting('worker'),null);assert.equal(h.provider.calls.length,action==='retry'?2:1);assert.equal(v.find('.ovl').classList.contains('on'),false);
+});
+
+test('167 round 2: recovery and redraw cannot unlock an in-flight attempt; failed POST restores both entrances',async t=>{
+ const h=await fixture(t);h.provider.onRun=async(_seat,_text,ctx)=>{ctx.modelStarted?.();throw new ProviderError('transport_lost','unknown result')};await call(h.api,'/api/chat',{body:{pane:'worker',message:'waiting'}});await h.runtime.idle();
+ const gate=deferred(),seen=deferred();let fail=true;const v=nowUI(async(path,body)=>{if(path.endsWith('/attempt')&&fail){seen.resolve();await gate.promise;return {ok:false,error:'write failed'}}return (await call(h.api,path,{body})).body});v.H.project=h.dir;await v.start();await v.find('#v-turn [data-now-open]').emit('click');
+ const first=v.find('.ovl [data-attempt-action="skip"]').emit('click');await seen.promise;v.streams[0].onerror({});v.streams[0].onopen({});await settled(v);
+ for(const entrance of ['.ovl','#v-week'])for(const action of ['retry','skip']){const button=v.find(entrance+' [data-attempt-action="'+action+'"]');assert.equal(button.disabled,true);await button.emit('click')}
+ await v.window.emit('keydown',{key:'Escape',target:v.body});await v.find('#v-turn [data-now-open]').emit('click');assert.equal(v.find('.ovl [data-attempt-action="skip"]').disabled,true);assert.equal(v.requests.filter(r=>r.body).length,1);
+ gate.resolve();await first;assert.match(v.toasts.at(-1)!,/write failed/);for(const entrance of ['.ovl','#v-week'])assert.equal(v.find(entrance+' [data-attempt-action="skip"]').disabled,false);
+ fail=false;await v.find('.ovl [data-attempt-action="skip"]').emit('click');await h.runtime.idle();await v.functions.fetch();assert.equal(v.requests.filter(r=>r.body).length,2);assert.equal(h.runtime.waiting('worker'),null);
+});
+
+test('167 round 2: an open waiting card only re-enables actions still allowed by its current snapshot',async()=>{
+ const waiting={status:'uncertain',turnInstanceId:'turn-a',recordSeqs:[36],startedAt:null,actions:['retry','skip']},pane={id:'worker',pendingApprovals:0,waiting};
+ const v=nowUI(async path=>path==='/api/status'?status('/a',[],[pane]):journal('/a',[]));await v.start();await v.find('#v-turn [data-now-open]').emit('click');const skip=v.find('.ovl [data-attempt-action="skip"]'),retry=v.find('.ovl [data-attempt-action="retry"]');
+ v.streams[0].onerror({});waiting.actions=['retry'];await v.functions.fetch();assert.equal(retry.disabled,false);assert.equal(skip.disabled,true);await skip.emit('click');assert.equal(v.requests.some(r=>r.body),false);
+ waiting.turnInstanceId='turn-b';await v.functions.fetch();assert.equal(retry.disabled,true);assert.equal(v.find('.ovl').classList.contains('on'),false);await retry.emit('click');assert.equal(v.requests.some(r=>r.body),false);
+ await v.find('#v-turn [data-now-open]').emit('click');const old=v.find('.ovl [data-attempt-action="retry"]');v.H.project='/b';v.H.confirmedProjectGeneration++;v.functions.draw();assert.equal(old.disabled,true);await old.emit('click');assert.equal(v.requests.some(r=>r.body),false);
+});
+
+test('167 round 2: an old attempt reply cannot affect a new project binding or its waiting overlay',async()=>{
+ const waiting={status:'uncertain',turnInstanceId:'turn-a',recordSeqs:[36],startedAt:null,actions:['retry','skip']},pane={id:'worker',pendingApprovals:0,waiting};const gate=deferred<any>(),seen=deferred();
+ const v=nowUI(async(path,body)=>{if(body){seen.resolve();return gate.promise}return path==='/api/status'?status(v.H.project,[],[pane]):journal(v.H.project,[])});await v.start();await v.find('#v-turn [data-now-open]').emit('click');const deciding=v.find('.ovl [data-attempt-action="skip"]').emit('click');await seen.promise;
+ await v.switchProject('/b');await settled(v);await v.switchProject('/a');await settled(v);waiting.turnInstanceId='turn-b';await v.functions.fetch();await v.find('#v-turn [data-now-open]').emit('click');gate.resolve({ok:true});await deciding;
+ assert.equal(v.find('.ovl').classList.contains('on'),true);assert.equal(v.find('.ovl [data-attempt-action="skip"]').dataset.attemptId,'turn-b');assert.equal(v.find('.ovl [data-attempt-action="skip"]').disabled,false);assert.equal(v.functions.items().pending.length,1);assert.equal(v.toasts.length,0);
+});
+
 for(const delay of [false,true])for(const statusFirst of [false,true])test('167/190: approval exists before slow chat load; SSE replay and timeout refresh HTTP'+(delay?' delayed':' immediate')+(statusFirst?' early status':''),async t=>{
  const {request}=await import('node:http'),{runInContext}=await import('node:vm'),{live}=await import('./now-ui-test-helpers.ts');
  const h=await fixture(t),p=h.runtime.registry.get('worker')!,approved=p.askApproval('Real confirmation','fixture',1000),gate=deferred(),sources:any[]=[];
