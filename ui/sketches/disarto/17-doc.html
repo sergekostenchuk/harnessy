@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 17 · Документ стадии · живой</title>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 17 · Документы проекта · живой</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
 <style>
   .doc{display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px;height:100%;min-height:0}
@@ -18,13 +18,13 @@
   .vrow{display:grid;grid-template-columns:44px 1fr 110px auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.vrow:last-child{border-bottom:0}.vrow b{color:var(--ink);font-weight:500}
 </style></head>
 <body><div class="sheet">
-  <h1>Harnessy · скетч 17 · документ стадии · живой</h1>
-  <p class="sub">Одно дело экрана — прочитать документ стадии и перейти к следующей. Документ остаётся главным: слева разделы с отметками, по центру текст. Всё вспомогательное — карточками из шапки: «Версии · 7», «ⓘ Паспорт»; незаполненные места помечены «ждёт» прямо в тексте — клик раскрывает, чего не хватает. Переход к рубежу — поток в два шага. <a href="index.html">← все скетчи</a></p>
+  <h1>Harnessy · скетч 17 · документы проекта · живой</h1>
+  <p class="sub">Одно дело экрана — прочитать документы проекта и перейти к следующей. Документ остаётся главным: слева разделы с отметками, по центру текст. Всё вспомогательное — карточками из шапки: «Версии · 7», «ⓘ Паспорт»; незаполненные места помечены «ждёт» прямо в тексте — клик раскрывает, чего не хватает. Переход к рубежу — поток в два шага. <a href="index.html">← все скетчи</a></p>
 
   <div class="frame" data-demo><div class="app">
     <aside class="side" data-rail="doc"></aside>
     <section class="main">
-      <div class="top"><b>Документ стадии · L1</b><span class="st"><i style="background:var(--accent)"></i>версия 6 · ждёт в 3 местах</span>
+      <div class="top"><b>Документы проекта · L1</b><span class="st"><i style="background:var(--accent)"></i>версия 6 · ждёт в 3 местах</span>
         <div class="r"><span class="btn sm ghost" id="vers">Версии · 7</span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span><span class="btn sm" id="fix">Доделать</span><span class="btn sm p" id="next">Перейти к рубежу</span></div></div>
       <div class="body" style="height:100%"><div class="doc">
         <div class="toc">
@@ -56,7 +56,7 @@
       </div></div>
     </section>
   </div>
-  <div class="cap"><span>17 · документ стадии · разделы и текст · версии / паспорт / «ждёт» — карточками</span><span>1280 × 860</span></div>
+  <div class="cap"><span>17 · документы проекта · разделы и текст · версии / паспорт / «ждёт» — карточками</span><span>1280 × 860</span></div>
   <div class="hint-bar"><span>клик по «ждёт» в тексте или слева · «версии · 7» и «доделать» в шапке · «перейти к рубежу» — два шага</span></div>
   <div class="recon"><b>Сверка с прототипом</b> (p-doc): 7 разделов (dsec×7) — слева и в тексте; 3 места «ждёт» — метки в тексте и в оглавлении, каждая с карточкой; «Версии · 7» → карточка («Сравнить с v5»); «Доделать» → карточка со списком недоделанного; «Перейти» и «Перейти так» → поток перехода (шаг 1 показывает, что не доделано, и даёт оба пути); «Паспорт · стадия» → чип.</div></div>
 </div>
@@ -75,7 +75,7 @@
   HX.bind('#next',()=>'<div class="from">переход к рубежу · шаг <span data-stepn>1</span> из 2</div><div class="steps"><i class="on"></i><i></i></div>'+
     '<div data-step="1" class="fh"><h4>Документ не доделан в двух местах</h4><p>Перейти можно и так — тогда недоделанное переедет в следующую стадию открытым.</p>'+blk('что останется открытым',kv([['раздел 5','2 риска без действия'],['раздел 6','смета на живой проход'],['последствие','рубеж начнётся без сметы — расход только по факту']]))+'<div class="ft"><span class="btn ghost" data-close>Отмена</span><span class="btn" data-close>Доделать</span><span class="btn" data-go="2" style="margin-left:auto">Перейти так</span><span class="btn p" data-go="2">Перейти</span></div></div>'+
     '<div data-step="2" class="fh"><h4>Подписать переход</h4><p>Стадия «Карта блоков L1» закрывается версией 6; начинается «Рубеж».</p>'+blk('что произойдёт',kv([['закрывается','стадия 2 · версия 6 становится подписанной'],['начинается','стадия 3 · подготовка живого прохода'],['не запускается','сам проход — отдельное решение'],['подписывает','Serge · 05.10.2026']]))+'<div class="ft"><span class="btn ghost" data-go="1">Назад</span><span class="btn p" data-close style="margin-left:auto">Подписать и перейти</span></div></div>',{w:660,h:460,hide:false});
-  HX.passport({title:'Документ стадии',where:'OMG › Документ стадии › L1',what:'Договор о стадии: цель, критерии, состав, зависимости, риски, бюджет, переход',why:'Одна истина о том, что считается «стадия закончена»',when:'Правится оркестратором, подписывается вами при переходе',expect:'Все семь разделов заполнены до подписи',risk:'Перейти «так» — недоделанное уедет в следующую стадию',ok:'Подписанная версия без меток «ждёт»',fail:'Стадия закрыта, а критерии провала не описаны'});
+  HX.passport({title:'Документы проекта',where:'OMG › Документы проекта › L1',what:'Договор о стадии: цель, критерии, состав, зависимости, риски, бюджет, переход',why:'Одна истина о том, что считается «стадия закончена»',when:'Правится оркестратором, подписывается вами при переходе',expect:'Все семь разделов заполнены до подписи',risk:'Перейти «так» — недоделанное уедет в следующую стадию',ok:'Подписанная версия без меток «ждёт»',fail:'Стадия закрыта, а критерии провала не описаны'});
 })();
 </script>
 </body></html>

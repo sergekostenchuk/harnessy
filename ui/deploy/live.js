@@ -59,6 +59,7 @@
   const api=(p,body)=>{if(body&&H.snapshotOnly)return Promise.resolve({ok:false,code:'live_pending',error:'движок ещё не подтвердил проект'});const project=H.project,changing=!!body&&/^\/api\/(?:project(?:\/create)?|room\/move|assign)$/.test(p);if(changing)H.projectLinkChange=true; return fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined).then(r=>r.json()).then(r=>{
     if(changing&&(!r.ok||r.project===project))H.projectLinkChange=false;
     if(changing&&r.ok&&typeof r.project==='string'&&window.HARNESS_BOOT)window.HARNESS_BOOT.select(r.project);
+    if(changing&&r.ok&&r.project!==project&&typeof sectionChanging==='function')sectionChanging();
     if(r.waiting&&(r.project||project)===H.project){ const id=typeof r.pane==='string'?r.pane:(r.pane&&r.pane.id)||body&&body.pane||(p.match(/^\/api\/panes\/([^/]+)/)||[])[1]; const pane=(H.panes||[]).find(x=>x.id===id); if(pane){ pane.waiting=r.waiting; showWaiting(pane,r.waiting,r.project||project); } }
     if(r.code==='restore_failed'&&r.project===H.project) showRestore(r.project,r.error);
     return r; }).catch(error=>{if(changing)H.projectLinkChange=false;throw error}); };
@@ -158,11 +159,58 @@
     if(!r||!r.ok){ H.cur=null; S.chat.push({role:'ai',html:'<p>Харнесс не принял сообщение: '+esc((r&&r.error)||'нет связи')+'</p>',t:now(),src:'err'}); save(); render(); return; }
     if(r.queued) toast('Место занято — сообщение встало в очередь'); return true; }
   function rememberLive(){if(!H.snapshotOnly&&window.HARNESS_BOOT&&H.liveStatus&&H.liveStatus.project===H.project)window.HARNESS_BOOT.save({...H.liveStatus,panes:H.panes,activeChats:H.active},H.chatList||[],H.projects,H.pins)}
+  // TS-09a: project materials are read from the engine; opening a section never calls a model.
+  const SECTION_PAGES={doc:['docs','Документы проекта','.harness/docs/','Документы проекта ещё не подготовлены.','Попросите оркестратора подготовить документы проекта; согласованные стадии можно хранить во вложенных папках docs/<стадия>/.','Подготовь документы проекта: опиши цель, ожидаемый результат и предложи разделы. Стадии согласуй со мной.'],art:['artifacts','Артефакты','.harness/evidence/','Артефактов проекта пока нет.','Оркестратор собирает здесь результаты работы команды и материалы для проверки.','Собери артефакты проекта и материалы для проверки в .harness/evidence/.'],mem:['memory','Память проекта','.harness/MEMORY.md','Решений проекта ещё нет.','Попросите оркестратора записать согласованные цели, решения и правила в память проекта.','Обнови память проекта в .harness/MEMORY.md: запиши согласованные цели, решения и правила.'],res:['research','Ресёрч','.harness/research/','В проекте ещё не проводились исследования.','Опишите вопрос, глубину и ожидаемый результат исследования. Оркестратор назначит исследователя и сохранит материалы в .harness/research/.','Предложи исследование для проекта: уточни вопрос, источники и глубину. Согласуй со мной и сохрани результаты в .harness/research/.']};
+  const PS={project:null,generation:0,data:null,error:null,loading:false,sending:false,receipt:null,alive:true};
+  const sectionCurrent=(project,generation)=>PS.alive&&H.on&&!H.snapshotOnly&&PS.project===project&&H.project===project&&PS.generation===generation;
+  function sectionText(text){return String(text).split(/^(#{1,6})[ \t]+(.+)$/m).map((part,i)=>i%3===1?'':i%3===2?'<h3>'+esc(part)+'</h3>':'<pre style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.6">'+esc(part)+'</pre>').join('')}
+  function sectionValid(data){return typeof data.empty==='boolean'&&Array.isArray(data.items)&&Array.isArray(data.limited)&&data.limited.every(v=>['files','depth','response'].includes(v))&&Object.hasOwn(data,'memoryState')&&[null,'missing','empty','template','content'].includes(data.memoryState)&&data.limits&&['files','depth','textBytes','responseBytes'].every(k=>Number.isSafeInteger(data.limits[k])&&data.limits[k]>0)&&
+    (data.orchestrator===null||data.orchestrator&&typeof data.orchestrator.pane==='string'&&data.orchestrator.pane&&typeof data.orchestrator.label==='string')&&
+    data.items.every(item=>item&&['path','name','modifiedAt'].every(k=>typeof item[k]==='string')&&(item.stage===null||typeof item.stage==='string')&&Number.isSafeInteger(item.bytes)&&item.bytes>=0&&typeof item.truncated==='boolean'&&(item.format==='text'&&typeof item.text==='string'||item.format==='binary'&&item.text===null));}
+  function sectionDraw(){const spec=SECTION_PAGES[PAGE];if(!spec||!H.on)return;const data=PS.data,orch=data&&data.orchestrator,title=spec[1]+' · '+base(H.project);
+    document.title='Harnessy · '+title;
+    let content=PS.error?'<div role="alert"><h2>Не удалось прочитать раздел</h2><p>'+esc(PS.error)+'</p><button type="button" class="btn ghost" data-section-refresh>Повторить чтение</button></div>':PS.loading?'<p role="status">Читаю материалы проекта…</p>':!data?'<p>Подключаюсь к движку…</p>':
+      (data.empty?'<h2>'+esc(data.memoryState==='template'?'Начальный шаблон памяти: решений проекта ещё нет':spec[3])+'</h2><p>'+esc(spec[4])+'</p>':'')+
+      (data.limited.length?'<p role="status">Показана часть материалов: достигнут предел '+esc(data.limited.join(', '))+'. Пределы: 1000 файлов, глубина 16, 256 КиБ текста на файл, 4 МиБ ответа.</p>':'')+
+      (data.empty&&PAGE==='mem'?'':data.items.map(item=>'<article style="border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0;overflow-wrap:anywhere"><h2>'+esc(item.name)+'</h2><p class="mono">'+esc(item.path)+(item.stage?' · стадия: '+esc(item.stage):'')+' · '+item.bytes+' байт</p>'+(item.format==='binary'?'<p>Бинарный файл: просмотр содержимого недоступен.</p>':sectionText(item.text))+(item.truncated?'<p>Сокращённый просмотр; полный файл находится в папке проекта.</p>':'')+'</article>').join(''))+
+      '<div style="border-top:1px solid var(--line);padding-top:16px;margin-top:20px">'+(orch?'<h3>Попросить оркестратора</h3><label>Поручение для '+esc(orch.label)+'<textarea data-section-text rows="4" style="display:block;width:100%;box-sizing:border-box;margin:10px 0;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:12px">'+esc(spec[5])+'</textarea></label><button type="button" class="btn p" data-section-request>Отправить оркестратору</button>':'<p>В проекте нет оркестратора. Откройте исходный разговор и назначьте оркестратора, когда будете готовы собрать команду.</p><button type="button" class="btn ghost" data-section-conversation>Открыть исходный разговор</button>')+(PS.receipt?'<p role="status">'+esc(PS.receipt)+'</p>':'')+'</div>';
+    document.querySelectorAll('.frame .main').forEach(main=>{main.style.cssText='display:flex;flex-direction:column;min-height:0;overflow:hidden';main.innerHTML='<div class="top"><b>'+esc(title)+'</b><span class="st">'+esc(spec[2])+'</span><button type="button" class="btn sm ghost" data-section-refresh>Обновить</button></div><div data-project-section="'+esc(spec[0])+'" data-section-project="'+esc(H.project)+'" style="flex:1;min-height:0;overflow:auto;padding:24px"><div style="max-width:1000px;margin:auto">'+content+'</div></div>'});
+  }
+  async function sectionFetch(){const spec=SECTION_PAGES[PAGE];if(!spec||!H.on||H.snapshotOnly||!PS.alive)return false;const project=H.project,generation=++PS.generation;
+    PS.project=project;PS.data=null;PS.error=null;PS.receipt=null;PS.loading=true;PS.sending=false;sectionDraw();
+    try{const data=await api('/api/project/sections/'+spec[0]);if(!sectionCurrent(project,generation))return false;
+      if(!data||!data.ok)throw Error(data&&data.error||'нет связи с движком');
+      if(data.project!==project||data.section!==spec[0])throw Error('проект или раздел ответа не совпадает');
+      if(!sectionValid(data))throw Error('неполный ответ движка');
+      PS.data=data;
+    }catch(error){if(!sectionCurrent(project,generation))return false;PS.error=error.message||'нет связи с движком'}
+    if(!sectionCurrent(project,generation))return false;PS.loading=false;sectionDraw();return !!PS.data;
+  }
+  function sectionSync(){if(!SECTION_PAGES[PAGE]||!H.on||H.snapshotOnly)return;if(PS.project!==H.project||PS.generation===0){if(window.HX&&HX.close)HX.close();void sectionFetch()}}
+  function sectionChanging(){if(!SECTION_PAGES[PAGE])return;PS.generation++;PS.project=null;PS.data=null;PS.error=null;PS.loading=true;PS.sending=false;PS.receipt=null;sectionDraw()}
+  function sectionConversation(){if(!PS.data||PS.project!==H.project)return;S.ui.sectionHint='В проекте нет оркестратора. Продолжайте исходный разговор; назначение оркестратора — следующий шаг создания команды.';S.ui.fresh=false;S.ui.switched=true;save();location.href='01-chat.html'}
+  async function sectionRequest(button){if(!PS.data||!PS.data.orchestrator||PS.sending)return false;const project=PS.project,generation=PS.generation,root=button.closest('[data-project-section]');if(!root||root.dataset.sectionProject!==project||!sectionCurrent(project,generation))return false;
+    const input=root.querySelector('[data-section-text]'),text=input&&input.value.trim();if(!text){toast('Опишите поручение оркестратору');return false}
+    PS.sending=true;button.disabled=true;let reply;
+    try{reply=await api('/api/project/sections/'+SECTION_PAGES[PAGE][0]+'/request',{project,text})}catch(error){reply={ok:false,error:'нет связи с движком'}}
+    if(!sectionCurrent(project,generation))return false;PS.sending=false;button.disabled=false;
+    if(!reply||!reply.ok){toast('Поручение не записано: '+esc(reply&&reply.error||'нет связи'));if(reply&&reply.code==='orchestrator_missing'){PS.data.orchestrator=null;sectionDraw()}return false}
+    PS.receipt='Поручение записано в журнал: №'+reply.seq;toast(PS.receipt);input.value='';button.textContent=PS.receipt;return true;
+  }
+  if(SECTION_PAGES[PAGE]){
+    addEventListener('pagehide',()=>{PS.alive=false;PS.generation++});
+    document.addEventListener('click',async event=>{if(!H.on)return;const button=event.target.closest('[data-section-refresh], [data-section-request], [data-section-conversation]');
+      if(!button){if(event.target.closest('.frame .main .top, .panel')){event.preventDefault();event.stopImmediatePropagation()}return}
+      event.preventDefault();event.stopImmediatePropagation();if(button.disabled)return;
+      if(button.hasAttribute('data-section-refresh'))await sectionFetch();else if(button.hasAttribute('data-section-conversation'))sectionConversation();else await sectionRequest(button);
+    },true);
+  }
+  // End TS-09a project sections.
   function applyStatus(st,request,connected=false){if(window.HARNESS_BOOT&&!window.HARNESS_BOOT.confirm(st.project||'',request))return false;if(connected){H.on=true;H.snapshotOnly=false}H.liveStatus=st;const changed=H.project!==(st.project||''),previousRoom=(H.panes||[]).find(p=>p.id==='room');H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.defaultDir=st.defaultDir||''; H.roleCatalog=st.roleCatalog||[]; H.noProject=!!st.noProject; H.projectsRoot=st.projectsRoot||''; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; H.halted=!!st.halted; H.kinds=st.kinds||[]; H.threads=st.threads||{};
     if(changed){S.chat=[];H.chatList=[];H.pins=[];H.projects=null;const selectedRoom=(H.panes||[]).find(p=>p.id==='room');if(previousRoom&&selectedRoom&&previousRoom.model!==selectedRoom.model)toast('у проекта своя настройка модели: '+esc(modelName(selectedRoom.model)));}
     if(changed&&typeof resetJournal==='function'){resetJournal(H.project);if(H.on&&!H.snapshotOnly&&window.psKey==='log')journalFetch()}setTimeout(()=>dispatchEvent(new CustomEvent('live:status')),0);
     if(PAGE==='new') document.querySelectorAll('.status > span:first-child').forEach(el=>{ el.textContent=(H.noProject||!!(S.cx&&S.cx.noFolder))?'без проекта · модель ничего не читает':'папка '+((H.project||'').split('/').filter(Boolean).pop()||'проект')+(st.repo?' · git':'')+' · ролей '+(H.panes||[]).filter(p=>p.id!=='room').length; });   // строка папки — от движка, не статика скетча (Kimi UX-1 №85 п.2)
-    badges();
+    if(typeof sectionSync==='function')sectionSync();badges();
     if(PAGE==='new'){ S.ui.pane='room'; S.ui.fresh=true; S.ui.switched=false; save(); }   // стартовый экран — ВСЕГДА без роли · новый чат; выбор роли или чата отсюда = переход в чат (слово владельца 08.10)
     if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); renderWaiting(); }
   async function refreshChats(){ const binding=sendBinding();try{ const r=await api('/api/chats');if(!bindingCurrent(binding))return; H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } if(typeof sideChats==='function') await sideChats();if(window.HARNESS_BOOT)rememberLive(); }
@@ -202,7 +250,7 @@
   const link=(href,t,p)=>'<a class="btn sm'+(p?' p':'')+'" href="'+href+'" style="text-decoration:none">'+t+'</a>';
   function answer(q){ const s=q.toLowerCase(), w=waiting(), n=w.length;
     if(/жд[её]т|ждут|команд|кто работает|что сейчас|статус|состояни/.test(s)) return '<p>'+(n?'Вас '+plural(n)+' <b>'+n+'</b> '+(n===1?'решение':'решения')+': '+w.map(d=>'«'+esc(DEC[d])+'»').join(' и ')+'.':'Сейчас вас никто не ждёт: все решения приняты.')+' Работают 4 места из 6, прогон H1.5 на шаге 3 из 7.</p><div class="act">'+link('14-now.html','Открыть «Сейчас»',1)+link('04-swarm.html','Стая')+'</div>';
-    if(/план|задач|карт/.test(s)) return '<p>В плане OMG <b>87 задач</b>, уровень L1: падают 3, в работе 12.</p><div class="act">'+link('02-plan.html','Открыть план',1)+link('17-doc.html','Документ стадии')+'</div>';
+    if(/план|задач|карт/.test(s)) return '<p>В плане OMG <b>87 задач</b>, уровень L1: падают 3, в работе 12.</p><div class="act">'+link('02-plan.html','Открыть план',1)+link('17-doc.html','Документы проекта')+'</div>';
     if(/расход|лимит|оплат|токен|стоит|деньг|подписк/.test(s)) return '<p>Claude Max — <b>62 %</b> недели, Codex — <b>94 %</b> пятичасового окна (сброс в 19:58), ближайшая оплата 07.10.</p><div class="act">'+link('05-spend.html','Открыть расход',1)+link('11-connections.html','Подключения')+'</div>';
     if(/ста[яеи]|агент|воркер|ревьюер|хранител/.test(s)) return '<p>В стае 6 мест: оркестратор, два воркера, ревьюер, хранитель и ресёрчер. Воркер 2 стоит на лимите Codex.</p><div class="act">'+link('04-swarm.html','Открыть стаю',1)+link('13-sensors.html','Датчики')+'</div>';
     if(/памят|правил/.test(s)) return '<p>В памяти проекта 12 правил, 2 спорных.</p><div class="act">'+link('16-memory.html','Открыть память',1)+'</div>';
@@ -309,7 +357,7 @@
   document.addEventListener('click',e=>{ if(e.target.closest('[data-clear]')){ S.chat=[]; save(); render(); toast('Разговор очищен'); } });
 
   // ── поиск ⌘K: экраны, открытые решения, действия
-  const SCREENS=[['Новый чат','10-new-chat.html'],['Сейчас · чей ход и решения','14-now.html'],['Чат','01-chat.html'],['План · карта','02-plan.html'],['Документ стадии','17-doc.html'],['Артефакты','15-artifacts.html'],['Память проекта','16-memory.html'],['Ресёрч','12-research.html'],['Стая агентов','04-swarm.html'],['Датчики','13-sensors.html'],['Расход','05-spend.html'],['Подключения и лимиты','11-connections.html'],['Журнал','21-journal.html'],['Настройки','06-settings.html'],['Уйти','18-overlays.html#leave'],['Первый запуск','19-first-run.html'],['Вход','20-login-pour.html'],['Дизайн-код','../disarto/00-design-code.html']];
+  const SCREENS=[['Новый чат','10-new-chat.html'],['Сейчас · чей ход и решения','14-now.html'],['Чат','01-chat.html'],['План · карта','02-plan.html'],['Документы проекта','17-doc.html'],['Артефакты','15-artifacts.html'],['Память проекта','16-memory.html'],['Ресёрч','12-research.html'],['Стая агентов','04-swarm.html'],['Датчики','13-sensors.html'],['Расход','05-spend.html'],['Подключения и лимиты','11-connections.html'],['Журнал','21-journal.html'],['Настройки','06-settings.html'],['Уйти','18-overlays.html#leave'],['Первый запуск','19-first-run.html'],['Вход','20-login-pour.html'],['Дизайн-код','../disarto/00-design-code.html']];
   let pal,palSel=0,palItems=[];
   function palList(q){ q=q.trim().toLowerCase(); const it=SCREENS.map(x=>({t:x[0],k:'экран',go:()=>location.href=x[1]}))
       .concat(waiting().map(d=>({t:DEC[d],k:'ждёт вас',go:()=>location.href='14-now.html'})))
@@ -482,7 +530,7 @@
       S.mem.add.forEach(a=>{ R[a.k]=[esc(a.text),a.scope,'вы · сегодня','✓',esc(a.text),'Добавлено вами в прототипе.','все роли']; });
       Object.keys(R).forEach(k=>{ const r=R[k]; if(S.mem.text[k]){ r[0]=esc(S.mem.text[k]); r[4]=esc(S.mem.text[k]); } if(S.mem.scope[k]) r[1]=S.mem.scope[k]; if(S.mem.rev[k]) r[3]='отозвано'; else if(R0[k]&&R0[k][3]==='спор'&&S.mem.ok[k]) r[3]='✓'; });
       MEM.order.length=0; S.mem.add.slice().reverse().forEach(a=>MEM.order.push(a.k)); ORD0.forEach(k=>MEM.order.push(k)); }
-    function apply(){ build(); const act=MEM.order.filter(k=>!S.mem.rev[k]), dis=MEM.order.filter(disputed), cnt=s=>s==='все'?act.length:act.filter(k=>R[k][1]===s).length;
+    function apply(){if(H.on)return; build(); const act=MEM.order.filter(k=>!S.mem.rev[k]), dis=MEM.order.filter(disputed), cnt=s=>s==='все'?act.length:act.filter(k=>R[k][1]===s).length;
       MEM.render(MEM.order.filter(k=>filter==='все'||R[k][1]===filter));
       document.querySelectorAll('#rows .li[data-r]').forEach(li=>li.classList.toggle('dim',!!S.mem.rev[li.dataset.r]));
       document.querySelectorAll('#v-rules .filters .chip').forEach((c,i)=>{ if(!SC[i]) return; c.dataset.sc=SC[i]; c.textContent=SC[i]+' · '+cnt(SC[i]); c.classList.toggle('on',SC[i]===filter); c.style.cursor='pointer'; });
@@ -493,9 +541,9 @@
       const dl=document.querySelector('#v-dis .lst'); if(dl){ let e=dl.querySelector('.live-empty'); if(!e){ e=document.createElement('div'); e.className='li dim live-empty'; e.style.cursor='default'; e.innerHTML='<div><small>Спорных правил нет — все разобраны.</small></div>'; dl.appendChild(e); } e.style.display=dis.length?'none':''; } }
     hooks.push(apply);
     const fl=document.querySelector('#v-rules .filters'); if(fl) fl.addEventListener('click',e=>{ const c=e.target.closest('[data-sc]'); if(c){ filter=c.dataset.sc; apply(); } });
-    const addB=document.getElementById('add'); if(addB) addB.addEventListener('click',()=>{ curR=null; setTimeout(()=>{ const ta=document.querySelector('.panel [data-step="1"] textarea'); if(ta){ ta.readOnly=false; ta.focus(); ta.select(); } },80); });
-    document.addEventListener('click',e=>{ const el=e.target.closest('.li[data-r]'); if(!el) return; curR=el.dataset.r; const inner=document.querySelector('.ovl.on .panel .inner'), acts=inner&&inner.querySelector('.acts'); if(acts&&S.mem.rev[curR]) acts.innerHTML='<span class="btn sm p" data-mback>Вернуть правило</span><span class="btn sm ghost" data-close>Закрыть</span>'; });
-    document.addEventListener('click',e=>{ const b=e.target.closest('.panel .acts .btn, .panel [data-step="3"] .btn.p'); if(!b) return; const lab=b.textContent.trim(), k=curR;
+    const addB=document.getElementById('add'); if(addB) addB.addEventListener('click',()=>{ curR=null; setTimeout(()=>{if(H.on)return; const ta=document.querySelector('.panel [data-step="1"] textarea'); if(ta){ ta.readOnly=false; ta.focus(); ta.select(); } },80); });
+    document.addEventListener('click',e=>{if(H.on)return; const el=e.target.closest('.li[data-r]'); if(!el) return; curR=el.dataset.r; const inner=document.querySelector('.ovl.on .panel .inner'), acts=inner&&inner.querySelector('.acts'); if(acts&&S.mem.rev[curR]) acts.innerHTML='<span class="btn sm p" data-mback>Вернуть правило</span><span class="btn sm ghost" data-close>Закрыть</span>'; });
+    document.addEventListener('click',e=>{if(H.on)return; const b=e.target.closest('.panel .acts .btn, .panel [data-step="3"] .btn.p'); if(!b) return; const lab=b.textContent.trim(), k=curR;
       if(b.closest('[data-step="3"]')){ if(!/Добавить правило/.test(lab)) return; const ta=document.querySelector('.panel [data-step="1"] textarea'), text=(ta&&ta.value||'').trim(); if(!text) return;
         const pk=document.querySelector('.panel [data-step="2"] .pick.on'), sc={'Этот разговор':'этот разговор','Проект OMG':'проект OMG','Везде':'везде'}[pk?pk.childNodes[0].textContent.trim():'']||'проект OMG';
         S.seq=(S.seq||0)+1; const a={k:'u'+S.seq,text,scope:sc}; S.mem.add.push(a); save(); log('память','Новое правило: '+text.slice(0,70)); filter='все'; apply();
@@ -517,13 +565,13 @@
     rows.forEach(li=>{ const c=cellOf(li), x=c?c.textContent:''; li.dataset.st0=/проверке/.test(x)?'check':/сам/.test(x)?'self':/влит/.test(x)?'merged':'check'; li.dataset.lab0=x; });
     const stOf=k=>S.art.st[k]||(rows.find(l=>l.dataset.a===k)||{dataset:{}}).dataset.st0, M0=rows.filter(l=>l.dataset.st0==='merged').length;
     let filter='all', curArt=null;
-    function apply(){ const n=s=>rows.filter(l=>stOf(l.dataset.a)===s).length;
+    function apply(){if(H.on)return; const n=s=>rows.filter(l=>stOf(l.dataset.a)===s).length;
       rows.forEach(li=>{ const k=li.dataset.a, s=stOf(k), c=cellOf(li); if(c){ c.textContent=S.art.st[k]?LAB[s]:li.dataset.lab0; c.classList.toggle('hot',s==='check'); } li.classList.toggle('dim',s==='merged'||s==='back'); li.style.display=(s==='gone'||(filter!=='all'&&s!==filter))?'none':''; });
       const nb=document.querySelectorAll('#v-list .nums b'); if(nb[0]) nb[0].textContent=n('check'); if(nb[1]) nb[1].textContent=n('self'); if(nb[2]) nb[2].textContent=111+n('merged')-M0;
       const st=document.querySelector('.top .st'), c=n('check'); if(st) st.innerHTML=c?'<i style="background:var(--accent)"></i>'+c+' '+(c===1?'готов':'готовы')+' к проверке':'<i></i>всё проверено';
       const total=rows.filter(l=>stOf(l.dataset.a)!=='gone').length; document.querySelectorAll('#v-list .filters .chip').forEach((ch,i)=>{ if(!FL[i]) return; ch.dataset.fl=FL[i]; ch.style.cursor='pointer'; ch.classList.toggle('on',FL[i]===filter); ch.textContent=['все · '+total,'к проверке · '+n('check'),'проверил сам · '+n('self'),'влито · '+n('merged')][i]; }); }
     hooks.push(apply);
-    document.addEventListener('click',e=>{ const li=e.target.closest('#v-list .li[data-a]'); if(li) curArt=li.dataset.a; const fc=e.target.closest('#v-list .filters [data-fl]'); if(fc){ filter=fc.dataset.fl; apply(); return; }
+    document.addEventListener('click',e=>{if(H.on)return; const li=e.target.closest('#v-list .li[data-a]'); if(li) curArt=li.dataset.a; const fc=e.target.closest('#v-list .filters [data-fl]'); if(fc){ filter=fc.dataset.fl; apply(); return; }
       const b=e.target.closest('.panel .acts .btn'); if(!b||!curArt||!document.querySelector('#v-list.on')) return; const k=curArt, lab=b.textContent.trim(), row=rows.find(l=>l.dataset.a===k), name=((row&&row.querySelector('b'))||{}).textContent||k, prev=S.art.st[k];
       const set=(to,msg)=>{ S.art.st[k]=to; save(); log('артефакты',name+' → '+LAB[to]); HX.close(); apply(); toast(msg,()=>{ if(prev) S.art.st[k]=prev; else delete S.art.st[k]; save(); log('артефакты','Отменено: '+name); apply(); }); };
       if(/^Проверил сам|^Обновить и проверить/.test(lab)) set('self','Отмечено: <b>проверил сам</b>');
@@ -607,7 +655,7 @@
     rows.forEach(li=>{ const c=li.querySelector(':scope > .m'); li.dataset.c0=c.textContent; li.dataset.col0=c.style.color||''; li.dataset.hot0=c.classList.contains('hot')?'1':''; li.dataset.dim0=li.classList.contains('dim')?'1':''; li.dataset.t0=li.querySelector('b').textContent; li.dataset.conf0=li.querySelector('.conf').innerHTML; });
     if(sub) sub.dataset.t0=sub.textContent;
     const kind=li=>{ const q=S.res.q[li.dataset.q]; if(q) return q; return /готов/.test(li.dataset.c0)?'ready':/расход/.test(li.dataset.c0)?'split':'search'; };
-    function apply(){ const depth=S.res.deep?20:12;
+    function apply(){if(H.on)return; const depth=S.res.deep?20:12;
       rows.forEach(li=>{ const k=li.dataset.q, s=kind(li), c=li.querySelector(':scope > .m'), over=S.res.q[k]; li.querySelector('b').textContent=S.res.title[k]||li.dataset.t0;
         c.textContent=over?({applied:'применено к проекту',merged:'сведено · ответ готов',rejected:'отклонён'}[over]):(s==='search'&&S.res.stop?'поиск остановлен':li.dataset.c0);
         c.style.color=(over==='applied'||over==='merged')?'var(--ok)':over?'':li.dataset.col0; c.classList.toggle('hot',!over&&li.dataset.hot0==='1'); li.classList.toggle('dim',over==='applied'||over==='rejected'||(!over&&li.dataset.dim0==='1'));
@@ -618,7 +666,7 @@
       const st=document.querySelector('.top .st'); if(st) st.innerHTML=S.res.stop?'<i style="background:var(--ink3)"></i>остановлено · 6 из '+depth+' источников':'<i></i>идёт · 6 из '+depth+' источников';
       const n=x=>rows.filter(li=>kind(li)===x).length, nb=document.querySelector('#v-cur .note-bar span'); if(nb) nb.textContent=rows.length+' вопроса · '+(n('ready')+n('merged'))+' готовы · '+n('split')+' расходится · '+n('search')+' в поиске'+(n('applied')?' · '+n('applied')+' применено':'')+(n('rejected')?' · '+n('rejected')+' отклонено':''); }
     hooks.push(apply);
-    document.addEventListener('click',e=>{ const li=e.target.closest('#v-cur .li[data-q]'); if(li){ curQ=li.dataset.q; const h=document.querySelector('.ovl.on .panel .ch h3'); if(h&&S.res.title[curQ]) h.textContent=S.res.title[curQ]; }
+    document.addEventListener('click',e=>{if(H.on)return; const li=e.target.closest('#v-cur .li[data-q]'); if(li){ curQ=li.dataset.q; const h=document.querySelector('.ovl.on .panel .ch h3'); if(h&&S.res.title[curQ]) h.textContent=S.res.title[curQ]; }
       const tb=e.target.closest('.pg .btn'); if(tb){ const i=btns.indexOf(tb); if(i===0){ S.res.stop=!S.res.stop; save(); log('ресёрч',S.res.stop?'Исследование остановлено':'Исследование продолжено'); apply(); toast(S.res.stop?'Исследование остановлено':'Исследование продолжено'); } else if(i===1){ S.res.deep=!S.res.deep; save(); log('ресёрч',S.res.deep?'Глубина увеличена до 20 источников':'Глубина возвращена к 12'); apply(); toast(S.res.deep?'Глубина: <b>20 источников</b>':'Глубина: 12 источников'); } return; }
       const b=e.target.closest('.panel .acts .btn'); if(!b||!curQ||!document.querySelector('#v-cur.on')) return; const k=curQ, lab=b.textContent.trim(), row=rows.find(r=>r.dataset.q===k), name=(S.res.title[k]||row.dataset.t0).slice(0,60), prev=S.res.q[k];
       const set=(to,msg)=>{ S.res.q[k]=to; save(); log('ресёрч',msg+': '+name); HX.close(); apply(); toast(msg,()=>{ if(prev) S.res.q[k]=prev; else delete S.res.q[k]; save(); apply(); }); };
@@ -630,14 +678,14 @@
       else toast('В прототипе «'+esc(lab)+'» ничего не открывает'); },true);
   }
 
-  // ══ ДОКУМЕНТ СТАДИИ: доделать разделы, подписать переход ══
+  // ══ ДОКУМЕНТЫ ПРОЕКТА: доделать разделы, подписать переход ══
   if(PAGE==='doc'){
     S.doc=S.doc||{fill:{},text:{},signed:0};
     const FILLT={risk:'Действие и владелец добавлены: при лимите Codex проход переходит на Sonnet (владелец — оркестратор); при недоступном ревьюере ревью идёт на Opus (владелец — вы).',budget:'Смета на остаток стадии: +1,4 % недели Claude по среднему 0,13 % на влитую задачу; порог остановки — 95 % недели.'}, NAME={risk:'Раздел 5 · Риски',budget:'Раздел 6 · Бюджет',sign:'Раздел 7 · Переход'};
     const wait=k=>document.querySelector('.paper .wait[data-w="'+k+'"]'), toc=k=>document.querySelector('.toc .it[data-w="'+k+'"]'); let curW=null;
     ['risk','budget','sign'].forEach(k=>{ const w=wait(k), t=toc(k); if(w){ w.dataset.t0=w.textContent; const p=w.closest('h4').nextElementSibling; if(p) p.dataset.h0=p.innerHTML; } if(t) t.dataset.h0=t.innerHTML; });
     const filled=k=>k==='sign'?!!S.doc.signed:!!S.doc.fill[k];
-    function apply(){ const n=['risk','budget','sign'].filter(filled).length, open=3-n, ver=6+Object.keys(S.doc.fill).length+(S.doc.signed?1:0);
+    function apply(){if(H.on)return; const n=['risk','budget','sign'].filter(filled).length, open=3-n, ver=6+Object.keys(S.doc.fill).length+(S.doc.signed?1:0);
       ['risk','budget','sign'].forEach(k=>{ const w=wait(k), t=toc(k), f=filled(k), p=w&&w.closest('h4').nextElementSibling;
         if(t){ t.classList.toggle('w',!f); t.classList.toggle('d',f); t.innerHTML=f?'<i>✓</i>'+t.dataset.h0.replace(/<i><\/i>/,'').replace(/<span class="n">.*?<\/span>/,''):t.dataset.h0; }
         if(w){ w.textContent=f?(k==='sign'?'подписано вами · '+hhmm(S.doc.signed):S.doc.fill[k]==='self'?'заполнено вами':'заполнено оркестратором · черновик'):w.dataset.t0; w.style.color=f?'var(--ok)':''; w.style.background=f?'var(--ok-soft)':''; w.style.cursor=f?'default':''; }
@@ -647,7 +695,7 @@
       const nx=document.getElementById('next'), fx=document.getElementById('fix'); if(nx){ nx.textContent=S.doc.signed?'Рубеж открыт ✓':'Перейти к рубежу'; nx.classList.toggle('p',!S.doc.signed); nx.style.cursor='pointer'; } if(fx){ fx.style.display=(filled('risk')&&filled('budget'))?'none':''; fx.style.cursor='pointer'; } const vb=document.getElementById('vers'); if(vb){ vb.textContent='Версии · '+(ver+1); vb.style.cursor='pointer'; } }
     hooks.push(apply);
     const fill=(keys,how,text)=>{ const prev=JSON.parse(JSON.stringify(S.doc)); keys.forEach(k=>{ S.doc.fill[k]=how; if(text) S.doc.text[k]=text; }); save(); log('документ',keys.map(k=>NAME[k]).join(', ')+' — '+(how==='self'?'заполнено вами':'поручено оркестратору, заполнено черновиком')); HX.close(); apply(); toast(keys.length>1?'Разделы 5 и 6 заполнены':NAME[keys[0]]+': заполнено',()=>{ S.doc=prev; save(); log('документ','Отменено заполнение'); apply(); }); };
-    document.addEventListener('click',e=>{ const w=e.target.closest('[data-w]'); if(w) curW=w.dataset.w;
+    document.addEventListener('click',e=>{if(H.on)return; const w=e.target.closest('[data-w]'); if(w) curW=w.dataset.w;
       const nx=e.target.closest('#next'); if(nx&&S.doc.signed){ e.stopPropagation(); e.preventDefault(); toast('Стадия уже закрыта: переход подписан в '+hhmm(S.doc.signed)); return; }
       if(w&&filled(w.dataset.w)&&!e.target.closest('.panel')){ e.stopPropagation(); e.preventDefault(); toast(NAME[w.dataset.w]+' — уже заполнен'); return; }
       const b=e.target.closest('.panel .acts .btn, .panel [data-step="2"] .btn.p, .panel [data-step="1"] .btn'); if(!b) return; const lab=b.textContent.trim();
@@ -656,11 +704,11 @@
       if(/^Доделать 5 и 6/.test(lab)){ fill(['risk','budget'].filter(k=>!filled(k)),'orch'); return; }
       if(/^Доделать — поручить/.test(lab)&&curW){ fill([curW],'orch'); return; }
       if(/^Заполнить самому/.test(lab)&&curW){ const blkEl=document.querySelector('.panel .blk'); if(blkEl&&!document.getElementById('d-edit')){ blkEl.insertAdjacentHTML('afterend','<textarea class="live-f" id="d-edit" style="height:84px;padding:10px 12px;resize:none;margin-top:12px" placeholder="Что делаем и кто отвечает"></textarea>'); b.textContent='Сохранить раздел'; b.setAttribute('data-dsave',''); document.getElementById('d-edit').focus(); } return; }
-      if(/^Перейти к подписи/.test(lab)){ setTimeout(()=>{ const n=document.getElementById('next'); if(n) n.click(); },380); return; }
+      if(/^Перейти к подписи/.test(lab)){ setTimeout(()=>{if(H.on)return; const n=document.getElementById('next'); if(n) n.click(); },380); return; }
       if(/^Открыть раздел 5/.test(lab)){ HX.close(); const w5=wait('risk'); if(w5) w5.scrollIntoView({block:'center',behavior:'smooth'}); return; }
-      if(/^Доделать$/.test(lab)&&b.closest('[data-step="1"]')){ setTimeout(()=>{ const f=document.getElementById('fix'); if(f&&f.style.display!=='none') f.click(); },380); return; }
+      if(/^Доделать$/.test(lab)&&b.closest('[data-step="1"]')){ setTimeout(()=>{if(H.on)return; const f=document.getElementById('fix'); if(f&&f.style.display!=='none') f.click(); },380); return; }
       if(/^Спросить оркестратора/.test(lab)){ S.draft='@оркестратор · по документу стадии L1, раздел 7: '; save(); location.href='01-chat.html'; } },true);
-    const nxb=document.getElementById('next'); if(nxb) nxb.addEventListener('click',()=>setTimeout(()=>{ const s1=document.querySelector('.panel [data-step="1"]'); if(!s1) return; const both=filled('risk')&&filled('budget'), h=s1.querySelector('h4'), p=s1.querySelector('p'), kvb=s1.querySelectorAll('.kv b');
+    const nxb=document.getElementById('next'); if(nxb) nxb.addEventListener('click',()=>setTimeout(()=>{if(H.on)return; const s1=document.querySelector('.panel [data-step="1"]'); if(!s1) return; const both=filled('risk')&&filled('budget'), h=s1.querySelector('h4'), p=s1.querySelector('p'), kvb=s1.querySelectorAll('.kv b');
       if(both){ if(h) h.textContent='Документ доделан'; if(p) p.textContent='Все разделы заполнены — можно подписывать переход.'; if(kvb[0]) kvb[0].textContent='заполнен'; if(kvb[1]) kvb[1].textContent='заполнен'; if(kvb[2]) kvb[2].textContent='рубеж начнётся со сметой и с действиями по рискам'; }
       else { if(kvb[0]&&filled('risk')) kvb[0].textContent='заполнен'; if(kvb[1]&&filled('budget')) kvb[1].textContent='заполнен'; } },60));
   }
@@ -786,12 +834,12 @@
     S.art.show=S.art.show||{upd:{},off:{}}; S.art.shared=S.art.shared||{};
     const box=document.querySelector('#v-show .show'), cards=[...document.querySelectorAll('#v-show .sc[data-s]')], names={}; let curSh=null;
     cards.forEach(c=>{ c.dataset.h0=c.innerHTML; }); document.querySelectorAll('#v-list .li[data-a]').forEach(li=>{ names[li.dataset.a]=li.querySelector('b').textContent; });
-    function applyShow(){ cards.forEach(c=>{ const k=c.dataset.s; c.innerHTML=c.dataset.h0; const f=c.querySelectorAll('.f span'), pp=c.querySelector('p');
+    function applyShow(){if(H.on)return; cards.forEach(c=>{ const k=c.dataset.s; c.innerHTML=c.dataset.h0; const f=c.querySelectorAll('.f span'), pp=c.querySelector('p');
         if(S.art.show.upd[k]){ if(k==='rep'&&pp) pp.textContent='закреплена версия 3 — актуальна'; if(f[0]) f[0].textContent=(k==='rep'?'версия 3 · ':'')+'проверено в '+hhmm(S.art.show.upd[k]); if(f[1]){ f[1].textContent='в норме'; f[1].style.color='var(--ok)'; } }
         c.style.opacity=S.art.show.off[k]?'.38':''; if(S.art.show.off[k]&&f[1]){ f[1].textContent='снято с витрины'; f[1].style.color='var(--ink3)'; } });
       if(box){ box.querySelectorAll('[data-live-s]').forEach(x=>x.remove()); Object.keys(S.art.shared).forEach(k=>{ if(!names[k]) return; const d=document.createElement('div'); d.className='sc'; d.dataset.liveS=k; d.style.cursor='pointer'; d.innerHTML='<b>'+esc(names[k])+'</b><p>отправлено вами на витрину из списка артефактов</p><div class="f"><span>сегодня</span><span style="color:var(--ok)">в норме</span></div>'; box.appendChild(d); }); } }
     hooks.push(applyShow);
-    document.addEventListener('click',e=>{ const c=e.target.closest('#v-show .sc[data-s]'); if(c){ curSh=c.dataset.s; setTimeout(()=>{ const acts=document.querySelector('.ovl.on .panel .acts'); if(acts&&S.art.show.off[curSh]) acts.innerHTML='<span class="btn sm p">Вернуть на витрину</span><span class="btn sm ghost" data-close>Закрыть</span>'; },0); }
+    document.addEventListener('click',e=>{if(H.on)return; const c=e.target.closest('#v-show .sc[data-s]'); if(c){ curSh=c.dataset.s; setTimeout(()=>{if(H.on)return; const acts=document.querySelector('.ovl.on .panel .acts'); if(acts&&S.art.show.off[curSh]) acts.innerHTML='<span class="btn sm p">Вернуть на витрину</span><span class="btn sm ghost" data-close>Закрыть</span>'; },0); }
       const ls=e.target.closest('#v-show [data-live-s]'); if(ls&&window.HX){ const k=ls.dataset.liveS; curSh='live:'+k; HX.open(ls,'<div class="from">раскрытая карточка · витрина</div><div class="ch"><h3>'+esc(names[k])+'</h3></div><div class="csub">отправлено вами · видно всем, у кого есть ссылка и вход</div>'+HX.acts([['Снять с витрины','p'],['Закрыть','ghost','data-close']]),{w:560,h:260}); return; }
       const b=e.target.closest('.panel .acts .btn'); if(!b||!curSh||!document.querySelector('#v-show.on')) return; const lab=b.textContent.trim();
       if(curSh.indexOf('live:')===0){ if(/^Снять/.test(lab)){ const k=curSh.slice(5); delete S.art.shared[k]; save(); log('артефакты',names[k]+' снят с витрины'); HX.close(); applyShow(); toast('Снято с витрины'); } return; }
@@ -808,20 +856,20 @@
     prow.forEach(li=>{ const c=li.querySelectorAll(':scope > .m')[2]; li.dataset.ap0=c?c.textContent:''; li.dataset.apc0=c?c.style.color:''; });
     if(sr){ sr.innerHTML='<input class="live-in" placeholder="⌕ Поиск по объектам: продукт, метод, термин…" style="font-size:13px">'; const inp=sr.querySelector('input'); inp.addEventListener('input',()=>{ const qv=inp.value.trim().toLowerCase(); let n=0; prow.forEach(li=>{ const ok=!qv||li.textContent.toLowerCase().includes(qv); li.style.display=ok?'':'none'; if(ok) n++; });
         let em=document.querySelector('#v-past .live-empty'); if(!em){ em=document.createElement('div'); em.className='li dim live-empty'; em.style.cursor='default'; em.innerHTML='<div><small>Среди прошлых исследований ничего не найдено.</small></div>'; document.querySelector('#v-past .lst').appendChild(em); } em.style.display=n?'none':''; }); }
-    function applyPast(){ prow.forEach(li=>{ const c=li.querySelectorAll(':scope > .m')[2]; if(!c) return; const x=S.res.cont[li.dataset.p]; c.textContent=x?'продолжено сегодня в '+hhmm(x):li.dataset.ap0; c.style.color=x?'var(--accent)':li.dataset.apc0; }); }
+    function applyPast(){if(H.on)return; prow.forEach(li=>{ const c=li.querySelectorAll(':scope > .m')[2]; if(!c) return; const x=S.res.cont[li.dataset.p]; c.textContent=x?'продолжено сегодня в '+hhmm(x):li.dataset.ap0; c.style.color=x?'var(--accent)':li.dataset.apc0; }); }
     hooks.push(applyPast);
-    document.addEventListener('click',e=>{ const li=e.target.closest('#v-past .li[data-p]'); if(li) curPast=li.dataset.p; const b=e.target.closest('.panel .acts .btn'); if(!b||!curPast||!document.querySelector('#v-past.on')) return; const lab=b.textContent.trim(), k=curPast, name=prow.find(r=>r.dataset.p===k).querySelector('b').textContent;
+    document.addEventListener('click',e=>{if(H.on)return; const li=e.target.closest('#v-past .li[data-p]'); if(li) curPast=li.dataset.p; const b=e.target.closest('.panel .acts .btn'); if(!b||!curPast||!document.querySelector('#v-past.on')) return; const lab=b.textContent.trim(), k=curPast, name=prow.find(r=>r.dataset.p===k).querySelector('b').textContent;
       if(/^Продолжить это исследование/.test(lab)){ S.res.cont[k]=now(); save(); log('ресёрч','Продолжено прошлое исследование: '+name.slice(0,60)); HX.close(); applyPast(); toast('Исследование продолжено — ресёрчер получит его вопросы',()=>{ delete S.res.cont[k]; save(); applyPast(); }); }
       else toast('В прототипе «'+esc(lab)+'» ничего не открывает: отчёты лежат в папке проекта'); },true);
   }
 
-  // ══ ДОКУМЕНТ СТАДИИ · версии: новые версии от ваших правок, «Открыть» и «Сравнить» ══
+  // ══ ДОКУМЕНТЫ ПРОЕКТА · версии: новые версии от ваших правок, «Открыть» и «Сравнить» ══
   if(PAGE==='doc'){
-    const vb=document.getElementById('vers'); if(vb) vb.addEventListener('click',()=>setTimeout(()=>{ const inner=document.querySelector('.ovl.on .panel .inner'), first=inner&&inner.querySelector('.vrow'); if(!first||inner.querySelector('.live-v')) return;
+    const vb=document.getElementById('vers'); if(vb) vb.addEventListener('click',()=>setTimeout(()=>{if(H.on)return; const inner=document.querySelector('.ovl.on .panel .inner'), first=inner&&inner.querySelector('.vrow'); if(!first||inner.querySelector('.live-v')) return;
       const live=[]; let n=6; ['risk','budget'].forEach(k=>{ if(S.doc.fill[k]){ n++; live.push(['v'+n,({risk:'раздел 5 · риски',budget:'раздел 6 · бюджет'}[k])+' — '+(S.doc.fill[k]==='self'?'заполнен вами':'заполнен оркестратором'),'сегодня']); } }); if(S.doc.signed){ n++; live.push(['v'+n,'переход подписан · стадия закрыта','вы · '+hhmm(S.doc.signed)]); }
       if(!live.length) return; live.reverse(); first.insertAdjacentHTML('beforebegin',live.map((v,i)=>'<div class="vrow live-v"><b>'+v[0]+'</b><span>'+v[1]+'</span><span class="m">'+v[2]+'</span><span>'+(i===0?'<span class="pill acc">текущая</span>':'<span class="btn sm ghost">Открыть</span>')+'</span></div>').join(''));
       const old=inner.querySelector('.vrow:not(.live-v) .pill.acc'); if(old) old.outerHTML='<span class="btn sm ghost">Открыть</span>'; const h=inner.querySelector('.ch h3'); if(h) h.textContent='Версии документа · '+(n+1); },60));
-    document.addEventListener('click',e=>{ const b=e.target.closest('.panel .vrow .btn'); if(!b) return; const row=b.closest('.vrow'), v=row.querySelector('b').textContent, nx=row.nextElementSibling, was=nx&&nx.classList.contains('live-vd'); document.querySelectorAll('.live-vd').forEach(x=>x.remove()); if(was) return;
+    document.addEventListener('click',e=>{if(H.on)return; const b=e.target.closest('.panel .vrow .btn'); if(!b) return; const row=b.closest('.vrow'), v=row.querySelector('b').textContent, nx=row.nextElementSibling, was=nx&&nx.classList.contains('live-vd'); document.querySelectorAll('.live-vd').forEach(x=>x.remove()); if(was) return;
       const cmp=/^Сравнить/.test(b.textContent.trim()), what=row.children[1].textContent;
       row.insertAdjacentHTML('afterend','<div class="blk live-vd" style="margin:6px 0 10px">'+(cmp?'<div class="t"><span>чем '+v+' отличается от v6</span><span>3 изменения</span></div><ul><li><b>+ раздел 5 · Риски:</b> добавлены риски 1–3</li><li><b>+ раздел 6 · Бюджет:</b> внесён факт — 14,2 % недели Claude и 31 $ Codex</li><li><b>~ раздел 3 · Состав блоков:</b> 87 задач, без изменений</li></ul>':'<div class="t"><span>версия '+v+'</span><span>только описание</span></div><p>'+esc(what)+'. В прототипе у прошлых версий хранится описание; полный текст есть у текущей.</p>')+'</div>'); },true);
   }
@@ -853,7 +901,7 @@
   const base=p=>(p||'').replace(/\/+$/,'').split('/').pop()||p;
   const pl=(n,a,b,c)=>{ const m=n%10, h=n%100; return (h>=11&&h<=14)?c:(m===1?a:(m>=2&&m<=4?b:c)); };
   const PIN='<svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6zM12 15v5"/></svg>';
-  const PROJ_ITEMS=[['doc','Документ стадии'],['art','Артефакты'],['mem','Память проекта'],['res','Ресёрч']];   // относятся к папке проекта — лежат внутри раскрытой папки
+  const PROJ_ITEMS=[['doc','Документы проекта'],['art','Артефакты'],['mem','Память проекта'],['res','Ресёрч']];   // относятся к папке проекта — лежат внутри раскрытой папки
   const ico=k=>window.psIcon?window.psIcon(k):'';
   const PROJECT_FOLD_KEY='harnessy-project-fold:';
   function projectExpanded(project){try{const value=localStorage.getItem(PROJECT_FOLD_KEY+project.path);if(value==='1'||value==='0')return value==='1'}catch(e){}return !!project.current}
@@ -980,6 +1028,7 @@
   window.LIVE={stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting};   // для cx.js (поле ввода)
   // ── запуск
   composer(); restoreUI(); wireSearch(); refresh();restoreLiveSnapshot(); sideChats();
+  if(PAGE==='chat'&&S.ui.sectionHint){toast(esc(S.ui.sectionHint));delete S.ui.sectionHint;save()}
   hConnect().finally(async()=>{ if(window.HARNESS_BOOT&&!H.connected){if(S.pending){S.draft=S.pending.text;S.pending=null;save()}return} S.ui.switched=false; if(cols().length){ if(S.pending){ const pending=S.pending,q=pending.text;S.pending=null;
         const target=sendBinding();if(pending.target&&(pending.target.project!==target.project||pending.target.pane!==target.pane||pending.target.chat!==target.chat)){S.draft=q;save();render();toast('Разговор изменился; сообщение осталось в черновике');return}
         if(S.ui.fresh&&H.on&&H.pane&&H.pane.id==='room'){ try{ const r=await api('/api/chats/new',{pane:'room',carry:'none'}); if(!r||!r.ok)throw Error(r&&r.error||'нет связи');await refreshChats();S.chat=[]; }catch(e){S.draft=q;save();render();toast('Не вышло: '+esc(e.message));return} }   // новый чат без роли — параллельный прежним
