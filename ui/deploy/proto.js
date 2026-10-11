@@ -55,7 +55,7 @@
     now:['частично','Решения и подтверждения приходят от движка; остальные показатели и прогнозы пока демонстрационные.'],
     events:['частично','Лента читается из журнала текущего проекта. Соседние блоки — примеры уведомлений и состояний.'],
     spend:['частично','Журнал ходов и расчёты имеют источник; неподключённые подписки, лимиты и прогнозы отмечены на блоках.'],
-    first:['частично','Выбор папки работает; состав команды и результаты следующих шагов пока демонстрационные.'],
+    first:['частично','Модель, оркестратор и состав — из движка; прогноза цены первого хода пока нет.'],
     login:['макет','Серверный вход и перенос данных пока показаны на примере.'],
     away:['частично','Чат и выбор условий доступны; исполнение условий ухода движком пока не поддерживается.']
   };
@@ -66,7 +66,7 @@
       const main=app.querySelector('.main'),top=main&&main.querySelector('.top');
       if(top){const heading=document.createElement('div');heading.className='spec-heading';top.before(heading);heading.appendChild(banner);top.remove();heading.appendChild(top)}else app.insertBefore(banner,app.firstChild);
     });
-    const partial={now:'#v-turn .nums, #v-away .nums, #v-week .nums',first:'.frame:not(:first-child)',away:'.leave-policy'};
+    const partial={now:'#v-turn .nums, #v-away .nums, #v-week .nums',away:'.leave-policy'};
     if(partial[KEY])document.querySelectorAll(partial[KEY]).forEach(block=>block.setAttribute('data-spec-mock',spec[1]));
     document.querySelectorAll('[data-spec-mock]').forEach(block=>{if(block.querySelector('.spec-block'))return;const label=document.createElement('div');label.className='spec-block';label.textContent='Макет · '+block.dataset.specMock;block.insertBefore(label,block.firstChild)});
   }
