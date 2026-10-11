@@ -57,7 +57,7 @@ Process memory is a cache of these files: the runtime rebuilds panes, chats, cur
 
 ### 2. How are unfinished operations saved and restored?
 
-**Durable intent before the effect, durable receipt after it, and "uncertain" is a first-class state** **[code]** for turns and role assignments, **[contract]** for owner confirmations and merges (TS-04c):
+**Durable intent before the effect, durable receipt after it, and "uncertain" is a first-class state** **[code]** for turns and role assignments, **[code]** for owner confirmations and merges (TS-04c, merged):
 
 - **A model turn.** Before the provider is called, the runtime writes an *attempt* (`attempts.json`: turn id, journal records delivered, start time). After the provider answers, the answer is written into the chat as a result record carrying `deliverySeq` and a receipt (`runtime: {turnInstanceId, recordSeqs, effectsPending, interrupted, nextSeen}`), then the journal cursor advances, then after-turn effects run, then the seat is saved, and only then the receipt is marked complete. On reopen the runtime finishes whatever stage was cut, **without calling the model again**.
 - **Failure after the model may have acted** (transport lost, process crash, project closed) leaves the attempt as `uncertain`: the queue is not advanced, the seat is blocked for automatic re-delivery, the owner sees a note, and only the owner's next action to that seat releases it. Two restarts in a row or a message from another agent do not re-run the model.
@@ -79,7 +79,7 @@ Process memory is a cache of these files: the runtime rebuilds panes, chats, cur
 
 The model produces text and events; it does not touch the world directly.
 
-- **Through the core only.** Sending to another seat, asking it, reading its chat, assigning a role and merging exist solely as tools that the core implements (`PeerTools` → `RuntimeActions`). Each goes through the journal's policy checks and the owner-confirmation gate, and re-validates the turn scope immediately before the effect **[code]** (merge and ask arrive with TS-04c **[contract]**).
+- **Through the core only.** Sending to another seat, asking it, reading its chat, assigning a role and merging exist solely as tools that the core implements (`PeerTools` → `RuntimeActions`). Each goes through the journal's policy checks and the owner-confirmation gate, and re-validates the turn scope immediately before the effect **[code]** (merge and ask: TS-04c **[code]**).
 - **Provider-side effects** (edits, commands) are governed by the provider's permission mode and sandbox chosen from the seat's mode, by writable roots, and by approval cards the owner answers in the window **[code]**.
 - **Receipts, not retries.** Because external actions are not idempotent, the core never re-runs a turn whose outcome is unknown (see 2). A result that was received but whose local bookkeeping failed is kept and completed; a result that may have happened is left to the owner.
 - **Hand-off carries text only.** When a conversation moves between seats or projects, only the text and its metadata move; execution receipts stay with the seat that produced them **[code]**.
