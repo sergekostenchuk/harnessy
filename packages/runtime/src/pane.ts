@@ -24,7 +24,7 @@ export class Approval {
 export interface PaneInit {id:string;vendor:Vendor|'human';label:string;model:string;mode?:Mode;cwd:string;role?:string;writePaths?:string[];digest?:boolean}
 export class Pane {
  id:string;vendor:Vendor|'human';label:string;model:string;mode:Mode;cwd:string;role:string;writePaths:string[];digest:boolean;
- worktree:string|null=null;branch:string|null=null;sessionId:string|null=null;busy=false;touched=false;revision=0;
+ worktree:string|null=null;branch:string|null=null;sessionId:string|null=null;sessionEpoch=0;busy=false;touched=false;revision=0;
  readonly uncommitted=new Set<TranscriptMessage>();transcript:TranscriptMessage[]=[];seen:Record<string,number>={};carry='';tokens:Usage|null=null;handle:TurnHandle|null=null;
  recoveryNote:string|null=null;recoveryError:RuntimeEvent|null=null;uncertainNote:string|null=null;status:'idle'|'recovering'|'uncertain'='idle';readonly approvals=new Map<string,Approval>();
  private bus:EventBus;private clock:Clock;
@@ -51,10 +51,12 @@ export class Registry {
  roleOf(id:string){return id==='owner'?'owner':this.get(id)?.role??id}
  refreshPolicy():boolean {if(!this.policy)return false;try{if(this.policy.maybeReload())this.policyChanged?.(this.policy)}catch{return false}return !this.policy.broken}
  canObserve(viewer:string,target:string):boolean {if(viewer==='owner')return true;return this.refreshPolicy()&&this.policy!.canObserve(this.roleOf(viewer),this.roleOf(target))}
- update(pane:Pane,body:Record<string,unknown>):boolean {if(pane.busy)return false;pane.touched=true;pane.revision++;
- const model=body.model,known=pane.vendor==='human'?[]:this.models[pane.vendor]??[];
- if(typeof model==='string'&&model&&(known.some(m=>m.id===model)||pane.vendor==='codex'&&known.length<=1))pane.model=model;
- else if(typeof model==='string'&&model){const other=(['claude','codex'] as const).find(v=>this.providers.has(v)&&this.models[v]?.some(m=>m.id===model));if(other&&other!==pane.vendor){pane.vendor=other;pane.model=model;pane.sessionId=null;pane.handle=null}}
+ update(pane:Pane,body:Record<string,unknown>):boolean {
+ const busy=pane.busy,model=typeof body.model==='string'?body.model:'',known=pane.vendor==='human'?[]:this.models[pane.vendor]??[];
+ const vendor=model?(known.some(m=>m.id===model)?pane.vendor:(['claude','codex'] as const).find(v=>this.providers.has(v)&&this.models[v]?.some(m=>m.id===model))??(pane.vendor==='codex'&&known.length<=1?'codex':null)):null;
+ if(busy&&!vendor)return false;pane.touched=true;pane.revision++;
+ if(vendor){if(vendor!==pane.vendor){pane.vendor=vendor;pane.sessionId=null;pane.sessionEpoch++;if(!busy)pane.handle=null}pane.model=model}
+ if(busy)return true;
  if(MODE_IDS.includes(body.mode as Mode))pane.mode=body.mode as Mode;
  if(typeof body.cwd==='string'&&validDir(body.cwd)){if(body.cwd!==pane.cwd){pane.transcript=[];pane.seen={}}pane.cwd=body.cwd}
  if(Object.hasOwn(body,'sessionId')){const next=typeof body.sessionId==='string'&&body.sessionId?body.sessionId:null;if(next!==pane.sessionId){pane.transcript=[];pane.seen={}}pane.sessionId=next}

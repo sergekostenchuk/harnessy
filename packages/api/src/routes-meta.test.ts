@@ -6,6 +6,15 @@ import {ProviderError} from '@harnessy/providers';
 import {Connections} from '@harnessy/projects';
 import {fixture,call,deferred,until,OWNER} from './test-helpers.ts';
 
+test('79/107: journal HTTP pagination is exclusive, typed and preserves since/limit/thread semantics',async t=>{
+ const h=await fixture(t);for(let i=1;i<=805;i++)h.runtime.journal.append({sender:'owner',to:'worker',kind:'note',thread:i%2?'odd':'even',text:'record '+i});
+ const latest=await call(h.api,'/api/journal?limit=400'),older=await call(h.api,'/api/journal?limit=400&before=406'),oldest=await call(h.api,'/api/journal?limit=400&before=6');
+ assert.equal(latest.status,200);assert.deepEqual([...oldest.body.records,...older.body.records,...latest.body.records].map(r=>r.seq),Array.from({length:805},(_,i)=>i+1));assert.equal(older.body.lastSeq,805);
+ const filtered=await call(h.api,'/api/journal?since=100&limit=0&before=110&thread=odd');assert.deepEqual(filtered.body.records.map((r:{seq:number})=>r.seq),[101,103,105,107,109]);assert.deepEqual((await call(h.api,'/api/journal?before=1')).body.records,[]);
+ for(const before of ['','0','-1','1.2','1.0','null','Infinity','1e2','9007199254740992','%202','%2B2','2&before=3']){const bad=await call(h.api,'/api/journal?before='+before);assert.equal(bad.status,400,before);assert.deepEqual(bad.body,{ok:false,code:'before_invalid',error:'before: ожидается целое число больше нуля'})}
+ const legacy=await call(h.api,'/api/journal?since=bad&limit=bad');assert.equal(legacy.status,200);assert.equal(legacy.body.records.length,100);assert.equal(legacy.body.records[0].seq,706);
+});
+
 test('1/16/19/70: status missing values, failed auth/catalog, static Claude models, and no model replacement',async t=>{
  const h=await fixture(t,{seats:'  codex: {role: executor, vendor: codex, model: old-model, mode: read}'});
  h.provider.auth=async()=>{throw new ProviderError('no_binary','claude не найден; задай CLAUDE_BIN')};h.codex.auth=async()=>{throw new ProviderError('not_logged_in','нет входа')};h.codex.models=async()=>{throw new ProviderError('models_unavailable','нечитаемый каталог')};

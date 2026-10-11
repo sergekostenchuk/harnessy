@@ -8,6 +8,12 @@ html[data-proto] .frame { display:none; position:absolute; left:0; top:0; margin
 html[data-proto] .frame.cur { display:block; }
 html[data-proto] .frame > *:not(.app):not(.stage) { display:none !important; }
 html[data-proto] .frame > .app, html[data-proto] .frame > .stage { position:absolute !important; left:0; top:0; transform-origin:0 0; max-width:none; border:0 !important; border-radius:0 !important; box-shadow:none !important; }
+/* Journal and conversation content occupy the remaining grid track and scroll there. */
+html[data-proto][data-page="log"] .main { grid-template-rows:auto minmax(0,1fr); min-height:0; }
+html[data-proto][data-page="log"] .views { min-height:0; overflow:hidden; }
+html[data-proto][data-page="log"] .view { min-height:0; overflow-y:auto; }
+html[data-proto][data-page="chat"] .main { grid-template-rows:auto minmax(0,1fr) auto; min-height:0; }
+html[data-proto][data-page="chat"] .feed { min-height:0; overflow-y:auto; }
 /* навигация */
 html[data-proto] aside [data-go], html[data-proto] aside [data-col], html[data-proto] aside .col { cursor:pointer; }
 html[data-proto] aside .nav[data-go]:hover, html[data-proto] aside .conv[data-go]:hover { background:var(--raised); color:var(--ink); }
@@ -330,6 +336,8 @@ aside.side.ps .ps-proj { cursor:pointer; } aside.side.ps .ps-head { position:rel
 .ps-folder { display:flex; align-items:center; gap:7px; height:28px; padding:0 9px 0 6px; border-radius:var(--rs,9px); color:var(--ink2); font-size:13px; cursor:pointer; white-space:nowrap; position:relative; }
 .ps-folder:hover { background:var(--raised); color:var(--ink); } .ps-folder.cur { color:var(--ink); }
 .ps-folder .chev { width:12px; text-align:center; color:var(--ink3); font-size:12px; flex:none; } .ps-folder > svg { width:15px; height:15px; flex:none; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.ps-folder button.chev { border:0; padding:0; background:transparent; font-family:inherit; cursor:pointer; }
+.ps-folder button.chev:focus-visible { outline:1px solid var(--accent); outline-offset:3px; }
 .ps-folder .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; } .ps-folder .m { font:9.5px var(--mono); color:var(--ink3); flex:none; }
 .ps-fold-body { display:flex; flex-direction:column; gap:1px; margin:0 0 6px; }
 aside.side.ps .ps-fold-body .nav.psub { height:26px; padding-left:30px; font-size:12.5px; } aside.side.ps .ps-fold-body .nav.psub svg { width:14px; height:14px; }

@@ -10,6 +10,16 @@ import {temp,fixture,fixtureDir,error} from './test-support.ts';
 process.env.TZ='UTC';
 const fixed={now:()=>new Date('2026-10-09T00:00:00.123Z'),id:(ms:number)=>ms.toString(16)+'-abcdef'};
 
+test('79/107: exclusive before pages over 800 records have no gaps and retain existing read filters',()=>{
+ const t=temp();try{const j=new Journal(t.root,fixed);for(let i=1;i<=805;i++)j.append({sender:'owner',to:'worker',kind:i%2?'question':'note',thread:i%3?'ordinary':'third',text:'record '+i});
+ const latest=j.read({limit:400}),older=j.read({limit:400,before:latest[0]!.seq}),oldest=j.read({limit:400,before:older[0]!.seq});
+ assert.deepEqual([...oldest,...older,...latest].map(r=>r.seq),Array.from({length:805},(_,i)=>i+1));assert.deepEqual(j.read({before:1}),[]);assert.equal(new Journal(t.root).read({limit:400,before:406})[0]!.seq,6);
+ assert.deepEqual(j.read({since:100,before:130,limit:0,thread:'third',kinds:['question']}).map(r=>r.seq),[105,111,117,123,129]);
+ assert.deepEqual(j.read({since:800,limit:0}).map(r=>r.seq),[801,802,803,804,805]);assert.deepEqual(j.read({before:undefined,since:800,limit:0}),j.read({since:800,limit:0}));
+ for(const before of [0,-1,1.5,NaN,Infinity,Number.MAX_SAFE_INTEGER+1,null,'2'])assert.throws(()=>j.read({before:before as number}),error('before_invalid','before: ожидается целое число больше нуля'));
+ }finally{t.close()}
+});
+
 test('TS-07/98: internal attempt metadata is last and survives reload without changing ordinary record bytes',()=>{
  const t=temp();try{const j=new Journal(t.root,fixed),a=j.append({sender:'harness',to:['owner'],kind:'note',origin:'attempt',text:'решение',thread:'attempt:turn-a',attempt:{pane:'worker',turnInstanceId:'turn-a',action:'skip',deliverySeq:7,done:false}});
  assert.equal(Object.keys(a).at(-1),'attempt');assert.deepEqual(new Journal(t.root,fixed).get(a.seq)!.attempt,a.attempt);assert.equal(j.pendingFor('worker').length,0);
