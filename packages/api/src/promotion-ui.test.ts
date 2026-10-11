@@ -76,3 +76,20 @@ for(const nextChoice of ['other','back','pagehide'])test('154 ОКНА: executed
  if(nextChoice!=='pagehide'){assert.equal(boot.confirm(project,statusToken),true);assert.equal((await v.context.refreshStatus(true)).project,project)}
  assert.equal(h.provider.calls.length,1);
 });
+
+for(const returns of [false,true])test('154 round 3 ОКНА: another client confirms '+(returns?'A → B → A':'B')+' before a delayed promotion reply',async t=>{
+ const h=await fixture(t),v=await ui(h),storage=new Map<string,string>(),entered=deferred(),release=deferred();
+ Object.assign(v.context,{rememberLive(){},sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,value:string)=>storage.set(k,value)}});
+ const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');runInContext(proto.slice(0,proto.indexOf('/* LIVE_BOOT_END */')),v.context);
+ const boot=v.context.HARNESS_BOOT;boot.select(h.dir);boot.confirm(h.dir,boot.capture());let sections=0;v.context.sectionChanging=()=>sections++;
+ v.context.fetch=async(path:string,opts?:{body:string})=>{const response=await call(h.api,path,opts?{body:JSON.parse(opts.body)}:{});if(path.endsWith('/orchestrator')){await h.runtime.idle();entered.resolve();await release.promise}return {json:async()=>response.body}};
+ runInContext('globalThis.api=(()=>{'+part(live,'  const api=','  // TS-07: waiting controls')+'return api;})();',v.context);
+ const promoting=v.context.LIVE.promoteConversation(v.find('.live-acts'),v.context.LIVE.sendBinding());await entered.promise;
+ // This HTTP client never calls this window's api(), boot.select() or invalidateBinding().
+ const next=h.dir+'/other-project';mkdirSync(next);assert.equal((await call(h.api,'/api/project',{body:{path:next}})).status,200);await v.context.refreshStatus(true);
+ assert.equal(v.H.project,next);assert.equal(storage.get('harnessy-live-project-v1'),next);
+ if(returns){assert.equal((await call(h.api,'/api/project',{body:{path:h.dir}})).status,200);await v.context.refreshStatus(true)}
+ const project=v.H.project,selected=storage.get('harnessy-live-project-v1'),beforeSections=sections;
+ release.resolve();assert.equal(await promoting,false);assert.equal(storage.get('harnessy-live-project-v1'),selected);assert.equal(sections,beforeSections);assert.equal(v.H.project,project);
+ assert.equal(boot.confirm(project,boot.capture()),true);assert.equal((await v.context.refreshStatus(true)).project,project);assert.equal(h.provider.calls.length,1);
+});

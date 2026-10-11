@@ -60,8 +60,8 @@
     if(body&&H.snapshotOnly)return Promise.resolve({ok:false,code:'live_pending',error:'движок ещё не подтвердил проект'});
     const project=H.project,changing=!!body&&/^\/api\/(?:project(?:\/create)?|room\/move|assign|chats\/[^/]+\/orchestrator)$/.test(p);
     if(changing){projectGeneration++;H.projectLinkChange=true}
-    const generation=projectGeneration,navigation=typeof bindingNavigation==='number'?bindingNavigation:null;
-    const current=()=>generation===projectGeneration&&(navigation===null||navigation===bindingNavigation)&&(typeof leftPage==='undefined'||!leftPage);
+    const confirmed=H.confirmedProjectGeneration||0,generation=projectGeneration,navigation=typeof bindingNavigation==='number'?bindingNavigation:null;
+    const current=()=>confirmed===(H.confirmedProjectGeneration||0)&&generation===projectGeneration&&(navigation===null||navigation===bindingNavigation)&&(typeof leftPage==='undefined'||!leftPage);
     return fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined).then(r=>r.json()).then(r=>{
       if(!current())return {ok:false,code:'binding_changed',error:'Привязка изменилась; ответ относится к прежнему выбору'};
       if(changing&&(!r.ok||r.project===project))H.projectLinkChange=false;
@@ -215,7 +215,7 @@
   }
   // End TS-09a project sections.
   function applyStatus(st,request,connected=false){if(leftPage||window.HARNESS_BOOT&&!window.HARNESS_BOOT.confirm(st.project||'',request))return false;if(connected){H.on=true;H.snapshotOnly=false}H.liveStatus=st;const changed=H.project!==(st.project||''),previousRoom=(H.panes||[]).find(p=>p.id==='room');H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.defaultDir=st.defaultDir||''; H.roleCatalog=st.roleCatalog||[]; H.noProject=!!st.noProject; H.projectsRoot=st.projectsRoot||''; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; H.halted=!!st.halted; H.kinds=st.kinds||[]; H.threads=st.threads||{};
-    if(changed){S.chat=[];H.chatList=[];H.pins=[];H.projects=null;const selectedRoom=(H.panes||[]).find(p=>p.id==='room');if(previousRoom&&selectedRoom&&previousRoom.model!==selectedRoom.model)toast('у проекта своя настройка модели: '+esc(modelName(selectedRoom.model)));}
+    if(changed){H.confirmedProjectGeneration=(H.confirmedProjectGeneration||0)+1;S.chat=[];H.chatList=[];H.pins=[];H.projects=null;const selectedRoom=(H.panes||[]).find(p=>p.id==='room');if(previousRoom&&selectedRoom&&previousRoom.model!==selectedRoom.model)toast('у проекта своя настройка модели: '+esc(modelName(selectedRoom.model)));}
     if(changed&&typeof eventsReset==='function')eventsReset();
     if(changed&&typeof resetJournal==='function'){resetJournal(H.project);if(H.on&&!H.snapshotOnly&&window.psKey==='log')journalFetch()}setTimeout(()=>dispatchEvent(new CustomEvent('live:status')),0);
     if(PAGE==='new') document.querySelectorAll('.status > span:first-child').forEach(el=>{ el.textContent=(H.noProject||!!(S.cx&&S.cx.noFolder))?'без проекта · модель ничего не читает':'папка '+((H.project||'').split('/').filter(Boolean).pop()||'проект')+(st.repo?' · git':'')+' · ролей '+(H.panes||[]).filter(p=>p.id!=='room').length; });   // строка папки — от движка, не статика скетча (Kimi UX-1 №85 п.2)
