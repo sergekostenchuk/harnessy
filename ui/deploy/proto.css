@@ -586,3 +586,34 @@ html[data-page="new"] .team-proposals{position:absolute;inset:20px;z-index:80;ma
 .role-knowledge summary{font-size:15px;font-weight:600;cursor:pointer;list-style-position:inside}
 .role-knowledge pre{font:inherit;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;margin:14px 0 0;color:var(--text,#dedee1)}
 .role-knowledge [role=alert]{color:var(--red,#da596d)}
+
+/* TS-15b: keep the sketch canvas and all five views; populated rows may exceed the sample. */
+html[data-page="swarm"] .main { grid-template-rows:auto auto minmax(0,1fr); min-height:0; }
+html[data-page="swarm"] .views { min-height:0; overflow:hidden; }
+html[data-page="swarm"] .view { overflow:auto; }
+html[data-page="swarm"] .board { overflow:auto; min-height:520px; }
+[data-swarm-canvas] { position:relative; width:1180px; min-height:700px; }
+[data-swarm-canvas] .seat { text-align:left; color:var(--ink); font:inherit; }
+html[data-page="swarm"] .strip { z-index:1; }
+html[data-page="swarm"] .waits { position:sticky; margin:-238px 0 14px 14px; bottom:14px; max-height:230px; overflow:auto; width:300px; }
+html[data-page="swarm"] .waits .spec-block { margin-top:10px; margin-bottom:6px; padding:4px 6px; font-size:10px; }
+[data-swarm-notice], .swarm-source { display:block; padding:8px 20px; color:var(--ink3); font-size:11px; overflow-wrap:anywhere; }
+[data-swarm-notice] { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+html[data-page="swarm"] .win { color:var(--ink); text-align:left; font:inherit; }
+html[data-page="swarm"] .li[data-swarm-seat] { width:100%; text-align:left; background:var(--panel); color:var(--ink); border:0; border-bottom:1px solid var(--line); font:inherit; cursor:pointer; }
+html[data-page="swarm"] .li small { display:block; color:var(--ink3); overflow-wrap:anywhere; }
+html[data-page="swarm"] .chan { overflow:auto; }
+html[data-page="swarm"] .chan .ln { min-width:65px; }
+html[data-page="swarm"] .note { flex-wrap:wrap; }
+html[data-page="swarm"] .msgs .tx { min-width:0; overflow-wrap:anywhere; }
+html[data-page="swarm"] #panel { left:50%; top:50%; transform:translate(-50%,-50%); width:min(884px,calc(100% - 32px)); max-height:calc(100% - 32px); overflow:auto; }
+html[data-page="swarm"] #panel .inner { width:auto; }
+html[data-page="swarm"] #ovl .head2 { flex-wrap:wrap; padding-right:24px; }
+html[data-page="swarm"] #ovl .head2 .r { flex-wrap:wrap; }
+html[data-page="swarm"] #ovl .tl, html[data-page="swarm"] #ovl .goal { overflow-wrap:anywhere; }
+html[data-page="swarm"] #ovl .stat small { display:block; }
+html[data-page="swarm"] button:disabled { cursor:default; opacity:.55; }
+html[data-page="swarm"] [role="tab"]:focus-visible, html[data-page="swarm"] [role="button"]:focus-visible, html[data-page="swarm"] button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+@media(max-width:759px){html[data-page="swarm"] .two { grid-template-columns:1fr; } html[data-page="swarm"] .m { grid-template-columns:36px 110px 1fr 40px; gap:6px; padding:9px; } html[data-page="swarm"] .top .r { flex-wrap:wrap; } html[data-page="swarm"] #v-seats .lst { overflow:auto; } html[data-page="swarm"] #v-seats .li { min-width:680px; }}
+
+html[data-page="swarm"] .swarm-route { display:flex; align-items:center; min-width:320px; }
