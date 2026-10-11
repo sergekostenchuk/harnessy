@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,realpathSync,rmSync,existsSync,readFileSync,statSync,symlinkSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {randomUUID} from 'node:crypto';
 import {TraceStore,traceData} from './trace.ts';
 function store(t:any,options=()=>({enabled:true,maxBytes:32768})){const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-trace-')));mkdirSync(join(dir,'.harness/state'),{recursive:true});const s=new TraceStore(dir,options,()=>1800000000000);t.after(async()=>{await s.close();rmSync(dir,{recursive:true,force:true})});return s}
 test('233: buffered spans preserve their chain and sequence after restart without blocking the caller',async t=>{
@@ -32,3 +33,17 @@ test('238: a secret in a reason is masked while a canonical API route remains us
 test('238: nested numeric payloads are bounded and throwing getters cannot interrupt the model',async t=>{const s=store(t);let payload:unknown=12;for(let i=0;i<4;i++)payload=Array(16).fill(payload);const r=traceData(payload,s.project);assert.ok(Buffer.byteLength(JSON.stringify(r.data))<=4096);assert.equal(r.truncated,true);assert.doesNotThrow(()=>s.record('tool.call',{data:{get broken(){throw Error('private getter')}}}));await s.flush();assert.equal((await s.read())[0]!.truncated,true);});
 
 test('233/234: project-open restoration preserves journal parents; turn lookup never waits for storage',async t=>{const s=store(t),span=s.record('queue.posted',{refs:{journalSeq:7}});await s.flush();const next=new TraceStore(s.project);t.after(()=>next.close());await next.restore();assert.equal(next.parentForJournal([7])?.traceId,span.traceId);next.read=()=>{throw Error('disk read must not precede a turn')};assert.equal(next.parentForJournal([7])?.spanId,span.spanId);assert.equal(next.parentForJournal([999]),undefined);});
+
+test('238 round 2: the entire envelope and inherited context are scrubbed before persistence',async t=>{
+ const s=store(t),marker='sk_test_SYNTHETIC_FIXTURE_ONLY_1234567890',short='sk_test_fixture',parent={store:s,traceId:marker,spanId:marker,parentSpanId:marker,chat:marker,pane:short,turnInstanceId:marker};
+ const ctx=s.record('ui.'+short,{actor:'model:'+short,outcome:marker,reason:{code:marker,text:marker},refs:{attemptId:marker,proposalId:marker,journalSeq:marker},durationMs:1e100} as any,parent);
+ s.record('ui.action',{traceId:marker,spanId:marker,parentSpanId:marker,chat:marker,pane:short,turnInstanceId:marker});
+ const id=randomUUID(),good=s.record('turn.start',{actor:'model:worker',chat:'c123abc',pane:'worker',turnInstanceId:id,refs:{attemptId:id}});s.end(good,'turn.end');await s.flush();
+ const rows=await s.read(),bytes=readFileSync(s.path,'utf8');for(const text of [bytes,JSON.stringify(rows),JSON.stringify({...ctx,store:undefined})]){assert.ok(!text.includes(marker));assert.ok(!text.includes(short))}
+ assert.equal(rows[0]!.chat,null);assert.equal(rows[0]!.pane,null);assert.equal(rows[0]!.turnInstanceId,null);assert.equal(rows[0]!.outcome,'failed');assert.equal(rows[0]!.durationMs,null);assert.deepEqual(rows[0]!.refs,{});assert.equal(rows[0]!.truncated,true);
+ assert.equal(rows[2]!.chat,'c123abc');assert.equal(rows[2]!.pane,'worker');assert.equal(rows[2]!.turnInstanceId,id);assert.equal(rows[3]!.spanId,good.spanId);assert.equal(s.forTurn(id)?.spanId,good.spanId);
+});
+
+test('238 round 2: oversize or invalid metadata is removed and cannot enter the returned context',async t=>{
+ const s=store(t),huge='x'.repeat(1000),ctx=s.record('ui.'+huge,{actor:'model:'+huge,chat:huge,pane:'worker\nprivate',turnInstanceId:huge});await s.flush();const row=(await s.read())[0]!;assert.equal(row.kind,'error.internal');assert.equal(row.actor,'engine');assert.equal(row.chat,null);assert.equal(row.pane,null);assert.equal(row.turnInstanceId,null);assert.equal(ctx.chat,null);assert.equal(row.truncated,true);assert.ok(!readFileSync(s.path,'utf8').includes(huge));
+});

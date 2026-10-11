@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
+import {readFileSync,mkdirSync,writeFileSync,appendFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {join} from 'node:path';
 import {fixture,call,OWNER,until,sse,deferred} from './test-helpers.ts';
@@ -55,3 +55,34 @@ test('233/234: a tool-posted journal record carries the chain into the next mode
 test('234: provider completion without a tool result is explicitly unavailable, not a successful tool',async t=>{const h=await fixture(t);h.provider.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();ctx.traceEvent?.({id:'missing',name:'Write',phase:'call'});return {text:'done',sessionId:null}};await h.runtime.runTurn('worker','fixture');const rows=await h.runtime.project.trace.read();assert.ok(rows.some(r=>r.kind==='tool.result'&&r.outcome==='failed'&&r.reason.code==='unavailable'));});
 
 test('234: an HTTP refusal records the typed policy reason and user-facing error',async t=>{const h=await fixture(t),a=click(h);const reply=await call(h.api,'/api/seats/owner',{headers:a.headers,body:{from:'lead'}});assert.equal(reply.status,403);const row=(await h.runtime.project.trace.read({traceId:a.body.traceId})).find(r=>r.kind==='http.response')!;assert.equal(row.reason.code,'approval_policy');assert.match(row.reason.text,/владелец/);assert.equal((row.data as any).route,'/api/seats/owner');});
+
+test('238 round 2: forged chat, seat and turn bindings are typed refusals with no record or credential in disk/HTTP',async t=>{
+ const h=await fixture(t);h.runtime.roomSet({model:'w1'},OWNER);const p=h.runtime.project,worker=p.registry.get('worker')!,chat=p.state.activeChat(worker)!,a=click(h),marker='sk_test_SYNTHETIC_FIXTURE_ONLY_1234567890',valid={...a.body.binding,pane:worker.id,chat:chat.id};
+ assert.equal((await call(h.api,'/api/trace',{body:{...a.body,binding:valid}})).status,200);
+ const before=await p.trace.read();
+ for(const binding of [{...valid,chat:marker},{...valid,chat:'cdeadbeef'},{...valid,pane:'unknown'},{...valid,pane:'sk_test_fixture'},{...valid,pane:'room'},{...valid,pane:null},{...valid,turnInstanceId:marker},{...valid,turnInstanceId:randomUUID()},{...a.body.binding,turnInstanceId:randomUUID()},{...valid,chat:{}},{...valid,pane:['worker']},{...valid,turnInstanceId:[]}]){
+  const id=randomUUID(),reply=await call(h.api,'/api/trace',{body:{...a.body,traceId:id,binding}});assert.equal(reply.status,400,JSON.stringify(binding));assert.equal(reply.body.code,'trace_invalid');
+  const snapshot=await call(h.api,'/api/trace?traceId='+id);assert.deepEqual(snapshot.body.records,[]);assert.ok(!JSON.stringify([reply.body,snapshot.body]).includes(marker));
+ }
+ for(const patch of [{turnInstanceId:marker},{actor:marker},{binding:{...valid,extra:marker}}])assert.equal((await call(h.api,'/api/trace',{body:{...a.body,binding:valid,...patch}})).body.code,'trace_invalid');
+ assert.equal((await p.trace.read()).length,before.length);const bytes=readFileSync(p.trace.path,'utf8');assert.ok(!bytes.includes(marker));assert.ok(!bytes.includes('sk_test_fixture'));
+ const all=await call(h.api,'/api/trace');assert.ok(!JSON.stringify(all.body).includes(marker));assert.equal(all.body.records.find((r:any)=>r.traceId===a.body.traceId).chat,chat.id);
+});
+
+test('238 round 2: a known turn belongs to its actual chat and seat, including after project reload',async t=>{
+ const h=await fixture(t);h.runtime.roomSet({model:'w1'},OWNER);const p=h.runtime.project,pane=p.registry.get('worker')!,chat=p.state.activeChat(pane)!,gate=deferred<{text:string;sessionId:null}>();h.provider.onRun=async()=>gate.promise;t.after(()=>gate.resolve({text:'done',sessionId:null}));const run=h.runtime.runTurn('worker','fixture');await until(()=>h.provider.calls.length===1);
+ const turn=(await p.trace.read()).find(row=>row.kind==='turn.start'&&row.pane===pane.id)!;assert.ok(turn.turnInstanceId);
+ const post=async(binding:object)=>{const a=click(h);return call(h.api,'/api/trace',{body:{...a.body,binding:{...a.body.binding,...binding}}})};
+ const binding={pane:pane.id,chat:chat.id,turnInstanceId:turn.turnInstanceId};assert.equal((await post(binding)).status,200);
+ gate.resolve({text:'done',sessionId:null});await run;assert.equal((await post(binding)).status,200);const other=p.state.newChat(pane);p.state.saveChats(p.registry);
+ assert.equal((await post({...binding,chat:other.id})).body.code,'trace_invalid');
+ const room=p.state.activeChat(p.registry.get('room')!)!;assert.equal((await post({...binding,pane:'room',chat:room.id})).body.code,'trace_invalid');
+ await h.runtime.projectSet(h.dir,{reload:true},OWNER);assert.equal(h.runtime.project.trace.forTurn(turn.turnInstanceId!),undefined);
+ assert.equal((await post(binding)).status,200);assert.equal((await post({...binding,chat:other.id})).status,400);
+});
+
+test('238 round 2: GET also sanitizes the entire stored envelope and never exposes unrecognized fields',async t=>{
+ const h=await fixture(t),a=click(h);await call(h.api,'/api/trace',{body:a.body});const original=(await h.runtime.project.trace.read())[0]!,marker='sk_test_SYNTHETIC_FIXTURE_ONLY_1234567890';
+ appendFileSync(h.runtime.project.trace.path,JSON.stringify({...original,seq:original.seq+1,kind:'ui.sk_test_fixture',actor:'model:sk_test_fixture',chat:marker,pane:'sk_test_fixture',turnInstanceId:marker,refs:{...original.refs,extra:marker},data:{action:marker},reason:{code:'none',text:marker},extra:marker})+'\n');
+ const response=await call(h.api,'/api/trace?traceId='+a.body.traceId);assert.equal(response.status,200);assert.equal(response.body.records.length,2);assert.ok(!response.text.includes(marker));assert.ok(!response.text.includes('sk_test_fixture'));const row=response.body.records[1];assert.equal(row.chat,null);assert.equal(row.pane,null);assert.equal(row.turnInstanceId,null);assert.equal(row.truncated,true);assert.equal('extra' in row,false);assert.equal('extra' in row.refs,false);
+});
