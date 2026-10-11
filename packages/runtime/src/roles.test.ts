@@ -6,7 +6,7 @@ import {withPathLock,loadTeam,TeamError} from '@harnessy/team';
 import {invokeTool} from '../../providers/src/tools.ts';
 import {bridge} from '../../providers/src/bridge-test-support.ts';
 import {RuntimeError,createRuntime,diskIO,withRoleActions,type StateIO} from './index.ts';
-import {harness,OWNER,FakeProvider,completedActions,deferred,until,savedAssignment} from './test-helpers.ts';
+import {harness,OWNER,FakeProvider,completedActions,deferred,until,savedConversationAssignment,savedAssignment} from './test-helpers.ts';
 const seats='  orchestrator: {role: orchestrator, vendor: claude, label: оркестратор, model: w1, mode: read, digest: false}';
 const actions=withRoleActions(completedActions),fail=(code:string)=>(e:unknown)=>(e instanceof RuntimeError||e instanceof TeamError)&&e.code===code;
 const records=(r:Awaited<ReturnType<typeof harness>>['runtime'],sid:string,origin:string)=>r.journal.read({limit:0}).filter(x=>x.origin===origin&&(origin==='assign'?true:x.to.includes(sid)));
@@ -59,8 +59,8 @@ test('53: own specialization file after intent before manifest is accepted; mism
 
 test('52/56: two singleton replacements each have new status/onboarding; replay does not reset later conversation',async t=>{
  const {runtime:r}=await harness(t,{seats,actions});await r.halt(true,OWNER);r.roomSet({model:'w1'},OWNER);const room=r.registry.get('room')!;room.record('me','первый разговор');room.sessionId='same-cwd';r.project.state.savePanes(r.registry,r.journal);
- const first=await r.assignRoomRole({role:'orchestrator'},OWNER);assert.equal(first.pane.sessionId,'same-cwd');assert.equal(first.replaced,true);assert.equal(r.registry.get('room')!.transcript.length,0);
- r.registry.get('room')!.record('me','второй разговор');const second=await r.assignRoomRole({role:'orchestrator'},OWNER);assert.notEqual(first.chat.id,second.chat.id);assert.equal(records(r,'orchestrator','onboarding').length,2);assert.equal(records(r,'orchestrator','assign').length,2);
+ const first=await savedConversationAssignment(r,{role:'orchestrator'});assert.equal(first.pane.sessionId,'same-cwd');assert.equal(first.replaced,true);assert.equal(r.registry.get('room')!.transcript.length,0);
+ r.registry.get('room')!.record('me','второй разговор');const second=await savedConversationAssignment(r,{role:'orchestrator'});assert.notEqual(first.chat.id,second.chat.id);assert.equal(records(r,'orchestrator','onboarding').length,2);assert.equal(records(r,'orchestrator','assign').length,2);
  r.registry.get('orchestrator')!.record('ai','поздний ответ');r.project.state.savePanes(r.registry,r.journal);await r.ensureSeatMaterialized('orchestrator',OWNER,first.chat.id);await r.ensureSeatMaterialized('orchestrator',OWNER,second.chat.id);assert.equal(r.project.state.chats.active.orchestrator,second.chat.id);assert.equal(r.registry.get('orchestrator')!.transcript.at(-1)!.text,'поздний ответ');assert.equal(records(r,'orchestrator','onboarding').length,2);
 });
 
@@ -71,10 +71,10 @@ test('15/17/36/38: missing role/model/team, no orchestrator/default project and 
  const h2=await harness(t,{deps:{defaultDir:h.dir}});await h2.runtime.openProject(h.dir);await assert.rejects(savedAssignment(h2.runtime,{role:'tester'}),fail('no_project'));
 });
 
-for(const cut of ['chat','status','onboarding'])test('52/53 ОКНА: room assignment append/save before stage '+cut+' marker is idempotent after restart',async t=>{
+for(const cut of ['chat','status','onboarding'])test('52/53 ОКНА: historical saved room assignment append/save before stage '+cut+' marker is idempotent after restart',async t=>{
  let armed=false;const io:StateIO={read:diskIO.read,write(path,text){if(armed&&path.endsWith('seat-materialization.json')){const op=JSON.parse(text)[0];if(op.stages[cut]){armed=false;throw Error('before '+cut+' marker')}}diskIO.write(path,text)}};
  const h=await harness(t,{seats,actions,deps:{stateIO:io}}),r=h.runtime;await r.halt(true,OWNER);r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','сохрани исходный разговор');r.project.state.savePanes(r.registry,r.journal);armed=true;
- await assert.rejects(r.assignRoomRole({role:'orchestrator'},OWNER),/before .* marker/);const total=Object.keys(r.project.state.chats.chats).length,id=JSON.parse(readFileSync(r.project.state.materializationPath,'utf8'))[0].operationId,roomId=r.project.state.chats.active.room;
+ await assert.rejects(savedConversationAssignment(r,{role:'orchestrator'}),/before .* marker/);const total=Object.keys(r.project.state.chats.chats).length,id=JSON.parse(readFileSync(r.project.state.materializationPath,'utf8'))[0].operationId,roomId=r.project.state.chats.active.room;
  r.registry.get('room')!.record('me','поздняя реплика комнаты');r.project.state.savePanes(r.registry,r.journal);await r.close();const next=await createRuntime(h.deps,actions);t.after(()=>next.close());assert.equal(Object.keys(next.project.state.chats.chats).length,total);assert.equal(next.project.state.chats.active.room,roomId);assert.equal(next.registry.get('room')!.transcript.at(-1)!.text,'поздняя реплика комнаты');assert.equal(next.project.state.chats.active.orchestrator,id);assert.equal(records(next,'orchestrator','assign').length,1);assert.equal(records(next,'orchestrator','onboarding').length,1);
  await next.ensureSeatMaterialized('orchestrator',OWNER,id);assert.equal(Object.keys(next.project.state.chats.chats).length,total);assert.equal(records(next,'orchestrator','onboarding').length,1);
 });
@@ -100,8 +100,8 @@ test('16/33/36: Codex MCP payload and token-bound scope reach the same refusal; 
  r.postOwner({to:'orchestrator',kind:'task',text:'создай аналитика'},OWNER);await r.idle();assert.deepEqual(result,{ok:false,code:'proposal_required',error:'участников создаёт оркестратор по подтверждённому предложению'});assert.equal(r.registry.get('executor'),null);assert.equal(existsSync(join(h.dir,'.harness','roles/seats/executor.md')),false);assert.throws(()=>r.validateBridge('orchestrator','test-token'),/ход не активен/);
 });
 
-test('52/54 ОКНА: target starts answering while assignment waits for root lock; source stays unchanged',async t=>{
+test('52/54 ОКНА: historical assignment: target starts answering while assignment waits for root lock; source stays unchanged',async t=>{
  const {runtime:r,provider:f}=await harness(t,{seats,actions});r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','источник');r.project.state.savePanes(r.registry,r.journal);
  const held=deferred(),entered=deferred(),result=deferred<{text:string;sessionId:null}>();const lock=withPathLock(r.project.dir,async()=>{entered.resolve();await held.promise});await entered.promise;
- const assignment=r.assignRoomRole({role:'orchestrator'},OWNER);f.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();return result.promise};const turn=r.runTurn('orchestrator','параллельный ход');await until(()=>r.registry.get('orchestrator')!.busy);held.resolve();await lock;await assert.rejects(assignment,fail('busy'));assert.equal(records(r,'orchestrator','assign').length,0);assert.equal(r.registry.get('room')!.transcript[0]!.text,'источник');result.resolve({text:'ответ',sessionId:null});await turn;
+ const assignment=assert.rejects(savedConversationAssignment(r,{role:'orchestrator'}),fail('busy'));f.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();return result.promise};const turn=r.runTurn('orchestrator','параллельный ход');await until(()=>r.registry.get('orchestrator')!.busy);held.resolve();await lock;await assignment;assert.equal(records(r,'orchestrator','assign').length,0);assert.equal(r.registry.get('room')!.transcript[0]!.text,'источник');result.resolve({text:'ответ',sessionId:null});await turn;
 });

@@ -13,18 +13,21 @@ async function serve(t:Parameters<typeof harness>[0],h:Awaited<ReturnType<typeof
 }
 async function card(url:string,id:string){const res=await fetch(url+'/api/context/'+id);assert.equal(res.status,200);const body=await res.json();assert.deepEqual(Object.keys(body),golden.rootKeys);assert.equal(body.pane,id);assert.equal(body.busy,false);return body}
 
+// 154/155: chat metadata adds revision and document references; historical fields retain their golden values.
+function legacyMeta(value:any){const {revision,documents,...legacy}=value;assert.ok(Number.isSafeInteger(revision)&&revision>0);assert.deepEqual(documents,[]);return legacy}
+
 test('TS-06.1: /api/context has Python golden from chat=null to a first delivered turn at every place',async t=>{
  let nextId=0;const h=await harness(t,{seats,deps:{id:()=> (++nextId).toString(16).padStart(4,'0')}});h.runtime.makeRoom('w1','chat',OWNER);await h.runtime.idle();h.runtime.project.state.chats={chats:{},active:{}};nextId=0; // Explicit legacy absence fixture; 83 now persists empty chats at creation.
  const api=await serve(t,h);assert.deepEqual(h.runtime.registry.ids,places);
  for(const id of places){assert.equal(h.runtime.context(id).chat,null);assert.equal((await card(api.url,id)).chat,null)}
  assert.deepEqual(h.runtime.project.state.chats.active,{});assert.equal(h.provider.calls.length,0);
- for(const id of places){const res=await fetch(api.url+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pane:id,message:'Новая задача: '+id,direct:true})});assert.equal(res.status,200);await h.runtime.idle();const expected={...golden.firstTurn[id],id:h.runtime.project.state.chats.active[id]};assert.deepEqual(h.runtime.context(id).chat,expected);assert.equal(JSON.stringify((await card(api.url,id)).chat),JSON.stringify(expected))} // 83: saving one turn also persists the other real places' empty chats.
+ for(const id of places){const res=await fetch(api.url+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pane:id,message:'Новая задача: '+id,direct:true})});assert.equal(res.status,200);await h.runtime.idle();const expected={...golden.firstTurn[id],id:h.runtime.project.state.chats.active[id]};assert.deepEqual(legacyMeta(h.runtime.context(id).chat),expected);assert.equal(JSON.stringify(legacyMeta((await card(api.url,id)).chat)),JSON.stringify(expected))} // 83: saving one turn also persists the other real places' empty chats.
  assert.equal(h.provider.calls.length,places.length)
 });
 
 test('TS-06.1: /api/context chat metadata matches Python golden for all places before and after a delivered turn',async t=>{
  const h=await harness(t,{seats,before:dir=>{writeFileSync(join(dir,'.harness/state/chats.json'),JSON.stringify(golden.saved));writeFileSync(join(dir,'.harness/state/panes.json'),JSON.stringify(golden.panes))}}),api=await serve(t,h);assert.deepEqual(h.runtime.registry.ids,places);
- for(const id of places){const expected=golden.before[id];assert.deepEqual(h.runtime.context(id).chat,expected);assert.equal(JSON.stringify((await card(api.url,id)).chat),JSON.stringify(expected))}
+ for(const id of places){const expected=golden.before[id];assert.deepEqual(legacyMeta(h.runtime.context(id).chat),expected);assert.equal(JSON.stringify(legacyMeta((await card(api.url,id)).chat)),JSON.stringify(expected))}
  for(const id of places){const res=await fetch(api.url+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pane:id,message:'Новая задача: '+id,direct:true})});assert.equal(res.status,200);await h.runtime.idle()}
- for(const id of places){const expected=golden.after[id];assert.deepEqual(h.runtime.context(id).chat,expected);assert.equal(JSON.stringify((await card(api.url,id)).chat),JSON.stringify(expected));assert.equal(h.provider.calls.filter(c=>c.seat.id===id).length,1)}
+ for(const id of places){const expected=golden.after[id];assert.deepEqual(legacyMeta(h.runtime.context(id).chat),expected);assert.equal(JSON.stringify(legacyMeta((await card(api.url,id)).chat)),JSON.stringify(expected));assert.equal(h.provider.calls.filter(c=>c.seat.id===id).length,1)}
 });

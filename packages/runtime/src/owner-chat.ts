@@ -5,7 +5,7 @@ import type {Runtime} from './runtime.ts';
 export const OWNER_KINDS=['task','question','note','stop','resume','decision'] as const;
 export function chat(runtime:Runtime,input:Record<string,unknown>,initiator:Initiator) {
  const p=owner(runtime,initiator),pane=place(p,String(input.pane||''),'нет окна'),kind=String(input.kind||'task'),text=pythonTrim(String(input.message||''));
- if(p.editing.has(pane.id)&&kind!=='stop')throw new RuntimeError('busy','место сейчас отвечает — дождитесь ответа',409);
+ if((p.editing.has(pane.id)||p.materializing.has(pane.id))&&kind!=='stop')throw new RuntimeError('busy','место сейчас отвечает — дождитесь ответа',409);
  if(pane.status==='recovering'||p.restoreFailed.has(pane.id))free(p,pane);
  const {cwd:_,from:__,by:___,mandate:____,...settings}=input;
  if(!p.editing.has(pane.id)&&!p.materializing.has(pane.id)&&p.registry.update(pane,settings))p.state.savePanes(p.registry,p.journal);

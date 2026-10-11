@@ -1,3 +1,4 @@
+import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
 import {isAbsolute} from 'node:path';
 import {expandUser,initProject,projectsRoot} from '@harnessy/projects';
@@ -90,6 +91,7 @@ export class Runtime {
  await this.actions.restorePendingAcks({runtime:this,project:p});
  try{await restoreAssignments(this,p)}catch(e){lineErrors.push(message(e));for(const id of registry.ids)p.restoreFailed.set(id,message(e))}
  for(const id of p.materializing){p.restoreFailed.set(id,[...lineErrors].reverse().find(text=>text.startsWith('назначение '+id+' '))??lineErrors.at(-1)??'восстановление назначения не завершено')}p.materializing.clear();
+ await restorePromotions(this,p);
  try{await options.initialize?.(p)}catch(e){p.starting=false;throw e}
  try{await this.restoreAttemptDecisions(p)}catch(e){lineErrors.push(message(e));for(const id of registry.ids)p.restoreFailed.set(id,message(e))}
  for(const pane of registry.panes.values()){
@@ -148,7 +150,7 @@ export class Runtime {
  waiting(id:string){const p=this.project,pane=this.pane(id,p);if(p.restoreFailed.has(id))return null;const info=waiting(p,pane);if(info)return info;const pending=this.attemptDecisions(p).find(d=>d.record.attempt!.pane===id&&!d.done);if(!pending)return null;const a=pending.record.attempt!,result=p.state.results(pane).find(r=>r.runtime?.turnInstanceId===a.turnInstanceId);return {status:a.action==='finish'?'recovering' as const:'uncertain' as const,recordSeqs:Array.isArray(result?.runtime.recordSeqs)?[...result.runtime.recordSeqs]:[],startedAt:null,turnInstanceId:a.turnInstanceId,actions:[a.action]}}
  publishState(id:string):void {const p=this.project;this.stateEvent(p,this.pane(id,p))}
  private warningId(p:ProjectState,pane:Pane,kind:string):string {return pane.id+':'+(waiting(p,pane)?.turnInstanceId??p.active.get(pane.id)?.scope.turnInstanceId??'episode:'+p.generation)+':'+kind}
- postOwner(input:AgentPostInput,initiator:Initiator):Record_ {this.requireOwner(initiator);const p=this.project;p.registry.refreshPolicy();return p.channel.postCore({...input,thread:input.thread??(input.kind==='task'?'T'+(p.journal.lastSeq+1):null)},OWNER)}
+ postOwner(input:AgentPostInput,initiator:Initiator):Record_ {this.requireOwner(initiator);const p=this.project,targets=Array.isArray(input.to)?input.to:[input.to];if(input.kind!=='stop'&&[...p.registry.panes.keys()].some(id=>(targets.includes(id)||targets.includes('*'))&&(p.editing.has(id)||p.materializing.has(id)||p.restoreFailed.has(id))))throw new RuntimeError('busy','назначение или изменение разговора ещё не завершено',409);p.registry.refreshPolicy();return p.channel.postCore({...input,thread:input.thread??(input.kind==='task'?'T'+(p.journal.lastSeq+1):null)},OWNER)}
  private report(p:ProjectState,pane:Pane,error:unknown):void{if(!p.closed){const event={type:'error',message:slice(message(error),600),sessionId:pane.sessionId,code:error instanceof RuntimeError?error.code:'internal',warning:this.warningId(p,pane,'error')};if(pane.status==='recovering'||pane.status==='uncertain')pane.recoveryError=event;pane.publish(event)}}
  private stateEvent(p:ProjectState,pane:Pane){if(!p.closed)pane.publish({type:'state',...pane.settings(),pending:p.journal.pendingFor(pane.id).length,status:pane.status,waiting:this.waiting(pane.id)})}
  private attemptDecisions(p:ProjectState):{record:Record_;done:Record_|null}[] {
@@ -372,6 +374,7 @@ export class Runtime {
  free(p,pane,pane.label+' занято: идёт ход');
  pane.sessionId=sessionId;pane.touched=true;pane.revision++;pane.transcript=msgs.map(m=>({role:m.role,text:m.text,ts:0}));pane.seen={};p.state.savePanes(p.registry,p.journal);return {id:sessionId,messages:msgs}
  }
+ promoteChat(id:string,input:PromotionInput,initiator:Initiator){return promoteChat(this,id,input,initiator)}
  roleCatalog(){return roleCatalog(this)}
  createSeat(input:CreateSeatInput,initiator:Initiator){return createSeat(this,input,initiator)}
  async ensureSeatMaterialized(id:string,initiator:Initiator,operationId?:string){this.requireOwner(initiator);if(this.project.restoreFailed.has(id))free(this.project,this.pane(id));return ensureSeatMaterialized(this,id,initiator,operationId)}
@@ -379,7 +382,7 @@ export class Runtime {
  makeRoom(model:string,mode:string,initiator:Initiator){return makeRoom(this,model,mode,initiator)}
  roomSet(input:{model?:unknown;folder?:unknown},initiator:Initiator){return roomSet(this,input,initiator)}
  roomMove(input:{path?:unknown;create?:unknown;git?:unknown},initiator:Initiator){return roomMove(this,input,initiator)}
- assignRoomRole(input:CreateSeatInput,initiator:Initiator){return assignRoomRole(this,input,initiator)}
+ assignRoomRole(input:CreateSeatInput & PromotionInput & {chat?:unknown},initiator:Initiator){return assignRoomRole(this,input,initiator)}
  chatMeta(id:string){const p=this.current;if(!p||p.closed)return null;const c=p.state.chats.chats[id];return c?meta(p,c):null}
  chatsList(initiator:Initiator){return chatsList(this,initiator)}
  chatGet(id:string,initiator:Initiator){return chatGet(this,id,initiator)}

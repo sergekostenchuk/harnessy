@@ -159,6 +159,7 @@ export async function assignConversation(runtime:Runtime,p:ProjectState,args:Cre
 }
 export async function ensureSeatMaterialized(runtime:Runtime,sid:string,initiator:Initiator,operationId?:string) {
  const p=owner(runtime,initiator);return withPathLock(p.dir,lock=>{same(runtime,p);
+  if(Object.values(p.state.chats.chats).some(c=>object(c.promotion)&&c.promotion.sid===sid&&c.promotion.done===false))throw new RuntimeError('promotion_pending','Повышение сохранено; повторите «Назначить оркестратора».',409);
   let op=operationId?operations(p).get(operationId):[...operations(p).values()].find(x=>x.sid===sid&&!all(x));
   if(operationId&&(!op||op.sid!==sid))invalid();
   const seat=p.team?.seats[sid];if(!op&&!seat)throw new RuntimeError('pane_unknown','нет такого места или это разговор без роли',404);
@@ -169,7 +170,7 @@ export async function ensureSeatMaterialized(runtime:Runtime,sid:string,initiato
  }).then(async result=>{if(!p.closed)await runtime.resumeQueue(sid,p);return {ok:true as const,pane:result.pane.settings(),chat:meta(p,result.chat)}});
 }
 export async function onboard(runtime:Runtime,sid:string,initiator:Initiator) {
- const p=owner(runtime,initiator),pane=p.registry.get(sid);if(!pane||sid==='room')throw new RuntimeError('pane_unknown','нет такого места или это разговор без роли',404);
+ const p=owner(runtime,initiator),pane=p.registry.get(sid);if(Object.values(p.state.chats.chats).some(c=>object(c.promotion)&&c.promotion.sid===sid&&c.promotion.done===false))throw new RuntimeError('promotion_pending','Повышение сохранено; повторите «Назначить оркестратора».',409);if(!pane||sid==='room')throw new RuntimeError('pane_unknown','нет такого места или это разговор без роли',404);
  if(p.journal.read({limit:0}).some(r=>r.from==='harness'&&r.origin==='onboarding'&&r.to.includes(sid))&&!p.materializing.has(sid))return {ok:true as const,already:true as const};
  if(!p.materializing.has(sid))free(p,pane,'место сейчас отвечает');else if(pane.busy||p.editing.has(sid))throw new RuntimeError('busy','место сейчас отвечает');await ensureSeatMaterialized(runtime,sid,initiator);return {ok:true as const,sent:true as const};
 }

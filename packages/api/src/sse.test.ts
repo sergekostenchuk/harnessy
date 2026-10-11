@@ -1,3 +1,4 @@
+import {promotionInput} from '../../runtime/src/test-helpers.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdirSync} from 'node:fs';
@@ -11,7 +12,7 @@ test('3/19/22/71: all replays pending cards, includes new seats, emits UTF8 and 
  await until(()=>all.frames.some(x=>x.type==='approval')&&single.frames.some(x=>x.type==='approval'));
  assert.equal(all.frames[0].pane,'worker');assert.equal('pane' in single.frames[0],false);assert.match(all.raw,/: ok/);assert.match(all.raw,/доступ/);
  h.clock.advance(15_000);await until(()=>all.raw.includes(': ka')&&single.raw.includes(': ka'));
- await call(h.api,'/api/room',{body:{model:'w1'}});const seat=await call(h.api,'/api/assign',{body:{role:'orchestrator'}});assert.equal(seat.status,200);const id=seat.body.pane.id;
+ await call(h.api,'/api/room',{body:{model:'w1'}});const seat=await call(h.api,'/api/assign',{body:{...promotionInput(h.runtime),role:'orchestrator'}});assert.equal(seat.status,200);const id=seat.body.pane.id;
  h.runtime.registry.get(id)!.publish({type:'delta',text:'новое место'});await until(()=>all.frames.some(x=>x.pane===id&&x.text==='новое место'));assert.equal(single.frames.some(x=>x.pane===id),false)
 });
 

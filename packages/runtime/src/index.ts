@@ -8,3 +8,5 @@ export {StateStore,diskIO,type StateIO,type TranscriptMessage,type ResultMessage
 export type {RuntimeDeps,RuntimeActions,BridgeSendArgs,BridgeFailure,SendResult,ReadPaneResult,AskResult,MergeResult,AssignRoleResult,ActionContext,AfterTurnContext,OwnerMergeContext,TurnScope,TurnRecords,ProjectState,RuntimeEvent,Clock,ModelCatalog} from './types.ts';
 export type {CreateSeatInput,Assignment,SeatInput} from './roles.ts';
 export type {ChatMeta} from './chats.ts';
+
+export {promotionIdentity,type PromotionIdentity} from './chats.ts';

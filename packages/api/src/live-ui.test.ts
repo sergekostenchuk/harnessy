@@ -38,6 +38,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  function curHTML(','  function hEvent(')+
   part(live,'  function hEvent(','  const isDirect=')+
   part(live,'  async function loadChat(','  // подключение к движку')+
+  part(live,'  // TS-09b2:','  // End TS-09b2 promotion.')+
   part(live,'  const bubble=','  const cols=')+
   '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+

@@ -16,7 +16,9 @@ export interface TranscriptMessage {role:string;text:string;ts:number;model?:str
 export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;vendor?:'claude'|'codex'|null;outcome:'error';errorCode:string}
 export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}
 export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;deliverySeq?:number;status?:'uncertain'}
-export interface Chat {id:string;pane:string;title:string;created:number;closed:number|null;model:string|null;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;turns?:AnalyticalTurn[];[key:string]:unknown}
+export interface DocumentRef {project:string;path:string}
+export interface Chat {revision?:number;revisionHash?:string;documents?:DocumentRef[];id:string;pane:string;title:string;created:number;closed:number|null;model:string|null;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;turns?:AnalyticalTurn[];[key:string]:unknown}
+export function chatMetadata(c:Chat):void {if(c.revision!==undefined&&(!Number.isSafeInteger(c.revision)||c.revision<0)||c.documents!==undefined&&(!Array.isArray(c.documents)||c.documents.length>50||!c.documents.every(d=>object(d)&&typeof d.project==='string'&&typeof d.path==='string')))throw new RuntimeError('chat_invalid','revision или documents сохранённого разговора не читаются',409)}
 export function jsonClone<T>(value:T):T{return parseCompat(compatJson(value)) as T}
 const CONVERSATION_FIELDS=new Set(['role','text','ts','model','vendor','usage','durationMs']);
 // Execution receipts belong to the source seat and journal, never to transferred history.
@@ -45,9 +47,10 @@ export class StateStore {
  const chats=raw.chats as Record<string,Chat>,active=orderedClone(raw.active as Record<string,string>);
  for(const id of orderedKeys(chats)){const c=chats[id];if(!object(c)||typeof c.pane!=='string'||!Array.isArray(c.transcript)||!c.transcript.every(m=>object(m)&&typeof m.role==='string'&&typeof m.text==='string'&&typeof m.ts==='number'))throw Error('неверная форма чата '+id)}
  this.chats={chats,active};for(const [pid,cid] of Object.entries(active)){const pane=registry.get(pid),c=chats[cid];if(!pane||!c||c.pane!==pid){delete active[pid];continue}
+ pane.revision=typeof c.revision==='number'?c.revision:0;
  pane.sessionId=typeof c.sessionId==='string'&&c.sessionId?c.sessionId:null;pane.transcript=c.transcript;pane.carry=typeof c.carry==='string'?c.carry:'';
  if(c.vendor==='claude'||c.vendor==='codex')pane.vendor=c.vendor;if(c.model===null)pane.model='';else if(typeof c.model==='string'&&c.model)pane.model=c.model;
- const last=[...c.transcript].reverse().find(m=>object(m.runtime)&&object(m.runtime.nextSeen));if(last&&object(last.runtime)&&object(last.runtime.nextSeen))pane.seen={...last.runtime.nextSeen} as Record<string,number>
+ const last=[...this.recoverable(c)].reverse().find(m=>object(m.runtime)&&object(m.runtime.nextSeen));if(last&&object(last.runtime)&&object(last.runtime.nextSeen))pane.seen={...last.runtime.nextSeen} as Record<string,number>
  }
  }catch(e){this.chats={chats:{},active:{}};if((e as NodeJS.ErrnoException).code!=='ENOENT')lineErrors.push('chats.json не читается: '+message(e))}
  try{
@@ -69,9 +72,11 @@ export class StateStore {
  readMaterializations():unknown {try{return this.read(this.materializationPath)}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return [];throw new RuntimeError('materialization_invalid','назначения ролей не читаются: '+message(e),409,{cause:e})}}
  saveMaterializations(value:unknown):void{this.write(this.materializationPath,value,2)}
  activeChat(pane:Pane,create=true):Chat|null {const id=this.chats.active[pane.id],existing=id?this.chats.chats[id]:null;return existing??(create?this.newChat(pane,'',true):null)}
- sync(registry:Registry):void {for(const p of registry.panes.values()){const c=this.activeChat(p,true);if(!c)continue;
+ sync(registry:Registry):void {for(const p of registry.panes.values()){const c=this.activeChat(p,true);if(!c)continue;chatMetadata(c);
  c.transcript=p.transcript.filter(m=>!p.uncommitted.has(m));c.sessionId=p.sessionId;c.model=p.model||null;c.vendor=p.vendor;c.carry=p.carry;
  if(!c.title||c.title==='вводная роли'){const first=p.transcript.find(m=>m.role==='me')?.text||p.transcript.find(m=>m.role==='ai'&&pythonTrim(m.text))?.text||'';c.title=slice(pythonTrim(first).split('\n')[0]??'',60)||(p.transcript.some(m=>m.role==='peer'&&m.text.startsWith('[от харнесс]'))?'вводная роли':'')}
+ const hash=createHash('sha256').update(compatJson({transcript:c.transcript,sessionId:c.sessionId,model:c.model,vendor:c.vendor,carry:c.carry,mode:p.mode,cwd:p.cwd,closed:c.closed,documents:c.documents??[]})).digest('hex');
+ if(c.revisionHash!==hash){c.revision=(c.revision??0)+1;c.revisionHash=hash}
  }}
  saveChats(registry:Registry):void{this.sync(registry);this.write(this.chatsPath,this.chats,2)}
  savePanes(registry:Registry,journal:Journal):void {journal.savePanes(Object.fromEntries([...registry.panes].map(([id,p])=>[id,p.persist()])));this.saveChats(registry)}
@@ -116,7 +121,8 @@ export class StateStore {
   if(Object.values(this.chats.chats).some(chat=>chat.turns?.some(t=>t.turnInstanceId===turn.turnInstanceId)||chat.transcript.some(m=>object(m.runtime)&&m.runtime.turnInstanceId===turn.turnInstanceId)))return;
   const chat=this.activeChat(pane)!;chat.turns=[...(chat.turns??[]),turn];this.saveChats(registry)
  }
- results(pane:Pane):ResultMessage[]{return Object.values(this.chats.chats).filter(c=>c.pane===pane.id).flatMap(c=>c.transcript.filter(m=>m.role==='ai'&&(Object.hasOwn(m,'runtime')||Object.hasOwn(m,'deliverySeq'))) as ResultMessage[])}
+ private recoverable(c:Chat):TranscriptMessage[]{const op=c.promotion;return object(op)&&op.target===this.dir&&op.sid===c.pane&&Number.isSafeInteger(op.boundary)?c.transcript.slice(Number(op.boundary)):c.transcript}
+ results(pane:Pane):ResultMessage[]{return Object.values(this.chats.chats).filter(c=>c.pane===pane.id).flatMap(c=>this.recoverable(c).filter(m=>m.role==='ai'&&(Object.hasOwn(m,'runtime')||Object.hasOwn(m,'deliverySeq'))) as ResultMessage[])}
  finishEffects(result:ResultMessage,registry:Registry):void {result.runtime.effectsPending=false;try{this.saveChats(registry)}catch(e){result.runtime.effectsPending=true;throw e}}
  validate(result:ResultMessage,pane:Pane,journal:Journal):void {
  const rt=result.runtime,fail=():never=>{throw new RuntimeError('recovering','записи сохранённого ответа не совпадают с журналом',409)};

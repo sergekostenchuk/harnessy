@@ -6,7 +6,7 @@ import {Journal,type Initiator} from '@harnessy/journal';
 import {ProviderError} from '@harnessy/providers';
 import {withPathLock} from '@harnessy/team';
 import {createRuntime,diskIO,RuntimeError,withRoleActions,type StateIO} from './index.ts';
-import {savedAssignment,completedActions,collect,deferred,FakeProvider,harness,OWNER,until} from './test-helpers.ts';
+import {savedAssignment,completedActions,collect,deferred,FakeProvider,harness,promotionInput,OWNER,until} from './test-helpers.ts';
 
 const error=(code:string)=>(e:unknown)=>e instanceof RuntimeError&&e.code===code;
 function seed(dir:string,id='old-turn',pane='worker',delivery=true){
@@ -62,7 +62,7 @@ test('72/96/101: uncertain room can move or become an orchestrator without disca
  const h=await harness(t,{actions:withRoleActions(completedActions)}),r=h.runtime;await r.settingsPatch('owner',{projectsRoot:join(h.dir,'projects')},OWNER);
  r.roomSet({model:'w1',folder:false},OWNER);h.provider.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();throw new ProviderError('transport_lost','после эффекта')};r.chat({pane:'room',message:'Хочу проект для заявления'},OWNER);await r.idle();const sourceId=r.waiting('room')!.turnInstanceId;h.provider.onRun=null;
  const moved=join(h.dir,'moved');mkdirSync(moved);await r.roomMove({path:moved},OWNER);assert.equal(r.project.dir,moved);await r.projectSet(h.dir,{},OWNER);assert.equal(r.waiting('room')!.turnInstanceId,sourceId);
- const assigned=await r.assignRoomRole({role:'orchestrator'},OWNER);await r.idle();assert.equal(assigned.created,true);assert.equal(assigned.pane.role,'orchestrator');assert.equal(JSON.parse(readFileSync(join(h.dir,'.harness','state','attempts.json'),'utf8')).room.turnInstanceId,sourceId);
+ const assigned=await r.assignRoomRole({...promotionInput(r),role:'orchestrator'},OWNER);await r.idle();assert.equal(assigned.created,true);assert.equal(assigned.pane.role,'orchestrator');assert.equal(JSON.parse(readFileSync(join(h.dir,'.harness','state','attempts.json'),'utf8')).room.turnInstanceId,sourceId);
 });
 
 test('72: saved materialization failure differs from active materialization and reload/switch stays available',async t=>{

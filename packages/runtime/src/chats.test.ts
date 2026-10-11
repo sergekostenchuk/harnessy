@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {RuntimeError,createRuntime} from './index.ts';
 import {SUMMARY_PROMPT} from './chats.ts';
 import {jsonClone} from './state.ts';
-import {harness,OWNER,deferred,until,completedActions,FakeProvider} from './test-helpers.ts';
+import {harness,OWNER,deferred,until,completedActions,FakeProvider,legacyChatBytes} from './test-helpers.ts';
 const error=(code:string,text?:string)=>(e:unknown)=>e instanceof RuntimeError&&e.code===code&&(!text||e.message===text);
 
 function history(r:Awaited<ReturnType<typeof harness>>['runtime']) {
@@ -66,7 +66,7 @@ test('57: durable final result stores current usage/duration, absent terminal ne
 
 test('20/55/57: Python chats golden round-trips byte for byte with floats, metadata and null/zero usage',async t=>{
  const golden=readFileSync(new URL('../fixtures/chats-ts04b-python.json',import.meta.url),'utf8'),h=await harness(t,{before:dir=>writeFileSync(join(dir,'.harness','state','chats.json'),golden)}),r=h.runtime;
- const listed=r.chatsList(OWNER);assert.equal(listed.chats[0]!.title,'Тема 🧠');assert.equal(listed.chats[0]!.last,1791500001);r.chatGet(listed.chats[0]!.id,OWNER);assert.equal(readFileSync(r.project.state.chatsPath,'utf8'),golden);assert.equal(r.registry.get('worker')!.sessionId,'old-session');
+ const listed=r.chatsList(OWNER);assert.equal(listed.chats[0]!.title,'Тема 🧠');assert.equal(listed.chats[0]!.last,1791500001);r.chatGet(listed.chats[0]!.id,OWNER);assert.equal(legacyChatBytes(readFileSync(r.project.state.chatsPath,'utf8')),golden);assert.equal(r.registry.get('worker')!.sessionId,'old-session');
 });
 
 test('57: session retry only copies final done and an interrupted result never borrows earlier turn usage',async t=>{

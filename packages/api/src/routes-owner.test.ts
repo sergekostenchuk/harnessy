@@ -1,3 +1,4 @@
+import {promotionInput} from '../../runtime/src/test-helpers.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync,appendFileSync} from 'node:fs';
@@ -33,20 +34,21 @@ test('1/19/68: chat direct and handoff selection forms, journal, chats and trans
  const transfer=await call(h.api,'/api/handoff',{body:{from:'worker',to:['orch','orch'],text:'выбранное',kind:'note'}});assert.equal(transfer.status,200);assert.deepEqual(keys(transfer.body),['answers','chars','names','ok','seq','to']);assert.equal(transfer.body.to.length,1);assert.equal(transfer.body.chars,9);await h.runtime.idle();
  const log=await call(h.api,'/api/journal?since=bad&limit=0');assert.equal(log.body.records.length,h.runtime.journal.lastSeq);assert.deepEqual(keys(log.body),['cursors','lastSeq','project','records','summary','threads']);assert.equal(log.body.records.at(-1).origin,'handoff');assert.equal((await call(h.api,'/api/journal?since=0&limit=0')).body.records.length,log.body.records.length);
  const list=await call(h.api,'/api/chats');assert.deepEqual(keys(list.body),['active','chats']);const id=list.body.active.worker;const chat=await call(h.api,'/api/chats/'+id);assert.deepEqual(keys(chat.body),['chat','messages']);assert.equal(chat.body.messages.filter((m:any)=>m.role==='ai').length,2);
- assert.deepEqual(keys(chat.body.chat),['active','closed','created','id','label','last','messages','model','pane','role','title','vendor']);
+ assert.deepEqual(keys(chat.body.chat),['active','closed','created','documents','id','label','last','messages','model','pane','revision','role','title','vendor']);
  const opened=await call(h.api,'/api/chats/open',{body:{chat:id}});assert.deepEqual(keys(opened.body),['already','chat','ok','pane']);
  const fresh=await call(h.api,'/api/chats/new',{body:{pane:'worker',carry:'text'}});assert.equal(fresh.status,200);assert.deepEqual(keys(fresh.body),['carried','chat','ok','pane']);assert.equal(fresh.body.carried,true);
  assert.equal((await call(h.api,'/api/chats/missing')).status,404);assert.deepEqual((await call(h.api,'/api/interrupt',{body:{pane:'worker'}})).body,{ok:false,error:'нечего прерывать'});
  const steer=await call(h.api,'/api/steer',{body:{pane:'worker',message:'вмешательство'}});assert.equal(steer.status,409);assert.equal(steer.body.code,'steer_failed');assert.equal(h.runtime.journal.pendingFor('worker').length,0)
 });
 
-test('1: project creation/assign new and replaced/seats/onboard keep distinct Python forms',async t=>{
+test('1: 154: project creation and bound assign alias; replacement is refused',async t=>{
  const h=await fixture(t);const path=join(h.dir,'project');const created=await call(h.api,'/api/project/create',{body:{path,model:'w1',git:true}});
  assert.equal(created.status,200);assert.deepEqual(keys(created.body),['created','git','memory','ok','orchestrator','project','seats']);assert.equal(created.body.created,true);assert.equal(created.body.git,true);assert.equal(created.body.seats,0);
  await h.runtime.idle();await call(h.api,'/api/halt',{body:{on:true}});
  assert.equal((await call(h.api,'/api/room',{body:{model:'w1',folder:path}})).status,200);
- const assigned=await call(h.api,'/api/assign',{body:{role:'orchestrator',model:'w1'}});assert.equal(assigned.status,200);assert.deepEqual(keys(assigned.body),['created','ok','pane','project','team']);assert.equal(assigned.body.created,false);
- const replacement=await call(h.api,'/api/assign',{body:{role:'orchestrator',model:'w1'}});assert.equal(replacement.status,200);assert.deepEqual(keys(replacement.body),['chat','ok','pane','replaced']);
+ const input=promotionInput(h.runtime),assigned=await call(h.api,'/api/assign',{body:{...input,role:'orchestrator'}});assert.equal(assigned.status,200);assert.deepEqual(keys(assigned.body),['already','chat','created','ok','pane','project','promotion','team']);assert.equal(assigned.body.created,false);
+ assert.deepEqual(assigned.body.promotion,{operationId:assigned.body.promotion.operationId,chat:assigned.body.chat.id,sourceProject:input.project,sourceRevision:input.revision,target:path,pane:assigned.body.pane.id});assert.equal(typeof assigned.body.promotion.operationId,'string');
+ const replacement=await call(h.api,'/api/assign',{body:{...promotionInput(h.runtime),role:'orchestrator'}});assert.equal(replacement.status,409);assert.equal(replacement.body.code,'orchestrator_exists');assert.equal(replacement.body.chat,assigned.body.chat.id);
  const seat=await call(h.api,'/api/seats',{body:{role:'executor',model:'w1'}});assert.equal(seat.status,409);assert.deepEqual(seat.body,{ok:false,code:'proposal_required',error:'участников создаёт оркестратор по подтверждённому предложению'});
  assert.equal((await call(h.api,'/api/seats',{body:{role:'assistant',model:'w1'}})).status,409);
  const onboard=await call(h.api,'/api/onboard',{body:{pane:assigned.body.pane.id}});assert.deepEqual(onboard.body,{ok:true,already:true});assert.equal((await call(h.api,'/api/onboard',{body:{pane:'room'}})).status,404);

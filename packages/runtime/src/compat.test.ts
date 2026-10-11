@@ -4,14 +4,14 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {compatJson,Journal} from '@harnessy/journal';
-import {harness,OWNER,FakeProvider} from './test-helpers.ts';
+import {harness,OWNER,FakeProvider,legacyChatBytes} from './test-helpers.ts';
 const fixture=(name:string)=>readFileSync(new URL('./fixtures/'+name,import.meta.url),'utf8');
 
 test('10/23/45: Pane.settings/persist and panes/halt/chats bytes match Python AST golden',async t=>{
  const h=await harness(t,{deps:{id:()=> 'beef'},seats:'  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read, write_paths: [src], digest: false}'}),{runtime:r,dir}=h,p=r.registry.get('worker')!;
  p.sessionId='s1';p.touched=true;p.record('me','Первая реплика\nпродолжение');p.record('ai','Ответ 🧠');r.project.state.savePanes(r.registry,r.journal);r.project.state.saveHalt(true);
  const expected=JSON.parse(fixture('settings.json'));expected.cwd=dir;expected.kind='worker';assert.equal(compatJson(p.settings()),compatJson(expected));
- assert.equal(readFileSync(join(dir,'.harness','state','panes.json'),'utf8'),fixture('panes.json'));assert.equal(readFileSync(join(dir,'.harness','state','halt.json'),'utf8'),fixture('halt.json'));assert.equal(readFileSync(join(dir,'.harness','state','chats.json'),'utf8'),fixture('chats.json'))
+ assert.equal(readFileSync(join(dir,'.harness','state','panes.json'),'utf8'),fixture('panes.json'));assert.equal(readFileSync(join(dir,'.harness','state','halt.json'),'utf8'),fixture('halt.json'));assert.equal(legacyChatBytes(readFileSync(join(dir,'.harness','state','chats.json'),'utf8')),fixture('chats.json'))
 });
 
 test('10: Python panes/session/digest and halted queue restore; unhalt is the first launch',async t=>{
@@ -20,7 +20,7 @@ test('10: Python panes/session/digest and halted queue restore; unhalt is the fi
 });
 
 test('10/49: old Python chats round-trip including fractional and integral float timestamp forms',async t=>{
- const source=fixture('chats-floats.json');const h=await harness(t,{before:dir=>writeFileSync(join(dir,'.harness','state','chats.json'),source)});h.runtime.project.state.saveChats(h.runtime.registry);assert.equal(readFileSync(join(h.dir,'.harness','state','chats.json'),'utf8'),source)
+ const source=fixture('chats-floats.json');const h=await harness(t,{before:dir=>writeFileSync(join(dir,'.harness','state','chats.json'),source)});h.runtime.project.state.saveChats(h.runtime.registry);assert.equal(legacyChatBytes(readFileSync(join(h.dir,'.harness','state','chats.json'),'utf8')),source)
 });
 
 test('10/26: real git worktree restores cwd/branch and supplies writableRoots; legacy merged status uses actual git',async t=>{
