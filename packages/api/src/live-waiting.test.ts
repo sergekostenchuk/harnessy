@@ -74,13 +74,7 @@ test('134 window: waiting card is above the selected chat feed, remains once, an
  view.H.pane=view.H.panes[0]!;view.functions.renderWaiting();assert.equal(view.cards.size,1);view.functions.consumeState({pane:'worker',status:'idle',waiting:null});assert.equal(view.cards.size,0);
 });
 
-test('134 window: Now uses the same decision card for every waiting place, including recovering without an attempt',()=>{
- const view=ui({page:'now'});view.H.on=true;view.H.panes[0]!.waiting=waiting;view.H.panes[1]!.waiting={...waiting,status:'recovering',recordSeqs:[],turnInstanceId:'recovering:room',actions:['finish']};view.functions.nowLive();
- assert.equal(view.cards.size,0);assert.match(view.decisions.innerHTML,/Решения владельца/);assert.ok(view.decisions.innerHTML.includes(view.functions.waitingControls(view.H.panes[0],waiting,view.H.project)));
- assert.equal(view.decisions.innerHTML.match(/data-attempt-action="retry"/g)?.length,1);assert.equal(view.decisions.innerHTML.match(/data-attempt-action="skip"/g)?.length,1);assert.equal(view.decisions.innerHTML.match(/data-attempt-action="finish"/g)?.length,1);assert.match(view.decisions.innerHTML,/Завершить восстановление/);assert.match(view.status.innerHTML,/2 ждут вас/);
- view.functions.consumeState({pane:'worker',status:'idle',waiting:null});assert.doesNotMatch(view.decisions.innerHTML,/data-attempt-pane="worker"/);assert.match(view.decisions.innerHTML,/data-attempt-pane="room"/);
- view.functions.consumeState({pane:'room',status:'idle',waiting:null});assert.doesNotMatch(view.decisions.innerHTML,/data-attempt-action/);assert.match(view.status.innerHTML,/никто не ждёт/);
-});
+// TS-15c: Now's waiting cases moved to now-ui.test.ts (real sketch DOM + HTTP snapshots).
 
 for(const page of ['new','art','mem'])test('134 window: waiting on '+page+' does not create an unrelated floating decision card',()=>{
  const view=ui({page});view.H.panes[0]!.waiting=waiting;view.functions.showWaiting(view.H.panes[0],waiting,view.H.project);view.functions.renderWaiting();assert.equal(view.cards.size,0);
@@ -109,7 +103,7 @@ test('97 window: central API refusal opens the door, delayed response of another
  view.sandbox.fetch=async()=>({json:async()=>({ok:false,code:'restore_failed',project:'/project-b',error:'назначение не восстановлено'})}) as unknown as Awaited<ReturnType<typeof view.sandbox.fetch>>;await view.functions.api('/api/chat',{pane:'worker',message:'текст'});assert.match(view.cards.get('live-waiting')!.innerHTML,/Повторить восстановление проекта/);
 });
 
-for(const legacy of [false,true])for(const page of ['chat','now'])for(const action of ['retry','skip'])test('134: cold '+page+' resolves an uncertain first room turn through '+action+' and keeps its decision after reopening'+(legacy?' after recreating a missing chat':' with an analytic turn'),async t=>{
+for(const legacy of [false,true])for(const page of ['chat'])for(const action of ['retry','skip'])test('134: cold '+page+' resolves an uncertain first room turn through '+action+' and keeps its decision after reopening'+(legacy?' after recreating a missing chat':' with an analytic turn'),async t=>{
  const h=await fixture(t,{seats:'{}'});await call(h.api,'/api/room',{body:{model:'w1',folder:false}});
  h.provider.onRun=async(_seat,_text,ctx)=>{ctx.modelStarted?.();throw new ProviderError('transport_lost','first room result unknown')};
  assert.equal((await call(h.api,'/api/chat',{body:{pane:'room',message:'first question'}})).status,200);await h.runtime.idle();assert.equal(h.provider.calls.length,1);const chatsPath=h.runtime.project.state.chatsPath;await h.api.close();
@@ -128,7 +122,7 @@ for(const legacy of [false,true])for(const page of ['chat','now'])for(const acti
  const reopened=ui();reopened.H.on=true;reopened.functions.applyStatus((await call(api,'/api/status')).body);reopened.sandbox.fetch=view.sandbox.fetch;await reopened.functions.loadChat();assert.equal(reopened.cards.size,0);assert.equal(reopened.S.chat.filter(m=>m.text===note).length,1);
 });
 
-for(const page of ['chat','now'])test('134: '+page+' finishes a saved response without another model call and reopens its decision note',async t=>{
+for(const page of ['chat'])test('134: '+page+' finishes a saved response without another model call and reopens its decision note',async t=>{
  const h=await fixture(t,{actions:{...completedActions,async afterTurn(){throw Error('local effects failed')}}});
  assert.equal((await call(h.api,'/api/chat',{body:{pane:'worker',message:'сохрани ответ'}})).status,200);await h.runtime.idle();
  const status=await call(h.api,'/api/status'),pane=status.body.panes.find((p:{id:string})=>p.id==='worker');assert.equal(pane.waiting.status,'recovering');assert.deepEqual(pane.waiting.actions,['finish']);const attemptId=pane.waiting.turnInstanceId;

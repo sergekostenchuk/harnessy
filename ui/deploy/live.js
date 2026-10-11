@@ -37,7 +37,7 @@
 
   // ── «Сейчас»: решение принимается кнопкой в строке или в раскрытой карточке
   let curD=null;
-  function applyNow(){ if(PAGE!=='now') return; const n=waiting().length;
+  function applyNow(){ if(PAGE!=='now') return;if(H.on){nowDraw();return} const n=waiting().length;
     document.querySelectorAll('.li[data-d]').forEach(li=>{ const r=S.dec[li.dataset.d], view=(li.closest('.view')||{}).id; li.classList.toggle('live-done',!!r);
       const btn=li.querySelector('.btn'); if(btn){ if(btn.dataset.label===undefined){ btn.dataset.label=btn.textContent.trim(); btn.dataset.p=btn.classList.contains('p')?'1':''; btn.style.cursor='pointer'; }
         btn.textContent=r?'✓ '+r.result:btn.dataset.label; btn.classList.toggle('ghost',!!r); btn.classList.toggle('p',!r&&btn.dataset.p==='1'); btn.title=r?'Нажмите, чтобы вернуть в очередь':''; }
@@ -48,7 +48,7 @@
   function refresh(){ badges(); applyNow(); hooks.forEach(f=>f()); }
   function resolve(d,label){ const prev=S.dec[d], later=/отлож/i.test(label); S.dec[d]={state:later?'later':'done',result:label,at:now()}; save(); log('решение',DEC[d]+' → '+label); refresh();
     toast('Записано: <b>'+esc(label)+'</b>',()=>{ if(prev) S.dec[d]=prev; else delete S.dec[d]; save(); log('решение','Отменено: '+DEC[d]); refresh(); }); }
-  document.addEventListener('click',e=>{ if(PAGE!=='now') return; const li=e.target.closest('.li[data-d]'); if(li) curD=li.dataset.d;
+  document.addEventListener('click',e=>{ if(PAGE!=='now'||H.on) return; const li=e.target.closest('.li[data-d]'); if(li) curD=li.dataset.d;
     const b=e.target.closest('.btn'); if(!b) return;
     if(li&&li.contains(b)){ e.stopPropagation(); e.preventDefault(); const d=li.dataset.d; if(!DEC[d]) return;
       if(S.dec[d]){ delete S.dec[d]; save(); log('решение','Возвращено в очередь: '+DEC[d]); refresh(); toast('Возвращено в очередь'); } else resolve(d,b.dataset.label||b.textContent.trim()); return; }
@@ -1484,24 +1484,94 @@
     const tf=e.target.closest('[data-jthread]'); if(tf){ e.stopPropagation(); JR.thread=tf.dataset.jthread||null; if(window.HX&&HX.close) HX.close(); journalDraw(); return; }
     const mg=e.target.closest('[data-jmerge]'); if(mg){ e.stopPropagation(); if(!confirm('Слить '+mg.dataset.jmerge.slice(0,7)+' в интеграционную ветку по вердикту #'+mg.dataset.jseq+'? Движок пропустит только SHA с принятым вердиктом; корень проекта должен быть без незакоммиченных правок.')) return; mg.textContent='Сливаю…'; let r=null; try{ r=await api('/api/owner/merge',{sha:mg.dataset.jmerge,message:'слияние из окна по вердикту #'+mg.dataset.jseq}); }catch(x){} if(!r||!r.ok){ toast('Слияние не прошло: '+esc((r&&r.error)||'нет связи')); mg.textContent='Слить '+mg.dataset.jmerge.slice(0,7); return; } toast('Влито: '+esc(String(r.mergeSha||r.sha||'').slice(0,10))); if(window.HX&&HX.close) HX.close(); journalFetch(); return; }
     const li=e.target.closest('.li.jl[data-seq]'); if(li&&window.HX){ e.stopPropagation(); const r=JR.records.find(x=>String(x.seq)===li.dataset.seq); if(r){HX.open(li,jcard(r),{w:660,h:520});hydrateArtifacts();} } },true);
-  // ── «Сейчас» при подключённом движке: «Чей ход» = открытые карточки подтверждений (SSE approval/approvalResolved, при подключении движок шлёт открытые), «Разрешить/Отказать» → /api/approve
-  const NOW={cards:new Map(),es:null};
-  function nowDraw(){ const lst=document.querySelector('#v-turn .lst'); if(!lst) return; const cards=[...NOW.cards.values()],pending=(H.panes||[]).filter(p=>p.waiting),total=cards.length+pending.length;
-    const head='<div class="li head"><span>кто просит</span><span>что</span><span>ждёт</span><span>главное действие</span><span></span></div>';
-    lst.innerHTML=head+(cards.length?cards.map(c=>'<div class="li" data-ap="'+esc(c.id)+'" data-ap-pane="'+esc(c.pane)+'"><span><span class="o need"></span>&nbsp; '+esc(who(c.pane))+'</span><div><b>'+esc(c.title||'подтверждение')+'</b><small>'+esc((c.detail||'').slice(0,160))+'</small></div><span class="m">с '+esc(c.since)+'</span><span><span class="btn sm p" data-ap-decision="allow">Разрешить</span> <span class="btn sm ghost" data-ap-decision="deny">Отказать</span></span><span></span></div>').join(''):'<div class="empty">'+(pending.length?'Итоги ходов ждут вашего решения во вкладке «Решения».':'Сейчас вас никто не ждёт: открытых карточек подтверждения нет. Вопросы и решения ролей — в журнале линии (экран «Журнал»).')+'</div>');
-    document.querySelectorAll('#v-turn .nums b.acc, #v-away .nums b.acc').forEach(b=>b.textContent=total);
-    document.querySelectorAll('#v-turn .nums b, #v-away .nums b, #v-week .nums b').forEach(b=>{ if(!b.classList.contains('acc')) b.textContent='—'; });   // прочие цифры экрана — демо, движок их не отдаёт
-    document.querySelectorAll('#v-week .chip').forEach(c=>{ const box=c.parentElement; if(box&&!box.dataset.live){ box.dataset.live='1'; box.innerHTML='<span class="mono">недельные счётчики появятся из журнала линии</span>'; } });
-    const decisions=document.querySelector('#v-week .lst');if(decisions)decisions.innerHTML='<div class="li head">Решения владельца</div>'+(pending.length?pending.map(p=>waitingControls(p,p.waiting,H.project)).join(''):'<div class="empty">Решений об итогах ходов пока нет.</div>');
-    const away=document.querySelector('#v-away .lst');if(away&&!away.dataset.live){away.dataset.live='1';away.innerHTML='<div class="empty">События линии — в журнале (экран «Журнал»), карточки подтверждений — во вкладке «Чей ход».</div>';}
-    const st=document.querySelector('.frame .top .st'); if(st) st.innerHTML='<i'+(total?' style="background:var(--accent)"':'')+'></i>'+(total?total+' '+plural(total)+' вас':'никто не ждёт')+' · движок'; }
-  function nowLive(){ if(!H.on||NOW.es) return; NOW.es=subscribeLiveEvents(); nowDraw();
-    NOW.es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='teamProposals'&&ev.project===H.project){void proposalsFetch();void knowledgeFetch();}if(ev.type==='approval'){ NOW.cards.set(ev.pane+'|'+ev.id,{pane:ev.pane,id:ev.id,title:ev.title,detail:ev.detail,since:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}); nowDraw(); }
-      else if(ev.type==='approvalResolved'){ NOW.cards.delete(ev.pane+'|'+ev.id); nowDraw(); }else if(ev.type==='state')consumeState(ev); };
-    NOW.es.onopen=async()=>{await refreshStatus();await proposalsFetch()};
-    NOW.es.onerror=()=>{ const st=document.querySelector('.frame .top .st'); if(st) st.innerHTML='<i></i>связь потеряна · переподключение…'; }; syncLiveEvents(); }
-  document.addEventListener('click',async e=>{ const b=e.target.closest('[data-ap-decision]'); if(!b||PAGE!=='now'||!H.on) return; e.preventDefault(); e.stopPropagation(); const li=b.closest('[data-ap]'); if(!li) return;
-    let r=null; try{ r=await api('/api/approve',{pane:li.dataset.apPane,id:li.dataset.ap,decision:b.dataset.apDecision}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; } toast(b.dataset.apDecision==='allow'?'Разрешено':'Отказано'); NOW.cards.delete(li.dataset.apPane+'|'+li.dataset.ap); nowDraw(); },true);
+  // ── «Сейчас» при подключённом движке: TS-15c, HTTP status + journal; SSE only invalidates the confirmed project.
+  const NOW={project:null,binding:0,generation:0,alive:true,es:null,job:null,queued:false,data:null,error:null,filter:'all',shown:100,sending:false,dialog:null};
+  const nowCurrent=(project,generation)=>NOW.alive&&H.on&&!H.snapshotOnly&&NOW.project===project&&H.project===project&&NOW.binding===(H.confirmedProjectGeneration||0)&&NOW.generation===generation;
+  const nowDate=ts=>new Date(ts).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  const nowAge=ts=>ts==null?'время начала неизвестно':Math.max(0,Math.floor((Date.now()-ts)/60000))+' мин';
+  function nowReset(){NOW.generation++;NOW.project=H.project;NOW.binding=H.confirmedProjectGeneration||0;NOW.job=null;NOW.queued=false;NOW.data=null;NOW.error=null;NOW.filter='all';NOW.shown=100;NOW.sending=false;if(NOW.dialog){if(window.HX)HX.close();NOW.dialog=null}}
+  const nowWaitingValid=w=>w===null||w&&['uncertain','recovering'].includes(w.status)&&typeof w.turnInstanceId==='string'&&w.turnInstanceId.length>0&&Array.isArray(w.recordSeqs)&&w.recordSeqs.every(n=>Number.isSafeInteger(n)&&n>0)&&(w.startedAt===null||typeof w.startedAt==='number'&&Number.isFinite(w.startedAt))&&Array.isArray(w.actions)&&w.actions.length>0&&w.actions.every(a=>['retry','skip','finish'].includes(a));
+  function nowValid(status,journal,project){return status&&status.project===project&&typeof status.halted==='boolean'&&Array.isArray(status.panes)&&status.panes.every(p=>p&&typeof p.id==='string'&&nowWaitingValid(p.waiting)&&Number.isSafeInteger(p.pendingApprovals)&&p.pendingApprovals>=0)&&Array.isArray(status.approvals)&&status.approvals.every(a=>a&&typeof a.pane==='string'&&typeof a.id==='string'&&typeof a.title==='string'&&typeof a.detail==='string')&&new Set(status.approvals.map(a=>a.pane+'\0'+a.id)).size===status.approvals.length&&status.panes.every(p=>status.approvals.filter(a=>a.pane===p.id).length===p.pendingApprovals)&&eventsValid(journal,project,{})&&journal.records.length===journal.summary.total}
+  async function nowFetch(check=true){
+    if(!NOW.alive||!H.on||H.snapshotOnly)return false;if(NOW.project!==H.project||NOW.binding!==(H.confirmedProjectGeneration||0))nowReset();
+    if(NOW.job){NOW.queued=true;return NOW.job}const project=NOW.project,generation=NOW.generation;
+    const work=async()=>{try{
+      if(check&&!await refreshStatus())throw Error('проект не подтверждён');if(!nowCurrent(project,generation))return false;
+      const status=structuredClone(H.liveStatus),journal=await api('/api/journal?limit=0');if(!nowCurrent(project,generation))return false;
+      if(!nowValid(status,journal,project))throw Error(journal&&journal.error||'некорректная форма статуса или журнала');
+      NOW.data={status,records:journal.records.slice().sort((a,b)=>b.seq-a.seq)};NOW.error=null;return true;
+    }catch(error){if(nowCurrent(project,generation))NOW.error='Не удалось прочитать «Сейчас»: '+error.message;return false}
+    finally{if(nowCurrent(project,generation)){NOW.job=null;const queued=NOW.queued;NOW.queued=false;nowDraw();if(queued)void nowFetch()}}};
+    // Schedule after job assignment, including failures before the first await.
+    NOW.job=Promise.resolve().then(work);nowDraw();return NOW.job;
+  }
+  function nowItems(){
+    if(!NOW.data)return {pending:[],resolved:[],records:[]};const {status,records}=NOW.data,bySeq=new Map(records.map(r=>[r.seq,r]));
+    const pending=status.approvals.map(a=>{const seq=/^ack:[1-9][0-9]*$/.test(a.id)?Number(a.id.slice(4)):null,r=seq&&bySeq.get(seq);return {key:'approval:'+a.pane+':'+a.id,type:'approval',pane:a.pane,requester:r?r.from:a.pane,title:a.title,detail:a.detail,ts:r?Date.parse(r.ts):null,seq:r?r.seq:null,approval:a}});
+    for(const p of status.panes)if(p.waiting)pending.push({key:'waiting:'+p.id+':'+p.waiting.turnInstanceId,type:'waiting',pane:p.id,title:'Итог хода неизвестен',detail:p.waiting.status==='recovering'?'Ответ сохранён; нужно завершить доставку':'Требуется ваше решение о повторе или пропуске',ts:p.waiting.startedAt||null,place:p,seq:null});
+    const resolutions=new Map();for(const r of records)if(Number.isSafeInteger(r.reply_to)&&(r.from==='owner'&&['answer','note','decision','ack','rejected'].includes(r.kind)||r.from==='harness'&&r.origin==='team-proposal-confirm'))if(!resolutions.has(r.reply_to))resolutions.set(r.reply_to,r);
+    const resolved=[],week=Date.now()-7*86400000;
+    for(const r of records){if(r.from!=='owner'&&r.to.includes('owner')&&['question','blocker','escalation'].includes(r.kind)){
+      if(pending.some(p=>p.seq===r.seq))continue;const answer=resolutions.get(r.seq),item={key:'record:'+r.seq,type:'record',pane:r.from,title:r.text,detail:'Запись №'+r.seq+' · '+r.kind,ts:Date.parse(r.ts),seq:r.seq,record:r,answer};
+      if(!answer)pending.push(item);else if(Date.parse(answer.ts)>=week)resolved.push(item);
+    }else if(Date.parse(r.ts)>=week&&(r.from==='owner'&&r.kind==='decision'||r.from==='harness'&&r.kind==='note'&&r.origin==='attempt'&&r.to.length===1&&r.to[0]==='owner'&&r.attempt&&typeof r.attempt.pane==='string'&&['retry','skip','finish'].includes(r.attempt.action)&&r.attempt.done===true&&r.thread==='attempt:'+r.attempt.turnInstanceId))resolved.push({key:'record:'+r.seq,type:'record',pane:r.from,title:r.text,ts:Date.parse(r.ts),seq:r.seq,record:r,answer:r});}
+    pending.sort((a,b)=>(a.ts??Infinity)-(b.ts??Infinity));resolved.sort((a,b)=>b.answer.seq-a.answer.seq);return {pending,resolved,records};
+  }
+  function nowButton(item){return '<button type="button" class="btn sm" data-now-open="'+esc(item.key)+'">Открыть решение</button>'}
+  function nowDraw(){
+    if(PAGE!=='now'||!H.on)return;const turn=document.querySelector('#v-turn .lst');if(!turn)return;
+    if(NOW.project!==H.project||NOW.binding!==(H.confirmedProjectGeneration||0))nowReset();
+    const {pending,resolved,records}=nowItems(),ready=!!NOW.data,count=ready?pending.length:'—',empty=NOW.error?'Данные не прочитаны. Повторите чтение.':'Читаю статус и журнал…';
+    const source='Текущий проект: '+(NOW.project||'ожидаю подтверждения');
+    document.querySelectorAll('#v-turn .nums .spec-block, #v-away .nums .spec-block').forEach(n=>n.remove());document.querySelectorAll('#v-turn .nums, #v-away .nums').forEach(n=>n.removeAttribute('data-spec-mock'));
+    const values=document.querySelectorAll('#v-turn .nums b');if(values.length){values[0].textContent=count;const times=pending.map(p=>p.ts).filter(t=>t!==null);values[1].textContent=!ready?'—':pending.length&&times.length===pending.length?nowAge(Math.min(...times)):pending.length?'неизвестно':'—';values[1].title=pending.some(p=>p.ts===null)?'Не у всех ожиданий известно время начала':'';values[2].textContent=ready?NOW.data.status.halted?'пауза':pending.length?'решение':NOW.data.status.panes.some(p=>p.busy)?'ход выполняется':'нет активных ходов':'—'}
+    const awayNums=document.querySelectorAll('#v-away .nums b');if(awayNums.length){awayNums[0].textContent='—';awayNums[1].textContent=count;awayNums[2].textContent='—';awayNums[2].parentElement.querySelector('small').textContent='вас не было · время неизвестно'}
+    const header='<div class="li head"><span>кто просит</span><span>что</span><span>ждёт</span><span>главное действие</span><span></span></div>';
+    turn.innerHTML=header+(ready?pending.length?pending.map(p=>'<div class="li"><span>'+esc(who(p.requester||p.pane))+'</span><div><b>'+esc(p.title.slice(0,180))+'</b><small>'+esc(p.detail||'')+'</small></div><span class="m">'+esc(nowAge(p.ts))+'</span><span>'+nowButton(p)+'</span><span class="chev">›</span></div>').join(''):'<div class="empty">Сейчас вас никто не ждёт: открытых подтверждений и вопросов владельцу нет.</div>':'<div class="empty">'+esc(empty)+'</div>');
+    const filters=document.querySelector('#v-week .filters');if(filters)filters.innerHTML=[['all','все',pending.length+resolved.length],['pending','ждут',pending.length],['resolved','решены',resolved.length]].map(([key,label,n])=>'<button class="chip'+(NOW.filter===key?' on':'')+'" data-now-filter="'+key+'" aria-pressed="'+(NOW.filter===key)+'">'+label+' · '+(ready?n:'—')+'</button>').join('')+'<button class="chip" disabled title="Движок не хранит отложенные решения">отложены · нет данных</button><span class="sp"></span><span class="mono">решены за 7 дней · открытые за всё время</span>';
+    const shown=NOW.filter==='pending'?pending:NOW.filter==='resolved'?resolved:[...pending,...resolved],decisions=document.querySelector('#v-week .lst');
+    if(decisions)decisions.innerHTML='<div class="li head"><span>вид</span><span>вопрос</span><span>источник</span><span>состояние</span><span></span></div>'+(ready?shown.length?shown.map(p=>p.type==='waiting'?'<div class="now-waiting">'+waitingControls(p.place,p.place.waiting,NOW.project)+'</div>':'<div class="li"><span class="kind">'+(p.answer?'решение':p.type==='approval'?'подтверждение':'вопрос')+'</span><div><b>'+esc(p.title.slice(0,180))+'</b><small>'+esc(p.ts===null?'время начала неизвестно':nowDate(p.ts))+'</small></div><span class="m">'+esc(p.seq?'журнал №'+p.seq:who(p.pane))+'</span><span class="m">'+(p.answer?'решено':'ждёт вас')+'</span><button class="btn sm ghost" aria-label="Открыть решение" data-now-open="'+esc(p.key)+'">›</button></div>').join(''):'<div class="empty">В этом срезе решений нет.</div>':'<div class="empty">'+esc(empty)+'</div>');
+    const recent=records.filter(r=>Date.parse(r.ts)>=Date.now()-7*86400000),away=document.querySelector('#v-away .lst');
+    if(away)away.innerHTML='<div class="now-source">Нет данных о времени вашего ухода: движок его не фиксирует. Ниже — события за последние 7 дней, новое сверху.</div><div class="li head"><span>когда</span><span>что произошло</span><span>кто</span><span>нужно от вас</span><span></span></div>'+(ready?recent.slice(0,NOW.shown).map(r=>{const item=pending.find(p=>p.seq===r.seq);return '<div class="li"><span class="m">'+esc(nowDate(r.ts))+'</span><div><b>'+esc(r.text.slice(0,180))+'</b><small>№'+r.seq+' · '+esc(r.kind)+'</small></div><span class="m">'+esc(who(r.from))+'</span><span>'+(item?nowButton(item):'запись журнала')+'</span><button class="btn sm ghost" aria-label="Открыть запись №'+r.seq+'" data-now-record="'+r.seq+'">›</button></div>'}).join('')||'<div class="empty">За последние 7 дней событий нет.</div>':'<div class="empty">'+esc(empty)+'</div>')+(recent.length>NOW.shown?'<button class="btn sm" data-now-more>Показать ещё</button>':'');
+    const idle=document.getElementById('idle');if(idle)idle.innerHTML='<div><b>Что будет, если ничего не делать</b><p>'+(ready?(NOW.data.status.halted?'Проект на паузе. ':pending.length?'Сейчас '+pending.length+' '+plural(pending.length)+' вашего решения. ':'Ожиданий владельца сейчас нет. '):'Состояние ещё не прочитано. ')+'Нет данных о времени завершения: движок не рассчитывает прогноз.</p></div><button class="btn sm" data-now-first'+(!pending.length?' disabled':'')+'>Решать по порядку</button>';
+    const note=document.querySelector('#v-turn .note-bar');if(note)note.innerHTML='<span data-now-source>'+esc(source)+'</span><button class="btn sm ghost" data-now-refresh'+(NOW.job?' disabled':'')+'>'+(NOW.job?'Читаю…':'Обновить')+'</button><span data-now-error role="status">'+esc(NOW.error?NOW.error+(ready?' · показан предыдущий снимок; действия недоступны.':''):'')+'</span>';
+    document.querySelectorAll('aside.side .nav[data-go="now"] .b').forEach(b=>{b.textContent=count;b.style.display=ready&&!count?'none':''});
+    const st=document.querySelector('.frame .top .st');if(st)st.textContent=ready?(count?count+' '+plural(count)+' вас':'никто не ждёт')+' · журнал и статус':empty;
+    const spec=document.querySelector('.spec-banner');if(spec)spec.textContent='Частично · решения и события — данные проекта. Нет данных о времени ухода, отложенных решениях и прогнозе завершения.';
+    document.querySelectorAll('[data-ap-decision]').forEach(b=>b.disabled=!!NOW.error||NOW.sending||!NOW.alive);
+    if(NOW.error||!NOW.alive)document.querySelectorAll('[data-attempt-action], [data-now-open], [data-now-record], [data-now-first]').forEach(b=>b.disabled=true);
+    if(NOW.dialog&&!NOW.sending){const item=[...pending,...resolved].find(p=>p.key===NOW.dialog.key);if(NOW.dialog.type!=='record'&&!item){if(window.HX)HX.close();NOW.dialog=null}}
+  }
+  function nowOpen(element,item){
+    if(!item||!NOW.data||NOW.error||!nowCurrent(NOW.project,NOW.generation))return;NOW.dialog={key:item.key,type:item.type,project:NOW.project,generation:NOW.generation};
+    const header='<div class="from">решение владельца · '+esc(NOW.project)+'</div><h3>'+esc(item.title)+'</h3>';
+    const actions=item.type==='approval'?'<div class="act"><button class="btn p" data-ap-decision="allow">Разрешить</button><button class="btn ghost" data-ap-decision="deny">Отказать</button></div>':'';
+    const body=item.type==='waiting'?waitingControls(item.place,item.place.waiting,NOW.project):'<p>'+esc(item.ts==null?'время начала неизвестно':nowDate(item.ts))+'</p>'+md(item.record?item.record.text:item.detail||'')+(item.answer&&item.answer!==item.record?'<h4>Ответ · №'+item.answer.seq+'</h4>'+md(item.answer.text):'');
+    if(window.HX)HX.open(element,header+body+actions+'<p data-now-action-error role="status"></p><a class="btn sm ghost" href="21-journal.html">Журнал проекта →</a>',{w:660,h:530,hide:false});
+  }
+  function nowLive(){if(PAGE!=='now'||!H.on||H.snapshotOnly||!NOW.alive)return;if(!NOW.es){NOW.es=subscribeLiveEvents();NOW.es.onmessage=e=>{let ev;try{ev=JSON.parse(e.data)}catch{return}if(ev.type==='teamProposals'&&ev.project===H.project){void proposalsFetch();if(typeof knowledgeFetch==='function')void knowledgeFetch()}if(['approval','approvalResolved','state','sent','done','note','error','teamProposals','owner','queued'].includes(ev.type))void nowFetch()};NOW.es.onopen=()=>{void nowFetch();if(typeof proposalsFetch==='function')void proposalsFetch()};NOW.es.onerror=()=>{NOW.error='Связь потеряна. Повторите чтение.';nowDraw()};syncLiveEvents()}return nowFetch(false)}
+  // TS-15c Now lifecycle.
+  if(PAGE==='now'){
+    addEventListener('live:status',()=>{if(!H.on||H.snapshotOnly||!NOW.alive)return;if(NOW.project!==H.project||NOW.binding!==(H.confirmedProjectGeneration||0)||!NOW.job)void nowLive()});
+    addEventListener('pagehide',()=>{NOW.alive=false;if(NOW.es)NOW.es.close();NOW.es=null;nowReset();nowDraw()});
+    addEventListener('pageshow',e=>{if(e.persisted){NOW.alive=true;nowReset()}});
+  }
+  document.addEventListener('click',async e=>{
+    if(PAGE!=='now'||!H.on)return;const b=e.target.closest('[data-now-open], [data-now-record], [data-now-filter], [data-now-refresh], [data-now-more], [data-now-first], [data-ap-decision], #idle, [data-passport]');if(!b)return;
+    e.preventDefault();e.stopImmediatePropagation();if(b.disabled)return;
+    if(b.hasAttribute('data-now-refresh'))return nowFetch();if(b.hasAttribute('data-now-filter')){NOW.filter=b.dataset.nowFilter;nowDraw();return}if(b.hasAttribute('data-now-more')){NOW.shown+=100;nowDraw();return}
+    const items=nowItems();if(b.hasAttribute('data-now-open')){nowOpen(b,[...items.pending,...items.resolved].find(p=>p.key===b.dataset.nowOpen));return}
+    if(b.hasAttribute('data-now-record')){const r=items.records.find(r=>String(r.seq)===b.dataset.nowRecord);if(r)nowOpen(b,{key:'record:'+r.seq,type:'record',title:'Запись №'+r.seq+' · '+r.kind,ts:Date.parse(r.ts),record:r});return}
+    if(b.hasAttribute('data-now-first')){nowOpen(b,items.pending[0]);return}
+    if(b.hasAttribute('data-passport')){if(window.HX)HX.open(b,'<h3>Сейчас</h3><p>Источник: статус и журнал текущего проекта. Подтверждения относятся к месту и конкретному вопросу; итог неизвестного хода решается отдельно.</p><p>История — за последние 7 дней. Время ухода, отложенные решения и прогноз завершения движок не хранит.</p>',{w:600,h:400,hide:false});return}
+    if(!b.hasAttribute('data-ap-decision')||NOW.sending||NOW.error)return;
+    const dialog=NOW.dialog,item=dialog&&items.pending.find(p=>p.key===dialog.key);if(!dialog||!item||item.type!=='approval'||!nowCurrent(dialog.project,dialog.generation))return;
+    NOW.sending=true;document.querySelectorAll('[data-ap-decision]').forEach(n=>n.disabled=true);
+    try{const result=await api('/api/approve',{project:dialog.project,pane:item.approval.pane,id:item.approval.id,decision:b.dataset.apDecision});if(!nowCurrent(dialog.project,dialog.generation))return;if(!result||!result.ok)throw Error(result&&result.error||'нет связи');if(window.HX)HX.close();NOW.dialog=null;await nowFetch()}
+    catch(error){if(nowCurrent(dialog.project,dialog.generation)){const box=document.querySelector('[data-now-action-error]');if(box)box.textContent='Решение не принято: '+error.message;toast('Решение не принято: '+esc(error.message))}}
+    finally{if(nowCurrent(dialog.project,dialog.generation)){NOW.sending=false;document.querySelectorAll('[data-ap-decision]').forEach(n=>n.disabled=!!NOW.error)}}
+  },true);
+  // End TS-15c Now.
   // TS-09a.1: one lifecycle for all prototype pages.
   function suspendPage(){pageGeneration++;PS.alive=false;PS.generation++;JR.epoch++;JR.loadingMore=false}
   async function resumePage(){const generation=++pageGeneration;leftPage=false;invalidateBinding();if(window.HARNESS_BOOT){window.HARNESS_BOOT.invalidate();window.HARNESS_BOOT.preview()}
