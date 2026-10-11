@@ -9,7 +9,7 @@ const q=(version=1)=>({proposalId:'p'+'a'.repeat(24),version,confirmed:false,sea
 function ui(fetcher:(path:string,body?:any)=>Promise<any>,page='chat'){
  const d=dom('<div class="frame cur"><main class="main"><div class="feed">Разговор остаётся</div></main></div>'),H:any={on:true,project:'/a',snapshotOnly:false},requests:any[]=[],toasts:string[]=[];
  const context:any={H,PAGE:page,document:d.document,leftPage:false,addEventListener:d.window.addEventListener.bind(d.window),toast:(s:string)=>toasts.push(s),esc:(v:any)=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),api:async(path:string,body?:any)=>{requests.push({path,body});return fetcher(path,body)}};
- runInContext(block+'globalThis.proposals={fetch:proposalsFetch,sync:proposalsSync,reset:proposalsReset,state:TP};',createContext(context));
+ runInContext(block+'globalThis.proposals={fetch:proposalsFetch,sync:proposalsSync,reset:proposalsReset,show:showTeamProposal,state:TP};',createContext(context));
  const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};return {...d,H,context,requests,toasts,find,f:context.proposals};
 }
 for(const page of ['chat','now'])test('156 UI '+page+': displayed exact proposal confirmed through HTTP; fake transcript yes does not authorize',async t=>{
@@ -32,12 +32,12 @@ test('156 UI: notification during read schedules another read; incomplete snapsh
  const bad=ui(async()=>({ok:true,project:'/a',proposals:[{...q(),version:undefined}]}));await bad.f.fetch();assert.equal(bad.document.querySelector('[data-team-confirm]'),null);assert.match(bad.find('#live-team-proposals').textContent,/Не удалось прочитать/);
 });
 
-for(const page of ['chat','now'])test('156 UI '+page+': stream notifications and reconnect refresh the proposal cards',async()=>{
+for(const page of ['chat','now','new'])test('156 UI '+page+': stream notifications and reconnect refresh the proposal cards',async()=>{
  let version=1;const v=ui(async path=>path==='/api/status'?{project:'/a',panes:[]}:{ok:true,project:'/a',proposals:[q(version)]},page),streams:any[]=[];
  const part=(a:string,b:string)=>live.slice(live.indexOf(a),live.indexOf(b,live.indexOf(a)));
  Object.assign(v.context,{window:v.context,location:{pathname:''},S:{ui:{pane:'room'}},NOW:{es:null,cards:new Map()},EventSource:class{onopen:any;onmessage:any;onerror:any;constructor(){streams.push(this)}close(){}},nowDraw(){},hStatus(){},hEvent(){},consumeState(){},loadChat:async()=>{},refreshChats:async()=>{},refreshStatus:async()=>{},applyStatus(st:any){v.H.project=st.project;v.H.panes=st.panes}});
  runInContext(part('  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part('  function nowLive(){',"  document.addEventListener('click',async e=>{ const b=e.target.closest('[data-ap-decision]')")+part('  async function hConnect(){','  // ── чат: настоящее поле ввода')+'globalThis.connect=hConnect;',v.context);
- await v.context.connect();assert.equal(streams.length,1);await streams[0].onopen();await until(()=>v.f.state.data[0]?.version===1);
+ await v.context.connect();assert.equal(streams.length,1);await streams[0].onopen();await until(()=>v.f.state.data[0]?.version===1);if(page==='new')v.f.show(q().proposalId);
  version=2;streams[0].onmessage({data:JSON.stringify({type:'teamProposals',project:'/a'})});await until(()=>v.f.state.data[0]?.version===2);assert.equal(v.find('[data-team-confirm]').dataset.teamVersion,'2');
  streams[0].onerror();version=3;await streams[0].onopen();await until(()=>v.f.state.data[0]?.version===3);assert.equal(v.find('[data-team-confirm]').dataset.teamVersion,'3');assert.equal(streams.length,1);
  v.context.leftPage=true;await v.window.emit('pagehide');const count=v.requests.length;streams[0].onmessage({data:JSON.stringify({type:'teamProposals',project:'/a'})});assert.equal(v.requests.length,count);assert.equal(v.document.querySelector('[data-team-confirm]'),null);

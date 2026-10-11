@@ -148,3 +148,41 @@ test('156 round 3: legacy proposal without a turn can be read but cannot absorb 
  const current=JSON.parse(readFileSync(path,'utf8'));current.proposals[1].turnInstanceId='forged-turn';writeFileSync(path,JSON.stringify(current));
  assert.equal((await call(h.api,'/api/seats/proposals')).body.code,'proposal_invalid');
 });
+
+test('241/242: owner creates one proposed row twice, changes kind without changing label/sid, then orchestrator creates the rest',async t=>{
+ const h=await setup(t),q=await h.propose({seats:[member('Прокурор'),member('Судья')]}),ref={project:h.dir,proposalId:q.proposalId,version:q.version},s=q.proposal.seats[0];
+ const results=await Promise.all([0,1].map(()=>call(h.api,'/api/seats/owner',{body:{...ref,seatIndex:0,kind:'reviewer'}})));
+ assert.ok(results.every(r=>r.status===200),JSON.stringify(results));assert.equal(results.filter(r=>!r.body.already).length,1);assert.equal(results[0]!.body.pane,s.sid);
+ const pane=h.runtime.registry.get(s.sid)!;assert.equal(pane.kind,'reviewer');assert.equal(pane.label,'Прокурор');assert.equal(pane.mode,'read');assert.equal(pane.model,'w1');
+ let stored=(await call(h.api,'/api/seats/proposals')).body.proposals[0];assert.deepEqual(stored.seats,q.proposal.seats);assert.deepEqual(stored.ownerSeats,{'0':{kind:'reviewer',created:true}});assert.equal(stored.confirmed,false);assert.equal(h.runtime.registry.get(q.proposal.seats[1].sid),null);
+ assert.equal((await h.post('/api/seats',{proposalId:q.proposalId,version:1})).body.code,'proposal_unconfirmed');
+ assert.equal((await call(h.api,'/api/seats/owner',{body:{...ref,seatIndex:0,kind:'worker'}})).body.code,'proposal_seat_locked');
+ assert.equal((await h.post('/api/seats/propose',{proposalId:q.proposalId,version:1,seats:[member('Замена')]})).body.code,'proposal_stale');
+ await call(h.api,'/api/seats/confirm',{body:ref});const rest=await h.post('/api/seats',{proposalId:q.proposalId,version:1});assert.equal(rest.status,200,rest.text);await until(()=>h.provider.calls.filter(c=>c.seat.id===s.sid).length===1);
+ assert.equal(h.runtime.registry.ids.length,4);assert.equal(h.runtime.registry.get(s.sid)!.kind,'reviewer');assert.equal(h.runtime.project.state.chats.active[s.sid],s.operationId);
+ assert.equal(readFileSync(join(h.dir,'.harness/roles/seats',s.sid+'.md'),'utf8'),member().intro);assert.equal(h.runtime.journal.read({limit:0}).filter(r=>r.origin==='onboarding'&&r.to.includes(s.sid)).length,1);
+});
+
+test('241 owner door: agent identity, missing/foreign binding, unknown kind and changed version fail without granting rights',async t=>{
+ const h=await setup(t),q=await h.propose(),base={project:h.dir,proposalId:q.proposalId,version:1,seatIndex:0};
+ assert.equal((await h.post('/api/seats/owner',base)).body.code,'policy_denied');
+ for(const body of [{...base,from:'owner'},{...base,project:undefined},{...base,project:'/foreign'},{...base,seatIndex:-1},{...base,seatIndex:1},{...base,seatIndex:0.5},{...base,seatIndex:undefined},{...base,kind:'Судья'},{...base,kind:null},{...base,version:2}])assert.equal((await call(h.api,'/api/seats/owner',{body})).body.ok,false,JSON.stringify(body));
+ assert.equal((await call(h.api,'/api/seats/owner',{body:{...base,kind:'orchestrator'}})).body.code,'role_taken');
+ assert.equal(h.runtime.registry.ids.length,2);assert.equal((await call(h.api,'/api/seats/proposals')).body.proposals[0].ownerSeats,undefined);
+ const result=await call(h.api,'/api/seats/owner',{body:{...base,label:'orchestrator',mode:'all'}});assert.equal(result.status,200);assert.equal(h.runtime.registry.get(result.body.pane)!.kind,'worker');assert.equal(h.runtime.registry.get(result.body.pane)!.mode,'read');
+});
+
+for(const cut of ['intent','assignment','receipt'])test('241 crash after '+cut+': one owner row survives restart without a second intro or another role',async t=>{
+ let armed=false;const io:StateIO={...diskIO,write(path,text){diskIO.write(path,text);if(!armed)return;const hit=path.endsWith('team-proposals.json')&&JSON.parse(text).proposals.some((q:any)=>q.ownerSeats?.[0]?.created===(cut==='receipt'))&&cut!=='assignment'||cut==='assignment'&&path.endsWith('seat-materialization.json')&&JSON.parse(text).some((s:any)=>s.stages.chat);if(hit){armed=false;throw Error('after durable '+cut)}}};
+ const h=await setup(t,{deps:{stateIO:io}}),q=await h.propose({seats:[member('Новый класс'),member('Остальные')]}),body={project:h.dir,proposalId:q.proposalId,version:1,seatIndex:0,kind:'researcher'};armed=true;
+ assert.equal((await call(h.api,'/api/seats/owner',{body})).body.ok,false);h.end.resolve({text:'done',sessionId:null});await h.run;await h.runtime.close();
+ const provider=new FakeProvider(),next=await createRuntime({...h.deps,providers:{claude:provider,codex:h.codex}},completedActions);t.after(()=>next.close());await next.idle();
+ const result=await next.createOwnerSeat(body,OWNER);assert.equal(result.pane,q.proposal.seats[0].sid);assert.equal(next.registry.get(result.pane)!.kind,'researcher');assert.equal(next.registry.get(q.proposal.seats[1].sid),null);assert.equal(next.journal.read({limit:0}).filter(r=>r.origin==='onboarding'&&r.to.includes(result.pane)).length,1);assert.equal((await next.teamProposals(OWNER)).proposals[0]!.ownerSeats![0]!.created,true);
+});
+
+test('241 ОКНА: owner intent snapshots kind and rechecks project after waiting on the lock',async t=>{
+ const h=await setup(t),q=await h.propose(),entered=deferred(),go=deferred(),held=withPathLock(h.dir,async()=>{entered.resolve();await go.promise});await entered.promise;
+ const input={project:h.dir,proposalId:q.proposalId,version:1,seatIndex:0,kind:'tester'},creating=h.runtime.createOwnerSeat(input,OWNER);input.kind='orchestrator';go.resolve();await held;const result=await creating;assert.equal(h.runtime.registry.get(result.pane)!.kind,'tester');
+ h.end.resolve({text:'done',sessionId:null});await h.run;await h.runtime.idle();const entered2=deferred(),go2=deferred(),held2=withPathLock(h.dir,async()=>{entered2.resolve();await go2.promise});await entered2.promise;
+ const pending=h.runtime.createOwnerSeat({...input,kind:'tester'},OWNER),rejected=assert.rejects(pending,(e:any)=>e.code==='project_changed');const next=join(h.dir,'next');mkdirSync(next);await h.runtime.projectSet(next,{},OWNER);go2.resolve();await held2;await rejected;assert.equal(h.runtime.registry.ids.length,1);
+});

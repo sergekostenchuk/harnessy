@@ -529,3 +529,13 @@ aside.side.ps .limits:focus-visible { outline:2px solid var(--accent); outline-o
 .sp-limit .ticks.bad i.on { background:var(--bad-fill); }
 .sp-limit .sp-value b.bad { color:var(--bad); }
 .sp-limit-extra { color:var(--ink2); font-size:12px; }
+/* Proposed role: a free label with an explicit, finite authority class. */
+.team-proposals{flex:none;max-height:45vh;overflow:auto;margin:12px 20px;padding:12px;border:1px solid var(--line);border-radius:12px}
+.proposal-seat{padding:12px 0;border-top:1px solid var(--line)}
+.proposal-seat p,.cx-proposal-role p{margin:6px 0;color:var(--ink2);overflow-wrap:anywhere}
+.proposal-seat select{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+.proposal-seat pre{white-space:pre-wrap;font:inherit;overflow-wrap:anywhere}
+.proposal-seat details{margin:10px 0}.proposal-seat .dim{font-size:12px}
+.cx-proposal-role{padding:10px 12px;border-bottom:1px solid var(--line)}
+.cx-proposal-role small{display:block;margin-top:4px;color:var(--ink2)}
+html[data-page="new"] .team-proposals{position:absolute;inset:20px;z-index:80;margin:0;max-height:calc(100% - 40px);background:var(--panel);box-shadow:0 12px 40px #0008}

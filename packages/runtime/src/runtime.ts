@@ -1,5 +1,5 @@
 import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
-import {propose,proposals,confirm,create,restoreProposals,type ProposalInput,type ProposalRef} from './proposals.ts';
+import {propose,proposals,confirm,create,createOwnerSeat,restoreProposals,type ProposalInput,type ProposalRef,type OwnerSeatInput} from './proposals.ts';
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
 import {isAbsolute} from 'node:path';
 import {expandUser,initProject,projectsRoot} from '@harnessy/projects';
@@ -258,6 +258,7 @@ export class Runtime {
  createSeats(scope:TurnScope,input:ProposalRef){return this.scoped(scope,(_p,ctx)=>create(this,ctx,input))}
  teamProposals(initiator:Initiator){return proposals(this,initiator)}
  confirmTeam(input:ProposalRef,initiator:Initiator){return confirm(this,input,initiator)}
+ createOwnerSeat(input:OwnerSeatInput,initiator:Initiator){return createOwnerSeat(this,input,initiator)}
  toolsFor(scope:TurnScope):PeerTools {
  this.scopes.assert(scope);const p=this.project,turn=p.active.get(scope.seatId);if(!turn||turn.scope!==scope)throw new RuntimeError('turn_ended','ход не активен',403);
  return {
