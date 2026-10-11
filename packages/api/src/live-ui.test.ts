@@ -24,7 +24,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
  const sandbox:Data={H,S,document,window:{},localStorage:{getItem:(key:string)=>storage.get(key)??null,setItem:(key:string,value:string)=>storage.set(key,value)},location:{pathname:'/21-journal.html',href:''},PAGE:'chat',
   fetch:async(path:string,opts?:{body:string})=>{const body=opts?.body?JSON.parse(opts.body):undefined;requests.push({path,body});return {json:async()=>options.fetch?options.fetch(path,body):({ok:true,pane:{...H.pane,...body}})}},
   toast:(text:string)=>toasts.push(text),esc:(value:unknown)=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),paneName:(p:Data)=>p.label,save(){},log(){},render(){rendered++},cols:()=>[column],drawLive(){},scrollEnd(){},md:(text:string)=>text,toolLine:()=>'',hStatus(){},now:()=>1791500000125,hhmm:()=>'',costLine:()=>'',actsLine:()=>'',ckBox:()=>'',onboardOnce:async()=>{},LOADED:null,
-  showWaiting(){},showRestore(){},setTimeout(){},clearInterval(){},setInterval(){return 1},addEventListener(type:string,fn:()=>void){if(type==='pagehide')pagehide.push(fn)},dispatchEvent(){},CustomEvent:class {},confirm:()=>false,sideChats(){},
+  showWaiting(){},showRestore(){},renderWaiting(){},loadAttemptNotes:async()=>{},setTimeout(){},clearInterval(){},setInterval(){return 1},addEventListener(type:string,fn:()=>void){if(type==='pagehide')pagehide.push(fn)},dispatchEvent(){},CustomEvent:class {},confirm:()=>false,sideChats(){},
   refreshStatus:async()=>{},refreshChats:async()=>{},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)||null},close(){},renderAll(){},draw(){},base:()=>'',modeLabel:(s:string)=>s,modelLabel:(s:string)=>s,ROOM:'room',isRoom:(p:Data)=>p.id==='room',ico:()=>'',pl:(n:number)=>String(n)};
  const context=createContext(sandbox);
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+
@@ -106,6 +106,15 @@ test('81/109: busy room uses pane setting and explains next-turn application',as
 });
 
 const directSeats='  worker: {role: executor, vendor: claude, model: w1, mode: read}\n  orchestrator: {role: orchestrator, vendor: claude, model: w1, mode: read}';
+for(const place of ['worker','room'])for(const page of ['chat','new'])test('135: '+place+' composer on '+page+' uses the current project instead of persisted noFolder',()=>{
+ const view=ui();view.H.project='/projects/chat-test';view.H.noProject=false;view.H.pane=view.H.panes.find((p:Data)=>p.id===place);view.S.ui.pane=place;view.S.cx={noFolder:true,att:[],modes:{}};view.sandbox.PAGE=page;
+ view.sandbox.svg=()=>'';view.sandbox.seats=()=>view.H.panes.filter((p:Data)=>p.id!=='room');
+ const top={innerHTML:''},bot={innerHTML:''},att={innerHTML:'',style:{}},box={__cx:{ta:view.ta},previousElementSibling:top,querySelector:(s:string)=>s==='.cx-bot'?bot:s==='.cx-att'?att:null};
+ runInContext('(function(){const S=()=>globalState,seat=()=>H.pane,cx=()=>globalState.cx;'+cx.match(/const base=[^;]+;/)![0]+part(cx,'  const chip=','  // ── строка:')+part(cx,'  function render(box)','  function setBusy(')+'globalThis.renderCX=render;})();',view.context);
+ const render=(view.context as Data).renderCX;render(box);assert.match(top.innerHTML,/data-cx="folder"[^>]*[\s\S]*?<b>chat-test<\/b>/);assert.doesNotMatch(top.innerHTML,/>Без проекта</);assert.equal(view.S.cx.noFolder,false);
+ view.H.project='/projects/next';render(box);assert.match(top.innerHTML,/<b>next<\/b>/);assert.doesNotMatch(top.innerHTML,/<b>chat-test<\/b>/);
+ view.H.noProject=true;view.S.cx.noFolder=false;render(box);assert.match(top.innerHTML,/<b>Без проекта<\/b>/);assert.equal(view.S.cx.noFolder,true);
+});
 function withOrchestrator(view:ReturnType<typeof ui>){view.H.panes[0].role='executor';view.H.panes.push({id:'orchestrator',label:'оркестратор',role:'orchestrator',vendor:'claude',model:'w1'});view.H.active.orchestrator='c-orch'}
 for(const change of ['pane','project','chat','away-back','pagehide'])test('TS-08 r2/1: orchestrator card retains its target through delayed history and cancels on '+change,async t=>{
  const h=await fixture(t,{seats:directSeats}),history=deferred<Data>(),view=ui({fetch:async(path,body)=>path==='/api/chats/c-orch'?history.promise:(await call(h.api,path,{...(body?{body}:{})})).body});
