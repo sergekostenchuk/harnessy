@@ -21,7 +21,7 @@ Python-движок удалён из рабочего дерева; его ис
 эскизы `ui/sketches`, оболочка `ui/desktop` (Electron, preload с выбором папки). TypeScript-ядро сохраняет прежнюю статику
 (`/sketches`, без кэша, версии ресурсов) и тот же HTTP/SSE-контракт (`/api/status`, `/api/chat`, `/api/events`, `/api/handoff`,
 `/api/assign`, `/api/seats`, `/api/projects`, `/api/room/move`, `/api/context`, `/api/settings`, `/api/connections`, `/api/halt`,
-`/api/interrupt` и остальные маршруты исторического сервера). Корневое окно перенесено без изменения в `ui/legacy/index.html`; Electron запускает движок через `ui/desktop/run.sh`, сама оболочка запускается через `ui/desktop/electron.sh`.
+`/api/interrupt` и остальные маршруты исторического сервера). Корень `/` перенаправляет на вход прототипа `/sketches/proto/10-new-chat.html`; Electron запускает движок через `ui/desktop/run.sh`, сама оболочка запускается через `ui/desktop/electron.sh`.
 
 ## Хранение — файлы проекта, не база (принцип с первого коммита)
 Состояние проекта живёт в его папке `.harness/`, как в Python-ядре, те же форматы:

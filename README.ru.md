@@ -93,7 +93,7 @@ npm test                        # строгая сборка всех паке�
 
 - **Electron — тонкая оболочка** (`ui/desktop`): `main.js` открывает `http://localhost:3777/sketches/proto/10-new-chat.html`, проверяет `/api/status`, а если порт молчит — сам запускает движок (`run.sh`) и ждёт. Рендерер работает с изоляцией контекста и без Node; единственный нативный мост — `window.harnessy.pickFolder` (preload) для выбора папки в Finder **[код]**.
 - **Окно — веб-приложение**, которое отдаёт сам движок из `ui/deploy/out/site` под `/sketches`: рабочий слой (`live.js`, `cx.js`, `ctx.js`, `set.js`, `conn.js`) говорит с движком по HTTP и SSE (`/api/events`) на `127.0.0.1:3777`. Запросы защищены проверками Host/Origin/`Sec-Fetch-Site`/Content-Type, чтобы чужая страница в браузере не могла управлять движком **[код]**.
-- **Backend = пакеты.** С 09.10.2026 живой движок — TypeScript (`packages/api/bin/harnessy.ts`). Лаунчер `ui/desktop/run.sh` запускает Node. Пакет `api` обслуживает прежний HTTP/SSE-контракт; неизменённое корневое окно находится в `ui/legacy/index.html`. Прежний Python-движок доступен в истории Git (`mvp-python`).
+- **Backend = пакеты.** С 09.10.2026 живой движок — TypeScript (`packages/api/bin/harnessy.ts`). Лаунчер `ui/desktop/run.sh` запускает Node. Пакет `api` обслуживает прежний HTTP/SSE-контракт; корень `/` перенаправляет на вход прототипа `/sketches/proto/10-new-chat.html`. Прежний Python-движок доступен в истории Git (`mvp-python`).
 
 ## Планы: публикация проектов, подключение моделей, оплата и обучение **[план]**
 

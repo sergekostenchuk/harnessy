@@ -10,6 +10,7 @@ import type {AddressInfo} from 'node:net';
 import {ProviderError} from '@harnessy/providers';
 import {Journal} from '@harnessy/journal';
 import {bootstrap,repositoryRoot} from './bootstrap.ts';
+import {PROTO_ENTRY} from './server.ts';
 import {FakeProvider,deferred} from './test-helpers.ts';
 function setup(t:import('node:test').TestContext){const root=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-api-start-')));t.after(()=>rmSync(root,{recursive:true,force:true}));
  const env:NodeJS.ProcessEnv={PORT:'0',CHAT_WORK_DIR:join(root,'default'),HARNESS_PROJECTS_ROOT:join(root,'projects'),HARNESSY_SITE:join(root,'absent-site'),HARNESS_LAST_PROJECT_FILE:join(root,'last'),HARNESS_PROJECTS_FILE:join(root,'registry.json'),HARNESS_PINS_FILE:join(root,'pins.json'),HARNESS_SETTINGS_FILE:join(root,'settings.json'),HARNESS_CONNECTIONS_FILE:join(root,'connections.json')};
@@ -23,6 +24,7 @@ test('5/14/15/16/71: startup falls back for missing/unreadable/deleted last proj
  if(last==='unreadable')mkdirSync(h.env.HARNESS_LAST_PROJECT_FILE!);if(last==='deleted')writeFileSync(h.env.HARNESS_LAST_PROJECT_FILE!,join(h.root,'deleted'));
  const app=await bootstrap(h.options);assert.equal(app.runtime.project.dir,h.env.CHAT_WORK_DIR);assert.ok(existsSync(h.env.HARNESS_PROJECTS_ROOT!));
  const status=await fetch(app.url+'/api/status').then(r=>r.json()) as any;assert.equal(status.auth.claude.error,'claude не найден; задай CLAUDE_BIN');assert.equal(status.models.codex.length,2);
+ const root=await fetch(app.url+'/',{redirect:'manual'});assert.equal(root.status,302);assert.equal(root.headers.get('location'),PROTO_ENTRY);await root.text();
  assert.equal((await fetch(app.url+'/sketches/missing')).status,404);assert.ok(h.log.some(s=>s.includes('папки нет — '+h.env.HARNESSY_SITE)));assert.ok(h.log.some(s=>s.includes('НЕТ — выполни в Терминале: claude login')));await app.close()
  }
  assert.ok(h.log.some(s=>s.includes('последний проект не прочитан')));assert.ok(h.log.some(s=>s.includes('последняя папка недоступна')))
@@ -48,7 +50,7 @@ test('18/71: queued model starts only after HTTP listens and sees actual ephemer
  const app=await bootstrap({...h.options,env:{...h.env,HARNESS_NO_LAST:'1'}});t.after(()=>app.close());await app.runtime.idle();assert.equal(httpStatus,200);assert.equal(h.codex.calls.length,1);assert.equal(h.codex.calls[0]!.ctx.appUrl,app.url);assert.ok(!app.url.endsWith(':0'))
 });
 
-for(const via of ['direct','directory link','file link','relative file link'])test('10/17/18/179/180: actual ui/desktop/run.sh via '+via+' launches TS, serves unchanged root/static and exits on SIGTERM, duplicate port fails', {timeout:20_000},async t=>{
+for(const via of ['direct','directory link','file link','relative file link'])test('10/17/18/179/180/191: actual ui/desktop/run.sh via '+via+' launches TS, opens the prototype instead of the old window and exits on SIGTERM, duplicate port fails', {timeout:20_000},async t=>{
  const h=setup(t),trace=join(h.root,'trace'),hook=join(h.root,'providers.mjs'),site=join(h.root,'site');mkdirSync(site);mkdirSync(join(site,'proto'));writeFileSync(join(site,'proto/10-new-chat.html'),'<title>Window</title>');
  // Node's test-only module substitution prevents any SDK process or model call in the child.
  const providers=pathToFileURL(join(repositoryRoot,'packages/providers/src/index.ts')).href;
@@ -65,9 +67,11 @@ mock.module(${JSON.stringify(providers)},{namedExports:{...original,ClaudeProvid
  if(via==='file link'||via==='relative file link'){script=join(h.root,'run link.sh');symlinkSync(via==='file link'?launcher:relative(h.root,launcher),script)}
  const child=spawn('/bin/sh',[script],{cwd:h.root,env,stdio:['ignore','pipe','pipe']});let stdout='',stderr='';child.stdout.on('data',d=>stdout+=d);child.stderr.on('data',d=>stderr+=d);const ended=new Promise<{code:number|null;signal:NodeJS.Signals|null}>(resolve=>child.once('exit',(code,signal)=>resolve({code,signal})));t.after(()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL')});
  const url=await new Promise<string>((resolve,reject)=>{const onData=()=>{const m=stdout.match(/^\[harness\] (http:\/\/127\.0\.0\.1:\d+)$/m);if(m){child.stdout.off('data',onData);resolve(m[1]!)}};child.stdout.on('data',onData);child.once('exit',()=>reject(Error('child exited: '+stderr)));onData()});
- const status=await fetch(url+'/api/status').then(r=>r.json()) as any;assert.equal(status.auth.claude.authMethod,'subscription');const root=await fetch(url+'/').then(r=>r.text());assert.match(root,/POST/);assert.match(root,/\/api\/sessions\/open/);assert.equal(root,readFileSync(join(repositoryRoot,'ui/legacy/index.html'),'utf8'));assert.equal((await fetch(url+'/sketches/proto/10-new-chat.html')).status,200);
+ const status=await fetch(url+'/api/status').then(r=>r.json()) as any;assert.equal(status.auth.claude.authMethod,'subscription');
+ const root=await fetch(url+'/',{redirect:'manual'});assert.equal(root.status,302);assert.equal(root.headers.get('location'),PROTO_ENTRY);assert.equal(root.headers.get('cache-control'),'no-store');assert.equal(await root.text(),PROTO_ENTRY+'\n');
+ const window=await fetch(url+'/');assert.equal(window.status,200);assert.equal(window.url,url+PROTO_ENTRY);assert.equal(await window.text(),'<title>Window</title>');
  const duplicate=spawn('/bin/sh',[script],{cwd:h.root,env:{...env,PORT:new URL(url).port},stdio:['ignore','pipe','pipe']});let duplicateError='';duplicate.stderr.on('data',d=>duplicateError+=d);duplicate.stdout.resume();const code=await new Promise<number|null>(resolve=>duplicate.once('exit',resolve));assert.notEqual(code,0);assert.match(duplicateError,/EADDRINUSE/);
- child.kill('SIGTERM');const exit=await ended;assert.equal(exit.code,0);assert.equal(exit.signal,null);assert.match(readFileSync(trace,'utf8'),/claude closed/);assert.match(readFileSync(trace,'utf8'),/codex closed/);assert.match(stdout,/вход Claude по подписке: да \(subscription\)/)
+ child.kill('SIGTERM');const exit=await ended;assert.equal(exit.code,0);assert.equal(exit.signal,null);assert.match(readFileSync(trace,'utf8'),/claude closed/);assert.match(readFileSync(trace,'utf8'),/codex closed/);assert.match(stdout,/вход Claude по подписке: да \(subscription\)/);assert.ok(stdout.includes('[harness] прототип Harnessy: '+url+PROTO_ENTRY))
 });
 
 

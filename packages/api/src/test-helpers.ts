@@ -8,9 +8,9 @@ export {deferred,until,OWNER,FakeProvider,FakeClock} from '../../runtime/src/tes
 export async function fixture(t:TestContext,options:Parameters<typeof harness>[1]={}){
  const codex=new FakeProvider('codex');codex.models=async()=>[{id:'gpt-test',label:'GPT test'}];
  const h=await harness(t,{...options,deps:{...options.deps,providers:{claude:new FakeProvider(),codex,...options.deps?.providers}}});
- const provider=h.deps.providers.claude as FakeProvider,siteDir=join(h.dir,'site'),indexFile=join(h.dir,'index.html');mkdirSync(siteDir);writeFileSync(join(siteDir,'test.js'),'window.test = "готов";');writeFileSync(indexFile,'<!doctype html><title>Harnessy</title>');
- const api=createApi({runtime:h.runtime,siteDir,indexFile,port:0});await api.listen();t.after(()=>api.close());h.deps.appUrl=api.url;
- return {...h,provider,codex,api,siteDir,indexFile}
+ const provider=h.deps.providers.claude as FakeProvider,siteDir=join(h.dir,'site');mkdirSync(siteDir);writeFileSync(join(siteDir,'test.js'),'window.test = "готов";');
+ const api=createApi({runtime:h.runtime,siteDir,port:0});await api.listen();t.after(()=>api.close());h.deps.appUrl=api.url;
+ return {...h,provider,codex,api,siteDir}
 }
 export interface Response {status:number;headers:IncomingHttpHeaders;body:any;text:string}
 export function call(api:Api,path:string,options:{method?:string;body?:unknown;raw?:string|Buffer|Buffer[];headers?:Record<string,string>}={}):Promise<Response>{return new Promise((resolve,reject)=>{

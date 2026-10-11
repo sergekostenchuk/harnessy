@@ -7,7 +7,7 @@ import {ClaudeProvider,CodexProvider,type Provider,type Vendor} from '@harnessy/
 import {Runtime,RuntimeError,createActions,type RuntimeDeps} from '@harnessy/runtime';
 import {ownerPaths,validDir,expandUser,ProjectRegistry,Connections,Settings,Pins} from '@harnessy/projects';
 import {CLAUDE_MODELS,CODEX_FALLBACK} from './catalog.ts';
-import {createApi,type Api} from './server.ts';
+import {createApi,PROTO_ENTRY,type Api} from './server.ts';
 import {text} from './responses.ts';
 export interface BootstrapOptions {env?:NodeJS.ProcessEnv;log?:(line:string)=>void;providers?:(cwd:string,env:NodeJS.ProcessEnv)=>Partial<Record<Vendor,Provider>>;findClaude?:()=>Promise<string|null>;signal?:AbortSignal}
 export const repositoryRoot=fileURLToPath(new URL('../../../',import.meta.url));
@@ -32,10 +32,10 @@ export async function bootstrap(options:BootstrapOptions={}){
  const close=()=>{options.signal?.removeEventListener('abort',onStop);return closeJob??=(api?api.close():runtime.close())};
  const onStop=()=>{void close().catch(()=>{})};options.signal?.addEventListener('abort',onStop,{once:true});
  try{
- await runtime.openProject(startDir,{deferPumps:true});cancelled(options.signal);api=createApi({runtime,siteDir,indexFile:join(repositoryRoot,'ui/legacy/index.html'),port});const url=await api.listen();cancelled(options.signal);deps.appUrl=url;
+ await runtime.openProject(startDir,{deferPumps:true});cancelled(options.signal);api=createApi({runtime,siteDir,port});const url=await api.listen();cancelled(options.signal);deps.appUrl=url;
  const p=runtime.project;log('[harness] линия: '+p.dir+' · мест '+p.registry.ids.length+' · политика v'+(p.policy?.version??'—')+' · записей '+p.journal.lastSeq+(p.lineErrors.length?' · ошибки: '+p.lineErrors.join('; '):''));
  log('[harness] '+url);log('[harness] claude: '+((await stoppable(options.findClaude?.()??displayClaude(env),options.signal))||'НЕ НАЙДЕН')+'; node для моста Codex: '+process.execPath);
- log('[harness] прототип Harnessy: '+(await isDirectory(siteDir)?url+'/sketches/proto/01-chat.html':'папки нет — '+siteDir));
+ log('[harness] прототип Harnessy: '+(await isDirectory(siteDir)?url+PROTO_ENTRY:'папки нет — '+siteDir));
  try{const a=await stoppable(runtime.auth('claude'),options.signal);log('[harness] вход Claude по подписке: '+(a.loggedIn?'да ('+String(a.authMethod??'')+')':'НЕТ — выполни в Терминале: claude login'))}catch{log('[harness] вход Claude по подписке: НЕТ — выполни в Терминале: claude login')}
  cancelled(options.signal);for(const id of runtime.registry.ids)void runtime.kick(id);
  return {api,runtime,url,close}

@@ -8,11 +8,13 @@ HTTP/SSE-порт нового ядра Harnessy. Node.js 22+, без внешн
 `sketches`. Файлы владельца задаются `HARNESS_{LAST_PROJECT,PROJECTS,PINS,SETTINGS,CONNECTIONS}_FILE`.
 `HARNESS_NO_LAST` запрещает чтение последней папки и изменение реестра/последней папки.
 
-`createApi({runtime, siteDir, indexFile, port})` предоставляет `listen()` и
+`createApi({runtime, siteDir, port})` предоставляет `listen()` и
 идемпотентный `close()`. `bootstrap()` собирает runtime с обязательным `createActions()`;
 очереди запускаются после привязки HTTP-порта. При ошибке старта созданный runtime
 закрывается. SIGINT/SIGTERM обрабатываются также во время старта; отмена запрещает запуск очереди. Завершение прекращает приём запросов, закрывает SSE, отменяет ходы и
 закрывает провайдеров, затем соединения HTTP.
+
+Корень `/` отвечает `302` на вход прототипа `/sketches/proto/10-new-chat.html`.
 
 Все API-запросы проверяют Host; изменяющие запросы — Origin/Sec-Fetch-Site и JSON
 Content-Type. Лимит распакованного тела — 2 000 000 байт, в том числе chunked.

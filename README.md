@@ -93,7 +93,7 @@ The model produces text and events; it does not touch the world directly.
 
 - **Electron is a thin shell** (`ui/desktop`): `main.js` opens `http://localhost:3777/sketches/proto/10-new-chat.html`, checks `/api/status`, and if the port is silent starts the engine itself (`run.sh`) and waits. The renderer runs with context isolation and no Node; the only native bridge is `window.harnessy.pickFolder` (preload) for the Finder folder picker **[code]**.
 - **The window is a web app** served by the engine itself from `ui/deploy/out/site` under `/sketches`: the live layer (`live.js`, `cx.js`, `ctx.js`, `set.js`, `conn.js`) talks to the engine over HTTP and SSE (`/api/events`) on `127.0.0.1:3777`. Requests are protected by Host/Origin/`Sec-Fetch-Site`/Content-Type checks so a foreign page in the browser cannot drive the engine **[code]**.
-- **Backend = packages.** Since 09.10.2026 the live engine is TypeScript (`packages/api/bin/harnessy.ts`). The launcher `ui/desktop/run.sh` starts Node. The `api` package serves the existing HTTP/SSE contract; the unchanged root window lives in `ui/legacy/index.html`. The former Python engine is available in Git history (`mvp-python`).
+- **Backend = packages.** Since 09.10.2026 the live engine is TypeScript (`packages/api/bin/harnessy.ts`). The launcher `ui/desktop/run.sh` starts Node. The `api` package serves the existing HTTP/SSE contract; the root `/` redirects to the prototype entry `/sketches/proto/10-new-chat.html`. The former Python engine is available in Git history (`mvp-python`).
 
 ## Roadmap: publishing, connecting models, payments and learning **[plan]**
 

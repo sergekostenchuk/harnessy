@@ -9,8 +9,9 @@ import {metaRoutes} from './routes-meta.ts';
 import {bridgeRoutes} from './routes-bridge.ts';
 import type {Route} from './routes.ts';
 import {serveSse} from './sse.ts';
-import {serveStatic,serveFile} from './static.ts';
-export interface ApiOptions {runtime:Runtime;siteDir:string;indexFile:string;port?:number;host?:string}
+import {serveStatic} from './static.ts';
+export const PROTO_ENTRY='/sketches/proto/10-new-chat.html';
+export interface ApiOptions {runtime:Runtime;siteDir:string;port?:number;host?:string}
 export function createApi(options:ApiOptions){
  const r=options.runtime,routes=[...ownerRoutes(r),...metaRoutes(r),...bridgeRoutes(r)],streams=new Set<()=>void>();let closing=false,closeJob:Promise<void>|null=null;
  function match(route:Route,path:string){const a=route.path.split('/'),b=path.split('/');if(a.length!==b.length)return null;const params:Record<string,string>={};for(let i=0;i<a.length;i++){if(a[i]!.startsWith(':')){if(!b[i])return null;params[a[i]!.slice(1)]=b[i]!}else if(a[i]!==b[i])return null}return params}
@@ -22,7 +23,7 @@ export function createApi(options:ApiOptions){
  checkBrowser(request,path,port);
  if(closing){writeReply(res,json({error:'сервер закрывается'},503),head);return}
  if(path.startsWith('/sketches')){if(method!=='GET'&&!head){res.setHeader('Cache-Control','no-cache');writeReply(res,plain('405: Method Not Allowed',405,{Allow:'GET,HEAD'}));return}await serveStatic(res,rawPath,options.siteDir,head);return}
- if(path==='/'){if(method!=='GET'&&!head){writeReply(res,plain('405: Method Not Allowed',405,{Allow:'GET,HEAD'}));return}try{await serveFile(res,options.indexFile,head)}catch{writeReply(res,plain('404: Not Found',404),head)}return}
+ if(path==='/'){if(method!=='GET'&&!head){writeReply(res,plain('405: Method Not Allowed',405,{Allow:'GET,HEAD'}));return}writeReply(res,plain(PROTO_ENTRY+'\n',302,{Location:PROTO_ENTRY,'Cache-Control':'no-store'}),head);return}
  if(path.startsWith('/api/sessions/')&&(method==='GET'||head)){writeReply(res,plain('405: Method Not Allowed',405,{Allow:'POST'}),head);return}
  if(/^\/api\/events\/[^/]+$/.test(path)){
  if(method!=='GET'&&!head){writeReply(res,plain('405: Method Not Allowed',405,{Allow:'GET,HEAD'}));return}
