@@ -64,7 +64,7 @@
   const warningSeen=new Set();
   function warningEvent(ev){ if(!ev.warning) return false; const key=H.project+'\u0000'+ev.pane+'\u0000'+ev.warning; if(warningSeen.has(key)) return true; warningSeen.add(key); return false; }
   function consumeState(ev){ const pane=(H.panes||[]).find(p=>p.id===ev.pane); if(pane) Object.assign(pane,ev);
-    if(PAGE==='chat'&&pane&&H.pane&&H.pane.id===ev.pane&&ev.busy&&ev.status==='running'&&!H.cur){H.cur={text:'',tools:[],model:ev.model,pane:ev.pane,who:ev.label||paneName(pane)};drawLive()}
+    if(PAGE==='chat'&&pane&&H.pane&&H.pane.id===ev.pane&&ev.busy&&!H.cur){H.cur={text:'',tools:[],model:ev.model,pane:ev.pane,who:ev.label||paneName(pane)};drawLive()}
     if(ev.status==='idle'){ const prefix=H.project+'\u0000'+ev.pane+'\u0000'; for(const key of warningSeen) if(key.startsWith(prefix)) warningSeen.delete(key); const card=document.getElementById('live-waiting'); if(card&&card.dataset.pane===ev.pane&&card.dataset.project===H.project) card.remove(); }
     else if(pane&&ev.waiting) showWaiting(pane,ev.waiting,H.project); if(typeof sideChats==='function') sideChats(); }
   function waitingControls(p,info,project,compact=false){ const seqs=info.recordSeqs||[],range=seqs.length?'#'+seqs[0]+'–#'+seqs[seqs.length-1]:'вся очередь',damaged=String(info.turnInstanceId).startsWith('unreadable:'),name=paneName(p);
@@ -208,8 +208,8 @@
       c.insertAdjacentHTML('beforeend','<div class="live-sep">'+(S.chat.length?(H.on?'ваш разговор · через харнесс':'ваш разговор в прототипе')+' · <a data-clear>очистить</a> · ':'разговор пуст · ')+'<a data-demo>'+(S.ui.demo?'скрыть пример':'пример разговора')+'</a></div>'+S.chat.map(bubble).join('')); }); selBar(); drawLive(); if(S.chat.length) scrollEnd(); }
   document.addEventListener('click',e=>{ if(e.target.closest('[data-demo]')){ S.ui.demo=!S.ui.demo; save(); render(); } });
   document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]'); if(!d||!H.pane) return; const q=S.draft||''; document.querySelectorAll('.live-direct').forEach(x=>x.remove());
-    if(d.dataset.direct==='on'){ S.ui.direct=S.ui.direct||{}; S.ui.direct[H.pane.id]=true; save(); log('чат','Обращение напрямую к «'+paneName(H.pane)+'», минуя оркестратора'); toast('Напрямую к «'+esc(paneName(H.pane))+'» — записано в журнал'); if(window.CX) CX.render(); if(q){ S.draft=null; S.chat.push({role:'me',text:q,t:now()}); save(); render(); ask(q); } return; }
-    if(d.dataset.direct==='orch'){ const o=(H.panes||[]).find(p=>p.role==='orchestrator'); if(o){invalidateBinding();S.ui.pane=o.id; save(); pickPane(); hStatus(); if(window.CX) CX.render(); loadChat().then(()=>{ if(q){ S.draft=null; S.chat.push({role:'me',text:q,t:now()}); save(); render(); ask(q); } }); } } });
+    if(d.dataset.direct==='on'){ const binding=sendBinding(); S.ui.direct=S.ui.direct||{}; S.ui.direct[binding.pane]=true; save(); log('чат','Обращение напрямую к «'+paneName(H.pane)+'», минуя оркестратора'); toast('Напрямую к «'+esc(paneName(H.pane))+'» — записано в журнал'); if(window.CX) CX.render(); return q?onSend(q,null,binding):false; }
+    if(d.dataset.direct==='orch'){ const o=(H.panes||[]).find(p=>p.role==='orchestrator'); if(o){invalidateBinding();S.ui.pane=o.id; save(); pickPane(); hStatus(); const binding=sendBinding(); if(window.CX) CX.render(); return loadChat().then(()=>q?onSend(q,null,binding):false); } } });
   // ── переключение собеседника с контекстом: чекбоксы у реплик, промпт, передача текстом (между моделями и вендорами переносится только текст)
   let SEL=null;
   const plain=m=>m.text||String(m.html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
@@ -270,7 +270,7 @@
   function reply(q,binding=sendBinding()){ if(H.on&&!H.pane){ cols().forEach(c=>c.insertAdjacentHTML('beforeend','<div class="ai live-msg"><span class="orb"></span><div><div class="thought">без роли · модель не выбрана</div><p>Выберите модель в строке ввода — тогда отправлю.</p></div></div>')); scrollEnd(); S.draft=q; save(); return; }
     if(H.on&&H.pane) return ask(q,binding); cols().forEach(c=>c.insertAdjacentHTML('beforeend','<div class="ai live-msg live-typing"><span class="orb"></span><div><div class="thought">думает…</div></div></div>')); scrollEnd();
     setTimeout(()=>{ S.chat.push({role:'ai',html:answer(q),t:now()}); S.chat=S.chat.slice(-40); save(); render(); },850); }
-  async function onSend(v,ta){ const binding=sendBinding();S.draft=ta&&ta.value||v;save();if(H.on&&(!await settingsReady(binding)||!bindingCurrent(binding))){if(leftPage)return false;S.draft=ta&&ta.value||v;save();toast('Настройка или разговор изменились; сообщение осталось в черновике');return false; }
+  async function onSend(v,ta,binding=sendBinding()){S.draft=ta&&ta.value||v;save();if(H.on&&(!await settingsReady(binding)||!bindingCurrent(binding))){if(leftPage)return false;S.draft=ta&&ta.value||v;save();toast('Настройка или разговор изменились; сообщение осталось в черновике');return false; }
     if(H.on&&!(H.panes||[]).some(p=>p.id===binding.pane&&p.model)){S.draft=ta&&ta.value||v;save();toast('Сначала выберите модель разговора');return false}
     if(ta&&ta.value.trim()!==v){S.draft=ta.value;save();return false} if(ta){ta.value='';ta.style.height=''} log('чат','Вопрос: '+v.slice(0,90));
     if(!cols().length){ S.pending={text:v,t:now(),target:binding}; save(); location.href='01-chat.html'; return true; }
@@ -876,7 +876,7 @@
         const target=sendBinding();if(pending.target&&(pending.target.project!==target.project||pending.target.pane!==target.pane||pending.target.chat!==target.chat)){S.draft=q;save();render();toast('Разговор изменился; сообщение осталось в черновике');return}
         if(S.ui.fresh&&H.on&&H.pane&&H.pane.id==='room'){ try{ const r=await api('/api/chats/new',{pane:'room',carry:'none'}); if(!r||!r.ok)throw Error(r&&r.error||'нет связи');await refreshChats();S.chat=[]; }catch(e){S.draft=q;save();render();toast('Не вышло: '+esc(e.message));return} }   // новый чат без роли — параллельный прежним
         const binding=sendBinding();if(binding.project!==target.project||binding.pane!==target.pane){S.draft=q;save();render();toast('Разговор изменился; сообщение осталось в черновике');return}
-        S.ui.fresh=false;save();S.chat.push({role:'me',text:q,t:now()});save();render();reply(q,binding); } else render(); } });
+        S.ui.fresh=false;save();await onSend(q,null,binding); } else render(); } });
   addEventListener('resize',()=>{ wireSearch(); badges(); });
   addEventListener('storage',()=>{ load(); refresh(); if(cols().length) render(); if(window.CX) CX.render(); });
   // ── «Журнал» при подключённом движке: записи /api/journal в разметке экрана (строки .li), фильтры по видам движка, карточка записи, тред целиком, слияние принятого вердикта владельцем

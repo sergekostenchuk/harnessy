@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
-import {fixture,call,deferred,until,OWNER,FakeProvider} from './test-helpers.ts';
+import {fixture,call,sse,deferred,until,OWNER,FakeProvider} from './test-helpers.ts';
+import {setImmediate as immediate} from 'node:timers/promises';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');
 const cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
 const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');
@@ -16,32 +17,36 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
  const H:Data={on:true,project:'/project-a',active:{worker:'chat-a'},panes:[{id:'worker',label:'воркер',model:'w1',vendor:'claude',role:'orchestrator',busy:false},{id:'room',label:'без роли',model:'w1',vendor:'claude'}],cur:null,asks:{},kinds:['question','note','verdict'],projects:[]};H.pane=H.panes[0];
  const S:Data={ui:{pane:'worker',direct:{worker:true}},chat:[],cx:{noFolder:false},draft:null},ta:Data={value:'question',style:{}};let rendered=0;
  const column={querySelectorAll:()=>[],classList:{toggle(){}},insertAdjacentHTML(){}};
- const document={getElementById(id:string){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',parentElement:{querySelector:()=>({textContent:''})},querySelector:()=>null,insertAdjacentHTML(){},replaceWith(){},cloneNode(){return this}});return elements.get(id)!},
+ const document={getElementById(id:string){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',dataset:{},remove(){elements.delete(id)},parentElement:{querySelector:()=>({textContent:''})},querySelector:()=>null,insertAdjacentHTML(){},replaceWith(){},cloneNode(){return this}});return elements.get(id)!},
   querySelectorAll(selector:string){if(selector==='.ps-folder[data-folder]')return rows;if(selector==='.feed .col')return [column];return []},querySelector:()=>null,
   addEventListener(type:string,fn:(event:Data)=>unknown){if(type==='click')clicks.push(fn)},documentElement:{hasAttribute:()=>false}};
  const sandbox:Data={H,S,document,window:{},localStorage:{getItem:(key:string)=>storage.get(key)??null,setItem:(key:string,value:string)=>storage.set(key,value)},location:{pathname:'/21-journal.html',href:''},PAGE:'chat',
   fetch:async(path:string,opts?:{body:string})=>{const body=opts?.body?JSON.parse(opts.body):undefined;requests.push({path,body});return {json:async()=>options.fetch?options.fetch(path,body):({ok:true,pane:{...H.pane,...body}})}},
   toast:(text:string)=>toasts.push(text),esc:(value:unknown)=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),paneName:(p:Data)=>p.label,save(){},log(){},render(){rendered++},cols:()=>[column],drawLive(){},scrollEnd(){},md:(text:string)=>text,toolLine:()=>'',hStatus(){},now:()=>1791500000125,hhmm:()=>'',costLine:()=>'',actsLine:()=>'',ckBox:()=>'',onboardOnce:async()=>{},LOADED:null,
   showWaiting(){},showRestore(){},setTimeout(){},clearInterval(){},setInterval(){return 1},addEventListener(type:string,fn:()=>void){if(type==='pagehide')pagehide.push(fn)},dispatchEvent(){},CustomEvent:class {},confirm:()=>false,sideChats(){},
-  refreshStatus:async()=>{},refreshChats:async()=>{},close(){},renderAll(){},draw(){},base:()=>'',modeLabel:(s:string)=>s,modelLabel:(s:string)=>s,ROOM:'room',isRoom:(p:Data)=>p.id==='room',ico:()=>'',pl:(n:number)=>String(n)};
+  refreshStatus:async()=>{},refreshChats:async()=>{},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)||null},close(){},renderAll(){},draw(){},base:()=>'',modeLabel:(s:string)=>s,modelLabel:(s:string)=>s,ROOM:'room',isRoom:(p:Data)=>p.id==='room',ico:()=>'',pl:(n:number)=>String(n)};
  const context=createContext(sandbox);
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+
+  part(live,'  const warningSeen=','  function waitingControls(')+
   part(live,'  let bindingGeneration','  function md(')+
   part(live,'  async function ask(','  function applyStatus(')+
   part(live,'  function reply(','  function composer(')+
   part(live,'  function composer(','  const SCREENS=')+
   part(live,'  function curHTML(','  function hEvent(')+
+  part(live,'  function hEvent(','  const isDirect=')+
   part(live,'  async function loadChat(','  // подключение к движку')+
   part(live,'  const bubble=','  const cols=')+
   '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
-  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,setSeat};',context);
+  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,setSeat,consumeState,hEvent};',context);
  const functions=(context as Data).testing as Data;
  function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
  function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
   part(live,"  document.addEventListener('click',async e=>{ const toggle=",'  // меню профиля')+
   '\nglobalThis.sidebar={expanded:projectExpanded,folder:projectFolder,toggle:toggleProjectFolder};',context);return (context as Data).sidebar as Data}
- return {H,S,ta,requests,toasts,storage,elements,rows,sandbox,context,functions,journal,sidebar,clicks,pagehide,get rendered(){return rendered}};
+ function direct(){runInContext(part(live,"  document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]');",'  // ── переключение собеседника'),context);const listener=clicks.at(-1)!;
+  return (mode:'on'|'orch')=>listener({target:{closest:(selector:string)=>selector==='[data-direct]'?{dataset:{direct:mode}}:null}}) as Promise<boolean>}
+ return {H,S,ta,requests,toasts,storage,elements,rows,sandbox,context,functions,journal,sidebar,direct,clicks,pagehide,get rendered(){return rendered}};
 }
 
 test('81/109: real HTTP setting and send are ordered; launch uses the accepted model',async t=>{
@@ -97,6 +102,56 @@ test('81/109: current answer keeps its launch label; history uses only saved don
 test('81/109: busy room uses pane setting and explains next-turn application',async()=>{
  const view=ui();view.S.ui.pane='room';view.H.pane=view.H.panes[1];view.H.pane.busy=true;view.sandbox.fetch=async(path:string,opts:{body:string})=>{view.requests.push({path,body:JSON.parse(opts.body)});return {json:async()=>({ok:true,pane:{...view.H.pane,model:'w2'},appliesFrom:'next'})}};
  assert.equal(await view.functions.setSeat({model:'w2'},'Модель'),true);assert.equal(view.requests[0]!.path,'/api/panes/room');assert.match(view.toasts.at(-1)!,/применится со следующего хода/);
+});
+
+const directSeats='  worker: {role: executor, vendor: claude, model: w1, mode: read}\n  orchestrator: {role: orchestrator, vendor: claude, model: w1, mode: read}';
+function withOrchestrator(view:ReturnType<typeof ui>){view.H.panes[0].role='executor';view.H.panes.push({id:'orchestrator',label:'оркестратор',role:'orchestrator',vendor:'claude',model:'w1'});view.H.active.orchestrator='c-orch'}
+for(const change of ['pane','project','chat','away-back','pagehide'])test('TS-08 r2/1: orchestrator card retains its target through delayed history and cancels on '+change,async t=>{
+ const h=await fixture(t,{seats:directSeats}),history=deferred<Data>(),view=ui({fetch:async(path,body)=>path==='/api/chats/c-orch'?history.promise:(await call(h.api,path,{...(body?{body}:{})})).body});
+ withOrchestrator(view);view.S.draft='ONLY for orchestrator';const sending=view.direct()('orch');await until(()=>view.requests.some(r=>r.path==='/api/chats/c-orch'));
+ if(change==='pane'){h.runtime.roomSet({model:'w1',folder:false},OWNER);view.functions.invalidateBinding();view.S.ui.pane='room';view.H.pane=view.H.panes[1]}
+ if(change==='project')view.H.project='/project-b';if(change==='chat')view.H.active.orchestrator='c-other';
+ if(change==='away-back'){view.functions.invalidateBinding();view.S.ui.pane='room';view.functions.sendBinding();view.S.ui.pane='orchestrator';view.H.pane=view.H.panes.at(-1);view.functions.invalidateBinding()}
+ if(change==='pagehide')view.pagehide[0]!();
+ history.resolve({messages:[],chat:{model:'w1'}});assert.equal(await sending,false);await h.runtime.idle();
+ assert.equal(h.provider.calls.length,0);assert.equal(view.requests.filter(r=>r.path==='/api/chat').length,0);assert.equal(view.S.draft,'ONLY for orchestrator');assert.equal(view.S.chat.filter((m:Data)=>m.role==='me').length,0);
+});
+
+for(const mode of ['on','orch'] as const)for(const accepted of [false,true])test('TS-08 r2/2: '+mode+' card waits for '+(accepted?'accepted':'refused')+' model setting before sending',async t=>{
+ const h=await fixture(t,{seats:directSeats}),history=deferred<Data>(),configuration=deferred(),id=mode==='on'?'worker':'orchestrator';
+ const view=ui({fetch:async(path,body)=>{if(path==='/api/chats/c-orch')return history.promise;if(path==='/api/panes/'+id){await configuration.promise;if(!accepted)return {ok:false,error:'model setting denied'}}return (await call(h.api,path,{...(body?{body}:{})})).body}});
+ withOrchestrator(view);view.S.ui.direct={};view.S.draft='confirmation question';const click=view.direct();let sending:Promise<boolean>,setting:Promise<boolean>;
+ if(mode==='on'){setting=view.functions.setSeat({model:'w2'},'Модель');await until(()=>view.requests.some(r=>r.path==='/api/panes/worker'));sending=click(mode)}
+ else {sending=click(mode);await until(()=>view.requests.some(r=>r.path==='/api/chats/c-orch'));setting=view.functions.setSeat({model:'w2'},'Модель');await until(()=>view.requests.some(r=>r.path==='/api/panes/orchestrator'));history.resolve({messages:[],chat:{model:'w1'}})}
+ await immediate();assert.equal(view.requests.filter(r=>r.path==='/api/chat').length,0);assert.equal(h.provider.calls.length,0);assert.equal(view.S.draft,'confirmation question');
+ configuration.resolve();assert.equal(await setting,accepted);assert.equal(await sending,accepted);await h.runtime.idle();
+ assert.equal(view.requests.filter(r=>r.path==='/api/chat').length,accepted?1:0);assert.equal(h.provider.calls.length,accepted?1:0);
+ if(accepted){assert.equal(h.provider.calls[0]!.seat.id,id);assert.equal(h.provider.calls[0]!.seat.model,'w2');assert.match(h.provider.calls[0]!.message,/confirmation question/);assert.equal(view.S.draft,null)}
+ else {assert.equal(view.S.draft,'confirmation question');assert.equal(view.S.chat.filter((m:Data)=>m.role==='me').length,0)}
+});
+
+for(const nextModel of ['w2','c1'])test('TS-08 r2/3: actual EventBus → SSE → window takes external start model and keeps it after setting '+nextModel,async t=>{
+ const h=await fixture(t),stream=await sse(h.api),gate=deferred(),entered=deferred();t.after(()=>{gate.resolve();stream.close()});await until(()=>stream.raw.includes(': ok'));
+ const view=ui();view.H.project=h.dir;let delivered=0;const deliver=()=>{while(delivered<stream.frames.length){const event=stream.frames[delivered++];if(event.type==='state')view.functions.consumeState(event);if(event.pane==='worker')view.functions.hEvent(event)}};
+ h.provider.onRun=async(seat,_text,ctx)=>{ctx.modelStarted?.();ctx.publish({type:'delta',text:'first '});entered.resolve();await gate.promise;ctx.publish({type:'delta',text:'second'});ctx.publish({type:'done',model:seat.model,sessionId:null,durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'first second',sessionId:null}};
+ const turn=h.runtime.runTurn('worker','started outside this window');await entered.promise;await until(()=>stream.frames.some(e=>e.type==='delta'));deliver();
+ const initial=stream.frames.find(e=>e.type==='state'&&e.pane==='worker'&&e.busy);assert.ok(initial);assert.equal(initial.status,'idle');assert.equal(view.H.cur.model,'w1');assert.match(view.functions.curHTML(),/w1/);assert.doesNotMatch(view.functions.curHTML(),/модель не сохранена/);
+ const configured=await call(h.api,'/api/panes/worker',{body:{model:nextModel}});assert.equal(configured.body.appliesFrom,'next');await until(()=>stream.frames.some(e=>e.type==='state'&&e.pane==='worker'&&e.model===nextModel));deliver();
+ assert.equal(view.H.pane.model,nextModel);assert.equal(view.H.cur.model,'w1');assert.match(view.functions.curHTML(),/w1/);assert.doesNotMatch(view.functions.curHTML(),new RegExp(nextModel));
+ gate.resolve();await turn;await until(()=>stream.frames.some(e=>e.type==='done'));deliver();assert.equal(view.H.cur,null);assert.equal(view.S.chat.length,1);assert.equal(view.S.chat[0].model,'w1');assert.equal(view.S.chat[0].text,'first second');
+});
+
+test('TS-08 r2/3: missing start model stays unknown; state from another pane cannot start the selected answer',()=>{
+ const view=ui();view.functions.consumeState({pane:'room',busy:true,status:'idle',model:'foreign'});assert.equal(view.H.cur,null);
+ view.functions.consumeState({pane:'worker',busy:true,status:'idle'});assert.match(view.functions.curHTML(),/модель не сохранена/);view.functions.consumeState({pane:'worker',busy:true,status:'idle',model:'next'});assert.match(view.functions.curHTML(),/модель не сохранена/);assert.doesNotMatch(view.functions.curHTML(),/next/);
+});
+
+test('TS-08 r2/2: pending new-chat transition shares the setting wait and preserves a refused draft',async t=>{
+ const h=await fixture(t),gate=deferred(),view=ui({fetch:async path=>{if(path==='/api/panes/worker'){await gate.promise;return {ok:false,error:'model setting denied'}}return (await call(h.api,path)).body}});
+ view.S.pending={text:'pending question',target:view.functions.sendBinding()};const setting=view.functions.setSeat({model:'w2'},'Модель');await until(()=>view.requests.length===1);
+ view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+part(live,'  hConnect().finally(',"  addEventListener('resize',()=>{ wireSearch();"),view.context);
+ await immediate();assert.equal(view.requests.filter(r=>r.path==='/api/chat').length,0);gate.resolve();assert.equal(await setting,false);await (view.context as Data).pendingSend;
+ assert.equal(h.provider.calls.length,0);assert.equal(view.S.draft,'pending question');assert.equal(view.S.chat.length,0);
 });
 
 const records=(count:number)=>Array.from({length:count},(_,i)=>({seq:i+1,ts:i%2?'2026-10-10T10:37:00+03:00':'2026-10-10T02:01:00Z',from:'owner',to:['worker'],kind:i%2?'note':'question',text:'record '+(i+1),thread:null}));
