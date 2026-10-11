@@ -121,7 +121,7 @@ test('202/203: an attached source without its monthly quota is a fact, excluded 
 });
 
 test('146: sidebar details also open outside Spend without HX, close on Escape and restore focus',async()=>{
- const v=ui();v.context.PAGE='new';delete v.context.HX;await v.functions.limits();const opener=v.find('[data-spend-limits]');await opener.emit('click');assert.equal(v.find('.limits-dialog').hasAttribute('open'),true);assert.ok(v.find('.limits-dialog').querySelectorAll('[role="meter"]').length>=2);await v.window.emit('keydown',{key:'Escape'});assert.equal(v.find('.limits-dialog').hasAttribute('open'),false);assert.equal(v.document.activeElement,opener);
+ const v=ui();v.context.PAGE='new';delete v.context.HX;await v.functions.limits();const opener=v.find('[data-spend-limits]');await opener.emit('click');assert.equal(v.find('.limits-dialog').hasAttribute('open'),true);assert.ok(v.find('.limits-dialog').querySelectorAll('[role="meter"]').length>=2);await v.window.emit('keydown',{key:'Escape'});assert.equal(v.find('.limits-dialog').hasAttribute('open'),false);assert.equal(v.document.activeElement,v.find('.limits'));
 });
 
 test('200/473: plan and all three Claude windows appear with a countdown, and a connection-read failure keeps the last snapshot',async()=>{
@@ -284,4 +284,13 @@ test('216–218: the whole compact block and keyboard open complete quota detail
  const link=widget.querySelector('a')!;assert.equal(link.getAttribute('href'),'05-spend.html?period=90');const clicked=await link.emit('click');assert.equal(clicked.prevented,false);assert.equal(v.find('.limits-dialog').hasAttribute('open'),false);
  await widget.emit('keydown',{key:' '});v.functions.limitEvent({...quota,revision:2,providers:quota.providers.map(p=>p.vendor==='claude'?{...p,extraUsageEnabled:true}:p)});assert.match(v.find('.limits-dialog').textContent,/доплата: вкл/);
  v.functions.limitEvent({...quota,revision:3,providers:quota.providers.map(p=>p.vendor==='claude'?{...p,extraUsageEnabled:null}:p)});assert.match(v.find('.limits-dialog').textContent,/доплата: нет данных/);assert.equal(v.writes.length,0);
+});
+
+
+for(const delivery of ['HTTP','SSE'])test('219: quota '+delivery+' replaces the opener button but close returns focus to the stable widget',async()=>{
+ const v=ui(),stamp=Date.now()/1000;let revision=1;const quota=()=>({ok:true,project:v.H.project,revision,updatedAt:stamp,providers:[{vendor:'claude',status:'ok',sourceConnected:true,fetchedAt:stamp,windows:[{label:'неделя',percentUsed:revision*20,windowMinutes:10080}]}]});
+ v.context.api=async(path:string)=>path==='/api/limits'?quota():v.response(path);await v.functions.limits();const widget=v.find('.limits'),oldButton=v.find('[data-spend-limits]');await oldButton.emit('click');revision++;
+ if(delivery==='HTTP')await v.functions.limits();else v.functions.limitEvent(quota());assert.equal(oldButton.isConnected,false);assert.equal(v.find('.limits'),widget);assert.equal(v.find('.limits-dialog').hasAttribute('open'),true);assert.match(v.find('.limits-dialog').textContent,/40 %/);
+ await v.window.emit('keydown',{key:'Escape'});assert.equal(v.find('.limits-dialog').hasAttribute('open'),false);assert.equal(v.document.activeElement,widget);assert.equal(widget.isConnected,true);
+ await v.find('[data-spend-limits]').emit('click');revision++;v.functions.limitEvent(quota());await v.find('[data-spend-close]').emit('click');assert.equal(v.document.activeElement,widget);
 });

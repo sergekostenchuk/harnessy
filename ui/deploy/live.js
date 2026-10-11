@@ -959,7 +959,7 @@
   function closeLimits(){if(limitsDialog&&limitsDialog.hasAttribute('open'))limitsDialog.close();if(limitsOpener&&limitsOpener.isConnected)limitsOpener.focus();limitsOpener=null;limitsDialogProject=null;}
   function openLimits(el){
     if(!limitsDialog){limitsDialog=document.createElement('dialog');limitsDialog.className='limits-dialog';limitsDialog.setAttribute('aria-label','Все лимиты подписок');document.body.appendChild(limitsDialog);limitsDialog.addEventListener('cancel',event=>{event.preventDefault();closeLimits()});limitsDialog.addEventListener('click',event=>{if(event.target===limitsDialog)closeLimits()});}
-    limitsOpener=el;limitsDialogProject=H.project;
+    limitsOpener=el.closest('aside.side.ps .limits')||el;limitsDialogProject=H.project;
     limitsDialog.innerHTML='<h3>Все лимиты</h3><div class="limits-cards">'+limitProviders().map(p=>spLimitHTML(p,true)).join('')+'</div><div class="sp-actions"><a href="05-spend.html?period='+SP.period+'">Расход и лимиты →</a>'+spButton('Закрыть','data-spend-close')+'</div>';
     limitsDialog.showModal();limitsDialog.querySelector('[data-spend-close]').focus();
   }
