@@ -36,6 +36,7 @@ export function metaRoutes(r:Runtime):Route[]{return [
  ownerKinds:['task','question','note','stop','resume','decision'],lineErrors:[...p.lineErrors],policy:{version:p.policy?.version??null,path:p.policy?.path??null},
  team:{path:p.team?join(p.team.harnessDir,'team.yaml'):null,integrationBranch:p.team?.integrationBranch??null,mergeRoles:p.team?.mergeRoles??[]},repo:p.repoRoot,
  panes:[...p.registry.panes.values()].map(pane=>({...pane.settings(),pending:p.journal.pendingFor(pane.id).length,status:pane.status,waiting:r.waiting(pane.id)})),
+ approvals:[p.owner,...p.registry.panes.values()].flatMap(pane=>[...pane.approvals.values()].map(approval=>({pane:pane.id,...approval.event()}))),
  promotions:Object.values(p.state.chats.chats).map(promotionIdentity).filter(Boolean),roleCatalog:r.roleCatalog(),noProject:p.dir===r.defaultDir||p.registry.get('room')?.mode==='chat',projectsRoot:projectsRoot(r.settings.effective()),activeChats:{...p.state.chats.active},hasOrchestrator:[...p.registry.panes.values()].some(p=>p.kind==='orchestrator'),halted:p.halted,threads:threads(p),auth:{claude,codex},journal:{lastSeq:p.journal.lastSeq,path:p.journal.channelPath}})
  }},
  {method:'GET',path:'/api/dir',handle:({query})=>{const cwd=query.get('cwd')??'';if(!validDir(cwd))return json({ok:false,error:'папки нет или это не папка: '+cwd},400);let hasHarness=false;try{hasHarness=statSync(join(cwd,'.harness')).isDirectory()}catch{}return json({ok:true,cwd,hasHarness})}},
