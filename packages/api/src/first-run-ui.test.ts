@@ -42,9 +42,9 @@ test('170: promotion preserves the saved conversation, coalesces double clicks a
 });
 
 for(const change of ['project','aba','chat','pagehide','model'])test('170: stale owner door cannot promote after '+change,async t=>{
- const h=await fixture(t),v=await ui(h);await v.find('.st[data-s="1"] [data-go="2"]').emit('click');await v.f.next();const button=v.find('[data-first-promote]');
+ const h=await fixture(t),v=await ui(h);await v.find('.st[data-s="1"] [data-go="2"]').emit('click');await v.f.next();const button=v.find('[data-first-promote]'),before=v.requests.filter(r=>r.body).length;
  if(change==='project')v.H.project='/other';else if(change==='aba'){v.H.project='/other';v.f.invalidate();v.H.project=h.dir}else if(change==='chat')v.H.active.room='other';else if(change==='model')v.f.state.model='c1';else await v.window.emit('pagehide');
- await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.runtime.registry.get('orchestrator'),null);
+ await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,before);assert.equal(h.runtime.registry.get('orchestrator'),null);
 });
 
 for(const change of ['project','pagehide'])test('170: delayed room response does not promote or advance a replacement '+change,async t=>{
@@ -102,4 +102,29 @@ test('170: readonly snapshot rendering cannot invalidate the initial status requ
 test('170: interrupted first turn retains the shared bound recovery controls on step three',async t=>{
  const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: orchestrator, model: w1, vendor: claude, mode: read}'}),v=await ui(h);await v.f.next();v.H.pane.waiting={turnInstanceId:'known-turn',recordSeqs:[4],status:'unknown',actions:['retry','skip']};
  runInContext(part('  function waitingControls(','  const attemptRequests=')+'renderWaiting();',v.vm);assert.equal(v.find('[data-attempt-action="retry"]').dataset.attemptProject,h.dir);assert.equal(v.find('[data-attempt-action="retry"]').dataset.attemptPane,'lead');assert.equal(v.find('[data-attempt-action="skip"]').dataset.attemptId,'known-turn');assert.equal(v.requests.filter(r=>r.body).length,0);
+});
+
+for(const change of ['chat','pane','pane-aba','project-aba','pagehide'])test('170: delayed status after room setup retains the confirmed chat across '+change,async t=>{
+ const h=await fixture(t,{seats:'  {}'});h.runtime.roomSet({model:'w1'},OWNER);const a=h.runtime.chatsList(OWNER).active.room;
+ const entered=deferred(),gate=deferred();let hold=false;const v=await ui(h,async path=>{if(hold&&path==='/api/status'){hold=false;entered.resolve();await gate.promise}});
+ Object.assign(v.c,{badges(){},renderWaiting(){},sideChats:async()=>{}});v.f.TP.project=h.dir;runInContext(part('  function applyStatus(','  // лента активного чата'),v.vm);
+ await v.f.next();assert.equal(v.f.state.door.binding.chat,a);const button=v.find('[data-first-promote]');hold=true;const work=button.emit('click');await entered.promise;
+ if(change==='chat'){const b=await call(h.api,'/api/chats/new',{body:{pane:'room',carry:'none'}});assert.equal(b.status,200);assert.notEqual(b.body.chat.id,a)}
+ else if(change==='pane'||change==='pane-aba'){v.S.ui.pane='another';v.f.invalidate();if(change==='pane-aba')v.S.ui.pane='room'}
+ else if(change==='project-aba'){v.H.project='/other';v.f.invalidate();v.H.project=h.dir}else await v.window.emit('pagehide');
+ gate.resolve();await work;await v.settle();await h.runtime.idle();assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);assert.equal(h.provider.calls.length,0);assert.equal(v.f.state.door,null);assert.equal(v.document.querySelector('[data-first-promote]'),null);
+ await button.emit('click');await v.settle();assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);assert.equal(h.provider.calls.length,0);
+});
+
+test('170: a missing room is created before the owner door so even the first confirmation has an exact chat',async t=>{
+ const h=await fixture(t),v=await ui(h);assert.equal(v.f.binding().chat,null);await v.f.next();const id=v.f.state.door.binding.chat;assert.ok(id);assert.equal(id,h.runtime.chatsList(OWNER).active.room);assert.equal(h.provider.calls.length,0);assert.deepEqual(v.requests.filter(r=>r.body).map(r=>r.path),['/api/chats/new']);
+ await v.find('[data-first-promote]').emit('click');await v.settle();await h.runtime.idle();assert.equal(v.requests.find(r=>r.path.endsWith('/orchestrator')).path,'/api/chats/'+id+'/orchestrator');assert.equal(h.provider.calls.length,1);
+ await v.f.next();await v.f.next();await v.settle();assert.equal(h.provider.calls.length,1);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,1);
+});
+
+test('170: a saved failed promotion is retried for the same conversation without a second introductory turn',async t=>{
+ const h=await fixture(t,{seats:'  {}'}),r=h.runtime;r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','Сохранённый разговор');const row=r.chatsList(OWNER).chats.find(c=>c.pane==='room')!,append=r.journal.append.bind(r.journal);let once=true;
+ r.journal.append=(record)=>{const out=append(record);if(once&&record.origin==='onboarding'){once=false;throw Error('interrupted after intro')}return out};await assert.rejects(r.promoteChat(row.id,{project:h.dir,revision:row.revision,documents:[]},OWNER),/interrupted after intro/);
+ const v=await ui(h);await v.window.emit('live:status');assert.match(v.find('[data-live-operations]').textContent,/interrupted after intro/);assert.equal(h.provider.calls.length,0);await v.find('[data-operation-retry]').emit('click');await v.settle();await r.idle();assert.equal(r.chatsList(OWNER).active.orchestrator,row.id);assert.equal(h.provider.calls.length,1);
+ await v.f.next();await v.f.next();await v.settle();assert.equal(h.provider.calls.length,1);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,1);
 });
