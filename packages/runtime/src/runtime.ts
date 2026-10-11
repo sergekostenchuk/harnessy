@@ -106,7 +106,7 @@ export class Runtime {
  const freshRoom=saved.room===undefined&&!registry.get('room')&&team!==null&&!Object.keys(team.seats).length;if(freshRoom)makeRoomIn({registry,dir:path,bus},this,roomModel||'',path===this.defaultDir?'chat':'read');
  const state=new StateStore(path,this.deps.stateIO??diskIO,this.clock,this.deps.id);const halted=state.load(registry,lineErrors);
  if(saved.room===undefined&&roomModel&&!registry.get('room')&&makeRoomIn({registry,dir:path,bus},this,roomModel,path===this.defaultDir?'chat':'read'))state.savePanes(registry,journal);
- const trace=new TraceStore(path,()=>this.traceConfig,()=>this.clock.now());this.traces.add(trace);await trace.restore();
+ const trace=new TraceStore(path,()=>this.traceConfig,()=>this.clock.now(),id=>id===owner.id||!!registry.get(id)||Object.values(state.chats.chats).some(chat=>chat.pane===id));this.traces.add(trace);await trace.restore();
  const p:ProjectState={trace,generation,dir:path,closed:false,starting:true,now:()=>this.clock.now(),editing:new Map(),materializing:new Set(),restoreFailed:new Map(),team,repoRoot:git.repoRoot,policy,journal,channel,registry,owner,bus,state,lineErrors,halted,active:new Map(),pumps:new Map(),resets:new Map(),routeJobs:new Map(),processEpoch:new Map(),wakeups:new Set()};
  this.current=p;this.traceEvents(p);channel.on(event=>{if(!p.closed)this.onChannel(p,event)});
  try{await this.projectRegistry.rememberProject(path)}catch(e){lineErrors.push(message(e))}

@@ -86,3 +86,32 @@ test('238 round 2: GET also sanitizes the entire stored envelope and never expos
  appendFileSync(h.runtime.project.trace.path,JSON.stringify({...original,seq:original.seq+1,kind:'ui.sk_test_fixture',actor:'model:sk_test_fixture',chat:marker,pane:'sk_test_fixture',turnInstanceId:marker,refs:{...original.refs,extra:marker},data:{action:marker},reason:{code:'none',text:marker},extra:marker})+'\n');
  const response=await call(h.api,'/api/trace?traceId='+a.body.traceId);assert.equal(response.status,200);assert.equal(response.body.records.length,2);assert.ok(!response.text.includes(marker));assert.ok(!response.text.includes('sk_test_fixture'));const row=response.body.records[1];assert.equal(row.chat,null);assert.equal(row.pane,null);assert.equal(row.turnInstanceId,null);assert.equal(row.truncated,true);assert.equal('extra' in row,false);assert.equal('extra' in row.refs,false);
 });
+
+test('238 round 3: six HTTP-created participant classes retain their identities in actions, turns and stored traces',async t=>{
+ const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: orchestrator, vendor: claude, model: w1, mode: read}'}),gate=deferred<{text:string;sessionId:null}>(),kinds=['assistant','architect','worker','reviewer','tester','researcher'];
+ t.after(()=>gate.resolve({text:'Done',sessionId:null}));h.provider.onRun=async(seat,_message,ctx)=>{ctx.modelStarted?.();if(seat.id==='lead'){ctx.registerProcessToken('fixture-token');return gate.promise}return {text:'Done',sessionId:null}};
+ assert.equal((await call(h.api,'/api/chat',{body:{pane:'lead',message:'Предложи команду',direct:true}})).status,200);await until(()=>h.provider.calls.length===1);
+ const proposed=await call(h.api,'/api/seats/propose',{body:{from:'lead',seats:kinds.map(kind=>({kind,label:kind,vendor:'claude',model:'w1',mode:'read',intro:'Fixture role'}))},headers:{'X-Pane-Token':'fixture-token'}});assert.equal(proposed.status,200,proposed.text);
+ gate.resolve({text:'Done',sessionId:null});await h.runtime.idle();const q=proposed.body.proposal,bindings:Array<{pane:string;chat:string;traceId:string}>=[];
+ for(let index=0;index<kinds.length;index++)await t.test(kinds[index]!,async()=>{
+  const created=await call(h.api,'/api/seats/owner',{body:{project:h.dir,proposalId:q.proposalId,version:q.version,seatIndex:index}});assert.equal(created.status,200,created.text);const {pane,chat}=created.body;
+  assert.equal(h.runtime.registry.get(pane)?.kind,kinds[index]);assert.equal(h.runtime.project.state.chats.chats[chat]?.pane,pane);
+  const action=click(h),binding={...action.body.binding,pane,chat},reply=await call(h.api,'/api/trace',{body:{...action.body,action:'Открыть чат',binding}});assert.equal(reply.status,200,reply.text);
+  assert.equal((await call(h.api,'/api/onboard',{body:{project:h.dir,pane,chat},headers:action.headers})).status,200);await h.runtime.idle();
+  const rows=(await call(h.api,'/api/trace')).body.records;assert.ok(rows.some((row:any)=>row.traceId===action.body.traceId&&row.kind==='ui.action'&&row.pane===pane&&row.chat===chat));for(const kind of ['turn.start','turn.end'])assert.ok(rows.some((row:any)=>row.kind===kind&&row.pane===pane&&row.actor==='model:'+pane&&row.chat===chat),kind+' '+kinds[index]);const turn=rows.find((row:any)=>row.kind==='turn.start'&&row.pane===pane&&row.chat===chat);
+  const disk=readFileSync(h.runtime.project.trace.path,'utf8').trim().split('\n').map(line=>JSON.parse(line));assert.ok(disk.some(row=>row.traceId===turn.traceId&&row.kind==='turn.start'&&row.pane===pane&&row.actor==='model:'+pane));bindings.push({pane,chat,traceId:turn.traceId});
+ });
+ assert.equal(bindings.length,kinds.length);assert.ok((await h.runtime.project.trace.read()).some(row=>row.refs.proposalId===q.proposalId));await h.runtime.projectSet(h.dir,{reload:true},OWNER);
+ for(const binding of bindings){const rows=(await call(h.api,'/api/trace?traceId='+binding.traceId)).body.records;assert.ok(rows.some((row:any)=>row.kind==='turn.start'&&row.pane===binding.pane&&row.actor==='model:'+binding.pane))}
+ const marker='sk_test_SYNTHETIC_FIXTURE_ONLY_1234567890',action=click(h),pane=bindings[0]!.pane,before=(await h.runtime.project.trace.read()).length;
+ const rejected=await call(h.api,'/api/trace',{body:{...action.body,binding:{...action.body.binding,pane,chat:marker}}});assert.equal(rejected.status,400);assert.equal(rejected.body.code,'trace_invalid');const response=await call(h.api,'/api/trace?traceId='+action.body.traceId);assert.deepEqual(response.body.records,[]);assert.equal((await h.runtime.project.trace.read()).length,before);assert.ok(!response.text.includes(marker));assert.ok(!readFileSync(h.runtime.project.trace.path,'utf8').includes(marker));
+});
+
+test('238 round 3: HTTP promotion creates a traceable orchestrator, the seventh role class',async t=>{
+ const h=await fixture(t);assert.equal((await call(h.api,'/api/room',{body:{model:'w1'}})).status,200);assert.equal((await call(h.api,'/api/chat',{body:{pane:'room',message:'Создай проект',direct:true}})).status,200);await h.runtime.idle();
+ const input=promotionInput(h.runtime),promoted=await call(h.api,'/api/chats/'+input.chat+'/orchestrator',{body:input});assert.equal(promoted.status,200,promoted.text);await h.runtime.idle();
+ const p=h.runtime.project,pane=[...p.registry.panes.values()].find(pane=>pane.kind==='orchestrator')!,chat=p.state.chats.active[pane.id]!,action=click(h),binding={...action.body.binding,pane:pane.id,chat};
+ assert.equal((await call(h.api,'/api/trace',{body:{...action.body,action:'Написать',binding}})).status,200);assert.equal((await call(h.api,'/api/chat',{body:{pane:pane.id,message:'Следующий шаг',direct:true},headers:action.headers})).status,200);await h.runtime.idle();
+ const rows=(await call(h.api,'/api/trace?traceId='+action.body.traceId)).body.records;assert.ok(rows.some((row:any)=>row.kind==='ui.action'&&row.pane===pane.id&&row.chat===chat));for(const kind of ['turn.start','turn.end'])assert.ok(rows.some((row:any)=>row.kind===kind&&row.pane===pane.id&&row.actor==='model:'+pane.id&&row.chat===chat));
+ const disk=readFileSync(p.trace.path,'utf8').trim().split('\n').map(line=>JSON.parse(line));assert.ok(disk.some(row=>row.traceId===action.body.traceId&&row.kind==='turn.start'&&row.pane===pane.id&&row.actor==='model:'+pane.id));
+});

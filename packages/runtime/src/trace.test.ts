@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {TraceStore,traceData} from './trace.ts';
-function store(t:any,options=()=>({enabled:true,maxBytes:32768})){const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-trace-')));mkdirSync(join(dir,'.harness/state'),{recursive:true});const s=new TraceStore(dir,options,()=>1800000000000);t.after(async()=>{await s.close();rmSync(dir,{recursive:true,force:true})});return s}
+function store(t:any,options=()=>({enabled:true,maxBytes:32768})){const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-trace-')));mkdirSync(join(dir,'.harness/state'),{recursive:true});const s=new TraceStore(dir,options,()=>1800000000000,id=>['worker','lead'].includes(id));t.after(async()=>{await s.close();rmSync(dir,{recursive:true,force:true})});return s}
 test('233: buffered spans preserve their chain and sequence after restart without blocking the caller',async t=>{
  const s=store(t),click=s.record('ui.action',{actor:'owner',data:{action:'Назначить оркестратора'}});s.run(click,()=>{s.record('http.request');s.record('tool.result',{actor:'model:lead',outcome:'rejected',reason:{code:'approval_policy',text:'Вызов отклонён политикой'}})});assert.equal(existsSync(s.path),false);await s.flush();const rows=await s.read({traceId:click.traceId});assert.equal(rows.length,3);assert.deepEqual(rows.map(r=>r.seq),[1,2,3]);assert.equal(rows[2]!.parentSpanId,click.spanId);assert.equal(rows[2]!.reason.code,'approval_policy');assert.equal((await s.read({outcome:'rejected'})).length,1);const next=new TraceStore(s.project);t.after(()=>next.close());next.record('ui.action');await next.flush();assert.equal((await next.read()).at(-1)!.seq,4);
 });
