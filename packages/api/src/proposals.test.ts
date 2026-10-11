@@ -121,3 +121,30 @@ test('156 round 2: legacy proposal derives its retry key; a stored key for diffe
  delete saved.proposals[0].requestKey;writeFileSync(path,JSON.stringify(saved));assert.equal((await h.propose()).proposalId,q.proposalId);
  saved.proposals[0].requestKey='sha256:'+'a'.repeat(64);writeFileSync(path,JSON.stringify(saved));const reply=await h.post('/api/seats/propose',{seats:[member()]});assert.equal(reply.body.code,'proposal_invalid');assert.equal(JSON.parse(readFileSync(path,'utf8')).proposals.length,1);
 });
+
+for(const stage of ['confirmed-same-turn','confirmed-next-turn','created-next-turn','unconfirmed-next-turn'])test('156 round 3: identical composition is a new intention after '+stage,async t=>{
+ const h=await setup(t),first=await h.propose(),ref={proposalId:first.proposalId,version:1};
+ if(!stage.startsWith('unconfirmed'))assert.equal((await call(h.api,'/api/seats/confirm',{body:{...ref,project:h.dir}})).status,200);
+ if(stage.startsWith('created'))assert.equal((await h.post('/api/seats',ref)).status,200);
+ let release=()=>{},nextTurn:Promise<unknown>=Promise.resolve();
+ if(stage.endsWith('next-turn')){
+  h.end.resolve({text:'Первый ход завершён',sessionId:null});await h.run;await h.runtime.idle();
+  const end=deferred<{text:string;sessionId:null}>(),entered=deferred();release=()=>end.resolve({text:'Второе предложение готово',sessionId:null});
+  h.provider.onRun=async(_seat,_message,ctx)=>{ctx.modelStarted?.();ctx.registerProcessToken('lead-token');entered.resolve();return end.promise};
+  nextTurn=h.runtime.runTurn('lead','Нужно ещё одно такое же место');await entered.promise;
+ }
+ try{
+  const next=await h.propose();assert.notEqual(next.proposalId,first.proposalId);assert.equal(next.version,1);assert.equal(next.proposal.confirmed,false);
+  assert.notEqual(next.proposal.seats[0].sid,first.proposal.seats[0].sid);assert.equal((await h.propose()).proposalId,next.proposalId,'retry within this turn retains the new intention');
+  assert.equal((await h.post('/api/seats',{proposalId:next.proposalId,version:1})).body.code,'proposal_unconfirmed');
+  assert.equal((await call(h.api,'/api/seats/proposals')).body.proposals.length,2);assert.equal(h.runtime.journal.read({limit:0}).filter(r=>r.origin==='team-proposal').length,2);
+ }finally{release();await nextTurn}
+});
+
+test('156 round 3: legacy proposal without a turn can be read but cannot absorb a new request; forged turn is rejected',async t=>{
+ const h=await setup(t),q=await h.propose(),path=join(h.dir,'.harness/state/team-proposals.json'),saved=JSON.parse(readFileSync(path,'utf8'));
+ delete saved.proposals[0].requestKey;delete saved.proposals[0].turnInstanceId;writeFileSync(path,JSON.stringify(saved));
+ assert.equal((await call(h.api,'/api/seats/proposals')).status,200);const next=await h.propose();assert.notEqual(next.proposalId,q.proposalId);
+ const current=JSON.parse(readFileSync(path,'utf8'));current.proposals[1].turnInstanceId='forged-turn';writeFileSync(path,JSON.stringify(current));
+ assert.equal((await call(h.api,'/api/seats/proposals')).body.code,'proposal_invalid');
+});

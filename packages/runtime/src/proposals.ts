@@ -9,7 +9,7 @@ import type {Runtime} from './runtime.ts';
 import type {ProjectState,ActionContext} from './types.ts';
 
 export interface ProposalSeat {kind:SeatKind;label:string;vendor:Vendor;model:string;mode:Mode;intro:string;sid:string;operationId:string}
-export interface TeamProposal {requestKey?:string;proposalId:string;version:number;from:string;thread:string;questionSeq:number|null;confirmed:boolean;seats:ProposalSeat[]}
+export interface TeamProposal {turnInstanceId?:string;requestKey?:string;proposalId:string;version:number;from:string;thread:string;questionSeq:number|null;confirmed:boolean;seats:ProposalSeat[]}
 interface Store {project:string;proposals:TeamProposal[]}
 export interface ProposalInput {proposalId?:unknown;version?:unknown;seats?:unknown}
 export interface ProposalRef {proposalId?:unknown;version?:unknown;project?:unknown}
@@ -23,7 +23,7 @@ function seatInput(raw:unknown):Omit<ProposalSeat,'sid'|'operationId'> {
 }
 function read(p:ProjectState):Store {
  const raw=p.state.readProposals();if(!object(raw)||raw.project!==p.dir||!Array.isArray(raw.proposals))invalid();const ids=new Set<string>(),places=new Set<string>(),ops=new Set<string>();
- for(const value of raw.proposals){if(!object(value)||value.requestKey!==undefined&&(typeof value.requestKey!=='string'||!/^sha256:[0-9a-f]{64}$/.test(value.requestKey))||!token(value.proposalId,'p')||ids.has(String(value.proposalId))||!Number.isSafeInteger(value.version)||Number(value.version)<1||typeof value.from!=='string'||!/^[a-z][a-z0-9_-]{0,30}$/.test(value.from)||typeof value.confirmed!=='boolean'||value.thread!=='team:'+value.proposalId+':'+value.version||!(value.questionSeq===null||Number.isSafeInteger(value.questionSeq)&&Number(value.questionSeq)>0)||!Array.isArray(value.seats)||!value.seats.length||value.seats.length>12)invalid();ids.add(String(value.proposalId));
+ for(const value of raw.proposals){if(!object(value)||value.turnInstanceId!==undefined&&(typeof value.turnInstanceId!=='string'||!value.turnInstanceId||value.turnInstanceId.length>128)||value.requestKey!==undefined&&(typeof value.requestKey!=='string'||!/^sha256:[0-9a-f]{64}$/.test(value.requestKey))||!token(value.proposalId,'p')||ids.has(String(value.proposalId))||!Number.isSafeInteger(value.version)||Number(value.version)<1||typeof value.from!=='string'||!/^[a-z][a-z0-9_-]{0,30}$/.test(value.from)||typeof value.confirmed!=='boolean'||value.thread!=='team:'+value.proposalId+':'+value.version||!(value.questionSeq===null||Number.isSafeInteger(value.questionSeq)&&Number(value.questionSeq)>0)||!Array.isArray(value.seats)||!value.seats.length||value.seats.length>12)invalid();ids.add(String(value.proposalId));
   for(const rawSeat of value.seats){if(!object(rawSeat))invalid();const {sid,operationId,...input}=rawSeat;seatInput(input);if(typeof sid!=='string'||sid!==input.kind+'-'+String(operationId).slice(1)||typeof operationId!=='string'||!/^c[0-9a-f]{5,20}$/.test(operationId)||places.has(sid)||ops.has(String(operationId)))invalid();places.add(sid);ops.add(String(operationId))}
   if(value.requestKey!==undefined&&value.requestKey!==savedRequestKey(value as unknown as TeamProposal))invalid('ключ повтора не соответствует составу');
  }
@@ -32,8 +32,8 @@ function read(p:ProjectState):Store {
 function ref(input:ProposalRef){if(!token(input.proposalId,'p')||!Number.isSafeInteger(input.version)||Number(input.version)<1)invalid('нужны proposalId и положительная целая version');return {proposalId:input.proposalId as string,version:input.version as number}}
 function find(store:Store,input:ProposalRef){const wanted=ref(input),q=store.proposals.find(q=>q.proposalId===wanted.proposalId);if(!q)fail('proposal_not_found','предложение не найдено',404);if(q.version!==wanted.version)fail('proposal_stale','версия предложения изменилась');return q}
 function authority(ctx:ActionContext,p:ProjectState){ctx.assertActive();if(ctx.scope.projectDir!==p.dir)fail('proposal_project_changed','проект предложения сменился');if(p.registry.get(ctx.scope.seatId)?.kind!=='orchestrator')fail('policy_denied','состав команды предлагает и создаёт только оркестратор',403)}
-function proposalKey(from:string,seats:ReturnType<typeof seatInput>[],update:ReturnType<typeof ref>|null){return 'sha256:'+createHash('sha256').update(JSON.stringify({from,update,seats})).digest('hex')}
-function savedRequestKey(q:TeamProposal){return proposalKey(q.from,q.seats.map(({sid,operationId,...input})=>seatInput(input)),q.version===1?null:{proposalId:q.proposalId,version:q.version-1})}
+function proposalKey(from:string,seats:ReturnType<typeof seatInput>[],update:ReturnType<typeof ref>|null,turnInstanceId?:string){return 'sha256:'+createHash('sha256').update(JSON.stringify({from,update,seats,...(turnInstanceId?{turnInstanceId}:{})})).digest('hex')}
+function savedRequestKey(q:TeamProposal){return proposalKey(q.from,q.seats.map(({sid,operationId,...input})=>seatInput(input)),q.version===1?null:{proposalId:q.proposalId,version:q.version-1},q.turnInstanceId)}
 function receipt(p:ProjectState,q:TeamProposal){return {ok:true as const,project:p.dir,proposal:jsonClone(q),proposalId:q.proposalId,version:q.version}}
 function summary(q:TeamProposal){return 'Оркестратор '+q.from+' предлагает состав команды, версия '+q.version+'.\n\n'+q.seats.map((s,i)=>(i+1)+'. '+s.label+' · '+s.kind+' · '+s.vendor+'/'+s.model+' · '+s.mode+'\nВводная: '+s.intro.slice(0,240)+(s.intro.length>240?'…':'')).join('\n\n')+'\n\nПодтвердите именно эту версию кнопкой в окне. Ответ «да» в чате не подтверждает состав.'}
 function question(p:ProjectState,q:TeamProposal){
@@ -52,14 +52,14 @@ export async function propose(runtime:Runtime,ctx:ActionContext,input:ProposalIn
  const p=runtime.project;authority(ctx,p);if(!Array.isArray(input.seats)||input.seats.length<1||input.seats.length>12)invalid('состав должен содержать от 1 до 12 мест');
  const seats=deepFreeze(input.seats.map(seatInput)),update=input.proposalId!==undefined||input.version!==undefined?ref(input):null;
  for(const s of seats)if(!p.registry.providers.has(s.vendor)||!p.registry.models[s.vendor]?.some(m=>m.id===s.model))invalid('модель не из каталога указанного провайдера');
- return withPathLock(p.dir,()=>{authority(ctx,p);same(runtime,p);const store=read(p),key=proposalKey(ctx.scope.seatId,seats,update),retry=store.proposals.find(q=>q.from===ctx.scope.seatId&&(q.requestKey??savedRequestKey(q))===key);
-  // Same normalized request resumes its durable intent, including an update whose version already advanced.
+ return withPathLock(p.dir,()=>{authority(ctx,p);same(runtime,p);const store=read(p),key=proposalKey(ctx.scope.seatId,seats,update,ctx.scope.turnInstanceId),retry=store.proposals.find(q=>!q.confirmed&&q.turnInstanceId===ctx.scope.turnInstanceId&&q.from===ctx.scope.seatId&&(q.requestKey??savedRequestKey(q))===key);
+  // Only this turn's unconfirmed intent can be retried. A confirmed composition or a new turn is a new proposal.
   if(retry){question(p,retry);p.state.saveProposals(store);publish(p);return receipt(p,retry)}
   const old=update?find(store,update):null;
   if(old?.confirmed)fail('proposal_stale','подтверждённый состав заморожен; создайте новое предложение');if(old&&old.from!==ctx.scope.seatId)fail('policy_denied','предложение принадлежит другому оркестратору',403);
   const proposalId=old?.proposalId??'p'+randomBytes(12).toString('hex'),version=(old?.version??0)+1;
   const manifest=readManifest(p.team!.harnessDir).get('seats') as Map<string,unknown>,assignments=p.state.readMaterializations();if(!Array.isArray(assignments))invalid('сохранённые назначения не читаются');
-  const allocated=new Set<string>(assignments.map(op=>object(op)?String(op.operationId):''));const q:TeamProposal={requestKey:key,proposalId,version,from:ctx.scope.seatId,thread:'team:'+proposalId+':'+version,questionSeq:null,confirmed:false,seats:seats.map(s=>{let operationId='';for(let n=0;n<100;n++){const id='c'+Math.floor(p.now()).toString(16)+randomBytes(2).toString('hex');if(!store.proposals.some(x=>x.seats.some(s=>s.operationId===id))&&!p.state.chats.chats[id]&&!allocated.has(id)&&!manifest.has(s.kind+'-'+id.slice(1))&&!p.registry.get(s.kind+'-'+id.slice(1))){operationId=id;allocated.add(id);break}}if(!operationId)invalid('не удалось выделить идентификатор места');return {...s,sid:s.kind+'-'+operationId.slice(1),operationId}})};
+  const allocated=new Set<string>(assignments.map(op=>object(op)?String(op.operationId):''));const q:TeamProposal={turnInstanceId:ctx.scope.turnInstanceId,requestKey:key,proposalId,version,from:ctx.scope.seatId,thread:'team:'+proposalId+':'+version,questionSeq:null,confirmed:false,seats:seats.map(s=>{let operationId='';for(let n=0;n<100;n++){const id='c'+Math.floor(p.now()).toString(16)+randomBytes(2).toString('hex');if(!store.proposals.some(x=>x.seats.some(s=>s.operationId===id))&&!p.state.chats.chats[id]&&!allocated.has(id)&&!manifest.has(s.kind+'-'+id.slice(1))&&!p.registry.get(s.kind+'-'+id.slice(1))){operationId=id;allocated.add(id);break}}if(!operationId)invalid('не удалось выделить идентификатор места');return {...s,sid:s.kind+'-'+operationId.slice(1),operationId}})};
   store.proposals=store.proposals.filter(x=>x!==old);store.proposals.push(q);p.state.saveProposals(store);question(p,q);p.state.saveProposals(store);publish(p);return receipt(p,q);
  });
 }
