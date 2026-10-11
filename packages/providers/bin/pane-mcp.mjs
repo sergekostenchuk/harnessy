@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {schemas,KINDS,descriptions} from '../src/schemas.ts';
+import {schemas,KINDS,descriptions,toolAnnotations} from '../src/schemas.ts';
 const PANE_ID=process.env.PANE_ID,APP_URL=process.env.APP_URL,TOKEN=process.env.PANE_TOKEN;
 const peers=Object.fromEntries((process.env.SEATS||'').split(';').filter(Boolean).map(s=>{const i=s.indexOf(':');return i>0?[s.slice(0,i),s.slice(i+1)]:[s,s]}));
 const others=Object.keys(peers).filter(k=>k!==PANE_ID);
@@ -11,7 +11,7 @@ function tools(){return Object.entries(schemas).map(([name,schema])=>{
  const inputSchema=schema.toJSONSchema();
  if(name==='ask')inputSchema.properties.to.enum=others;
  if(name==='read_pane')inputSchema.properties.pane.enum=others;
- return {name,description:descriptions[name]+(name==='send'?' Виды записей: '+KINDS.join(', ')+'.':''),inputSchema}
+ return {name,annotations:toolAnnotations[name],description:descriptions[name]+(name==='send'?' Виды записей: '+KINDS.join(', ')+'.':''),inputSchema}
  })}
 async function call(name,input){
  if(!PANE_ID||!APP_URL||!TOKEN)return error('protocol: отсутствует PANE_ID, APP_URL или PANE_TOKEN');

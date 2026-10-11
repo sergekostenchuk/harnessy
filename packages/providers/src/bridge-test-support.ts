@@ -5,12 +5,12 @@ import {join} from 'node:path';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const script=fileURLToPath(new URL('../bin/pane-mcp.mjs',import.meta.url));
-export async function bridge(messages:unknown[],token:string|null='test-token',config:{PANE_ID?:string;APP_URL?:string;SEATS?:string}={}){
+export async function bridge(messages:unknown[],token:string|null='test-token',config:{PANE_ID?:string;APP_URL?:string;SEATS?:string}={},response?:Record<string,unknown>){
  const dir=await mkdtemp(join(tmpdir(),'providers-bridge-')),calls=join(dir,'calls.ndjson'),loader=join(dir,'fetch.mjs');
  await writeFile(loader,`import {appendFileSync} from 'node:fs';
 globalThis.fetch=async(url,options={})=>{
  appendFileSync(process.env.TEST_CALLS,JSON.stringify({url:String(url),...options})+'\\n');
- return {ok:true,json:async()=>({ok:true,seq:1,to:['reviewer'],thread:'task',reply:'answer',sha:'123',mergeSha:'456',branch:'integration',pane:'new',label:'New',model:'m',mode:'read',mandate:1,text:'transcript'})};
+ return {ok:true,json:async()=>(${response?JSON.stringify(response):"{ok:true,seq:1,to:['reviewer'],thread:'task',reply:'answer',sha:'123',mergeSha:'456',branch:'integration',pane:'new',label:'New',model:'m',mode:'read',mandate:1,text:'transcript'}"})};
 };`);
  try{
  const env={...process.env,PANE_ID:'worker',APP_URL:'http://fake.invalid',SEATS:'worker:Worker;reviewer:Review',TEST_CALLS:calls,...config};

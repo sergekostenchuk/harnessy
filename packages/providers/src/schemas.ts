@@ -10,6 +10,10 @@ export const schemas={
  merge:z.strictObject({sha:z.string(),message:z.string().optional()}),
  assign_role:z.strictObject({role:z.string(),model:z.string().optional(),mode:z.enum(modes).optional(),specialization:z.strictObject({title:z.string().max(60),text:z.string().max(20000)}).optional()})
 };
+// Hints describe effects; authorization is enforced by the authenticated Harnessy bridge.
+export const toolAnnotations=Object.fromEntries(Object.keys(schemas).map(name=>[name,{
+ readOnlyHint:name==='read_pane',destructiveHint:name==='merge',openWorldHint:false
+}])) as Record<keyof typeof schemas,{readOnlyHint:boolean;destructiveHint:boolean;openWorldHint:boolean}>;
 export const descriptions={
  propose_seats:'Предложить владельцу состав команды с предметными вводными. Доступно оркестратору. Обновление ожидающего состава требует proposalId и текущую version. После подтверждения нужен новый proposalId. Места пока не создаются.',
  create_seats:'Создать участников по proposalId и version, подтверждённым владельцем в окне. Только оркестратор. Повтор продолжает частичное создание без замены чатов. Ответ «да» в чате не является подтверждением.',

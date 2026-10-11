@@ -2,6 +2,7 @@ import {readFile,access} from 'node:fs/promises';
 import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {parse,stringify} from 'smol-toml';
+import {schemas} from '../schemas.ts';
 import {ProviderError,type Seat,type TurnContext,record} from '../types.ts';
 export const BASE_OVERRIDES=['features.hooks=false','features.multi_agent=false','features.apps=false','features.memories=false','features.plugins=false','features.browser_use=false','features.computer_use=false','project_doc_max_bytes=0','notify=[]'];
 export function tomlValue(value:unknown):string{
@@ -30,6 +31,9 @@ export function overrides(seat:Seat,ctx:TurnContext,token:string,servers:string[
  const env={PANE_ID:seat.id,APP_URL:ctx.appUrl,SEATS:ctx.peers.map(p=>p.id+':'+p.label).join(';').replaceAll('"',''),PANE_TOKEN:token};
  const out=[...BASE_OVERRIDES,...servers.filter(n=>n!=='panes'&&n!=='sol-spark-router').map(n=>'mcp_servers.'+tomlKey(n)+'.enabled=false'),
  'mcp_servers.panes.enabled=true','mcp_servers.panes.command='+tomlValue(process.execPath),'mcp_servers.panes.args='+tomlValue([bridge]),'mcp_servers.panes.env='+tomlValue(env)];
+ // Codex 0.160: MCP 'auto' requires approval for missing/destructive hints; 'never' then rejects before elicitation.
+ // Per-tool policy avoids that extra prompt only for our catalog; file/command sandbox and other MCPs retain their policies.
+ out.push(...Object.keys(schemas).map(name=>'mcp_servers.panes.tools.'+tomlKey(name)+'.approval_mode="approve"'));
  out.push('sandbox_workspace_write.writable_roots='+tomlValue(ctx.writableRoots));
  if(router)out.push('mcp_servers.sol-spark-router.enabled=true','mcp_servers.sol-spark-router.command='+tomlValue(router[0]),'mcp_servers.sol-spark-router.args='+tomlValue([router[1]]),'mcp_servers.sol-spark-router.startup_timeout_sec=20','mcp_servers.sol-spark-router.tool_timeout_sec=3600');
  return out
