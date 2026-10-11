@@ -8,7 +8,7 @@ import {RuntimeError,object,deepFreeze,message} from './errors.ts';
 import {owner,free,reserve,same} from './operations.ts';
 import {jsonClone,conversationHistory,diskIO,type Chat,type DocumentRef} from './state.ts';
 import {parseCompat} from '@harnessy/journal';
-import {meta} from './chats.ts';
+import {meta,promotionIdentity} from './chats.ts';
 import {roomWithoutProject} from './roles.ts';
 import type {Runtime} from './runtime.ts';
 import type {ProjectState} from './types.ts';
@@ -80,7 +80,7 @@ function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,op:Promotion){
  }
  save(p,c,{...op,done:true});release(p,op);return c;
 }
-function reply(p:ProjectState,c:Chat,op:Promotion,already:boolean){const pane=p.registry.get(op.sid);if(!pane)invalid();return {ok:true as const,project:p.dir,pane:pane.settings(),chat:meta(p,c),created:op.target!==op.input.project,already,team:join(p.dir,'.harness','team.yaml')}}
+function reply(p:ProjectState,c:Chat,op:Promotion,already:boolean){const pane=p.registry.get(op.sid);if(!pane)invalid();return {ok:true as const,project:p.dir,pane:pane.settings(),chat:meta(p,c),promotion:promotionIdentity(c),created:op.target!==op.input.project,already,team:join(p.dir,'.harness','team.yaml')}}
 export async function promoteChat(runtime:Runtime,id:string,args:PromotionInput,initiator:Initiator){
  const p=owner(runtime,initiator);p.state.saveChats(p.registry);const c=p.state.chats.chats[id];if(!c)throw new RuntimeError('chat_unknown','нет такого разговора',404);
  if(typeof args.project!=='string'||!Number.isSafeInteger(args.revision)||Number(args.revision)<0||args.task!==undefined&&typeof args.task!=='string'||args.createProject!==undefined&&typeof args.createProject!=='boolean')throw new RuntimeError('promotion_invalid','нужны project, revision и documents; task — строка, createProject — boolean',400);

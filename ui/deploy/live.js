@@ -56,22 +56,34 @@
 
   // ── мост к харнессу: если страницу отдал сам харнесс (~/HARNESS, :3777), чат идёт к настоящей модели по подписке, ответ — потоком событий
   const H={on:false,panes:[],pane:null,cur:null,asks:{}};
-  const api=(()=>{let projectGeneration=0;return (p,body)=>{
+  const api=(p,body,operation)=>{
     if(body&&H.snapshotOnly)return Promise.resolve({ok:false,code:'live_pending',error:'движок ещё не подтвердил проект'});
     const project=H.project,changing=!!body&&/^\/api\/(?:project(?:\/create)?|room\/move|assign|chats\/[^/]+\/orchestrator)$/.test(p);
-    if(changing){projectGeneration++;H.projectLinkChange=true}
-    const confirmed=H.confirmedProjectGeneration||0,generation=projectGeneration,navigation=typeof bindingNavigation==='number'?bindingNavigation:null;
-    const current=()=>confirmed===(H.confirmedProjectGeneration||0)&&generation===projectGeneration&&(navigation===null||navigation===bindingNavigation)&&(typeof leftPage==='undefined'||!leftPage);
+    if(changing){H.projectRequestGeneration=(H.projectRequestGeneration||0)+1;H.projectLinkChange=true}
+    const captured=Object.assign(operation||{},captureProjectOperation(p,body));
     return fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined).then(r=>r.json()).then(r=>{
-      if(!current())return {ok:false,code:'binding_changed',error:'Привязка изменилась; ответ относится к прежнему выбору'};
+      if(!projectOperationCurrent(captured,r))return {ok:false,code:'binding_changed',error:'Привязка изменилась; ответ относится к прежнему выбору'};
       if(changing&&(!r.ok||r.project===project))H.projectLinkChange=false;
       if(changing&&r.ok&&typeof r.project==='string'&&window.HARNESS_BOOT)window.HARNESS_BOOT.select(r.project);
       if(changing&&r.ok&&r.project!==project&&typeof sectionChanging==='function')sectionChanging();
       if(r.waiting&&(r.project||project)===H.project){ const id=typeof r.pane==='string'?r.pane:(r.pane&&r.pane.id)||body&&body.pane||(p.match(/^\/api\/panes\/([^/]+)/)||[])[1]; const pane=(H.panes||[]).find(x=>x.id===id); if(pane){ pane.waiting=r.waiting; showWaiting(pane,r.waiting,r.project||project); } }
       if(r.code==='restore_failed'&&r.project===H.project) showRestore(r.project,r.error);
       return r;
-    }).catch(error=>{if(changing&&current())H.projectLinkChange=false;throw error});
-  }})();
+    }).catch(error=>{if(changing&&projectOperationCurrent(captured))H.projectLinkChange=false;throw error});
+  };
+  function captureProjectOperation(path,body){const match=body&&path.match(/^\/api\/chats\/([^/]+)\/orchestrator$/);return {project:H.project,confirmed:H.confirmedProjectGeneration||0,request:H.projectRequestGeneration||0,navigation:typeof bindingNavigation==='number'?bindingNavigation:null,chat:match?decodeURIComponent(match[1]):null,revision:body&&body.revision};}
+  // Local navigation always invalidates a reply. One remotely confirmed project change is allowed
+  // only when status and this response identify this exact promotion of the captured conversation.
+  function projectOperationCurrent(op,response){
+    if(typeof leftPage!=='undefined'&&leftPage||op.request!==(H.projectRequestGeneration||0)||op.navigation!==null&&op.navigation!==bindingNavigation)return false;
+    const confirmed=H.confirmedProjectGeneration||0;if(confirmed===op.confirmed)return true;
+    if(confirmed!==op.confirmed+1||!op.chat||!response||!response.ok||response.project!==H.project)return false;
+    const result=response.promotion,seen=((H.liveStatus||{}).promotions||[]).find(p=>p.chat===op.chat);
+    if(!result||!seen||result.chat!==op.chat||result.target!==H.project||!response.pane||result.pane!==response.pane.id||(H.active||{})[result.pane]!==op.chat)return false;
+    const previous=op.previousPromotion;
+    return ['operationId','chat','sourceProject','sourceRevision','target','pane'].every(k=>result[k]!==undefined&&result[k]===seen[k])&&
+      (previous&&previous.operationId?result.operationId===previous.operationId&&result.sourceProject===previous.sourceProject&&result.sourceRevision===previous.sourceRevision:result.sourceProject===op.project&&result.sourceRevision===op.revision);
+  }
   // TS-07: waiting controls bind the click to the displayed project and episode.
   const warningSeen=new Set();
   function warningEvent(ev){ if(!ev.warning) return false; const key=H.project+'\u0000'+ev.pane+'\u0000'+ev.warning; if(warningSeen.has(key)) return true; warningSeen.add(key); return false; }
@@ -353,7 +365,7 @@
     if(promotionBusy||!bindingCurrent(binding))return false;
     if((binding.pane!=='room'&&!((H.chatList||[]).find(c=>c.id===binding.chat)||{}).promotion?.pending)||!binding.chat){toast('Выберите разговор без роли');return false}
     if(S.cx&&S.cx.noFolderPending){toast('Сначала выберите модель разговора');return false}
-    promotionBusy=true;const navigation=bindingNavigation;
+    promotionBusy=true;
     try{
       if(!await settingsReady(binding)||!bindingCurrent(binding)||leftPage)return false;
       const snapshot=await api('/api/chats/'+encodeURIComponent(binding.chat));
@@ -361,8 +373,8 @@
       const chat=snapshot&&snapshot.chat;
       if(!chat||chat.id!==binding.chat||chat.pane!==binding.pane||!Number.isSafeInteger(chat.revision)||!Array.isArray(chat.documents)){toast('Не удалось прочитать привязку разговора');return false}
       if(!chat.model){toast('Сначала выберите модель разговора');return false}
-      const r=await api('/api/chats/'+encodeURIComponent(chat.id)+'/orchestrator',{project:binding.project,revision:chat.revision,documents:chat.documents,...(H.noProject&&!chat.promotion?.pending?{createProject:true}:{})});
-      if(leftPage||bindingNavigation!==navigation||!bindingCurrent(binding)&&!(r&&r.ok&&H.project===r.project))return false;
+      const path='/api/chats/'+encodeURIComponent(chat.id)+'/orchestrator',body={project:binding.project,revision:chat.revision,documents:chat.documents,...(H.noProject&&!chat.promotion?.pending?{createProject:true}:{})},operation={...captureProjectOperation(path,body),previousPromotion:chat.promotion};
+      const r=await api(path,body,operation);if(!projectOperationCurrent(operation,r))return false;
       if(!r||!r.ok){
         toast('Не вышло: '+esc(r&&r.error||'нет связи'));
         if(r&&r.code==='orchestrator_exists'&&r.chat)laMenu(anchor,'В проекте уже есть оркестратор',[{t:'Открыть существующий',id:r.chat}],async()=>{

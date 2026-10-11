@@ -14,7 +14,7 @@ async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body
  const box:any={H,S,PAGE:options.page??'chat',document:d.document,window:null,location:{href:''},navigator:{},save(){},log(){},esc:(v:any)=>String(v??''),toast(html:string){d.document.querySelector('#toast')!.innerHTML=html},hStatus(){},badges(){},renderWaiting(){},loadChat:async()=>{},pickPane(){H.pane=H.panes.find((p:any)=>p.id===S.ui.pane)},render(){},setTimeout(){},clearTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),removeEventListener:d.window.removeEventListener.bind(d.window),
  api(path:string,body?:any){requests.push({path,body});const job=(async()=>{await pause?.(path,body);return (await call(h.api,path,body?{body}:{})).body})();pending.add(job);job.finally(()=>pending.delete(job));return job},
  async refreshStatus(){H.project=h.runtime.project.dir;H.panes=(await box.api('/api/status')).panes;const c=h.runtime.chatsList(OWNER);H.active=c.active;H.chatList=c.chats;box.pickPane()},closeLAMenus(){d.document.querySelectorAll('.live-menu').forEach(n=>n.remove())},dismissLAMenu(m:any){return ()=>m.remove()},modelName:(m:string)=>m,paneName:(p:any)=>p.label};
- box.window=box;const context=createContext(box);runInContext(part(live,'  let bindingGeneration','  function md(')+part(live,'  function laMenu(','  function laPath(')+part(live,'  // TS-09b2:',"    if(kind==='handoff')")+'});',context);
+ box.window=box;const context=createContext(box);runInContext(part(live,'  function captureProjectOperation','  // TS-07: waiting controls')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function laMenu(','  function laPath(')+part(live,'  // TS-09b2:',"    if(kind==='handoff')")+'});',context);
  runInContext(part(live,'  function applyStatus(','  // лента активного чата'),context);
  runInContext('globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,promoteConversation,sendBinding,bindingCurrent,invalidateBinding,configureSetting,busy:()=>false};',context);runInContext(cx,context);
  const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};
@@ -92,4 +92,21 @@ for(const returns of [false,true])test('154 round 3 ОКНА: another client con
  const project=v.H.project,selected=storage.get('harnessy-live-project-v1'),beforeSections=sections;
  release.resolve();assert.equal(await promoting,false);assert.equal(storage.get('harnessy-live-project-v1'),selected);assert.equal(sections,beforeSections);assert.equal(v.H.project,project);
  assert.equal(boot.confirm(project,boot.capture()),true);assert.equal((await v.context.refreshStatus(true)).project,project);assert.equal(h.provider.calls.length,1);
+});
+
+for(const scenario of ['late','early','foreign','round-trip','wrong-operation','missing-operation'])test('154 round 4: promotion binding classifies '+scenario+' status before its POST receipt',async t=>{
+ const h=await fixture(t),v=await ui(h),storage=new Map<string,string>(),entered=deferred(),release=deferred();await h.runtime.settingsPatch('owner',{projectsRoot:h.dir+'/projects'},OWNER);v.H.noProject=true;
+ Object.assign(v.context,{rememberLive(){},sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,value:string)=>storage.set(k,value)}});
+ const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');runInContext(proto.slice(0,proto.indexOf('/* LIVE_BOOT_END */')),v.context);const boot=v.context.HARNESS_BOOT;boot.select(h.dir);boot.confirm(h.dir,boot.capture());
+ v.context.fetch=async(path:string,opts?:{body:string})=>{const response=await call(h.api,path,opts?{body:JSON.parse(opts.body)}:{});if(path.endsWith('/orchestrator')){await h.runtime.idle();entered.resolve();await release.promise}return {json:async()=>response.body}};
+ runInContext('globalThis.api=(()=>{'+part(live,'  const api=','  // TS-07: waiting controls')+'return api;})();',v.context);
+ const promoting=v.context.LIVE.promoteConversation(v.find('.live-acts'),v.context.LIVE.sendBinding());await entered.promise;const created=h.runtime.project.dir;assert.notEqual(created,h.dir);
+ if(scenario!=='late')await v.context.refreshStatus(true);
+ if(['foreign','round-trip'].includes(scenario)){const other=h.dir+'/unrelated';mkdirSync(other);assert.equal((await call(h.api,'/api/project',{body:{path:other}})).status,200);await v.context.refreshStatus(true);if(scenario==='round-trip'){assert.equal((await call(h.api,'/api/project',{body:{path:created}})).status,200);await v.context.refreshStatus(true)}}
+ if(scenario==='wrong-operation')v.H.liveStatus.promotions[0].sourceRevision++;
+ if(scenario==='missing-operation')delete v.H.liveStatus.promotions;
+ const selected=storage.get('harnessy-live-project-v1');release.resolve();const result=await promoting;
+ if(['early','late'].includes(scenario)){assert.equal(result,true);assert.equal(v.H.project,created);assert.equal(v.S.ui.pane,'orchestrator');assert.equal(v.H.active.orchestrator,h.runtime.chatsList(OWNER).active.orchestrator)}
+ else{assert.equal(result,false);assert.equal(storage.get('harnessy-live-project-v1'),selected);assert.equal(boot.confirm(v.H.project,boot.capture()),true)}
+ assert.equal(h.provider.calls.length,1);
 });

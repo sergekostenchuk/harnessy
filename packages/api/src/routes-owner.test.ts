@@ -46,7 +46,8 @@ test('1: 154: project creation and bound assign alias; replacement is refused',a
  assert.equal(created.status,200);assert.deepEqual(keys(created.body),['created','git','memory','ok','orchestrator','project','seats']);assert.equal(created.body.created,true);assert.equal(created.body.git,true);assert.equal(created.body.seats,0);
  await h.runtime.idle();await call(h.api,'/api/halt',{body:{on:true}});
  assert.equal((await call(h.api,'/api/room',{body:{model:'w1',folder:path}})).status,200);
- const assigned=await call(h.api,'/api/assign',{body:{...promotionInput(h.runtime),role:'orchestrator'}});assert.equal(assigned.status,200);assert.deepEqual(keys(assigned.body),['already','chat','created','ok','pane','project','team']);assert.equal(assigned.body.created,false);
+ const input=promotionInput(h.runtime),assigned=await call(h.api,'/api/assign',{body:{...input,role:'orchestrator'}});assert.equal(assigned.status,200);assert.deepEqual(keys(assigned.body),['already','chat','created','ok','pane','project','promotion','team']);assert.equal(assigned.body.created,false);
+ assert.deepEqual(assigned.body.promotion,{operationId:assigned.body.promotion.operationId,chat:assigned.body.chat.id,sourceProject:input.project,sourceRevision:input.revision,target:path,pane:assigned.body.pane.id});assert.equal(typeof assigned.body.promotion.operationId,'string');
  const replacement=await call(h.api,'/api/assign',{body:{...promotionInput(h.runtime),role:'orchestrator'}});assert.equal(replacement.status,409);assert.equal(replacement.body.code,'orchestrator_exists');assert.equal(replacement.body.chat,assigned.body.chat.id);
  const seat=await call(h.api,'/api/seats',{body:{role:'executor',model:'w1'}});assert.equal(seat.status,409);assert.deepEqual(seat.body,{ok:false,code:'proposal_required',error:'участников создаёт оркестратор по подтверждённому предложению'});
  assert.equal((await call(h.api,'/api/seats',{body:{role:'assistant',model:'w1'}})).status,409);
