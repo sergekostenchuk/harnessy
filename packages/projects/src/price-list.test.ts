@@ -1,11 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
+import {mkdirSync,writeFileSync,readFileSync,symlinkSync,unlinkSync} from 'node:fs';
 import {join} from 'node:path';
 import {withPathLock} from '@harnessy/team';
 import {Settings} from './settings.ts';
 import {temp,failure} from './test-support.ts';
 const row={vendor:'claude',model:'same',inputPerM:1,outputPerM:2,cacheReadPerM:0,currency:'USD'};
+
+test('176 r2: queued owner patch reads the captured canonical file when its symlink changes',async t=>{
+ const h=temp();t.after(h.close);const a=join(h.root,'a.json'),b=join(h.root,'b.json'),link=join(h.root,'owner.json');
+ writeFileSync(a,JSON.stringify({keep:'OWNER_A',defaultMode:'read'}));writeFileSync(b,JSON.stringify({other:'FILE_B',defaultMode:'all'}));symlinkSync(a,link);const beforeB=readFileSync(b);
+ let release!:()=>void,entered!:()=>void;const held=new Promise<void>(r=>release=r),ready=new Promise<void>(r=>entered=r);t.after(()=>release());
+ const lock=withPathLock(a,async()=>{entered();await held});await ready;
+ const pending=new Settings(link).patch('owner',{priceList:[row]});unlinkSync(link);symlinkSync(b,link);release();await lock;const reply=await pending;
+ const expected={keep:'OWNER_A',defaultMode:'read',priceList:[row]};assert.deepEqual(JSON.parse(readFileSync(a,'utf8')),expected);assert.deepEqual(reply.saved,expected);
+ assert.deepEqual(readFileSync(b),beforeB);assert.deepEqual(readFileSync(link),beforeB);
+});
 
 test('176: prices are owner-only, zero is known; project disk data cannot override the owner',async t=>{
  const h=temp();t.after(h.close);const project=join(h.root,'project');mkdirSync(join(project,'.harness','state'),{recursive:true});const s=new Settings(join(h.root,'owner'),()=>project);

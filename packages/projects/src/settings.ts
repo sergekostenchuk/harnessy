@@ -15,8 +15,8 @@ export class Settings {
  private ownerFile:string;private currentProject:()=>string|null;private now:()=>number;
  constructor(ownerFile=ownerPaths().settings,currentProject:()=>string|null=()=>null,now=()=>Date.now()){this.ownerFile=ownerFile;this.currentProject=currentProject;this.now=now}
  projectPath(){const path=this.currentProject();return path?join(path,'.harness','state','settings.json'):null}
- private readOwner(writing=false){
-  let raw:unknown;try{raw=parseCompat(new TextDecoder('utf-8',{fatal:true}).decode(readFileSync(canonicalPath(this.ownerFile))))}
+ private readOwner(writing=false,path=canonicalPath(this.ownerFile)){
+  let raw:unknown;try{raw=parseCompat(new TextDecoder('utf-8',{fatal:true}).decode(readFileSync(path)))}
   catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return {};if(writing&&(e as NodeJS.ErrnoException).code==='EISDIR')throw new ProjectError('write_failed','не записано: '+String(e),500,e);throw new ProjectError('pricelist_unreadable','прайс-лист владельца не читается',409,e)}
   if(!object(raw))throw new ProjectError('pricelist_unreadable','прайс-лист владельца не читается: настройки должны быть объектом',409);
   return raw;
@@ -37,7 +37,7 @@ export class Settings {
  const project=this.currentProject(),selected=scope==='owner'?this.ownerFile:project?join(project,'.harness','state','settings.json'):null;if(!selected)throw new ProjectError('invalid_settings','папка не открыта');
  const path=canonicalPath(selected);
  return withPathLock(scope==='project'?project!:path,()=>{
- const cur=scope==='owner'?this.readOwner(true):readObject(path),saved=orderedClone(cur);for(const key of orderedKeys(changes)){if(changes[key]===null)delete saved[key];else Object.defineProperty(saved,key,{value:changes[key],enumerable:true,configurable:true,writable:true})}
+ const cur=scope==='owner'?this.readOwner(true,path):readObject(path),saved=orderedClone(cur);for(const key of orderedKeys(changes)){if(changes[key]===null)delete saved[key];else Object.defineProperty(saved,key,{value:changes[key],enumerable:true,configurable:true,writable:true})}
  const ordered=orderedClone(cur,saved);for(const key of orderedKeys(ordered))if(!Object.hasOwn(saved,key))delete ordered[key];if(scope==='owner')this.prices(ordered);writeJson(path,ordered);
  return {ok:true as const,scope,saved:ordered,effective:this.effective(),applies:SETTINGS_APPLIES,ts:Math.floor(this.now()/1000)}
  })
