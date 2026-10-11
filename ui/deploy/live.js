@@ -222,8 +222,8 @@
     const done=new Map();for(const record of r.records){const a=record.attempt;if(record.from==='harness'&&record.kind==='note'&&record.origin==='attempt'&&record.to&&record.to.length===1&&record.to[0]==='owner'&&a&&typeof a.turnInstanceId==='string'&&a.turnInstanceId&&a.done===true&&a.pane===p.id&&record.thread==='attempt:'+a.turnInstanceId&&['retry','skip','finish'].includes(a.action))done.set(a.turnInstanceId,record)}
     const notes=[...done.values()].map(record=>{const a=record.attempt,text='владелец решил: '+({retry:'повторить ход',skip:'пропустить записи прежнего хода',finish:'завершить восстановление'}[a.action]);return {role:'ai',src:'sys',who:'харнесс',pane:p.id,text,html:md(text),t:Date.parse(record.ts),attemptId:a.turnInstanceId}});
     S.chat=S.chat.filter(m=>!m.attemptId).concat(notes).sort((a,b)=>a.t-b.t);save();render();}
-  async function loadChat(){ if(!H.on||PAGE!=='chat') return; const p=H.pane, cid=p?(H.active||{})[p.id]:null,binding=sendBinding();
-    if(!cid){ S.chat=[]; save(); LOADED=cid||'none';renderWaiting();render();await loadAttemptNotes(p,binding);if(!bindingCurrent(binding))return;if(p&&!p.busy) await onboardOnce(p); return; }
+  async function loadChat({onboard=true,visible=false}={}){ if(!H.on||PAGE!=='chat'&&!(visible&&cols().length)) return; const p=H.pane, cid=p?(H.active||{})[p.id]:null,binding=sendBinding();
+    if(!cid){ S.chat=[]; save(); LOADED=cid||'none';renderWaiting();render();await loadAttemptNotes(p,binding);if(!bindingCurrent(binding))return;if(onboard&&p&&!p.busy) await onboardOnce(p); return; }
     if(LOADED!==cid){S.chat=[];save();render()}
     let r=null; try{ r=await api('/api/chats/'+cid); }catch(e){} if(!r||!Array.isArray(r.messages)){ return; }
     const who=p.id==='room'?'Без роли':paneName(p);
@@ -231,7 +231,7 @@
     if(!bindingCurrent(binding)) return;
     S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:hsys(m)?'sys':'live',who:hsys(m)?(/контекст передан/.test(m.text)?'харнесс · передача':'харнесс · вводная'):(m.role==='peer'?'сосед':who),pane:p.id,model:typeof m.model==='string'&&m.model?m.model:null,html:md(m.text.replace(/^\[от [^\]]+\]\s*/,'')),text:m.text,t:(m.ts||0)*1000,cost:{i:m.usage&&m.usage.input,o:m.usage&&m.usage.output,c:m.usage&&m.usage.cacheRead,ms:m.durationMs}});   // цена и модель — из реплики, не из настройки чата
     LOADED=cid;save();renderWaiting();render();await loadAttemptNotes(p,binding);if(!bindingCurrent(binding))return;
-    if(p.id!=='room'&&!r.messages.length&&!p.busy) await onboardOnce(p); }   // роль без вводной получает её при первом открытии чата (правило движка)
+    if(onboard&&p.id!=='room'&&!r.messages.length&&!p.busy) await onboardOnce(p); }   // роль без вводной получает её при первом открытии чата (правило движка)
   // подключение к движку на всех экранах: боковая панель, настройки, подключения живут его данными (08.10)
   async function hConnect(){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)){ return; }   /* движок подключён, если статус есть — даже без единого места: иначе чистая машина (первый запуск) остаётся в демо-режиме и проект создать нельзя */
     if(applyStatus(st,request,true)===false)return;H.connected=true;if(window.HARNESS_BOOT)window.HARNESS_BOOT.accept(); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
@@ -1027,9 +1027,13 @@
   // TS-09a.1: one lifecycle for all prototype pages.
   function suspendPage(){pageGeneration++;PS.alive=false;PS.generation++;JR.epoch++;JR.loadingMore=false}
   async function resumePage(){const generation=++pageGeneration;leftPage=false;invalidateBinding();if(window.HARNESS_BOOT){window.HARNESS_BOOT.invalidate();window.HARNESS_BOOT.preview()}
-    H.snapshotOnly=true;PS.alive=true;sectionChanging();SP.generation++;JR.epoch++;
+    H.snapshotOnly=true;PS.alive=true;sectionChanging();SP.generation++;JR.epoch++;S.chat=[];H.cur=null;H.asks={};SEL=null;LOADED=null;S.ui.openChat=null;
+    if(S.pending){S.draft=S.draft||S.pending.text;S.pending=null}save();render();
     const status=await refreshStatus(true);if(leftPage||generation!==pageGeneration)return false;
     if(!status){PS.error='Не удалось подтвердить проект после возврата. Повторите чтение или перезагрузите страницу.';PS.loading=false;sectionDraw();toast(PS.error);return false}
+    if(cols().length){const pane=H.pane?H.pane.id:'room';if(S.ui.pane!==pane){invalidateBinding();S.ui.pane=pane;save()}
+      await loadChat({onboard:false,visible:true});if(leftPage||generation!==pageGeneration)return false;
+    }
     H.connected=true;if(window.HARNESS_BOOT)window.HARNESS_BOOT.accept();liveFirstPaint();if(PAGE==='log')void journalFetch();return true;
   }
   addEventListener('pageshow',event=>{if(event.persisted)return resumePage()});

@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
+import {readFileSync,writeFileSync,readdirSync,mkdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {createContext,runInContext} from 'node:vm';
 import {execFileSync} from 'node:child_process';
 import {fixture,call,sse,deferred,until,OWNER,FakeProvider} from './test-helpers.ts';
 import {setImmediate as immediate} from 'node:timers/promises';
+import {dom} from './ui-dom-test-helpers.ts';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');
 const cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
 const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');
@@ -276,6 +277,15 @@ function firstPaint(html:string,storage=new Map<string,string>(),page='chat'){
 }
 const realStatus=()=>({project:'/real/project',panes:[{id:'worker',label:'Настоящий оркестратор',model:'w1',vendor:'claude',role:'orchestrator',busy:false}],activeChats:{worker:'c-real'},models:{},auth:{token:'must-not-cache'}});
 
+function historyDOM(v:ReturnType<typeof firstPaint>,html='<div class="frame"><div class="main"><div class="top"><b>Project A</b><span class="st"></span></div><div class="feed"><div class="col"></div></div></div></div>'){
+ const d=dom(html),all=v.sandbox.document.querySelectorAll,one=v.sandbox.document.querySelector;
+ v.sandbox.document.querySelectorAll=(q:string)=>['.feed .col','.feed','.frame .top > b','.frame .top .st'].includes(q)?d.document.querySelectorAll(q):all(q);
+ v.sandbox.document.querySelector=(q:string)=>d.document.querySelector(q)||one(q);
+ v.sandbox.cols=()=>d.document.querySelectorAll('.feed .col');v.sandbox.selBar=()=>{};
+ runInContext(part(live,'  const paneName=','  function pickMenu(')+part(live,'  function render(){',"  document.addEventListener('click',e=>{ if(e.target.closest('a[data-demo]'))"),v.context);
+ return d;
+}
+
 test('141–143: every PROTO_PAGES page hides demo before delayed status; success paints real project, offline is labelled',async()=>{
  const directory=new URL('../../../ui/deploy/out/site/sketches/proto/',import.meta.url);
  execFileSync('python3',['ui/deploy/build.py'],{cwd:new URL('../../../',import.meta.url),stdio:'pipe'});
@@ -382,14 +392,21 @@ test('152: all PROTO_PAGES share history return, invalidate old bindings/status,
  const mapping=runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data;assert.equal(pages.length,18);
  for(const page of pages){
   const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/'+page+'.html',import.meta.url),'utf8'),key=Object.keys(mapping).find(k=>mapping[k]===page+'.html')||'',v=firstPaint(html,new Map(),key);
-  v.paint.apply(realStatus(),v.boot.capture(),true);await immediate();const old=v.boot.capture(),binding=v.functions.sendBinding(),gate=deferred<Data>(),fetch=v.sandbox.fetch;
-  v.sandbox.fetch=async(path:string)=>{if(path==='/api/status'){v.requests.push({path,body:undefined});return {json:()=>gate.promise}}return fetch(path)};
+  const body=html.match(/<body[^>]*>([\s\S]*?)<script\b/)![1]!,d=historyDOM(v,body),columns=d.document.querySelectorAll('.feed .col');
+  v.paint.apply(realStatus(),v.boot.capture(),true);await immediate();v.S.chat=[{role:'ai',src:'live',text:'CACHED ANSWER FROM A',html:'CACHED ANSWER FROM A'}];for(const column of columns)column.innerHTML='<div class="ai live-msg">CACHED ANSWER FROM A</div>';
+  v.S.ui.openChat='old-pinned-chat';v.S.pending={text:'unsent draft from A'};v.H.cur={text:'OLD STREAM',tools:[]};v.H.asks={old:{text:'OLD QUESTION'}};
+  const old=v.boot.capture(),binding=v.functions.sendBinding(),gate=deferred<Data>(),fetch=v.sandbox.fetch;
+  v.sandbox.onboardOnce=async()=>{throw Error('history return must not onboard')};
+  v.sandbox.fetch=async(path:string)=>{if(['/api/status','/api/chats','/api/chats/chat-b'].includes(path)){v.requests.push({path,body:undefined});return {json:()=>path==='/api/status'?gate.promise:Promise.resolve(path==='/api/chats'?{chats:[{id:'chat-b',pane:'worker',title:'B',messages:2,active:true}],active:{worker:'chat-b'}}:{messages:[{role:'me',text:'QUESTION FROM B'},{role:'ai',text:'ANSWER FROM B',model:'w1'}]})}}return fetch(path)};
   v.pagehide[0]!();const before=v.requests.length;await v.pageshow[0]!({persisted:false});assert.equal(v.requests.length,before,page+': ordinary pageshow is not a restore');
   const resumed=v.pageshow[0]!({persisted:true});assert.equal(v.requests.at(-1)!.path,'/api/status');assert.equal(v.H.snapshotOnly,true,page);assert.equal(v.functions.bindingCurrent(binding),false,page);assert.equal(v.boot.current(old),false,page);
+  assert.equal(v.H.cur,null,page);assert.equal(Object.keys(v.H.asks).length,0,page);assert.equal(v.S.pending,null,page);assert.equal(v.S.draft,'unsent draft from A',page);assert.equal(v.S.ui.openChat,null,page);for(const column of columns)assert.doesNotMatch(column.textContent,/CACHED ANSWER FROM A|OLD STREAM|OLD QUESTION/,page);
   assert.equal((await v.functions.api('/api/chat',{message:'must wait for confirmation'})).code,'live_pending',page);
-  gate.resolve(projectStatus('/returned/'+page,'Returned '+page));await resumed;await immediate();
+  gate.resolve({...projectStatus('/returned/'+page,'Returned '+page),activeChats:{worker:'chat-b'}});await resumed;await immediate();
   assert.equal(v.H.project,'/returned/'+page,page);assert.equal(v.H.snapshotOnly,false,page);assert.equal(v.storage.get('harnessy-live-project-v1'),'/returned/'+page,page);assert.equal(v.attrs.has('data-live-preview'),false,page);
   assert.equal(v.paint.apply(projectStatus('/real/project','OLD'),old),false,page);assert.equal(v.requests.some(r=>r.body),false,page+': history return cannot post or call a model');
+  assert.equal(v.requests.some(r=>r.path==='/api/chats/chat-b'),columns.length>0,page+': read history exactly where a feed is displayed');
+  for(const column of columns){assert.match(column.querySelectorAll('.live-msg').map(m=>m.textContent).join('\n'),/QUESTION FROM B[\s\S]*ANSWER FROM B/,page);assert.doesNotMatch(column.textContent,/CACHED ANSWER FROM A|OLD STREAM|OLD QUESTION/,page)}
  }
 });
 
@@ -399,4 +416,43 @@ for(const reader of ['refresh','connect'])test('152: late '+reader+' status from
  const pending=v.paint[reader]();v.pagehide[0]!();const restored=v.pageshow[0]!({persisted:true});fresh.resolve(projectStatus('/project-b','B'));await restored;
  old.resolve(projectStatus('/project-a','OLD A'));await pending;
  assert.equal(v.H.project,'/project-b');assert.equal(v.H.panes[0].label,'B');assert.equal(v.storage.get('harnessy-live-project-v1'),'/project-b');assert.equal(v.H.snapshotOnly,false);
+});
+
+test('TS-09a.1 r2: real HTTP return replaces project A feed with B history and rejects an old history response',async t=>{
+ const h=await fixture(t),v=firstPaint(bootHtml,new Map(),'chat'),d=historyDOM(v);let answer='ANSWER FROM A';
+ h.provider.onRun=async(seat,_text,ctx)=>{ctx.modelStarted?.();ctx.publish({type:'done',model:seat.model,sessionId:null,durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:answer,sessionId:null}};
+ await h.runtime.runTurn('worker','question A');const a=(await call(h.api,'/api/status')).body,oldPath='/api/chats/'+a.activeChats.worker;
+ const oldGate=deferred(),newGate=deferred(),oldEntered=deferred(),newEntered=deferred();let holdOld=false,newPath='';t.after(()=>{oldGate.resolve();newGate.resolve()});
+ v.sandbox.fetch=async(path:string,options?:{body:string})=>{const body=options?.body?JSON.parse(options.body):undefined;v.requests.push({path,body});const result=(await call(h.api,path,body?{body}:{})).body;
+  if(path===oldPath&&holdOld){oldEntered.resolve();await oldGate.promise}if(path===newPath){newEntered.resolve();await newGate.promise}return {json:async()=>result}};
+ runInContext(part(live,'  // лента активного чата','  // подключение к движку'),v.context);
+ v.paint.apply(a,v.boot.capture(),true);await v.functions.loadChat({onboard:false});assert.match(d.document.querySelector('.feed')!.textContent,/ANSWER FROM A/);
+ holdOld=true;const pending=v.functions.loadChat({onboard:false});await oldEntered.promise;v.pagehide[0]!();
+ const b=join(h.dir,'project-b');mkdirSync(join(b,'.harness'),{recursive:true});writeFileSync(join(b,'.harness','team.yaml'),readFileSync(join(h.dir,'.harness','team.yaml')));
+ assert.equal((await call(h.api,'/api/project',{body:{path:b}})).body.ok,true);answer='ANSWER FROM B';await h.runtime.runTurn('worker','question B');const status=(await call(h.api,'/api/status')).body;newPath='/api/chats/'+status.activeChats.worker;
+ const calls=h.provider.calls.length,seq=h.runtime.journal.lastSeq,start=v.requests.length,restored=v.pageshow[0]!({persisted:true});await newEntered.promise;
+ assert.equal(v.H.project,b);assert.equal(v.H.active.worker,status.activeChats.worker);assert.doesNotMatch(d.document.querySelector('.feed')!.textContent,/ANSWER FROM A|ANSWER FROM B/);assert.match(d.document.querySelector('.top > b')!.textContent,/project-b$/);
+ newGate.resolve();await restored;oldGate.resolve();await pending;await h.runtime.idle();
+ assert.match(d.document.querySelector('.feed')!.textContent,/ANSWER FROM B/);assert.doesNotMatch(d.document.querySelector('.feed')!.textContent,/ANSWER FROM A/);assert.equal(v.S.chat.at(-1).text,'ANSWER FROM B');assert.equal(h.provider.calls.length,calls);assert.equal(h.runtime.journal.lastSeq,seq);assert.equal(v.requests.slice(start).some(r=>r.body),false);assert.equal(v.requests.slice(start).filter(r=>r.path===newPath).length,1);
+});
+
+for(const current of ['no-active-chat','empty-active-chat','no-pane'])test('TS-09a.1 r2: '+current+' restores an empty feed without real onboarding or a model call',async t=>{
+ const h=await fixture(t,current==='no-pane'?{seats:'  {}'}:{}),v=firstPaint(bootHtml,new Map(),'chat'),d=historyDOM(v);
+ if(current==='empty-active-chat')assert.equal((await call(h.api,'/api/chats/new',{body:{pane:'worker',carry:'none'}})).body.ok,true);
+ v.sandbox.fetch=async(path:string,options?:{body:string})=>{const body=options?.body?JSON.parse(options.body):undefined;v.requests.push({path,body});return {json:async()=>(await call(h.api,path,body?{body}:{})).body}};
+ runInContext(part(live,'  // лента активного чата','  // подключение к движку'),v.context);
+ v.paint.apply((await call(h.api,'/api/status')).body,v.boot.capture(),true);d.document.querySelector('.col')!.innerHTML='<div class="ai live-msg">OLD ANSWER</div>';v.S.chat=[{role:'ai',text:'OLD ANSWER',html:'OLD ANSWER'}];
+ v.pagehide[0]!();await v.pageshow[0]!({persisted:true});await h.runtime.idle();
+ assert.doesNotMatch(d.document.querySelector('.feed')!.textContent,/OLD ANSWER/);assert.equal(v.S.chat.length,0);assert.equal(h.provider.calls.length,0);assert.equal(v.requests.some(r=>r.body||r.path==='/api/onboard'),false);
+ assert.equal(v.requests.some(r=>r.path.startsWith('/api/chats/')&&!r.path.endsWith('/new')),current==='empty-active-chat');
+});
+
+for(const change of ['pane','chat','pagehide'])test('TS-09a.1 r2: a late restored history cannot repaint after '+change,async()=>{
+ const v=firstPaint(bootHtml,new Map(),'chat'),d=historyDOM(v),history=deferred<Data>();let reads=0;
+ const status={...realStatus(),project:'/project-b',panes:[realStatus().panes[0]!,{id:'room',label:'Без роли',model:'w1',vendor:'claude'}],activeChats:{worker:'chat-b',room:'chat-room'}};
+ v.sandbox.fetch=async(path:string)=>{v.requests.push({path,body:undefined});return {json:async()=>path==='/api/status'?status:path==='/api/chats'?{chats:[],active:status.activeChats}:path==='/api/chats/chat-b'?(reads++,await history.promise):{messages:[{role:'ai',text:'CURRENT SELECTION'}]}}};
+ v.S.chat=[{role:'ai',text:'OLD A',html:'OLD A'}];d.document.querySelector('.col')!.innerHTML='<div class="ai live-msg">OLD A</div>';v.pagehide[0]!();const restored=v.pageshow[0]!({persisted:true});await until(()=>reads===1);
+ v.functions.invalidateBinding();if(change==='pane'){v.S.ui.pane='room';v.sandbox.pickPane()}if(change==='chat')v.H.active.worker='chat-c';if(change==='pagehide')v.pagehide[0]!();
+ if(change!=='pagehide')await v.functions.loadChat({onboard:false,visible:true});history.resolve({messages:[{role:'ai',text:'STALE RETURNED HISTORY'}]});await restored;
+ const text=d.document.querySelector('.feed')!.textContent;assert.doesNotMatch(text,/STALE RETURNED HISTORY|OLD A/);if(change!=='pagehide')assert.match(text,/CURRENT SELECTION/);assert.equal(v.requests.some(r=>r.body),false);
 });
