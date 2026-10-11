@@ -419,10 +419,15 @@ html[data-page="spend"] .top .r { flex-wrap:wrap; }
 .sp-limit .ticks i { flex:1; height:7px; border-radius:1px; background:var(--line2); }
 .sp-limit .ticks i.on { background:var(--ok); }
 .sp-limit .ticks.warn i.on { background:var(--warn,#e0b23c); }
-aside.side.ps .limits .sp-limit { margin:9px 0; }
-aside.side.ps .limits .sp-value b { font:500 22px var(--mono); }
-aside.side.ps .limits .sp-value span { font-size:10px; color:var(--ink3); }
-aside.side.ps .limits .ticks { margin:5px 0; }
+aside.side.ps .limits .limit-window { margin:0 0 8px; }
+aside.side.ps .limits .row { gap:6px; font-size:10.5px; }
+aside.side.ps .limits .row b { flex:none; white-space:nowrap; }
+aside.side.ps .limits .limit-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+aside.side.ps .limits .row b.bad { color:var(--bad); }
+aside.side.ps .limits .ticks.bad i.on { background:var(--bad-fill); }
+aside.side.ps .limits .limit-note { display:block; margin:-3px 0 6px; color:var(--ink3); font-size:9px; }
+aside.side.ps .limits .limit-provider.stale .row { color:var(--ink3); }
+aside.side.ps .limits .limit-provider.stale .ticks { opacity:.55; }
 aside.side.ps .limits .sp-link { display:block; margin-top:6px; font-size:10px; }
 .sp-limit.stale .ticks { opacity:.55; }
 .limits-dialog { width:min(740px,calc(100vw - 32px)); max-height:calc(100dvh - 48px); box-sizing:border-box; overflow:auto; padding:24px; border:1px solid var(--line2); border-radius:14px; background:var(--panel); color:var(--ink); box-shadow:0 24px 80px #0008; }

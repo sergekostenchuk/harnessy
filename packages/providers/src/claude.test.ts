@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {query,type Query,type SDKUserMessage} from '@anthropic-ai/claude-agent-sdk';
-import {ClaudeProvider,claudeOptions,type ClaudeDependencies} from './claude.ts';
+import {ClaudeProvider,claudeOptions,claudeUsage,type ClaudeDependencies} from './claude.ts';
 import {ProviderError} from './types.ts';
 import {fixture,terminals,until} from './test-support.ts';
 const init={type:'system',subtype:'init',session_id:'session'};
@@ -121,3 +121,10 @@ test('200: absent login and cancelled usage do not start an authenticated reques
 test('200: API-only credentials are not applicable to subscription windows and do not call usage',async()=>{
  let requests=0;const p=new ClaudeProvider({env:{ANTHROPIC_API_KEY:'fixture-only'},readOauthLogin:async()=>null,usageFetch:(async()=>{requests++;throw Error('unexpected request')}) as typeof fetch});const result=await p.limits();assert.equal(result.ok,false);if(!result.ok)assert.equal(result.code,'limits_not_applicable');assert.equal(requests,0);assert.doesNotMatch(JSON.stringify(result),/fixture-only/);
 });
+
+
+test('213: Claude usage keeps Fable and additional named model windows, and skips absent windows',()=>{
+ const raw={five_hour:quotaUsage.five_hour,seven_day:quotaUsage.seven_day,seven_day_fable:{utilization:95,resets_at:null},seven_day_haiku:{utilization:80,resets_at:null},seven_day_sonnet:null};const r=claudeUsage(raw);assert.equal(r.ok,true);if(!r.ok)return;assert.deepEqual(r.windows.map(w=>[w.label,w.percentUsed]),[['5 ч',18],['неделя',62.4],['неделя · Fable',95],['неделя · Haiku',80]]);
+ const missing=claudeUsage({five_hour:quotaUsage.five_hour,seven_day:quotaUsage.seven_day});assert.equal(missing.ok,true);if(missing.ok)assert.equal(missing.windows.length,2);
+});
+for(const value of [{utilization:101,resets_at:null},{utilization:'95',resets_at:null},{utilization:12},{utilization:12,resets_at:'invalid'}])test('213: malformed additional Claude model quota is a typed refusal '+JSON.stringify(value),()=>{const r=claudeUsage({...quotaUsage,seven_day_fable:value});assert.equal(r.ok,false);if(!r.ok)assert.equal(r.code,'limits_invalid')});

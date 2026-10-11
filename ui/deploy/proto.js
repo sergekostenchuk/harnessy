@@ -95,7 +95,7 @@
   const WORK=[['now','Сейчас','',1],['chat','Чат','3'],['plan','План · карта','87 · L1']];   // «Сейчас · Чат · План» — не трогать (слово владельца 08.10); счётчик чатов ведёт рабочий слой
   const ico=k=>'<svg viewBox="0 0 24 24">'+(IC[k]||XI[k]||'')+'</svg>'; window.psIcon=ico;   // рабочий слой рисует строки проектов той же иконкой
   const FOLD_KEY='harnessy-side-fold', foldOpen=f=>{ try{ return localStorage.getItem(FOLD_KEY+':'+f)==='1'; }catch(e){ return false; } };
-  const limit=(name,p,window,reset)=>{ const n=24,on=Math.round(p/100*n),warn=p>=90;return '<div class="sp-limit"><div class="sp-limit-title"><b>'+name+'</b><span class="pill">макет</span></div><div class="row sp-value"><b'+(warn?' class="warn"':'')+'>'+p.toLocaleString('ru-RU')+' %</b><span>'+window+'</span></div><div class="ticks'+(warn?' warn':'')+'">'+Array.from({length:n},(_,i)=>'<i'+(i<on?' class="on"':'')+'></i>').join('')+'</div><small>сброс '+reset+'</small></div>'; };
+  const limit=(name,p)=>{ const tone=p>=95?'bad':p>=80?'warn':'',n=24;return '<div class="limit-window" title="макет · '+name+'"><div class="row"><span class="limit-label">'+name+'</span><b'+(tone?' class="'+tone+'"':'')+'>'+p.toLocaleString('ru-RU')+' %</b></div><div class="ticks'+(tone?' '+tone:'')+'" role="meter" aria-label="макет · '+name+'" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+p+'">'+Array.from({length:n},(_,i)=>'<i'+(i<Math.round(p/100*n)?' class="on"':'')+'></i>').join('')+'</div></div>'; };
 
   function sideHTML(){ const rail=side==='rail';
     const item=([k,t,m,badge])=>'<div class="nav'+(k===KEY?' on':'')+'" data-go="'+k+'" title="'+t+'">'+ico(k)+(rail?'':'<span class="t">'+t+'</span>'+(m?'<span class="m">'+m+'</span>':''))+(badge?'<span class="b">2</span>':'')+'</div>';
@@ -108,7 +108,7 @@
     const folders=rail?'<i class="ps-sep"></i><div class="nav" data-folders title="Проекты и чаты">'+ico('folder')+'</div>':'<div class="grp">проекты</div><div class="ps-folders"><div class="ps-chat more">проекты — из движка</div></div>';
     const log=(rail?'<i class="ps-sep"></i>':'<div class="grp"></div>')+item(['log','Журнал','']);
     const foot=rail?'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="nav'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Расход и лимиты">'+ico('spend')+'</div><div class="nav" data-go="profile" title="Профиль"><span class="av">S<i></i></span></div></div>'
-      :'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="limits'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Расход и лимиты"><div class="cap">Лимиты</div>'+limit('Claude Max',62.4,'неделя','вт 03:00')+limit('Codex',94,'5 ч','через 1 ч 12 мин')+'</div>'+
+      :'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="limits'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Расход и лимиты"><div class="cap">ИСПОЛЬЗОВАНО</div>'+limit('Claude · Fable · неделя',32)+limit('Claude · остальные · неделя',62.4)+limit('Claude · 5 ч',18)+limit('Codex · неделя',71)+limit('Codex · 5 ч',94)+'<small class="limit-note">макет</small></div>'+
        '<div class="user" data-go="profile" title="Профиль"><span class="av">S<i></i></span><div>Serge<small>9616166@gmail.com</small></div><span class="chev">⌄</span></div></div>';
     return head+top+'<div class="ps-scroll">'+work+pins+folders+log+'</div>'+foot; }
   window.psKey=KEY;
