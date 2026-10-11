@@ -38,9 +38,9 @@ test('77 window: SSE replay cannot finish an active answer; idle/new episode/pro
  view.functions.hEvent({...ev,warning:'worker:turn-b:error'});assert.equal(view.finishes,3);view.H.project='/project-b';view.functions.hEvent(ev);assert.equal(view.finishes,4);
 });
 
-test('77 window: note replay is shown once, ordinary events remain visible',()=>{
- const view=ui(),ev={type:'note',text:'ожидание',pane:'worker',warning:'worker:turn-a:uncertain',replay:true};view.functions.hEvent(ev);view.H.cur={text:'ответ',tools:[]};view.functions.hEvent(ev);assert.equal(view.S.chat.length,1);assert.equal(view.finishes,0);assert.equal(view.H.cur.text,'ответ');
- view.functions.hEvent({type:'note',text:'другая заметка'});assert.equal(view.S.chat.length,2);assert.equal(view.finishes,1);
+test('77/129 window: note replay is shown once; ordinary notes remain visible without finishing the answer',()=>{
+ const view=ui(),ev={type:'note',text:'ожидание',pane:'worker',warning:'worker:turn-a:uncertain',replay:true};view.functions.hEvent(ev);view.H.cur={text:'ответ',tools:[]};const active=view.H.cur;view.functions.hEvent(ev);assert.equal(view.S.chat.length,1);assert.equal(view.finishes,0);assert.strictEqual(view.H.cur,active);
+ view.functions.hEvent({type:'note',text:'другая заметка'});assert.equal(view.S.chat.length,2);assert.equal(view.S.chat[1]!.text,'[от харнесс] другая заметка');assert.equal(view.finishes,0);assert.strictEqual(view.H.cur,active);assert.equal(active.text,'ответ');
 });
 
 test('74/97 window: sidebar/banner controls carry immutable project/pane/episode and disclose consequences',()=>{

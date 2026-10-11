@@ -138,7 +138,7 @@
     else if(t==='approvalResolved'){ const a=H.asks[ev.id]; if(a){ a.done=ev.decision; drawLive(); setTimeout(()=>{ delete H.asks[ev.id]; drawLive(); },2500); } }
     else if(t==='done'){ finish(ev); log('чат','Ответ: '+paneName(H.pane)+' · '+(ev.model||'модель не сохранена')); }
     else if(t==='error'){ finish(ev); }
-    else if(t==='note'){ if(H.cur) finish(); S.chat.push({role:'ai',src:'sys',who:'харнесс',pane:H.pane?H.pane.id:'room',html:'<p>'+esc(ev.text||'')+'</p>',text:'[от харнесс] '+(ev.text||''),t:now()}); S.chat=S.chat.slice(-40); save(); render(); } }
+    else if(t==='note'){ S.chat.push({role:'ai',src:'sys',who:'харнесс',pane:H.pane?H.pane.id:'room',html:'<p>'+esc(ev.text||'')+'</p>',text:'[от харнесс] '+(ev.text||''),t:now()}); S.chat=S.chat.slice(-40); save(); render(); } }
   const isDirect=()=>!!(S.ui.direct&&H.pane&&S.ui.direct[H.pane.id]);
   async function ask(q,binding=sendBinding()){ if(!bindingCurrent(binding)) return false; const target=(H.panes||[]).find(p=>p.id===binding.pane)||H.pane;
     if(!H.cur){ H.cur={text:'',tools:[],model:target&&target.model,pane:binding.pane,who:target&&(target.id==='room'?'Без роли':paneName(target))}; drawLive(); } let r=null; try{ r=await api('/api/chat',{pane:binding.pane,message:q,kind:'question',direct:!!(S.ui.direct&&S.ui.direct[binding.pane])}); }catch(e){}

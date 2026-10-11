@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
 import {createContext,runInContext} from 'node:vm';
 import {fixture,call,sse,deferred,until,OWNER,FakeProvider} from './test-helpers.ts';
 import {setImmediate as immediate} from 'node:timers/promises';
@@ -144,6 +145,47 @@ for(const nextModel of ['w2','c1'])test('TS-08 r2/3: actual EventBus → SSE →
 test('TS-08 r2/3: missing start model stays unknown; state from another pane cannot start the selected answer',()=>{
  const view=ui();view.functions.consumeState({pane:'room',busy:true,status:'idle',model:'foreign'});assert.equal(view.H.cur,null);
  view.functions.consumeState({pane:'worker',busy:true,status:'idle'});assert.match(view.functions.curHTML(),/модель не сохранена/);view.functions.consumeState({pane:'worker',busy:true,status:'idle',model:'next'});assert.match(view.functions.curHTML(),/модель не сохранена/);assert.doesNotMatch(view.functions.curHTML(),/next/);
+});
+
+for(const source of ['carry','digest','carry + digest'])test('129: EventBus → SSE → window preserves the active model through '+source+' and a note between deltas',async t=>{
+ const h=await fixture(t,{seats:'  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read, digest: true}\n  peer: {role: reviewer, vendor: claude, label: ревьюер, model: w1, mode: read}',
+  before:dir=>writeFileSync(join(dir,'.harness','comms-policy.yaml'),'version: 1\nroutes: [{from: "*", to: "*", kinds: "*"}]\nobserve: {executor: "*"}\n')});
+ if(source.includes('digest'))await h.runtime.runTurn('peer','context from peer');
+ if(source.includes('carry'))h.runtime.registry.get('worker')!.carry='saved earlier conversation';
+ const stream=await sse(h.api),first=deferred(),last=deferred(),entered=deferred(),streaming=deferred();
+ t.after(()=>{first.resolve();last.resolve();stream.close()});await until(()=>stream.raw.includes(': ok'));
+ const view=ui(),busy:boolean[]=[];view.H.project=h.dir;view.sandbox.CX=view.sandbox.window.CX={setBusy:(value:boolean)=>busy.push(value)};
+ view.sandbox.selBar=()=>{};
+ runInContext(part(live,'  function render(){',"  document.addEventListener('click',e=>{ if(e.target.closest('[data-demo]'))"),view.context);
+ const binding=plain(view.functions.sendBinding()),active:{snapshot:Data|null}={snapshot:null};let delivered=0;
+ const deliver=()=>{while(delivered<stream.frames.length){const event=stream.frames[delivered++];
+  if(event.type==='state')view.functions.consumeState(event);
+  if(event.pane!=='worker')continue;
+  if(event.type==='state'&&event.busy&&!active.snapshot)active.snapshot=view.H.cur;
+  view.functions.hEvent(event);
+  if(event.type==='note'){assert.ok(active.snapshot);assert.strictEqual(view.H.cur,active.snapshot);assert.equal(view.H.cur.model,'w1');assert.equal(view.H.cur.pane,'worker');assert.equal(busy.at(-1),true);assert.equal(view.S.chat.filter((m:Data)=>m.src==='live').length,0);assert.deepEqual(plain(view.functions.sendBinding()),binding)}
+ }};
+ h.provider.onRun=async(seat,_text,ctx)=>{ctx.modelStarted?.();entered.resolve();await first.promise;
+  ctx.publish({type:'delta',text:'first '});h.runtime.registry.get('worker')!.publish({type:'note',text:'служебная заметка между частями ответа'});streaming.resolve();await last.promise;
+  ctx.publish({type:'delta',text:'second'});ctx.publish({type:'done',model:seat.model,sessionId:null,durationMs:1,usage:{input:1,output:2,cacheRead:0}});return {text:'first second',sessionId:null}};
+ const turn=h.runtime.runTurn('worker','started outside this window');await entered.promise;
+ const setupNotes=(source.includes('carry')?1:0)+(source.includes('digest')?1:0);
+ await until(()=>stream.frames.filter(e=>e.pane==='worker'&&e.type==='note').length===setupNotes);deliver();
+ assert.ok(active.snapshot);assert.equal(view.H.cur.text,'');assert.match(view.functions.curHTML(),/w1/);assert.equal(busy.includes(false),false);
+ const events=stream.frames.filter(e=>e.pane==='worker');assert.equal(events[0].type,'state');assert.equal(events[0].busy,true);assert.ok(events.slice(1).every(e=>e.type==='note'));
+ const prompt=h.provider.calls.at(-1)!.message;if(source.includes('carry'))assert.match(prompt,/saved earlier conversation/);if(source.includes('digest'))assert.match(prompt,/готов: peer/);
+ first.resolve();await streaming.promise;await until(()=>stream.frames.some(e=>e.text==='служебная заметка между частями ответа'));deliver();
+ assert.strictEqual(view.H.cur,active.snapshot);assert.equal(view.H.cur.text,'first ');assert.match(view.functions.curHTML(),/w1/);assert.doesNotMatch(view.functions.curHTML(),/модель не сохранена/);assert.equal(busy.includes(false),false);
+ const configured=await call(h.api,'/api/panes/worker',{body:{model:'w2'}});assert.equal(configured.body.appliesFrom,'next');await until(()=>stream.frames.some(e=>e.pane==='worker'&&e.type==='state'&&e.model==='w2'));deliver();
+ assert.strictEqual(view.H.cur,active.snapshot);assert.equal(view.H.pane.model,'w2');assert.match(view.functions.curHTML(),/w1/);assert.doesNotMatch(view.functions.curHTML(),/w2/);
+ last.resolve();await turn;await until(()=>stream.frames.some(e=>e.pane==='worker'&&e.type==='done'));deliver();
+ assert.equal(view.H.cur,null);assert.equal(busy.at(-1),false);const replies=view.S.chat.filter((m:Data)=>m.src==='live');assert.equal(replies.length,1);assert.equal(replies[0].text,'first second');assert.equal(replies[0].model,'w1');assert.equal(view.S.chat.filter((m:Data)=>m.src==='sys').length,setupNotes+1);
+});
+
+test('129: note preserves an unknown start model; provider error still finishes the answer',()=>{
+ const view=ui();view.functions.consumeState({pane:'worker',busy:true,status:'idle'});view.functions.hEvent({type:'delta',text:'partial'});const snapshot=view.H.cur;
+ view.functions.hEvent({type:'note',text:'служебная заметка'});assert.strictEqual(view.H.cur,snapshot);assert.equal(view.H.cur.text,'partial');assert.match(view.functions.curHTML(),/модель не сохранена/);assert.equal(view.S.chat.filter((m:Data)=>m.src==='live').length,0);
+ view.functions.hEvent({type:'error',code:'transport_lost',message:'связь потеряна'});assert.equal(view.H.cur,null);assert.equal(view.S.chat.filter((m:Data)=>m.src==='live').length,1);assert.equal(view.S.chat.at(-1).src,'err');assert.match(view.S.chat.at(-1).html,/связь потеряна/);
 });
 
 test('TS-08 r2/2: pending new-chat transition shares the setting wait and preserves a refused draft',async t=>{
