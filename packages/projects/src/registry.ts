@@ -8,7 +8,7 @@ import type {OwnerPaths,ProjectInfo} from './types.ts';
 export class ProjectRegistry {
  private paths:Pick<OwnerPaths,'projects'|'lastProject'>;private options:{noLast?:boolean;gitops?:GitOps;currentSeats?:()=>number};
  constructor(paths:Pick<OwnerPaths,'projects'|'lastProject'>=ownerPaths(),options:{noLast?:boolean;gitops?:GitOps;currentSeats?:()=>number}={}){this.paths=paths;this.options=options}
- async rememberProject(path:string):Promise<void>{if(this.options.noLast??!!process.env.HARNESS_NO_LAST)return;return withPathLock(this.paths.projects,lock=>{
+ async rememberProject(path:string):Promise<void>{if(this.options.noLast||!!process.env.HARNESS_NO_LAST)return;return withPathLock(this.paths.projects,lock=>{
  const loaded=readJson(lock.path),known=Array.isArray(loaded)?loaded.filter(x=>typeof x==='string'):[];
  if(!known.includes(path)){known.push(path);writeJson(lock.path,known)}
  return withPathLock(this.paths.lastProject,last=>{try{mkdirSync(dirname(last.path),{recursive:true});atomicWrite(last.path,path)}catch(e){throw new ProjectError('write_failed','не записано: '+String(e),500,e)}})
