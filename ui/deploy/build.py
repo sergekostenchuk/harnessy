@@ -215,9 +215,11 @@ def build_proto():
         if (HERE / extra).exists():
             shutil.copy(HERE / extra, dst / extra)
     (dst / "proto.js").write_text(rep((HERE / "proto.js").read_text(encoding="utf-8"), "/*IC*/", ic), encoding="utf-8")
+    boot = (HERE / "proto.js").read_text(encoding="utf-8").split("/* LIVE_BOOT_END */", 1)[0]
     for stem, title in PROTO_PAGES.items():
         t = (src / f"{stem}.html").read_text(encoding="utf-8")
         t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto>')
+        t = rep(t, "<head>", "<head><script>" + boot + "</script>")
         t = rep(t, "</head>", '<link rel="stylesheet" href="proto.css"></head>')
         t = rep(t, "</body>", '<script src="proto.js"></script>\n<script src="live.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="conn.js"></script>\n</body>')
         t = re.sub(r"<title>.*?</title>", f"<title>Harnessy · {title}</title>", t, count=1, flags=re.S)

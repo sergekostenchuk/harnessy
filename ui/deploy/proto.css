@@ -1,3 +1,9 @@
+/* The head boot flag exists before body parsing and the first paint. */
+html[data-live-pending]{pointer-events:none}
+html[data-live-pending] [data-demo]{visibility:hidden!important}
+html[data-live-pending][data-live-preview] [data-live-preview]{visibility:visible!important;pointer-events:none}
+#live-boot-state{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:10000;padding:12px 18px;border-radius:10px;background:#19191c;color:#aaa;font:13px system-ui}
+html[data-live-mock] #live-boot-state{top:auto;bottom:12px;transform:translateX(-50%);pointer-events:none}
 /* proto.css — режим прототипа: экран-скетч на всё окно, без пояснительных подписей листа.
    Подключается сборкой (build.py → out/site/sketches/proto/) вместе с proto.js; исходники скетчей не меняются. */
 html[data-proto], html[data-proto] body { height:100%; margin:0; }

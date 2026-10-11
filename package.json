@@ -10,7 +10,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "npm run build && node --test \"packages/*/src/**/*.test.ts\"",
+    "test": "node packages/projects/src/test-helpers.ts run",
     "build": "npm run build --workspaces --if-present"
   },
   "devDependencies": {

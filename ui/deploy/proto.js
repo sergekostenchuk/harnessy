@@ -1,3 +1,32 @@
+/* LIVE_BOOT_START: also inlined as the first head script by build.py. */
+(function(){
+  if(window.HARNESS_BOOT) return;
+  const root=document.documentElement, KEY='harnessy-live-snapshot-v1', PROJECT='harnessy-live-project-v1';
+  root.setAttribute('data-live-pending','');
+  let timer, connected=false, switching=false;
+  const read=k=>{try{return sessionStorage.getItem(k)}catch(e){return null}};
+  const write=(k,v)=>{try{sessionStorage.setItem(k,v)}catch(e){}};
+  function snapshot(){
+    try{const s=JSON.parse(read(KEY)||'null'),project=read(PROJECT);
+      return s&&s.v===1&&typeof project==='string'&&s.project===project&&s.status&&s.status.project===project&&Array.isArray(s.status.panes)&&s.status.panes.every(p=>p&&typeof p.id==='string')&&Array.isArray(s.chats)&&s.chats.every(c=>c&&typeof c.id==='string'&&typeof c.pane==='string')&&Array.isArray(s.projects)&&s.projects.every(p=>p&&typeof p.path==='string')&&Array.isArray(s.pins)&&s.pins.every(p=>p&&typeof p.path==='string')&&(!s.status.models||typeof s.status.models==='object'&&!Array.isArray(s.status.models))?s:null;
+    }catch(e){return null}
+  }
+  function caption(text){if(!document.body){document.addEventListener('DOMContentLoaded',()=>{if(root.hasAttribute('data-live-mock')||root.hasAttribute('data-live-pending'))caption(text)},{once:true});return}let el=document.getElementById('live-boot-state');if(!el){el=document.createElement('div');el.id='live-boot-state';el.setAttribute('role','status');document.body.appendChild(el)}el.textContent=text;return el}
+  const boot=window.HARNESS_BOOT={snapshot,
+    select(project){if(typeof project==='string'){switching=true;write(PROJECT,project)}},
+    confirm(project){if(typeof project!=='string'||switching&&read(PROJECT)!==project)return false;switching=false;write(PROJECT,project);return true},
+    save(status,chats,projects,pins){if(!status||typeof status.project!=='string'||!Array.isArray(status.panes)||!Array.isArray(chats))return;
+      const selected=read(PROJECT);if(selected!==null&&selected!==status.project)return;const {auth,...publicStatus}=status;if(selected===null)write(PROJECT,status.project);
+      write(KEY,JSON.stringify({v:1,project:status.project,status:publicStatus,chats,projects:projects||[],pins:pins||[]}));
+    },
+    preview(){root.setAttribute('data-live-preview','');caption('Обновляю данные проекта…')},
+    accept(){connected=true;clearTimeout(timer)},
+    ready(){connected=true;clearTimeout(timer);root.removeAttribute('data-live-pending');root.removeAttribute('data-live-preview');root.removeAttribute('data-live-mock');root.setAttribute('data-live','');const el=document.getElementById('live-boot-state');if(el)el.remove()},
+    offline(){if(connected)return;root.removeAttribute('data-live-pending');root.removeAttribute('data-live-preview');root.setAttribute('data-live-mock','');caption('макет · движок недоступен');if(boot.onOffline)boot.onOffline()}
+  };
+  timer=setTimeout(()=>boot.offline(),1500);
+})();
+/* LIVE_BOOT_END */
 /* proto.js — режим прототипа для экранов-скетчей (включается атрибутом <html data-proto>, его ставит сборка).
    Что делает: (1) экран на всё окно: кадр 1280×860 растягивается, в окне меньше — уменьшается целиком;
    (2) единая боковая панель на всех экранах: «Новый чат», поиск, разделы по группам, проекты, лимиты, профиль; «⟨ / ⟩» сворачивает в рейку;

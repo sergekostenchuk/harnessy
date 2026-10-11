@@ -6,7 +6,7 @@
   if(!document.documentElement.hasAttribute('data-proto')||!window.LIVE) return;
   const L=window.LIVE, PAGE=document.documentElement.dataset.page||''; if(PAGE!=='new'&&PAGE!=='chat') return;
   const esc=L.esc, H=L.H, S=()=>L.S;
-  function cx(){ const s=S(); if(!s.cx) s.cx={folder:'OMG',rights:null,model:null,modes:{},att:[],conn:{},noFolder:false}; return s.cx; }
+  function cx(){ const s=S(); if(!s.cx) s.cx={folder:'',rights:null,model:null,modes:{},att:[],conn:{},noFolder:false}; return s.cx; }
   const ROOM='room', isRoom=p=>!!p&&p.id===ROOM, seats=()=>(H.panes||[]).filter(p=>p.id!==ROOM), room=()=>(H.panes||[]).find(p=>p.id===ROOM);
   const base=path=>(path||'').split('/').filter(Boolean).pop()||'папка';
   const rolesN=n=>n+' '+(n%10===1&&n%100!==11?'роль':(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'роли':'ролей'));
@@ -32,7 +32,7 @@
     const ta=box.__cx.ta; if(ta) ta.addEventListener('input',()=>{ const g=box.querySelector('.cx-go'),p=seat(); if(g&&!g.classList.contains('busy')) g.classList.toggle('off',!ta.value.trim()||H.on&&!(p&&p.model)); }); }
   function render(box){ const c=cx(), p=seat(), top=box.previousElementSibling, bot=box.querySelector('.cx-bot'), att=box.querySelector('.cx-att'); if(!top||!bot) return;
     if(H.on){const pending=typeof c.noFolderPending==='string'&&c.noFolderPending===H.project&&S().ui.pane===ROOM&&!H.noProject;if(!pending&&(c.noFolder!==!!H.noProject||c.noFolderPending!==undefined)){c.noFolder=!!H.noProject;delete c.noFolderPending;L.save();}}   // привязка проекта — из статуса движка, а не сохранённого флага окна
-    const folder=c.noFolder?'Без проекта':(H.on?base(H.project):(c.folder||'OMG'));
+    const folder=c.noFolder?'Без проекта':(H.on?base(H.project):(c.folder||'проект не выбран'));
     const role=p?(isRoom(p)?'Без роли':L.paneName(p)):'Без роли', rights=p?modeLabel(p.mode):modeLabel(c.rights);
     const model=p&&p.model?modelLabel(p.model):'выбрать модель';   // у разговора без роли модели нет, пока её не выбрали
     const act=p?((H.active||{})[p.id]):null, meta=(H.chatList||[]).find(x=>x.id===act), chatLabel=(PAGE==='new'&&S().ui.fresh)?'Новый чат':(meta&&meta.messages?(meta.title||'без названия'):'Новый чат');
