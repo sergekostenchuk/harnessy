@@ -665,3 +665,12 @@ html[data-proto] .main:has(#v-turn) .ovl{overflow:hidden}
 [data-section-card] .prev{max-height:320px;overflow:auto}
 [data-section-card] .rule{max-height:160px;overflow:auto;white-space:pre-wrap}
 [data-section-card] .acts>.spec-block{flex-basis:100%}
+
+/* TS-15e: route controls reuse the sketch grid and remain usable on narrow windows. */
+.ps-pin{border:0;padding:0;background:none;font:inherit;cursor:pointer}.ps-pin:focus-visible{opacity:1;outline:2px solid var(--accent)}.ps-pin:disabled{cursor:default;opacity:.4}
+html[data-page="conn"] [data-rseg] button{border:0;background:none;color:inherit;font:inherit;padding:6px 10px;cursor:pointer}html[data-page="conn"] [data-rseg] button.on{background:var(--raised);border-radius:6px;color:var(--ink)}
+html[data-page="conn"] .pay small{display:block;font-size:10px;line-height:1.4;margin-top:4px}html[data-page="conn"] .rform{display:flex;gap:8px;flex-wrap:wrap}html[data-page="conn"] .rform input{min-width:0;flex:1 1 180px}html[data-page="conn"] .cbody{overflow-wrap:anywhere}html[data-page="conn"] .cbody .acts{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:700px){html[data-page="conn"] .cbody .two{grid-template-columns:1fr}html[data-page="conn"] .cbody .opt{flex-wrap:wrap}html[data-page="conn"] .row{grid-template-columns:24px 1fr 1fr!important;gap:8px}html[data-page="conn"] .row .pay{grid-column:2/4}html[data-page="conn"] .row .chev{display:none}}
+html[data-page="conn"] .main .ovl{overflow:hidden}html[data-page="conn"] .main .panel{max-width:calc(100% - 24px)}html[data-page="conn"] .foot-note{white-space:normal;overflow-wrap:anywhere;gap:12px}html[data-page="conn"] .foot-note>span{min-width:0}
+
+html[data-page="conn"] .main:has(>[data-connections-status]){grid-template-rows:auto auto minmax(0,1fr)}html[data-page="conn"] [data-connections-status]{margin:0;padding:8px 20px;align-items:center}html[data-page="conn"] .views{min-height:0;overflow:hidden}html[data-page="conn"] .view{min-height:0;overflow-y:auto}

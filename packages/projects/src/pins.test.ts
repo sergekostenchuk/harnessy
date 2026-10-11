@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdirSync,symlinkSync,readFileSync} from 'node:fs';
+import {mkdirSync,symlinkSync,readFileSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {Pins} from './pins.ts';
 import {temp,failure} from './test-support.ts';
@@ -14,5 +14,16 @@ test('[18,21,31] folder/chat pins enforce canonical project and server chat meta
  [{kind:'x',path:current},'kind: folder или chat; path обязателен',400],[{kind:'folder'},'kind: folder или chat; path обязателен',400],[{kind:'folder',path:join(t.root,'missing')},'нет такой папки',404],
  [{kind:'chat',path:current},'для чата нужен chat (id)',400],[{kind:'chat',path:other,chat:'chat'},'закрепить можно только чат открытой папки',400],[{kind:'chat',path:current,chat:'missing'},'нет такого чата',404]
  ] as const)await assert.rejects(pins.set(input),e=>failure('invalid_pin',text)(e)&&(e as {status:number}).status===status);
+ }finally{t.close()}
+});
+
+test('172/186: explicit unpin survives missing folders/chats and preserves the same chat id in another project',async()=>{
+ const t=temp();try{const a=join(t.root,'a'),b=join(t.root,'b');mkdirSync(a);mkdirSync(b);let current=a,exists=true;
+ const pins=new Pins(join(t.root,'pins.json'),()=>current,()=>exists?{title:'saved',label:'role',pane:'worker'}:null);
+ await pins.set({kind:'chat',path:a,chat:'same',on:true});await pins.set({kind:'folder',path:a,on:true});current=b;await pins.set({kind:'chat',path:b,chat:'same',on:true});exists=false;rmSync(a,{recursive:true});
+ await pins.set({kind:'chat',path:a,chat:'same',on:false});await pins.set({kind:'chat',path:a,chat:'same',on:false});assert.equal(pins.get().pins.length,2);assert.ok(pins.get().pins.some(p=>p.kind==='chat'&&p.path===b));
+ await pins.set({kind:'folder',path:a,on:false});await pins.set({kind:'chat',path:b,chat:'same',on:false});assert.deepEqual(pins.get().pins,[]);
+ await assert.rejects(pins.set({kind:'folder',path:a,on:true}),failure('invalid_pin','нет такой папки'));await assert.rejects(pins.set({kind:'chat',path:b,chat:'same',on:true}),failure('invalid_pin','нет такого чата'));
+ await assert.rejects(pins.set({kind:'chat',path:b,on:false}),failure('invalid_pin','для чата нужен chat (id)'));
  }finally{t.close()}
 });
