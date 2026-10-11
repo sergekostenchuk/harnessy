@@ -80,8 +80,8 @@ test('122/128: missing room selection disables the actual composer after typing 
 function connection(respond:(path:string,body?:any)=>Promise<any>){
  const v=ui(respond),streams:any[]=[];v.context.PAGE='chat';v.context.location.pathname='/01-chat.html';v.context.consumeState=()=>{};v.context.hEvent=()=>{};
  v.context.fetch=(path:string,opts?:{body?:string})=>Promise.resolve({json:()=>respond(path,opts?.body?JSON.parse(opts.body):undefined)});
- v.context.EventSource=class {constructor(){streams.push(this)}};
- runInContext(part(live,'  const api=','  // TS-07: waiting controls')+part(live,'  async function hConnect(){','  // ── чат: настоящее поле ввода')+'\nglobalThis.linkTesting={api,hConnect};',v.context);
+ v.context.EventSource=class {constructor(){streams.push(this)}close(){}};
+ runInContext(part(live,'  const api=','  // TS-07: waiting controls')+part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  async function hConnect(){','  // ── чат: настоящее поле ввода')+'\nglobalThis.linkTesting={api,hConnect};',v.context);
  return {...v,streams,link:v.context.linkTesting};
 }
 function linkStatus(project:string){return {project,panes:[{id:'room',label:'без роли',model:'w1'}],models:{},activeChats:{}}}
@@ -92,7 +92,7 @@ test('132: planned project SSE reconnection does not replace the project toast; 
   return path==='/api/status'?linkStatus(project):path==='/api/projects'?{projects:[{path:project,name:'current',current:true}]}:path==='/api/chats'?{chats:[],active:{}}:{pins:[]};
  });await v.link.hConnect();const es=v.streams[0];const switching=v.link.api('/api/project',{path:'/projects/b'});await entered.promise;
  assert.equal(v.H.projectLinkChange,true);es.onerror();assert.equal(v.H.link,'lost');await es.onopen();assert.equal(v.H.project,'/projects/b');assert.equal(v.H.link,'ok');assert.equal(v.H.projectLinkChange,false);assert.equal(v.toasts.length,0);
- gate.resolve({ok:true,project});await switching;es.onerror();await es.onopen();assert.deepEqual(v.toasts,['Связь с движком потеряна — переподключаюсь…','Связь восстановлена']);
+ gate.resolve({ok:true,project});await switching;await v.window.emit('live:status');const current=v.streams.at(-1);current.onerror();await current.onopen();assert.deepEqual(v.toasts,['Связь с движком потеряна — переподключаюсь…','Связь восстановлена']);
 });
 
 test('132: a refused or same-project request cannot mask a genuine reconnect; another window changing project does not announce recovery',async()=>{

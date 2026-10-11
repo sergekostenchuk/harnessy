@@ -37,3 +37,13 @@ test('144: final quota contract distinguishes API-key plans and refuses absent m
  for(const key of ['plan','fetchedAt','windows']){provider.limits=async()=>{const raw:any=live(h.clock.now());delete raw[key];return raw};await store.refresh('claude',true);assert.equal(store.snapshot().providers[0]!.code,'limits_invalid')}
  provider.limits=async()=>({ok:false,code:'limits_not_applicable',reason:'do not pass through'});await store.refresh('claude',true);assert.equal(store.snapshot().providers[0]!.status,'not_applicable');assert.deepEqual(store.snapshot().providers[0]!.windows,[]);assert.equal(store.snapshot().providers[0]!.plan,null);assert.doesNotMatch(JSON.stringify(store.snapshot()),/do not pass through/);
 });
+
+test('TS-12 r2: snapshot revisions advance when the last quota disappears, across errors and same-project reopen',async t=>{
+ const h=await harness(t),provider=Object.assign(new FakeProvider(),{limits:async():Promise<ProviderLimits>=>live(h.clock.now(),61)}),store=new LimitsStore(h.dir,h.clock,{claude:provider},()=>{});t.after(()=>store.close());await store.refresh();const first=store.snapshot();assert.equal(first.providers[0]!.status,'ok');
+ provider.limits=async()=>({ok:false,code:'limits_not_applicable',reason:''});await store.refresh('claude',true);const empty=store.snapshot();assert.equal(empty.updatedAt,null);assert.equal(empty.providers[0]!.status,'not_applicable');assert.ok(empty.revision>first.revision);assert.deepEqual(empty.providers[0]!.windows,[]);
+ provider.limits=async()=>({ok:false,code:'limits_auth',reason:''});await store.refresh('claude',true);const error=store.snapshot();assert.equal(error.updatedAt,null);assert.ok(error.revision>empty.revision);const reopened=new LimitsStore(h.dir,h.clock,{claude:provider},()=>{});assert.ok(reopened.snapshot().revision>error.revision);reopened.close();
+});
+
+test('TS-12 r2: an unchanged unsupported source does not send quota events into an idle subscription',async t=>{
+ const h=await harness(t),events=collect(h.runtime),first=h.runtime.limitsSnapshot();t.after(()=>events.sub.close());await h.runtime.limits();h.clock.advance(60000);await h.runtime.limits();assert.equal(h.runtime.limitsSnapshot().revision,first.revision);assert.ok(!events.events.some(e=>e.type==='limits'));
+});

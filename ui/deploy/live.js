@@ -234,11 +234,31 @@
     LOADED=cid;save();renderWaiting();render();await loadAttemptNotes(p,binding);if(!bindingCurrent(binding))return;
     if(onboard&&p.id!=='room'&&!r.messages.length&&!p.busy) await onboardOnce(p); }   // роль без вводной получает её при первом открытии чата (правило движка)
   // подключение к движку на всех экранах: боковая панель, настройки, подключения живут его данными (08.10)
+  // TS-12: one project-bound transport for limits, chat, approvals and journal invalidations.
+  const LIVE_EVENTS={source:null,project:null,generation:0,alive:true,listeners:new Set()};
+  function stopLiveEvents(){LIVE_EVENTS.generation++;if(LIVE_EVENTS.source)LIVE_EVENTS.source.close();LIVE_EVENTS.source=null;}
+  function subscribeLiveEvents(){const listener={onmessage:null,onopen:null,onerror:null,close(){LIVE_EVENTS.listeners.delete(listener)}};LIVE_EVENTS.listeners.add(listener);syncLiveEvents();return listener;}
+  function syncLiveEvents(){
+    if(!LIVE_EVENTS.alive||!H.on||H.snapshotOnly||typeof EventSource!=='function'){if(LIVE_EVENTS.source)stopLiveEvents();return;}
+    if(LIVE_EVENTS.source&&LIVE_EVENTS.project===H.project)return;
+    stopLiveEvents();const project=LIVE_EVENTS.project=H.project,generation=LIVE_EVENTS.generation,source=LIVE_EVENTS.source=new EventSource('/api/events/all');
+    const current=()=>LIVE_EVENTS.alive&&LIVE_EVENTS.source===source&&LIVE_EVENTS.generation===generation&&H.project===project&&!H.snapshotOnly;
+    source.onmessage=event=>{if(!current())return;let data;try{data=JSON.parse(event.data)}catch{return}if(!data||typeof data!=='object'||typeof data.type!=='string')return;
+      if(data.type==='limits'&&typeof limitsEvent==='function')limitsEvent(data);
+      for(const listener of [...LIVE_EVENTS.listeners])if(current()&&listener.onmessage)listener.onmessage(event);
+    };
+    source.onopen=async event=>{if(!current())return;if(typeof limitsRestart==='function')void limitsRestart();for(const listener of [...LIVE_EVENTS.listeners])if(current()&&listener.onopen)await listener.onopen(event);};
+    source.onerror=event=>{if(!current())return;for(const listener of [...LIVE_EVENTS.listeners])if(current()&&listener.onerror)listener.onerror(event);};
+  }
+  addEventListener('live:status',syncLiveEvents);
+  addEventListener('pagehide',()=>{LIVE_EVENTS.alive=false;stopLiveEvents()});
+  addEventListener('pageshow',event=>{if(event.persisted)LIVE_EVENTS.alive=true});
+  // End TS-12 shared events.
   async function hConnect(){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)){ return; }   /* движок подключён, если статус есть — даже без единого места: иначе чистая машина (первый запуск) остаётся в демо-режиме и проект создать нельзя */
     if(applyStatus(st,request,true)===false)return;H.connected=true;if(window.HARNESS_BOOT)window.HARNESS_BOOT.accept(); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
-    await refreshChats();
+    syncLiveEvents();await refreshChats();
     if(PAGE==='chat'){ if(H.pane&&H.pane.busy) H.cur={text:'',tools:[]};
-      let linkedProject=H.project;const es=new EventSource('/api/events/all'); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='limits')limitsEvent(ev); if(ev.type==='state') consumeState(ev); if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
+      let linkedProject=H.project;const es=H.events||(H.events=subscribeLiveEvents()); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='state') consumeState(ev); if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
       es.onerror=()=>{ if(H.link!=='lost'){ H.link='lost'; hStatus(); if(!H.projectLinkChange)toast('Связь с движком потеряна — переподключаюсь…'); } };   // плановая смена проекта тоже закрывает SSE — это не потеря движка
       es.onopen=async()=>{ if(H.link==='lost'){ const switching=H.projectLinkChange;H.link='ok'; hStatus(); await refreshStatus();if(!switching&&H.project===linkedProject)toast('Связь восстановлена');linkedProject=H.project;H.projectLinkChange=false; } };
       hStatus(); await loadChat(); }
@@ -716,7 +736,7 @@
   // TS-14b: spend blocks stay in their sketch positions; only their data and actions change.
   const spendPeriod=()=>{try{const p=new URLSearchParams(location.search||'').get('period');return ['7','30','90','all'].includes(p)?p:'all'}catch(e){return 'all'}};
   const SP={period:spendPeriod(),group:'byPane',project:null,generation:0,data:null,loading:false,error:null,alive:true,history:[],next:null,historyError:null,historyLoading:false,historyGeneration:0,vendor:'',model:'',card:null,mutation:false};
-  const LIM={generation:0,project:null,providers:[],limits:[],activity:[],error:null,loading:false,updatedAt:null};
+  const LIM={generation:0,project:null,providers:[],limits:[],activity:[],error:null,loading:false,updatedAt:null,revision:null};
   const spendGroups={byPane:'по местам',byChat:'по чатам',byModel:'по моделям',byVendor:'по провайдерам',byModelVendor:'модель и провайдер',byDay:'по дням UTC'};
   const spButton=(text,attr,disabled=false)=>'<button type="button" class="btn sm ghost" '+attr+(disabled?' disabled':'')+'>'+esc(text)+'</button>';
   const spMock=(title,reason,actions=[])=>'<div class="sp-mock"><b>'+esc(title)+'</b><span class="pill">макет</span><p>'+esc(reason)+'</p>'+actions.map(t=>spButton(t,'data-spend-unavailable title="'+esc(reason)+'"',true)).join(' ')+'</div>';
@@ -744,13 +764,19 @@
     const ranked=limitProviders().filter(p=>!spWindow(p).unavailable).map((p,i)=>({p,i,n:(LIM.activity.find(g=>g.vendor===p.id)||{}).turns||0})).sort((a,b)=>b.n-a.n||a.i-b.i).slice(0,3);
     el.innerHTML='<div class="cap">Лимиты</div>'+ranked.map(({p})=>spLimitHTML(p,false,true)).join('')+(!ranked.length?'<p>'+esc(LIM.loading?'Читаю подключения…':LIM.error||(LIM.providers.length?'Окна подписок — в подробностях':'Нет подключённых провайдеров'))+'</p>':'')+spButton('подробнее','data-spend-limits')+'<a class="sp-link" href="05-spend.html?period='+SP.period+'">Расход и лимиты →</a>';
   });if(limitsDialog&&limitsDialog.hasAttribute('open'))limitsDialog.querySelector('.limits-cards').innerHTML=limitProviders().map(p=>spLimitHTML(p,true)).join('');}
-  function limitsEvent(data){if(!H.on||!SP.alive||data.project!==H.project||!Array.isArray(data.providers)||LIM.updatedAt&&data.updatedAt<LIM.updatedAt)return;LIM.error=null;LIM.limits=data.providers;LIM.updatedAt=data.updatedAt;limitsDraw();if(PAGE==='spend')spendDraw();}
-  async function limitsFetch(){if(!H.on||!SP.alive)return false;const project=H.project,generation=++LIM.generation;LIM.loading=true;if(LIM.project!==project){LIM.providers=[];LIM.limits=[];LIM.activity=[];LIM.updatedAt=null;LIM.project=project}limitsDraw();
+  function limitsApply(data){
+    if(!data||data.ok!==true||data.project!==H.project||!Array.isArray(data.providers)||!Number.isSafeInteger(data.revision)||data.revision<0)return false;
+    if(LIM.revision!==null&&data.revision<LIM.revision)return true;
+    LIM.limits=data.providers;LIM.revision=data.revision;LIM.updatedAt=typeof data.updatedAt==='number'?data.updatedAt:null;return true;
+  }
+  function limitsEvent(data){if(!H.on||H.snapshotOnly||!SP.alive||!limitsApply(data))return;LIM.error=null;limitsDraw();if(PAGE==='spend')spendDraw();}
+  function limitsRestart(){if(!SP.alive||!H.on||H.snapshotOnly)return;LIM.generation++;LIM.revision=null;return limitsFetch();}
+  async function limitsFetch(){if(!H.on||H.snapshotOnly||!SP.alive)return false;const project=H.project,generation=++LIM.generation;LIM.loading=true;if(LIM.project!==project){LIM.providers=[];LIM.limits=[];LIM.activity=[];LIM.updatedAt=null;LIM.revision=null;LIM.project=project}limitsDraw();
     const [connections,limits,activity]=await Promise.allSettled([api('/api/connections'),api('/api/limits'),api('/api/spend?period=7')]);if(!SP.alive||project!==H.project||generation!==LIM.generation)return false;
     const c=connections.status==='fulfilled'?connections.value:null,l=limits.status==='fulfilled'?limits.value:null,a=activity.status==='fulfilled'?activity.value:null;
     LIM.error=null;if(c&&c.ok&&Array.isArray(c.providers))LIM.providers=c.providers.filter(p=>p&&typeof p.id==='string'&&p.auth&&p.auth.loggedIn===true);
     if(!c||!c.ok||!Array.isArray(c.providers))LIM.error=c&&c.error||'Подключения не прочитаны';
-    if(l&&l.ok&&l.project===project&&Array.isArray(l.providers)){if(!LIM.updatedAt||typeof l.updatedAt==='number'&&l.updatedAt>=LIM.updatedAt){LIM.limits=l.providers;LIM.updatedAt=typeof l.updatedAt==='number'?l.updatedAt:null}}else {LIM.error=LIM.error||'Лимиты временно недоступны';LIM.limits=LIM.limits.map(p=>({...p,stale:true}))}
+    if(!limitsApply(l)){LIM.error=LIM.error||'Лимиты временно недоступны';LIM.limits=LIM.limits.map(p=>({...p,stale:true}))}
     LIM.activity=a&&a.ok&&a.project===project&&a.period==='7'&&Array.isArray(a.byVendor)?a.byVendor:[];LIM.loading=false;limitsDraw();spendDraw();return true;
   }
   function spProvider(p){if(!p)return '<div class="h">Подключения</div><p class="d">'+esc(LIM.loading?'Читаю подключения…':LIM.error||'Нет подключённых провайдеров')+'</p><a href="11-connections.html">Открыть подключения →</a>';
@@ -820,7 +846,7 @@
     else html=el.innerHTML+'<a href="06-settings.html#p=priceList">Настроить прайс-лист →</a>';
     HX.open(el,'<div data-live-spend>'+html+'<div class="acts">'+spButton('Закрыть','data-spend-close')+'</div></div>',{w:1000,h:690,hide:false});
   }
-  addEventListener('live:status',()=>{if(limitsDialogProject&&limitsDialogProject!==H.project)closeLimits();if(H.on&&SP.alive){if(SP.project!==H.project&&window.HX){HX.close();SP.card=null}void limitsFetch();if(PAGE==='spend')void spendFetch()}});
+  addEventListener('live:status',()=>{if(limitsDialogProject&&limitsDialogProject!==H.project)closeLimits();if(H.on&&!H.snapshotOnly&&SP.alive){if(SP.project!==H.project&&window.HX){HX.close();SP.card=null}void limitsFetch();if(PAGE==='spend')void spendFetch()}});
   addEventListener('pagehide',()=>{closeLimits();SP.alive=false;SP.generation++;LIM.generation++});addEventListener('pageshow',event=>{if(event.persisted)SP.alive=true});
   document.addEventListener('click',async event=>{const target=event.target,widget=target.closest('[data-spend-limits]');if(!H.on&&!widget&&!target.closest('[data-spend-close]'))return;
     // Nested menus own their clicks; the card must not intercept them before laMenu receives the choice.
@@ -1100,7 +1126,7 @@
     try{return await job}finally{if(EV.checking===job){EV.checking=null;const again=EV.refreshQueued;EV.refreshQueued=false;if(again&&eventsCurrent(project,generation))await eventsRefresh()}}
   }
   function eventsSync(refresh=false){if(!eventFeed()||!EV.alive||!H.on||H.snapshotOnly)return;if(EV.project!==H.project)eventsReset();
-    if(!EV.es&&typeof EventSource==='function'){const project=EV.project,generation=EV.generation,es=EV.es=new EventSource('/api/events/all');
+    if(!EV.es&&typeof EventSource==='function'){const project=EV.project,generation=EV.generation,es=EV.es=subscribeLiveEvents();
       es.onmessage=e=>{if(!eventsCurrent(project,generation))return;let event;try{event=JSON.parse(e.data)}catch{return}if(['sent','done','error','note','state','approvalResolved'].includes(event.type))void eventsRefresh()};
       es.onopen=()=>{if(eventsCurrent(project,generation))void eventsRefresh()};
       es.onerror=()=>{if(eventsCurrent(project,generation)){EV.error='поток обновлений недоступен; можно перечитать журнал';eventsDraw()}};
@@ -1169,9 +1195,9 @@
     const decisions=document.querySelector('#v-week .lst');if(decisions)decisions.innerHTML='<div class="li head">Решения владельца</div>'+(pending.length?pending.map(p=>waitingControls(p,p.waiting,H.project)).join(''):'<div class="empty">Решений об итогах ходов пока нет.</div>');
     const away=document.querySelector('#v-away .lst');if(away&&!away.dataset.live){away.dataset.live='1';away.innerHTML='<div class="empty">События линии — в журнале (экран «Журнал»), карточки подтверждений — во вкладке «Чей ход».</div>';}
     const st=document.querySelector('.frame .top .st'); if(st) st.innerHTML='<i'+(total?' style="background:var(--accent)"':'')+'></i>'+(total?total+' '+plural(total)+' вас':'никто не ждёт')+' · движок'; }
-  function nowLive(){ if(!H.on||NOW.es) return; NOW.es=new EventSource('/api/events/all'); nowDraw();
+  function nowLive(){ if(!H.on||NOW.es) return; NOW.es=subscribeLiveEvents(); nowDraw();
     NOW.es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='approval'){ NOW.cards.set(ev.pane+'|'+ev.id,{pane:ev.pane,id:ev.id,title:ev.title,detail:ev.detail,since:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}); nowDraw(); }
-      else if(ev.type==='approvalResolved'){ NOW.cards.delete(ev.pane+'|'+ev.id); nowDraw(); }else if(ev.type==='limits')limitsEvent(ev);else if(ev.type==='state')consumeState(ev); };
+      else if(ev.type==='approvalResolved'){ NOW.cards.delete(ev.pane+'|'+ev.id); nowDraw(); }else if(ev.type==='state')consumeState(ev); };
     NOW.es.onerror=()=>{ const st=document.querySelector('.frame .top .st'); if(st) st.innerHTML='<i></i>связь потеряна · переподключение…'; }; }
   document.addEventListener('click',async e=>{ const b=e.target.closest('[data-ap-decision]'); if(!b||PAGE!=='now'||!H.on) return; e.preventDefault(); e.stopPropagation(); const li=b.closest('[data-ap]'); if(!li) return;
     let r=null; try{ r=await api('/api/approve',{pane:li.dataset.apPane,id:li.dataset.ap,decision:b.dataset.apDecision}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; } toast(b.dataset.apDecision==='allow'?'Разрешено':'Отказано'); NOW.cards.delete(li.dataset.apPane+'|'+li.dataset.ap); nowDraw(); },true);

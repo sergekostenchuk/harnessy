@@ -15,7 +15,7 @@ function ui(fetch?:(path:string)=>Promise<any>){
   esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),api:async(path:string)=>{requests.push(path);return fetch?fetch(path):snapshot(H.project)},
   addEventListener:d.window.addEventListener.bind(d.window),EventSource:class{onmessage:any;onopen:any;onerror:any;closed=false;path:string;constructor(path:string){this.path=path;streams.push(this)}close(){this.closed=true}}};context.window=context;
  const vm=createContext(context);runInContext(part(proto,'  // TS-15a specification','  // End TS-15a specification'),vm);
- runInContext(part(live,'  // TS-15a: journal-backed','  // End TS-15a events.')+'\nglobalThis.testing={state:EV,sync:eventsSync,fetch:eventsFetch,reset:eventsReset,draw:eventsDraw};',vm);
+ runInContext(part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  // TS-15a: journal-backed','  // End TS-15a events.')+'\nglobalThis.testing={state:EV,sync:eventsSync,fetch:eventsFetch,reset:eventsReset,draw:eventsDraw};',vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  const switchProject=(project:string)=>{H.project=project;context.testing.reset();return context.testing.sync()};
  return {...d,H,context,requests,streams,find,switchProject,functions:context.testing};
@@ -38,7 +38,7 @@ test('168/184: stream is only an invalidation signal, retains older pages and ne
  let latest=1;const v=ui(async path=>{const q=new URL('http://test'+path).searchParams;return snapshot('/a',latest>Number(q.get('since')||0)?[record(latest)]:[],latest,latest)});
  await v.functions.sync();latest=2;v.streams[0].onmessage({data:JSON.stringify({type:'done',seq:999,text:'forged stream record'})});await until(()=>v.functions.state.lastSeq===2);
  assert.deepEqual([...v.functions.state.records].map(r=>r.seq),[2,1]);assert.ok(v.requests.at(-1)?.includes('since=1'));assert.doesNotMatch(v.find('[data-events-body]').textContent,/forged/);
- await v.find('[data-events-clear]').emit('click');assert.equal(v.streams[0].closed,true);assert.equal(v.streams.length,2);
+ await v.find('[data-events-clear]').emit('click');assert.equal(v.streams[0].closed,false);assert.equal(v.streams.length,1);
 });
 
 test('168/190: late A, B, A and filter responses cannot replace the confirmed binding',async()=>{
