@@ -1,7 +1,7 @@
 import {join} from 'node:path';
 import {statSync} from 'node:fs';
 import {MODES,pyTruthy} from '@harnessy/team';
-import {KINDS} from '@harnessy/journal';
+import {KINDS,SYSTEM_KINDS} from '@harnessy/journal';
 import {projectsRoot,validDir,ROUTES} from '@harnessy/projects';
 import {RuntimeError,type Runtime,type ProjectState} from '@harnessy/runtime';
 import {CLAUDE_MODELS,CODEX_FALLBACK} from './catalog.ts';
@@ -36,12 +36,18 @@ export function metaRoutes(r:Runtime):Route[]{return [
  {method:'GET',path:'/api/projects',handle:async()=>{const p=r.project,data=await r.projectRegistry.listProjects(p.dir);sameProject(r,p);for(const row of data.projects)if(row.current)row.seats=[...p.registry.panes.values()].filter(p=>p.id!=='room').length;return json(data)}},
  {method:'GET',path:'/api/journal',handle:({query})=>{let before:number|undefined;
  if(query.has('before')){const raw=query.get('before')!;before=Number(raw);if(query.getAll('before').length!==1||!/^\d+$/.test(raw)||!Number.isSafeInteger(before)||before<=0)return json({ok:false,code:'before_invalid',error:'before: ожидается целое число больше нуля'},400)}
- let since=integer(query.get('since')??'0',NaN),limit=integer(query.get('limit')??'100',NaN);if(!Number.isFinite(since)||!Number.isFinite(limit)){since=0;limit=100}const p=r.project;return json({records:p.journal.read({since,limit,thread:query.get('thread')||null,before}),lastSeq:p.journal.lastSeq,cursors:p.journal.cursors,threads:threads(p)})}},
+ let since=integer(query.get('since')??'0',NaN),limit=integer(query.get('limit')??'100',NaN);if(!Number.isFinite(since)||!Number.isFinite(limit)){since=0;limit=100}const p=r.project;
+ const filters=Object.fromEntries(['kind','from','to'].map(key=>[key,query.get(key)||null]));
+ if(['kind','from','to'].some(key=>query.getAll(key).length>1)||filters.kind&&!new Set<string>([...KINDS,...SYSTEM_KINDS]).has(filters.kind))return json({ok:false,code:'journal_filter_invalid',error:'фильтр журнала: один kind из каталога, from и to — идентификаторы участников'},400);
+ const all=p.journal.read({since:Math.min(0,since),limit:0}),projectRecords=all.filter(record=>record.seq>0),counts=new Map<string,number>();for(const record of projectRecords)counts.set(record.kind,(counts.get(record.kind)||0)+1);
+ const selected=all.filter(record=>record.seq>since&&(before===undefined||record.seq<before)&&(!query.get('thread')||record.thread===query.get('thread'))&&(!filters.kind||record.kind===filters.kind)&&(!filters.from||record.from===filters.from)&&(!filters.to||record.to.includes(filters.to)));
+ if(before!==undefined)selected.sort((a,b)=>a.seq-b.seq);
+ return json({project:p.dir,records:limit?selected.slice(-limit):selected,summary:{total:projectRecords.length,byKind:Object.fromEntries(counts)},lastSeq:p.journal.lastSeq,cursors:p.journal.cursors,threads:threads(p)})}},
  {method:'GET',path:'/api/connections',handle:async()=>{
  const {p,claude,codex,models}=await metadata(r,true),seats=(v:string)=>[...p.registry.panes.values()].filter(p=>p.vendor===v&&p.id!=='room').map(p=>p.id),other=models.filter(m=>!m.id.startsWith('gpt'));
  const providers:Record<string,unknown>[]=[{id:'claude',name:'Claude',kind:'подписка · вход через claude',auth:claude,models:CLAUDE_MODELS.length,seats:seats('claude'),routable:true,route:r.connections.get('claude')},{id:'codex',name:'Codex',kind:'подписка ChatGPT · codex app-server',auth:codex,models:models.length-other.length,seats:seats('codex'),routable:true,route:r.connections.get('codex')}];
  if(other.length)providers.push({id:'router',name:'Роутер провайдеров',kind:'локальный роутер 127.0.0.1:11435 · Ollama Cloud, Qwen, DeepSeek, GLM, Kimi',auth:{loggedIn:true},models:other.length,seats:[],routable:false,route:null,note:'выход в сеть у роутера свой — движок его маршрут не задаёт'});
- return json({ok:true,providers,routes:ROUTES})
+ return json({ok:true,project:p.dir,providers,routes:ROUTES})
  }},
  {method:'POST',path:'/api/connections/route',handle:async({body})=>{
  const v=string(body.provider);if(v!=='claude'&&v!=='codex')return json({ok:false,error:'маршрут задаётся только провайдерам, чьи процессы запускает движок: claude, codex'},400);

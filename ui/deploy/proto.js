@@ -38,11 +38,37 @@
   if(!document.documentElement.hasAttribute('data-proto')) return;
   /*IC*/
   const FILE=location.pathname.split('/').pop()||'10-new-chat.html';
-  const PAGES={new:'10-new-chat.html',now:'14-now.html',chat:'01-chat.html',plan:'02-plan.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
-  const TIP={now:'Сейчас',chat:'Чат',plan:'План · карта',res:'Ресёрч',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Стая агентов',sens:'Датчики',spend:'Расход и лимиты',log:'Журнал'};
-  const TOP=['now','chat','plan','res','doc','art','mem','swarm','sens','spend','log'];
+  const PAGES={new:'10-new-chat.html',now:'14-now.html',chat:'01-chat.html',plan:'02-plan.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',events:'09-events.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
+  const TIP={now:'Сейчас',chat:'Чат',plan:'План · карта',res:'Ресёрч',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Стая агентов',sens:'Датчики',spend:'Расход и лимиты',events:'События',log:'Журнал'};
+  const TOP=['now','chat','plan','res','doc','art','mem','swarm','sens','spend','events','log'];
   const KEY=Object.keys(PAGES).find(k=>PAGES[k]===FILE)||'';
   document.documentElement.dataset.page=KEY;
+  // TS-15a specification labels are independent of connection/boot state.
+  const SPEC={
+    plan:['макет','План, задачи и показатели пока показаны на примере: движок не отдаёт карту работ.'],
+    swarm:['макет','Состав, связи и показатели команды — пример; подключение данных команды ещё не выполнено.'],
+    sens:['макет','Датчики и пороги — пример; движок пока не отдаёт эти измерения.'],
+    now:['частично','Решения и подтверждения приходят от движка; остальные показатели и прогнозы пока демонстрационные.'],
+    events:['частично','Лента читается из журнала текущего проекта. Соседние блоки — примеры уведомлений и состояний.'],
+    spend:['частично','Журнал ходов и расчёты имеют источник; неподключённые подписки, лимиты и прогнозы отмечены на блоках.'],
+    first:['частично','Выбор папки работает; состав команды и результаты следующих шагов пока демонстрационные.'],
+    login:['макет','Серверный вход и перенос данных пока показаны на примере.'],
+    away:['частично','Чат и выбор условий доступны; исполнение условий ухода движком пока не поддерживается.']
+  };
+  function specificationLabels(){const spec=SPEC[KEY];if(!spec)return;document.documentElement.setAttribute('data-spec-state',spec[0]);
+    document.querySelectorAll('.frame').forEach(frame=>{const app=frame.querySelector('.app,.stage');if(!app||app.querySelector('.spec-banner'))return;
+      const banner=document.createElement('div');banner.className='spec-banner';banner.setAttribute('role','note');
+      banner.textContent='Макет · образец данных · страница: '+spec[0]+'. '+spec[1];
+      const main=app.querySelector('.main'),top=main&&main.querySelector('.top');
+      if(top){const heading=document.createElement('div');heading.className='spec-heading';top.before(heading);heading.appendChild(banner);top.remove();heading.appendChild(top)}else app.insertBefore(banner,app.firstChild);
+    });
+    const partial={now:'#v-turn .nums, #v-away .nums, #v-week .nums',first:'.frame:not(:first-child)',away:'.leave-policy'};
+    if(partial[KEY])document.querySelectorAll(partial[KEY]).forEach(block=>block.setAttribute('data-spec-mock',spec[1]));
+    document.querySelectorAll('[data-spec-mock]').forEach(block=>{if(block.querySelector('.spec-block'))return;const label=document.createElement('div');label.className='spec-block';label.textContent='Макет · '+block.dataset.specMock;block.insertBefore(label,block.firstChild)});
+  }
+  specificationLabels();
+  // End TS-15a specification labels.
+
 
   const SIDE_KEY='harnessy-side'; let side='wide'; try{ if(localStorage.getItem(SIDE_KEY)==='rail') side='rail'; }catch(e){} document.documentElement.dataset.side=side;
   // ── кадры и размер
@@ -118,7 +144,7 @@
     dr.innerHTML='<div class="m-h"><i><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></i>Harnessy<span data-mx>×</span></div>'+item('new','Новый чат','p')+
       '<div class="m-g">работа</div>'+item('now','Сейчас','2')+item('chat','Чат')+item('plan','План · карта')+item('doc','Документы проекта')+item('art','Артефакты')+item('mem','Память проекта')+item('res','Ресёрч')+
       '<div class="m-g">команда</div>'+item('swarm','Стая агентов')+item('sens','Датчики')+item('spend','Расход и лимиты')+item('conn','Подключения и лимиты')+
-      '<div class="m-g">прочее</div>'+item('log','Журнал')+item('set','Настройки')+item('away','Уйти')+
+      '<div class="m-g">прочее</div>'+item('events','События')+item('log','Журнал')+item('set','Настройки')+item('away','Уйти')+
       '<div class="m-f"><a href="../disarto/'+FILE+'">этот экран листом, с пояснениями ↗</a><a href="../disarto/index.html">все скетчи ↗</a></div>';
     document.body.append(btn,bg,dr);
     const open=v=>document.documentElement.classList.toggle('m-open',v);

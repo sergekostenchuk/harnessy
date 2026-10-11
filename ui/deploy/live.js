@@ -207,6 +207,7 @@
   // End TS-09a project sections.
   function applyStatus(st,request,connected=false){if(leftPage||window.HARNESS_BOOT&&!window.HARNESS_BOOT.confirm(st.project||'',request))return false;if(connected){H.on=true;H.snapshotOnly=false}H.liveStatus=st;const changed=H.project!==(st.project||''),previousRoom=(H.panes||[]).find(p=>p.id==='room');H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.defaultDir=st.defaultDir||''; H.roleCatalog=st.roleCatalog||[]; H.noProject=!!st.noProject; H.projectsRoot=st.projectsRoot||''; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; H.halted=!!st.halted; H.kinds=st.kinds||[]; H.threads=st.threads||{};
     if(changed){S.chat=[];H.chatList=[];H.pins=[];H.projects=null;const selectedRoom=(H.panes||[]).find(p=>p.id==='room');if(previousRoom&&selectedRoom&&previousRoom.model!==selectedRoom.model)toast('у проекта своя настройка модели: '+esc(modelName(selectedRoom.model)));}
+    if(changed&&typeof eventsReset==='function')eventsReset();
     if(changed&&typeof resetJournal==='function'){resetJournal(H.project);if(H.on&&!H.snapshotOnly&&window.psKey==='log')journalFetch()}setTimeout(()=>dispatchEvent(new CustomEvent('live:status')),0);
     if(PAGE==='new') document.querySelectorAll('.status > span:first-child').forEach(el=>{ el.textContent=(H.noProject||!!(S.cx&&S.cx.noFolder))?'без проекта · модель ничего не читает':'папка '+((H.project||'').split('/').filter(Boolean).pop()||'проект')+(st.repo?' · git':'')+' · ролей '+(H.panes||[]).filter(p=>p.id!=='room').length; });   // строка папки — от движка, не статика скетча (Kimi UX-1 №85 п.2)
     if(typeof sectionSync==='function')sectionSync();badges();
@@ -356,7 +357,7 @@
   document.addEventListener('click',e=>{ if(e.target.closest('[data-clear]')){ S.chat=[]; save(); render(); toast('Разговор очищен'); } });
 
   // ── поиск ⌘K: экраны, открытые решения, действия
-  const SCREENS=[['Новый чат','10-new-chat.html'],['Сейчас · чей ход и решения','14-now.html'],['Чат','01-chat.html'],['План · карта','02-plan.html'],['Документы проекта','17-doc.html'],['Артефакты','15-artifacts.html'],['Память проекта','16-memory.html'],['Ресёрч','12-research.html'],['Стая агентов','04-swarm.html'],['Датчики','13-sensors.html'],['Расход и лимиты','05-spend.html'],['Подключения и лимиты','11-connections.html'],['Журнал','21-journal.html'],['Настройки','06-settings.html'],['Уйти','18-overlays.html#leave'],['Первый запуск','19-first-run.html'],['Вход','20-login-pour.html'],['Дизайн-код','../disarto/00-design-code.html']];
+  const SCREENS=[['Новый чат','10-new-chat.html'],['Сейчас · чей ход и решения','14-now.html'],['Чат','01-chat.html'],['План · карта','02-plan.html'],['Документы проекта','17-doc.html'],['Артефакты','15-artifacts.html'],['Память проекта','16-memory.html'],['Ресёрч','12-research.html'],['Стая агентов','04-swarm.html'],['Датчики','13-sensors.html'],['Расход и лимиты','05-spend.html'],['Подключения и лимиты','11-connections.html'],['Журнал','21-journal.html'],['События','09-events.html'],['Настройки','06-settings.html'],['Уйти','18-overlays.html#leave'],['Первый запуск','19-first-run.html'],['Вход','20-login-pour.html'],['Дизайн-код','../disarto/00-design-code.html']];
   let pal,palSel=0,palItems=[];
   function palList(q){ q=q.trim().toLowerCase(); const it=SCREENS.map(x=>({t:x[0],k:'экран',go:()=>location.href=x[1]}))
       .concat(waiting().map(d=>({t:DEC[d],k:'ждёт вас',go:()=>location.href='14-now.html'})))
@@ -1041,6 +1042,67 @@
   function liveFirstPaint(){if(H.connected&&window.HARNESS_BOOT)window.HARNESS_BOOT.ready()}
   // End TS-11 snapshot.
   // ── «Журнал» при подключённом движке: записи /api/journal в разметке экрана (строки .li), фильтры по видам движка, карточка записи, тред целиком, слияние принятого вердикта владельцем
+  // TS-15a: journal-backed events. The stream invalidates HTTP snapshots; it is never a journal.
+  const EV={project:null,generation:0,alive:true,records:[],summary:null,lastSeq:0,more:false,loading:false,error:null,queued:false,refreshQueued:false,checking:null,es:null,filters:{kind:'',from:'',to:'',thread:''}};
+  const eventFeed=()=>PAGE==='events'?document.querySelector('[data-event-feed]'):null;
+  function eventsReset(){if(!eventFeed())return;EV.generation++;if(EV.es)EV.es.close();EV.es=null;EV.project=H.project;EV.records=[];EV.summary=null;EV.lastSeq=0;EV.more=false;EV.loading=false;EV.queued=false;EV.refreshQueued=false;EV.checking=null;EV.error=null;eventsDraw()}
+  function eventsValid(r,project,filters){
+    const count=n=>Number.isSafeInteger(n)&&n>=0;
+    return r&&r.ok!==false&&r.project===project&&count(r.lastSeq)&&r.summary&&count(r.summary.total)&&r.summary.byKind&&typeof r.summary.byKind==='object'&&!Array.isArray(r.summary.byKind)&&Object.values(r.summary.byKind).every(count)&&Object.values(r.summary.byKind).reduce((a,b)=>a+b,0)===r.summary.total&&Array.isArray(r.records)&&r.records.every(x=>x&&Number.isSafeInteger(x.seq)&&x.seq>0&&x.seq<=r.lastSeq&&typeof x.ts==='string'&&Number.isFinite(Date.parse(x.ts))&&typeof x.kind==='string'&&typeof x.from==='string'&&Array.isArray(x.to)&&x.to.every(v=>typeof v==='string')&&typeof x.text==='string'&&(x.thread===null||typeof x.thread==='string')&&(!filters.kind||filters.kind===x.kind)&&(!filters.from||filters.from===x.from)&&(!filters.to||x.to.includes(filters.to))&&(!filters.thread||filters.thread===x.thread))&&new Set(r.records.map(x=>x.seq)).size===r.records.length;
+  }
+  function eventsDraw(){const feed=eventFeed();if(!feed)return;
+    if(!feed.querySelector('[data-events-body]')){
+      feed.innerHTML='<div class="mcap">События проекта · журнал</div><div data-events-source class="events-source"></div><div data-events-count></div><div class="events-kinds" data-events-kinds></div><form class="events-filters"><label>От кого<input name="from" placeholder="идентификатор участника"></label><label>Кому<input name="to" placeholder="идентификатор участника"></label><label>Тред<input name="thread" placeholder="идентификатор треда"></label><button class="btn sm" type="submit">Применить</button><button class="btn sm ghost" type="button" data-events-clear>Сбросить</button></form><div data-events-error role="status"></div><div data-events-body></div><div class="ffoot"><button class="btn sm" data-events-more>Показать ещё</button><button class="btn sm ghost" data-events-refresh>Обновить</button></div><div class="spec-block">Макет · действия журнала: отметки прочтения и назначение агента пока не поддерживаются движком.</div><div class="ffoot"><button class="btn sm ghost" disabled title="Движок не хранит отметки прочтения">Отметить прочитанным</button><button class="btn sm" disabled title="Состав команды назначается через оркестратора">Назначить агента</button></div>';
+    }
+    feed.querySelector('[data-events-source]').textContent='Текущий проект: '+(EV.project||'ожидаю подтверждения');
+    feed.querySelector('[data-events-count]').textContent=EV.summary?'Всего в проекте: '+EV.summary.total+' · загружено по фильтрам: '+EV.records.length:'';
+    const kinds=EV.summary?Object.keys(EV.summary.byKind).sort():[];if(EV.filters.kind&&!kinds.includes(EV.filters.kind))kinds.push(EV.filters.kind);
+    feed.querySelector('[data-events-kinds]').innerHTML=['',...kinds].map(k=>'<button class="btn sm'+(EV.filters.kind===k?' p':' ghost')+'" data-events-kind="'+esc(k)+'" aria-pressed="'+(EV.filters.kind===k)+'">'+esc(k||'Все')+(EV.summary?' · '+(k?EV.summary.byKind[k]||0:EV.summary.total):'')+'</button>').join('');
+    feed.querySelector('[data-events-error]').textContent=EV.error?'Не удалось прочитать журнал: '+EV.error+(EV.summary?' · показан предыдущий снимок.':''):'';
+    const groups=new Map();for(const record of EV.records){const thread=record.thread||'';if(!groups.has(thread))groups.set(thread,[]);groups.get(thread).push(record)}
+    feed.querySelector('[data-events-body]').innerHTML=EV.records.length?[...groups].map(([thread,records])=>'<div class="grp"><span>'+esc(thread||'Без треда')+'</span><span>'+records.length+' загружено</span></div>'+records.map(r=>'<div class="ev"><span class="o">•</span><details data-event-seq="'+r.seq+'"><summary><b>№'+r.seq+' · '+esc(r.kind)+'</b><span class="t">'+esc(new Date(r.ts).toLocaleString('ru-RU'))+'</span><span class="events-route">'+esc(r.from)+' → '+esc(r.to.join(', '))+'</span><span class="events-preview">'+esc(r.text.slice(0,160))+'</span></summary><q>'+esc(r.text)+'</q><small>Проект: '+esc(EV.project)+' · тред: '+esc(r.thread||'без треда')+'</small></details></div>').join('')).join(''):EV.summary?'<div class="empty">'+(EV.summary.total?'По выбранным фильтрам записей нет.':'В этом проекте пока нет событий. Здесь появятся поручения, ответы и события движка.')+'</div>':'<div class="empty">'+(EV.error?'Данные не прочитаны. Нажмите «Обновить».':'Читаю журнал…')+'</div>';
+    const more=feed.querySelector('[data-events-more]');more.disabled=!EV.more||EV.loading;more.textContent=EV.loading?'Читаю…':'Показать ещё';
+    feed.querySelector('[data-events-refresh]').disabled=EV.loading;
+  }
+  function eventsCurrent(project,generation){return EV.alive&&H.on&&!H.snapshotOnly&&H.project===project&&EV.project===project&&EV.generation===generation}
+  async function eventsFetch(mode='refresh'){
+    if(!eventFeed()||!EV.alive||!H.on||H.snapshotOnly)return;if(EV.project!==H.project)eventsReset();
+    if(EV.loading){if(mode==='refresh')EV.queued=true;return}const project=EV.project,generation=EV.generation,filters={...EV.filters},more=mode==='more',initial=!EV.summary,before=more&&EV.records.length?Math.min(...EV.records.map(r=>r.seq)):null,since=initial||more?0:EV.lastSeq;
+    const q=new URLSearchParams({limit:initial||more?'100':'0'});if(before)q.set('before',String(before));if(since)q.set('since',String(since));for(const [key,value]of Object.entries(filters))if(value)q.set(key,value);
+    EV.loading=true;EV.error=null;eventsDraw();
+    try{const r=await api('/api/journal?'+q);if(!eventsCurrent(project,generation))return;
+      if(!eventsValid(r,project,filters)||r.lastSeq<EV.lastSeq||r.records.some(x=>before&&x.seq>=before||since&&x.seq<=since))throw Error(r&&r.error||'некорректная форма ответа или привязка к проекту');
+      EV.records=[...new Map([...EV.records,...r.records].map(x=>[x.seq,x])).values()].sort((a,b)=>b.seq-a.seq);EV.summary=r.summary;if(!more)EV.lastSeq=r.lastSeq;
+      if(initial||more)EV.more=r.records.length===100&&Math.min(...r.records.map(x=>x.seq))>1;
+      document.title='Harnessy · События · '+project.split('/').pop();
+    }catch(e){if(eventsCurrent(project,generation))EV.error=e.message||'нет связи'}
+    finally{if(eventsCurrent(project,generation)){EV.loading=false;eventsDraw();if(EV.queued){EV.queued=false;void eventsFetch()}}}
+  }
+  async function eventsRefresh(){if(!eventFeed()||!EV.alive)return;if(EV.checking){EV.refreshQueued=true;return EV.checking}const project=EV.project,generation=EV.generation;
+    const job=(async()=>{const status=await refreshStatus(true);if(!EV.alive||generation!==EV.generation)return;if(!status){EV.error='проект не подтверждён движком';eventsDraw();return}return eventsSync(true)})();EV.checking=job;
+    try{return await job}finally{if(EV.checking===job){EV.checking=null;const again=EV.refreshQueued;EV.refreshQueued=false;if(again&&eventsCurrent(project,generation))await eventsRefresh()}}
+  }
+  function eventsSync(refresh=false){if(!eventFeed()||!EV.alive||!H.on||H.snapshotOnly)return;if(EV.project!==H.project)eventsReset();
+    if(!EV.es&&typeof EventSource==='function'){const project=EV.project,generation=EV.generation,es=EV.es=new EventSource('/api/events/all');
+      es.onmessage=e=>{if(!eventsCurrent(project,generation))return;let event;try{event=JSON.parse(e.data)}catch{return}if(['sent','done','error','note','state','approvalResolved'].includes(event.type))void eventsRefresh()};
+      es.onopen=()=>{if(eventsCurrent(project,generation))void eventsRefresh()};
+      es.onerror=()=>{if(eventsCurrent(project,generation)){EV.error='поток обновлений недоступен; можно перечитать журнал';eventsDraw()}};
+    }
+    if(refresh||!EV.summary)return eventsFetch();
+  }
+  if(PAGE==='events'){
+    eventsDraw();addEventListener('live:status',()=>eventsSync());
+    addEventListener('pagehide',()=>{EV.alive=false;eventsReset()});
+    addEventListener('pageshow',e=>{if(e.persisted){EV.alive=true;eventsReset()}});
+    addEventListener('focus',()=>eventsRefresh());
+    eventFeed().addEventListener('submit',e=>{e.preventDefault();for(const key of ['from','to','thread'])EV.filters[key]=eventFeed().querySelector('[name="'+key+'"]').value.trim();eventsReset();return eventsSync(true)});
+    eventFeed().addEventListener('click',e=>{const button=e.target.closest('button');if(!button||button.disabled)return;
+      if(button.hasAttribute('data-events-more'))return eventsFetch('more');if(button.hasAttribute('data-events-refresh'))return eventsRefresh();
+      if(button.hasAttribute('data-events-kind')){EV.filters.kind=button.dataset.eventsKind;eventsReset();return eventsSync(true)}
+      if(button.hasAttribute('data-events-clear')){for(const key of Object.keys(EV.filters))EV.filters[key]='';for(const input of eventFeed().querySelectorAll('input'))input.value='';eventsReset();return eventsSync(true)}
+    });
+  }
+  // End TS-15a events.
   let JR={records:[],threads:{},kind:'все',thread:null,timer:null,project:null,epoch:0,ranges:[],loadingMore:false,refreshId:0};
   function resetJournal(project){JR.project=project;JR.epoch++;JR.records=[];JR.threads={};JR.kind='все';JR.thread=null;JR.ranges=[];JR.loadingMore=false;JR.refreshId=0;journalDraw()}
   function journalBefore(){const ranges=JR.ranges;for(let i=ranges.length-1;i>0;i--)if(ranges[i][0]>ranges[i-1][1]+1)return ranges[i][0];return ranges.length&&ranges[0][0]>1?ranges[0][0]:null}
