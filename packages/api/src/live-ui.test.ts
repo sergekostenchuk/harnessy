@@ -471,3 +471,20 @@ test('178: gallery preserves the sketch canvas and routes implemented pages to t
  assert.match(gallery,/href="05-spend.html"/);assert.match(gallery,/href="01-chat.html"/);assert.match(gallery,/href="\/sketches\/disarto\/00-design-code.html"/);assert.doesNotMatch(gallery,/location.replace/);
  const index=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/index.html',import.meta.url),'utf8');assert.match(index,/10-new-chat.html/);
 });
+
+test('210: every SCREENS entry is reachable from the untruncated palette by click, keyboard and search',async()=>{
+ const d=dom('<aside class="side"><div class="search">Найти</div></aside>');Object.assign(d.document,{documentElement:d.html,body:d.body});
+ const context:Data={document:d.document,location:{href:''},waiting:()=>[],DEC:{},addEventListener:d.window.addEventListener.bind(d.window),esc:(v:unknown)=>String(v),localStorage:{removeItem(){}},S:{chat:[]},save(){},render(){},toast(){}};context.window=context;
+ runInContext(part(live,'  const SCREENS=','  // ── переключатели и сегменты')+'\nglobalThis.screens=SCREENS;wireSearch();',createContext(context));
+ const screens=plain(context.screens) as [string,string][];assert.ok(screens.some(([name])=>name==='События'));assert.ok(screens.some(([name])=>name==='Журнал'));assert.ok(screens.length>12);
+ const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};
+ await d.window.emit('keydown',{key:'k',metaKey:true});assert.equal(find('.live-pal').classList.contains('on'),true);
+ const rows=()=>d.document.querySelectorAll('.lp-i[data-i]');assert.deepEqual(rows().filter(n=>n.querySelector('small')?.textContent==='экран').map(n=>n.textContent.replace(/экран$/,'')),screens.map(([name])=>name));
+ for(let i=0;i<screens.length;i++){await rows()[i]!.emit('click');assert.equal(context.location.href,screens[i]![1])}
+ const scrolled:number[]=[];rows().forEach((n,i)=>Reflect.set(n,'scrollIntoView',(options:unknown)=>{assert.deepEqual(plain(options),{block:'nearest'});scrolled.push(i)}));
+ for(let i=0;i<screens.length;i++){await find('.lp-box input').emit('keydown',{key:'Enter'});assert.equal(context.location.href,screens[i]![1]);await find('.lp-box input').emit('keydown',{key:'ArrowDown'})}
+ assert.ok(scrolled.includes(screens.length-1),'keyboard selection scrolls to screens after the twelfth entry');
+ for(const [name,href] of screens){const input=find('.lp-box input');input.value=name.toUpperCase();await input.emit('input');const row=rows().find(n=>n.textContent===name+'экран');assert.ok(row,name);await row.emit('click');assert.equal(context.location.href,href)}
+ const input=find('.lp-box input');input.value='no matching screen';await input.emit('input');const previous=context.location.href;await input.emit('keydown',{key:'ArrowDown'});await input.emit('keydown',{key:'Enter'});assert.equal(context.location.href,previous);
+ await d.window.emit('keydown',{key:'Escape'});assert.equal(find('.live-pal').classList.contains('on'),false);await find('aside .search').emit('click');assert.equal(find('.live-pal').classList.contains('on'),true);assert.equal(rows().filter(n=>n.querySelector('small')?.textContent==='экран').length,screens.length);
+});

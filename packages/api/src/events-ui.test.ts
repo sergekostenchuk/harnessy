@@ -112,3 +112,15 @@ for(const change of ['project','ABA','filter','pagehide'])test('168/190: queued 
  const reads=v.requests.length;release.resolve(snapshot('/a',[record(2,'stale')],2));await until(()=>!v.functions.state.loading&&!v.functions.state.checking);
  assert.equal(v.requests.length,reads);assert.equal(v.functions.state.refreshQueued,false);assert.doesNotMatch(v.find('[data-events-body]').textContent,/stale/);
 });
+
+test('209: the real Events form accepts uppercase labels through HTTP and rejects a different thread',async t=>{
+ const h=await fixture(t);h.runtime.journal.append({sender:'Owner',to:'worker',kind:'note',thread:'assignment:AbC',text:'matching entry'});
+ const v=ui(async path=>(await call(h.api,path)).body);v.H.project=h.dir;await v.functions.sync();
+ for(const [from,to,thread] of [['OWNER','WORKER','ASSIGNMENT:ABC'],['owner','worker','assignment:abc'],['OwNeR','WoRkEr','AsSiGnMeNt:AbC']]){
+  v.find('[name="from"]').value=from!;v.find('[name="to"]').value=to!;v.find('[name="thread"]').value=thread!;await v.find('form').emit('submit');
+  assert.equal(v.functions.state.records.length,1);assert.equal(v.find('[data-events-error]').textContent,'');assert.match(v.find('[data-events-body]').textContent,/matching entry/);assert.equal(v.find('[name="thread"]').value,thread);
+  assert.equal(new URL('http://test'+v.requests.at(-1)).searchParams.get('thread'),thread);
+ }
+ v.context.api=async()=>snapshot(h.dir,[{...record(2),from:'owner',to:['worker'],thread:'assignment:wrong'}],2,2);await v.find('[data-events-refresh]').emit('click');
+ assert.match(v.find('[data-events-error]').textContent,/некорректная форма/);assert.equal(v.functions.state.records.length,1);
+});
