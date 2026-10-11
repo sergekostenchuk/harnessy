@@ -263,7 +263,7 @@ function firstPaint(html:string,storage=new Map<string,string>(),page='chat'){
  Object.assign(view.sandbox.document,{documentElement:root,getElementById:(id:string)=>nodes.get(id)||null,createElement:node,body:{appendChild(el:Data){nodes.set(el.id,el)}}});
  const original=view.sandbox.document.querySelectorAll;
  view.sandbox.document.querySelectorAll=(q:string)=>q==='aside.side.ps'?[side]:q==='aside.side.ps .ps-folders'?[folders]:q==='aside.side.ps .ps-proj'?[project]:q==='.frame .top > b'?[head]:original(q);
- Object.assign(view.sandbox,{setTimeout:(fn:()=>void,ms:number)=>{timers.set(++timerId,{fn,ms});return timerId},clearTimeout:(id:number)=>timers.delete(id),sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,v:string)=>storage.set(k,v)},badges(){},EventSource:class {},nowLive(){},journalLive(){},journalFetch:async()=>{},SP:{generation:0},JR:{epoch:0},base:(path:string)=>path.split('/').pop(),PROJ_ITEMS:[],PIN:'',PAGE:page});
+ Object.assign(view.sandbox,{setTimeout:(fn:()=>void,ms:number)=>{timers.set(++timerId,{fn,ms});return timerId},clearTimeout:(id:number)=>timers.delete(id),sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,v:string)=>storage.set(k,v)},badges(){},limitsDraw(){},EventSource:class {},nowLive(){},journalLive(){},journalFetch:async()=>{},SP:{generation:0},JR:{epoch:0},base:(path:string)=>path.split('/').pop(),PROJ_ITEMS:[],PIN:'',PAGE:page});
  view.sandbox.window=view.sandbox;view.sandbox.psKey=page;view.sandbox.location.pathname='/sketches/proto/'+(runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data)[page];view.H.on=false;view.H.panes=[];view.H.project=undefined;view.H.pane=null;
  const first=html.match(/<head>\s*<script>([\s\S]*?)<\/script>/);assert.ok(first,'first head script precedes styles and all frames');runInContext(first[1]!,view.context);
  runInContext(part(live,'  function applyStatus(','  // лента активного чата')+
@@ -462,4 +462,10 @@ test('153: the direct-to-orchestrator card selects verified kind and ignores an 
  const h=await fixture(t,{seats:'  orchestrator: {kind: worker, role: orchestrator, label: Ложный руководитель, vendor: claude, model: w1, mode: read}\n  lead: {kind: orchestrator, role: юрист, label: Тимлид, vendor: claude, model: w1, mode: read}'});
  const view=ui({fetch:async(path,body)=>(await call(h.api,path,{...(body?{body}:{})})).body}),status=(await call(h.api,'/api/status')).body;
  view.H.project=h.dir;view.H.panes=status.panes;view.H.active=status.activeChats;view.S.ui.pane='orchestrator';view.H.pane=view.H.panes[0];view.S.draft='Задача только тимлиду';assert.equal(await view.direct()('orch'),true);await h.runtime.idle();assert.equal(view.requests.find(r=>r.path==='/api/chat')!.body!.pane,'lead');assert.equal(h.provider.calls.length,1);assert.equal(h.provider.calls[0]!.seat.id,'lead');
+});
+
+test('178: gallery preserves the sketch canvas and routes implemented pages to the live prototype',()=>{
+ const gallery=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/gallery.html',import.meta.url),'utf8');
+ assert.match(gallery,/href="05-spend.html"/);assert.match(gallery,/href="01-chat.html"/);assert.match(gallery,/href="\/sketches\/disarto\/00-design-code.html"/);assert.doesNotMatch(gallery,/location.replace/);
+ const index=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/index.html',import.meta.url),'utf8');assert.match(index,/10-new-chat.html/);
 });

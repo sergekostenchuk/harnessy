@@ -39,7 +39,7 @@
   /*IC*/
   const FILE=location.pathname.split('/').pop()||'10-new-chat.html';
   const PAGES={new:'10-new-chat.html',now:'14-now.html',chat:'01-chat.html',plan:'02-plan.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
-  const TIP={now:'Сейчас',chat:'Чат',plan:'План · карта',res:'Ресёрч',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Стая агентов',sens:'Датчики',spend:'Расход',log:'Журнал'};
+  const TIP={now:'Сейчас',chat:'Чат',plan:'План · карта',res:'Ресёрч',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Стая агентов',sens:'Датчики',spend:'Расход и лимиты',log:'Журнал'};
   const TOP=['now','chat','plan','res','doc','art','mem','swarm','sens','spend','log'];
   const KEY=Object.keys(PAGES).find(k=>PAGES[k]===FILE)||'';
   document.documentElement.dataset.page=KEY;
@@ -80,8 +80,8 @@
     const pins=rail?'':'<div class="grp">закреплённые</div><div class="ps-pins"><div class="ps-chat more">закреплённых пока нет</div></div>';
     const folders=rail?'<i class="ps-sep"></i><div class="nav" data-folders title="Проекты и чаты">'+ico('folder')+'</div>':'<div class="grp">проекты</div><div class="ps-folders"><div class="ps-chat more">проекты — из движка</div></div>';
     const log=(rail?'<i class="ps-sep"></i>':'<div class="grp"></div>')+item(['log','Журнал','']);
-    const foot=rail?'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="nav'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Использовано → Расход">'+ico('spend')+'</div><div class="nav" data-go="profile" title="Профиль"><span class="av">S<i></i></span></div></div>'
-      :'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="limits'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Использовано — открыть расход"><div class="cap">использовано</div>'+limit('Claude · неделя',62)+limit('Codex · 5 часов',94)+'</div>'+
+    const foot=rail?'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="nav'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Расход и лимиты">'+ico('spend')+'</div><div class="nav" data-go="profile" title="Профиль"><span class="av">S<i></i></span></div></div>'
+      :'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="limits'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Расход и лимиты"><div class="cap">использовано</div>'+limit('Claude · неделя',62)+limit('Codex · 5 часов',94)+'</div>'+
        '<div class="user" data-go="profile" title="Профиль"><span class="av">S<i></i></span><div>Serge<small>9616166@gmail.com</small></div><span class="chev">⌄</span></div></div>';
     return head+top+'<div class="ps-scroll">'+work+pins+folders+log+'</div>'+foot; }
   window.psKey=KEY;
@@ -117,7 +117,7 @@
     const dr=document.createElement('nav'); dr.className='m-drawer';
     dr.innerHTML='<div class="m-h"><i><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></i>Harnessy<span data-mx>×</span></div>'+item('new','Новый чат','p')+
       '<div class="m-g">работа</div>'+item('now','Сейчас','2')+item('chat','Чат')+item('plan','План · карта')+item('doc','Документы проекта')+item('art','Артефакты')+item('mem','Память проекта')+item('res','Ресёрч')+
-      '<div class="m-g">команда</div>'+item('swarm','Стая агентов')+item('sens','Датчики')+item('spend','Расход')+item('conn','Подключения и лимиты')+
+      '<div class="m-g">команда</div>'+item('swarm','Стая агентов')+item('sens','Датчики')+item('spend','Расход и лимиты')+item('conn','Подключения и лимиты')+
       '<div class="m-g">прочее</div>'+item('log','Журнал')+item('set','Настройки')+item('away','Уйти')+
       '<div class="m-f"><a href="../disarto/'+FILE+'">этот экран листом, с пояснениями ↗</a><a href="../disarto/index.html">все скетчи ↗</a></div>';
     document.body.append(btn,bg,dr);

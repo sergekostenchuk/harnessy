@@ -390,3 +390,43 @@ aside.side.ps .ps-foot { position:relative; } aside.side.ps .ps-foot .live-menu.
 .rnote { margin:6px 0 10px !important; font-size:11.5px !important; color:var(--ink3) !important; }
 .row.off .st i.bad { background:var(--bad-fill,#a3304b); } .kv code, .rr code, .op code { font:11px var(--mono); background:var(--panel); padding:1px 5px; border-radius:4px; }
 .op .ic { font:600 12px var(--mono); color:var(--ink2); }
+/* TS-14b: original spend columns, scrollable contents and truthful partial states. */
+html[data-page="spend"] .views { overflow:auto !important; }
+html[data-page="spend"] .lay { height:auto; }
+html[data-page="spend"] .col { overflow:visible; }
+html[data-page="spend"] .view { overflow:visible; }
+html[data-page="spend"] .top { flex-wrap:wrap; height:auto; min-height:54px; padding-top:8px; padding-bottom:8px; }
+html[data-page="spend"] .top .r { flex-wrap:wrap; }
+.sp-table { overflow:auto; max-width:100%; }
+.sp-table .tbl { width:100%; }
+.sp-actions, [data-spend-periods] { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.sp-actions { margin:10px 0; }
+.sp-actions label { font-size:11px; color:var(--ink2); }
+.sp-actions select { background:var(--raised); color:var(--ink); border:1px solid var(--line2); border-radius:5px; max-width:180px; padding:5px; }
+.sp-mock { color:var(--ink3); border-top:1px dashed var(--line2); margin:10px 0; padding-top:8px; font-size:11px; }
+.sp-mock .pill { margin-left:8px; }
+.sp-mock p { margin:5px 0; }
+.sp-mock button:disabled { opacity:.45; cursor:not-allowed; }
+.sp-limit { margin:8px 0; font-size:11px; }
+.sp-limit small { display:block; font-size:10px; color:var(--ink3); margin-top:4px; }
+.sp-limit .row { display:flex; justify-content:space-between; gap:8px; }
+.sp-limit.stale { color:var(--ink3); }
+.sp-link { display:block; margin-top:8px; font-size:11px; }
+[data-spend-status] { padding:10px 18px; color:var(--ink3); font-size:11px; }
+.sp-river { height:auto !important; min-height:90px; }
+.sp-river .nd { position:static; display:inline-block; }
+.sp-route { display:grid; grid-template-columns:100px 1fr; gap:8px; align-items:center; margin:8px 0; font-size:11px; }
+html[data-page="spend"] .cal div { height:auto; min-height:38px; font-size:9px; }
+html[data-page="spend"] .cal b { display:block; font-size:11px; margin-top:4px; }
+.sp-prices input { min-width:76px; width:100%; }
+.sp-prices td:nth-child(2) input { min-width:160px; }
+.sp-prices th { white-space:nowrap; }
+[data-live-spend] { overflow:auto; }
+[aria-pressed="true"] { border-color:var(--accent) !important; }
+html[data-page="spend"] .view { position:relative !important; inset:auto !important; height:auto !important; }
+html[data-page="spend"] .view:not(.on) { display:none; }
+.panel:has([data-live-spend]) .inner { height:100%; overflow:auto; box-sizing:border-box; }
+html[data-page="spend"] [data-c="router"] { flex:none !important; }
+html[data-page="spend"] .main a, .sp-link, [data-pane="priceList"] a, [data-live-spend] a { color:var(--accent); text-decoration:none; }
+html[data-page="spend"] .main a:hover, .sp-link:hover, [data-pane="priceList"] a:hover { text-decoration:underline; }
+[data-pane="priceList"] .sp-actions { padding:0 12px 10px; }
