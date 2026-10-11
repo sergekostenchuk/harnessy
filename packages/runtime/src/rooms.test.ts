@@ -53,7 +53,7 @@ test('17/56: absent path, relative create and busy/reserved room refuse without 
 
 test('ОКНА/56: queued room move cannot close a project selected in the meantime',async t=>{
  const h=await harness(t,{actions}),r=h.runtime;const destination=join(h.dir,'destination'),other=join(h.dir,'other');await initProject(other,{git:false,orchestrator:false});r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','снимок');
- const held=deferred(),entered=deferred();const lock=withPathLock(destination,async()=>{entered.resolve();await held.promise});await entered.promise;const move=r.roomMove({path:destination,create:true},OWNER);await Promise.resolve();await r.openProject(other);held.resolve();await lock;await assert.rejects(move,error('project_changed'));assert.equal(r.project.dir,other);assert.equal(r.registry.get('room'),null);
+ const held=deferred(),entered=deferred();const lock=withPathLock(destination,async()=>{entered.resolve();await held.promise});await entered.promise;const move=r.roomMove({path:destination,create:true},OWNER);await Promise.resolve();await r.openProject(other);held.resolve();await lock;await assert.rejects(move,error('project_changed'));assert.equal(r.project.dir,other);assert.equal(r.registry.get('room')!.model,'w1');assert.equal(r.registry.get('room')!.sessionId,null);assert.deepEqual(r.registry.get('room')!.transcript,[]); // 128: only the room model follows project selection; the queued move cannot transfer its conversation.
 });
 
 test('38/56: saved room with unavailable provider remains readable and queues input with typed no_provider',async t=>{

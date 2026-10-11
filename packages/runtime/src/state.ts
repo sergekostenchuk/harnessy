@@ -11,10 +11,12 @@ export const diskIO:StateIO={read:path=>new TextDecoder('utf-8',{fatal:true}).de
  mkdirSync(dirname(path),{recursive:true});atomicWrite(path,text);const fd=openSync(dirname(path),'r');try{fsyncSync(fd)}finally{closeSync(fd)}
 },rename(from,to){renameSync(from,to);const fd=openSync(dirname(to),'r');try{fsyncSync(fd)}finally{closeSync(fd)}}};
 export interface Receipt {turnInstanceId:string;recordSeqs:number[];effectsPending:boolean;interrupted:boolean;nextSeen:Record<string,number>}
-export interface TranscriptMessage {role:string;text:string;ts:number;model?:string;[key:string]:unknown}
+export type TurnOutcome='ok'|'interrupted'|'error';
+export interface TranscriptMessage {role:string;text:string;ts:number;model?:string;outcome?:TurnOutcome;errorCode?:string;origin?:'transferred';[key:string]:unknown}
+export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;outcome:'error';errorCode:string}
 export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}
 export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;deliverySeq?:number;status?:'uncertain'}
-export interface Chat {id:string;pane:string;title:string;created:number;closed:number|null;model:string;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;[key:string]:unknown}
+export interface Chat {id:string;pane:string;title:string;created:number;closed:number|null;model:string;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;turns?:AnalyticalTurn[];[key:string]:unknown}
 export function jsonClone<T>(value:T):T{return parseCompat(compatJson(value)) as T}
 const CONVERSATION_FIELDS=new Set(['role','text','ts','model','usage','durationMs']);
 // Execution receipts belong to the source seat and journal, never to transferred history.
@@ -22,6 +24,7 @@ export function conversationHistory(messages:readonly TranscriptMessage[]):Trans
  return jsonClone(messages.map(message=>{
   const copy=orderedClone(message);
   for(const key of orderedKeys(copy))if(!CONVERSATION_FIELDS.has(key))delete copy[key];
+  if(copy.role==='ai')copy.origin='transferred';
   return copy;
  }));
 }
@@ -108,6 +111,10 @@ export class StateStore {
  commitResult(pane:Pane,registry:Registry,result:ResultMessage):void {
  if(!pane.transcript.some(m=>object(m.runtime)&&m.runtime.turnInstanceId===result.runtime.turnInstanceId))pane.transcript.push(result);
  this.undurable.add(result.runtime.turnInstanceId);this.saveChats(registry);this.undurable.delete(result.runtime.turnInstanceId)
+ }
+ recordFailedTurn(pane:Pane,registry:Registry,turn:AnalyticalTurn):void {
+  if(Object.values(this.chats.chats).some(chat=>chat.turns?.some(t=>t.turnInstanceId===turn.turnInstanceId)||chat.transcript.some(m=>object(m.runtime)&&m.runtime.turnInstanceId===turn.turnInstanceId)))return;
+  const chat=this.activeChat(pane)!;chat.turns=[...(chat.turns??[]),turn];this.saveChats(registry)
  }
  results(pane:Pane):ResultMessage[]{return Object.values(this.chats.chats).filter(c=>c.pane===pane.id).flatMap(c=>c.transcript.filter(m=>m.role==='ai'&&(Object.hasOwn(m,'runtime')||Object.hasOwn(m,'deliverySeq'))) as ResultMessage[])}
  finishEffects(result:ResultMessage,registry:Registry):void {result.runtime.effectsPending=false;try{this.saveChats(registry)}catch(e){result.runtime.effectsPending=true;throw e}}

@@ -1,6 +1,6 @@
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
 import {isAbsolute} from 'node:path';
-import {expandUser,initProject} from '@harnessy/projects';
+import {expandUser,initProject,projectsRoot} from '@harnessy/projects';
 import {pyTruthy} from '@harnessy/team';
 import {askDeliveryDepth} from './action-state.ts';
 import {makeRoom,makeRoomIn,roomSet,roomMove,assignRoomRole} from './rooms.ts';
@@ -45,15 +45,16 @@ export class Runtime {
  private pane(id:string,p=this.project):Pane{const pane=p.registry.get(id);if(!pane)throw new RuntimeError('pane_unknown','нет окна',404);return pane}
  labelOf(id:string,p=this.project){return id==='owner'?'владелец':id==='harness'?'харнесс':p.registry.get(id)?.label??id}
  subscribe(selector:Selector){if('pane' in selector)this.pane(selector.pane!);return this.project.bus.subscribe(selector)}
+ projectPath(path:string):string {const target=canonicalPath(path),root=canonicalPath(projectsRoot(this.settings.effective()));if(target===root)throw new RuntimeError('path_is_root','это папка всех проектов: выберите или создайте проект внутри',400);return target}
  private async changeProject<T>(operation:()=>Promise<T>):Promise<T> {
  const previous=this.opening;let release!:()=>void;this.opening=new Promise(r=>{release=r});await previous;
  try{return await operation()}finally{release()}
  }
- async openProject(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean}={}):Promise<void> {
+ async openProject(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean;roomModel?:string}={}):Promise<void> {
  return this.changeProject(()=>this.openProjectLocked(dir,options))
  }
- private async openProjectLocked(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean}):Promise<void> {
- if(options.expected)this.same(options.expected);await this.closeProjectLocked();const generation=++this.generation,path=realpathSync(dir),harness=await ensureLine(path),lineErrors:string[]=[];let team=null,policy=null;
+ private async openProjectLocked(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean;roomModel?:string}):Promise<void> {
+ if(options.expected)this.same(options.expected);const path=realpathSync(this.projectPath(dir)),roomModel=options.roomModel||this.current?.registry.get('room')?.model;await this.closeProjectLocked();const generation=++this.generation,harness=await ensureLine(path),lineErrors:string[]=[];let team=null,policy=null;
  try{team=loadTeam(harness);lineErrors.push(...team.warnings)}catch(e){lineErrors.push(message(e))}
  try{policy=new Policy(join(harness,'comms-policy.yaml'))}catch(e){lineErrors.push(message(e))}
  let registry!:Registry,owner!:Pane;
@@ -69,6 +70,7 @@ export class Runtime {
  const channel=new Channel({journal,policy,projectDir:path,liveSeats:()=>registry.ids,roleOf:id=>id==='owner'?'owner':registry.get(id)?.role??null,labelOf:id=>id==='owner'?'владелец':id==='harness'?'харнесс':registry.get(id)?.label??id,hasRepo:()=>!!git.repoRoot,resolveSha:sha=>gitFact(['rev-parse','--verify','--end-of-options',sha+'^{commit}']),mergeCommitFor:sha=>{if(!git.repoRoot)return null;const branch=team?.integrationBranch??'main';try{execFileSync('git',['-C',git.repoRoot,'merge-base','--is-ancestor',sha,branch],{stdio:'ignore',timeout:5000})}catch{return null}return gitFact(['rev-list','--merges','--ancestry-path','--reverse',sha+'..'+branch])?.split(/\s+/)[0]??sha}});
  const saved=journal.loadPanes();if(object(saved.room)&&typeof saved.room.model==='string'&&typeof saved.room.mode==='string')makeRoomIn({registry,dir:path,bus},this,saved.room.model,saved.room.mode,saved.room.vendor==='claude'||saved.room.vendor==='codex'?saved.room.vendor:undefined);for(const pane of registry.panes.values()){const st=saved[pane.id];if(!object(st))continue;if(st.vendor==='claude'||st.vendor==='codex')pane.vendor=st.vendor;registry.update(pane,{model:st.model,mode:st.mode,sessionId:st.sessionId??null,digest:st.digest??false})}
  const state=new StateStore(path,this.deps.stateIO??diskIO,this.clock,this.deps.id);const halted=state.load(registry,lineErrors);
+ if(saved.room===undefined&&roomModel&&!registry.get('room')&&makeRoomIn({registry,dir:path,bus},this,roomModel,path===this.defaultDir?'chat':'read'))state.savePanes(registry,journal);
  const p:ProjectState={generation,dir:path,closed:false,starting:true,now:()=>this.clock.now(),editing:new Map(),materializing:new Set(),restoreFailed:new Map(),team,repoRoot:git.repoRoot,policy,journal,channel,registry,owner,bus,state,lineErrors,halted,active:new Map(),pumps:new Map(),resets:new Map(),routeJobs:new Map(),processEpoch:new Map(),wakeups:new Set()};
  this.current=p;channel.on(event=>{if(!p.closed)this.onChannel(p,event)});
  try{await this.projectRegistry.rememberProject(path)}catch(e){lineErrors.push(message(e))}
@@ -88,9 +90,9 @@ export class Runtime {
  this.requireOwner(initiator);const p=this.project;
  if(!validDir(path))throw new RuntimeError('path_invalid','папки нет или это не папка: '+path,400);
  return this.changeProject(async()=>{
- this.same(p);if(path===p.dir&&!options.reload)return {ok:true as const,project:path,changed:false as const};
+ this.same(p);const target=this.projectPath(path);if(target===p.dir&&!options.reload)return {ok:true as const,project:target,changed:false as const};
  const hold=reserve(p,[...p.registry.panes.values()],'идёт ход: смени папку, когда все окна свободны',true);
- try{if(!validDir(path))throw new RuntimeError('path_invalid','папки нет или это не папка: '+path,400);await this.openProjectLocked(path,{expected:p});const next=this.project;return {ok:true as const,project:next.dir,changed:true as const,lineErrors:[...next.lineErrors],panes:[...next.registry.panes.values()].map(p=>p.settings())}}
+ try{if(!validDir(target))throw new RuntimeError('path_invalid','папки нет или это не папка: '+path,400);await this.openProjectLocked(target,{expected:p});const next=this.project;return {ok:true as const,project:next.dir,changed:true as const,lineErrors:[...next.lineErrors],panes:[...next.registry.panes.values()].map(p=>p.settings())}}
  finally{hold.release()}
  })
  }
@@ -98,15 +100,15 @@ export class Runtime {
  this.requireOwner(initiator);const p=this.project,path=expandUser(pythonTrim(String(input.path||'')));
  if(!path||!isAbsolute(path)||[...path].length>400)throw new RuntimeError('path_invalid','нужен абсолютный путь папки',400);
  return this.changeProject(async()=>{
- this.same(p);const busyText='идёт ход: создай папку, когда все окна свободны';let hold=reserve(p,[...p.registry.panes.values()],busyText,true);
+ this.same(p);const target=this.projectPath(path),busyText='идёт ход: создай папку, когда все окна свободны';let hold=reserve(p,[...p.registry.panes.values()],busyText,true);
  try{
  let info:Awaited<ReturnType<typeof initProject>>;
- try{info=await initProject(path,{git:input.git===undefined||pyTruthy(input.git),model:String(input.model||'')},{...(this.deps.gitops?{gitops:this.deps.gitops}:{}),catalog:structuredClone(p.registry.models),...(p.registry.get('room')?.model?{roomModel:p.registry.get('room')!.model}:{}),settings:structuredClone(this.settings.effective())})}
+ try{info=await initProject(target,{git:input.git===undefined||pyTruthy(input.git),model:String(input.model||'')},{...(this.deps.gitops?{gitops:this.deps.gitops}:{}),catalog:structuredClone(p.registry.models),...(p.registry.get('room')?.model?{roomModel:p.registry.get('room')!.model}:{}),settings:structuredClone(this.settings.effective())})}
  catch(e){throw new RuntimeError('project_failed','проект не создан: '+message(e),400,{cause:e})}
  this.same(p);
  // Reacquire for the current seats synchronously; closing marks the project closed before the next await.
  hold.release();hold=reserve(p,[...p.registry.panes.values()],busyText,true);
- await this.openProjectLocked(path,{expected:p});const next=this.project;
+ await this.openProjectLocked(target,{expected:p,...(typeof input.model==='string'?{roomModel:input.model}:{})});const next=this.project;
  return {ok:true as const,project:next.dir,...info,seats:[...next.registry.panes.values()].filter(p=>p.id!=='room').length}
  }finally{hold.release();if(this.current===p&&!p.closed)for(const id of p.registry.ids)void this.kick(id)}
  })
@@ -258,7 +260,7 @@ export class Runtime {
  if(pane.status!=='idle')throw new RuntimeError(pane.status,'ход не активен');
  const entries=options.entries??[],records=deepFreeze(entries.map(e=>e.record)),injected:TranscriptMessage[]=[];
  const relayDepth=Math.max(options.relayDepth??0,askDeliveryDepth(p,records));
- pane.busy=true;pane.touched=true;pane.revision++;
+ pane.busy=true;pane.touched=true;pane.revision++;const launchModel=pane.model;
  const scope=this.scopes.create(p.dir,id,randomUUID()),controller=new AbortController();let releaseReset!:()=>void,finish!:()=>void;
  const turn:ActiveTurn={scope,controller,pane,vendor:pane.vendor,records,deliverySeq:Math.max(0,...entries.map(e=>e.deliverySeq)),relayDepth,attemptNumber:0,handle:null,started:false,stopRequested:false,terminal:null,partial:'',finished:new Promise(r=>{finish=r}),finish:()=>finish(),timer:undefined,resetWait:new Promise(r=>{releaseReset=r}),releaseReset:()=>releaseReset(),result:null,injected};p.active.set(id,turn);this.stateEvent(p,pane);
  let success=false,terminalSent=false;
@@ -289,6 +291,7 @@ export class Runtime {
  for(const m of injected)pane.uncommitted.delete(m);
  const response=timestampMessage('ai',result.text,this.clock.now()) as ResultMessage;const held=(turn as ActiveTurn).terminal;
  if(held?.type==='done'){if(typeof held.model==='string'&&held.model)response.model=held.model;if(object(held.usage))response.usage=structuredClone(held.usage);if(typeof held.durationMs==='number'&&Number.isFinite(held.durationMs))response.durationMs=held.durationMs}
+ response.outcome=interrupted?'interrupted':held?.type==='error'?'error':'ok';if(response.outcome==='error')response.errorCode=typeof held?.code==='string'?held.code:'internal';
  response.deliverySeq=turn.deliverySeq;response.runtime={turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),effectsPending:true,interrupted,nextSeen};turn.result=response;
  p.state.commitResult(pane,p.registry,response);
  const receipt=p.state.attempts[id];if(receipt?.turnInstanceId===scope.turnInstanceId)p.state.clearAttempt(id);
@@ -301,6 +304,7 @@ export class Runtime {
  if(!turn.result){pane.transcript=pane.transcript.filter(m=>!injected.includes(m));for(const m of injected)pane.uncommitted.delete(m);
  if(!turn.started){try{p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
  else {   // модель уже могла действовать (modelStarted), результата нет: неопределённый исход не повторяется автоматически — долговечный uncertain до действия владельца (ревью №111 п.1)
+  try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,outcome:'error',errorCode:e instanceof ProviderError?e.code:'internal'})}catch(error){p.lineErrors.push(message(error))}
   try{p.state.uncertain(id)}catch(error){p.lineErrors.push(message(error))}
   pane.status='uncertain';pane.uncertainNote=waitingError(p,pane).message;if(!p.closed)pane.publish({type:'note',text:pane.uncertainNote,warning:this.warningId(p,pane,'uncertain')})}
  }else {pane.status='recovering';pane.recoveryNote='ответ модели сохранён; завершается восстановление доставки';pane.publish({type:'note',text:pane.recoveryNote,warning:this.warningId(p,pane,'recovery')})}
