@@ -17,6 +17,7 @@ export interface SeatInput {
  instructions:{path:string|null;content:string};label:string;writePaths:string[];worktree:string|null;mandate?:number;
 }
 export interface Assignment {
+ awaitFirstOpen?:boolean;
  operationId:string;sid:string;by:string;how:string;error?:string;input:SeatInput;files:{seat:{path:string;content:string}|null};
  source:{chat:Chat|null;carry:string};stages:{team:boolean;seatFile:boolean;chat:boolean;status:boolean;onboarding:boolean};
 }
@@ -26,6 +27,7 @@ const caches=new WeakMap<object,Map<string,Assignment>>(),failures=new WeakMap<o
 const all=(op:Assignment)=>Object.values(op.stages).every(Boolean);
 function invalid():never {throw new RuntimeError('materialization_invalid','неверная запись назначения роли',409)}
 function valid(raw:unknown):Assignment {
+ if(object(raw)&&raw.awaitFirstOpen!==undefined&&typeof raw.awaitFirstOpen!=='boolean')invalid();
  if(!object(raw)||typeof raw.operationId!=='string'||!/^c[0-9a-f]{5,}$/.test(raw.operationId)||typeof raw.sid!=='string'||!/^[a-z][a-z0-9_-]{0,30}$/.test(raw.sid)||['owner','harness','all','room'].includes(raw.sid)||typeof raw.by!=='string'||!raw.by||typeof raw.how!=='string'||!object(raw.input)||!object(raw.files)||!object(raw.source)||!object(raw.stages))invalid();
  if(raw.error!==undefined&&(typeof raw.error!=='string'||!raw.error||raw.error.length>600))invalid();
  const i=raw.input,st=raw.stages;if(!Object.hasOwn(i,'kind'))i.kind=seatKind(undefined,i.role);else seatKind(i.kind);
@@ -47,6 +49,12 @@ export function materializationProgress(p:ProjectState,operationId:string,sid:st
  const op=operations(p).get(operationId);if(!op)return {operationId,sid,state:'pending' as const,stages:null,error:null};if(op.sid!==sid)invalid();
  const error=failures.get(p.state)?.get(operationId)??op.error??p.restoreFailed.get(sid)??null;
  return {operationId,sid,stages:{...op.stages},state:error?'failed' as const:all(op)?'complete' as const:'running' as const,error};
+}
+export function assignmentSnapshot(p:ProjectState,operationId:string,sid:string):Assignment|null {
+ const op=operations(p).get(operationId);if(op&&op.sid!==sid)invalid();return op?jsonClone(op):null;
+}
+export function proposalAssignment(p:ProjectState,sid:string):Assignment|null {
+ const found=[...operations(p).values()].find(op=>op.sid===sid&&op.how.startsWith('по подтверждённому составу '));return found?jsonClone(found):null;
 }
 function put(p:ProjectState,op:Assignment):void {
  const map=operations(p),next=new Map(map);next.set(op.operationId,op);
@@ -114,6 +122,7 @@ function materializeSteps(runtime:Runtime,p:ProjectState,lock:PathLock,original:
    const source=op.source.chat,old=p.state.activeChat(pane,false);
    if(old&&old.id!==op.operationId)closeChat(p,pane,'none');
    c=p.state.newChat(pane,op.source.carry,false,op.operationId);
+   if(op.awaitFirstOpen)c.firstOpen={project:p.dir,pane:pane.id,chat:c.id,operationId:op.operationId,opened:false};
    if(source){const originalVendor=pane.vendor;pane.transcript=conversationHistory(source.transcript);pane.carry=op.source.carry;
     pane.sessionId=source.vendor===originalVendor&&source.cwd===pane.cwd?source.sessionId:null;pane.vendor=source.vendor as Vendor;pane.model=source.model||'';
     c.transcript=pane.transcript;c.carry=pane.carry;c.sessionId=pane.sessionId;c.vendor=pane.vendor;c.model=pane.model;
@@ -191,8 +200,24 @@ export async function ensureSeatMaterialized(runtime:Runtime,sid:string,initiato
   return materialize(runtime,p,lock,op,()=>same(runtime,p));
  }).then(async result=>{if(!p.closed)await runtime.resumeQueue(sid,p);return {ok:true as const,pane:result.pane.settings(),chat:meta(p,result.chat)}});
 }
-export async function onboard(runtime:Runtime,sid:string,initiator:Initiator) {
+function firstOpening(p:ProjectState,pane:Pane):{chat:Chat;opened:boolean}|null {
+ const op=[...operations(p).values()].find(op=>op.sid===pane.id&&op.awaitFirstOpen),active=p.state.chats.chats[p.state.chats.active[pane.id]??''];
+ const c=op?p.state.chats.chats[op.operationId]:active,v=c?.firstOpen;
+ if(v===undefined){if(op)throw new RuntimeError('chat_invalid','не сохранено ожидание первого открытия',409);return null}
+ if(!op||!object(v)||v.project!==p.dir||v.pane!==pane.id||v.chat!==c!.id||v.operationId!==op.operationId||typeof v.opened!=='boolean')throw new RuntimeError('chat_invalid','ожидание первого открытия не соответствует разговору',409);
+ return {chat:c!,opened:v.opened};
+}
+export function firstOpenPending(p:ProjectState,pane:Pane):boolean {
+ const opening=firstOpening(p,pane);return opening!==null&&!opening.opened;
+}
+export async function onboard(runtime:Runtime,sid:string,initiator:Initiator,binding:{project?:unknown;chat?:unknown}={}) {
  const p=owner(runtime,initiator),pane=p.registry.get(sid);if(Object.values(p.state.chats.chats).some(c=>object(c.promotion)&&c.promotion.sid===sid&&c.promotion.done===false))throw new RuntimeError('promotion_pending','Повышение сохранено; повторите «Назначить оркестратора».',409);if(!pane||sid==='room')throw new RuntimeError('pane_unknown','нет такого места или это разговор без роли',404);
+ if(firstOpenPending(p,pane)){
+  await withPathLock(p.dir,()=>{same(runtime,p);const c=p.state.chats.chats[p.state.chats.active[sid]??''];if(binding.project!==p.dir||binding.chat!==c?.id)throw new RuntimeError('stale_chat','проект или разговор первого открытия изменился',409);
+   const opening=firstOpening(p,pane);if(!opening||opening.opened)return;if(p.materializing.has(sid))throw new RuntimeError('recovering','создание роли ещё не завершено',409);
+   const previous=opening.chat.firstOpen;opening.chat.firstOpen={...(previous as object),opened:true};try{p.state.saveChats(p.registry)}catch(e){opening.chat.firstOpen=previous;throw e}
+  });if(!p.closed)void runtime.resumeQueue(sid,p);return {ok:true as const,sent:true as const};
+ }
  if(p.journal.read({limit:0}).some(r=>r.from==='harness'&&r.origin==='onboarding'&&r.to.includes(sid))&&!p.materializing.has(sid))return {ok:true as const,already:true as const};
  if(!p.materializing.has(sid))free(p,pane,'место сейчас отвечает');else if(pane.busy||p.editing.has(sid))throw new RuntimeError('busy','место сейчас отвечает');await ensureSeatMaterialized(runtime,sid,initiator);return {ok:true as const,sent:true as const};
 }

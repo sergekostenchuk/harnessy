@@ -6,7 +6,9 @@ import {expandUser,initProject,projectsRoot} from '@harnessy/projects';
 import {pyTruthy} from '@harnessy/team';
 import {askDeliveryDepth} from './action-state.ts';
 import {makeRoom,makeRoomIn,roomSet,roomMove,assignRoomRole} from './rooms.ts';
-import {createSeat,ensureSeatMaterialized,onboard,restoreAssignments,roleCatalog,type CreateSeatInput} from './roles.ts';
+import {createSeat,ensureSeatMaterialized,onboard,restoreAssignments,roleCatalog,firstOpenPending,type CreateSeatInput} from './roles.ts';
+import {roleKnowledge} from './proposals.ts';
+import {teamKnowledgeChanges,isTeamSnapshot} from '@harnessy/context';
 import {chatsList,chatGet,chatsNew,chatsOpen,meta,transferSnapshot} from './chats.ts';
 import {handoff} from './handoff.ts';
 import {chat} from './owner-chat.ts';
@@ -204,6 +206,7 @@ export class Runtime {
  async idle():Promise<void>{const p=this.project;while(p.pumps.size)await Promise.all([...p.pumps.values()])}
  private async pump(p:ProjectState,pane:Pane):Promise<boolean>{
  if(p.closed||p.starting||pane.busy||p.editing.has(pane.id)||p.materializing.has(pane.id)||p.restoreFailed.has(pane.id))return false;
+ if(firstOpenPending(p,pane))return false;
  await this.restoreAttemptDecisions(p,pane);
  if(!await this.recover(p,pane))return false;
  while(!p.closed&&!p.halted&&!pane.busy){if(p.state.attempts[pane.id]?.status==='uncertain'||pane.status==='uncertain')return false;
@@ -278,6 +281,7 @@ export class Runtime {
  async runTurn(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol}={}):Promise<string> {
  const p=options.project??this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);this.same(p);
  if(p.starting)throw new RuntimeError('project_opening','проект открывается',409);
+ if(firstOpenPending(p,pane))throw new RuntimeError('role_not_opened','Откройте чат роли, чтобы она получила вводную',409);
  if(p.halted)throw new RuntimeError('halted','остановлено владельцем: ходы не идут, сообщения ждут в очереди');
  if(pane.busy||p.editing.has(id)&&p.editing.get(id)!==options.reservation)throw new RuntimeError('busy',pane.label+' занято');
  if(p.restoreFailed.has(id))free(p,pane);
@@ -293,18 +297,27 @@ export class Runtime {
  try{
  if(!validDir(pane.cwd))throw new RuntimeError('cwd_changed','папки нет: '+pane.cwd);const provider=this.provider(turn.vendor),vendor=provider.vendor,epoch=p.processEpoch.get(vendor)??0,sessionEpoch=pane.sessionEpoch;
  launchVendor=vendor;
+ const knowledgeChat=p.state.activeChat(pane,false),knowledge=knowledgeChat?deepFreeze(roleKnowledge(p,knowledgeChat)):null;
+ const previousKnowledge=[...pane.transcript].reverse().find(m=>m.teamKnowledge)?.teamKnowledge;
+ if(previousKnowledge!==undefined&&(!object(previousKnowledge)||previousKnowledge.project!==p.dir||previousKnowledge.chat!==knowledgeChat?.id||!isTeamSnapshot(previousKnowledge.team)))throw new RuntimeError('chat_invalid','снимок команды не соответствует разговору',409);
+ const teamText=knowledge?(object(previousKnowledge)?teamKnowledgeChanges(previousKnowledge.team as import('@harnessy/context').TeamMemberKnowledge[],knowledge.team):knowledge.text):'';let teamSaved=false;
  const summary=digest(pane,p.registry.others(id),(a,b)=>p.registry.canObserve(a,b)),nextSeen=summary.nextSeen;
  let prompt=messageText;if(pane.carry){prompt='Прежний разговор (был без папки, продолжается здесь):\n'+pane.carry+'\n\n---\nНовое сообщение:\n'+prompt;pane.publish({type:'note',text:'в сообщение добавлен прежний разговор'})}
  if(summary.text){prompt=summary.text+'\n\n---\nСообщение тебе:\n'+prompt;pane.publish({type:'note',text:'в сообщение добавлена сводка соседей ('+[...summary.text].length+' символов)'})}
+ if(teamText)prompt=teamText+'\n\n---\n'+prompt;
  for(const r of records){const m=timestampMessage(r.from==='owner'?'me':'peer',r.from==='owner'?r.text:'[от '+this.labelOf(r.from,p)+'] '+r.text,this.clock.now());if(pythonTrim(m.text)){pane.transcript.push(m);pane.uncommitted.add(m);injected.push(m)}}
  p.state.startAttempt(pane,{turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),startedAt:this.clock.now(),deliverySeq:turn.deliverySeq});
  const current=()=>!p.closed&&p.active.get(id)===turn;
  let attempt=0,earlySession:string|null=null;
  const ctx:TurnContext={signal:controller.signal,modelStarted:()=>{if(current()){
-  if(transfer&&!transferSaved){const notice={...timestampMessage('peer','[от харнесс] '+transferLabel(transfer),this.clock.now()),contextTransfer:{...transfer,turnInstanceId:scope.turnInstanceId}};pane.transcript.push(notice);
-   try{p.state.saveChats(p.registry)}catch(e){pane.transcript=pane.transcript.filter(m=>m!==notice);throw e}
-   transferSaved=true;pane.publish({type:'contextTransfer',text:transferLabel(transfer),transfer:notice.contextTransfer,ts:notice.ts});
-  }turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
+  const notices:TranscriptMessage[]=[];
+  const transferNotice=transfer&&!transferSaved?{...timestampMessage('peer','[от харнесс] '+transferLabel(transfer),this.clock.now()),contextTransfer:{...transfer,turnInstanceId:scope.turnInstanceId}}:null;
+  const teamNotice=knowledge&&teamText&&!teamSaved?{...timestampMessage('peer','[от харнесс] '+teamText,this.clock.now()),teamKnowledge:{project:p.dir,chat:knowledge.chat,team:knowledge.team,turnInstanceId:scope.turnInstanceId}}:null;
+  if(transferNotice)notices.push(transferNotice);if(teamNotice)notices.push(teamNotice);
+  if(notices.length){pane.transcript.push(...notices);try{p.state.saveChats(p.registry)}catch(e){pane.transcript=pane.transcript.filter(m=>!notices.includes(m));throw e}}
+  if(transferNotice){transferSaved=true;pane.publish({type:'contextTransfer',text:transferLabel(transfer!),transfer:transferNotice.contextTransfer,ts:transferNotice.ts})}
+  if(teamNotice){teamSaved=true;pane.publish({type:'roleKnowledge',knowledge})}
+  turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
  }},publish:event=>{
  if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:event.text,sessionId:pane.sessionId}:event;return}
  if(turn.stopRequested)return;if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;pane.publish(event)
@@ -400,7 +413,7 @@ export class Runtime {
  roleCatalog(){return roleCatalog(this)}
  createSeat(input:CreateSeatInput,initiator:Initiator){return createSeat(this,input,initiator)}
  async ensureSeatMaterialized(id:string,initiator:Initiator,operationId?:string){this.requireOwner(initiator);if(this.project.restoreFailed.has(id))free(this.project,this.pane(id));return ensureSeatMaterialized(this,id,initiator,operationId)}
- async onboard(id:string,initiator:Initiator){this.requireOwner(initiator);if(this.project.restoreFailed.has(id))free(this.project,this.pane(id));return onboard(this,id,initiator)}
+ async onboard(id:string,initiator:Initiator,binding:{project?:unknown;chat?:unknown}={}){this.requireOwner(initiator);if(this.project.restoreFailed.has(id))free(this.project,this.pane(id));return onboard(this,id,initiator,binding)}
  makeRoom(model:string,mode:string,initiator:Initiator){return makeRoom(this,model,mode,initiator)}
  roomSet(input:{model?:unknown;folder?:unknown},initiator:Initiator){return roomSet(this,input,initiator)}
  roomMove(input:{path?:unknown;create?:unknown;git?:unknown},initiator:Initiator){return roomMove(this,input,initiator)}

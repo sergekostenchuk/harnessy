@@ -9,6 +9,8 @@ import type {ProjectState} from './types.ts';
 import {jsonClone,chatMetadata,diskIO,type Chat} from './state.ts';
 import type {Pane} from './pane.ts';
 import {makeRoomIn} from './rooms.ts';
+import {roleKnowledge} from './proposals.ts';
+import {firstOpenPending} from './roles.ts';
 import {SEAT_KINDS,type SeatKind} from '@harnessy/team';
 import {promotionHistory} from './promotion.ts';
 
@@ -94,7 +96,7 @@ export function chatsList(runtime:Runtime,initiator:Initiator) {
  return {active:orderedClone(p.state.chats.active),chats:Object.values(p.state.chats.chats).map(c=>meta(p,c)).sort((a,b)=>b.last-a.last)};
 }
 export function chatGet(runtime:Runtime,id:string,initiator:Initiator) {
- const p=owner(runtime,initiator),c=find(p,id);p.state.saveChats(p.registry);return {chat:meta(p,c),messages:jsonClone(c.transcript)};
+ const p=owner(runtime,initiator),c=find(p,id);p.state.saveChats(p.registry);const knowledge=roleKnowledge(p,c);return {chat:meta(p,c),messages:jsonClone(c.transcript),...(knowledge?{knowledge,firstOpenPending:firstOpenPending(p,p.registry.get(c.pane)!)}:{})};
 }
 export async function chatsNew(runtime:Runtime,input:{pane?:unknown;carry?:unknown},initiator:Initiator) {
  const p=owner(runtime,initiator),pid=String(input.pane||'');if(pid==='room'&&!p.registry.get('room'))makeRoomIn(p,runtime,'',p.dir===runtime.defaultDir?'chat':'read');const pane=place(p,pid),carry=String(input.carry||'text');free(p,pane);
