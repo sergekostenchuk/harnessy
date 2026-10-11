@@ -116,7 +116,7 @@ for(const legacy of [false,true])for(const page of ['chat','now'])for(const acti
  // Older projects can have only attempts.json. New failed model turns also persist chat.turns[], never a fabricated response.
  if(legacy)rmSync(chatsPath);
  const provider=new FakeProvider(),runtime=await createRuntime({...h.deps,providers:{claude:provider}},completedActions);t.after(()=>runtime.close());
- const api=createApi({runtime,siteDir:h.siteDir,indexFile:h.indexFile,port:0});await api.listen();t.after(()=>api.close());
+ const api=createApi({runtime,siteDir:h.siteDir,port:0});await api.listen();t.after(()=>api.close());
  const status=await call(api,'/api/status'),chats=await call(api,'/api/chats');assert.equal(chats.body.chats.length,1);assert.equal(chats.body.chats[0].messages,0);if(!legacy){const spend=await call(api,'/api/spend');assert.equal(spend.body.totals.turns,1);assert.equal(spend.body.totals.outcomes.error,1)}const room=status.body.panes.find((p:{id:string})=>p.id==='room');assert.ok(room.waiting);const attemptId=room.waiting.turnInstanceId;
  const view=ui({page});view.H.on=true;view.functions.applyStatus(status.body);if(page==='now')view.functions.nowLive();assert.equal(provider.calls.length,0);
  const html=page==='chat'?view.cards.get('live-waiting')!.innerHTML:view.decisions.innerHTML;assert.match(html,/data-attempt-action="retry"/);assert.match(html,/data-attempt-action="skip"/);

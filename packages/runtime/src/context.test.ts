@@ -9,7 +9,7 @@ const golden=JSON.parse(readFileSync(new URL('./fixtures/context-python.json',im
 const places=['assistant','researcher','executor3','room'];
 const seats='  assistant: {role: assistant, label: ассистент, vendor: claude, model: w1, mode: read}\n  researcher: {role: researcher, label: ресёрчер, vendor: claude, model: w1, mode: read}\n  executor3: {role: executor, label: воркер 3, vendor: claude, model: w1, mode: read}';
 async function serve(t:Parameters<typeof harness>[0],h:Awaited<ReturnType<typeof harness>>){
- const api=createApi({runtime:h.runtime,siteDir:h.dir,indexFile:join(h.dir,'unused.html'),port:0});await api.listen();t.after(()=>api.close());h.deps.appUrl=api.url;return api;
+ const api=createApi({runtime:h.runtime,siteDir:h.dir,port:0});await api.listen();t.after(()=>api.close());h.deps.appUrl=api.url;return api;
 }
 async function card(url:string,id:string){const res=await fetch(url+'/api/context/'+id);assert.equal(res.status,200);const body=await res.json();assert.deepEqual(Object.keys(body),golden.rootKeys);assert.equal(body.pane,id);assert.equal(body.busy,false);return body}
 
