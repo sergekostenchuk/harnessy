@@ -639,3 +639,29 @@ html[data-proto] .main:has(#v-turn) .ovl{overflow:hidden}
   html[data-proto] .main:has(#v-turn) .panel{max-width:calc(100% - 24px);left:12px!important}
   html[data-proto] .main:has(#v-turn) .panel .inner{width:100%!important}
 }
+
+/* TS-15d: project files keep the native sketch lists and document layout. */
+[data-project-section] .li[data-section-item]{cursor:pointer}
+[data-project-section] .li[data-section-item]:focus-visible,[data-project-section] .toc .it:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+[data-project-section] .section-empty{padding:20px 4px;color:var(--ink2)}
+[data-project-section] .section-empty h2{font-size:17px;font-weight:500}
+[data-project-section] .section-request{border-top:1px solid var(--line);margin-top:24px;padding-top:16px}
+[data-project-section] .section-request h3{font-size:14px;font-weight:500}
+[data-project-section] .section-request .in{display:block;box-sizing:border-box;width:100%;margin:10px 0;min-height:70px}
+[data-project-section] .nums[data-section-missing]{position:relative;padding-top:35px}
+[data-project-section] .nums>.spec-block{position:absolute;top:0;left:0;right:0}
+[data-project-section] .rh[data-spec-mock]{flex-wrap:wrap}
+[data-project-section] .rh>.spec-block{flex-basis:100%}
+[data-project-section] article{overflow-wrap:anywhere}
+[data-project-section] .toc .it{display:block;cursor:pointer}
+[data-project-section] .toc small{display:block;font:10px var(--mono);color:var(--ink3);margin-top:4px}
+[data-section-card] article h2{display:none}
+[data-section-card] article .meta{font:11px var(--mono);color:var(--ink3);margin:10px 0}
+[data-section-card] article h3{font-size:16px;font-weight:500;margin-top:16px}
+[data-project-section] .section-request .in{background:var(--panel);color:var(--ink);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font:13px/1.55 var(--font);resize:vertical}
+[data-project-section] .li[data-section-item]>*{min-width:0;overflow-wrap:anywhere}
+[data-project-section] .li[data-section-item] .scope{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-sizing:border-box}
+[data-project-section] .toc .pg .spec-block{font:9px/1.4 var(--mono);padding:6px;margin-bottom:8px}
+[data-section-card] .prev{max-height:320px;overflow:auto}
+[data-section-card] .rule{max-height:160px;overflow:auto;white-space:pre-wrap}
+[data-section-card] .acts>.spec-block{flex-basis:100%}
