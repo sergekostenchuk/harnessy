@@ -42,6 +42,7 @@ export class DomNode {
  getElementById(id:string){return this.querySelector('#'+id)}
  insertAdjacentHTML(where:string,html:string){const temp=new DomNode('div',this.owner);temp.innerHTML=html;for(const n of [...temp.children]){if(where==='beforeend')this.appendChild(n);else throw Error('unsupported position '+where)}}
  focus(){this.owner.activeElement=this}setSelectionRange(_start:number,_end:number){}
+ showModal(){this.setAttribute('open','')}close(){this.removeAttribute('open')}
  offsetWidth=1000;offsetHeight=800;
  getBoundingClientRect(){return {left:0,top:0,width:this.offsetWidth,height:this.offsetHeight}}
  addEventListener(type:string,fn:(e:any)=>any,capture=false){const listeners=this.listeners.get(type)??[];listeners.push({fn,capture});this.listeners.set(type,listeners)}

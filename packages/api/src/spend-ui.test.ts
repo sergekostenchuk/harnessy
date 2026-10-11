@@ -19,7 +19,7 @@ function ui(fetch?:(path:string,body?:any)=>Promise<any>,on=true){
   URL:{createObjectURL(blob:Blob){blobs.push(blob);return 'blob:test'},revokeObjectURL(){}},localStorage:{setItem(...v:any[]){writes.push(v)},getItem:()=>null}};
  const create=d.document.createElement.bind(d.document);d.document.createElement=(tag:string)=>{const n:any=create(tag);if(tag==='a')n.click=()=>downloaded.push(n.download);return n};context.window=context;
  const vm=createContext(context);runInContext(read('ui/sketches/disarto/app.js'),vm);runInContext(part(raw,'<script>','</script>').slice('<script>'.length),vm);
- runInContext(part(live,'  function closeLAMenus(','  // запись «контекст передан»')+part(live,'  const statics=','  // ══ ПЛАН:')+part(live,'  // TS-14b: spend blocks','  // ══ ПОДКЛЮЧЕНИЯ')+'\nglobalThis.testing={fetch:spendFetch,draw:spendDraw,csv:spendCsv,state:SP,limits:limitsFetch,limitState:LIM,limitDraw:limitsDraw,history:spendHistory};restoreUI();',vm);
+ runInContext(part(live,'  function closeLAMenus(','  // запись «контекст передан»')+part(live,'  const statics=','  // ══ ПЛАН:')+part(live,'  // TS-14b: spend blocks','  // ══ ПОДКЛЮЧЕНИЯ')+'\nglobalThis.testing={fetch:spendFetch,draw:spendDraw,csv:spendCsv,state:SP,limits:limitsFetch,limitState:LIM,limitDraw:limitsDraw,limitEvent:limitsEvent,history:spendHistory};restoreUI();',vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  return {...d,H,S,context,requests,blobs,downloaded,logs,writes,toasts,find,response,functions:context.testing};
 }
@@ -28,7 +28,7 @@ test('173/178: cancelled TS-10 hidden-block invariant; original Spend blocks and
  const h=await fixture(t);await h.runtime.runTurn('worker','question');const v=ui(async path=>(await call(h.api,path)).body);v.H.project=h.dir;
  const original=v.find('[data-c="router"]');await v.functions.fetch();await v.functions.limits();assert.equal(v.find('[data-c="router"]'),original);
  for(const selector of ['[data-c="claude"]','[data-c="codex"]','[data-c="qwen"]','[data-c="hist"]','[data-c="cal"]','#v-proj','#v-role','#v-est','#cap','#seg'])v.find(selector);
- assert.doesNotMatch(v.find('.main').textContent,/62,4|94 %|19:58|OMG|Sonnet 35 %/);assert.match(v.find('.main').textContent,/макет/);assert.match(v.find('.main').textContent,/chats.json/);assert.equal(v.functions.state.data.totals.input,20);
+ assert.doesNotMatch(v.find('.main').textContent,/OMG|Sonnet 35 %/);assert.match(v.find('[data-c="claude"]').textContent,/62,4|62.4/);assert.match(v.find('[data-c="claude"]').textContent,/макет/);assert.match(v.find('.main').textContent,/макет/);assert.match(v.find('.main').textContent,/chats.json/);assert.equal(v.functions.state.data.totals.input,20);
  const before=v.requests.filter(p=>p==='/api/spend?period=7').length;await v.find('[data-spend-period="7"]').emit('click');assert.equal(v.requests.filter(p=>p==='/api/spend?period=7').length,before+1);assert.equal(v.context.location.search,'?period=7');
  await v.find('#seg [data-v="proj"]').emit('click');assert.equal(v.find('#v-proj').classList.contains('on'),true);await v.window.emit('keydown',{key:'4'});assert.equal(v.find('#v-est').classList.contains('on'),true);
  await v.find('[data-spend-group="byModel"]').emit('click');assert.match(v.find('#v-proj .tbl').textContent,/w1/);
@@ -60,10 +60,10 @@ test('178: CSV uses measurements, preserves quotes/newlines, and neutralizes for
  const v=ui(),data=snapshot();data.byChat[0]!.title='  =SUM(1;2)\n"label"';v.context.api=async(p:string)=>p.includes('/turns')?v.response(p):data;await v.functions.fetch();const csv=v.functions.csv();assert.match(csv,/"'  =SUM/);assert.match(csv,/""label""/);assert.match(csv,/costByCurrency/);assert.match(csv,/"byModelVendor"/);
 });
 
-test('177: only connected providers, seven-day activity ranks top three; detail shows all windows with stale/no-data reasons and period link',async()=>{
- const v=ui();v.functions.state.period='30';const paths:string[]=[];v.context.api=async(p:string)=>{paths.push(p);return p==='/api/connections'?{ok:true,providers:['claude','codex','router','four','off'].map(id=>({id,name:id,auth:{loggedIn:id!=='off'}}))}:p==='/api/limits'?{ok:true,updatedAt:1,providers:[{vendor:'codex',source:'event',stale:true,windows:[{name:'5-hour',usedPercent:25,resetsAt:200},{name:'weekly',usedPercent:50}]}]}:{...snapshot('/projects/a','7'),byVendor:[{vendor:'codex',turns:10},{vendor:'four',turns:7},{vendor:'router',turns:4},{vendor:'claude',turns:1}]}};
+test('177/198–203: top three connected subscriptions keep sketch meters; all windows show dated values or marked samples',async()=>{
+ const v=ui();v.functions.state.period='30';const paths:string[]=[];v.context.api=async(p:string)=>{paths.push(p);return p==='/api/connections'?{ok:true,providers:['claude','codex','router','four','off'].map(id=>({id,name:id,auth:{loggedIn:id!=='off'}}))}:p==='/api/limits'?{ok:true,project:v.H.project,updatedAt:1,providers:[{vendor:'codex',source:'event',stale:true,windows:[{label:'5-hour',percentUsed:25,resetsAt:200},{label:'weekly',percentUsed:50}]}]}:{...snapshot('/projects/a','7'),byVendor:[{vendor:'codex',turns:10},{vendor:'four',turns:7},{vendor:'router',turns:4},{vendor:'claude',turns:1}]}};
  await v.functions.limits();assert.ok(paths.includes('/api/spend?period=7'));const widget=v.find('.limits');assert.equal(widget.hasAttribute('data-go'),false);assert.doesNotMatch(widget.textContent,/claude|off/);assert.match(widget.textContent,/codex/);assert.match(widget.textContent,/остаток 75 %/);assert.match(widget.textContent,/устаревшие/);assert.equal(widget.querySelectorAll('.sp-limit').length,3);assert.equal(widget.querySelector('a')!.getAttribute('href'),'05-spend.html?period=30');
- await v.find('[data-spend-limits]').emit('click');assert.equal(v.find('.panel').querySelectorAll('.sp-limit').length,4);assert.match(v.find('.panel').textContent,/weekly|5-hour/);assert.match(v.find('.panel').textContent,/нет данных/);assert.equal(v.find('.panel a').getAttribute('href'),'05-spend.html?period=30');
+ await v.find('[data-spend-limits]').emit('click');assert.equal(v.find('.limits-dialog').querySelectorAll('.sp-limit').length,4);assert.match(v.find('.limits-dialog').textContent,/weekly|5-hour/);assert.match(v.find('.limits-dialog').textContent,/макет/);assert.doesNotMatch(v.find('.limits-dialog').textContent,/нет данных|—/);assert.ok(v.find('.limits-dialog').querySelectorAll('[role="meter"]').length>=4);assert.equal(v.find('.limits-dialog a').getAttribute('href'),'05-spend.html?period=30');
 });
 
 test('175/178: history paginates with deduplication; late filter response cannot replace new filter; escape prevents reopening',async()=>{
@@ -74,7 +74,7 @@ test('175/178: history paginates with deduplication; late filter response cannot
 
 test('177: late quota reads cannot restore a previous project or a hidden page',async()=>{
  const v=ui(),old=deferred<any>(),connections={ok:true,providers:[{id:'claude',name:'Claude',auth:{loggedIn:true}}]};
- v.context.api=()=>old.promise;const first=v.functions.limits();v.H.project='/projects/b';v.context.api=async(p:string)=>p==='/api/connections'?connections:p==='/api/limits'?{ok:true,updatedAt:Date.now()/1000,providers:[{vendor:'claude',source:'test',windows:[{name:'weekly',usedPercent:20}]}]}:snapshot('/projects/b','7');await v.functions.limits();
+ v.context.api=()=>old.promise;const first=v.functions.limits();v.H.project='/projects/b';v.context.api=async(p:string)=>p==='/api/connections'?connections:p==='/api/limits'?{ok:true,project:v.H.project,updatedAt:Date.now()/1000,providers:[{vendor:'claude',source:'test',windows:[{label:'weekly',percentUsed:20}]}]}:snapshot('/projects/b','7');await v.functions.limits();
  v.H.project='/projects/a';await v.functions.limits();old.resolve({ok:true,providers:[{id:'stale',name:'stale',auth:{loggedIn:true}}]});await first;
  assert.deepEqual(Array.from(v.functions.limitState.providers,(p:any)=>p.id),['claude']);assert.match(v.find('.limits').textContent,/остаток 80 %/);
  const hidden=deferred<any>();v.context.api=()=>hidden.promise;const pending=v.functions.limits();await v.window.emit('pagehide');hidden.resolve({ok:true,providers:[{id:'hidden',auth:{loggedIn:true}}]});await pending;assert.doesNotMatch(v.find('.limits').textContent,/hidden/);
@@ -103,3 +103,31 @@ for(const expanded of [false,true]){
   v.H.project='/projects/a';await v.find(root+' [data-spend-model]').emit('click');v.functions.state.generation++;await v.find(root+' .live-menu [data-k="1"]').emit('click');assert.equal(writes.length,1);
  });
 }
+
+test('198/203: disconnected widget keeps sketch percentages and meters, marked as samples; details still open',async()=>{
+ const v=ui(undefined,false);v.functions.limitDraw();const widget=v.find('.limits');assert.equal(widget.querySelectorAll('.sp-limit').length,3);assert.equal(widget.querySelectorAll('[role="meter"]').length,3);assert.match(widget.textContent,/62,4|62.4/);assert.match(widget.textContent,/94 %/);assert.match(widget.textContent,/\$41,20/);assert.match(widget.textContent,/макет/);assert.doesNotMatch(widget.textContent,/нет данных|—/);
+ await v.find('[data-spend-limits]').emit('click');assert.ok(v.find('.limits-dialog').querySelectorAll('[role="meter"]').length>=5);await v.find('[data-spend-close]').emit('click');assert.equal(v.find('.limits-dialog').hasAttribute('open'),false);
+});
+test('203: failed quota refresh keeps the last real value dated; foreign response cannot impersonate current project',async()=>{
+ const v=ui();v.context.api=async(p:string)=>p==='/api/limits'?{ok:true,project:v.H.project,updatedAt:Date.now()/1000,providers:[{vendor:'claude',source:'Claude usage',fetchedAt:Date.now()/1000,windows:[{label:'неделя',percentUsed:0,resetsAt:Date.now()/1000+60}]}]}:v.response(p);
+ await v.functions.limits();assert.match(v.find('.limits').textContent,/остаток 100 %/);assert.doesNotMatch(v.find('.limits').textContent,/макет/);
+ v.context.api=async(p:string)=>p==='/api/limits'?{ok:true,project:'/foreign',updatedAt:Date.now()/1000,providers:[{vendor:'claude',source:'forged',windows:[{label:'неделя',percentUsed:99}]}]}:v.response(p);await v.functions.limits();assert.match(v.find('.limits').textContent,/остаток 100 %/);assert.match(v.find('.limits').textContent,/устаревшие данные/);assert.doesNotMatch(v.find('.limits').textContent,/forged|99 %/);
+});
+
+test('202/203: an attached source without its monthly quota is a fact, excluded from top three and never replaced with sample money',async()=>{
+ const v=ui();v.context.api=async(p:string)=>p==='/api/connections'?{ok:true,providers:[{id:'kimi',name:'Kimi',kind:'подписка',auth:{loggedIn:true}},{id:'claude',name:'Claude',auth:{loggedIn:true}}]}:p==='/api/limits'?{ok:true,project:v.H.project,updatedAt:Date.now()/1000,providers:[{vendor:'kimi',sourceConnected:true,source:'Kimi',windows:[],reason:'месячный лимит провайдер не отдаёт'}]}:snapshot(v.H.project,'7');
+ await v.functions.limits();assert.doesNotMatch(v.find('.limits').textContent,/Kimi/);await v.find('[data-spend-limits]').emit('click');const cards=v.find('.limits-dialog').querySelectorAll('.sp-limit'),kimi=cards.find(c=>c.textContent.includes('Kimi'))!;assert.ok(kimi);assert.match(kimi.textContent,/месячный лимит провайдер не отдаёт/);assert.doesNotMatch(kimi.textContent,/макет|34|41,20/);assert.equal(kimi.querySelectorAll('[role="meter"]').length,0);
+});
+
+test('146: sidebar details also open outside Spend without HX, close on Escape and restore focus',async()=>{
+ const v=ui();v.context.PAGE='new';delete v.context.HX;await v.functions.limits();const opener=v.find('[data-spend-limits]');await opener.emit('click');assert.equal(v.find('.limits-dialog').hasAttribute('open'),true);assert.ok(v.find('.limits-dialog').querySelectorAll('[role="meter"]').length>=2);await v.window.emit('keydown',{key:'Escape'});assert.equal(v.find('.limits-dialog').hasAttribute('open'),false);assert.equal(v.document.activeElement,opener);
+});
+
+test('200/473: plan and all three Claude windows appear with a countdown, and a connection-read failure keeps the last snapshot',async()=>{
+ const v=ui(),now=Date.now()/1000;v.context.api=async(p:string)=>p==='/api/limits'?{ok:true,project:v.H.project,updatedAt:now,providers:[{vendor:'claude',plan:'Max',fetchedAt:now,status:'ok',sourceConnected:true,source:'claude.ai /usage',windows:[{label:'5 ч',percentUsed:21,windowMinutes:300,resetsAt:now+3120},{label:'неделя',percentUsed:21,windowMinutes:10080,resetsAt:now+100000},{label:'неделя · Sonnet',percentUsed:32,windowMinutes:10080,resetsAt:now+100000}]}]}:v.response(p);await v.functions.limits();assert.match(v.find('.limits').textContent,/Claude · Max/);await v.find('[data-spend-limits]').emit('click');const detail=v.find('.limits-dialog');assert.equal(detail.querySelectorAll('[role="meter"]').length,3);assert.match(detail.textContent,/сброс через 52 мин/);assert.match(detail.textContent,/Sonnet/);
+ v.context.api=async()=>{throw Error('connection down')};await v.functions.limits();assert.match(v.find('.limits').textContent,/Claude · Max/);assert.match(v.find('.limits').textContent,/устаревшие данные/);
+});
+
+test('200: an older in-flight HTTP result cannot overwrite a newer quota event',async()=>{
+ const v=ui(),pending=deferred<any>(),now=Date.now()/1000;v.context.api=async(p:string)=>p==='/api/limits'?pending.promise:v.response(p);const reading=v.functions.limits();const quota=(stamp:number,percentUsed:number)=>({ok:true,project:v.H.project,updatedAt:stamp,providers:[{vendor:'claude',plan:'Max',status:'ok',sourceConnected:true,fetchedAt:stamp,windows:[{label:'неделя',percentUsed,windowMinutes:10080,resetsAt:now+3600}]}]});v.functions.limitEvent(quota(now,30));pending.resolve(quota(now-60,10));await reading;assert.match(v.find('.limits').textContent,/остаток 70 %/);assert.doesNotMatch(v.find('.limits').textContent,/остаток 90 %/);
+});

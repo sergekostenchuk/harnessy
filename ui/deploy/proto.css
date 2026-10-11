@@ -230,7 +230,7 @@ aside.side.ps .nav:hover, aside.side.ps .nav.on { background:var(--raised); colo
 aside.side.ps .nav .t { overflow:hidden; text-overflow:ellipsis; }
 aside.side.ps .nav .m { margin-left:auto; font:10px var(--mono); color:var(--ink3); } aside.side.ps .bad { color:var(--bad); }
 aside.side.ps .nav .b { position:static; margin-left:auto; min-width:18px; height:18px; border-radius:9px; background:var(--accent); color:#1a0e04; font:500 10px/18px var(--mono); text-align:center; padding:0 5px; }
-aside.side.ps .ps-foot { padding-top:8px; display:flex; flex-direction:column; gap:6px; }
+aside.side.ps .ps-foot { padding-top:8px; display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
 aside.side.ps .limits { padding:9px 10px; border:1px solid var(--line2); border-radius:var(--rs,9px); background:var(--raised); cursor:pointer; }
 aside.side.ps .limits .row { display:flex; justify-content:space-between; font-size:11.5px; color:var(--ink2); margin-bottom:4px; } aside.side.ps .limits .row b { font:500 11px var(--mono); color:var(--ink); }
 aside.side.ps .limits .cap { font:9.5px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); margin-bottom:6px; }
@@ -351,7 +351,7 @@ aside.side.ps .ps-fold-body .nav.psub { height:26px; padding-left:30px; font-siz
 .pinnable:hover .ps-pin, .ps-pin.on { opacity:1; } .pinnable:hover .m { visibility:hidden; } .ps-pin:hover { color:var(--ink); background:var(--tile); } .ps-pin.on { color:#c27a34; }
 .ps-chat.pin .t { color:var(--ink2); } .ps-chat.pin:hover .t { color:var(--ink); }
 aside.side.ps .ps-foot .nav { height:28px; } aside.side.ps .limits.on { border-color:#c27a34; }
-aside.side.ps .ps-scroll { min-height:50%; }
+
 
 /* карточка «Контекст» (ctx.js): монохромная матрица тиками, подсказка по категории, список содержимого */
 .status .live-ctx { cursor:pointer; border-bottom:1px dotted var(--ink3); } .status .live-ctx:hover { color:var(--ink); }
@@ -411,6 +411,27 @@ html[data-page="spend"] .top .r { flex-wrap:wrap; }
 .sp-limit small { display:block; font-size:10px; color:var(--ink3); margin-top:4px; }
 .sp-limit .row { display:flex; justify-content:space-between; gap:8px; }
 .sp-limit.stale { color:var(--ink3); }
+.sp-limit-title { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.sp-limit-title > b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sp-limit .sp-value { align-items:baseline; margin:5px 0; }
+.sp-limit .sp-value b { font:500 32px var(--mono); letter-spacing:-.04em; }
+.sp-limit .ticks { display:flex; gap:2px; margin:6px 0; }
+.sp-limit .ticks i { flex:1; height:7px; border-radius:1px; background:var(--line2); }
+.sp-limit .ticks i.on { background:var(--ok); }
+.sp-limit .ticks.warn i.on { background:var(--warn,#e0b23c); }
+aside.side.ps .limits .sp-limit { margin:9px 0; }
+aside.side.ps .limits .sp-value b { font:500 22px var(--mono); }
+aside.side.ps .limits .sp-value span { font-size:10px; color:var(--ink3); }
+aside.side.ps .limits .ticks { margin:5px 0; }
+aside.side.ps .limits .sp-link { display:block; margin-top:6px; font-size:10px; }
+.sp-limit.stale .ticks { opacity:.55; }
+.limits-dialog { width:min(740px,calc(100vw - 32px)); max-height:calc(100dvh - 48px); box-sizing:border-box; overflow:auto; padding:24px; border:1px solid var(--line2); border-radius:14px; background:var(--panel); color:var(--ink); box-shadow:0 24px 80px #0008; }
+.limits-dialog::backdrop { background:#0009; }
+.limits-dialog a { color:var(--accent); }
+.limits-dialog h3 { margin:0 0 18px; font-size:20px; }
+.limits-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; }
+.limits-dialog .sp-actions { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:18px; }
+.limits-dialog button:focus-visible,.limits-dialog a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .sp-link { display:block; margin-top:8px; font-size:11px; }
 [data-spend-status] { padding:10px 18px; color:var(--ink3); font-size:11px; }
 .sp-river { height:auto !important; min-height:90px; }

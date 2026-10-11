@@ -1,5 +1,5 @@
 import {randomBytes} from 'node:crypto';
-import {ProviderError,snapshot,record,type Seat,type TurnContext,type Provider,type Usage} from '../types.ts';
+import {ProviderError,snapshot,record,limitPlan,type Seat,type TurnContext,type Provider,type Usage,type ProviderLimits,type LimitWindow} from '../types.ts';
 import {asError,requireRecord,vendorError} from '../errors.ts';
 import {waitWithSignal} from '../cancellation.ts';
 import {childEnv} from '../env.ts';
@@ -10,6 +10,19 @@ import {argumentsFor,BASE_OVERRIDES,overrides,userServers,sparkRouter,tomlKey} f
 import {serverRequest} from './protocol.ts';
 interface ProcessRecord {client:RpcClient;cwd:string;peers:string;token:string;revoke:()=>void}
 interface Active {seat:Seat;ctx:TurnContext;client:RpcClient|null;threadId:string|null;turnId:string|null;stopRequested:boolean;reject:(e:ProviderError)=>void}
+export function codexLimits(raw:unknown,now=Date.now()/1000,plan:unknown=null):ProviderLimits{
+ const invalid:ProviderLimits={ok:false,code:'limits_invalid',reason:'Codex: неполный ответ лимитов подписки'};
+ if(!record(raw))return invalid;
+ const value=record(raw.rateLimitsByLimitId)&&record(raw.rateLimitsByLimitId.codex)?raw.rateLimitsByLimitId.codex:raw.rateLimits;
+ if(!record(value)||!('primary'in value)||!('secondary'in value))return invalid;
+ const windows:LimitWindow[]=[];
+ for(const key of ['primary','secondary']){
+ const w=value[key];if(w===null)continue;
+ if(!record(w)||typeof w.usedPercent!=='number'||!Number.isFinite(w.usedPercent)||w.usedPercent<0||w.usedPercent>100||!Number.isSafeInteger(w.windowDurationMins)||Number(w.windowDurationMins)<=0||!(w.resetsAt===null||typeof w.resetsAt==='number'&&Number.isFinite(w.resetsAt)&&w.resetsAt>0))return invalid;
+ const minutes=Number(w.windowDurationMins);windows.push({label:minutes===300?'5 ч':minutes===10080?'неделя':minutes===43200?'месяц':minutes+' мин',percentUsed:w.usedPercent,resetsAt:w.resetsAt,windowMinutes:minutes});
+ }
+ return windows.length?{ok:true,plan:limitPlan(value.planType)??limitPlan(plan),windows,fetchedAt:now,source:'Codex app-server'}:{ok:false,code:'limits_unsupported',reason:'Codex: лимиты провайдер не отдаёт'};
+}
 export interface CodexDependencies {transportFactory:TransportFactory;servers:()=>Promise<string[]>;router:()=>Promise<string[]|null>;env:NodeJS.ProcessEnv;cwd:string}
 export class CodexProvider implements Provider {
  readonly vendor='codex' as const;private deps:CodexDependencies;
@@ -164,6 +177,11 @@ export class CodexProvider implements Provider {
  async auth(){const res=requireRecord(await (await this.listClient(this.deps.cwd)).request('account/read',{refreshToken:false}),'account response');
  if(res.account===null)return {loggedIn:false};const a=requireRecord(res.account,'account');
  if(typeof a.type!=='string')throw new ProviderError('protocol','missing account type');return {loggedIn:a.type==='chatgpt',email:a.email??null,plan:a.planType??null}}
+ async limits(signal?:AbortSignal):Promise<ProviderLimits>{
+ const timeout=AbortSignal.timeout(10000),stop=signal?AbortSignal.any([signal,timeout]):timeout;
+ try{const client=await waitWithSignal(()=>this.listClient(this.deps.cwd),stop);const account=await client.request('account/read',{refreshToken:false},stop);if(record(account)&&record(account.account)&&account.account.type==='apiKey')return {ok:false,code:'limits_not_applicable',reason:'Codex: ключ API не имеет окон подписки'};return codexLimits(await client.request('account/rateLimits/read',{},stop),Date.now()/1000,record(account)&&record(account.account)?account.account.planType:null)}
+ catch{return {ok:false,code:stop.aborted?'limits_timeout':'limits_unavailable',reason:stop.aborted?'Codex: чтение лимитов отменено или превысило время ожидания':'Codex: лимиты провайдер не отдаёт'}}
+ }
  async models(){if(this.modelsCache)return this.modelsCache;try{
  const client=await this.listClient(this.deps.cwd),out:{id:string;label:string}[]=[];let cursor:string|null=null;
  do{const res=requireRecord(await client.request('model/list',cursor?{cursor}:{}),'model list');if(!Array.isArray(res.data))throw new ProviderError('protocol','missing models');
