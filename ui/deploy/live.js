@@ -240,6 +240,8 @@
   function subscribeLiveEvents(){const listener={onmessage:null,onopen:null,onerror:null,close(){LIVE_EVENTS.listeners.delete(listener)}};LIVE_EVENTS.listeners.add(listener);syncLiveEvents();return listener;}
   function syncLiveEvents(){
     if(!LIVE_EVENTS.alive||!H.on||H.snapshotOnly||typeof EventSource!=='function'){if(LIVE_EVENTS.source)stopLiveEvents();return;}
+    // Opening a stream replays pending approvals immediately, including when live:status starts it.
+    if(PAGE==='chat'&&!(H.events&&H.events.onmessage)||PAGE==='now'&&(typeof NOW==='undefined'||!NOW.es||!NOW.es.onmessage))return;
     if(LIVE_EVENTS.source&&LIVE_EVENTS.project===H.project)return;
     stopLiveEvents();const project=LIVE_EVENTS.project=H.project,generation=LIVE_EVENTS.generation,source=LIVE_EVENTS.source=new EventSource('/api/events/all');
     const current=()=>LIVE_EVENTS.alive&&LIVE_EVENTS.source===source&&LIVE_EVENTS.generation===generation&&H.project===project&&!H.snapshotOnly;
@@ -256,14 +258,15 @@
   // End TS-12 shared events.
   async function hConnect(){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)){ return; }   /* движок подключён, если статус есть — даже без единого места: иначе чистая машина (первый запуск) остаётся в демо-режиме и проект создать нельзя */
     if(applyStatus(st,request,true)===false)return;H.connected=true;if(window.HARNESS_BOOT)window.HARNESS_BOOT.accept(); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
-    syncLiveEvents();await refreshChats();
     if(PAGE==='chat'){ if(H.pane&&H.pane.busy) H.cur={text:'',tools:[]};
       let linkedProject=H.project;const es=H.events||(H.events=subscribeLiveEvents()); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='state') consumeState(ev); if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
       es.onerror=()=>{ if(H.link!=='lost'){ H.link='lost'; hStatus(); if(!H.projectLinkChange)toast('Связь с движком потеряна — переподключаюсь…'); } };   // плановая смена проекта тоже закрывает SSE — это не потеря движка
       es.onopen=async()=>{ if(H.link==='lost'){ const switching=H.projectLinkChange;H.link='ok'; hStatus(); await refreshStatus();if(!switching&&H.project===linkedProject)toast('Связь восстановлена');linkedProject=H.project;H.projectLinkChange=false; } };
-      hStatus(); await loadChat(); }
+      hStatus(); }
+    if(PAGE==='now') nowLive();
+    syncLiveEvents();await refreshChats();
+    if(PAGE==='chat')await loadChat();
     if(/21-journal\.html$/.test(location.pathname)) journalLive();
-    if(PAGE==='now') nowLive();   // «Сейчас» — открытые карточки подтверждений из движка, не демо-решения (Kimi UX-7 №133 п.5)   // экран «Журнал» — лента линии из движка, не заготовка (Kimi UX-7 №133 п.1)
     if(window.CX) CX.render(); }
 
   // ── чат: настоящее поле ввода; разговор хранится; ответы — по сценарию и так и подписаны (или от настоящей модели через мост)
@@ -1198,7 +1201,7 @@
   function nowLive(){ if(!H.on||NOW.es) return; NOW.es=subscribeLiveEvents(); nowDraw();
     NOW.es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='approval'){ NOW.cards.set(ev.pane+'|'+ev.id,{pane:ev.pane,id:ev.id,title:ev.title,detail:ev.detail,since:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}); nowDraw(); }
       else if(ev.type==='approvalResolved'){ NOW.cards.delete(ev.pane+'|'+ev.id); nowDraw(); }else if(ev.type==='state')consumeState(ev); };
-    NOW.es.onerror=()=>{ const st=document.querySelector('.frame .top .st'); if(st) st.innerHTML='<i></i>связь потеряна · переподключение…'; }; }
+    NOW.es.onerror=()=>{ const st=document.querySelector('.frame .top .st'); if(st) st.innerHTML='<i></i>связь потеряна · переподключение…'; }; syncLiveEvents(); }
   document.addEventListener('click',async e=>{ const b=e.target.closest('[data-ap-decision]'); if(!b||PAGE!=='now'||!H.on) return; e.preventDefault(); e.stopPropagation(); const li=b.closest('[data-ap]'); if(!li) return;
     let r=null; try{ r=await api('/api/approve',{pane:li.dataset.apPane,id:li.dataset.ap,decision:b.dataset.apDecision}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; } toast(b.dataset.apDecision==='allow'?'Разрешено':'Отказано'); NOW.cards.delete(li.dataset.apPane+'|'+li.dataset.ap); nowDraw(); },true);
   // TS-09a.1: one lifecycle for all prototype pages.

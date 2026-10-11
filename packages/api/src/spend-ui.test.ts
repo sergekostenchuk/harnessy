@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {request} from 'node:http';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
 import {fixture,call,deferred,until,sse} from './test-helpers.ts';
@@ -159,4 +160,19 @@ test('TS-12 r2: project A → B → A and pagehide cancel old streams and late H
  const v=connectedQuotaPage('spend');await v.context.quotaConnect();await v.functions.limits();const first=v.streams[0],old=v.quota();v.H.project='/projects/b';await v.window.emit('live:status');v.H.project='/projects/a';await v.window.emit('live:status');await until(()=>!v.functions.limitState.loading);assert.equal(first.closed,true);assert.equal(v.streams.filter(s=>!s.closed).length,1);const current=v.streams.at(-1);v.setPercent(92);current.onmessage({data:JSON.stringify({type:'limits',...v.quota()})});first.onmessage({data:JSON.stringify({type:'limits',...old,revision:999})});assert.match(v.find('.limits').textContent,/92 %/);
  const pending=deferred<any>();v.context.api=async(p:string)=>p==='/api/limits'?pending.promise:v.response(p);const reading=v.functions.limits();await v.window.emit('pagehide');assert.ok(v.streams.every(s=>s.closed));current.onmessage({data:JSON.stringify({type:'limits',...old,revision:999})});pending.resolve({...old,revision:999});await reading;assert.match(v.find('.limits').textContent,/92 %/);
  v.H.snapshotOnly=true;await v.window.emit('pageshow',{persisted:true});await v.window.emit('live:status');assert.ok(v.streams.every(s=>s.closed));v.H.snapshotOnly=false;v.context.api=async(p:string)=>p==='/api/limits'?{...old,revision:1}:v.response(p);await v.window.emit('live:status');await v.streams.at(-1).onopen();await until(()=>v.functions.limitState.revision===1);assert.equal(v.streams.filter(s=>!s.closed).length,1);assert.match(v.find('.limits').textContent,/18 %/);
+});
+
+for(const page of ['chat','now'])for(const delay of [false,true])for(const statusFirst of [false,true])test('TS-12 r3: '+page+' retains approval replay with '+(delay?'slow':'immediate')+' chat loading'+(statusFirst?' and an early live:status':''),async t=>{
+ const h=await fixture(t),pane=h.runtime.registry.get('worker')!,approved=pane.askApproval('Разрешить тестовое действие','только дублёр',1000),gate=deferred(),sources:any[]=[];
+ const v=ui(async path=>(await call(h.api,path)).body);v.context.PAGE=page;v.H.project=h.dir;v.H.pane=pane.settings();v.H.asks={};v.S.ui.pane='worker';
+ Object.assign(v.context,{NOW:{cards:new Map(),es:null},nowDraw(){},hStatus(){},drawLive(){},warningEvent:()=>false,consumeState(){},refreshChats:async()=>{if(delay)await gate.promise},loadChat:async()=>{},applyStatus(st:any){Object.assign(v.H,{on:true,project:st.project,panes:st.panes});if(statusFirst)void v.window.emit('live:status')},EventSource:class{
+  onmessage?:((event:any)=>void);onopen?:((event:any)=>void);onerror?:((event:any)=>void);frames:any[]=[];req:any;res:any;
+  constructor(url:string){sources.push(this);this.req=request(h.api.url+url,res=>{this.res=res;this.onopen?.({});let pending='';res.on('error',()=>{});res.on('data',chunk=>{pending+=chunk.toString();let end;while((end=pending.indexOf('\n\n'))>=0){const block=pending.slice(0,end);pending=pending.slice(end+2);if(block.startsWith('data: ')){const data=block.slice(6);this.frames.push(JSON.parse(data));this.onmessage?.({data})}}})});this.req.on('error',()=>{});this.req.end();t.after(()=>this.close())}
+  close(){this.req.destroy();this.res?.destroy()}
+ }});
+ runInContext(part(live,'  function hEvent(','  const isDirect=')+part(live,'  async function hConnect(){','  // ── чат: настоящее поле ввода')+part(live,'  function nowLive(){',"  document.addEventListener('click',async e=>{ const b=e.target.closest('[data-ap-decision]')")+'\nglobalThis.connectReplay=hConnect;',v.context);
+ if(statusFirst){await v.window.emit('live:status');assert.equal(sources.length,0,'replay must not start before the page consumer exists')}
+ const connecting=v.context.connectReplay();await until(()=>sources.length===1&&sources[0].frames.some((e:any)=>e.type==='approval'));const count=()=>page==='chat'?Object.keys(v.H.asks).length:v.context.NOW.cards.size;
+ assert.equal(pane.approvals.size,1);assert.equal(count(),1,'the card must already exist while refreshChats is pending');gate.resolve();await connecting;assert.equal(count(),1);assert.equal(sources.length,1);
+ h.clock.advance(1000);assert.equal(await approved,false);await until(()=>sources[0].frames.some((e:any)=>e.type==='approvalResolved'));assert.equal(count(),0,'resolution still reaches the same consumer');
 });
