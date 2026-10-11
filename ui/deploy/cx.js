@@ -31,7 +31,7 @@
     const bar=box.querySelector('.bar2'), bot=document.createElement('div'); bot.className='cx-bot'; if(bar) bar.replaceWith(bot); else box.appendChild(bot);
     const ta=box.__cx.ta; if(ta) ta.addEventListener('input',()=>{ const g=box.querySelector('.cx-go'),p=seat(); if(g&&!g.classList.contains('busy')) g.classList.toggle('off',!ta.value.trim()||H.on&&!(p&&p.model)); }); }
   function render(box){ const c=cx(), p=seat(), top=box.previousElementSibling, bot=box.querySelector('.cx-bot'), att=box.querySelector('.cx-att'); if(!top||!bot) return;
-    if(H.on&&p&&!isRoom(p)&&c.noFolder){ c.noFolder=false; L.save(); }   // «без проекта» — только у разговора без роли; застрявшее состояние при выбранной роли сбрасывается (Kimi UX-4 №126 п.2)
+    if(H.on&&c.noFolder!==!!H.noProject){c.noFolder=!!H.noProject;L.save();}   // привязка проекта — из статуса движка, а не сохранённого флага окна
     const folder=c.noFolder?'Без проекта':(H.on?base(H.project):(c.folder||'OMG'));
     const role=p?(isRoom(p)?'Без роли':L.paneName(p)):'Без роли', rights=p?modeLabel(p.mode):modeLabel(c.rights);
     const model=p&&p.model?modelLabel(p.model):'выбрать модель';   // у разговора без роли модели нет, пока её не выбрали
