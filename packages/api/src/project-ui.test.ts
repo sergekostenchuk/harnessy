@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,mkdtempSync,mkdirSync,realpathSync,rmSync} from 'node:fs';
+import {readFileSync,mkdtempSync,mkdirSync,realpathSync,rmSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {ProjectRegistry,initProject} from '@harnessy/projects';
@@ -173,4 +173,13 @@ test('172/186: pin identity includes project; read failure retains evidence and 
  const currentPin=v.document.querySelector('.ps-folders [data-pin-toggle="chat"]')!;assert.equal(currentPin.dataset.pinOn,'1');assert.equal(v.document.querySelector('.ps-pins [data-pin-toggle="chat"]')!.dataset.pinOn,'0');await currentPin.emit('click');assert.match(v.toasts.at(-1)!,/write failed/);assert.equal(v.document.querySelectorAll('.ps-pins [data-pin-chat]').length,1);
  broken=true;await v.functions.sideChats();assert.match(v.document.querySelector('.ps-pins')!.textContent,/не прочитаны/);assert.match(v.document.querySelector('.ps-pins')!.textContent,/Other project/);assert.equal(v.document.querySelector('.ps-folders [data-pin-toggle="chat"]')!.disabled,true);broken=false;await v.document.querySelector('[data-pins-refresh]')!.emit('click');assert.equal(v.document.querySelector('.ps-folders [data-pin-toggle="chat"]')!.disabled,false);
  hold=true;const old=v.document.querySelector('.ps-folders [data-pin-toggle="chat"]')!.emit('click');await seen.promise;const before=v.toasts.length;v.H.project='/projects/b';v.H.confirmedProjectGeneration=1;v.H.project='/projects/a';v.H.confirmedProjectGeneration=2;gate.resolve({ok:true,on:true,pins:[other]});await old;assert.equal(v.toasts.length,before);assert.equal(v.document.querySelector('.ps-folders [data-pin-toggle="chat"]')!.dataset.pinOn,'1');
+});
+
+test('TS-15e r2/1: damaged pin storage returns a typed HTTP error, preserves bytes and the sidebar snapshot until retry',async t=>{
+ const h=await fixture(t),file=join(h.dir,'pins.json');assert.deepEqual((await call(h.api,'/api/pins')).body.pins,[]);
+ await call(h.api,'/api/pins',{body:{kind:'folder',path:h.dir,on:true}});const saved=readFileSync(file),v=ui(async(path,body)=>(await call(h.api,path,{body})).body);await v.functions.refreshStatus();await v.functions.sideChats();assert.equal(v.document.querySelectorAll('.ps-pins [data-pin-folder]').length,1);
+ const damaged='[{"kind":"folder","path":"/saved-evidence",';writeFileSync(file,damaged);
+ for(const body of [undefined,{kind:'folder',path:join(h.dir,'missing-target'),on:false,project:h.dir},{kind:'folder',path:h.dir,on:true,project:h.dir}]){const r=await call(h.api,'/api/pins',{body});assert.equal(r.status,409);assert.equal(r.body.code,'pins_unreadable');assert.equal(readFileSync(file,'utf8'),damaged)}
+ await v.functions.sideChats();assert.match(v.document.querySelector('.ps-pins')!.textContent,/не прочитаны/);assert.doesNotMatch(v.document.querySelector('.ps-pins')!.textContent,/закреплённых пока нет/);assert.equal(v.document.querySelectorAll('.ps-pins [data-pin-folder]').length,1);assert.equal(v.document.querySelector('.ps-pins [data-pin-toggle]')!.disabled,true);
+ writeFileSync(file,saved);await v.document.querySelector('[data-pins-refresh]')!.emit('click');assert.equal(v.document.querySelector('[data-pins-refresh]'),null);assert.equal(v.document.querySelector('.ps-pins [data-pin-toggle]')!.disabled,false);await v.document.querySelector('.ps-pins [data-pin-toggle]')!.emit('click');assert.deepEqual((await call(h.api,'/api/pins')).body.pins,[]);
 });

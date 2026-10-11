@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdirSync,symlinkSync,readFileSync,rmSync} from 'node:fs';
+import {mkdirSync,symlinkSync,readFileSync,rmSync,writeFileSync,existsSync,statSync} from 'node:fs';
 import {join} from 'node:path';
 import {Pins} from './pins.ts';
 import {temp,failure} from './test-support.ts';
@@ -14,6 +14,17 @@ test('[18,21,31] folder/chat pins enforce canonical project and server chat meta
  [{kind:'x',path:current},'kind: folder или chat; path обязателен',400],[{kind:'folder'},'kind: folder или chat; path обязателен',400],[{kind:'folder',path:join(t.root,'missing')},'нет такой папки',404],
  [{kind:'chat',path:current},'для чата нужен chat (id)',400],[{kind:'chat',path:other,chat:'chat'},'закрепить можно только чат открытой папки',400],[{kind:'chat',path:current,chat:'missing'},'нет такого чата',404]
  ] as const)await assert.rejects(pins.set(input),e=>failure('invalid_pin',text)(e)&&(e as {status:number}).status===status);
+ }finally{t.close()}
+});
+
+test('TS-15e r2/1: only a missing file is empty; invalid bytes, shape and read failures never get overwritten',async()=>{
+ const t=temp();try{const path=join(t.root,'pins.json'),pins=new Pins(path),unreadable=(e:any)=>e.code==='pins_unreadable'&&e.status===409;
+ assert.deepEqual(pins.get().pins,[]);assert.equal(existsSync(path),false);
+ for(const bytes of [Buffer.from('[{"kind":"folder",'),Buffer.from('{}'),Buffer.from('[null]'),Buffer.from('[{"kind":["folder"],"path":"/saved"}]'),Buffer.from('[{"kind":"chat","path":"/saved"}]'),Buffer.concat([Buffer.from('[{"kind":"folder","path":"/'),Buffer.from([0xff]),Buffer.from('"}]')])]){
+  writeFileSync(path,bytes);assert.throws(()=>pins.get(),unreadable);
+  for(const on of [false,true,undefined]){await assert.rejects(pins.set({kind:'folder',path:t.root,on}),unreadable);assert.deepEqual(readFileSync(path),bytes)}
+ }
+ rmSync(path);mkdirSync(path);assert.throws(()=>pins.get(),unreadable);await assert.rejects(pins.set({kind:'folder',path:t.root,on:false}),unreadable);assert.ok(statSync(path).isDirectory());
  }finally{t.close()}
 });
 
