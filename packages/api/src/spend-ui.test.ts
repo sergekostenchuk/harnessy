@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
-import {fixture,call,deferred} from './test-helpers.ts';
+import {fixture,call,deferred,until} from './test-helpers.ts';
 const read=(path:string)=>readFileSync(new URL('../../../'+path,import.meta.url),'utf8'),live=read('ui/deploy/live.js'),raw=read('ui/sketches/disarto/05-spend.html');
 const part=(source:string,start:string,end:string)=>{const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return source.slice(a,b)};
 const metrics=(turns=1)=>({turns,input:2,output:3,cacheRead:0,durationMs:10,averageDurationMs:10,durationSamples:1,p50DurationMs:10,p95DurationMs:10,errorRate:0,outcomes:{ok:turns,interrupted:0,error:0,unknown:0},missingMeasurements:0,cost:null,costByCurrency:[],unpricedTurns:turns,pricedTurns:0,costReason:'нет цены'});
@@ -15,11 +15,11 @@ function ui(fetch?:(path:string,body?:any)=>Promise<any>,on=true){
  const sidebar=d.document.querySelector('aside')!;sidebar.className='side ps';sidebar.insertAdjacentHTML('beforeend','<div class="limits" data-go="spend"></div>');
  const response=(path:string)=>{const q=new URL('http://test'+path).searchParams,period=q.get('period')??'all';return path.startsWith('/api/spend/turns')?{ok:true,project:H.project,period,source:'chats.json',items:[item()],next:null}:path==='/api/connections'?{ok:true,providers:[{id:'claude',name:'Claude',auth:{loggedIn:true}}]}:path==='/api/limits'?{ok:false}:snapshot(H.project,period)};
  const context:any={H,S,PAGE:'spend',document:d.document,location:{href:'',search:'',hash:''},history:{replaceState(_a:any,_b:any,url:string){context.location.search=url}},hooks:[],save(){writes.push('state')},log(...v:any[]){logs.push(v)},toast:(s:string)=>toasts.push(s),now:()=>1,hhmm:()=>'',resolve(){throw Error('fake decision')},esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),base:(s:string)=>s.split('/').pop(),fmtN:(n:any)=>n==null?'—':String(n),paneName:(p:any)=>p.label,
-  laMenu(_el:any,_title:string,items:any[],choose:any){context.menu={items,choose}},refreshStatus:async()=>{},api:async(path:string,body?:any)=>{requests.push(path);return fetch?fetch(path,body):response(path)},addEventListener:d.window.addEventListener.bind(d.window),setTimeout:(fn:()=>void)=>{fn();return 1},requestAnimationFrame:(fn:()=>void)=>fn(),Blob,URLSearchParams,
+  refreshStatus:async()=>{},api:async(path:string,body?:any)=>{requests.push(path);return fetch?fetch(path,body):response(path)},addEventListener:d.window.addEventListener.bind(d.window),setTimeout:(fn:()=>void)=>{fn();return 1},requestAnimationFrame:(fn:()=>void)=>fn(),Blob,URLSearchParams,
   URL:{createObjectURL(blob:Blob){blobs.push(blob);return 'blob:test'},revokeObjectURL(){}},localStorage:{setItem(...v:any[]){writes.push(v)},getItem:()=>null}};
  const create=d.document.createElement.bind(d.document);d.document.createElement=(tag:string)=>{const n:any=create(tag);if(tag==='a')n.click=()=>downloaded.push(n.download);return n};context.window=context;
  const vm=createContext(context);runInContext(read('ui/sketches/disarto/app.js'),vm);runInContext(part(raw,'<script>','</script>').slice('<script>'.length),vm);
- runInContext(part(live,'  const statics=','  // ══ ПЛАН:')+part(live,'  // TS-14b: spend blocks','  // ══ ПОДКЛЮЧЕНИЯ')+'\nglobalThis.testing={fetch:spendFetch,draw:spendDraw,csv:spendCsv,state:SP,limits:limitsFetch,limitState:LIM,limitDraw:limitsDraw,history:spendHistory};restoreUI();',vm);
+ runInContext(part(live,'  function closeLAMenus(','  // запись «контекст передан»')+part(live,'  const statics=','  // ══ ПЛАН:')+part(live,'  // TS-14b: spend blocks','  // ══ ПОДКЛЮЧЕНИЯ')+'\nglobalThis.testing={fetch:spendFetch,draw:spendDraw,csv:spendCsv,state:SP,limits:limitsFetch,limitState:LIM,limitDraw:limitsDraw,history:spendHistory};restoreUI();',vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  return {...d,H,S,context,requests,blobs,downloaded,logs,writes,toasts,find,response,functions:context.testing};
 }
@@ -80,8 +80,26 @@ test('177: late quota reads cannot restore a previous project or a hidden page',
  const hidden=deferred<any>();v.context.api=()=>hidden.promise;const pending=v.functions.limits();await v.window.emit('pagehide');hidden.resolve({ok:true,providers:[{id:'hidden',auth:{loggedIn:true}}]});await pending;assert.doesNotMatch(v.find('.limits').textContent,/hidden/);
 });
 
-test('173: change model sends exactly one bound API action; no success for refusal, no call after project change',async()=>{
- const v=ui();await v.functions.fetch();v.context.api=async()=>({ok:true,pane:{id:'worker',model:'w2'},appliesFrom:'next'});await v.find('[data-spend-model]').emit('click');await v.context.menu.choose({id:'w2'});assert.match(v.toasts.at(-1)!,/применится со следующего хода/);
- v.context.api=async()=>({ok:false,error:'refused'});await v.find('[data-spend-model]').emit('click');await v.context.menu.choose({id:'w1'});assert.match(v.toasts.at(-1)!,/refused/);
- await v.find('[data-spend-model]').emit('click');v.H.project='/different';v.context.api=()=>{throw Error('must not send')};await v.context.menu.choose({id:'w2'});
-});
+for(const expanded of [false,true]){
+ const root=expanded?'.panel':'[data-c="router"]';
+ test('173 round 2: real model menu reaches HTTP once from '+root,async t=>{
+  const h=await fixture(t),v=ui(async(path,body)=>(await call(h.api,path,body?{body}:{})).body);v.H.project=h.dir;await v.functions.fetch();
+  if(expanded)await v.find('[data-c="router"]').emit('click');const beforeCard=v.functions.state.card;
+  await v.find(root+' [data-spend-model="worker"]').emit('click');await v.find(root+' .live-menu [data-k="1"] small').emit('click');
+  assert.equal(v.requests.filter(p=>p==='/api/panes/worker').length,1);await until(()=>!v.functions.state.mutation);
+  assert.equal(h.runtime.project.registry.get('worker')!.model,'w2');assert.match(v.toasts.at(-1)!,/Модель: w2/);assert.equal(v.functions.state.card,beforeCard);
+  assert.equal(v.document.querySelector('.ovl')?.classList.contains('on')??false,expanded);assert.equal(v.document.querySelector('.live-menu'),null);
+ });
+ test('173 round 2: real model menu preserves binding, refusal and in-flight guard from '+root,async()=>{
+  const v=ui();await v.functions.fetch();if(expanded)await v.find('[data-c="router"]').emit('click');
+  const gate=deferred<any>(),writes:any[]=[];v.context.api=async(path:string,body:any)=>{writes.push({path,body});return gate.promise};
+  await v.find(root+' [data-spend-model]').emit('click');await v.find(root+' .live-menu [data-k="1"]').emit('click');
+  assert.equal(writes.length,1);assert.equal(writes[0].body.model,'w2');assert.equal(v.functions.state.mutation,true);
+  // A second real choice while the first HTTP write is pending cannot start another write.
+  if(expanded){await v.find(root+' [data-spend-model]').emit('click');await v.find(root+' .live-menu [data-k="0"]').emit('click')}
+  else await v.find(root+' [data-spend-model]').emit('click');
+  assert.equal(writes.length,1);gate.resolve({ok:false,error:'refused'});await until(()=>!v.functions.state.mutation);assert.match(v.toasts.at(-1)!,/refused/);
+  await v.find(root+' [data-spend-model]').emit('click');v.H.project='/different';await v.find(root+' .live-menu [data-k="1"]').emit('click');assert.equal(writes.length,1);
+  v.H.project='/projects/a';await v.find(root+' [data-spend-model]').emit('click');v.functions.state.generation++;await v.find(root+' .live-menu [data-k="1"]').emit('click');assert.equal(writes.length,1);
+ });
+}

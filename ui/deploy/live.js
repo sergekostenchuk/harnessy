@@ -301,7 +301,7 @@
     m.__close=close; document.addEventListener('keydown',key,true); setTimeout(()=>{ if(m.isConnected) document.addEventListener('click',off,true); },0); return close; }
   function laMenu(anchor,title,items,onPick){ closeLAMenus(); const m=document.createElement('div'); m.className='live-menu la'; anchor.style.position='relative';
     m.innerHTML='<div class="h">'+title+'</div>'+(items.length?items.map((it,i)=>'<div data-k="'+i+'"'+(it.dis?' class="dis"':'')+'>'+it.t+(it.r?' <small>'+it.r+'</small>':'')+'</div>').join(''):'<div class="dis">нечего предложить</div>'); anchor.appendChild(m);
-    const close=dismissLAMenu(m); m.addEventListener('click',e=>{ const d=e.target.closest('[data-k]'); if(!d||d.classList.contains('dis')) return; close(); onPick(items[+d.dataset.k]); }); }
+    const close=dismissLAMenu(m); m.addEventListener('click',e=>{ e.stopPropagation(); const d=e.target.closest('[data-k]'); if(!d||d.classList.contains('dis')) return; close(); onPick(items[+d.dataset.k]); }); }
   function laPath(anchor,title,def,onOk,btn){ closeLAMenus(); const m=document.createElement('div'); m.className='live-menu la'; anchor.style.position='relative';
     m.innerHTML='<div class="h">'+title+'</div><input class="live-f" placeholder="/Users/…/имя-проекта" value="'+esc(def||'')+'">'+(window.harnessy&&window.harnessy.pickFolder?'<div data-finder>Выбрать в Finder…</div>':'')+'<div data-ok>'+(btn||'Создать и перейти')+'</div>'; anchor.appendChild(m); const inp=m.querySelector('input'); setTimeout(()=>{ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); },0);
     const fd=m.querySelector('[data-finder]'); if(fd) fd.addEventListener('click',async()=>{ let p=null; try{ p=await window.harnessy.pickFolder({title,message:'Выберите папку или создайте новую кнопкой диалога',defaultPath:(def||'').replace(/\/[^/]*$/,'/')}); }catch(x){} if(p){ inp.value=p; inp.focus(); } });
@@ -805,6 +805,8 @@
   addEventListener('live:status',()=>{if(H.on&&SP.alive){if(SP.project!==H.project&&window.HX){HX.close();SP.card=null}void limitsFetch();if(PAGE==='spend')void spendFetch()}});
   addEventListener('pagehide',()=>{SP.alive=false;SP.generation++;LIM.generation++});addEventListener('pageshow',event=>{if(event.persisted)SP.alive=true});
   document.addEventListener('click',async event=>{if(!H.on)return;const target=event.target,widget=target.closest('[data-spend-limits]');
+    // Nested menus own their clicks; the card must not intercept them before laMenu receives the choice.
+    if(target.closest('.live-menu'))return;
     const button=target.closest('[data-spend-period], [data-spend-group], [data-spend-refresh], [data-spend-csv], [data-spend-more], [data-spend-chat], [data-spend-model], [data-spend-close]');
     const card=PAGE==='spend'&&target.closest('[data-c]'),passport=PAGE==='spend'&&target.closest('[data-passport]');
     if(target.closest('[data-spend-unavailable]')){event.preventDefault();event.stopImmediatePropagation();return}if(card&&target.closest('a, input, select, option')&&!button){event.stopPropagation();return}if(!widget&&!button&&!passport&&!card)return;
