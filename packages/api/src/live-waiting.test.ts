@@ -109,7 +109,7 @@ test('97 window: central API refusal opens the door, delayed response of another
  view.sandbox.fetch=async()=>({json:async()=>({ok:false,code:'restore_failed',project:'/project-b',error:'назначение не восстановлено'})}) as unknown as Awaited<ReturnType<typeof view.sandbox.fetch>>;await view.functions.api('/api/chat',{pane:'worker',message:'текст'});assert.match(view.cards.get('live-waiting')!.innerHTML,/Повторить восстановление проекта/);
 });
 
-for(const legacy of [false,true])for(const page of ['chat','now'])for(const action of ['retry','skip'])test('134: cold '+page+' resolves an uncertain first room turn through '+action+' and keeps its decision after reopening'+(legacy?' without legacy chat':' with an analytic turn'),async t=>{
+for(const legacy of [false,true])for(const page of ['chat','now'])for(const action of ['retry','skip'])test('134: cold '+page+' resolves an uncertain first room turn through '+action+' and keeps its decision after reopening'+(legacy?' after recreating a missing chat':' with an analytic turn'),async t=>{
  const h=await fixture(t,{seats:'{}'});await call(h.api,'/api/room',{body:{model:'w1',folder:false}});
  h.provider.onRun=async(_seat,_text,ctx)=>{ctx.modelStarted?.();throw new ProviderError('transport_lost','first room result unknown')};
  assert.equal((await call(h.api,'/api/chat',{body:{pane:'room',message:'first question'}})).status,200);await h.runtime.idle();assert.equal(h.provider.calls.length,1);const chatsPath=h.runtime.project.state.chatsPath;await h.api.close();
@@ -117,7 +117,7 @@ for(const legacy of [false,true])for(const page of ['chat','now'])for(const acti
  if(legacy)rmSync(chatsPath);
  const provider=new FakeProvider(),runtime=await createRuntime({...h.deps,providers:{claude:provider}},completedActions);t.after(()=>runtime.close());
  const api=createApi({runtime,siteDir:h.siteDir,indexFile:h.indexFile,port:0});await api.listen();t.after(()=>api.close());
- const status=await call(api,'/api/status'),chats=await call(api,'/api/chats');assert.equal(chats.body.chats.length,legacy?0:1);if(!legacy){assert.equal(chats.body.chats[0].messages,0);const spend=await call(api,'/api/spend');assert.equal(spend.body.totals.turns,1);assert.equal(spend.body.totals.outcomes.error,1)}const room=status.body.panes.find((p:{id:string})=>p.id==='room');assert.ok(room.waiting);const attemptId=room.waiting.turnInstanceId;
+ const status=await call(api,'/api/status'),chats=await call(api,'/api/chats');assert.equal(chats.body.chats.length,1);assert.equal(chats.body.chats[0].messages,0);if(!legacy){const spend=await call(api,'/api/spend');assert.equal(spend.body.totals.turns,1);assert.equal(spend.body.totals.outcomes.error,1)}const room=status.body.panes.find((p:{id:string})=>p.id==='room');assert.ok(room.waiting);const attemptId=room.waiting.turnInstanceId;
  const view=ui({page});view.H.on=true;view.functions.applyStatus(status.body);if(page==='now')view.functions.nowLive();assert.equal(provider.calls.length,0);
  const html=page==='chat'?view.cards.get('live-waiting')!.innerHTML:view.decisions.innerHTML;assert.match(html,/data-attempt-action="retry"/);assert.match(html,/data-attempt-action="skip"/);
  const sidebar=view.sidebar(chats.body.chats);assert.match(sidebar,/data-pane="room"/);assert.match(sidebar,/ждёт решения/);assert.doesNotMatch(sidebar,/data-attempt|в проекте пока нет ролей и чатов/);

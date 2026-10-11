@@ -16,7 +16,7 @@ for(const change of ['revision','vendor','cwd','seat','busy','project'])test('23
  if(change==='revision')r.paneSet('worker',{mode:'check'},OWNER);
  if(change==='vendor'){r.registry.get('worker')!.vendor='codex'}
  if(change==='cwd'){mkdirSync(join(h.dir,'sub'));r.registry.update(r.registry.get('worker')!,{cwd:join(h.dir,'sub')})}
- if(change==='seat'){r.registry.panes.delete('worker');r.registry.add({id:'worker',vendor:'claude',role:'executor',label:'другой',model:'w1',mode:'read',digest:false,writePaths:[],instructions:null,worktree:null})}
+ if(change==='seat'){r.registry.panes.delete('worker');r.registry.add({id:'worker',vendor:'claude',role:'executor',kind:'worker',label:'другой',model:'w1',mode:'read',digest:false,writePaths:[],instructions:null,worktree:null})}
  const work=deferred<{text:string;sessionId:string}>();if(change==='busy'){f.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();return work.promise};r.postOwner({to:'worker',kind:'task',text:'начали ход'},OWNER);await until(()=>f.calls.length===1)}
  if(change==='project'){const dir=mkdtempSync(join(tmpdir(),'harnessy-session-switch-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));await r.openProject(dir)}
  gate.resolve([{role:'ai',text:'прежняя история'}]);await rejection;work.resolve({text:'новый ход',sessionId:'new'});await r.idle();assert.notEqual(r.registry.get('worker')?.sessionId,'old')

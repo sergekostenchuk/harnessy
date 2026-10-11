@@ -75,8 +75,9 @@ export class Runtime {
  const git=await openProjectGit(path,Object.values(team?.seats??{}),team?.integrationBranch??'main',this.deps.gitops??gitops);lineErrors.push(...git.lineErrors);
  for(const pane of registry.panes.values()){pane.cwd=git.cwdBySeat[pane.id]??path;pane.worktree=git.worktreeBySeat[pane.id]??null;pane.branch=git.branchBySeat[pane.id]??null}
  const gitFact=(args:string[]):string|null=>{if(!git.repoRoot)return null;try{return execFileSync('git',['-C',git.repoRoot,...args],{encoding:'utf8',timeout:5000,stdio:['ignore','pipe','pipe']}).trim()||null}catch{return null}};
- const channel=new Channel({journal,policy,projectDir:path,liveSeats:()=>registry.ids,roleOf:id=>id==='owner'?'owner':registry.get(id)?.role??null,labelOf:id=>id==='owner'?'владелец':id==='harness'?'харнесс':registry.get(id)?.label??id,hasRepo:()=>!!git.repoRoot,resolveSha:sha=>gitFact(['rev-parse','--verify','--end-of-options',sha+'^{commit}']),mergeCommitFor:sha=>{if(!git.repoRoot)return null;const branch=team?.integrationBranch??'main';try{execFileSync('git',['-C',git.repoRoot,'merge-base','--is-ancestor',sha,branch],{stdio:'ignore',timeout:5000})}catch{return null}return gitFact(['rev-list','--merges','--ancestry-path','--reverse',sha+'..'+branch])?.split(/\s+/)[0]??sha}});
- const saved=journal.loadPanes();if(object(saved.room)&&typeof saved.room.model==='string'&&typeof saved.room.mode==='string')makeRoomIn({registry,dir:path,bus},this,saved.room.model,saved.room.mode,saved.room.vendor==='claude'||saved.room.vendor==='codex'?saved.room.vendor:undefined);for(const pane of registry.panes.values()){const st=saved[pane.id];if(!object(st))continue;if(st.vendor==='claude'||st.vendor==='codex')pane.vendor=st.vendor;registry.update(pane,{model:st.model,mode:st.mode,sessionId:st.sessionId??null,digest:st.digest??false})}
+ const channel=new Channel({journal,policy,projectDir:path,liveSeats:()=>registry.ids,roleOf:id=>registry.roleOf(id),labelOf:id=>id==='owner'?'владелец':id==='harness'?'харнесс':registry.get(id)?.label??id,hasRepo:()=>!!git.repoRoot,resolveSha:sha=>gitFact(['rev-parse','--verify','--end-of-options',sha+'^{commit}']),mergeCommitFor:sha=>{if(!git.repoRoot)return null;const branch=team?.integrationBranch??'main';try{execFileSync('git',['-C',git.repoRoot,'merge-base','--is-ancestor',sha,branch],{stdio:'ignore',timeout:5000})}catch{return null}return gitFact(['rev-list','--merges','--ancestry-path','--reverse',sha+'..'+branch])?.split(/\s+/)[0]??sha}});
+ const saved=journal.loadPanes();if(object(saved.room)&&(typeof saved.room.model==='string'||saved.room.model===null)&&typeof saved.room.mode==='string')makeRoomIn({registry,dir:path,bus},this,saved.room.model,saved.room.mode,saved.room.vendor==='claude'||saved.room.vendor==='codex'?saved.room.vendor:undefined);for(const pane of registry.panes.values()){const st=saved[pane.id];if(!object(st))continue;if(st.vendor==='claude'||st.vendor==='codex')pane.vendor=st.vendor;registry.update(pane,{model:st.model,mode:st.mode,sessionId:st.sessionId??null,digest:st.digest??false})}
+ const freshRoom=saved.room===undefined&&!registry.get('room')&&team!==null&&!Object.keys(team.seats).length;if(freshRoom)makeRoomIn({registry,dir:path,bus},this,roomModel||'',path===this.defaultDir?'chat':'read');
  const state=new StateStore(path,this.deps.stateIO??diskIO,this.clock,this.deps.id);const halted=state.load(registry,lineErrors);
  if(saved.room===undefined&&roomModel&&!registry.get('room')&&makeRoomIn({registry,dir:path,bus},this,roomModel,path===this.defaultDir?'chat':'read'))state.savePanes(registry,journal);
  const p:ProjectState={generation,dir:path,closed:false,starting:true,now:()=>this.clock.now(),editing:new Map(),materializing:new Set(),restoreFailed:new Map(),team,repoRoot:git.repoRoot,policy,journal,channel,registry,owner,bus,state,lineErrors,halted,active:new Map(),pumps:new Map(),resets:new Map(),routeJobs:new Map(),processEpoch:new Map(),wakeups:new Set()};
@@ -92,6 +93,7 @@ export class Runtime {
  if(attempt&&!matched){pane.status='uncertain';try{state.uncertain(pane.id)}catch(e){lineErrors.push(message(e))}pane.uncertainNote=waitingError(p,pane).message;pane.publish({type:'note',text:pane.uncertainNote,warning:this.warningId(p,pane,'uncertain')})}
  else {await this.recover(p,pane)}
  }
+ if(!lineErrors.some(text=>text.startsWith('chats.json не читается'))){if(freshRoom)state.savePanes(registry,journal);else state.saveChats(registry)}
  p.starting=false;if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if(pane.status==='idle'&&!p.materializing.has(pane.id)&&!p.restoreFailed.has(pane.id))await this.resumeQueue(pane.id,p);
  }
  async projectSet(path:string,options:{reload?:boolean},initiator:Initiator){
@@ -111,7 +113,7 @@ export class Runtime {
  this.same(p);const target=this.projectPath(path),busyText='идёт ход: создай папку, когда все окна свободны';let hold=reserve(p,[...p.registry.panes.values()],busyText,true);
  try{
  let info:Awaited<ReturnType<typeof initProject>>;
- try{info=await initProject(target,{git:input.git===undefined||pyTruthy(input.git),model:String(input.model||'')},{...(this.deps.gitops?{gitops:this.deps.gitops}:{}),catalog:structuredClone(p.registry.models),...(p.registry.get('room')?.model?{roomModel:p.registry.get('room')!.model}:{}),settings:structuredClone(this.settings.effective())})}
+ try{info=await initProject(target,{git:input.git===undefined||pyTruthy(input.git),model:String(input.model||''),orchestrator:false},{...(this.deps.gitops?{gitops:this.deps.gitops}:{}),catalog:structuredClone(p.registry.models),...(p.registry.get('room')?.model?{roomModel:p.registry.get('room')!.model}:{}),settings:structuredClone(this.settings.effective())})}
  catch(e){throw new RuntimeError('project_failed','проект не создан: '+message(e),400,{cause:e})}
  this.same(p);
  // Reacquire for the current seats synchronously; closing marks the project closed before the next await.
@@ -243,7 +245,7 @@ export class Runtime {
  ask(scope:TurnScope,args:AskArgs):Promise<AskResult>{return this.scoped(scope,(_p,ctx)=>this.actions.ask(args,ctx))}
  merge(scope:TurnScope,args:MergeArgs):Promise<MergeResult>{return this.scoped(scope,(_p,ctx)=>this.actions.merge(args,ctx))}
  async mergeOwner(args:MergeArgs,initiator:Initiator):Promise<MergeResult>{this.requireOwner(initiator);const p=this.project;if(!this.actions.mergeOwner)throw new RuntimeError('actions_required','порт действий обязателен',500);try{return await this.actions.mergeOwner(args,{runtime:this,project:p,initiator:Object.freeze({...initiator}),assertActive:()=>{this.same(p);this.requireOwner(initiator)}})}catch(e){return {ok:false,code:e instanceof RuntimeError||e instanceof JournalError?e.code:'merge_failed',error:message(e)}}}
- assignRole(scope:TurnScope,args:AssignRoleArgs):Promise<AssignRoleResult>{return this.scoped(scope,(_p,ctx)=>this.actions.assignRole(args,ctx))}
+ assignRole(scope:TurnScope,_args:AssignRoleArgs):Promise<AssignRoleResult>{return this.scoped(scope,()=>Promise.resolve({ok:false as const,code:'proposal_required',error:'участников создаёт оркестратор по подтверждённому предложению'}))}
  toolsFor(scope:TurnScope):PeerTools {
  this.scopes.assert(scope);const p=this.project,turn=p.active.get(scope.seatId);if(!turn||turn.scope!==scope)throw new RuntimeError('turn_ended','ход не активен',403);
  return {
@@ -255,7 +257,7 @@ export class Runtime {
  }
  }
  validateBridge(from:string,token:string):TurnScope{const p=this.current;return this.tokens.validate(from,token,p&&!p.closed?p.generation:-1,p?.active.get(from)?.vendor??p?.registry.get(from)?.vendor??'')}
- private roleNote(p:ProjectState,pane:Pane):string {const roles=Object.fromEntries([...p.registry.panes].map(([id,p])=>[id,p.role])),labels=Object.fromEntries([...p.registry.panes].map(([id,p])=>[id,p.label]));return roleNote(pane,{projectDir:p.dir,repoRoot:p.repoRoot,team:p.team,instructionText:p.team&&p.team.seats[pane.id]?instructionsFor(p.team,p.team.seats[pane.id]!):'',policySummary:p.policy?.summaryFor(pane.role,roles,labels)??null})}
+ private roleNote(p:ProjectState,pane:Pane):string {const roles=Object.fromEntries([...p.registry.panes].map(([id,p])=>[id,p.kind??'room'])),labels=Object.fromEntries([...p.registry.panes].map(([id,p])=>[id,p.label]));return roleNote(pane,{projectDir:p.dir,repoRoot:p.repoRoot,team:p.team,instructionText:p.team&&p.team.seats[pane.id]?instructionsFor(p.team,p.team.seats[pane.id]!):'',policySummary:p.policy?.summaryFor(pane.kind??'room',roles,labels)??null})}
  context(id:string){const p=this.project,pane=this.pane(id,p),chat=p.state.activeChat(pane,false);return contextCard(pane,{instructionText:p.team&&p.team.seats[id]?instructionsFor(p.team,p.team.seats[id]!):'',roleNote:this.roleNote(p,pane),chat:chat?{...meta(p,chat)}:null})}
  private async waitVendor(p:ProjectState,vendor:Vendor|'human'):Promise<void>{if(vendor==='human')return;while(p.resets.has(vendor)||p.routeJobs.has(vendor)){await Promise.all([p.resets.get(vendor),p.routeJobs.get(vendor)]);this.same(p)}}
  async runTurn(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol}={}):Promise<string> {
@@ -268,6 +270,7 @@ export class Runtime {
  if(pane.status!=='idle')throw new RuntimeError(pane.status,'ход не активен');
  const entries=options.entries??[],records=deepFreeze(entries.map(e=>e.record)),injected:TranscriptMessage[]=[];
  const relayDepth=Math.max(options.relayDepth??0,askDeliveryDepth(p,records));
+ if(!pane.model)throw new RuntimeError('model_required','Сначала выберите модель разговора',400);
  pane.busy=true;pane.touched=true;pane.revision++;const launchModel=pane.model;
  const scope=this.scopes.create(p.dir,id,randomUUID()),controller=new AbortController();let releaseReset!:()=>void,finish!:()=>void;
  const turn:ActiveTurn={scope,controller,pane,vendor:pane.vendor,records,deliverySeq:Math.max(0,...entries.map(e=>e.deliverySeq)),relayDepth,attemptNumber:0,handle:null,started:false,stopRequested:false,terminal:null,partial:'',finished:new Promise(r=>{finish=r}),finish:()=>finish(),timer:undefined,resetWait:new Promise(r=>{releaseReset=r}),releaseReset:()=>releaseReset(),result:null,injected};p.active.set(id,turn);this.stateEvent(p,pane);

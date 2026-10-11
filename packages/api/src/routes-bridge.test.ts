@@ -20,7 +20,7 @@ test('2/9/19/67/69: every bridge path requires bound token, accepts raw forms an
  const sent=await call(h.api,'/api/send',{body:{from:'worker',to:['owner'],kind:'status',text:'сырой текст'},headers});assert.equal(sent.status,200);assert.deepEqual(sent.body,{ok:true,seq:1,thread:null,to:['owner']});
  const ask=await call(h.api,'/api/ask',{body:{from:'worker',to:'peer',text:'вопрос'},headers});assert.deepEqual(ask.body,{ok:true,reply:'ответ',seq:1});
  const merge=await call(h.api,'/api/merge',{body:{from:'worker',sha:'a'.repeat(40)},headers});assert.deepEqual(merge.body,{ok:true,sha:'a'.repeat(40),mergeSha:'b'.repeat(40),branch:'main'});
- const role=await call(h.api,'/api/assign_role',{body:{from:'worker',role:'tester'},headers});assert.deepEqual(role.body,{ok:true,pane:'tester',label:'тестер',model:'w1',mode:'read',mandate:1});
+ const role=await call(h.api,'/api/assign_role',{body:{from:'worker',role:'tester'},headers});assert.deepEqual(role.body,{ok:false,code:'proposal_required',error:'участников создаёт оркестратор по подтверждённому предложению'});
  h.runtime.registry.get('peer')!.record('me','первое');h.runtime.registry.get('peer')!.record('ai','последнее');
  const transcript=await call(h.api,'/api/pane_transcript?from=worker&pane=peer&last=0',{headers});assert.equal(transcript.status,200);assert.deepEqual(Object.keys(transcript.body).sort(),['ok','text']);assert.match(transcript.body.text,/последние 1 реплик/);assert.match(transcript.body.text,/последнее/);assert.doesNotMatch(transcript.body.text,/первое/);
  assert.equal((await call(h.api,'/api/send',{body:{from:'worker',to:'worker',kind:'status',text:'x'},headers})).status,400);

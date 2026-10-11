@@ -1,6 +1,6 @@
 import {readFileSync,existsSync,lstatSync} from 'node:fs';
 import {join} from 'node:path';
-import {withPathLock,addSeatLocked,ensureSeatFileLocked,loadTeam,readManifest,mapping,pyDefault,pyString,ROLE_CATALOG,MODE_IDS,MODES,instructionsFor,TeamError,type Seat,type Mode,type Vendor,type PathLock,type AddSeatArgs} from '@harnessy/team';
+import {withPathLock,addSeatLocked,ensureSeatFileLocked,loadTeam,readManifest,mapping,pyDefault,pyString,ROLE_CATALOG,MODE_IDS,MODES,instructionsFor,seatKind,TeamError,type Seat,type Mode,type Vendor,type PathLock,type AddSeatArgs} from '@harnessy/team';
 import {onboarding,transcriptText} from '@harnessy/context';
 import {pythonTrim,type Initiator} from '@harnessy/journal';
 import {object,RuntimeError,deepFreeze,message} from './errors.ts';
@@ -13,7 +13,7 @@ import type {ActionContext,AssignRoleResult,ProjectState} from './types.ts';
 import type {AssignRoleArgs} from '@harnessy/providers';
 
 export interface SeatInput {
- role:string;vendor:Vendor;model:string;mode:Mode;specialization?:{title:string;text:string};
+ role:string;kind:import('@harnessy/team').SeatKind;vendor:Vendor;model:string;mode:Mode;specialization?:{title:string;text:string};
  instructions:{path:string|null;content:string};label:string;writePaths:string[];worktree:string|null;mandate?:number;
 }
 export interface Assignment {
@@ -27,13 +27,13 @@ const all=(op:Assignment)=>Object.values(op.stages).every(Boolean);
 function invalid():never {throw new RuntimeError('materialization_invalid','неверная запись назначения роли',409)}
 function valid(raw:unknown):Assignment {
  if(!object(raw)||typeof raw.operationId!=='string'||!/^c[0-9a-f]{5,}$/.test(raw.operationId)||typeof raw.sid!=='string'||!/^[a-z][a-z0-9_-]{0,30}$/.test(raw.sid)||['owner','harness','all','room'].includes(raw.sid)||typeof raw.by!=='string'||!raw.by||typeof raw.how!=='string'||!object(raw.input)||!object(raw.files)||!object(raw.source)||!object(raw.stages))invalid();
- const i=raw.input,st=raw.stages;
+ const i=raw.input,st=raw.stages;if(!Object.hasOwn(i,'kind'))i.kind=seatKind(undefined,i.role);else seatKind(i.kind);
  if(typeof i.role!=='string'||!i.role||!['claude','codex'].includes(String(i.vendor))||typeof i.model!=='string'||!i.model||!MODE_IDS.includes(i.mode as Mode)||!object(i.instructions)||(i.instructions.path!==null&&typeof i.instructions.path!=='string')||typeof i.instructions.content!=='string'||typeof i.label!=='string'||!Array.isArray(i.writePaths)||!i.writePaths.every(x=>typeof x==='string')||(i.worktree!==null&&typeof i.worktree!=='string')||typeof raw.source.carry!=='string'||!['team','seatFile','chat','status','onboarding'].every(k=>typeof st[k]==='boolean'))invalid();
  if(i.specialization!==undefined)specialization(i.specialization);
  if(i.mandate!==undefined&&(!Number.isSafeInteger(i.mandate)||Number(i.mandate)<1))invalid();
  if(raw.files.seat!==null&&(!object(raw.files.seat)||raw.files.seat.path!=='roles/seats/'+raw.sid+'.md'||typeof raw.files.seat.content!=='string'))invalid();
  const c=raw.source.chat;
- if(c!==null&&(!object(c)||typeof c.id!=='string'||typeof c.pane!=='string'||typeof c.model!=='string'||!['claude','codex'].includes(String(c.vendor))||typeof c.carry!=='string'||typeof c.cwd!=='string'||!Array.isArray(c.transcript)||!c.transcript.every(m=>object(m)&&typeof m.role==='string'&&typeof m.text==='string'&&typeof m.ts==='number')))invalid();
+ if(c!==null&&(!object(c)||typeof c.id!=='string'||typeof c.pane!=='string'||c.model!==null&&typeof c.model!=='string'||!['claude','codex'].includes(String(c.vendor))||typeof c.carry!=='string'||typeof c.cwd!=='string'||!Array.isArray(c.transcript)||!c.transcript.every(m=>object(m)&&typeof m.role==='string'&&typeof m.text==='string'&&typeof m.ts==='number')))invalid();
  const op=raw as unknown as Assignment;deepFreeze(op.input);deepFreeze(op.source);deepFreeze(op.files);return op;
 }
 function operations(p:ProjectState):Map<string,Assignment> {
@@ -55,11 +55,11 @@ function specialization(raw:unknown):{title:string;text:string} {
 }
 export function noProject(runtime:Runtime,p=runtime.project):boolean{return p.dir===runtime.defaultDir}
 export function roomWithoutProject(runtime:Runtime,p=runtime.project){return noProject(runtime,p)||p.registry.get('room')?.mode==='chat'}
-export function hasOrchestrator(p:ProjectState){return [...p.registry.panes.values()].some(x=>x.role==='orchestrator')}
-export function roleCatalog(runtime:Runtime){const p=runtime.project,nop=roomWithoutProject(runtime,p),orch=hasOrchestrator(p);return ROLE_CATALOG.map(c=>({...c,available:c.role==='orchestrator'||orch&&!nop,reason:c.role==='orchestrator'||orch&&!nop?null:nop?'без проекта: оркестратор создаст проект по разговору':'сначала оркестратор — он разворачивает проект и вводит роли'}))}
+export function hasOrchestrator(p:ProjectState){return [...p.registry.panes.values()].some(x=>x.kind==='orchestrator')}
+export function roleCatalog(runtime:Runtime){const p=runtime.project,orch=hasOrchestrator(p);return ROLE_CATALOG.map(c=>({...c,kind:seatKind(undefined,c.role),available:c.role==='orchestrator'&&!orch,reason:c.role==='orchestrator'&&!orch?null:c.role==='orchestrator'?'В проекте уже есть оркестратор':'участников создаёт оркестратор по подтверждённому предложению'}))}
 function input(runtime:Runtime,p:ProjectState,args:CreateSeatInput,existing?:Seat):SeatInput {
  const role=String(args.role||''),cat=ROLE_CATALOG.find(c=>c.role===role);
- if(!cat&&!existing)throw new TeamError('role_unknown','неизвестная роль '+role);
+ if(!existing)seatKind(undefined,role);
  if(!p.team)throw new RuntimeError('team_invalid','команда папки не читается: '+p.lineErrors.join('; '),400);
  if(!existing&&noProject(runtime,p))throw new RuntimeError('no_project','папка по умолчанию — не проект: создай проект или назначь оркестратора разговору без проекта',400);
  if(!existing&&role!=='orchestrator'&&!hasOrchestrator(p))throw new TeamError('role_unknown','сначала оркестратор — он разворачивает проект и вводит остальные роли');
@@ -70,7 +70,7 @@ function input(runtime:Runtime,p:ProjectState,args:CreateSeatInput,existing?:Sea
  const path=existing?.instructions??(existsSync(join(p.team.harnessDir,'roles',role+'.md'))?'roles/'+role+'.md':null);
  const content=existing?instructionsFor(p.team,existing):path?readFileSync(join(p.team.harnessDir,path),'utf8'):'';
  const spec=args.specialization===undefined?undefined:specialization(args.specialization);
- return {role,vendor,model,mode,...(spec?{specialization:spec}:{}),instructions:{path,content},label:existing?.label??cat!.label,writePaths:[...(existing?.writePaths??[])],worktree:existing?.worktree??null};
+ return {role,kind:existing?.kind??seatKind(undefined,role),vendor,model,mode,...(spec?{specialization:spec}:{}),instructions:{path,content},label:existing?.label??cat?.label??role,writePaths:[...(existing?.writePaths??[])],worktree:existing?.worktree??null};
 }
 export function chatSnapshot(p:ProjectState,pane:Pane):Chat {
  const old=p.state.activeChat(pane,false),base=old?jsonClone(old):{id:p.state.newChatId(),pane:pane.id,title:'',created:Math.floor(p.now()/1000),closed:null,model:pane.model,vendor:pane.vendor,sessionId:pane.sessionId,transcript:[],carry:pane.carry};
@@ -78,7 +78,7 @@ export function chatSnapshot(p:ProjectState,pane:Pane):Chat {
 }
 function matches(seat:Seat,i:SeatInput,op:Assignment):boolean {
  const instructions=op.files.seat?.path??i.instructions.path;
- return seat.role===i.role&&seat.vendor===i.vendor&&seat.model===i.model&&seat.mode===i.mode&&seat.label===i.label&&seat.instructions===instructions&&JSON.stringify(seat.writePaths)===JSON.stringify(i.writePaths)&&seat.worktree===i.worktree;
+ return seat.kind===i.kind&&seat.role===i.role&&seat.vendor===i.vendor&&seat.model===i.model&&seat.mode===i.mode&&seat.label===i.label&&seat.instructions===instructions&&JSON.stringify(seat.writePaths)===JSON.stringify(i.writePaths)&&seat.worktree===i.worktree;
 }
 function currentStatus(p:ProjectState,op:Assignment){return p.journal.read({limit:0,thread:'assignment:'+op.operationId}).find(r=>r.from==='harness'&&r.kind==='status'&&r.origin==='assign'&&r.to.includes('owner'))}
 function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,original:Assignment,authority:()=>void):{pane:Pane;chat:Chat} {
@@ -88,7 +88,7 @@ function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,original:Assig
  let team=loadTeam(p.team!.harnessDir),seat=team.seats[op.sid];
  if(seat){if(!matches(seat,op.input,op))throw new RuntimeError('seat_mismatch','место '+op.sid+' не совпадает с сохранённым назначением');if(op.files.seat){authority();ensureSeatFileLocked(lock,team.harnessDir,op.sid,op.files.seat.content,true)}}
  else {
-  authority();const args:AddSeatArgs={role:op.input.role,vendor:op.input.vendor,model:op.input.model,mode:op.input.mode,...(op.input.specialization?{specialization:op.input.specialization}:{}),instructions:op.input.instructions.path};
+  authority();const args:AddSeatArgs={role:op.input.role,kind:op.input.kind,label:op.input.label,vendor:op.input.vendor,model:op.input.model,mode:op.input.mode,...(op.input.specialization?{specialization:op.input.specialization}:{}),instructions:op.input.instructions.path};
   seat=addSeatLocked(lock,team.harnessDir,args,{}, {sid:op.sid,instructions:op.files.seat?.path??op.input.instructions.path,file:op.files.seat,acceptExisting:true});
   team=loadTeam(team.harnessDir);if(!matches(seat,op.input,op))throw new RuntimeError('seat_mismatch','место '+op.sid+' не совпадает с сохранённым назначением');
  }
@@ -100,12 +100,12 @@ function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,original:Assig
    if(old&&old.id!==op.operationId)closeChat(p,pane,'none');
    c=p.state.newChat(pane,op.source.carry,false,op.operationId);
    if(source){const originalVendor=pane.vendor;pane.transcript=conversationHistory(source.transcript);pane.carry=op.source.carry;
-    pane.sessionId=source.vendor===originalVendor&&source.cwd===pane.cwd?source.sessionId:null;pane.vendor=source.vendor as Vendor;pane.model=source.model;
+    pane.sessionId=source.vendor===originalVendor&&source.cwd===pane.cwd?source.sessionId:null;pane.vendor=source.vendor as Vendor;pane.model=source.model||'';
     c.transcript=pane.transcript;c.carry=pane.carry;c.sessionId=pane.sessionId;c.vendor=pane.vendor;c.model=pane.model;
    }
   }else if(c.pane!==op.sid)invalid();
   // A persisted chat is the receipt for this step. Never overwrite its later model replies on replay.
-  p.state.chats.active[pane.id]=c.id;pane.transcript=c.transcript;pane.carry=c.carry;pane.sessionId=c.sessionId;pane.model=c.model;pane.vendor=c.vendor as Vendor;pane.seen={};
+  p.state.chats.active[pane.id]=c.id;pane.transcript=c.transcript;pane.carry=c.carry;pane.sessionId=c.sessionId;pane.model=c.model||'';pane.vendor=c.vendor as Vendor;pane.seen={};
   const source=op.source.chat,room=source?.pane==='room'?p.registry.get('room'):null;
   if(room&&creating){p.state.newChat(room);room.revision++}
   p.state.savePanes(p.registry,p.journal);op=stage(p,op,'chat');
@@ -115,25 +115,24 @@ function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,original:Assig
  if(!status){authority();const tail=op.source.chat?.pane==='room'?' разговору без роли':'';status=p.channel.postCore({to:['owner'],kind:'status',text:'Назначена роль «'+pane.label+'» ('+pane.id+', '+pane.model+', '+pane.mode+')'+tail+' — инициатор: '+op.by+'.',origin:'assign',thread:'assignment:'+op.operationId},{seat:'harness',trust:'harness'})}
  if(!op.stages.status)op=stage(p,op,'status');
  const existing=p.journal.read({limit:0}).find(r=>r.seq>status!.seq&&r.from==='harness'&&r.origin==='onboarding'&&r.to.includes(pane.id));
- if(!existing){authority();const roles=Object.fromEntries([...p.registry.panes].map(([id,x])=>[id,x.role])),labels=Object.fromEntries([...p.registry.panes].map(([id,x])=>[id,x.label]));
-  const text=onboarding(pane,op.how,{projectDir:p.dir,repoRoot:p.repoRoot,team:p.team,instructionText:op.files.seat?.content??op.input.instructions.content,policySummary:p.policy?.summaryFor(pane.role,roles,labels)??null,memoryText:memory(p),peers:[...p.registry.panes.values()],records:p.journal.read({limit:0}),now:new Date(parseInt(op.operationId.slice(1,-4),16)),modeLabels:Object.fromEntries(MODES.map(m=>[m.id,m.label]))});
+ if(!existing){authority();const roles=Object.fromEntries([...p.registry.panes].map(([id,x])=>[id,x.kind??'room'])),labels=Object.fromEntries([...p.registry.panes].map(([id,x])=>[id,x.label]));
+  const text=onboarding(pane,op.how,{projectDir:p.dir,repoRoot:p.repoRoot,team:p.team,instructionText:op.files.seat?.content??op.input.instructions.content,policySummary:p.policy?.summaryFor(pane.kind??'room',roles,labels)??null,memoryText:memory(p),peers:[...p.registry.panes.values()],records:p.journal.read({limit:0}),now:new Date(parseInt(op.operationId.slice(1,-4),16)),modeLabels:Object.fromEntries(MODES.map(m=>[m.id,m.label]))});
   p.channel.postCore({to:[pane.id],kind:'note',text,origin:'onboarding'},{seat:'harness',trust:'harness'});
  }
  if(!op.stages.onboarding)op=stage(p,op,'onboarding');p.materializing.delete(op.sid);return {pane,chat:c};
 }
 function memory(p:ProjectState):string {try{return readFileSync(join(p.dir,'.harness','MEMORY.md'),'utf8')}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return '';throw e}}
 function pending(p:ProjectState,role:string){return [...operations(p).values()].find(op=>op.input.role===role&&!all(op))}
-export async function createSeat(runtime:Runtime,args:CreateSeatInput,initiator:Initiator) {
- const p=owner(runtime,initiator);const result=await assign(runtime,p,args,{by:'владелец (интерфейс)',how:'владельцем из меню собеседника',assert:()=>same(runtime,p)});
- return {ok:true as const,pane:result.pane.settings(),chat:meta(p,result.chat)};
+export async function createSeat(runtime:Runtime,_args:CreateSeatInput,initiator:Initiator):Promise<{ok:true;pane:ReturnType<Pane['settings']>;chat:ReturnType<typeof meta>}> {
+ owner(runtime,initiator);throw new RuntimeError('proposal_required','участников создаёт оркестратор по подтверждённому предложению',409);
 }
-async function assign(runtime:Runtime,p:ProjectState,args:CreateSeatInput,authority:Authority,source:Chat|null=null,existing?:Seat) {
+export async function assign(runtime:Runtime,p:ProjectState,args:CreateSeatInput,authority:Authority,source:Chat|null=null,existing?:Seat) {
  const role=String(args.role||''),frozen=input(runtime,p,args,existing);
  return withPathLock(p.dir,lock=>{authority.assert();same(runtime,p);
   const incomplete=pending(p,role);if(incomplete)return materialize(runtime,p,lock,incomplete,authority.assert);
   if(existing){const target=p.registry.get(existing.id);if(!target)throw new RuntimeError('pane_unknown','нет такого места');free(p,target,'«'+target.label+'» сейчас отвечает — назначьте после ответа')}
   const team=loadTeam(p.team!.harnessDir),raw=readManifest(team.harnessDir).get('seats') as Map<unknown,unknown>;
-  const found=[...raw].filter(([sid,r])=>mapping(r)&&pyString(pyDefault(r.get('role'),sid))===role),cat=ROLE_CATALOG.find(c=>c.role===role),n=found.length+1;
+  const found=[...raw].filter(([,r])=>mapping(r)&&seatKind(r.get('kind'),r.get('role'))===frozen.kind),cat=ROLE_CATALOG.find(c=>c.role===role),n=found.length+1;
   if(!existing&&found.length&&!cat?.multi)throw new TeamError('role_taken','роль «'+cat!.label+'» в этой папке уже есть ('+pyString(pyDefault((found[0]![1] as Map<unknown,unknown>).get('label'),found[0]![0]))+')');
   const sid=existing?.id??role+(n===1?'':n);
   if(!existing&&raw.has(sid))throw new TeamError('seat_exists','место '+sid+' уже есть в team.yaml');
@@ -153,8 +152,8 @@ export async function assignConversation(runtime:Runtime,p:ProjectState,args:Cre
  const role=String(args.role||''),cat=ROLE_CATALOG.find(c=>c.role===role);if(!cat)throw new TeamError('role_unknown','неизвестная роль '+role);
  if(!p.team)throw new RuntimeError('team_invalid','команда папки не читается: '+p.lineErrors.join('; '),400);
  if(role!=='orchestrator'&&!hasOrchestrator(p))throw new TeamError('role_unknown','сначала оркестратор — он разворачивает проект и вводит остальные роли');
- const sameSeat=Object.values(p.team.seats).find(s=>s.role===role),existing=!cat.multi?sameSeat:undefined;
- if(existing){free(p,p.registry.get(existing.id)!,'«'+existing.label+'» сейчас отвечает — назначьте после ответа');if(args.specialization!==undefined)throw new TeamError('role_taken','роль «'+cat.label+'» в этой папке уже есть ('+existing.label+')')}
+ const sameSeat=Object.values(p.team.seats).find(s=>s.kind===seatKind(undefined,role)),existing=!cat!.multi?sameSeat:undefined;
+ if(existing){free(p,p.registry.get(existing.id)!,'«'+existing.label+'» сейчас отвечает — назначьте после ответа');if(args.specialization!==undefined)throw new TeamError('role_taken','роль «'+cat!.label+'» в этой папке уже есть ('+existing.label+')')}
  const result=await assign(runtime,p,{...args,model:source.model,mode:args.mode??p.registry.get('room')?.mode}, {by:'владелец (интерфейс)',how,assert:()=>same(runtime,p)},source,existing);
  return {result,replaced:!!existing};
 }
@@ -177,11 +176,6 @@ export async function onboard(runtime:Runtime,sid:string,initiator:Initiator) {
 export async function restoreAssignments(runtime:Runtime,p:ProjectState):Promise<void> {
  const ops=operations(p);for(const original of ops.values())if(!all(original))try{await withPathLock(p.dir,lock=>materialize(runtime,p,lock,original,()=>same(runtime,p)))}catch(e){p.lineErrors.push('назначение '+original.sid+' не завершено: '+message(e));p.registry.get(original.sid)?.publish({type:'error',message:message(e),sessionId:null})}
 }
-export async function assignRoleAction(args:AssignRoleArgs,ctx:ActionContext):Promise<AssignRoleResult> {
- ctx.assertActive();const runtime=ctx.runtime,p=runtime.project,src=p.registry.get(ctx.scope.seatId);
- if(!src)return {ok:false,code:'sender_unknown',error:'нет окна '+ctx.scope.seatId};
- if(src.role!=='orchestrator')return {ok:false,code:'policy_denied',error:'назначать роли может только оркестратор (по поручению владельца)'};
- const rec=ctx.turnRecords.filter(r=>r.from==='owner').at(-1);if(!rec)return {ok:false,code:'no_mandate',error:'назначение роли — только в ходе, начатом поручением владельца; в этом ходе записи владельца нет'};
- try{const result=await assign(runtime,p,{...args,mode:args.mode||'read'},{by:'оркестратор ('+src.id+') по поручению владельца №'+rec.seq,how:'оркестратором по поручению владельца №'+rec.seq,mandate:rec.seq,assert:ctx.assertActive});return {ok:true,pane:result.pane.id,label:result.pane.label,model:result.pane.model,mode:result.pane.mode,mandate:rec.seq}}
- catch(e){return {ok:false,code:e instanceof RuntimeError&&e.code==='turn_ended'?'turn_ended':e instanceof TeamError&&['specialization_invalid','seat_file_exists'].includes(e.code)?e.code:'refused',error:message(e)}}
+export async function assignRoleAction(_args:AssignRoleArgs,ctx:ActionContext):Promise<AssignRoleResult> {
+ ctx.assertActive();return {ok:false,code:'proposal_required',error:'участников создаёт оркестратор по подтверждённому предложению'};
 }

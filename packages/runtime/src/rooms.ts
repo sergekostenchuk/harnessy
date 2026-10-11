@@ -15,9 +15,9 @@ import type {ProjectState} from './types.ts';
 export function vendorOf(p:Pick<ProjectState,'registry'>,model:string):Vendor|null {
  return (['claude','codex'] as const).find(v=>p.registry.providers.has(v)&&p.registry.models[v]?.some(m=>m.id===model))??null;
 }
-export function makeRoomIn(p:Pick<ProjectState,'registry'|'dir'|'bus'>,runtime:Runtime,model:string,mode:string,vendor?:Vendor):Pane|null {
- const selected=vendor??vendorOf(p,model);if(!selected||!MODE_IDS.includes(mode as Mode))return null;
- const old=p.registry.get('room'),room=new Pane({id:'room',vendor:selected,label:'без роли',role:'room',model,mode:mode as Mode,cwd:p.dir},p.bus,runtime.clock);
+export function makeRoomIn(p:Pick<ProjectState,'registry'|'dir'|'bus'>,runtime:Runtime,model:string|null,mode:string,vendor?:Vendor):Pane|null {
+ const selected=vendor??(model?vendorOf(p,model):p.registry.providers.has('claude')?'claude':p.registry.providers.has('codex')?'codex':'claude');if(!selected||!MODE_IDS.includes(mode as Mode))return null;
+ const old=p.registry.get('room'),room=new Pane({id:'room',vendor:selected,label:'без роли',role:'room',model:model||'',mode:mode as Mode,cwd:p.dir},p.bus,runtime.clock);
  if(old){room.transcript=old.transcript;room.carry=old.carry;if(old.vendor===selected&&old.model===model)room.sessionId=old.sessionId;room.revision=old.revision+1}
  p.registry.panes.set('room',room);return room;
 }
@@ -49,7 +49,7 @@ export async function roomMove(runtime:Runtime,input:{path?:unknown;create?:unkn
  const path=runtime.projectPath(requested),hold=reserve(p,[...p.registry.panes.values()],'идёт ход: переезд, когда все окна свободны',true),source=chatSnapshot(p,room);
  try {
   if(pyTruthy(input.create)){
-   try{await initProject(path,{git:input.git===undefined||pyTruthy(input.git),model:room.model},initDeps(runtime,p,room))}catch(e){throw new RuntimeError('project_failed','проект не создан: '+message(e),400,{cause:e})}
+   try{await initProject(path,{git:input.git===undefined||pyTruthy(input.git),model:room.model,orchestrator:false},initDeps(runtime,p,room))}catch(e){throw new RuntimeError('project_failed','проект не создан: '+message(e),400,{cause:e})}
   }
   same(runtime,p);if(!validDir(path))throw new RuntimeError('path_invalid','папки нет: '+path,400);
   await runtime.openProject(path,{expected:p,initialize:next=>{transferRoom(runtime,next,source,'read','разговор без роли не создан в новой папке')}});
@@ -58,7 +58,7 @@ export async function roomMove(runtime:Runtime,input:{path?:unknown;create?:unkn
 }
 export async function assignRoomRole(runtime:Runtime,input:CreateSeatInput,initiator:Initiator) {
  const p=owner(runtime,initiator),role=String(input.role||'');
- if(!runtime.roleCatalog().some(c=>c.role===role))throw new RuntimeError('role_unknown','неизвестная роль '+role,400);
+ if(role!=='orchestrator')throw new RuntimeError('proposal_required','участников создаёт оркестратор по подтверждённому предложению',409);
  const room=p.registry.get('room');if(!room?.model)throw new RuntimeError('room_missing','нет разговора без роли — назначать нечему',400);
  free(p,room,'разговор сейчас отвечает — назначьте роль после ответа',roomWithoutProject(runtime,p));
  const source=chatSnapshot(p,room);let how='владельцем из разговора без роли (разговор продолжается в этой роли)';

@@ -9,13 +9,13 @@ export function sectionRoutes(r:Runtime):Route[]{return [
   const current=()=>{if(p.closed||r.project!==p)throw new RuntimeError('project_changed','проект сменился',409)};
   current();let data;
   try{data=await readProjectSection(p.dir,section)}catch(error){current();throw error}current();
-  const orch=[...p.registry.panes.values()].find(p=>p.role==='orchestrator');
+  const orch=[...p.registry.panes.values()].find(p=>p.kind==='orchestrator');
   return json({ok:true,project:p.dir,section,...data,orchestrator:orch?{pane:orch.id,label:orch.label}:null});
  }},
  {method:'POST',path:'/api/project/sections/:section/request',style:'J',handle:({params,body})=>{
   projectSection(params.section!);const p=r.project;
   if(p.closed||typeof body.project!=='string'||body.project!==p.dir)throw new RuntimeError('project_changed','проект сменился',409);
-  const orch=[...p.registry.panes.values()].find(p=>p.role==='orchestrator');
+  const orch=[...p.registry.panes.values()].find(p=>p.kind==='orchestrator');
   if(!orch)return json({ok:false,code:'orchestrator_missing',error:'В проекте нет оркестратора. Откройте исходный разговор и назначьте оркестратора.'},409);
   if(typeof body.text!=='string')throw new RuntimeError('text_empty','пустое сообщение',400);
   return json({...r.chat({pane:orch.id,kind:'task',message:body.text},OWNER),project:p.dir,pane:orch.id});

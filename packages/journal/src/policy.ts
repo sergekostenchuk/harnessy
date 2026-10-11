@@ -5,6 +5,8 @@ export class PolicyError extends Error {constructor(message:string){super(messag
 function pyString(value:unknown):string {return value===true?'True':value===false?'False':value===null?'None':String(value)}
 function asList(value:unknown):string[]{if(value==null)return [];if(typeof value==='string')return [value];if(Array.isArray(value))return value.map(pyString);throw new PolicyError('comms-policy.yaml: ожидалась строка или список')}
 function truthy(value:unknown):boolean{return !!value&&(!Array.isArray(value)||value.length>0)&&(!object(value)||Object.keys(value).length>0)}
+const roleKey=(role:string)=>role==='executor'?'worker':role;
+const matches=(roles:readonly string[],role:string)=>roles.includes('*')||roles.some(r=>roleKey(r)===roleKey(role));
 function acyclic(value:unknown,ancestors=new Set<object>()){
  if(!value||typeof value!=='object')return;if(ancestors.has(value))throw new PolicyError('comms-policy.yaml не читается: циклический якорь');
  ancestors.add(value);for(const item of Object.values(value))acyclic(item,ancestors);ancestors.delete(value)
@@ -12,25 +14,26 @@ function acyclic(value:unknown,ancestors=new Set<object>()){
 export class PolicySnapshot implements PolicyView {
  readonly version:number;readonly default:string;readonly routes:readonly Route[];readonly observe:Readonly<Record<string,'*'|readonly string[]>>;
  constructor(version:number,default_:string,routes:Route[],observe:Record<string,'*'|string[]>){this.version=version;this.default=default_;this.routes=freeze(routes);this.observe=freeze(observe);Object.freeze(this)}
- routeFor(from:string,to:string,kind:string):Route|null {return this.routes.find(r=>(r.from.includes('*')||r.from.includes(from))&&(r.to.includes('*')||r.to.includes(to))&&(r.kinds==='*'||r.kinds.includes(kind)))??null}
- allowedKinds(from:string,to:string):string[]{const out:string[]=[];for(const r of this.routes)if((r.from.includes('*')||r.from.includes(from))&&(r.to.includes('*')||r.to.includes(to)))for(const kind of r.kinds==='*'?KINDS:r.kinds)if(!out.includes(kind))out.push(kind);return out}
+ routeFor(from:string,to:string,kind:string):Route|null {from=roleKey(from);to=roleKey(to);return this.routes.find(r=>matches(r.from,from)&&matches(r.to,to)&&(r.kinds==='*'||r.kinds.includes(kind)))??null}
+ allowedKinds(from:string,to:string):string[]{from=roleKey(from);to=roleKey(to);const out:string[]=[];for(const r of this.routes)if(matches(r.from,from)&&matches(r.to,to))for(const kind of r.kinds==='*'?KINDS:r.kinds)if(!out.includes(kind))out.push(kind);return out}
  checkSend(from:string,to:string,kind:string):Decision {
  const route=this.routeFor(from,to,kind);if(!route){const allowed=this.allowedKinds(from,to),hint=allowed.length?from+' может писать '+to+' только: '+allowed.join(', '):'у роли '+from+' нет маршрута к '+to;
  return {allow:false,pending:false,reason:'политика v'+this.version+': '+hint,route:null,bounds:{},trigger:null}}
  const pending=route.trigger==='owner-ack';return {allow:true,pending,reason:pending?'ждёт подтверждения владельца':'',route,bounds:route.bounds??{},trigger:route.trigger}
  }
- canObserve(role:string,targetRole:string):boolean{if(role==='owner')return true;const value=Object.hasOwn(this.observe,role)?this.observe[role]:undefined;return value==='*'||!!value?.includes(targetRole)}
+ canObserve(role:string,targetRole:string):boolean{role=roleKey(role);targetRole=roleKey(targetRole);if(role==='owner')return true;const key=Object.hasOwn(this.observe,role)?role:role==='worker'?'executor':role,value=Object.hasOwn(this.observe,key)?this.observe[key]:undefined;return value==='*'||!!value?.some(r=>roleKey(r)===targetRole)}
  summaryFor(role:string,seatRoles:Record<string,string>,labels:Record<string,string>):string {
+ role=roleKey(role);seatRoles=Object.fromEntries(Object.entries(seatRoles).map(([id,r])=>[id,roleKey(r)]));
  const lines:string[]=[];
  for(const [sid,r] of Object.entries(seatRoles)){
  if(r===role&&Object.values(seatRoles).filter(x=>x===role).length===1)continue;
  const kinds=this.allowedKinds(role,r);if(!kinds.length)continue;
- const rt=this.routes.filter(x=>(x.from.includes('*')||x.from.includes(role))&&(x.to.includes('*')||x.to.includes(r))&&x.trigger);
+ const rt=this.routes.filter(x=>matches(x.from,role)&&matches(x.to,r)&&x.trigger);
  const extra=rt.length?' ('+rt.map(x=>(x.kinds==='*'?KINDS:x.kinds).join(', ')+': '+x.trigger).join('; ')+')':'';
  lines.push('- '+sid+' ('+(labels[sid]??sid)+'): '+kinds.join(', ')+extra)
  }
  const allowed=this.allowedKinds(role,'owner');if(allowed.length)lines.push('- owner (владелец): '+allowed.join(', '));
- const obs=Object.hasOwn(this.observe,role)?this.observe[role]:undefined,watch=obs==='*'?'все окна':obs?.length?Object.entries(seatRoles).filter(([,r])=>obs.includes(r)).map(([sid])=>sid).join(', ')||'никого':'никого';
+ const key=Object.hasOwn(this.observe,role)?role:role==='worker'?'executor':role,obs=Object.hasOwn(this.observe,key)?this.observe[key]:undefined,watch=obs==='*'?'все окна':obs?.length?Object.entries(seatRoles).filter(([,r])=>obs.some(x=>roleKey(x)===r)).map(([sid])=>sid).join(', ')||'никого':'никого';
  return 'Твои маршруты по политике связи (кому какие виды записей ты можешь отправлять):\n'+lines.join('\n')+'\nЧитать чужие разговоры (read_pane, сводка) ты можешь у: '+watch+'. Запись вне маршрута сервер отклонит с причиной.'
  }
 }

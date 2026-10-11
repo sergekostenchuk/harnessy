@@ -1,5 +1,5 @@
 import {randomBytes} from 'node:crypto';
-import {MODE_IDS,pyTruthy,type Mode,type Seat as TeamSeat} from '@harnessy/team';
+import {MODE_IDS,pyTruthy,legacyKind,seatKind,type SeatKind,type Mode,type Seat as TeamSeat} from '@harnessy/team';
 import {pythonTrim,Policy} from '@harnessy/journal';
 import {statSync} from 'node:fs';
 import {RuntimeError} from './errors.ts';
@@ -21,18 +21,19 @@ export class Approval {
  detach():void {if(this.ended)return;this.ended=true;this.clock.clearTimeout(this.timer);this.pane.approvals.delete(this.id);this.resolve(false)}
  event():RuntimeEvent{return {type:'approval',id:this.id,title:this.title,detail:this.detail}}
 }
-export interface PaneInit {id:string;vendor:Vendor|'human';label:string;model:string;mode?:Mode;cwd:string;role?:string;writePaths?:string[];digest?:boolean}
+export interface PaneInit {id:string;vendor:Vendor|'human';label:string;model:string;mode?:Mode;cwd:string;role?:string;kind?:SeatKind;writePaths?:string[];digest?:boolean}
 export class Pane {
  id:string;vendor:Vendor|'human';label:string;model:string;mode:Mode;cwd:string;role:string;writePaths:string[];digest:boolean;
+ readonly kind:SeatKind|null;
  worktree:string|null=null;branch:string|null=null;sessionId:string|null=null;sessionEpoch=0;busy=false;touched=false;revision=0;
  readonly uncommitted=new Set<TranscriptMessage>();transcript:TranscriptMessage[]=[];seen:Record<string,number>={};carry='';tokens:Usage|null=null;handle:TurnHandle|null=null;
  recoveryNote:string|null=null;recoveryError:RuntimeEvent|null=null;uncertainNote:string|null=null;status:'idle'|'recovering'|'uncertain'='idle';readonly approvals=new Map<string,Approval>();
  private bus:EventBus;private clock:Clock;
- constructor(init:PaneInit,bus:EventBus,clock:Clock=systemClock){this.bus=bus;this.clock=clock;this.id=init.id;this.vendor=init.vendor;this.label=init.label;this.model=init.model;this.mode=init.mode??'chat';this.cwd=init.cwd;this.role=init.role??'';this.writePaths=[...(init.writePaths??[])];this.digest=init.digest??false}
+ constructor(init:PaneInit,bus:EventBus,clock:Clock=systemClock){this.bus=bus;this.clock=clock;this.id=init.id;this.vendor=init.vendor;this.label=init.label;this.model=init.model;this.mode=init.mode??'chat';this.cwd=init.cwd;this.role=init.role??'';this.kind=init.kind===undefined?legacyKind(init.role):seatKind(init.kind);this.writePaths=[...(init.writePaths??[])];this.digest=init.digest??false}
  publish(event:RuntimeEvent):void{this.bus.publish(this.id,event)}
  record(role:string,text:string):void{if(pythonTrim(text))this.transcript.push(timestampMessage(role,text,this.clock.now()))}
- settings(){return {id:this.id,vendor:this.vendor,label:this.label,role:this.role,model:this.model,mode:this.mode,cwd:this.cwd,sessionId:this.sessionId,digest:this.digest,busy:this.busy,writePaths:[...this.writePaths],worktree:this.worktree,branch:this.branch,touched:this.touched,pendingApprovals:this.approvals.size}}
- persist(){return {model:this.model,mode:this.mode,sessionId:this.sessionId,digest:this.digest,vendor:this.vendor}}
+ settings(){return {id:this.id,vendor:this.vendor,label:this.label,role:this.role,model:this.model,mode:this.mode,cwd:this.cwd,sessionId:this.sessionId,digest:this.digest,busy:this.busy,writePaths:[...this.writePaths],worktree:this.worktree,branch:this.branch,touched:this.touched,pendingApprovals:this.approvals.size,kind:this.kind}}
+ persist(){return {model:this.model||null,mode:this.mode,sessionId:this.sessionId,digest:this.digest,vendor:this.vendor}}
  providerSeat():Seat{if(this.vendor==='human')throw new RuntimeError('no_provider','нет провайдера: human');return {id:this.id,vendor:this.vendor,label:this.label,model:this.model,mode:this.mode,cwd:this.cwd,sessionId:this.sessionId,writePaths:[...this.writePaths],worktree:this.worktree}}
  askApproval(title:string,detail:string,timeout=APPROVAL_TIMEOUT_MS):Promise<boolean>{let id:string;do{id=randomBytes(6).toString('hex')}while(this.approvals.has(id));const a=new Approval(id,this,title,detail,timeout,this.clock);this.approvals.set(id,a);this.publish(a.event());return a.future}
  resolveApproval(id:string,allow:boolean):boolean{return this.approvals.get(id)?.finish(allow?'allow':'deny')??false}
@@ -44,13 +45,13 @@ export class Registry {
  readonly defaultCwd:string;readonly models:ModelCatalog;private bus:EventBus;private clock:Clock;readonly providers:ReadonlySet<Vendor>;
  constructor(defaultCwd:string,models:ModelCatalog,seats:readonly TeamSeat[],bus:EventBus,clock:Clock,providers:ReadonlySet<Vendor>){this.defaultCwd=defaultCwd;this.models=models;this.bus=bus;this.clock=clock;this.providers=providers;for(const seat of seats)this.add(seat)}
  add(seat:TeamSeat):Pane {const existing=this.panes.get(seat.id);if(existing)return existing;
- const pane=new Pane({id:seat.id,vendor:seat.vendor,label:seat.label,model:seat.model||this.models[seat.vendor]?.find(m=>m.id)?.id||'',mode:seat.mode,cwd:this.defaultCwd,role:seat.role,writePaths:seat.writePaths,digest:seat.digest},this.bus,this.clock);this.panes.set(pane.id,pane);return pane}
+ const pane=new Pane({id:seat.id,vendor:seat.vendor,label:seat.label,model:seat.model||this.models[seat.vendor]?.find(m=>m.id)?.id||'',mode:seat.mode,cwd:this.defaultCwd,role:seat.role,kind:seat.kind,writePaths:seat.writePaths,digest:seat.digest},this.bus,this.clock);this.panes.set(pane.id,pane);return pane}
  get ids(){return [...this.panes.keys()]}
  get(id:string){return this.panes.get(id)??null}
  others(id:string){return [...this.panes.values()].filter(p=>p.id!==id)}
- roleOf(id:string){return id==='owner'?'owner':this.get(id)?.role??id}
+ roleOf(id:string){return id==='owner'?'owner':id==='room'&&this.get(id)?'room':this.get(id)?.kind??null}
  refreshPolicy():boolean {if(!this.policy)return false;try{if(this.policy.maybeReload())this.policyChanged?.(this.policy)}catch{return false}return !this.policy.broken}
- canObserve(viewer:string,target:string):boolean {if(viewer==='owner')return true;return this.refreshPolicy()&&this.policy!.canObserve(this.roleOf(viewer),this.roleOf(target))}
+ canObserve(viewer:string,target:string):boolean {if(viewer==='owner')return true;const from=this.roleOf(viewer),to=this.roleOf(target);return from!==null&&to!==null&&this.refreshPolicy()&&this.policy!.canObserve(from,to)}
  update(pane:Pane,body:Record<string,unknown>):boolean {
  const busy=pane.busy,model=typeof body.model==='string'?body.model:'',known=pane.vendor==='human'?[]:this.models[pane.vendor]??[];
  const vendor=model?(known.some(m=>m.id===model)?pane.vendor:(['claude','codex'] as const).find(v=>this.providers.has(v)&&this.models[v]?.some(m=>m.id===model))??(pane.vendor==='codex'&&known.length<=1?'codex':null)):null;
