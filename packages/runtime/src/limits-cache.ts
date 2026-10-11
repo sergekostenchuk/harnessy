@@ -6,7 +6,7 @@ import {record,limitPlan,limitCredits,type LimitCredits,type ProviderLimits,type
 
 export const POLL_SECONDS=300,TURN_SECONDS=60;
 export const reasons:Record<LimitsCode,string>={limits_unsupported:'лимиты провайдер не отдаёт',limits_not_applicable:'ключ API не имеет окон подписки',limits_auth:'вход по подписке недоступен',limits_rate_limited:'сервис лимитов просит повторить позже',limits_unavailable:'сервис лимитов временно недоступен',limits_invalid:'ответ или сохранённый снимок лимитов повреждён',limits_timeout:'чтение лимитов отменено или превысило время ожидания',limits_storage:'не удалось сохранить снимок лимитов'};
-export type Saved={vendor:Vendor;plan:string|null;windows:LimitWindow[];fetchedAt:number;credits?:LimitCredits;resetCredits?:number};
+export type Saved={vendor:Vendor;plan:string|null;planLevel?:'5x'|'20x'|null;extraUsageEnabled?:boolean|null;windows:LimitWindow[];fetchedAt:number;credits?:LimitCredits;resetCredits?:number};
 export function saved(raw:unknown,vendor:Vendor,now:number):Saved|null{
  if(!record(raw)||!(raw.plan===null||typeof raw.plan==='string'&&limitPlan(raw.plan)===raw.plan)||raw.vendor!==vendor||typeof raw.fetchedAt!=='number'||!Number.isFinite(raw.fetchedAt)||raw.fetchedAt<=0||raw.fetchedAt>now+60||!Array.isArray(raw.windows)||raw.windows.length>20)return null;
  const credits=raw.credits===undefined?undefined:limitCredits(raw.credits),reset=raw.resetCredits;
@@ -14,7 +14,7 @@ export function saved(raw:unknown,vendor:Vendor,now:number):Saved|null{
  const windows:LimitWindow[]=[];
  for(const w of raw.windows){if(!record(w)||typeof w.label!=='string'||!w.label||w.label.length>80||typeof w.percentUsed!=='number'||!Number.isFinite(w.percentUsed)||w.percentUsed<0||w.percentUsed>100||!Number.isSafeInteger(w.windowMinutes)||Number(w.windowMinutes)<=0||!(w.resetsAt===null||typeof w.resetsAt==='number'&&Number.isFinite(w.resetsAt)&&w.resetsAt>0))return null;
  windows.push({label:w.label,percentUsed:w.percentUsed,windowMinutes:Number(w.windowMinutes),resetsAt:w.resetsAt})}
- return {vendor,plan:raw.plan as string|null,windows,fetchedAt:raw.fetchedAt,...(credits?{credits}:{}),...(reset!==undefined?{resetCredits:Number(reset)}:{})};
+ return {vendor,plan:raw.plan as string|null,planLevel:raw.planLevel==='5x'||raw.planLevel==='20x'?raw.planLevel:null,extraUsageEnabled:typeof raw.extraUsageEnabled==='boolean'?raw.extraUsageEnabled:null,windows,fetchedAt:raw.fetchedAt,...(credits?{credits}:{}),...(reset!==undefined?{resetCredits:Number(reset)}:{})};
 }
 export interface SharedSnapshot {version:1;vendor:Vendor;attemptedAt:number;retryAt:number|null;backoff:number;pending:string|null;code:LimitsCode|null;value:Saved|null}
 export const nextAttempt=(row:SharedSnapshot,afterTurn=false)=>row.retryAt??row.attemptedAt+(afterTurn&&!row.pending?TURN_SECONDS:POLL_SECONDS);

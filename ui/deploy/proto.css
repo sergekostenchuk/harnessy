@@ -453,8 +453,8 @@ html[data-page="spend"] .view { position:relative !important; inset:auto !import
 html[data-page="spend"] .view:not(.on) { display:none; }
 .panel:has([data-live-spend]) .inner { height:100%; overflow:auto; box-sizing:border-box; }
 html[data-page="spend"] [data-c="router"] { flex:none !important; }
-html[data-page="spend"] .main a, .sp-link, [data-pane="priceList"] a, [data-live-spend] a { color:var(--accent); text-decoration:none; }
-html[data-page="spend"] .main a:hover, .sp-link:hover, [data-pane="priceList"] a:hover { text-decoration:underline; }
+html[data-page="spend"] .main a, .sp-link, [data-pane="priceList"] a, [data-pane="subscriptions"] a, [data-live-spend] a { color:var(--accent); text-decoration:none; }
+html[data-page="spend"] .main a:hover, .sp-link:hover, [data-pane="priceList"] a:hover, [data-pane="subscriptions"] a:hover { text-decoration:underline; }
 [data-pane="priceList"] .sp-actions { padding:0 12px 10px; }
 
 /* TS-15a: specification is not a connection status; these labels survive boot.ready(). */
@@ -478,3 +478,44 @@ html[data-page="events"] .feed { min-width:0; }
 [data-event-feed] .ffoot { flex-wrap:wrap; }
 [data-event-feed] button:disabled { opacity:.5; cursor:not-allowed; }
 @media(max-width:759px){html[data-page="events"] .g3 { grid-template-columns:1fr; padding:16px; } html[data-page="events"] .feed { grid-row:1; } .spec-banner { padding:10px 16px; } }
+/* TS-14c: spend overview keeps the sketch's two-column graphics. */
+html[data-page="spend"] #v-over .lay { grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); }
+html[data-page="spend"] #v-over .col, html[data-page="spend"] #v-over .card { min-width:0; }
+html[data-page="spend"] #v-over .card .h { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.sp-state { margin-left:auto; flex-shrink:0; font-size:9px; color:var(--ink3); }
+.sp-source, .sp-reset { display:block; color:var(--ink3); font-size:10px; line-height:1.5; margin:5px 0; }
+.sp-windows { display:grid; grid-template-columns:1fr; gap:12px; margin:12px 0 8px; }
+.sp-windows.wide { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.sp-quota .big b { font-weight:500; }
+.sp-quota .tk { position:relative; }
+.sp-quota .tk:after { content:""; position:absolute; left:80%; width:2px; top:-3px; bottom:-3px; background:var(--ink2); }
+.sp-quota-missing { padding:12px 0; }.sp-quota-missing .big { font-size:22px; }.sp-quota-missing p { color:var(--ink3); font-size:11px; }
+html[data-page="spend"] .sp-policy .opt { padding:9px 0 0; margin-top:9px; }
+.sp-policy button.tog { padding:0; flex-shrink:0; cursor:not-allowed; opacity:.65; }
+html[data-page="spend"] .subs .big { font-size:23px; }.subs .sub2 { gap:6px; }.subs .sub2 b { font-size:12px; }.subs .sub2 small { font-size:8px; letter-spacing:0; }
+html[data-page="spend"] .sp-router-modes { display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:var(--ink3); font-size:10px; }
+.sp-router-modes button { border:0; background:transparent; color:var(--ink3); padding:5px 7px; font:11px var(--font); cursor:not-allowed; }.sp-router-modes button.on { background:var(--raised); border-radius:5px; color:var(--ink2); }
+html[data-page="spend"] .sp-graph { min-height:180px; margin:6px 0; }
+.sp-graph .sp-gateway { left:0; top:50%; transform:translateY(-50%); }
+.sp-graph .sp-node { left:56%; right:0; overflow:hidden; text-overflow:ellipsis; font-size:11px; }
+.sp-graph .sp-node small { overflow:hidden; text-overflow:ellipsis; font-size:9px; }
+.sp-graph-empty { position:absolute; right:0; top:50%; color:var(--ink3); font-size:11px; }
+html[data-page="spend"] .sp-table .tbl { table-layout:auto; }.sp-table td { overflow-wrap:anywhere; }.sp-table td small { display:block; color:var(--ink3); font-size:10px; }
+html[data-page="spend"] #v-over .tbl th { font-size:9px; white-space:normal; }.sp-table th { text-align:left; }
+html[data-page="spend"] #v-over .tbl td { font-size:11px; padding-top:7px; padding-bottom:7px; }
+html[data-page="spend"] #v-over .fb { margin-top:10px; }.fb small { display:block; color:var(--ink3); font-size:10px; }
+html[data-page="spend"] #v-over .dirty { flex-wrap:wrap; white-space:normal; gap:6px; color:var(--ink3); }
+html[data-page="spend"] .sp-calendar { margin:8px 0; }.sp-calendar div { min-height:42px!important; }.sp-calendar div b { font-size:8px!important; }
+[data-spend-prices] { padding:12px 18px 18px; text-align:right; font-size:11px; }[data-spend-prices] a { color:var(--ink3); }
+@media(max-width:900px) { html[data-page="spend"] #v-over .lay { grid-template-columns:1fr; } }
+@media(max-width:480px) { html[data-page="spend"] #v-over .subs { grid-template-columns:1fr; }.sp-windows.wide { grid-template-columns:1fr; }.sp-quota .tkl { font-size:9px; } }
+html[data-page="spend"] .subs .sp-windows { margin:6px 0; }.subs .sp-quota .big small { display:inline; font-size:9px; margin-right:6px; }.subs .sp-quota .big { display:flex; flex-direction:row-reverse; align-items:baseline; justify-content:flex-end; gap:6px; }.subs .sp-quota .tkl { font-size:8px; letter-spacing:0; }.subs .sp-quota .tk { margin:7px 0 4px; }.subs .sp-quota .tk i { height:5px; }
+/* The third slot is absent until a connected API provider supplies a quota. */
+html[data-page="spend"] .subs:has([data-c="qwen"][hidden]){grid-template-columns:1fr}
+html[data-page="spend"] .sp-calendar [data-s]{min-width:0}
+html[data-page="spend"] .sp-policy button:not(:disabled){cursor:pointer}
+.panel:has([data-subscription-date]) .inner{height:100%;overflow:auto;box-sizing:border-box}
+
+.set .rows .row.sp-billing-account{display:flex;flex-wrap:wrap;gap:12px}.sp-billing-account>div{flex:1 0 100%}.sp-billing-account label{flex:1 1 180px;min-width:0}.sp-billing-account input{display:block;max-width:100%;box-sizing:border-box;margin-top:4px}
+
+.panel:has([data-subscription-date]) a{color:var(--amber)}

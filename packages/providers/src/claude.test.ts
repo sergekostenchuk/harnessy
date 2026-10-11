@@ -140,3 +140,8 @@ for(const status of [429,503])for(const format of ['seconds','date','invalid'])t
  const retry=format==='seconds'?'720':format==='date'?new Date(Date.now()+720000).toUTCString():'secret-header',p=new ClaudeProvider({env:{},readOauthLogin:async()=>({token:'fixture-secret',plan:'Max'}),usageFetch:(async()=>new Response('fixture-secret',{status,headers:{'retry-after':retry}})) as typeof fetch});
  const result=await p.limits();assert.equal(result.ok,false);if(result.ok)return;assert.equal(result.code,status===429?'limits_rate_limited':'limits_unavailable');if(format==='invalid')assert.equal(result.retryAfterSeconds,undefined);else assert.ok(result.retryAfterSeconds!>=719&&result.retryAfterSeconds!<=720);assert.doesNotMatch(JSON.stringify(result),/fixture-secret|secret-header/);
 });
+test('218: subscription level and extra usage flag come from login/usage, never from credential text',async()=>{
+ const p=new ClaudeProvider({env:{},readOauthLogin:async()=>({token:'fixture-secret',plan:'Max',planLevel:'20x'}),usageFetch:(async()=>new Response(JSON.stringify({...quotaUsage,extra_usage:{is_enabled:true,accessToken:'never-return'}}))) as typeof fetch});
+ const r=await p.limits();assert.equal(r.ok,true);if(r.ok){assert.equal(r.planLevel,'20x');assert.equal(r.extraUsageEnabled,true)}assert.doesNotMatch(JSON.stringify(r),/fixture-secret|never-return/);
+
+});

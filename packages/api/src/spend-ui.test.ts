@@ -20,7 +20,7 @@ function ui(fetch?:(path:string,body?:any)=>Promise<any>,on=true){
   URL:{createObjectURL(blob:Blob){blobs.push(blob);return 'blob:test'},revokeObjectURL(){}},localStorage:{setItem(...v:any[]){writes.push(v)},getItem:()=>null}};
  const create=d.document.createElement.bind(d.document);d.document.createElement=(tag:string)=>{const n:any=create(tag);if(tag==='a')n.click=()=>downloaded.push(n.download);return n};context.window=context;
  const vm=createContext(context);runInContext(read('ui/sketches/disarto/app.js'),vm);runInContext(part(raw,'<script>','</script>').slice('<script>'.length),vm);
- runInContext(part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  function closeLAMenus(','  // запись «контекст передан»')+part(live,'  const statics=','  // ══ ПЛАН:')+part(live,'  // TS-14b: spend blocks','  // ══ ПОДКЛЮЧЕНИЯ')+'\nglobalThis.testing={fetch:spendFetch,draw:spendDraw,csv:spendCsv,state:SP,limits:limitsFetch,limitState:LIM,limitDraw:limitsDraw,limitEvent:limitsEvent,subscribe:subscribeLiveEvents,syncEvents:syncLiveEvents,history:spendHistory};restoreUI();',vm);
+ runInContext(part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  function closeLAMenus(','  // запись «контекст передан»')+part(live,'  const statics=','  // ══ ПЛАН:')+part(live,'  // TS-14b: spend blocks','  // ══ ПОДКЛЮЧЕНИЯ')+'\nglobalThis.testing={fetch:spendFetch,draw:spendDraw,csv:spendCsv,state:SP,limits:limitsFetch,limitState:LIM,limitDraw:limitsDraw,limitEvent:limitsEvent,subscribe:subscribeLiveEvents,syncEvents:syncLiveEvents,history:spendHistory,windows:spendWindows};restoreUI();',vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  return {...d,H,S,context,requests,blobs,downloaded,logs,writes,toasts,find,response,functions:context.testing};
 }
@@ -29,7 +29,7 @@ test('173/178: cancelled TS-10 hidden-block invariant; original Spend blocks and
  const h=await fixture(t);await h.runtime.runTurn('worker','question');const v=ui(async path=>(await call(h.api,path)).body);v.H.project=h.dir;
  const original=v.find('[data-c="router"]');await v.functions.fetch();await v.functions.limits();assert.equal(v.find('[data-c="router"]'),original);
  for(const selector of ['[data-c="claude"]','[data-c="codex"]','[data-c="qwen"]','[data-c="hist"]','[data-c="cal"]','#v-proj','#v-role','#v-est','#cap','#seg'])v.find(selector);
- assert.doesNotMatch(v.find('.main').textContent,/OMG|Sonnet 35 %/);assert.match(v.find('[data-c="claude"]').textContent,/62,4|62.4/);assert.match(v.find('[data-c="claude"]').textContent,/макет/);assert.match(v.find('.main').textContent,/макет/);assert.match(v.find('.main').textContent,/chats.json/);assert.equal(v.functions.state.data.totals.input,20);
+ assert.match(v.find('[data-c="claude"]').textContent,/62,4 %/);assert.match(v.find('[data-c="claude"]').textContent,/Макет лимитов/);assert.doesNotMatch(v.find('.main').textContent,/19:58|OMG|Sonnet 35 %/);assert.match(v.find('.main').textContent,/макет/);assert.match(v.find('.main').textContent,/chats.json/);assert.equal(v.functions.state.data.totals.input,20);
  const before=v.requests.filter(p=>p==='/api/spend?period=7').length;await v.find('[data-spend-period="7"]').emit('click');assert.equal(v.requests.filter(p=>p==='/api/spend?period=7').length,before+1);assert.equal(v.context.location.search,'?period=7');
  await v.find('#seg [data-v="proj"]').emit('click');assert.equal(v.find('#v-proj').classList.contains('on'),true);await v.window.emit('keydown',{key:'4'});assert.equal(v.find('#v-est').classList.contains('on'),true);
  await v.find('[data-spend-group="byModel"]').emit('click');assert.match(v.find('#v-proj .tbl').textContent,/w1/);
@@ -68,8 +68,8 @@ test('177/211: top three use connected subscriptions and measured API quotas; a 
 });
 
 test('175/178: history paginates with deduplication; late filter response cannot replace new filter; escape prevents reopening',async()=>{
- const v=ui();await v.functions.fetch();v.functions.state.next='cursor';v.functions.draw();v.context.api=async()=>({ok:true,project:v.H.project,period:'all',source:'chats.json',items:[item(),item('t2')],next:null});await v.find('[data-spend-more]').emit('click');assert.equal(v.functions.state.history.length,2);
- await v.find('[data-c="hist"]').emit('click');const gate=deferred<any>();v.context.api=()=>gate.promise;v.functions.state.next='more';const pending=v.functions.history(true);await v.window.emit('keydown',{key:'Escape'});gate.resolve({ok:true,project:v.H.project,period:'all',source:'chats.json',items:[item('t3')],next:null});await pending;assert.equal(v.find('.ovl').classList.contains('on'),false);
+ const v=ui();await v.functions.fetch();v.functions.state.next='cursor';v.functions.draw();await v.find('[data-c="hist"]').emit('click');v.context.api=async()=>({ok:true,project:v.H.project,period:'all',source:'chats.json',items:[item(),item('t2')],next:null});await v.find('[data-spend-more]').emit('click');assert.equal(v.functions.state.history.length,2);
+ await v.find('[data-c="hist"]').emit('click');const gate=deferred<any>();v.context.api=()=>gate.promise;v.functions.state.next='more';const pending=v.functions.history(true);await v.window.emit('keydown',{key:'Escape'});gate.resolve({ok:true,project:v.H.project,period:'all',source:'chats.json',items:[item('t3')],next:null});await pending;assert.equal(v.find('.ovl').classList.contains('on'),false);await v.find('[data-c="hist"]').emit('click');
  const old=deferred<any>();v.context.api=(p:string)=>p.includes('vendor=codex')?Promise.resolve({ok:true,project:v.H.project,period:'all',source:'chats.json',items:[],next:null}):old.promise;const filter=v.find('[data-spend-vendor]');filter.value='claude';const first=filter.emit('change');const next=v.find('[data-spend-vendor]');next.value='codex';await next.emit('change');old.resolve({ok:true,project:v.H.project,period:'all',source:'chats.json',items:[item('stale')],next:null});await first;assert.equal(v.functions.state.history.length,0);assert.equal(v.functions.state.historyLoading,false);
 });
 
@@ -218,4 +218,58 @@ test('214/215: Codex weekly-only quota shows credits in both cards; a failed ref
  assert.match(v.find('.limits').textContent,/Codex · неделя/);assert.doesNotMatch(v.find('.limits').textContent,/5 ч|кредиты/);for(const selector of ['[data-c="codex"]','.limits-dialog'])assert.equal(v.find(selector).querySelector('.sp-limit-credits')!.textContent.replace(/\s/g,' '),'кредиты: 62 500 · сбросов лимита в запасе: 2');
  v.functions.limitEvent({...quota,revision:2,providers:[{...quota.providers[0],status:'unavailable',reason:'сервис лимитов просит повторить позже',stale:true,nextAttemptAt:stamp+600}]});for(const selector of ['.limits','[data-c="codex"]','.limits-dialog']){assert.match(v.find(selector).textContent,/21 %/);assert.match(v.find(selector).textContent,/следующая попытка/);assert.match(v.find(selector).textContent,/просит повторить позже/)}
  v.functions.limitEvent({...quota,revision:3,providers:[{...quota.providers[0],credits:undefined,resetCredits:undefined}]});assert.equal(v.find('[data-c="codex"]').querySelector('.sp-limit-credits'),null);assert.equal(v.find('.limits-dialog').querySelector('.sp-limit-retry'),null);
+});
+// 204–207 replace the old 'no limit source = empty card' invariant, without inventing provider readings.
+test('204/205/207: stable vendor slots, live quota graphics, unavailable fields and labelled samples',async()=>{
+ const v=ui();await v.functions.fetch();const l=v.functions.limitState;
+ l.providers=[{id:'codex',name:'Codex'},{id:'claude',name:'Claude'},{id:'router',name:'Router'}];
+ l.limits=[{vendor:'claude',plan:'Max',sourceConnected:true,source:'test usage',fetchedAt:1791500000,windows:[{label:'неделя',percentUsed:28.5,resetsAt:1791600000},{label:'5 ч',percentUsed:12,resetsAt:1791550000}]},{vendor:'codex',sourceConnected:true,reason:'Подписка не отдаёт лимиты',windows:[]}];v.functions.draw();
+ const claude=v.find('[data-c="claude"]'),codex=v.find('[data-c="codex"]'),qwen=v.find('[data-c="qwen"]');
+ assert.equal(claude.dataset.vendor,'claude');assert.equal(codex.dataset.vendor,'codex');assert.equal(claude.querySelectorAll('[role="meter"]').length,2);assert.equal(claude.querySelector('[role="meter"]')!.getAttribute('aria-valuenow'),'28.5');assert.match(claude.textContent,/28,5 %/);assert.doesNotMatch(claude.textContent,/62,4/);
+ assert.match(codex.textContent,/нет данных.*Подписка не отдаёт лимиты/s);assert.equal(codex.querySelector('[role="meter"]'),null);assert.doesNotMatch(codex.textContent,/94 %/);
+ assert.equal(Reflect.get(qwen,'hidden'),true);assert.equal(qwen.textContent,'');assert.equal(v.document.querySelector('[data-spend-extra]'),null);assert.equal(v.find('.sp-gateway').dataset.spendRouter,'connected');
+ for(const selector of ['claude','codex','hist','router','cal']){const card=v.find('[data-c="'+selector+'"]');assert.match(card.querySelector('.sp-state')!.textContent,/живое|частично|макет/);assert.doesNotMatch(card.textContent,/—/)}
+});
+
+test('204/206: router SVG uses actual turn shares, token fallback and exactly one bottom price link',async()=>{
+ const v=ui();await v.functions.fetch();assert.equal(v.find('[data-c="router"] svg').querySelectorAll('path').length,1);assert.match(v.find('.sp-node').textContent,/w1.*100 %/s);assert.match(v.find('[data-c="hist"]').textContent,/5 ток\./);assert.doesNotMatch(v.find('#v-over').textContent,/без цены|прайс-лист/);
+ const link=v.find('.views [data-spend-prices] a');assert.equal(link.textContent,'цены моделей (донастройка)');assert.equal(link.getAttribute('href'),'06-settings.html#p=priceList');assert.equal(v.document.querySelectorAll('a[href="06-settings.html#p=priceList"]').length,1);
+ await v.find('[data-c="router"]').emit('click');assert.equal(v.document.querySelectorAll('a[href="06-settings.html#p=priceList"]').length,1);
+ v.functions.state.history=[{...item(),cost:0.125,currency:'USD'}];v.functions.draw();assert.match(v.find('[data-c="hist"]').textContent,/0,125 USD/);
+ v.functions.state.data.byModelVendor=[{...metrics(),model:'<img src=x>',vendor:null,p50DurationMs:null,p95DurationMs:null,errorRate:null}];v.functions.draw();assert.equal(v.document.querySelector('.sp-node img'),null);assert.match(v.find('[data-c="router"]').textContent,/нет данных/);
+});
+
+test('204/205: calendar retains 21 cells, uses daily counts and resets, marks payments as samples',async()=>{
+ const v=ui();await v.functions.fetch();const today=new Date().toISOString().slice(0,10);v.functions.state.data.byDay=[{day:today,...metrics(7)}];v.functions.limitState.limits=[{vendor:'codex',windows:[{label:'5 ч',percentUsed:50,resetsAt:Date.now()/1000+1}]}];v.functions.draw();
+ assert.equal(v.find('.sp-calendar').children.length,21);const cell=v.find('.sp-calendar [data-date="'+today+'"]');assert.match(cell.textContent,/7 ход/);assert.equal(cell.classList.contains('r'),true);assert.match(cell.getAttribute('title')!,/codex.*5 ч/s);assert.match(v.find('[data-c="cal"]').textContent,/Макет платежей/);
+});
+
+test('204: threshold and router policy samples remain visible but never mutate settings, from both surfaces',async()=>{
+ const v=ui();await v.functions.fetch();const before=JSON.stringify(v.S),writes=v.requests.filter(p=>!p.startsWith('/api/spend')).length;
+ for(const expanded of [false,true]){if(expanded)await v.find('[data-c="claude"]').emit('click');const root=expanded?'.panel':'[data-c="claude"]';assert.equal(v.find(root+' [role="switch"]').disabled,true);await v.find(root+' [role="switch"]').emit('click');}
+ assert.equal(JSON.stringify(v.S),before);assert.equal(v.logs.length,0);assert.equal(v.writes.length,0);assert.equal(v.requests.filter(p=>!p.startsWith('/api/spend')).length,writes);
+});
+
+test('209: third subscription slot requires a connected API provider with quota, never router or a fabricated Qwen',async()=>{
+ const v=ui();await v.functions.fetch();const l=v.functions.limitState;l.providers=[{id:'router',name:'Роутер провайдеров',kind:'локальный роутер',auth:{loggedIn:true}}];v.functions.draw();assert.equal(Reflect.get(v.find('[data-c="qwen"]'),'hidden'),true);assert.doesNotMatch(v.find('#v-over').textContent,/Роутер провайдеров|Qwen|остаток API/);
+ l.providers.push({id:'qwen',name:'Qwen',kind:'ключ API',auth:{loggedIn:true}});v.functions.draw();assert.equal(Reflect.get(v.find('[data-c="qwen"]'),'hidden'),true);
+ l.limits=[{vendor:'qwen',sourceConnected:true,fetchedAt:Date.now()/1000,windows:[{label:'месяц',percentUsed:34,resetsAt:1791600000}]}];v.functions.draw();assert.equal(Reflect.get(v.find('[data-c="qwen"]'),'hidden'),false);assert.match(v.find('[data-c="qwen"]').textContent,/Qwen · ключ API/);assert.equal(v.find('[data-c="qwen"] [role="meter"]').getAttribute('aria-valuenow'),'34');
+ l.providers=[];v.functions.draw();assert.equal(Reflect.get(v.find('[data-c="qwen"]'),'hidden'),true);
+});
+
+test('211/218: owner payment dates and quota preferences are live; stale billing replies cannot cross projects',async()=>{
+ const v=ui(),today=new Date().toISOString().slice(0,10),config={subscriptionPrices:[],subscriptionDates:[{vendor:'claude',date:today,plan:null}],limitWarn80:false,limitSwitchCheaper:false};let old:any;
+ const billing=()=>({ok:true,project:v.H.project,config:{...config},subscriptions:[],payments:[{vendor:'claude',date:today,plan:'Max',amount:123,currency:'USD',source:'owner'}]});
+ v.context.api=async(path:string,body:any)=>path==='/api/billing'?billing():body?{ok:true,scope:'owner',saved:{...body.patch}}:v.response(path);await v.functions.fetch();
+ const cell=v.find('.sp-calendar [data-date="'+today+'"]');assert.match(cell.getAttribute('title')!,/настройки владельца.*123 USD/);assert.doesNotMatch(v.find('[data-c="cal"]').textContent,/Макет платежей/);
+ const flag=v.find('[data-spend-policy="limitWarn80"]');assert.equal(flag.disabled,false);await flag.emit('click');assert.equal(v.find('[data-spend-policy="limitWarn80"]').getAttribute('aria-checked'),'true');assert.match(v.toasts.at(-1)!,/действие движка пока не поддерживается/);
+ const gate=deferred<any>();v.context.api=async(path:string)=>path==='/api/billing'?(old=billing(),gate.promise):v.response(path);const request=v.functions.fetch();await until(()=>!!old);v.H.project='/b';gate.resolve(old);await request;v.functions.draw();assert.doesNotMatch(v.find('[data-c="cal"]').innerHTML,/123 USD/);
+});
+
+test('210: window tokens span cursor pages independently of history filters; forecast is labelled and missing measurements stay explicit',async()=>{
+ const v=ui(),now=Math.floor(Date.now()/1000),w={label:'5 ч',percentUsed:20,windowMinutes:300,resetsAt:now+9000};let reads=0;
+ v.context.api=async(path:string)=>{if(path.startsWith('/api/spend/turns')){reads++;return {ok:true,project:v.H.project,period:'all',items:reads===1?[{...item('a'),ts:now-10},{...item('b'),ts:now-20,usage:{input:null,output:1,cacheRead:0}}]:[{...item('c'),ts:now-30},{...item('old'),ts:now-10000}],next:reads===1?'cursor':null}}return v.response(path)};
+ v.functions.limitState.providers=[{id:'claude',name:'Claude',auth:{loggedIn:true}}];v.functions.limitState.limits=[{vendor:'claude',status:'ok',sourceConnected:true,windows:[w],fetchedAt:now}];v.functions.state.vendor='codex';await v.functions.windows();assert.equal(reads,2);assert.match(v.find('.top .st').textContent,/Claude 20 % 5 ч.*сброс через/);assert.match(v.find('[data-c="claude"]').textContent,/Наш проект за окно: 10 ток.*часть токенов не сохранена/);assert.match(v.find('[data-c="claude"]').textContent,/Оценка к сбросу ≈ 40/);
+ const late=deferred<any>();v.context.api=async()=>late.promise;const pending=v.functions.windows(true);v.H.project='/projects/b';late.resolve({ok:true,project:'/projects/a',period:'all',items:[{...item(),ts:now}],next:null});await pending;v.functions.draw();assert.doesNotMatch(v.find('[data-c="claude"]').textContent,/Наш проект за окно: 10/);
+
 });

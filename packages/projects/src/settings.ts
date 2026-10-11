@@ -4,6 +4,7 @@ import {withPathLock,canonicalPath,MODE_IDS} from '@harnessy/team';
 import {ownerPaths,readObject,writeJson,object,truthy} from './files.ts';
 import {orderedClone,orderedKeys,parseCompat} from '@harnessy/journal';
 import {priceList,type ModelPrice} from './price-list.ts';
+import {BILLING_KEYS,billingConfig} from './billing.ts';
 import {ProjectError} from './errors.ts';
 import {SETTINGS_APPLIES,SETTINGS_SCOPE} from './strings.ts';
 function repr(key:string){
@@ -23,7 +24,8 @@ export class Settings {
  }
  private prices(owner:Record<string,unknown>):ModelPrice[]{try{return Object.hasOwn(owner,'priceList')?priceList(owner.priceList):[]}catch(e){throw new ProjectError('pricelist_unreadable','прайс-лист владельца не читается: '+(e as Error).message,409,e)}}
  priceList(){return this.prices(this.readOwner())}
- private merged(owner:Record<string,unknown>,project:Record<string,unknown>){const overrides=orderedClone(project);delete overrides.priceList;return orderedClone(owner,overrides)}
+ billing(){try{return billingConfig(this.readOwner())}catch(e){throw new ProjectError('billing_unreadable','Настройки подписок не читаются: '+(e as Error).message,409,e)}}
+ private merged(owner:Record<string,unknown>,project:Record<string,unknown>){const overrides=orderedClone(project);for(const key of ['priceList',...BILLING_KEYS])delete overrides[key];return orderedClone(owner,overrides)}
  get(){const owner=this.readOwner(),path=this.projectPath(),project=path?readObject(path):{};this.prices(owner);return {ok:true as const,owner,project,effective:this.merged(owner,project),applies:SETTINGS_APPLIES}}
  // Broken prices must not prevent opening a project or reaching the owner's repair endpoint.
  effective(){const path=this.projectPath();return this.merged(readObject(this.ownerFile),path?readObject(path):{})}
@@ -32,6 +34,7 @@ export class Settings {
  const changes=orderedClone(patch);
  for(const key of orderedKeys(changes)){const value=changes[key];if([...key].length>40||!(/^[\p{L}\p{N}]+$/u.test(key.replaceAll('_',''))))throw new ProjectError('invalid_settings','ключ '+repr(key)+' не годится');
  if(key==='priceList'){if(scope!=='owner')throw new ProjectError('invalid_settings','priceList: только область owner');if(value!==null)changes[key]=priceList(value)}
+ if(BILLING_KEYS.includes(key as never)){if(scope!=='owner')throw new ProjectError('billing_invalid',key+': только область owner');if(value!==null)billingConfig({[key]:value})}
  if(value!==null&&!['string','number','boolean'].includes(typeof value)&&!Array.isArray(value))throw new ProjectError('invalid_settings','значение '+key+': только строка, число, флаг или список');
  if(key==='defaultMode'&&value!==null&&!MODE_IDS.includes(value as never))throw new ProjectError('invalid_settings','defaultMode: '+[...MODE_IDS].sort().join(', '))}
  const project=this.currentProject(),selected=scope==='owner'?this.ownerFile:project?join(project,'.harness','state','settings.json'):null;if(!selected)throw new ProjectError('invalid_settings','папка не открыта');
