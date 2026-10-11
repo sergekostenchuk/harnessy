@@ -7,7 +7,7 @@ import {pyTruthy} from '@harnessy/team';
 import {askDeliveryDepth} from './action-state.ts';
 import {makeRoom,makeRoomIn,roomSet,roomMove,assignRoomRole} from './rooms.ts';
 import {createSeat,ensureSeatMaterialized,onboard,restoreAssignments,roleCatalog,type CreateSeatInput} from './roles.ts';
-import {chatsList,chatGet,chatsNew,chatsOpen,meta} from './chats.ts';
+import {chatsList,chatGet,chatsNew,chatsOpen,meta,transferSnapshot} from './chats.ts';
 import {handoff} from './handoff.ts';
 import {chat} from './owner-chat.ts';
 import {execFileSync} from 'node:child_process';
@@ -17,7 +17,7 @@ import {randomUUID} from 'node:crypto';
 import {ensureLineLocked,withPathLock,loadTeam,instructionsFor,canonicalPath,type Vendor} from '@harnessy/team';
 import {Journal,Channel,Policy,JournalError,pythonTrim,type AgentPostInput,type Initiator,type Record_,type DeliveryEntry,type ChannelEvent} from '@harnessy/journal';
 import {openProjectGit,writableRoots,Connections,ProjectRegistry,Settings,Pins,gitops} from '@harnessy/projects';
-import {digest,roleNote,contextCard} from '@harnessy/context';
+import {digest,roleNote,contextCard,conversationTransfer,transferSettings,transferLabel,TRANSFER_DEFAULTS,type ConversationTransfer} from '@harnessy/context';
 import {ProviderError,type TurnContext,type PeerTools,type SendArgs,type AskArgs,type ReadPaneArgs,type MergeArgs,type AssignRoleArgs} from '@harnessy/providers';
 import {Pane,Registry,validDir} from './pane.ts';
 import {EventBus,type Selector} from './events.ts';
@@ -286,10 +286,10 @@ export class Runtime {
  const entries=options.entries??[],records=deepFreeze(entries.map(e=>e.record)),injected:TranscriptMessage[]=[];
  const relayDepth=Math.max(options.relayDepth??0,askDeliveryDepth(p,records));
  if(!pane.model)throw new RuntimeError('model_required','Сначала выберите модель разговора',400);
- pane.busy=true;pane.touched=true;pane.revision++;const launchModel=pane.model;
+ pane.busy=true;pane.touched=true;pane.revision++;const launchModel=pane.model,launchEpoch=pane.sessionEpoch;
  const scope=this.scopes.create(p.dir,id,randomUUID()),controller=new AbortController();let releaseReset!:()=>void,finish!:()=>void;
  const turn:ActiveTurn={scope,controller,pane,vendor:pane.vendor,records,deliverySeq:Math.max(0,...entries.map(e=>e.deliverySeq)),relayDepth,attemptNumber:0,handle:null,started:false,stopRequested:false,terminal:null,partial:'',finished:new Promise(r=>{finish=r}),finish:()=>finish(),timer:undefined,resetWait:new Promise(r=>{releaseReset=r}),releaseReset:()=>releaseReset(),result:null,injected};p.active.set(id,turn);this.stateEvent(p,pane);
- let success=false,terminalSent=false,launchVendor:Vendor|null=null;
+ let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null,transferSaved=false;
  try{
  if(!validDir(pane.cwd))throw new RuntimeError('cwd_changed','папки нет: '+pane.cwd);const provider=this.provider(turn.vendor),vendor=provider.vendor,epoch=p.processEpoch.get(vendor)??0,sessionEpoch=pane.sessionEpoch;
  launchVendor=vendor;
@@ -299,20 +299,27 @@ export class Runtime {
  for(const r of records){const m=timestampMessage(r.from==='owner'?'me':'peer',r.from==='owner'?r.text:'[от '+this.labelOf(r.from,p)+'] '+r.text,this.clock.now());if(pythonTrim(m.text)){pane.transcript.push(m);pane.uncommitted.add(m);injected.push(m)}}
  p.state.startAttempt(pane,{turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),startedAt:this.clock.now(),deliverySeq:turn.deliverySeq});
  const current=()=>!p.closed&&p.active.get(id)===turn;
- let attempt=0;
- const ctx:TurnContext={signal:controller.signal,modelStarted:()=>{if(current())turn.started=true},publish:event=>{
+ let attempt=0,earlySession:string|null=null;
+ const ctx:TurnContext={signal:controller.signal,modelStarted:()=>{if(current()){
+  if(transfer&&!transferSaved){const notice={...timestampMessage('peer','[от харнесс] '+transferLabel(transfer),this.clock.now()),contextTransfer:{...transfer,turnInstanceId:scope.turnInstanceId}};pane.transcript.push(notice);
+   try{p.state.saveChats(p.registry)}catch(e){pane.transcript=pane.transcript.filter(m=>m!==notice);throw e}
+   transferSaved=true;pane.publish({type:'contextTransfer',text:transferLabel(transfer),transfer:notice.contextTransfer,ts:notice.ts});
+  }turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
+ }},publish:event=>{
  if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:event.text,sessionId:pane.sessionId}:event;return}
  if(turn.stopRequested)return;if(event.type==='delta')turn.partial+=event.text;pane.publish(event)
- },askApproval:(title,detail)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return pane.askApproval(title,detail)},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
+ },askApproval:(title,detail)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return pane.askApproval(title,detail)},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;if(transfer&&!turn.started){earlySession=sid;return}pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
  if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(pane,handle)
  },env:this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[...p.registry.panes.values()].map(p=>({id:p.id,label:p.label,vendor:p.vendor as Vendor})),tools:this.toolsFor(scope),relayDepth:turn.relayDepth,projectDir:p.dir,appUrl:this.deps.appUrl,
  registerProcessToken:token=>{if(!p.closed&&(p.processEpoch.get(vendor)??0)===epoch)this.tokens.register(token,p.generation,id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,id,vendor),writableRoots:writableRoots(p.repoRoot,!!pane.worktree)};
  let result:{text:string;sessionId:string|null;interrupted?:boolean};const launchSeat=pane.providerSeat();
  while(true){attempt++;turn.terminal=null;turn.attemptNumber=attempt;const attemptNumber=attempt,seat=attempt===1?launchSeat:{...launchSeat,sessionId:null},activeAttempt=()=>current()&&turn.attemptNumber===attemptNumber;
+ if(!seat.sessionId){const snapshot=transferSnapshot(p,pane,records);if(snapshot){let settings;try{settings=transferSettings(this.settings.get().owner)}catch(e){throw new RuntimeError('context_settings_invalid','настройки переноса: '+message(e),409)}transfer=conversationTransfer(snapshot,settings)}}
+ const attemptPrompt=transfer?.content?transfer.content+'\n\n---\nНовое сообщение:\n'+prompt:prompt;
  const attemptCtx:TurnContext={...ctx,modelStarted:()=>{if(activeAttempt())ctx.modelStarted?.()},publish:e=>{if(activeAttempt())ctx.publish(e)},session:s=>{if(activeAttempt())ctx.session(s)},setHandle:h=>{if(activeAttempt())ctx.setHandle(h)},askApproval:(title,detail)=>activeAttempt()?ctx.askApproval(title,detail):Promise.resolve(false)};
- try{if(controller.signal.aborted)throw new ProviderError('cancelled','ход отменён');result=await Promise.race([provider.runTurn(seat,prompt,attemptCtx),turn.resetWait.then(()=>{throw new ProviderError('cancelled','ход отменён')})]);break}
+ try{if(controller.signal.aborted)throw new ProviderError('cancelled','ход отменён');result=await Promise.race([provider.runTurn(seat,attemptPrompt,attemptCtx),turn.resetWait.then(()=>{throw new ProviderError('cancelled','ход отменён')})]);break}
  catch(e){if(turn.stopRequested&&turn.started){result={text:turn.partial,sessionId:pane.sessionId,interrupted:true};break}
- if(e instanceof ProviderError&&e.code==='session_missing'&&attempt===1&&seat.sessionId&&!controller.signal.aborted){pane.sessionId=null;p.state.savePanes(p.registry,p.journal);pane.publish({type:'note',text:'сессия модели не найдена — начат новый разговор'});turn.partial='';turn.started=false;continue}throw e}finally{if(turn.attemptNumber===attemptNumber)turn.attemptNumber=0}}
+ if(e instanceof ProviderError&&e.code==='session_missing'&&attempt===1&&seat.sessionId&&!controller.signal.aborted){if(pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch)pane.sessionId=null;p.state.savePanes(p.registry,p.journal);pane.publish({type:'note',text:'сессия модели не найдена — начат новый разговор'});turn.partial='';turn.started=false;continue}throw e}finally{if(turn.attemptNumber===attemptNumber)turn.attemptNumber=0}}
  if(p.closed)throw new ProviderError('cancelled','ход отменён');
  const interrupted=turn.stopRequested&&turn.started||result.interrupted===true;pane.sessionId=pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch?result.sessionId:null;
  for(const m of injected)pane.uncommitted.delete(m);
@@ -329,7 +336,7 @@ export class Runtime {
  success=true;return result.text
  }catch(e){
  if(!turn.result){pane.transcript=pane.transcript.filter(m=>!injected.includes(m));for(const m of injected)pane.uncommitted.delete(m);
- if(!turn.started){try{p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
+ if(!turn.started){try{if(transfer&&pane.vendor===launchVendor&&pane.sessionEpoch===launchEpoch){pane.sessionId=null;p.state.savePanes(p.registry,p.journal)}p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
  else {   // модель уже могла действовать (modelStarted), результата нет: неопределённый исход не повторяется автоматически — долговечный uncertain до действия владельца (ревью №111 п.1)
   try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:e instanceof ProviderError?e.code:'internal'})}catch(error){p.lineErrors.push(message(error))}
   try{p.state.uncertain(id)}catch(error){p.lineErrors.push(message(error))}
@@ -402,7 +409,9 @@ export class Runtime {
  pinsGet(initiator:Initiator){this.requireOwner(initiator);return this.pins.get()}
  async pinSet(input:Parameters<Pins['set']>[0],initiator:Initiator){this.requireOwner(initiator);return this.pins.set(input)}
  settingsGet(initiator:Initiator){this.requireOwner(initiator);return this.settings.get()}
- async settingsPatch(scope:unknown,patch:unknown,initiator:Initiator){this.requireOwner(initiator);return this.settings.patch(scope,patch)}
+ async settingsPatch(scope:unknown,patch:unknown,initiator:Initiator){this.requireOwner(initiator);
+ if(object(patch)&&Object.keys(TRANSFER_DEFAULTS).some(key=>Object.hasOwn(patch,key))){if(scope&&scope!=='owner')throw new RuntimeError('context_settings_invalid','настройки переноса: только область owner',400);try{transferSettings(patch)}catch(e){throw new RuntimeError('context_settings_invalid',message(e),400)}}
+ return this.settings.patch(scope,patch)}
  async close(){await this.closeProject()}
 }
 export async function createRuntime(deps:RuntimeDeps,actions:RuntimeActions):Promise<Runtime>{const runtime=new Runtime(deps,actions);await runtime.openProject(deps.projectDir);return runtime}

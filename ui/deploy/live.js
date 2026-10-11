@@ -160,7 +160,10 @@
   function finish(ev){ const c=H.cur; H.cur=null; if(window.CX&&CX.setBusy) CX.setBusy(false); setTimeout(()=>dispatchEvent(new CustomEvent('live:done')),0);
     if(c&&(c.text||c.tools.length)){ const u=ev&&ev.usage; S.chat.push({role:'ai',html:c.tools.map(toolLine).join('')+md(c.text),text:c.text,t:now(),src:'live',who:c.who||(H.pane.id==='room'?'Без роли':paneName(H.pane)),pane:c.pane||H.pane.id,nf:!!(S.cx&&S.cx.noFolder),model:ev&&typeof ev.model==='string'&&ev.model?ev.model:null,cost:u?{i:u.input,o:u.output,c:u.cacheRead,ms:ev.durationMs}:null}); S.chat=S.chat.slice(-40); save(); }
     if(ev&&ev.type==='error'){ const msg=ev.message||ev.text||ev.error||'ошибка'; S.chat.push({role:'ai',html:'<p>'+esc(msg)+'</p>'+(/not supported|unsupported|недоступн/i.test(msg)?'<p class="live-hint">Эта модель недоступна на подписке — выберите другую в чипе модели.</p>':''),t:now(),src:'err'}); save(); } render(); }
+  function transferHTML(text,transfer){return '<details class="live-context-transfer"><summary>'+esc(text)+'</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(transfer.content||'Перенос выключен владельцем.')+'</pre></details>';}
   function hEvent(ev){ const t=ev.type, cur=()=>H.cur||(H.cur={text:'',tools:[]});
+    if(t==='contextTransfer'){const transfer=ev.transfer;if(!transfer||transfer.project!==H.project||transfer.chat!==(H.active||{})[ev.pane]||S.chat.some(m=>m.transferId===transfer.turnInstanceId))return;
+      S.chat.push({role:'ai',src:'sys',who:'харнесс · передача',pane:ev.pane,html:transferHTML(ev.text,transfer),text:ev.text,t:(ev.ts||0)*1000,transferId:transfer.turnInstanceId});save();render();return;}
     if(t==='error'&&ev.code==='unserializable'){ toast(ev.message||'Событие не удалось показать; ответ продолжается'); return; }
     if((t==='note'||t==='error')&&warningEvent(ev)) return;
     if(t==='delta'){ cur().text+=ev.text||''; drawLive(); }
@@ -251,7 +254,7 @@
     const who=p.id==='room'?'Без роли':paneName(p);
     const hsys=m=>m.role==='peer'&&/^\[от харнесс\]/.test(m.text);   // заметки харнесса (вводная, передача) — системные: без модели, расхода и действий
     if(!bindingCurrent(binding)) return;
-    S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:hsys(m)?'sys':'live',who:hsys(m)?(/контекст передан/.test(m.text)?'харнесс · передача':'харнесс · вводная'):(m.role==='peer'?'сосед':who),pane:p.id,model:typeof m.model==='string'&&m.model?m.model:null,html:md(m.text.replace(/^\[от [^\]]+\]\s*/,'')),text:m.text,t:(m.ts||0)*1000,cost:{i:m.usage&&m.usage.input,o:m.usage&&m.usage.output,c:m.usage&&m.usage.cacheRead,ms:m.durationMs}});   // цена и модель — из реплики, не из настройки чата
+    S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:hsys(m)?'sys':'live',who:hsys(m)?(/контекст передан/.test(m.text)?'харнесс · передача':'харнесс · вводная'):(m.role==='peer'?'сосед':who),pane:p.id,model:typeof m.model==='string'&&m.model?m.model:null,html:m.contextTransfer?transferHTML(m.text.replace(/^\[от харнесс\]\s*/,''),m.contextTransfer):md(m.text.replace(/^\[от [^\]]+\]\s*/,'')),transferId:m.contextTransfer&&m.contextTransfer.turnInstanceId,text:m.text,t:(m.ts||0)*1000,cost:{i:m.usage&&m.usage.input,o:m.usage&&m.usage.output,c:m.usage&&m.usage.cacheRead,ms:m.durationMs}});   // цена и модель — из реплики, не из настройки чата
     LOADED=cid;save();renderWaiting();render();await loadAttemptNotes(p,binding);if(!bindingCurrent(binding))return;
     if(onboard&&p.id!=='room'&&!r.messages.length&&!p.busy) await onboardOnce(p); }   // роль без вводной получает её при первом открытии чата (правило движка)
 

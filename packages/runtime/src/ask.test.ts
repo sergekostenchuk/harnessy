@@ -39,7 +39,8 @@ test('4/34/62: A→B→C→A refuses transitive cycle; relayDepth reaches 0,1,2 
 
 test('4/62: depths 0/1/2 allowed; depth 3 refuses before question is written, unknown/self refuse',async t=>{
  const {runtime:r,provider:f}=await setup(t);const results:AskResult[]=[];
- f.onRun=async(s,m,c)=>{c.modelStarted?.();if(s.id==='worker'&&m.startsWith('depth ')){const scope=r.project.active.get('worker')!.scope;results.push(await r.ask(scope,{to:'peer',text:'вопрос'}));assert.equal((await r.ask(scope,{to:'worker',text:'себе'})).ok,false);assert.equal((await r.ask(scope,{to:'absent',text:'нет'})).ok,false)}return {text:'ответ',sessionId:null}};
+ // TS-19: this double returns no session; later turns prepend quoted history.
+ f.onRun=async(s,m,c)=>{c.modelStarted?.();if(s.id==='worker'&&/(?:^|\nНовое сообщение:\n)depth [0-3]$/.test(m)){const scope=r.project.active.get('worker')!.scope;results.push(await r.ask(scope,{to:'peer',text:'вопрос'}));assert.equal((await r.ask(scope,{to:'worker',text:'себе'})).ok,false);assert.equal((await r.ask(scope,{to:'absent',text:'нет'})).ok,false)}return {text:'ответ',sessionId:null}};
  for(let depth=0;depth<=3;depth++){await r.runTurn('worker','depth '+depth,{relayDepth:depth});await r.idle()}
  assert.deepEqual(results.map(r=>r.ok),[true,true,true,false]);assert.deepEqual(results[3],{ok:false,code:'ask_failed',error:'цепочка вопросов длиннее 3'});assert.equal(r.journal.read({limit:0}).filter(r=>r.origin==='ask').length,3);
 });

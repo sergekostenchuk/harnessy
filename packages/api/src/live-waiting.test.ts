@@ -21,8 +21,8 @@ function ui(options:{realFinish?:boolean;page?:string}={}){
  finish(){finishes++;H.cur=null},noteFinish(){finishes++},refreshStatus:async()=>{refreshes++},refreshChats:async()=>{},sideChats(){},toast:(s:string)=>toasts.push(s),now:()=>1,save(){},render(){},drawLive(){busy=!!H.cur},log(){},setTimeout(){},addEventListener(){},PAGE:options.page??'chat',badges(){},pickPane(){H.pane=H.panes.find(p=>p.id===S.ui.pane)??H.panes[0]!},window:{CX},CX,toolLine:()=>'',md:(text:string)=>text,onboardOnce:async()=>{},LOADED:null,plural:(n:number)=>n===1?'ждёт':'ждут',who:(id:string)=>id,EventSource:class {onmessage:any;onerror:any;url:string;constructor(url:string){this.url=url}}};
  const context=createContext(sandbox);
  const helpers=source.slice(source.indexOf('  const api='),source.indexOf('  // End TS-07 waiting controls.'));
- const events=source.slice(source.indexOf('  function hEvent('),source.indexOf('  const isDirect='));
- const finish=options.realFinish?source.slice(source.indexOf('  function finish('),source.indexOf('  function hEvent('))+'\nconst originalFinish=finish;finish=ev=>{noteFinish();originalFinish(ev)};':'';
+ const events=source.slice(source.indexOf('  function transferHTML('),source.indexOf('  const isDirect='));
+ const finish=options.realFinish?source.slice(source.indexOf('  function finish('),source.indexOf('  function transferHTML('))+'\nconst originalFinish=finish;finish=ev=>{noteFinish();originalFinish(ev)};':'';
  const statusSource=source.slice(source.indexOf('  function applyStatus('),source.indexOf('  async function refreshChats('));
  const names=source.split('\n').find(line=>line.startsWith('  const modelName='));assert.ok(names);
  const binding=source.slice(source.indexOf('  let bindingGeneration'),source.indexOf('  function md(')),notes=source.slice(source.indexOf('  async function loadAttemptNotes('),source.indexOf('  // подключение к движку'));
@@ -198,4 +198,16 @@ for(const place of ['worker','room'])for(const state of ['uncertain','recovering
   assert.ok(v.S.chat.some(m=>m.text==='saved answer'));assert.ok(v.requests.some(r=>r.path==='/api/chats/'+chat.id));assert.equal(v.requests.some(r=>r.path==='/api/chats/open'),false);
  }
  assert.equal(h.provider.calls.length,calls);assert.equal((await call(h.api,'/api/status')).body.panes.find((p:any)=>p.id===place).waiting.status,state);
+});
+
+test('247/249: EventBus → HTTP SSE → window shows expandable transfer without ending reply; history restores it',async t=>{
+ const h=await fixture(t),pane=h.runtime.registry.get('worker')!,p=h.runtime.project;pane.transcript=[{role:'me',text:'<script>historical</script>',ts:1},{role:'ai',text:'saved answer',ts:2}];pane.sessionId=null;p.state.saveChats(p.registry);const cid=p.state.chats.active.worker!;
+ const stream=await sse(h.api);t.after(()=>stream.close());const view=ui({realFinish:true});Object.assign(view.H,{on:true,project:h.dir,active:{worker:cid}});view.S.ui.pane='worker';view.H.cur={text:'',tools:[]};const active=view.H.cur;
+ const gate=deferred();t.after(()=>gate.resolve());h.provider.onRun=async(s,_text,ctx)=>{ctx.modelStarted?.();await gate.promise;ctx.publish({type:'delta',text:'NEW REPLY'});ctx.publish({type:'done',sessionId:'new',model:s.model,usage:{input:33,output:2,cacheRead:0},durationMs:1});return {text:'NEW REPLY',sessionId:'new'}};
+ const sent=await call(h.api,'/api/chat',{body:{pane:'worker',message:'continue',kind:'question'}});assert.equal(sent.status,200);await until(()=>stream.frames.some(e=>e.type==='contextTransfer'));
+ const event=stream.frames.find(e=>e.type==='contextTransfer');view.functions.hEvent(event);view.functions.hEvent(event);assert.equal(view.finishes,0);assert.strictEqual(view.H.cur,active);assert.equal(view.S.chat.length,1);assert.match(view.S.chat[0]!.html,/<details.*<summary>контекст передан новой модели/);assert.match(view.S.chat[0]!.html,/&lt;script&gt;/);assert.doesNotMatch(view.S.chat[0]!.html,/<script>/);
+ const status=(await call(h.api,'/api/status')).body;assert.equal(status.panes.find((x:any)=>x.id==='worker').contextTransfer.chat,cid);
+ view.functions.hEvent({...event,transfer:{...event.transfer,project:'/other'}});assert.equal(view.S.chat.length,1);
+ gate.resolve();await h.runtime.idle();await until(()=>stream.frames.some(e=>e.type==='done'));for(const e of stream.frames.filter(e=>['delta','done'].includes(e.type)))view.functions.hEvent(e);assert.equal(view.finishes,1);assert.equal(view.S.chat.at(-1)!.text,'NEW REPLY');
+ view.sandbox.fetch=async(path:string)=>({json:async()=>(await call(h.api,path)).body});await view.functions.loadChat();const note=view.S.chat.find(m=>m.transferId===event.transfer.turnInstanceId)!;assert.ok(note);assert.match(note.html,/<details/);assert.equal(view.S.chat.filter(m=>m.transferId).length,1);
 });

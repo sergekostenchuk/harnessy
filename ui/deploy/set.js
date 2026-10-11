@@ -8,6 +8,21 @@
   const binding=()=>{ if(currentProject!==L.H.project){ currentProject=L.H.project; projectGeneration++; } return {project:currentProject,generation:projectGeneration}; };
   const same=b=>{ const now=binding(); return b.project===now.project&&b.generation===now.generation; };
   const hhmm=ts=>{ const d=ts?new Date(ts*1000):new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+  const TRANSFER={draft:{},saving:false,error:null,receipt:null};
+  const transferDefaults={contextTransferEnabled:true,contextTransferMessages:12,contextTransferTokens:20000};
+  function transferHTML(){const values={...transferDefaults,...(SET&&SET.owner||{}),...TRANSFER.draft},disabled=!SET||TRANSFER.saving;
+    return '<div><h3>Перенос контекста</h3><p class="d">Личное · при смене провайдера или потере сессии новая модель получает историю этого разговора. Ранняя часть сжимается без вызова модели; переданные токены входят в расход хода. Изменения действуют со следующего переноса.</p></div><div class="rows">'+
+      (TRANSFER.error?'<p role="alert">'+esc(TRANSFER.error)+'</p>':'')+(TRANSFER.receipt?'<p role="status">'+esc(TRANSFER.receipt)+'</p>':'')+
+      '<div class="row"><div><b>Автоматически переносить контекст</b><small>Выключено — не переносить, с отметкой в чате</small></div><button type="button" class="tog'+(values.contextTransferEnabled?' on':'')+'" role="switch" aria-checked="'+!!values.contextTransferEnabled+'" data-transfer-toggle'+(disabled?' disabled':'')+'></button></div>'+
+      [['contextTransferMessages','Последние сообщения дословно',0,100],['contextTransferTokens','Бюджет переноса · примерные токены',512,200000]].map(([key,title,min,max])=>'<label class="row"><span>'+title+'<small>'+min+'–'+max+' · при превышении — сжатие</small></span><input type="number" class="live-f" data-transfer-key="'+key+'" min="'+min+'" max="'+max+'" value="'+esc(values[key])+'"'+(disabled?' disabled':'')+'></label>').join('')+
+      '<button type="button" class="btn sm" data-transfer-save'+(disabled?' disabled':'')+'>'+(TRANSFER.saving?'Сохраняю…':'Сохранить')+'</button></div>';}
+  document.addEventListener('input',e=>{const input=e.target.closest('[data-transfer-key]');if(!input||TRANSFER.saving)return;TRANSFER.draft[input.dataset.transferKey]=input.value;TRANSFER.receipt=null;loadGeneration++});
+  document.addEventListener('click',async e=>{const button=e.target.closest('[data-transfer-toggle], [data-transfer-save]');if(!button)return;e.preventDefault();e.stopImmediatePropagation();if(button.disabled||TRANSFER.saving)return;
+    TRANSFER.receipt=null;if(button.hasAttribute('data-transfer-toggle')){TRANSFER.draft.contextTransferEnabled=!(TRANSFER.draft.contextTransferEnabled??(SET&&SET.owner&&SET.owner.contextTransferEnabled)??true);loadGeneration++;render();return}
+    const patch={...TRANSFER.draft};for(const [key,min,max] of [['contextTransferMessages',0,100],['contextTransferTokens',512,200000]])if(Object.hasOwn(patch,key)){const value=Number(patch[key]);if(String(patch[key]).trim()===''||!Number.isSafeInteger(value)||value<min||value>max){TRANSFER.error=key+': целое число от '+min+' до '+max;render();return}patch[key]=value}
+    if(!Object.keys(patch).length)return;TRANSFER.saving=true;TRANSFER.error=null;loadGeneration++;render();
+    try{const r=await api('/api/settings',{scope:'owner',patch});if(!r||!r.ok||r.scope!=='owner'||!r.saved||!Object.keys(patch).every(k=>r.saved[k]===patch[k]))throw Error(r&&r.error||'Нет подтверждения настройки переноса');loadGeneration++;SET={...(SET||{}),owner:r.saved,effective:r.effective};TRANSFER.draft={};TRANSFER.receipt='Сохранено · личная область · '+hhmm(r.ts)}catch(e){TRANSFER.error=e.message}finally{TRANSFER.saving=false;render()}
+  },true);
   const PRICE={draft:null,dirty:false,saving:false,error:null,receipt:null,revision:0};
   const priceKeys=['vendor','model','inputPerM','outputPerM','cacheReadPerM','currency'];
   function priceRows(){if(PRICE.draft===null&&SET){PRICE.draft=Array.isArray(SET.owner&&SET.owner.priceList)?SET.owner.priceList.map(r=>({...r})):[]}return PRICE.draft||[]}
@@ -50,10 +65,10 @@
     BILL.saving=true;BILL.error=null;BILL.generation++;loadGeneration++;render();
     try{const r=flag?await api('/api/settings',{scope:'owner',patch}):await api('/api/billing',{changes});if(!r||!r.ok||r.scope!=='owner'||(flag?(!r.saved||r.saved[flag]!==patch[flag]):!r.config)){if(r&&r.code==='billing_conflict')await billingLoad();throw Error(r&&r.error||'Нет подтверждения настроек подписки')}loadGeneration++;BILL.generation++;if(!flag){BILL.dirty=false;BILL.draft=null}BILL.receipt='Сохранено · личная область · '+hhmm(r.ts);await billingLoad()}catch(error){BILL.error=error.message}finally{BILL.saving=false;render()}
   },true);
-  const NAV=[['Личное',[['profile','Профиль и входы'],['notif','Уведомления'],['look','Облик'],['keys','Клавиши'],['priceList','Прайс-лист'],['subscriptions','Подписки и платежи']]],
+  const NAV=[['Личное',[['profile','Профиль и входы'],['notif','Уведомления'],['look','Облик'],['keys','Клавиши'],['priceList','Прайс-лист'],['contextTransfer','Перенос контекста'],['subscriptions','Подписки и платежи']]],
              ['Проект',[['rights','Разрешения и стоп-случаи'],['budget','Бюджет и выключатель'],['memory','Память и правила','16-memory.html'],['roles','Роли и места']]],
              ['Подключения',[['conn','Провайдеры и маршруты','11-connections.html'],['social','Входы и ключи','11-connections.html#v=keys'],['dev','Разработчик']]]];
-  const SCOPE={subscriptions:'везде · файл владельца',priceList:'везде · файл владельца',profile:'везде · локальное окно',notif:'везде · файл владельца',look:'это окно',keys:'это окно',rights:'проект',budget:'проект',roles:'проект',dev:'движок'};
+  const SCOPE={contextTransfer:'везде · файл владельца',subscriptions:'везде · файл владельца',priceList:'везде · файл владельца',profile:'везде · локальное окно',notif:'везде · файл владельца',look:'это окно',keys:'это окно',rights:'проект',budget:'проект',roles:'проект',dev:'движок'};
   const row=(t,s,ctl,o)=>{ const disabled=o&&o.off?' data-set-disabled title="'+esc(o.reason||'настройка пока не исполняется движком')+'" aria-disabled="true" style="cursor:default"':'';
     return '<div class="row'+(o&&o.off?' off':'')+(o&&o.click?' click':'')+'"'+disabled+(o&&o.attr?' '+o.attr:'')+'><div><b>'+t+'</b>'+(s?'<small>'+s+'</small>':'')+'</div>'+(disabled?(ctl||'').replace(/<(span|button)\b/g,'<$1'+disabled):(ctl||''))+'</div>'; };
   const seg=(items,on,attr)=>'<span class="seg" '+(attr||'')+'>'+items.map(([v,t])=>'<span data-v="'+v+'"'+(v===on?' class="on"':'')+'>'+t+'</span>').join('')+'</span>';
@@ -66,6 +81,7 @@
     const head=(h,d)=>'<div><h3>'+h+'</h3><p class="d">'+d+'</p></div>';
     if(k==='subscriptions')return billingHTML();
     if(k==='priceList')return priceHTML();
+    if(k==='contextTransfer')return transferHTML();
     if(k==='profile'){ const maskMail=m=>String(m||'').replace(/^(.)[^@]*(@.*)$/,'$1•••$2'); const cl=CONN?CONN.find(p=>p.id==='claude'):null, cx=CONN?CONN.find(p=>p.id==='codex'):null; const a=cl&&cl.auth||{}, b=cx&&cx.auth||{};
       return head('Профиль и входы','Локальное окно Harnessy работает без входа. Входы провайдеров — это ваши подписки; сайт harnessy.ai имеет свои входы (Telegram, GitHub, Google) и к окну не относится.')+
         '<div class="rows">'+row('Это окно','локально · '+esc(L.H.project||'проект не открыт'),'<span class="pill ok">без входа</span>')+
