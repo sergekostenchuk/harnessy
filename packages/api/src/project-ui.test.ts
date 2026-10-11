@@ -78,7 +78,7 @@ test('122/128: missing room selection disables the actual composer after typing 
 });
 
 function connection(respond:(path:string,body?:any)=>Promise<any>){
- const v=ui(respond),streams:any[]=[];v.context.PAGE='chat';v.context.location.pathname='/01-chat.html';v.context.consumeState=()=>{};v.context.hEvent=()=>{};
+ const v=ui(respond),streams:any[]=[];v.context.PAGE='chat';v.context.location.pathname='/01-chat.html';v.context.consumeState=()=>{};v.context.hEvent=()=>{};v.context.proposalsFetch=async()=>{};
  v.context.fetch=(path:string,opts?:{body?:string})=>Promise.resolve({json:()=>respond(path,opts?.body?JSON.parse(opts.body):undefined)});
  v.context.EventSource=class {constructor(){streams.push(this)}close(){}};
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  async function hConnect(){','  // ── чат: настоящее поле ввода')+'\nglobalThis.linkTesting={api,hConnect};',v.context);

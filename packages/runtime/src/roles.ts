@@ -122,6 +122,13 @@ function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,original:Assig
  if(!op.stages.onboarding)op=stage(p,op,'onboarding');p.materializing.delete(op.sid);return {pane,chat:c};
 }
 function memory(p:ProjectState):string {try{return readFileSync(join(p.dir,'.harness','MEMORY.md'),'utf8')}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return '';throw e}}
+// The proposal layer owns confirmation and stable identities; this is the same durable materializer used for recovery.
+export function assignProposed(runtime:Runtime,p:ProjectState,lock:PathLock,raw:Assignment,authority:()=>void){
+ authority();const op=valid(raw),saved=operations(p).get(op.operationId);
+ if(saved&&(saved.sid!==op.sid||JSON.stringify(saved.input)!==JSON.stringify(op.input)))throw new RuntimeError('proposal_invalid','назначение не совпадает с подтверждённым составом',409);
+ if(!saved){put(p,op);p.materializing.add(op.sid)}
+ return materialize(runtime,p,lock,saved??op,authority);
+}
 function pending(p:ProjectState,role:string){return [...operations(p).values()].find(op=>op.input.role===role&&!all(op))}
 export async function createSeat(runtime:Runtime,_args:CreateSeatInput,initiator:Initiator):Promise<{ok:true;pane:ReturnType<Pane['settings']>;chat:ReturnType<typeof meta>}> {
  owner(runtime,initiator);throw new RuntimeError('proposal_required','участников создаёт оркестратор по подтверждённому предложению',409);

@@ -8,6 +8,8 @@ function compact<T extends object>(value:T):{[K in keyof T]:Exclude<T[K],undefin
 export async function invokeTool(name:string,input:unknown,ctx:TurnContext):Promise<ToolResult>{
  if(ctx.signal.aborted)return {ok:false,error:'ход отменён',code:'cancelled'};
  switch(name){
+ case 'propose_seats':return ctx.tools.proposeSeats(compact(schemas.propose_seats.parse(input)));
+ case 'create_seats':return ctx.tools.createSeats(schemas.create_seats.parse(input));
  case 'send':return ctx.tools.send(compact(schemas.send.parse(input)));
  case 'ask':return ctx.tools.ask(compact(schemas.ask.parse(input)));
  case 'read_pane':return ctx.tools.readPane(compact(schemas.read_pane.parse(input)));

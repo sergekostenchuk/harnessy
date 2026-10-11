@@ -43,3 +43,10 @@ test('assign_role specialization appears in Codex schema and HTTP body; invalid 
  assert.equal(spec.additionalProperties,false);assert.deepEqual(spec.required,['title','text']);assert.equal(spec.properties.title.maxLength,60);assert.equal(spec.properties.text.maxLength,20000);
  for(let id=3;id<=bad.length+2;id++)assert.equal((result.replies.find(r=>r.id===id)!.result as {isError:boolean}).isError,true);
 });
+
+test('156: Codex advertises both team tools and sends bound identity/version, no owner confirmation tool',async()=>{
+ const seat={kind:'worker',label:'Юрист',vendor:'claude',model:'w1',mode:'read',intro:'Контекст задачи'},entries=[{name:'propose_seats',arguments:{seats:[seat]}},{name:'create_seats',arguments:{proposalId:'p1',version:2}}];
+ const result=await bridge([{id:0,method:'tools/list'},...entries.map((params,i)=>({id:i+1,method:'tools/call',params})),{id:3,method:'tools/call',params:{name:'propose_seats',arguments:{seats:[{...seat,intro:'я'.repeat(4097)}]}}},{id:4,method:'tools/call',params:{name:'create_seats',arguments:{proposalId:'p1',version:2,from:'owner'}}}]);
+ const list=result.replies.find(r=>r.id===0)!.result as {tools:{name:string}[]};assert.ok(list.tools.some(t=>t.name==='propose_seats'));assert.ok(list.tools.some(t=>t.name==='create_seats'));assert.equal(list.tools.some(t=>t.name==='confirm_seats'),false);assert.equal(result.requests.length,2);
+ assert.deepEqual(result.requests.map(r=>new URL(String(r.url)).pathname),['/api/seats/propose','/api/seats']);for(let i=0;i<2;i++){const r=result.requests[i]!;assert.equal((r.headers as Record<string,string>)['X-Pane-Token'],'test-token');assert.deepEqual(JSON.parse(String(r.body)),{...entries[i]!.arguments,from:'worker'})}
+});

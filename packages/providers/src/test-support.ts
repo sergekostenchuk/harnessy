@@ -5,7 +5,7 @@ export function fixture(vendor:'claude'|'codex'='codex'){
  const controller=new AbortController(),events:TurnEvent[]=[],sessions:string[]=[],tokens:string[]=[],revoked:string[]=[];let handle:TurnHandle|null=null;
  const ctx:TurnContext={signal:controller.signal,publish:e=>events.push(e),askApproval:async()=>true,session:id=>sessions.push(id),setHandle:h=>{handle=h},
  env:{},roleNote:'role',peers:[{id:'worker',label:'Worker',vendor},{id:'reviewer',label:'Review',vendor:'codex'}],
- tools:{send:async()=>({ok:true,text:'sent'}),ask:async()=>({ok:true,text:'reply'}),readPane:async()=>({ok:true,text:'history'}),merge:async()=>({ok:true,text:'merged'}),assignRole:async()=>({ok:true,text:'assigned'})},
+ tools:{proposeSeats:async()=>({ok:true,text:'proposed'}),createSeats:async()=>({ok:true,text:'created'}),send:async()=>({ok:true,text:'sent'}),ask:async()=>({ok:true,text:'reply'}),readPane:async()=>({ok:true,text:'history'}),merge:async()=>({ok:true,text:'merged'}),assignRole:async()=>({ok:true,text:'assigned'})},
  relayDepth:0,projectDir:'/project',appUrl:'http://127.0.0.1:3777',registerProcessToken:t=>tokens.push(t),revokeProcessToken:t=>revoked.push(t),writableRoots:['/project/.harness/evidence']};
  return {seat,ctx,events,sessions,tokens,revoked,controller,get handle(){return handle}};
 }

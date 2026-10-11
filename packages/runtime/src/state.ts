@@ -71,6 +71,8 @@ export class StateStore {
  saveActions(value:unknown):void{this.write(join(this.dir,'.harness','state','actions.json'),value,2)}
  readMaterializations():unknown {try{return this.read(this.materializationPath)}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return [];throw new RuntimeError('materialization_invalid','назначения ролей не читаются: '+message(e),409,{cause:e})}}
  saveMaterializations(value:unknown):void{this.write(this.materializationPath,value,2)}
+ readProposals():unknown {try{return this.read(join(this.dir,'.harness/state/team-proposals.json'))}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return {project:this.dir,proposals:[]};throw new RuntimeError('proposal_invalid','предложения команды не читаются: '+message(e),409,{cause:e})}}
+ saveProposals(value:unknown):void{this.write(join(this.dir,'.harness/state/team-proposals.json'),value,2)}
  activeChat(pane:Pane,create=true):Chat|null {const id=this.chats.active[pane.id],existing=id?this.chats.chats[id]:null;return existing??(create?this.newChat(pane,'',true):null)}
  sync(registry:Registry):void {for(const p of registry.panes.values()){const c=this.activeChat(p,true);if(!c)continue;chatMetadata(c);
  c.transcript=p.transcript.filter(m=>!p.uncommitted.has(m));c.sessionId=p.sessionId;c.model=p.model||null;c.vendor=p.vendor;c.carry=p.carry;

@@ -25,12 +25,13 @@ async function call(name,input){
  if(name==='read_pane'){
  url=new URL('/api/pane_transcript',APP_URL);url.searchParams.set('from',PANE_ID);url.searchParams.set('pane',args.pane);url.searchParams.set('last',String(args.last_n??20));opts={headers};
  }else{
- const path={send:'/api/send',ask:'/api/ask',merge:'/api/merge',assign_role:'/api/assign_role'}[name];
+ const path={send:'/api/send',ask:'/api/ask',merge:'/api/merge',assign_role:'/api/assign_role',propose_seats:'/api/seats/propose',create_seats:'/api/seats'}[name];
  url=new URL(path,APP_URL);opts={method:'POST',headers,body:JSON.stringify({...args,from:PANE_ID})};
  }
  const response=await fetch(url,opts),d=await response.json();
  if(typeof d!=='object'||d===null||typeof d.ok!=='boolean')return error('protocol: неверный ответ ядра');
  if(!response.ok||!d.ok)return error(clean(d.error||'запрос отклонён ядром'));
+ if(name==='propose_seats'||name==='create_seats')return ok(JSON.stringify(d));
  if(name==='send')return ok('Запись #'+d.seq+' отправлена '+(d.to||[]).join(', ')+'; тред '+(d.thread||'без треда')+'.');
  if(name==='ask')return ok(d.reply||'(пустой ответ)');
  if(name==='merge')return ok('Слито: '+String(d.sha).slice(0,12)+' → '+String(d.mergeSha).slice(0,12)+' в '+d.branch+'.');
