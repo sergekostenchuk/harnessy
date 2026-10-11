@@ -1,3 +1,4 @@
+import {currentTrace} from './trace.ts';
 import {randomBytes} from 'node:crypto';
 import {MODE_IDS,pyTruthy,legacyKind,seatKind,type SeatKind,type Mode,type Seat as TeamSeat} from '@harnessy/team';
 import {pythonTrim,Policy} from '@harnessy/journal';
@@ -12,6 +13,7 @@ export type ApprovalDecision='allow'|'deny'|'timeout';
 export type DurableDecision=(decision:ApprovalDecision)=>{decision:ApprovalDecision;error?:Error};
 export class Approval {
  readonly future:Promise<boolean>;private resolve!:(allow:boolean)=>void;private timer:unknown;private ended=false;
+ private trace=currentTrace();
  readonly id:string;readonly pane:Pane;readonly title:string;readonly detail:string;private clock:Clock;private durable:DurableDecision|undefined;
  constructor(id:string,pane:Pane,title:string,detail:string,timeout:number,clock:Clock,durable?:DurableDecision){
  this.id=id;this.pane=pane;this.title=title;this.detail=detail;this.clock=clock;this.durable=durable;
@@ -19,7 +21,7 @@ export class Approval {
  }
  finish(requested:ApprovalDecision):boolean {if(this.ended)return false;const saved=this.durable?.(requested)??{decision:requested};this.ended=true;this.clock.clearTimeout(this.timer);this.pane.approvals.delete(this.id);this.pane.publish({type:'approvalResolved',id:this.id,decision:saved.decision});this.resolve(saved.decision==='allow');if(saved.error)throw saved.error;return true}
  detach():void {if(this.ended)return;this.ended=true;this.clock.clearTimeout(this.timer);this.pane.approvals.delete(this.id);this.resolve(false)}
- event():RuntimeEvent{return {type:'approval',id:this.id,title:this.title,detail:this.detail}}
+ event():RuntimeEvent{return {type:'approval',id:this.id,title:this.title,detail:this.detail,...(this.trace?{traceId:this.trace.traceId,spanId:this.trace.spanId,project:this.trace.store.project}:{})}}
 }
 export interface PaneInit {id:string;vendor:Vendor|'human';label:string;model:string;mode?:Mode;cwd:string;role?:string;kind?:SeatKind;writePaths?:string[];digest?:boolean}
 export class Pane {

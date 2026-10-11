@@ -145,3 +145,7 @@ test('218: subscription level and extra usage flag come from login/usage, never 
  const r=await p.limits();assert.equal(r.ok,true);if(r.ok){assert.equal(r.planLevel,'20x');assert.equal(r.extraUsageEnabled,true)}assert.doesNotMatch(JSON.stringify(r),/fixture-secret|never-return/);
 
 });
+
+test('234: successful and failed Claude tool results keep the call id; pane tools use their own bridge trace',async()=>{
+ const f=fixture('claude'),traces:any[]=[];f.ctx.traceEvent=e=>traces.push(e);const h=harness([init,{type:'assistant',session_id:'session',message:{content:[{type:'tool_use',id:'a',name:'Read',input:{file_path:'x'}},{type:'tool_use',id:'b',name:'Write',input:{file_path:'y'}},{type:'tool_use',id:'c',name:'mcp__panes__send',input:{}}]}},{type:'user',session_id:'session',message:{content:[{type:'tool_result',tool_use_id:'a',content:'success'},{type:'tool_result',tool_use_id:'b',content:'failure',is_error:true},{type:'tool_result',tool_use_id:'c',content:'sent'}]}},done]);await new ClaudeProvider(h.deps).runTurn(f.seat,'fixture',f.ctx);assert.deepEqual(traces.map(t=>[t.id,t.phase,t.outcome??null]),[['a','call',null],['b','call',null],['a','result','ok'],['b','result','failed']]);
+});

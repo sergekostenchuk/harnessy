@@ -115,3 +115,8 @@ for(const [usage,expected] of [
  });return {turn:{id}}}}),f=fixture(),p=new CodexProvider(h.deps);
  await p.runTurn(f.seat,'x',f.ctx);const end=f.events.at(-1);assert.ok(end?.type==='done');assert.deepEqual(end.usage,expected);await p.close();
 });
+
+test('234: Codex call/result spans include successful tools and MCP approval-policy refusals, excluding foreign turns',async()=>{
+ const h=codexHarness(t=>{const base=t.responder;t.responder=(m,p,t)=>{if(m!=='turn/start')return base(m,p,t);const id='turn-'+(++t.turn);queueMicrotask(()=>{for(const item of [{id:'cmd',type:'commandExecution',command:'pwd',status:'completed',exitCode:0},{id:'denied',type:'mcpToolCall',server:'panes',tool:'propose_seats',status:'failed',error:{message:'MCP tool call rejected by approval policy'}}]){t.notify('item/started',{threadId:'thread',turnId:id,item});t.notify('item/completed',{threadId:'thread',turnId:id,item})}t.notify('item/completed',{threadId:'thread',turnId:'foreign',item:{id:'foreign',type:'fileChange'}});t.notify('turn/completed',{threadId:'thread',turn:{id,status:'completed'}})});return {turn:{id}}}});
+ const f=fixture(),traces:any[]=[];f.ctx.traceEvent=e=>traces.push(e);const provider=new CodexProvider(h.deps);try{await provider.runTurn(f.seat,'fixture',f.ctx);assert.equal(traces.length,4);assert.ok(traces.some(x=>x.id==='cmd'&&x.phase==='result'&&x.outcome==='ok'));assert.ok(traces.some(x=>x.id==='denied'&&x.phase==='result'&&x.outcome==='rejected'&&x.reason==='approval_policy'))}finally{await provider.close()}
+});

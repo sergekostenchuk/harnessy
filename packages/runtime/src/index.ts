@@ -10,3 +10,5 @@ export type {CreateSeatInput,Assignment,SeatInput} from './roles.ts';
 export type {ChatMeta} from './chats.ts';
 
 export {promotionIdentity,type PromotionIdentity} from './chats.ts';
+
+export {TraceStore,currentTrace,traceId,traceBindingId,traceReason,TRACE_REASONS,type TraceRecord,type TraceContext,type TraceOutcome,type TraceReason} from './trace.ts';

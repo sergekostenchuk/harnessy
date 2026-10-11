@@ -20,7 +20,7 @@ async function call(name,input){
  const args=parsed.data;
  if(name==='ask'&&!others.includes(args.to)||name==='read_pane'&&!others.includes(args.pane))return error('protocol: нет такого окна');
  try{
- const headers={'Content-Type':'application/json','X-Pane-Token':TOKEN};
+ const headers={'Content-Type':'application/json','X-Pane-Token':TOKEN,'X-Harness-Pane':PANE_ID};
  let url,opts;
  if(name==='read_pane'){
  url=new URL('/api/pane_transcript',APP_URL);url.searchParams.set('from',PANE_ID);url.searchParams.set('pane',args.pane);url.searchParams.set('last',String(args.last_n??20));opts={headers};

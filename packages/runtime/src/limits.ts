@@ -11,9 +11,9 @@ export class LimitsStore {
  private revision=++nextLimitsRevision;private values=new Map<Vendor,Saved>();private errors=new Map<Vendor,LimitsCode>();private nextAttempts=new Map<Vendor,number>();private turns=new Map<Vendor,number>();
  private jobs=new Map<Vendor,Promise<void>>();private aborts=new Set<AbortController>();private timer:unknown;private closed=false;
  private readonly path:string;private cache:SharedLimitsCache;
- private dir:string;private clock:Clock;private providers:Partial<Record<Vendor,Provider>>;private publish:()=>void;
- constructor(dir:string,clock:Clock,providers:Partial<Record<Vendor,Provider>>,publish:()=>void,sharedDir=join(homedir(),'.harnessy/limits')){
- this.dir=dir;this.clock=clock;this.providers=providers;this.publish=publish;
+ private trace:((vendor:Vendor,result:ProviderLimits)=>void)|undefined;private dir:string;private clock:Clock;private providers:Partial<Record<Vendor,Provider>>;private publish:()=>void;
+ constructor(dir:string,clock:Clock,providers:Partial<Record<Vendor,Provider>>,publish:()=>void,sharedDir=join(homedir(),'.harnessy/limits'),trace?:(vendor:Vendor,result:ProviderLimits)=>void){
+ this.trace=trace;this.dir=dir;this.clock=clock;this.providers=providers;this.publish=publish;
  this.path=join(dir,'.harness/state/limits.json');this.cache=new SharedLimitsCache(sharedDir,()=>this.clock.now()/1000);
  try{
  const stat=lstatSync(this.path);if(!this.safeDirectory()||!stat.isFile()||stat.size>65536)throw Error('not a regular cache');
@@ -55,6 +55,7 @@ export class LimitsStore {
   const after=await identity();return {...result,account:before&&before===after?before:null};
  };
  let result:ProviderLimits;try{result=await Promise.race([measure(),cancelled])}catch{result={ok:false,code:'limits_unavailable',reason:''}}
+ if(!this.closed)try{this.trace?.(vendor,result)}catch{}
  const row=this.cache.complete(vendor,token,result);if(row)this.adopt(row);
  }catch{if(!this.closed){this.errors.set(vendor,'limits_storage');this.nextAttempts.set(vendor,this.clock.now()/1000+300);this.revision=++nextLimitsRevision;this.publish()}}
  finally{this.clock.clearTimeout(timer);this.aborts.delete(abort)}
