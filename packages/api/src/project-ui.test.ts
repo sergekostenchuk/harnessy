@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {ProjectRegistry,initProject} from '@harnessy/projects';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
+import {setImmediate as immediate} from 'node:timers/promises';
 import {fixture,call,deferred,OWNER} from './test-helpers.ts';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
 const part=(source:string,start:string,end:string)=>{const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return source.slice(a,b)};
@@ -17,10 +18,10 @@ function ui(fetch:(path:string,body?:any)=>Promise<any>){
  const vm=createContext(context);runInContext([part(live,'  let bindingGeneration','  function md('),live.split('\n').find(l=>l.startsWith('  const modelName=')),part(live,'  function applyStatus(','  // лента активного чата'),part(live,'  const base=','  async function openChatRow('),part(live,'  async function sideSwitchProject(',"  document.addEventListener('click',async e=>{ const toggle="),'globalThis.testing={applyStatus,refreshStatus,refreshChats,sideChats,sideSwitchProject,sendBinding,bindingCurrent,invalidateBinding};'].join('\n'),vm);
  return {...d,H,S,context,requests,toasts,storage,functions:context.testing};
 }
-function menus(fetch:(path:string,body?:any)=>Promise<any>){const v=ui(fetch),main=v.document.createElement('div');main.className='main';main.innerHTML='<span data-cx="plus">＋</span><span data-cx="folder">проект</span>';v.body.appendChild(main);v.html.setAttribute('data-proto','');v.html.setAttribute('data-page','new');Object.assign(v.S.cx,{modes:{},att:[],conn:{}});
+function menus(fetch:(path:string,body?:any)=>Promise<any>){const pending=new Set<Promise<any>>(),v=ui(async(path,body)=>{const response=fetch(path,body);pending.add(response);try{return await response}finally{pending.delete(response)}}),main=v.document.createElement('div');main.className='main';main.innerHTML='<span data-cx="plus">＋</span><span data-cx="folder">проект</span>';v.body.appendChild(main);v.html.setAttribute('data-proto','');v.html.setAttribute('data-page','new');Object.assign(v.S.cx,{modes:{},att:[],conn:{}});
  const L={...v.functions,api:v.context.api,H:v.H,S:v.S,save:v.context.save,esc:v.context.esc,toast:v.context.toast,log:v.context.log,paneName:v.context.paneName,hStatus:v.context.hStatus,pickPane:v.context.pickPane,busy:()=>false};v.context.window=v.context;v.context.LIVE=L;runInContext(cx,v.context);
  const find=(selector:string)=>{const n=v.document.querySelector(selector);assert.ok(n,selector);return n};
- const open=async(kind:'mkdir'|'opendir')=>{await find('[data-cx="plus"]').emit('click');await find('[data-cx-nav="folder"]').emit('click');await find('[data-cx-nav="'+kind+'"]').emit('click')};return {...v,L,find,open};
+ const open=async(kind:'mkdir'|'opendir')=>{await find('[data-cx="plus"]').emit('click');await find('[data-cx-nav="folder"]').emit('click');await find('[data-cx-nav="'+kind+'"]').emit('click')};const settle=async()=>{do{await Promise.all([...pending]);await immediate()}while(pending.size)};return {...v,L,find,open,settle};
 }
 
 for(const method of ['Enter','button'])test('130/117/128: '+method+' submits the same actual project form once, refreshes the sidebar and retains the chosen model',async t=>{
@@ -102,4 +103,36 @@ test('132: a refused or same-project request cannot mask a genuine reconnect; an
  for(const route of ['/api/project','/api/project/create','/api/room/move','/api/assign']){await v.link.api(route,{path:'/projects/b'});assert.equal(v.H.projectLinkChange,false)}
  refuse=false;await v.link.api('/api/project',{path:project});assert.equal(v.H.projectLinkChange,false);es.onerror();await es.onopen();assert.equal(v.toasts.at(-1),'Связь восстановлена');
  v.toasts.length=0;project='/projects/b';es.onerror();await es.onopen();assert.equal(v.H.project,project);assert.doesNotMatch(v.toasts.join('\n'),/Связь восстановлена/);
+});
+
+
+for(const alreadyConfigured of [false,true])test('TS-07.2 r2/2: no-project choice survives rerender and model selection via real HTTP, configured='+alreadyConfigured,async t=>{
+ const h=await fixture(t);if(alreadyConfigured)await call(h.api,'/api/room',{body:{model:'w1',folder:true}});
+ const v=menus(async(path,body)=>(await call(h.api,path,body?{body}:{})).body);await v.functions.refreshStatus();
+ const box=v.document.createElement('div');box.className='box';box.innerHTML='<div class="in"></div><div class="bar2"></div>';const ta=v.document.createElement('textarea');(box as any).__cx={ta};v.document.querySelector('.main')!.appendChild(box);v.context.CX.render();
+ runInContext('LIVE.configureSetting=configureSetting;',v.context);
+ await v.find('[data-cx="folder"]').emit('click');await v.settle();await v.find('[data-cx-nofolder]').emit('click');
+ assert.equal(v.S.cx.noFolder,true);assert.match(v.find('.cx-top [data-cx="folder"]').textContent,/Без проекта/);
+ if(!alreadyConfigured){assert.equal(v.H.noProject,false);assert.equal(v.S.cx.noFolderPending,v.H.project);assert.equal(v.requests.some(r=>r.path==='/api/room'),false)}
+ await v.functions.refreshStatus();v.context.CX.render();assert.equal(v.S.cx.noFolder,true,'old confirmed status must not erase a pending choice');
+ await v.find('.cx-bot [data-cx="model"]').emit('click');await v.find('[data-cx-model="gpt-test"]').emit('click');
+ const selected=v.requests.filter(r=>r.path==='/api/room').at(-1)!;assert.equal(selected.body.folder,false);assert.equal(selected.body.model,'gpt-test');
+ const status=(await call(h.api,'/api/status')).body;assert.equal(status.noProject,true);assert.equal(status.panes.find((p:any)=>p.id==='room').mode,'chat');assert.equal(v.S.cx.noFolderPending,undefined);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+});
+
+test('TS-07.2 r2/2: denied no-project change never claims success and restores the confirmed folder',async t=>{
+ const h=await fixture(t);await call(h.api,'/api/room',{body:{model:'w1',folder:true}});
+ const v=menus(async(path,body)=>path==='/api/room'?{ok:false,error:'busy'}:(await call(h.api,path,body?{body}:{})).body);await v.functions.refreshStatus();
+ const box=v.document.createElement('div');box.className='box';box.innerHTML='<div class="in"></div><div class="bar2"></div>';const ta=v.document.createElement('textarea');(box as any).__cx={ta};v.document.querySelector('.main')!.appendChild(box);v.context.CX.render();
+ await v.find('[data-cx="folder"]').emit('click');await v.settle();await v.find('[data-cx-nofolder]').emit('click');
+ assert.equal(v.S.cx.noFolder,false);assert.equal(v.S.cx.noFolderPending,undefined);assert.match(v.toasts.at(-1)!,/не принял.*busy/);assert.equal(v.H.noProject,false);
+});
+
+
+test('TS-07.2 r2/2: pending no-project choice belongs to its project and expires on a project switch',async t=>{
+ const h=await fixture(t),v=menus(async(path,body)=>(await call(h.api,path,body?{body}:{})).body);await v.functions.refreshStatus();
+ const box=v.document.createElement('div');box.className='box';box.innerHTML='<div class="in"></div><div class="bar2"></div>';const ta=v.document.createElement('textarea');(box as any).__cx={ta};v.document.querySelector('.main')!.appendChild(box);v.context.CX.render();runInContext('LIVE.configureSetting=configureSetting;',v.context);
+ await v.find('[data-cx="folder"]').emit('click');await v.settle();await v.find('[data-cx-nofolder]').emit('click');assert.equal(v.S.cx.noFolderPending,h.dir);
+ const other=join(h.dir,'other');mkdirSync(other);assert.equal((await call(h.api,'/api/project',{body:{path:other}})).status,200);await v.functions.refreshStatus();v.context.CX.render();assert.equal(v.S.cx.noFolder,false);assert.equal(v.S.cx.noFolderPending,undefined);assert.match(v.find('.cx-top [data-cx="folder"]').textContent,/other/);
+ await v.find('.cx-bot [data-cx="model"]').emit('click');await v.find('[data-cx-model="gpt-test"]').emit('click');assert.equal(v.requests.filter(r=>r.path==='/api/room').at(-1)!.body.folder,true);assert.equal((await call(h.api,'/api/status')).body.noProject,false);
 });

@@ -31,7 +31,13 @@ function ui(options:{realFinish?:boolean;page?:string}={}){
  const functions=(context as unknown as {testing:{api(path:string,body?:unknown):Promise<unknown>;hEvent(e:unknown):void;applyStatus(st:unknown):void;consumeState(e:unknown):void;waitingControls(p:unknown,info:unknown,project:string,compact?:boolean):string;showWaiting(p:unknown,info:unknown,project:string):void;showRestore(project:string,error:string):void;renderWaiting():void;loadChat():Promise<void>;loadAttemptNotes(p:unknown,b:unknown):Promise<void>;sendBinding():unknown;nowLive():void}}).testing;
  async function click(dataset:Record<string,string>){const button={dataset,disabled:false};let stopped=false;await listeners[0]!({target:{closest(){return button}},preventDefault(){},stopImmediatePropagation(){stopped=true}});assert.equal(stopped,true);assert.equal(button.disabled,false)}
  function sidebar(all:unknown[]){const context=createContext({H,all,pins:[],PIN:'',esc:sandbox.esc,paneName:sandbox.paneName,waitingControls:functions.waitingControls});runInContext(source.slice(source.indexOf('    const seats=(H.panes'),source.indexOf('    const projHTML='))+'\nglobalThis.sidebar=chatsHTML;',context);return String((context as unknown as {sidebar:string}).sidebar)}
- return {H,S,cards,main,feed,decisions,turns,status,requests,toasts,functions,sandbox,click,sidebar,get finishes(){return finishes},get refreshes(){return refreshes},get busy(){return busy}};
+
+ async function sidebarClick(chat:string,pane:string){
+  runInContext(source.slice(source.indexOf('  async function openChatRow('),source.indexOf('  async function sideSwitchProject('))+'\n'+source.slice(source.indexOf("  document.addEventListener('click',async e=>{ const toggle="),source.indexOf('  // меню профиля')),context);
+  const row={dataset:{chat,pane},classList:{contains:()=>false}};
+  await listeners.at(-1)!({target:{closest:(selector:string)=>selector==='.ps-chat[data-pane]'?row:null},preventDefault(){},stopPropagation(){}});
+ }
+ return {H,S,cards,main,feed,decisions,turns,status,requests,toasts,functions,sandbox,click,sidebar,sidebarClick,get finishes(){return finishes},get refreshes(){return refreshes},get busy(){return busy}};
 }
 const waiting={status:'uncertain',recordSeqs:[36],startedAt:1,turnInstanceId:'turn-a',actions:['retry','skip']};
 
@@ -168,4 +174,28 @@ for(const malformed of ['serializer','bus'] as const)test('TS-07 r2/3: '+malform
 
 test('TS-07 r2/3: ordinary provider errors remain terminal',()=>{
  const view=ui({realFinish:true});view.functions.hEvent({type:'delta',text:'partial'});assert.equal(view.busy,true);view.functions.hEvent({type:'error',code:'transport_lost',message:'provider disconnected'});assert.equal(view.finishes,1);assert.equal(view.busy,false);assert.equal(view.H.cur,null);
+});
+
+
+for(const place of ['worker','room'])for(const state of ['uncertain','recovering'])test('TS-07.2 r2/1: sidebar → HTTP history → waiting card for '+place+' with '+state+' and an existing chat',async t=>{
+ const h=await fixture(t,{actions:{...completedActions,async afterTurn(){return 'completed'}}});await call(h.api,'/api/room',{body:{model:'w1'}});
+ await call(h.api,'/api/chat',{body:{pane:place,message:'saved answer'}});await h.runtime.idle();
+ if(state==='recovering')h.runtime.actions.afterTurn=async()=>{throw Error('effects unavailable')};
+ else h.provider.onRun=async(_seat,_message,ctx)=>{ctx.modelStarted?.();throw new ProviderError('transport_lost','lost')};
+ await call(h.api,'/api/chat',{body:{pane:place,message:'uncertain work'}});await h.runtime.idle();
+ const st=(await call(h.api,'/api/status')).body,chats=(await call(h.api,'/api/chats')).body.chats,chat=chats.find((c:any)=>c.pane===place&&c.active);
+ assert.ok(chat.messages>0);assert.equal(st.panes.find((p:any)=>p.id===place).waiting.status,state);
+ // Keep the protected mutation closed: viewing a selected active chat must not call it at all.
+ assert.equal((await call(h.api,'/api/chats/open',{body:{chat:chat.id,carry:'text'}})).status,409);
+ const calls=h.provider.calls.length;
+ for(const cold of [false,true]){
+  const v=ui();v.H.on=true;v.S.ui.pane=place==='worker'?'room':'worker';v.functions.applyStatus(st);assert.notEqual(v.H.pane.id,place);
+  v.sandbox.fetch=async(path,options)=>{v.requests.push({path,body:options?.body?JSON.parse(options.body):null});return {json:async()=>(await call(h.api,path,options?.body?{body:JSON.parse(options.body)}:{})).body}};
+  v.sandbox.refreshStatus=async()=>{v.functions.applyStatus((await call(h.api,'/api/status')).body)};
+  const row=v.sidebar(chats);assert.match(row,/ждёт решения/);assert.doesNotMatch(row,/data-attempt-action/);
+  await v.sidebarClick(chat.id,place);
+  assert.equal(v.S.ui.pane,place,cold?'cold':'warm');assert.equal(v.H.pane.id,place);assert.equal(v.cards.get('live-waiting')!.dataset.pane,place);assert.match(v.cards.get('live-waiting')!.innerHTML,/Итог хода|восстановлен/);
+  assert.ok(v.S.chat.some(m=>m.text==='saved answer'));assert.ok(v.requests.some(r=>r.path==='/api/chats/'+chat.id));assert.equal(v.requests.some(r=>r.path==='/api/chats/open'),false);
+ }
+ assert.equal(h.provider.calls.length,calls);assert.equal((await call(h.api,'/api/status')).body.panes.find((p:any)=>p.id===place).waiting.status,state);
 });
