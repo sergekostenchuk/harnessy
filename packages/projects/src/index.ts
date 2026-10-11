@@ -3,6 +3,7 @@ export * from './errors.ts';
 export * from './strings.ts';
 export {GitOps,execute,gitops,run,isRepo,ownRepo,repoRoot,head,currentBranch,branchExists,commitExists,resolveSha,ensureExclude,ensureWorktree,mergeCommitFor,mergeInto,type MergeResult} from './gitops.ts';
 export * from './project.ts';
+export * from './sections.ts';
 export * from './slug.ts';
 export * from './registry.ts';
 export * from './pins.ts';

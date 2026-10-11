@@ -38,7 +38,7 @@
   /*IC*/
   const FILE=location.pathname.split('/').pop()||'10-new-chat.html';
   const PAGES={new:'10-new-chat.html',now:'14-now.html',chat:'01-chat.html',plan:'02-plan.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
-  const TIP={now:'Сейчас',chat:'Чат',plan:'План · карта',res:'Ресёрч',doc:'Документ стадии',art:'Артефакты',mem:'Память проекта',swarm:'Стая агентов',sens:'Датчики',spend:'Расход',log:'Журнал'};
+  const TIP={now:'Сейчас',chat:'Чат',plan:'План · карта',res:'Ресёрч',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Стая агентов',sens:'Датчики',spend:'Расход',log:'Журнал'};
   const TOP=['now','chat','plan','res','doc','art','mem','swarm','sens','spend','log'];
   const KEY=Object.keys(PAGES).find(k=>PAGES[k]===FILE)||'';
   document.documentElement.dataset.page=KEY;
@@ -86,7 +86,7 @@
   window.psKey=KEY;
   // демонстрация без движка (сайт harnessy.ai): нарисованные папка, роли и закреплённые — рабочий слой заменяет их настоящими, когда движок подключён
   function demoSide(){ if(window.LIVE&&LIVE.H&&LIVE.H.on) return; const pi=ico('folder');
-    const proj=[['doc','Документ стадии'],['art','Артефакты'],['mem','Память проекта'],['res','Ресёрч']].map(([k,t])=>'<div class="nav psub'+(k===KEY?' on':'')+'" data-go="'+k+'">'+ico(k)+'<span class="t">'+t+'</span></div>').join('');
+    const proj=[['doc','Документы проекта'],['art','Артефакты'],['mem','Память проекта'],['res','Ресёрч']].map(([k,t])=>'<div class="nav psub'+(k===KEY?' on':'')+'" data-go="'+k+'">'+ico(k)+'<span class="t">'+t+'</span></div>').join('');
     const chats=[['Оркестратор','план H1.5 · рубеж',1,1],['Воркер 1','integration · шаг 4/7',0,1],['Ревьюер','договор H1.5 · раунд 2',0,0]].map(([r,s,act,busy])=>'<div class="ps-chat role'+(act?' act':'')+(busy?' busy':'')+'" data-go="chat"><i></i><span class="t">'+r+'</span><span class="s">'+s+'</span></div>').join('')+'<div class="ps-chat hdr">без роли</div><div class="ps-chat" data-go="chat"><i></i><span class="s one">какие задачи ты можешь решать…</span></div>';
     document.querySelectorAll('aside.side.ps .ps-folders').forEach(b=>{ b.innerHTML='<div class="ps-folder cur" title="демонстрация"><span class="chev">⌄</span>'+pi+'<span class="t">OMG</span><span class="m">6 ролей · git</span></div><div class="ps-fold-body">'+proj+chats+'</div><div class="ps-folder"><span class="chev">›</span>'+pi+'<span class="t">HARNESS</span><span class="m">спит</span></div><div class="ps-folder"><span class="chev">›</span>'+pi+'<span class="t">Принтер Brother</span><span class="m">1 роль</span></div>'; });
     document.querySelectorAll('aside.side.ps .ps-pins').forEach(b=>{ b.innerHTML='<div class="ps-chat pin act" data-go="chat"><i></i><span class="t">OMG</span><span class="m">проект</span></div><div class="ps-chat pin" data-go="chat"><i></i><span class="s one">прогон H1.5 · воркер 1</span><span class="m">чат</span></div>'; });
@@ -115,7 +115,7 @@
     const bg=document.createElement('div'); bg.className='m-bg';
     const dr=document.createElement('nav'); dr.className='m-drawer';
     dr.innerHTML='<div class="m-h"><i><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></i>Harnessy<span data-mx>×</span></div>'+item('new','Новый чат','p')+
-      '<div class="m-g">работа</div>'+item('now','Сейчас','2')+item('chat','Чат')+item('plan','План · карта')+item('doc','Документ стадии')+item('art','Артефакты')+item('mem','Память проекта')+item('res','Ресёрч')+
+      '<div class="m-g">работа</div>'+item('now','Сейчас','2')+item('chat','Чат')+item('plan','План · карта')+item('doc','Документы проекта')+item('art','Артефакты')+item('mem','Память проекта')+item('res','Ресёрч')+
       '<div class="m-g">команда</div>'+item('swarm','Стая агентов')+item('sens','Датчики')+item('spend','Расход')+item('conn','Подключения и лимиты')+
       '<div class="m-g">прочее</div>'+item('log','Журнал')+item('set','Настройки')+item('away','Уйти')+
       '<div class="m-f"><a href="../disarto/'+FILE+'">этот экран листом, с пояснениями ↗</a><a href="../disarto/index.html">все скетчи ↗</a></div>';
