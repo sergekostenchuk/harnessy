@@ -24,6 +24,7 @@ export class DomNode {
  get outerHTML():string{if(this.tagName==='#TEXT')return encode(this.text);const tag=this.tagName.toLowerCase();return '<'+tag+Object.entries(this.attributes).map(([k,v])=>' '+k+'="'+encode(v)+'"').join('')+'>'+this.innerHTML+(/^(input|br|hr|img|meta|link)$/.test(tag)?'':'</'+tag+'>')}
  set outerHTML(v:string){const parent=this.parentElement;if(!parent)return;const temp=new DomNode('div',this.owner);temp.innerHTML=v;const at=parent.children.indexOf(this);for(const n of temp.children)n.parentElement=parent;parent.children.splice(at,1,...temp.children);this.parentElement=null}
  setAttribute(name:string,v:string){this.attributes[name]=v;if(name.startsWith('data-'))this.dataset[key(name.slice(5))]=v;if(name==='style')for(const [k,value] of v.split(';').map(s=>s.split(':')))if(k?.trim())this.style[key(k.trim())]=value?.trim()??''}
+ removeAttribute(name:string){delete this.attributes[name];if(name.startsWith('data-'))delete this.dataset[key(name.slice(5))]}
  getAttribute(name:string){return this.attributes[name]??null}hasAttribute(name:string){return name in this.attributes}
  appendChild(n:DomNode){n.parentElement=this;this.children.push(n);return n}
  insertBefore(n:DomNode,anchor:DomNode|null){if(!anchor)return this.appendChild(n);const at=this.children.indexOf(anchor);if(at<0)throw Error('missing anchor');n.remove();n.parentElement=this;this.children.splice(at,0,n);return n}

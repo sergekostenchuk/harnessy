@@ -8,10 +8,29 @@
   const binding=()=>{ if(currentProject!==L.H.project){ currentProject=L.H.project; projectGeneration++; } return {project:currentProject,generation:projectGeneration}; };
   const same=b=>{ const now=binding(); return b.project===now.project&&b.generation===now.generation; };
   const hhmm=ts=>{ const d=ts?new Date(ts*1000):new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
-  const NAV=[['Личное',[['profile','Профиль и входы'],['notif','Уведомления'],['look','Облик'],['keys','Клавиши']]],
+  const PRICE={draft:null,dirty:false,saving:false,error:null,receipt:null,revision:0};
+  const priceKeys=['vendor','model','inputPerM','outputPerM','cacheReadPerM','currency'];
+  function priceRows(){if(PRICE.draft===null&&SET){PRICE.draft=Array.isArray(SET.owner&&SET.owner.priceList)?SET.owner.priceList.map(r=>({...r})):[]}return PRICE.draft||[]}
+  function priceHTML(){const rows=priceRows();return '<div><h3>Прайс-лист</h3><p class="d">Личное · цены за миллион токенов. Свежий вход и чтение кэша считаются отдельно. Историческая стоимость пересчитывается по текущей таблице; валюты не складываются.</p></div><div class="rows"><div class="row"><b>Цены моделей</b><a href="05-spend.html">Расход и лимиты →</a></div>'+
+    (PRICE.error?'<p role="alert">'+esc(PRICE.error)+'</p>':'')+(PRICE.receipt?'<p role="status">'+esc(PRICE.receipt)+'</p>':'')+(!SET&&PRICE.draft===null?'<p>Прайс-лист ещё не прочитан. '+(PRICE.error?'Исправьте файл владельца или повторите чтение.':'Ожидаю ответ движка…')+'</p>':'')+
+    '<div class="sp-table"><table class="tbl sp-prices"><thead><tr>'+['Провайдер','Модель','Вход / 1M','Выход / 1M','Кэш / 1M','Валюта',''].map(t=>'<th>'+t+'</th>').join('')+'</tr></thead><tbody>'+rows.map((r,i)=>'<tr>'+priceKeys.map(k=>'<td><input class="live-f" aria-label="'+k+' '+(i+1)+'" data-price-row="'+i+'" data-price-key="'+k+'" value="'+esc(r[k]??'')+'"'+(PRICE.saving?' disabled':'')+'></td>').join('')+'<td><button type="button" class="btn sm" data-price-remove="'+i+'"'+(PRICE.saving?' disabled':'')+'>Удалить</button></td></tr>').join('')+'</tbody></table></div>'+
+    '<div class="sp-actions">'+[['add','Добавить'],['save',PRICE.saving?'Сохраняю…':'Сохранить'],['cancel','Отмена'],['reload','Перечитать']].map(([action,title])=>'<button type="button" class="btn sm" data-price-action="'+action+'"'+(PRICE.saving||PRICE.draft===null&&action!=='reload'&&!(action==='add'&&PRICE.error)?' disabled':'')+'>'+title+'</button>').join('')+'</div>'+(PRICE.dirty?'<p class="d">Изменения ещё не сохранены</p>':'')+'</div>';}
+  function priceInput(){const rows=priceRows().map(r=>({...r})),keys=new Set();for(const r of rows){for(const k of ['vendor','model','currency'])if(typeof r[k]!=='string'||!r[k].trim())throw Error(k+': заполните поле');else r[k]=r[k].trim();
+      for(const k of ['inputPerM','outputPerM','cacheReadPerM']){if(String(r[k]??'').trim()===''||!Number.isFinite(Number(r[k]))||Number(r[k])<0)throw Error(k+': введите число не меньше нуля');r[k]=Number(r[k])}const key=JSON.stringify([r.vendor,r.model]);if(keys.has(key))throw Error('Повтор провайдера и модели: '+r.vendor+'/'+r.model);keys.add(key)}return rows;}
+  document.addEventListener('input',e=>{const input=e.target.closest('[data-price-key]');if(!input||PRICE.saving)return;const r=priceRows()[Number(input.dataset.priceRow)];if(!r)return;r[input.dataset.priceKey]=input.value;PRICE.dirty=true;PRICE.receipt=null;PRICE.revision++});
+  document.addEventListener('click',async e=>{const button=e.target.closest('[data-price-action], [data-price-remove]');if(!button)return;e.preventDefault();e.stopImmediatePropagation();if(PRICE.saving||button.disabled)return;PRICE.receipt=null;
+    if(button.hasAttribute('data-price-remove')){priceRows().splice(Number(button.dataset.priceRemove),1);PRICE.dirty=true;PRICE.revision++;render();return}
+    const action=button.dataset.priceAction;if(action==='add'){if(PRICE.draft===null)PRICE.draft=[];priceRows().push({vendor:'claude',model:'',inputPerM:'',outputPerM:'',cacheReadPerM:'',currency:'USD'});PRICE.dirty=true;PRICE.revision++;render();return}
+    if(action==='cancel'){PRICE.draft=null;PRICE.dirty=false;PRICE.error=null;PRICE.revision++;render();return}if(action==='reload'){PRICE.draft=null;PRICE.dirty=false;PRICE.revision++;await load();return}
+    let rows;try{rows=priceInput()}catch(error){PRICE.error=error.message;render();return}PRICE.saving=true;PRICE.error=null;const revision=++PRICE.revision;loadGeneration++;render();
+    try{const r=await api('/api/settings',{scope:'owner',patch:{priceList:rows}});if(revision!==PRICE.revision)return;if(!r||!r.ok||r.scope!=='owner'||!r.saved||!Array.isArray(r.saved.priceList)||r.saved.priceList.length!==rows.length||!r.saved.priceList.every((row,i)=>priceKeys.every(k=>row[k]===rows[i][k])))throw Error(r&&r.error||'Нет подтверждения сохранённого прайс-листа');
+      loadGeneration++;SET={...(SET||{}),owner:r.saved,effective:r.effective};PRICE.draft=r.saved.priceList.map(r=>({...r}));PRICE.dirty=false;PRICE.receipt='Сохранено · личная область · '+hhmm(r.ts);
+    }catch(error){if(revision===PRICE.revision)PRICE.error=error.message||'Нет связи'}finally{if(revision===PRICE.revision){PRICE.saving=false;render()}}
+  },true);
+  const NAV=[['Личное',[['profile','Профиль и входы'],['notif','Уведомления'],['look','Облик'],['keys','Клавиши'],['priceList','Прайс-лист']]],
              ['Проект',[['rights','Разрешения и стоп-случаи'],['budget','Бюджет и выключатель'],['memory','Память и правила','16-memory.html'],['roles','Роли и места']]],
              ['Подключения',[['conn','Провайдеры и маршруты','11-connections.html'],['social','Входы и ключи','11-connections.html#v=keys'],['dev','Разработчик']]]];
-  const SCOPE={profile:'везде · локальное окно',notif:'везде · файл владельца',look:'это окно',keys:'это окно',rights:'проект',budget:'проект',roles:'проект',dev:'движок'};
+  const SCOPE={priceList:'везде · файл владельца',profile:'везде · локальное окно',notif:'везде · файл владельца',look:'это окно',keys:'это окно',rights:'проект',budget:'проект',roles:'проект',dev:'движок'};
   const row=(t,s,ctl,o)=>{ const disabled=o&&o.off?' data-set-disabled title="'+esc(o.reason||'настройка пока не исполняется движком')+'" aria-disabled="true" style="cursor:default"':'';
     return '<div class="row'+(o&&o.off?' off':'')+(o&&o.click?' click':'')+'"'+disabled+(o&&o.attr?' '+o.attr:'')+'><div><b>'+t+'</b>'+(s?'<small>'+s+'</small>':'')+'</div>'+(disabled?(ctl||'').replace(/<(span|button)\b/g,'<$1'+disabled):(ctl||''))+'</div>'; };
   const seg=(items,on,attr)=>'<span class="seg" '+(attr||'')+'>'+items.map(([v,t])=>'<span data-v="'+v+'"'+(v===on?' class="on"':'')+'>'+t+'</span>').join('')+'</span>';
@@ -22,6 +41,7 @@
   const modeLabel=id=>((L.H.modes||[]).find(m=>m.id===id)||{}).label||id||'—';
   function paneHTML(k){ const eff=(SET&&SET.effective)||{}, proj=(SET&&SET.project)||{}, owner=(SET&&SET.owner)||{}; const seats=(L.H.panes||[]).filter(p=>p.id!=='room');
     const head=(h,d)=>'<div><h3>'+h+'</h3><p class="d">'+d+'</p></div>';
+    if(k==='priceList')return priceHTML();
     if(k==='profile'){ const maskMail=m=>String(m||'').replace(/^(.)[^@]*(@.*)$/,'$1•••$2'); const cl=CONN?CONN.find(p=>p.id==='claude'):null, cx=CONN?CONN.find(p=>p.id==='codex'):null; const a=cl&&cl.auth||{}, b=cx&&cx.auth||{};
       return head('Профиль и входы','Локальное окно Harnessy работает без входа. Входы провайдеров — это ваши подписки; сайт harnessy.ai имеет свои входы (Telegram, GitHub, Google) и к окну не относится.')+
         '<div class="rows">'+row('Это окно','локально · '+esc(L.H.project||'проект не открыт'),'<span class="pill ok">без входа</span>')+
@@ -54,7 +74,7 @@
     const st=document.querySelector('.frame .top .st'); const t=(NAV.flatMap(x=>x[1]).find(x=>x[0]===cur)||[])[1]||''; if(st) st.textContent=t.toLowerCase()+' · область: '+(SCOPE[cur]||'—'); const r=document.querySelector('.frame .top .r'); if(r) r.innerHTML=''; if(query.trim()) filterQuery(); }
   function go(k,push){ const item=NAV.flatMap(x=>x[1]).find(x=>x[0]===k); if(!item) return; if(item[2]){ location.href=item[2]; return; } cur=k; if(push!==false&&location.hash!=='#p='+k) history.pushState(null,'','#p='+k); render(); }
   async function load(){ const b=binding(),generation=++loadGeneration; let status=null,settings=null; try{ status=await api('/api/status'); }catch(e){} try{ settings=await api('/api/settings'); }catch(e){}
-    if(!same(b)||generation!==loadGeneration) return; ST=status&&status.project===b.project?status:null; SET=settings&&settings.ok?settings:null; render(); let connections=null; try{ const c=await api('/api/connections'); connections=c.providers||null; }catch(e){}
+    if(!same(b)||generation!==loadGeneration) return; ST=status&&status.project===b.project?status:null; SET=settings&&settings.ok?settings:null;if(settings&&!settings.ok)PRICE.error=settings.error||'Прайс-лист не прочитан';if(!PRICE.dirty&&!PRICE.saving){PRICE.draft=null;if(SET)PRICE.error=null} render(); let connections=null; try{ const c=await api('/api/connections'); connections=c.providers||null; }catch(e){}
     if(!same(b)||generation!==loadGeneration) return; CONN=connections; if(cur==='profile') render(); }
   async function projectSetting(patch,b){ let r=null; try{ r=await api('/api/settings',{scope:'project',patch}); }catch(x){} if(!same(b)){ toast('Проект сменился — настройка относится к прежнему проекту'); return false; }
     if(!r||!r.ok||r.scope!=='project'||!r.saved||typeof r.saved!=='object'||Array.isArray(r.saved)||!r.effective||typeof r.effective!=='object'||Array.isArray(r.effective)){ toast('Не вышло: '+esc((r&&r.error)||'нет подтверждения сохранённой настройки')); return false; }
@@ -86,8 +106,8 @@
     const all=NAV.flatMap(x=>x[1]).filter(x=>!x[2]).map(([k,t])=>{ const tmp=document.createElement('div'); tmp.innerHTML=paneHTML(k); const heading=t.toLowerCase().includes(v)||(tmp.querySelector('h3')||{}).textContent?.toLowerCase().includes(v); tmp.querySelectorAll('.row').forEach(r=>{ if(!heading&&!r.textContent.toLowerCase().includes(v)) r.remove(); }); tmp.querySelectorAll('.rows').forEach(b=>{ if(!b.querySelector('.row')) b.remove(); }); return tmp.querySelector('.rows')?'<section><div><h3>'+t+'</h3></div>'+[...tmp.querySelectorAll('.rows')].map(b=>b.outerHTML).join('')+'</section>':''; }).join('');
     set.querySelector('.pane').innerHTML=all||'<p class="d">ничего не найдено</p>'; }
   document.addEventListener('input',e=>{ const q=e.target.closest('[data-set-q]'); if(!q) return; query=q.value; if(query.trim()) filterQuery(); else { render(); document.querySelector('[data-set-q]')?.focus(); } });
-  addEventListener('popstate',()=>{ const m=location.hash.match(/#p=([a-z]+)/); if(m) go(m[1],false); });
+  addEventListener('popstate',()=>{ const m=location.hash.match(/#p=([a-zA-Z]+)/); if(m) go(m[1],false); });
   addEventListener('live:status',()=>{ binding(); load(); });
   try{ if(localStorage.getItem('harnessy-less-motion')==='1') document.documentElement.classList.add('less-motion'); }catch(e){}
-  const initial=location.hash.match(/#p=([a-z]+)/); if(initial&&NAV.flatMap(x=>x[1]).some(x=>x[0]===initial[1]&&!x[2])) cur=initial[1]; render(); load();
+  const initial=location.hash.match(/#p=([a-zA-Z]+)/); if(initial&&NAV.flatMap(x=>x[1]).some(x=>x[0]===initial[1]&&!x[2])) cur=initial[1]; render(); load();
 })();

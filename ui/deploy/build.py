@@ -181,7 +181,7 @@ def build_sketches():
     print(f"скетчи: {n} файлов + audit.html → {dst}")
 
 
-PROTO_PAGES = {"01-chat": "Чат", "02-plan": "План", "04-swarm": "Стая", "05-spend": "Расход", "06-settings": "Настройки", "09-events": "Плашки и события",
+PROTO_PAGES = {"01-chat": "Чат", "02-plan": "План", "04-swarm": "Стая", "05-spend": "Расход и лимиты", "06-settings": "Настройки", "09-events": "Плашки и события",
                "10-new-chat": "Новый чат", "11-connections": "Подключения", "12-research": "Ресёрч", "13-sensors": "Датчики", "14-now": "Сейчас",
                "15-artifacts": "Артефакты", "16-memory": "Память проекта", "17-doc": "Документ стадии", "18-overlays": "Уйти · окно · поиск",
                "19-first-run": "Первый запуск", "20-login-pour": "Вход", "21-journal": "Журнал"}
@@ -224,6 +224,14 @@ def build_proto():
         t = rep(t, "</body>", '<script src="proto.js"></script>\n<script src="live.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="conn.js"></script>\n</body>')
         t = re.sub(r"<title>.*?</title>", f"<title>Harnessy · {title}</title>", t, count=1, flags=re.S)
         (dst / f"{stem}.html").write_text(t, encoding="utf-8")
+    gallery = (src / "index.html").read_text(encoding="utf-8")
+    def gallery_link(match):
+        name = match.group(1)
+        if name.removesuffix(".html") in PROTO_PAGES:
+            return 'href="' + name + '"'
+        return 'href="/sketches/disarto/' + name + '"'
+    gallery = re.sub(r'href="([\w-]+\.html)"', gallery_link, gallery)
+    (dst / "gallery.html").write_text(gallery, encoding="utf-8")
     (dst / "index.html").write_text(LAUNCH, encoding="utf-8")
     print(f"прототип из новых экранов: {len(PROTO_PAGES)} экранов → {dst}")
 

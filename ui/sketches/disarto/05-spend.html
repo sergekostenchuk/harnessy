@@ -42,7 +42,7 @@
       <div class="foot"><div class="nav"><span class="ring"><i></i></span></div><div class="nav"><span class="av">S<i></i></span></div></div>
     </aside>
     <section class="main">
-      <div class="top"><b>Расход · все проекты</b><span class="st"><i style="background:var(--bad-fill,#a3304b)"></i>codex 94 % · сброс 19:58 · claude 62 % недели</span>
+      <div class="top"><b>Расход и лимиты · текущий проект</b><span class="st"><i style="background:var(--bad-fill,#a3304b)"></i>codex 94 % · сброс 19:58 · claude 62 % недели</span>
         <div class="r"><span class="seg" id="seg"><span class="on" data-v="over">Обзор</span><span data-v="proj">Проекты</span><span data-v="role">Причины</span><span data-v="est">Смета</span></span><span class="seg"><span>7 дн</span><span class="on">30 дн</span><span>90 дн</span><span>всё</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
       <div class="views"><div class="view on" id="v-over"><div class="lay">
         <div class="col">
@@ -206,7 +206,7 @@
   HX.bind('#cap',()=>'<div class="from">раскрытая карточка · порог недели</div><div class="ch"><h3>Что делать на 95 % недели</h3></div><div class="csub">сейчас 62 % · прогноз к сбросу 71 % · порог не достигается</div>'+
     '<label class="pick" data-pick>95 % · сигнал<small>только сообщить в приложении и в мессенджере; работа продолжается</small></label><label class="pick on" data-pick>95 % · ограничитель<small>остановить всё, кроме оркестратора; включить обратно можете только вы</small></label><label class="pick" data-pick>Оставить незаданным<small>без порога — расход ограничен только лимитом подписки</small></label>'+acts([['Применить','p','data-close'],['Отмена','ghost','data-close']]),{w:560,h:420,hide:false});
   HX.views('#seg');
-  HX.passport({title:'Расход',where:'Расход · все проекты',what:'Сколько потрачено, на что, чем это кончилось и когда платить',why:'Мера всего — цена правильного результата, а не процент лимита',when:'Данные лимитов — раз в 5 минут; история — по ходам',expect:'Расход в смете; ни одна подписка не упирается в лимит без запасной',risk:'Перезапуски и третьи возвраты съедают неделю незаметно',ok:'Точность смет ≥ 80 %, цена на влитую задачу падает',fail:'Расход без результата (как живой проход 02–03.10)'});
+  HX.passport({title:'Расход и лимиты',where:'Расход и лимиты · текущий проект',what:'Сколько потрачено, на что, чем это кончилось и когда платить',why:'Мера всего — цена правильного результата, а не процент лимита',when:'Данные лимитов — раз в 5 минут; история — по ходам',expect:'Расход в смете; ни одна подписка не упирается в лимит без запасной',risk:'Перезапуски и третьи возвраты съедают неделю незаметно',ok:'Точность смет ≥ 80 %, цена на влитую задачу падает',fail:'Расход без результата (как живой проход 02–03.10)'});
 })();
 </script>
 </body></html>
