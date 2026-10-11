@@ -9,6 +9,7 @@ import {CLAUDE_MODELS,CODEX_FALLBACK} from './catalog.ts';
 import {OWNER,string,integer,type Route} from './routes.ts';
 import {json,slice,text} from './responses.ts';
 import {spend,spendTurns} from './spend.ts';
+import {projectFileRoutes} from './project-file.ts';
 import {sectionRoutes} from './routes-sections.ts';
 export function sameProject(r:Runtime,p:ProjectState):void {if(p.closed||r.project!==p)throw new RuntimeError('project_changed','проект сменился',409)}
 export const threads=(p:ProjectState)=>Object.fromEntries(p.channel.threads);
@@ -23,6 +24,7 @@ export async function metadata(r:Runtime,connections=false){
 }
 export function metaRoutes(r:Runtime):Route[]{return [
  ...sectionRoutes(r),
+ ...projectFileRoutes(r),
  {method:'GET',path:'/api/limits',style:'J',handle:async()=>json(await r.limits())},
  {method:'GET',path:'/api/spend',style:'J',handle:async({query})=>json(await spend(r,query))},
  {method:'GET',path:'/api/spend/turns',style:'J',handle:async({query})=>json(await spendTurns(r,query))},

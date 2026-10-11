@@ -15,7 +15,7 @@ function ui(fetch?:(path:string)=>Promise<any>){
   esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),api:async(path:string)=>{requests.push(path);return fetch?fetch(path):snapshot(H.project)},
   addEventListener:d.window.addEventListener.bind(d.window),EventSource:class{onmessage:any;onopen:any;onerror:any;closed=false;path:string;constructor(path:string){this.path=path;streams.push(this)}close(){this.closed=true}}};context.window=context;
  const vm=createContext(context);runInContext(part(proto,'  // TS-15a specification','  // End TS-15a specification'),vm);
- runInContext(part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  // TS-15a: journal-backed','  // End TS-15a events.')+'\nglobalThis.testing={state:EV,sync:eventsSync,fetch:eventsFetch,reset:eventsReset,draw:eventsDraw};',vm);
+ runInContext(part(live,'  function md(','  const paneName=')+part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  // TS-15a: journal-backed','  // End TS-15a events.')+'\nglobalThis.testing={state:EV,sync:eventsSync,fetch:eventsFetch,reset:eventsReset,draw:eventsDraw};',vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  const switchProject=(project:string)=>{H.project=project;context.testing.reset();return context.testing.sync()};
  return {...d,H,context,requests,streams,find,switchProject,functions:context.testing};
@@ -123,4 +123,8 @@ test('209: the real Events form accepts uppercase labels through HTTP and reject
  }
  v.context.api=async()=>snapshot(h.dir,[{...record(2),from:'owner',to:['worker'],thread:'assignment:wrong'}],2,2);await v.find('[data-events-refresh]').emit('click');
  assert.match(v.find('[data-events-error]').textContent,/некорректная форма/);assert.equal(v.functions.state.records.length,1);
+});
+
+test('228: expanded channel entry renders its Markdown table and escaped HTML through the shared renderer',async t=>{
+ const h=await fixture(t);h.runtime.journal.append({sender:'owner',to:'worker',kind:'note',text:'## Состав\n\n| Роль | Модель |\n| --- | --- |\n| Юрист | Claude |\n\n<script>bad()</script>'});const v=ui(async path=>(await call(h.api,path)).body);v.H.project=h.dir;await v.functions.sync();assert.equal(v.find('.events-markdown h2').textContent,'Состав');assert.equal(v.find('.events-markdown td').textContent,'Юрист');assert.equal(v.document.querySelector('.events-markdown script'),null);
 });
