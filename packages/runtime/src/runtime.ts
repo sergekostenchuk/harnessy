@@ -314,9 +314,14 @@ export class Runtime {
  registerProcessToken:token=>{if(!p.closed&&(p.processEpoch.get(vendor)??0)===epoch)this.tokens.register(token,p.generation,id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,id,vendor),writableRoots:writableRoots(p.repoRoot,!!pane.worktree)};
  let result:{text:string;sessionId:string|null;interrupted?:boolean};const launchSeat=pane.providerSeat();
  while(true){attempt++;turn.terminal=null;turn.attemptNumber=attempt;const attemptNumber=attempt,seat=attempt===1?launchSeat:{...launchSeat,sessionId:null},activeAttempt=()=>current()&&turn.attemptNumber===attemptNumber;
- if(!seat.sessionId){let settings;try{settings=transferSettings(this.settings.get().owner)}catch(e){throw new RuntimeError('context_settings_invalid','настройки переноса: '+message(e),409)}
-  const snapshot=transferSnapshot(p,pane,records,settings.contextTransferEnabled);if(snapshot)transfer=conversationTransfer(snapshot,settings)}
- const attemptPrompt=transfer?.content?transfer.content+'\n\n---\nНовое сообщение:\n'+prompt:prompt;
+ if(!seat.sessionId){try{let settings;try{settings=transferSettings(this.settings.get().owner)}catch(e){throw new RuntimeError('context_settings_invalid','настройки переноса: '+message(e),409)}
+  const snapshot=transferSnapshot(p,pane,records,settings.contextTransferEnabled);transfer=snapshot?conversationTransfer(snapshot,settings):null;
+ }catch(e){
+  const chat=p.state.chats.chats[p.state.chats.active[pane.id]??''];
+  transfer={project:p.dir,chat:chat?.pane===pane.id?chat.id:'',messages:0,verbatim:0,compressed:false,tokens:0,content:'',enabled:true,failure:{code:e instanceof RuntimeError?e.code:'context_unreadable',reason:slice(message(e),600)}};
+ }}
+ // Failed history is never mixed with the current request (including a saved carry).
+ const attemptPrompt=transfer?.failure?messageText:transfer?.content?transfer.content+'\n\n---\nНовое сообщение:\n'+prompt:prompt;
  const attemptCtx:TurnContext={...ctx,modelStarted:()=>{if(activeAttempt())ctx.modelStarted?.()},publish:e=>{if(activeAttempt())ctx.publish(e)},session:s=>{if(activeAttempt())ctx.session(s)},setHandle:h=>{if(activeAttempt())ctx.setHandle(h)},askApproval:(title,detail)=>activeAttempt()?ctx.askApproval(title,detail):Promise.resolve(false)};
  try{if(controller.signal.aborted)throw new ProviderError('cancelled','ход отменён');result=await Promise.race([provider.runTurn(seat,attemptPrompt,attemptCtx),turn.resetWait.then(()=>{throw new ProviderError('cancelled','ход отменён')})]);break}
  catch(e){if(turn.stopRequested&&turn.started){result={text:turn.partial,sessionId:pane.sessionId,interrupted:true};break}

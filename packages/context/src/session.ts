@@ -16,6 +16,7 @@ export interface ConversationSnapshot {
 }
 export interface ConversationTransfer {
  project:string;chat:string;messages:number;verbatim:number;compressed:boolean;tokens:number;content:string;enabled:boolean;
+ failure?:{code:string;reason:string};
 }
 const quote=(text:string)=>text.split('\n').map(line=>'> '+line).join('\n');
 const excerpt=(text:string,limit:number)=>{const a=[...text];return a.length<=limit?text:a.slice(0,Math.max(0,limit-1)).join('')+'…'};
@@ -49,4 +50,4 @@ export function conversationTransfer(snapshot:ConversationSnapshot,settings:Tran
  result.content=header+(facts?facts+'\n\n':'')+pieces.sort((a,b)=>a.index-b.index).map(p=>p.text).join('\n\n')+footer;
  result.tokens=estTokens(result.content);return result;
 }
-export function transferLabel(t:ConversationTransfer):string {return !t.enabled?'контекст не передан по настройке':'контекст передан новой модели: '+t.messages+' сообщений · ~'+t.tokens+' токенов'+(t.compressed?' · остальное сжато':'')}
+export function transferLabel(t:ConversationTransfer):string {return t.failure?'контекст не передан: '+t.failure.reason:!t.enabled?'контекст не передан по настройке':'контекст передан новой модели: '+t.messages+' сообщений · ~'+t.tokens+' токенов'+(t.compressed?' · остальное сжато':'')}

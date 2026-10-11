@@ -10,6 +10,7 @@ import {jsonClone,chatMetadata,diskIO,type Chat} from './state.ts';
 import type {Pane} from './pane.ts';
 import {makeRoomIn} from './rooms.ts';
 import {SEAT_KINDS,type SeatKind} from '@harnessy/team';
+import {promotionHistory} from './promotion.ts';
 
 function proposalRows(p:ProjectState,q:Record<string,unknown>,seats:unknown[]){
  const invalid=():never=>{throw new RuntimeError('proposal_invalid','состояние строк предложения для контекста повреждено',409)};
@@ -46,7 +47,10 @@ export function transferSnapshot(p:ProjectState,pane:Pane,records:readonly impor
  const seqs=new Set(messages.flatMap(m=>object(m.runtime)&&Array.isArray(m.runtime.recordSeqs)?m.runtime.recordSeqs.filter((n):n is number=>Number.isSafeInteger(n)):[]));
  for(const r of records)seqs.add(r.seq);
  const history=p.journal.read({limit:0}).filter(r=>seqs.has(r.seq));
- if(history.some(r=>!r.to.includes(pane.id)&&!r.to.includes('*')))throw new RuntimeError('context_binding_invalid','запись контекста адресована другому месту',409);
+ const previous=history.filter(r=>!r.to.includes(pane.id)&&!r.to.includes('*'));
+ if(previous.length){const lineage=promotionHistory(p,c);
+  if(previous.some(r=>!lineage?.seqs.has(r.seq)||!r.to.includes(lineage.pane)))throw new RuntimeError('context_binding_invalid','запись контекста адресована другому месту',409);
+ }
  const threads=new Set(history.flatMap(r=>r.thread?[r.thread]:[]));
  const facts:ConversationSnapshot['facts']=[];
  const promotion=c.promotion;if(object(promotion)&&promotion.target===p.dir&&promotion.sid===pane.id&&object(promotion.source)&&object(promotion.source.chat)&&promotion.source.chat.id===id&&typeof promotion.intro==='string')facts.push({label:'Предметная вводная при повышении',text:promotion.intro});

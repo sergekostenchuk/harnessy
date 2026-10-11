@@ -39,6 +39,23 @@ function documents(value:unknown):DocumentRef[]{
 function verifyDocuments(refs:DocumentRef[]){if(JSON.stringify(documents(refs))!==JSON.stringify(refs))throw new RuntimeError('documents_invalid','путь документа изменился после сохранения',409)}
 function rolePath(op:Promotion){return 'roles/seats/'+op.id+'.md'}
 function roleFile(op:Promotion){return '<!-- promotion:'+op.id+' -->\nОркестратор команды проекта. Предметная вводная и первое поручение сохранены в журнале повышения.\n'}
+// Only receipts from this operation's frozen source may retain the old addressee.
+// A room label alone proves nothing: another room chat uses that same label.
+export function promotionHistory(p:ProjectState,c:Chat):{pane:string;seqs:Set<number>}|null {
+ if(c.promotion===undefined)return null;
+ const op=parse(c.promotion);
+ if(!op.done||op.target!==p.dir||op.sid!==c.pane||op.source.chat.id!==c.id||!existing(p,op))invalid('родословная контекста не совпадает с повышением');
+ const seqs=new Set<number>();
+ // Moving a conversation strips journal receipts; source numbers cannot name target records.
+ if(op.input.project!==p.dir||op.source.cwd!==p.dir)return {pane:op.source.pane,seqs};
+ for(const m of op.source.chat.transcript){
+  if(m.project!==undefined&&m.project!==op.input.project||m.chat!==undefined&&m.chat!==c.id||object(m.provenance)&&(m.provenance.project!==op.input.project||m.provenance.chat!==c.id))invalid('исходная стенограмма содержит чужую привязку');
+  const receipt=m.runtime;if(!object(receipt)||typeof receipt.turnInstanceId!=='string'||!Array.isArray(receipt.recordSeqs))continue;
+  const preserved=c.transcript.some(n=>n.role===m.role&&n.text===m.text&&n.ts===m.ts&&object(n.runtime)&&n.runtime.turnInstanceId===receipt.turnInstanceId&&JSON.stringify(n.runtime.recordSeqs)===JSON.stringify(receipt.recordSeqs));
+  if(preserved)for(const seq of receipt.recordSeqs)if(Number.isSafeInteger(seq)&&Number(seq)>0)seqs.add(Number(seq));
+ }
+ return {pane:op.source.pane,seqs};
+}
 function existing(p:ProjectState,op?:Promotion){const seat=Object.values(p.team?.seats??{}).find(s=>s.kind==='orchestrator');
  let own=false;if(seat&&op&&seat.id===op.sid&&seat.instructions===rolePath(op)){
   try{own=readFileSync(join(p.dir,'.harness',seat.instructions),'utf8')===roleFile(op)}catch{}
