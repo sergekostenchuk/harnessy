@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
-import {fixture,call,deferred,until} from './test-helpers.ts';
+import {fixture,call,deferred,until,sse} from './test-helpers.ts';
 const read=(path:string)=>readFileSync(new URL('../../../'+path,import.meta.url),'utf8'),live=read('ui/deploy/live.js'),proto=read('ui/deploy/proto.js'),raw=read('ui/sketches/disarto/09-events.html');
 const part=(s:string,a:string,b:string)=>{const start=s.indexOf(a),end=s.indexOf(b,start);assert.ok(start>=0&&end>start);return s.slice(start,end)};
 const record=(seq:number,text='event '+seq)=>({seq,ts:'2026-10-11T12:00:00+03:00',from:'owner',to:['worker'],kind:'note',thread:'work',text});
@@ -86,4 +86,29 @@ test('168/190: replay burst shares one pending status read; rejected confirmatio
  const v=ui();await v.functions.sync();const gate=deferred<boolean>();let calls=0;v.context.refreshStatus=async()=>{calls++;return gate.promise};
  for(let i=0;i<10;i++)v.streams[0].onmessage({data:'{"type":"state"}'});assert.equal(calls,1);const reads=v.requests.length;gate.resolve(false);await until(()=>v.functions.state.checking===null);
  assert.equal(v.requests.length,reads);assert.match(v.find('[data-events-error]').textContent,/проект не подтверждён/);
+});
+
+
+test('168/190 ОКНА: real SSE during a captured HTTP snapshot triggers a second read without another event',async t=>{
+ const h=await fixture(t);h.runtime.journal.append({sender:'owner',to:'worker',kind:'note',text:'initial'});
+ const captured=deferred(),release=deferred();t.after(()=>release.resolve());let delay=false;
+ const v=ui(async path=>{const response=(await call(h.api,path)).body;if(delay&&path.startsWith('/api/journal')){delay=false;captured.resolve();await release.promise}return response});v.H.project=h.dir;
+ Object.assign(v.context,{leftPage:false,S:{ui:{pane:'worker'},chat:[]},sendBinding:()=>({}),bindingCurrent:()=>true,sideChats:async()=>{},hStatus(){},badges(){},pickPane(){},renderWaiting(){},save(){},modelName:(s:any)=>s,toast(){},setTimeout:(fn:any)=>queueMicrotask(fn),CustomEvent:class{type:string;constructor(type:string){this.type=type}},dispatchEvent:(e:any)=>{void v.window.emit(e.type)}});
+ runInContext(part(live,'  function applyStatus(','  // лента активного чата'),v.context);
+ await v.functions.sync();const stream=await sse(h.api);t.after(()=>stream.close());await until(()=>stream.raw.includes(': ok'));let seen=0;
+ const deliver=()=>{while(seen<stream.frames.length)v.streams.at(-1).onmessage({data:JSON.stringify(stream.frames[seen++])})};delay=true;
+ h.runtime.registry.get('worker')!.publish({type:'note',text:'refresh'});await until(()=>stream.frames.length===1);deliver();await captured.promise;
+ const next=h.runtime.journal.append({sender:'worker',to:'owner',kind:'answer',text:'arrived during snapshot'});h.runtime.registry.get('worker')!.publish({type:'sent',record:next});await until(()=>stream.frames.length===2);deliver();release.resolve();
+ await until(()=>!v.functions.state.checking&&!v.functions.state.loading);assert.equal(v.functions.state.lastSeq,next.seq);assert.ok(v.functions.state.records.some((r:any)=>r.seq===next.seq));assert.match(v.find('[data-events-body]').textContent,/arrived during snapshot/);
+ assert.equal(v.requests.filter(p=>p.startsWith('/api/journal')).length,3); // initial + captured + one follow-up
+});
+
+for(const change of ['project','ABA','filter','pagehide'])test('168/190: queued refresh is discarded on '+change+' binding change',async()=>{
+ const release=deferred<any>(),captured=deferred();let delay=false;
+ const v=ui(async()=>{if(delay){delay=false;captured.resolve();return release.promise}return snapshot(v.H.project)});await v.functions.sync();delay=true;
+ v.streams[0].onmessage({data:'{"type":"note"}'});await captured.promise;for(let i=0;i<5;i++)v.streams[0].onmessage({data:'{"type":"sent"}'});
+ if(change==='project'||change==='ABA'){await v.switchProject('/b');if(change==='ABA')await v.switchProject('/a')}
+ else if(change==='filter')await v.find('[data-events-clear]').emit('click');else await v.window.emit('pagehide');
+ const reads=v.requests.length;release.resolve(snapshot('/a',[record(2,'stale')],2));await until(()=>!v.functions.state.loading&&!v.functions.state.checking);
+ assert.equal(v.requests.length,reads);assert.equal(v.functions.state.refreshQueued,false);assert.doesNotMatch(v.find('[data-events-body]').textContent,/stale/);
 });

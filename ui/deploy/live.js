@@ -1043,9 +1043,9 @@
   // End TS-11 snapshot.
   // ── «Журнал» при подключённом движке: записи /api/journal в разметке экрана (строки .li), фильтры по видам движка, карточка записи, тред целиком, слияние принятого вердикта владельцем
   // TS-15a: journal-backed events. The stream invalidates HTTP snapshots; it is never a journal.
-  const EV={project:null,generation:0,alive:true,records:[],summary:null,lastSeq:0,more:false,loading:false,error:null,queued:false,checking:null,es:null,filters:{kind:'',from:'',to:'',thread:''}};
+  const EV={project:null,generation:0,alive:true,records:[],summary:null,lastSeq:0,more:false,loading:false,error:null,queued:false,refreshQueued:false,checking:null,es:null,filters:{kind:'',from:'',to:'',thread:''}};
   const eventFeed=()=>PAGE==='events'?document.querySelector('[data-event-feed]'):null;
-  function eventsReset(){if(!eventFeed())return;EV.generation++;if(EV.es)EV.es.close();EV.es=null;EV.project=H.project;EV.records=[];EV.summary=null;EV.lastSeq=0;EV.more=false;EV.loading=false;EV.queued=false;EV.checking=null;EV.error=null;eventsDraw()}
+  function eventsReset(){if(!eventFeed())return;EV.generation++;if(EV.es)EV.es.close();EV.es=null;EV.project=H.project;EV.records=[];EV.summary=null;EV.lastSeq=0;EV.more=false;EV.loading=false;EV.queued=false;EV.refreshQueued=false;EV.checking=null;EV.error=null;eventsDraw()}
   function eventsValid(r,project,filters){
     const count=n=>Number.isSafeInteger(n)&&n>=0;
     return r&&r.ok!==false&&r.project===project&&count(r.lastSeq)&&r.summary&&count(r.summary.total)&&r.summary.byKind&&typeof r.summary.byKind==='object'&&!Array.isArray(r.summary.byKind)&&Object.values(r.summary.byKind).every(count)&&Object.values(r.summary.byKind).reduce((a,b)=>a+b,0)===r.summary.total&&Array.isArray(r.records)&&r.records.every(x=>x&&Number.isSafeInteger(x.seq)&&x.seq>0&&x.seq<=r.lastSeq&&typeof x.ts==='string'&&Number.isFinite(Date.parse(x.ts))&&typeof x.kind==='string'&&typeof x.from==='string'&&Array.isArray(x.to)&&x.to.every(v=>typeof v==='string')&&typeof x.text==='string'&&(x.thread===null||typeof x.thread==='string')&&(!filters.kind||filters.kind===x.kind)&&(!filters.from||filters.from===x.from)&&(!filters.to||x.to.includes(filters.to))&&(!filters.thread||filters.thread===x.thread))&&new Set(r.records.map(x=>x.seq)).size===r.records.length;
@@ -1078,9 +1078,9 @@
     }catch(e){if(eventsCurrent(project,generation))EV.error=e.message||'нет связи'}
     finally{if(eventsCurrent(project,generation)){EV.loading=false;eventsDraw();if(EV.queued){EV.queued=false;void eventsFetch()}}}
   }
-  async function eventsRefresh(){if(!eventFeed()||!EV.alive)return;if(EV.checking)return EV.checking;const generation=EV.generation;
+  async function eventsRefresh(){if(!eventFeed()||!EV.alive)return;if(EV.checking){EV.refreshQueued=true;return EV.checking}const project=EV.project,generation=EV.generation;
     const job=(async()=>{const status=await refreshStatus(true);if(!EV.alive||generation!==EV.generation)return;if(!status){EV.error='проект не подтверждён движком';eventsDraw();return}return eventsSync(true)})();EV.checking=job;
-    try{return await job}finally{if(EV.checking===job)EV.checking=null}
+    try{return await job}finally{if(EV.checking===job){EV.checking=null;const again=EV.refreshQueued;EV.refreshQueued=false;if(again&&eventsCurrent(project,generation))await eventsRefresh()}}
   }
   function eventsSync(refresh=false){if(!eventFeed()||!EV.alive||!H.on||H.snapshotOnly)return;if(EV.project!==H.project)eventsReset();
     if(!EV.es&&typeof EventSource==='function'){const project=EV.project,generation=EV.generation,es=EV.es=new EventSource('/api/events/all');
