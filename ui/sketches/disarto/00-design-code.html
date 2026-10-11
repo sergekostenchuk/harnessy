@@ -62,6 +62,63 @@
 .md-file-dialog { width:min(850px,calc(100vw - 48px)); max-height:85vh; overflow:auto; padding:24px; border:1px solid var(--line2); border-radius:14px; background:var(--bg); color:var(--ink); }.md-file-dialog::backdrop { background:#0009; }.md-file-dialog h3 { font:500 15px var(--font); overflow-wrap:anywhere; }.md-file-dialog > button { margin-top:18px; }
 .events-markdown { margin:12px 0; }.md-table:focus-visible,.md-body a:focus-visible,.md-code button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 
+/* TS-20e: connection components, graphite surfaces and cognac actions from sketch 11. */
+#connections-spec { min-width:0; max-width:calc(100vw - 40px); }
+#connections-spec .conn-spec-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+#connections-spec .conn-spec-stack { display:grid; gap:12px; align-content:start; }
+#connections-spec .conn-program { padding:18px; border:1px solid var(--line2); border-radius:14px; background:var(--panel); min-width:0; }
+#connections-spec h3 { margin:0; font:500 15px/1.35 var(--font); color:var(--ink); }
+#connections-spec .conn-section-title { margin:26px 0 12px; }
+#connections-spec .conn-section-gap { margin-top:18px; }
+#connections-spec .conn-program-head { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+#connections-spec .conn-program-head > div { flex:1; min-width:120px; }
+#connections-spec .conn-program-head small,#connections-spec .conn-label { display:block; color:var(--ink3); font:10px/1.5 var(--mono); letter-spacing:.06em; text-transform:uppercase; }
+#connections-spec .conn-program-mark { display:grid; place-items:center; width:38px; height:38px; flex:none; border:1px solid var(--line2); border-radius:10px; background:var(--raised); font:500 16px var(--font); color:var(--ink2); }
+#connections-spec .conn-facts { display:grid; gap:9px; margin:14px 0; font:12px/1.5 var(--font); }
+#connections-spec .conn-facts > div { display:grid; grid-template-columns:140px minmax(0,1fr); gap:10px; }
+#connections-spec dt,#connections-spec .conn-note { color:var(--ink2); }
+#connections-spec dd { margin:0; overflow-wrap:anywhere; }
+#connections-spec .conn-note { font:11.5px/1.55 var(--font); margin:8px 0; }
+#connections-spec .conn-login-command { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; padding:12px; background:var(--raised); border:1px solid var(--line2); border-radius:9px; }
+#connections-spec .conn-login-command .conn-label { flex-basis:100%; }
+#connections-spec code { font:12px/1.5 var(--mono); overflow-wrap:anywhere; }
+#connections-spec .conn-login-command code { flex:1; min-width:80px; }
+#connections-spec .conn-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0 0; }
+#connections-spec .btn { cursor:pointer; font-family:var(--font); white-space:normal; height:auto; min-height:32px; text-align:center; }
+#connections-spec .btn small { font:10px var(--mono); opacity:.85; }
+#connections-spec .btn:disabled { opacity:.5; cursor:not-allowed; }
+#connections-spec .conn-route { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; padding-top:12px; margin-top:12px; border-top:1px solid var(--line); font-size:12px; }
+#connections-spec .conn-route > span:first-child { color:var(--ink3); }
+#connections-spec .conn-route b { font-weight:400; flex:1; }
+#connections-spec .conn-state-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+#connections-spec .conn-auth-state { display:flex; align-items:center; gap:10px; padding:12px 14px; border:1px solid var(--line2); border-radius:10px; background:var(--raised); min-width:0; }
+#connections-spec .conn-auth-state > div { flex:1; min-width:0; }
+#connections-spec .conn-auth-state b { font:500 12px/1.5 var(--font); }
+#connections-spec .conn-auth-state small { display:block; color:var(--ink2); font:11px/1.5 var(--font); }
+#connections-spec .conn-status-dot { width:7px; height:7px; border-radius:50%; background:var(--ink3); flex:none; }
+#connections-spec .conn-status-dot.ok { background:var(--ok); }
+#connections-spec .conn-status-dot.attention { background:var(--accent); }
+#connections-spec .conn-status-dot.bad { background:var(--bad); }
+#connections-spec .conn-spinner { width:12px; height:12px; border-radius:50%; border:2px solid var(--accent); border-right-color:transparent; flex:none; }
+#connections-spec [data-state="unavailable"],#connections-spec [data-state="key-rejected"] { border-color:var(--bad-fill); }
+#connections-spec .conn-models { list-style:none; padding:0; margin:14px 0; }
+#connections-spec .conn-models li { display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); font:12px/1.5 var(--font); }
+#connections-spec .conn-models b { font-weight:400; }
+#connections-spec .conn-models small { display:block; color:var(--ink3); font-size:11px; }
+#connections-spec .conn-models li > span { text-align:right; color:var(--ink2); font:10px/1.6 var(--mono); }
+#connections-spec .conn-empty-models { color:var(--ink2); font:12px/1.5 var(--font); }
+#connections-spec summary { cursor:pointer; }
+#connections-spec .conn-trial-card > .conn-auth-state { margin-top:20px; }
+#connections-spec .conn-key-input { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+#connections-spec .conn-key-input input { width:0; min-width:120px; flex:1; padding:9px 12px; border:1px solid var(--line2); border-radius:8px; color:var(--ink); background:var(--raised); font:12px var(--mono); }
+#connections-spec .conn-key-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; border-top:1px solid var(--line); padding-top:16px; margin-top:16px; }
+#connections-spec .conn-masked-key { font:12px var(--mono); flex:1; }
+#connections-spec .conn-demo-note { min-height:1.6em; color:var(--ink2); font:12px/1.6 var(--font); }
+#connections-spec .conn-trial-dialog { width:min(480px,calc(100vw - 40px)); box-sizing:border-box; max-height:85vh; overflow:auto; padding:22px; border:1px solid var(--line2); border-radius:14px; background:var(--panel); color:var(--ink); font:13px/1.6 var(--font); }
+#connections-spec .conn-trial-dialog::backdrop { background:rgba(6,6,8,.7); }
+#connections-spec :is(button,input,summary):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+@media(max-width:760px){ #connections-spec .conn-spec-grid,#connections-spec .conn-state-grid { grid-template-columns:minmax(0,1fr); } #connections-spec .conn-program { padding:14px; } #connections-spec .conn-auth-state { flex-wrap:wrap; } #connections-spec .conn-facts > div { grid-template-columns:100px minmax(0,1fr); } }
+
 </style></head>
 <body><div class="sheet">
   <h1>Harnessy · лист 00 · дизайн-код</h1>
@@ -121,6 +178,75 @@
           <div class="rowx"><span class="seg"><span class="on">Обзор</span><span>Проекты</span><span>Причины</span></span><span class="tog on"></span><span class="tog"></span></div></div>
       </div></section>
 
+    <!-- TS-20e: connection components; examples only, no provider calls. -->
+    <section id="connections-spec" aria-labelledby="connections-spec-title">
+      <h2 id="connections-spec-title">Подключения · программы и ключи<i></i></h2>
+      <p class="t3">Макет · образцы состояний для скетча 11. Команды, входы, модели и лимиты здесь не проверяются; кнопки показывают поведение элемента.</p>
+      <div class="conn-spec-grid">
+        <article class="conn-program" data-example-program="ready">
+          <div class="conn-program-head"><span class="conn-program-mark" aria-hidden="true">A</span><div><h3>Antigravity</h3><small>подписка · программа agy</small></div><span class="pill ok">вход есть</span></div>
+          <dl class="conn-facts"><div><dt>Программа</dt><dd>установлена</dd></div><div><dt>Версия</dt><dd><code>1.2.17</code></dd></div><div><dt>Проверка входа</dt><dd>проверен · 14:32 · образец</dd></div></dl>
+          <div class="conn-login-command"><span class="conn-label">команда входа</span><code>agy</code><button type="button" class="btn sm" data-example-action="terminal">Открыть Терминал</button></div>
+          <p class="conn-note">Вход — в программе провайдера. Пароль в Harnessy не вводится.</p>
+          <div class="conn-actions"><button type="button" class="btn" data-example-action="auth">Проверить вход</button><button type="button" class="btn p" data-example-trial>Пробный ход <small>цена неизвестна</small></button></div>
+          <div class="conn-route"><span>Маршрут</span><b>напрямую</b><button type="button" class="btn sm ghost" data-example-action="route">Настроить</button></div>
+          <div class="conn-route"><span>Лимиты</span><b>провайдер не отдаёт</b><span class="conn-note">образец состояния</span></div>
+        </article>
+        <div class="conn-spec-stack">
+          <article class="conn-program" data-example-program="signed-out">
+            <div class="conn-program-head"><span class="conn-program-mark" aria-hidden="true">C</span><div><h3>GitHub Copilot</h3><small>подписка · программа copilot</small></div><span class="pill acc">нужен вход</span></div>
+            <dl class="conn-facts"><div><dt>Программа</dt><dd>установлена</dd></div><div><dt>Версия</dt><dd><code>1.0.12</code></dd></div></dl>
+            <div class="conn-login-command"><span class="conn-label">команда входа</span><code>copilot</code><button type="button" class="btn sm p" data-example-action="terminal">Открыть Терминал</button></div>
+            <div class="conn-actions"><button type="button" class="btn" data-example-action="auth">Проверить вход</button><button type="button" class="btn" disabled>Пробный ход · сначала войдите</button></div>
+          </article>
+          <article class="conn-program" data-example-program="missing">
+            <div class="conn-program-head"><span class="conn-program-mark" aria-hidden="true">?</span><div><h3>Программа не установлена</h3><small>образец карточки до подключения</small></div><span class="pill">не установлена</span></div>
+            <p class="conn-note">Версия не определена. После установки повторите проверку.</p>
+            <div class="conn-actions"><button type="button" class="btn" data-example-action="installation">Проверить программу</button><button type="button" class="btn" disabled>Открыть Терминал</button></div>
+          </article>
+        </div>
+      </div>
+
+      <h3 class="conn-section-title">Проверка входа</h3>
+      <div class="conn-state-grid">
+        <div class="conn-auth-state" data-state="unchecked" role="status"><span class="conn-status-dot" aria-hidden="true"></span><div><b>Не проверен</b><small>Нажмите «Проверить вход».</small></div></div>
+        <div class="conn-auth-state" data-state="checking" role="status" aria-busy="true"><span class="conn-spinner" aria-hidden="true"></span><div><b>Проверяем вход…</b><small>Пробный ход не запускается.</small></div><button type="button" class="btn sm" disabled>Проверяем…</button></div>
+        <div class="conn-auth-state" data-state="ready" role="status"><span class="conn-status-dot ok" aria-hidden="true"></span><div><b>Вход проверен</b><small>Программа готова к ходу.</small></div></div>
+        <div class="conn-auth-state" data-state="signed-out" role="status"><span class="conn-status-dot attention" aria-hidden="true"></span><div><b>Вход не выполнен</b><small>Войдите в программе провайдера.</small></div></div>
+        <div class="conn-auth-state" data-state="unavailable" role="status"><span class="conn-status-dot bad" aria-hidden="true"></span><div><b>Не удалось проверить вход</b><small>Программа не ответила. Состояние входа неизвестно.</small></div><button type="button" class="btn sm ghost" data-example-action="auth">Повторить</button></div>
+        <div class="conn-auth-state" data-state="missing" role="status"><span class="conn-status-dot" aria-hidden="true"></span><div><b>Программа не найдена</b><small>Установите программу и повторите проверку.</small></div></div>
+      </div>
+
+      <div class="conn-spec-grid conn-section-gap">
+        <article class="conn-program"><h3>Модели · кто на них работает</h3><p class="conn-note">Образец списка Claude из скетча 11; реальные модели — из программы.</p>
+          <ul class="conn-models"><li><div><b>Opus 5.5</b><small>придумывать · тяжёлый код</small></div><span>оркестратор · воркер 1</span></li><li><div><b>Sonnet 5.5</b><small>чтение · проверка · средний код</small></div><span>воркер 2 · хранитель</span></li><li><div><b>Haiku 4.5</b><small>мелочи</small></div><span class="conn-note">никто</span></li></ul>
+          <details class="conn-empty-models"><summary>Состояния без списка моделей</summary><p role="status">Нет данных · программа вернула пустой список моделей.</p><p role="status">Не удалось прочитать модели. <button type="button" class="btn sm ghost" data-example-action="models">Повторить</button></p></details>
+        </article>
+        <article class="conn-program conn-trial-card"><h3>Пробный ход</h3><p class="conn-note">Один запрос выбранной модели. Запуск — только после отдельного разрешения владельца.</p>
+          <dl class="conn-facts"><div><dt>Модель</dt><dd>выбранная модель</dd></div><div><dt>Цена</dt><dd>неизвестна · спишется по тарифу провайдера</dd></div></dl>
+          <div class="conn-actions"><button type="button" class="btn p" data-example-trial>Пробный ход <small>цена неизвестна</small></button></div>
+          <div class="conn-auth-state" data-state="trial-running" role="status" aria-busy="true"><span class="conn-spinner" aria-hidden="true"></span><div><b>Пробный ход…</b><small>Один ход уже запущен · образец.</small></div><button type="button" class="btn sm" disabled>Выполняется…</button></div>
+        </article>
+      </div>
+
+      <h3 class="conn-section-title">Ключ API · маскирование и состояние</h3>
+      <div class="conn-spec-grid">
+        <article class="conn-program"><h3>Qwen · Alibaba</h3><p class="conn-note">Ключ API · образец строки. В карточке видны только последние четыре знака.</p>
+          <label class="conn-label" for="dc-api-key">ключ API</label><div class="conn-key-input"><input id="dc-api-key" type="password" placeholder="Вставьте ключ" autocomplete="off" spellcheck="false" aria-describedby="dc-key-note"><button type="button" class="btn sm" data-example-action="key">Проверить ключ</button></div><p class="conn-note" id="dc-key-note">Макет: введённое значение не сохраняется и не отправляется.</p>
+          <div class="conn-key-row"><span class="conn-masked-key" aria-label="Ключ скрыт; последние четыре знака 1A2B">•••• •••• 1A2B</span><span class="pill ok">ключ проверен</span><button type="button" class="btn sm ghost" data-example-action="key">Сменить ключ</button></div>
+        </article>
+        <div class="conn-spec-stack">
+          <div class="conn-auth-state" data-state="key-checking" role="status" aria-busy="true"><span class="conn-spinner" aria-hidden="true"></span><div><b>Проверяем ключ…</b><small>Пробный ход не запускается.</small></div><button type="button" class="btn sm" disabled>Проверяем…</button></div>
+          <div class="conn-auth-state" data-state="key-ready" role="status"><span class="conn-status-dot ok" aria-hidden="true"></span><div><b>Ключ проверен</b><small>Проверено · 14:32 · образец.</small></div></div>
+          <div class="conn-auth-state" data-state="key-rejected" role="status"><span class="conn-status-dot bad" aria-hidden="true"></span><div><b>Ключ отклонён</b><small>Провайдер не принял ключ. Проверьте его и повторите.</small></div><button type="button" class="btn sm ghost" data-example-action="key">Повторить</button></div>
+          <div class="conn-auth-state" data-state="key-unavailable" role="status"><span class="conn-status-dot" aria-hidden="true"></span><div><b>Ключ не проверен</b><small>Нет связи с провайдером. Это не отказ ключа.</small></div></div>
+        </div>
+      </div>
+      <p class="conn-demo-note" data-example-status role="status" aria-live="polite">Макет · программы и ключи не проверяются.</p>
+      <dialog class="conn-trial-dialog" aria-labelledby="dc-trial-title" aria-describedby="dc-trial-price"><h3 id="dc-trial-title">Разрешить пробный ход?</h3><p>Один запрос выбранной модели. Вход и чтение списка моделей сами по себе ход не запускают.</p><p id="dc-trial-price"><b>Цена неизвестна.</b> Ход расходует подписку или оплачивается по тарифу провайдера.</p><p class="conn-note">Макет · после подтверждения настоящий ход не начнётся.</p><div class="conn-actions"><button type="button" class="btn ghost" data-example-dismiss autofocus>Отмена</button><button type="button" class="btn p" data-example-run>Разрешить один ход</button></div></dialog>
+    </section>
+    <!-- End TS-20e connection components. -->
+
     <section id="operation-progress"><h2>ход операции · операция идёт<i></i></h2>
       <div class="three">
         <div class="box"><div class="cap2">в кнопке</div><button type="button" class="btn p operation-button" disabled>Создаём…</button><p class="t3" style="margin-top:12px">Повторное нажатие подсвечивает ту же операцию.</p></div>
@@ -173,4 +299,17 @@
 (function(){ const fill=(id,n,on)=>{ const e=document.getElementById(id); e.innerHTML=Array.from({length:n},(_,i)=>'<i'+(i<on?' class="on"':'')+'></i>').join(''); }; fill('t1',48,30); fill('t2',36,27); })();
 </script>
 <section class="box" id="model-answer"><h2>Ответ модели · Markdown и артефакты</h2><div class="md-body"><h2>Цель проекта</h2><p>Состав команды и результаты хода читаются в одной ленте.</p><div class="md-table" tabindex="0"><table><thead><tr><th>Роль</th><th>Задача</th></tr></thead><tbody><tr><td>Архитектор</td><td>Устройство системы</td></tr><tr><td>Ревьюер</td><td>Независимая критика</td></tr></tbody></table></div><div class="md-code"><div class="md-code-head"><span>typescript</span><button type="button" data-example-copy>копировать</button></div><pre><code><span class="md-keyword">const</span> ready = <span class="md-keyword">true</span>;</code></pre></div><span class="md-artifact"><a href="#model-answer"><b>Схема проекта.png</b><span>открыть ↗</span></a><small>artifacts/схема.png · 24 КБ · образец карточки</small><svg viewBox="0 0 420 120" role="img" aria-label="Образец превью: три блока схемы" style="display:block;max-height:140px;margin:16px auto"><g fill="var(--tile)" stroke="var(--line2)"><rect x="5" y="35" width="110" height="50" rx="8"/><rect x="155" y="35" width="110" height="50" rx="8"/><rect x="305" y="35" width="110" height="50" rx="8"/></g><path d="M115 60h40m110 0h40" stroke="var(--accent)"/><g fill="var(--ink2)" font-size="12" text-anchor="middle"><text x="60" y="65">Владелец</text><text x="210" y="65">Оркестратор</text><text x="360" y="65">Команда</text></g></svg></span><span class="md-artifact"><a href="#model-answer"><b>Обзор.mp4</b><span>открыть ↗</span></a><small>artifacts/обзор.mp4 · видео с управлением воспроизведением · образец</small></span><span class="md-artifact"><a href="#model-answer"><b>Отчёт.pdf</b><span>открыть ↗</span></a><small>docs/отчёт.pdf · 120 КБ · образец</small></span></div></section>
+<script id="connections-spec-demo">
+(function(){
+  const root=document.getElementById('connections-spec'),dialog=root.querySelector('dialog'),status=root.querySelector('[data-example-status]');
+  root.addEventListener('click',event=>{
+    const button=event.target.closest('button');if(!button||button.disabled)return;
+    if(button.hasAttribute('data-example-trial')){if(!dialog.open)dialog.showModal();return}
+    if(button.hasAttribute('data-example-dismiss')){dialog.close();return}
+    if(button.hasAttribute('data-example-run')){dialog.close();status.textContent='Макет · разрешение показано, настоящий ход не запущен.';return}
+    const messages={terminal:'Макет · Терминал не открыт, команда не запущена.',auth:'Макет · вход не проверялся.',installation:'Макет · установка программы не проверялась.',route:'Макет · маршрут не изменён.',models:'Макет · список моделей не запрашивался.',key:'Макет · ключ не проверялся и не сохранялся.'};
+    if(messages[button.dataset.exampleAction])status.textContent=messages[button.dataset.exampleAction];
+  });
+})();
+</script>
 </body></html>
