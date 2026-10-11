@@ -4,7 +4,7 @@ import {ProjectError} from '@harnessy/projects';
 import {ProviderError} from '@harnessy/providers';
 import {RuntimeError} from '@harnessy/runtime';
 import {TeamError} from '@harnessy/team';
-export interface Reply {status:number;value:unknown;plain?:boolean;headers?:Record<string,string>}
+export interface Reply {status:number;value:unknown;plain?:boolean;bytes?:Buffer;headers?:Record<string,string>}
 export const json=(value:unknown,status=200):Reply=>({status,value});
 export const plain=(value:string,status:number,headers?:Record<string,string>):Reply=>({status,value,plain:true,...(headers?{headers}:{})});
 export class HttpError extends Error {readonly reply:Reply;constructor(reply:Reply){super(typeof reply.value==='string'?reply.value:'HTTP '+reply.status);this.reply=reply}}
@@ -21,5 +21,5 @@ export function failure(error:unknown,style:'E'|'F'|'J'='F',statuses:Record<stri
  return json(style==='E'?{error:text(error)}:{ok:false,error:text(error)},status)
 }
 export function writeReply(res:ServerResponse,reply:Reply,head=false){
- const body=reply.plain?String(reply.value):pythonJson(reply.value);res.writeHead(reply.status,{'Content-Type':reply.plain?'text/plain; charset=utf-8':'application/json; charset=utf-8','Content-Length':String(Buffer.byteLength(body)),...reply.headers});res.end(head?undefined:body)
+ const body=reply.bytes??(reply.plain?String(reply.value):pythonJson(reply.value));res.writeHead(reply.status,{'Content-Type':reply.plain?'text/plain; charset=utf-8':'application/json; charset=utf-8','Content-Length':String(Buffer.byteLength(body)),...reply.headers});res.end(head?undefined:body)
 }
