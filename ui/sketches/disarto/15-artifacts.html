@@ -87,6 +87,7 @@
       '<div data-cp="v">'+V.map(([v,s,w],i)=>'<div class="vrow"><b>'+v+'</b><span>'+s+'</span><span class="m">'+w+'</span><span>'+(i===1?'<span class="btn sm p">Закрепить версию</span>':i===5?'<span class="btn sm">Сравнить с v2</span>':'<span class="btn sm ghost">Открыть</span>')+'</span></div>').join('')+'</div>'+
       '<div data-cp="r">'+(risks.length?'<ul style="margin:0;padding-left:16px;font-size:12.5px;color:var(--ink2);line-height:1.7">'+risks.map(x=>'<li>'+x+'</li>').join('')+'</ul>':'<p style="font-size:12.5px;color:var(--ink2);margin:0">Открытых рисков нет.</p>')+'</div>'+
       acts(act); };
+  window.SECTION_SKETCH=()=>card('d84d'); // live data uses the same card blocks
   HX.views('#seg');
   HX.bind('.li[data-a]',el=>card(el.dataset.a),{h:560});
   const SH={map:['Карта OM','harness.autoiflow.com/map · обновлено 30 мин назад',[['артефакт','map.json · seq 3587'],['версия на витрине','текущая'],['кто видит','все, у кого ссылка и вход']]],

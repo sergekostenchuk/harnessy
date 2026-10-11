@@ -74,6 +74,7 @@
       '<div data-cp="s">'+(q[3].length?q[3].map(([a,b,c],i)=>'<div class="src"><span class="n">'+(i+1)+'</span><div><b>'+a+'</b>'+b+'</div><span class="m">'+c+'</span></div>').join(''):'<p style="font-size:12.5px;color:var(--ink2);margin:0">Источников пока нет.</p>')+'</div>'+
       '<div data-cp="v">'+V.map(([v,s,t])=>'<div class="vrow"><b>'+v+'</b><span>'+s+'</span><span class="m">'+t+'</span></div>').join('')+'</div>'+
       acts(k==='4'?[['Уточнить вопрос','p'],'Отклонить']:split?[['Свести ответы инструментов','p'],'Сравнить','Уточнить','Отклонить']:[['Применить к проекту → «Что исследовано»','p','data-close'],'Сравнить','Уточнить','Отклонить']); };
+  window.SECTION_SKETCH=()=>card('1'); // live data uses the same card blocks
   HX.views('#seg');
   HX.bind('.li[data-q]',el=>card(el.dataset.q),{w:820,h:560});
   HX.bind('.li[data-p]',el=>'<div class="from">раскрытая карточка · прошлое исследование</div><div class="ch"><h3>'+el.querySelector('b').textContent+'</h3></div><div class="csub">'+el.querySelector('small').textContent+'</div>'+blk('итог',kv([['вопросов',el.children[2].textContent],['применено',el.children[3].textContent],['где лежит','~/REPORTS/workbench-design/research/'],['кто вёл','ресёрчеры · Sonnet']]))+acts([['Открыть отчёт','p'],'Продолжить это исследование','Сравнить с текущим']),{w:640,h:380});
