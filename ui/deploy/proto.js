@@ -3,7 +3,7 @@
   if(window.HARNESS_BOOT) return;
   const root=document.documentElement, KEY='harnessy-live-snapshot-v1', PROJECT='harnessy-live-project-v1';
   root.setAttribute('data-live-pending','');
-  let timer, connected=false, switching=false;
+  let timer, connected=false, switching=false, generation=0, requested=0, confirmed=0;
   const read=k=>{try{return sessionStorage.getItem(k)}catch(e){return null}};
   const write=(k,v)=>{try{sessionStorage.setItem(k,v)}catch(e){}};
   function snapshot(){
@@ -13,8 +13,10 @@
   }
   function caption(text){if(!document.body){document.addEventListener('DOMContentLoaded',()=>{if(root.hasAttribute('data-live-mock')||root.hasAttribute('data-live-pending'))caption(text)},{once:true});return}let el=document.getElementById('live-boot-state');if(!el){el=document.createElement('div');el.id='live-boot-state';el.setAttribute('role','status');document.body.appendChild(el)}el.textContent=text;return el}
   const boot=window.HARNESS_BOOT={snapshot,
-    select(project){if(typeof project==='string'){switching=true;write(PROJECT,project)}},
-    confirm(project){if(typeof project!=='string'||switching&&read(PROJECT)!==project)return false;switching=false;write(PROJECT,project);return true},
+    capture(){return Object.freeze({generation,request:++requested})},
+    current(token){return !!token&&token.generation===generation&&Number.isSafeInteger(token.request)&&token.request>0&&token.request<=requested&&token.request>=confirmed},
+    select(project){if(typeof project==='string'){generation++;switching=true;write(PROJECT,project)}},
+    confirm(project,token){if(!boot.current(token)||typeof project!=='string'||switching&&read(PROJECT)!==project)return false;confirmed=token.request;switching=false;write(PROJECT,project);return true},
     save(status,chats,projects,pins){if(!status||typeof status.project!=='string'||!Array.isArray(status.panes)||!Array.isArray(chats))return;
       const selected=read(PROJECT);if(selected!==null&&selected!==status.project)return;const {auth,...publicStatus}=status;if(selected===null)write(PROJECT,status.project);
       write(KEY,JSON.stringify({v:1,project:status.project,status:publicStatus,chats,projects:projects||[],pins:pins||[]}));

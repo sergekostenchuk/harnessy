@@ -269,7 +269,7 @@ function firstPaint(html:string,storage=new Map<string,string>(),page='chat'){
   part(live,'  async function hConnect(','  // ── чат: настоящее')+
   part(live,'  const PROJECT_FOLD_KEY=','  async function openChatRow(')+
   part(live,'  function restoreLiveSnapshot(','  // End TS-11 snapshot.')+
-  '\nglobalThis.paint={restore:restoreLiveSnapshot,connect:hConnect,ready:liveFirstPaint,remember:rememberLive};',view.context);
+  '\nglobalThis.paint={restore:restoreLiveSnapshot,connect:hConnect,refresh:refreshStatus,apply:applyStatus,ready:liveFirstPaint,remember:rememberLive};',view.context);
  return {...view,root,attrs,timers,nodes,side,folders,project,head,status,storage,boot:view.sandbox.HARNESS_BOOT,paint:view.sandbox.paint,
   demoVisible:()=>!attrs.has('data-live-pending'),deadline(){for(const [id,timer] of timers)if(timer.ms===1500){timers.delete(id);timer.fn()}}};
 }
@@ -311,7 +311,7 @@ test('142: cached status and chat list render before HTTP; wrong project, corrup
   const storage=new Map(original.storage);if(candidate===null)storage.delete('harnessy-live-snapshot-v1');else storage.set('harnessy-live-snapshot-v1',candidate);
   const bad=firstPaint(html,storage);assert.equal(bad.paint.restore(),false);assert.equal(bad.H.on,false);assert.equal(bad.folders.innerHTML,'');assert.equal(bad.demoVisible(),false);
  }
- original.boot.select('/different-project');original.boot.save(realStatus(),[],[],[]);assert.equal(original.storage.get('harnessy-live-project-v1'),'/different-project','late old-project data cannot undo an accepted switch');assert.equal(original.boot.confirm('/real/project'),false);assert.equal(original.boot.confirm('/different-project'),true);const switched=firstPaint(html,original.storage);assert.equal(switched.paint.restore(),false,'accepted project switch invalidates the old preview before a new status arrives');
+ original.boot.select('/different-project');original.boot.save(realStatus(),[],[],[]);assert.equal(original.storage.get('harnessy-live-project-v1'),'/different-project','late old-project data cannot undo an accepted switch');assert.equal(original.boot.confirm('/real/project',original.boot.capture()),false);assert.equal(original.boot.confirm('/different-project',original.boot.capture()),true);const switched=firstPaint(html,original.storage);assert.equal(switched.paint.restore(),false,'accepted project switch invalidates the old preview before a new status arrives');
  assert.doesNotMatch(cx,/folder:'OMG'|c\.folder\|\|'OMG'/);
 });
 
@@ -332,4 +332,46 @@ test('142: cold cached journal executes the real startup after journal/Now state
  const tail=live.slice(live.indexOf('  function restoreLiveSnapshot('),live.lastIndexOf('})();'));
  assert.doesNotThrow(()=>runInContext(tail,v.context));assert.equal(v.H.snapshotOnly,true);assert.equal(v.H.project,'/real/project');assert.deepEqual(v.requests.map(r=>r.path),['/api/status']);
  v.status.resolve(realStatus());await immediate();assert.equal(v.attrs.has('data-live-pending'),false);assert.equal(v.H.connected,true);assert.equal(v.requests.some(r=>r.path==='/api/onboard'||r.path==='/api/chats/open'||r.path==='/api/chat'),false);
+});
+
+const bootHtml='<head><script>'+proto.split('/* LIVE_BOOT_END */')[0]+'</script></head>';
+const projectStatus=(project:string,label:string)=>({...realStatus(),project,panes:[{...realStatus().panes[0]!,label}]});
+for(const older of ['refresh','connect'])for(const newer of ['refresh','connect'])test('TS-11 r2: late '+older+' cannot undo confirmed project from '+newer,async()=>{
+ const v=firstPaint(bootHtml,new Map(),'set'),old=deferred<Data>(),next=deferred<Data>();let calls=0;
+ v.paint.apply(projectStatus('/project-a','initial A'),v.boot.capture(),true);v.paint.remember();
+ const fetch=v.sandbox.fetch;v.sandbox.fetch=async(path:string)=>path==='/api/status'?{json:()=>++calls===1?old.promise:next.promise}:fetch(path);
+ const pending=v.paint[older]();v.boot.select('/project-b');const current=v.paint[newer]();
+ next.resolve(projectStatus('/project-b','current B'));await current;v.paint.remember();const saved=v.storage.get('harnessy-live-snapshot-v1'),requests=v.requests.length;
+ assert.equal(v.H.project,'/project-b');assert.equal(v.H.panes[0].label,'current B');
+ old.resolve(projectStatus('/project-a','late A'));await pending;
+ assert.equal(v.H.project,'/project-b');assert.equal(v.H.liveStatus.project,'/project-b');assert.equal(v.H.panes[0].label,'current B');assert.equal(v.H.on,true);assert.equal(v.H.snapshotOnly,false);
+ assert.equal(v.storage.get('harnessy-live-project-v1'),'/project-b');assert.equal(v.storage.get('harnessy-live-snapshot-v1'),saved);assert.equal(v.boot.snapshot().project,'/project-b');assert.equal(v.requests.length,requests,'rejected status cannot refresh chats or save an old snapshot');
+});
+
+for(const reader of ['refresh','connect'])test('TS-11 r2: '+reader+' rejects a pre-switch response after A → B → A, including the saved snapshot',async()=>{
+ const v=firstPaint(bootHtml,new Map(),'set'),gates=[deferred<Data>(),deferred<Data>(),deferred<Data>()];let calls=0;
+ v.paint.apply(projectStatus('/project-a','initial A'),v.boot.capture(),true);
+ const fetch=v.sandbox.fetch;v.sandbox.fetch=async(path:string)=>path==='/api/status'?{json:()=>gates[calls++]!.promise}:fetch(path);
+ const old=v.paint[reader]();v.boot.select('/project-b');const b=v.paint[reader]();gates[1]!.resolve(projectStatus('/project-b','B'));await b;
+ v.boot.select('/project-a');const a=v.paint[reader]();gates[2]!.resolve(projectStatus('/project-a','new A'));await a;v.paint.remember();const saved=v.storage.get('harnessy-live-snapshot-v1');
+ gates[0]!.resolve(projectStatus('/project-a','obsolete A'));await old;
+ assert.equal(v.H.project,'/project-a');assert.equal(v.H.panes[0].label,'new A');assert.equal(v.storage.get('harnessy-live-project-v1'),'/project-a');assert.equal(v.storage.get('harnessy-live-snapshot-v1'),saved);assert.equal(v.boot.snapshot().status.panes[0].label,'new A');
+});
+
+test('TS-11 r2: request order protects a changed status from another window; missing or invalid request cannot apply',async()=>{
+ const v=firstPaint(bootHtml,new Map(),'set'),old=deferred<Data>(),next=deferred<Data>();let calls=0;
+ v.paint.apply(projectStatus('/project-a','A'),v.boot.capture(),true);
+ const fetch=v.sandbox.fetch;v.sandbox.fetch=async(path:string)=>path==='/api/status'?{json:()=>++calls===1?old.promise:next.promise}:fetch(path);
+ const pending=v.paint.refresh(),current=v.paint.refresh();next.resolve(projectStatus('/project-b','external B'));await current;v.paint.remember();const saved=v.storage.get('harnessy-live-snapshot-v1');
+ old.resolve(projectStatus('/project-a','old external A'));await pending;
+ for(const token of [undefined,null,{}, {generation:0,request:NaN},{generation:0,request:999}])assert.equal(v.paint.apply(projectStatus('/forged','forged'),token),false);
+ assert.equal(v.H.project,'/project-b');assert.equal(v.storage.get('harnessy-live-project-v1'),'/project-b');assert.equal(v.storage.get('harnessy-live-snapshot-v1'),saved);
+});
+
+test('TS-11 r2: rejected startup response leaves a cached preview read-only until a current status arrives',async()=>{
+ const seed=firstPaint(bootHtml);seed.boot.save(realStatus(),[],[],[]);const v=firstPaint(bootHtml,seed.storage,'set'),gate=deferred<Data>();
+ assert.equal(v.paint.restore(),true);v.sandbox.fetch=async(path:string)=>({json:()=>path==='/api/status'?gate.promise:Promise.resolve({chats:[]})});
+ const old=v.paint.connect();v.boot.select('/next-project');gate.resolve(realStatus());await old;
+ assert.equal(v.H.project,'/real/project');assert.equal(v.H.snapshotOnly,true);assert.equal(v.H.connected,undefined);assert.equal(v.storage.get('harnessy-live-project-v1'),'/next-project');
+ const before=v.requests.length;assert.equal((await v.functions.api('/api/chat',{message:'keep preview read-only'})).code,'live_pending');assert.equal(v.requests.length,before);
 });
