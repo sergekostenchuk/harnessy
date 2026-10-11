@@ -21,7 +21,7 @@ import {digest,roleNote,contextCard,conversationTransfer,transferSettings,transf
 import {ProviderError,type TurnContext,type PeerTools,type SendArgs,type AskArgs,type ReadPaneArgs,type MergeArgs,type AssignRoleArgs} from '@harnessy/providers';
 import {Pane,Registry,validDir} from './pane.ts';
 import {EventBus,type Selector} from './events.ts';
-import {StateStore,diskIO,timestampMessage,type ResultMessage,type TranscriptMessage} from './state.ts';
+import {StateStore,diskIO,timestampMessage,artifactPaths,type ResultMessage,type TranscriptMessage} from './state.ts';
 import {LimitsStore} from './limits.ts';
 import {Scopes,ProcessTokens} from './scope.ts';
 import {renderInbox,queueNote} from './inbox.ts';
@@ -283,7 +283,7 @@ export class Runtime {
  if(p.restoreFailed.has(id))free(p,pane);
  if(p.materializing.has(id))throw new RuntimeError('recovering','назначение роли не завершено');
  if(pane.status!=='idle')throw new RuntimeError(pane.status,'ход не активен');
- const entries=options.entries??[],records=deepFreeze(entries.map(e=>e.record)),injected:TranscriptMessage[]=[];
+ const entries=options.entries??[],records=deepFreeze(entries.map(e=>e.record)),injected:TranscriptMessage[]=[],artifacts=new Set<string>();
  const relayDepth=Math.max(options.relayDepth??0,askDeliveryDepth(p,records));
  if(!pane.model)throw new RuntimeError('model_required','Сначала выберите модель разговора',400);
  pane.busy=true;pane.touched=true;pane.revision++;const launchModel=pane.model,launchEpoch=pane.sessionEpoch;
@@ -307,7 +307,7 @@ export class Runtime {
   }turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
  }},publish:event=>{
  if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:event.text,sessionId:pane.sessionId}:event;return}
- if(turn.stopRequested)return;if(event.type==='delta')turn.partial+=event.text;pane.publish(event)
+ if(turn.stopRequested)return;if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;pane.publish(event)
  },askApproval:(title,detail)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return pane.askApproval(title,detail)},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;if(transfer&&!turn.started){earlySession=sid;return}pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
  if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(pane,handle)
  },env:this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[...p.registry.panes.values()].map(p=>({id:p.id,label:p.label,vendor:p.vendor as Vendor})),tools:this.toolsFor(scope),relayDepth:turn.relayDepth,projectDir:p.dir,appUrl:this.deps.appUrl,
@@ -327,13 +327,13 @@ export class Runtime {
  const response=timestampMessage('ai',result.text,this.clock.now()) as ResultMessage;const held=(turn as ActiveTurn).terminal;
  if(held?.type==='done'){if(typeof held.model==='string'&&held.model)response.model=held.model;if(object(held.usage))response.usage=structuredClone(held.usage);if(typeof held.durationMs==='number'&&Number.isFinite(held.durationMs))response.durationMs=held.durationMs}
  response.vendor=launchVendor;response.outcome=interrupted?'interrupted':held?.type==='error'?'error':'ok';if(response.outcome==='error')response.errorCode=typeof held?.code==='string'?held.code:'internal';
- response.deliverySeq=turn.deliverySeq;response.runtime={turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),effectsPending:true,interrupted,nextSeen};turn.result=response;
+ response.deliverySeq=turn.deliverySeq;response.runtime={turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),effectsPending:true,interrupted,nextSeen};turn.result=response;if(artifacts.size)response.artifacts={project:p.dir,chat:p.state.activeChat(pane)!.id,turnInstanceId:scope.turnInstanceId,paths:[...artifacts]};
  p.state.commitResult(pane,p.registry,response);
  const receipt=p.state.attempts[id];if(receipt?.turnInstanceId===scope.turnInstanceId)p.state.clearAttempt(id);
  await this.recover(p,pane,true);
  const terminal=held?.type==='done'?held:{type:'done',sessionId:pane.sessionId,durationMs:0,usage:{input:null,output:null,cacheRead:null}};
  if(terminal.type==='done'&&object(terminal.usage))pane.tokens=terminal.usage as unknown as import('@harnessy/providers').Usage;
- pane.publish({...terminal,...(interrupted?{interrupted:true}:{})});terminalSent=true;
+ pane.publish({...terminal,...(response.artifacts?{artifacts:structuredClone(response.artifacts),turnInstanceId:scope.turnInstanceId}:{}),...(interrupted?{interrupted:true}:{})});terminalSent=true;
  success=true;return result.text
  }catch(e){
  if(!turn.result){pane.transcript=pane.transcript.filter(m=>!injected.includes(m));for(const m of injected)pane.uncommitted.delete(m);
