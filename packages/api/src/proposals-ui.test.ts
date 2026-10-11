@@ -8,8 +8,8 @@ const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'u
 const q=(version=1)=>({proposalId:'p'+'a'.repeat(24),version,confirmed:false,seats:[{sid:'worker-a',kind:'worker',label:'Юрист <script>bad</script>',vendor:'claude',model:'w1',mode:'read',intro:'Проверь договор полностью'}]});
 function ui(fetcher:(path:string,body?:any)=>Promise<any>,page='chat'){
  const d=dom('<div class="frame cur"><main class="main"><div class="feed">Разговор остаётся</div></main></div>'),H:any={on:true,project:'/a',snapshotOnly:false},requests:any[]=[],toasts:string[]=[];
- const context:any={H,PAGE:page,document:d.document,leftPage:false,addEventListener:d.window.addEventListener.bind(d.window),toast:(s:string)=>toasts.push(s),esc:(v:any)=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),api:async(path:string,body?:any)=>{requests.push({path,body});return fetcher(path,body)}};
- runInContext(block+'globalThis.proposals={fetch:proposalsFetch,sync:proposalsSync,reset:proposalsReset,show:showTeamProposal,state:TP};',createContext(context));
+ const context:any={H,S:{ui:{pane:'room'}},PAGE:page,document:d.document,leftPage:false,bindingNavigation:0,sendBinding:()=>({project:H.project,pane:'room',chat:null}),bindingCurrent:(b:any)=>b.project===H.project,addEventListener:d.window.addEventListener.bind(d.window),toast:(s:string)=>toasts.push(s),esc:(v:any)=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),api:async(path:string,body?:any)=>{requests.push({path,body});return fetcher(path,body)}};
+ runInContext(live.slice(live.indexOf('  // TS-09b4: one progress view'),live.indexOf('  // TS-09b2:'))+block+'globalThis.proposals={fetch:proposalsFetch,sync:proposalsSync,reset:proposalsReset,show:showTeamProposal,state:TP,draw:operationsStatus};',createContext(context));
  const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};return {...d,H,context,requests,toasts,find,f:context.proposals};
 }
 for(const page of ['chat','now'])test('156 UI '+page+': displayed exact proposal confirmed through HTTP; fake transcript yes does not authorize',async t=>{
@@ -41,4 +41,12 @@ for(const page of ['chat','now','new'])test('156 UI '+page+': stream notificatio
  version=2;streams[0].onmessage({data:JSON.stringify({type:'teamProposals',project:'/a'})});await until(()=>v.f.state.data[0]?.version===2);assert.equal(v.find('[data-team-confirm]').dataset.teamVersion,'2');
  streams[0].onerror();version=3;await streams[0].onopen();await until(()=>v.f.state.data[0]?.version===3);assert.equal(v.find('[data-team-confirm]').dataset.teamVersion,'3');assert.equal(streams.length,1);
  v.context.leftPage=true;await v.window.emit('pagehide');const count=v.requests.length;streams[0].onmessage({data:JSON.stringify({type:'teamProposals',project:'/a'})});assert.equal(v.requests.length,count);assert.equal(v.document.querySelector('[data-team-confirm]'),null);
+});
+
+
+test('222: confirmed seat creation shares operation progress and counts only seats returned by status',async()=>{
+ const gate=deferred<any>();let confirmed=false;const v=ui(async(_path,body)=>{if(body){confirmed=true;return gate.promise}return {ok:true,project:'/a',proposals:[{...q(),confirmed,seats:[...q().seats,{...q().seats[0],sid:'reviewer-b',label:'Ревьюер'}]}]}});
+ v.H.panes=[];await v.f.fetch();const click=v.find('[data-team-confirm]').emit('click');assert.match(v.find('[data-live-operations]').textContent,/подтверждаем состав/);assert.equal(v.find('[data-team-confirm]').disabled,true);gate.resolve({ok:true});await click;assert.match(v.find('[data-live-operations]').textContent,/ожидаем оркестратора/);assert.equal(v.find('[role="progressbar"]').getAttribute('aria-valuenow'),null);
+ v.H.panes=[{id:'worker-a'}];v.f.draw();assert.equal(v.find('[role="progressbar"]').getAttribute('aria-valuenow'),'1');assert.match(v.find('[data-live-operations]').textContent,/Ревьюер/);
+ v.H.panes.push({id:'reviewer-b'});v.f.draw();assert.match(v.find('[data-live-operations]').textContent,/Готово/);assert.equal(v.find('[role="progressbar"]').getAttribute('aria-valuenow'),'2');assert.equal(v.requests.filter(r=>r.body).length,1);v.H.project='/b';v.f.draw();assert.equal(v.document.querySelector('[data-live-operations]'),null);
 });

@@ -67,14 +67,15 @@ export function transferSnapshot(p:ProjectState,pane:Pane,records:readonly impor
 }
 
 export const SUMMARY_PROMPT='Напиши краткую выжимку этого разговора для передачи в новый чат той же роли: что решено, что сделано, открытые вопросы, чего ждёт владелец. Коротко, списком, без вступления.';
-export interface PromotionIdentity {operationId:string;chat:string;sourceProject:string;sourceRevision:number;target:string;pane:string}
+export interface PromotionIdentity {operationId:string;chat:string;sourceProject:string;sourceRevision:number;target:string;pane:string;step:number;stepCount:4;stepLabel:string;completed:number;error:string|null}
 export function promotionIdentity(c:Chat):PromotionIdentity|null {
  const op=c.promotion;if(!object(op)||typeof op.id!=='string'||typeof op.sid!=='string'||typeof op.target!=='string'||!object(op.input)||typeof op.input.project!=='string'||!Number.isSafeInteger(op.input.revision))return null;
- return {operationId:op.id,chat:c.id,sourceProject:op.input.project,sourceRevision:op.input.revision as number,target:op.target,pane:op.sid};
+ const saved=object(op.progress)?op.progress:null,derived=op.done===true?4:c.pane===op.sid?3:op.target===op.input.project?1:0,completed=op.done===true?4:saved&&Number.isInteger(saved.completed)&&Number(saved.completed)>=0&&Number(saved.completed)<4?Math.max(derived,Number(saved.completed)):derived,step=Math.min(completed+1,4);
+ return {operationId:op.id,chat:c.id,sourceProject:op.input.project,sourceRevision:op.input.revision as number,target:op.target,pane:op.sid,step,stepCount:4,stepLabel:['папка','вводная и документы','место','первое поручение'][step-1]!,completed,error:saved&&typeof saved.error==='string'?saved.error:null};
 }
 export interface ChatMeta {promotion?:{pending:boolean;target:string}&Partial<PromotionIdentity>;revision:number;documents:import('./state.ts').DocumentRef[];id:string;pane:string;label:string;role:string|null;title:string;created:number;closed:number|null;model:string|null;vendor:string;messages:number;last:number;active:boolean}
 export function meta(p:ProjectState,c:Chat):ChatMeta {
- chatMetadata(c);const promotion=object(c.promotion)&&typeof c.promotion.target==='string'?{...promotionIdentity(c),pending:c.promotion.done===false,target:c.promotion.target}:null,refs=promotion&&object(c.promotion)&&object(c.promotion.input)&&Array.isArray(c.promotion.input.documents)?c.promotion.input.documents:c.documents??[];const pane=p.registry.get(c.pane),last=c.transcript.at(-1);
+ chatMetadata(c);const promotion=object(c.promotion)&&typeof c.promotion.target==='string'?{...promotionIdentity(c),pending:c.promotion.done===false||object(c.promotion.progress)&&typeof c.promotion.progress.error==='string',target:c.promotion.target}:null,refs=promotion&&object(c.promotion)&&object(c.promotion.input)&&Array.isArray(c.promotion.input.documents)?c.promotion.input.documents:c.documents??[];const pane=p.registry.get(c.pane),last=c.transcript.at(-1);
  return {...(promotion?{promotion}:{}),revision:c.revision??0,documents:jsonClone(refs),id:c.id,pane:c.pane,label:pane?.label??c.pane,role:pane?.role??null,title:c.title||'',created:c.created,closed:c.closed??null,model:c.model,vendor:c.vendor,messages:c.transcript.length,last:last?.ts?Math.trunc(last.ts):c.created,active:p.state.chats.active[c.pane]===c.id};
 }
 export function closeChat(p:ProjectState,pane:Pane,carry:string):string {

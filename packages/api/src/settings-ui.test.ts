@@ -18,7 +18,7 @@ function settingsUi(fetch?:(path:string,body?:any)=>Promise<any>,project='/proje
   localStorage:{getItem:(k:string)=>storage.get(k)??null,setItem(k:string,v:string){storage.set(k,v);writes.push(k)}},save(){writes.push('live-state')},log:L.log,toast:L.toast,esc:L.esc,hooks,stop(){requests.push({path:'stop'})},now:()=>1,hhmm:()=>'',
   addEventListener:d.window.addEventListener.bind(d.window),setTimeout:(fn:()=>void)=>{fn();return 1},requestAnimationFrame:(fn:()=>void)=>fn(),clearTimeout(){}};
  context.window=context;const vm=createContext(context);runInContext(read('ui/sketches/disarto/app.js'),vm);
- runInContext(part(live,'  const statics=','  // ══ ПЛАН:')+part(live,'  function closeLAMenus(','  // запись «контекст передан»')+part(live,'  function laMulti(','  document.addEventListener(\'click\',async e=>{ const la=')+part(live,'  // ══ НАСТРОЙКИ:','  // ══ ПЕРВЫЙ ЗАПУСК:')+'\nglobalThis.menus={laMenu,laPath,laMulti};restoreUI();',vm);
+ runInContext(part(live,'  const statics=','  // ══ ПЛАН:')+part(live,'  function closeLAMenus(','  // запись «контекст передан»')+part(live,'  function laMulti(','  // TS-09b4: one progress view')+part(live,'  // ══ НАСТРОЙКИ:','  // ══ ПЕРВЫЙ ЗАПУСК:')+'\nglobalThis.menus={laMenu,laPath,laMulti};restoreUI();',vm);
  Object.assign(L,context.menus);runInContext(live.split('\n').find(l=>l.includes("if(e.key==='Escape'&&H.cur"))!,vm);runInContext(set,vm);
  const find=(selector:string)=>{const node=d.document.querySelector(selector);assert.ok(node,selector);return node};
  const go=async(p:string)=>{await find('.snav [data-p="'+p+'"]').emit('click')};

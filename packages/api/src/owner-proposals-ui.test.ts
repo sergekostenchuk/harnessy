@@ -24,7 +24,7 @@ function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body:any,r
  async refreshStatus(){const status=await box.api('/api/status');H.project=status.project;H.panes=status.panes;box.pickPane()},
  async onSend(text:string,_ta:any,binding:any){if(!box.LIVE.bindingCurrent(binding)||box.leftPage)return false;return box.api('/api/chat',{pane:binding.pane,message:text})}};
  box.window=box;const vm=createContext(box);
- runInContext(part('  let bindingGeneration','  function md(')+part('  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+'globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,sendBinding,bindingCurrent,invalidateBinding,get teamProposals(){return TP},proposalsFetch,showTeamProposal,requestTeamProposal};globalThis.resetProposals=proposalsReset;',vm);
+ runInContext(part('  let bindingGeneration','  function md(')+part('  // TS-09b4: one progress view','  // TS-09b2:')+part('  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+'globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,sendBinding,bindingCurrent,invalidateBinding,get teamProposals(){return TP},proposalsFetch,showTeamProposal,requestTeamProposal};globalThis.resetProposals=proposalsReset;',vm);
  runInContext(cx,vm);
  const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};
  const settle=async()=>{do{await Promise.all([...pending]);await immediate()}while(pending.size)};
@@ -49,7 +49,7 @@ test('243 DOM+HTTP: no registered proposal gives a precise prompt to the project
 for(const phase of ['read','create'])test('244 DOM+HTTP: delayed '+phase+' cannot repaint another project or keep a usable stale menu',async t=>{
  const h=await setup(t),gate=deferred(),entered=deferred();let hold=true;const v=ui(h,async(path,body)=>{if(hold&&(phase==='read'&&path==='/api/seats/proposals'||phase==='create'&&body&&path==='/api/seats/owner')){hold=false;entered.resolve();await gate.promise}});
  await v.find('[data-cx="role"]').emit('click');if(phase==='create'){await v.settle();await v.find('[data-cx-team-open]').emit('click')}
- const click=phase==='create'?v.find('[data-team-create]').emit('click'):Promise.resolve();await entered.promise;v.H.project='/other';v.L.invalidateBinding();v.box.resetProposals();gate.resolve();await click;await v.settle();assert.equal(v.document.querySelector('[data-team-proposal]'),null);assert.equal(v.document.querySelector('.cx-pop'),null);assert.equal(v.H.project,'/other');assert.equal(v.requests.filter(r=>r.path==='/api/status').length,0);
+ const click=phase==='create'?v.find('[data-team-create]').emit('click'):Promise.resolve();await entered.promise;const statusReads=v.requests.filter(r=>r.path==='/api/status').length;v.H.project='/other';v.L.invalidateBinding();v.box.resetProposals();gate.resolve();await click;await v.settle();assert.equal(v.document.querySelector('[data-team-proposal]'),null);assert.equal(v.document.querySelector('.cx-pop'),null);assert.equal(v.H.project,'/other');assert.equal(v.requests.filter(r=>r.path==='/api/status').length,statusReads);
 });
 
 test('240: an updated proposal snapshot redraws an already open role menu',async t=>{
@@ -60,7 +60,7 @@ test('240: an updated proposal snapshot redraws an already open role menu',async
 
 test('243: changing the project while opening the orchestrator never sends the prompt to the replacement',async t=>{
  const h=await setup(t,false),v=ui(h),gate=deferred(),entered=deferred();v.box.loadChat=async()=>{entered.resolve();await gate.promise};
- await v.find('[data-cx="role"]').emit('click');await v.settle();const action=v.find('[data-cx-team-request]').emit('click');await entered.promise;v.H.project='/other';v.L.invalidateBinding();gate.resolve();await action;assert.equal(v.requests.some(r=>r.path==='/api/chat'),false);
+ await v.find('[data-cx="role"]').emit('click');await v.settle();const action=v.find('[data-cx-team-request]').emit('click');await entered.promise;const statusReads=v.requests.filter(r=>r.path==='/api/status').length;v.H.project='/other';v.L.invalidateBinding();gate.resolve();await action;assert.equal(v.requests.some(r=>r.path==='/api/chat'),false);
 });
 
 test('241: partial owner materialization keeps a visible retry even when the place exists in status',async t=>{
