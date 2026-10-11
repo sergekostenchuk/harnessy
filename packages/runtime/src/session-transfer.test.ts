@@ -46,7 +46,7 @@ test('246: saved promotion intro, documents, same-chat proposal and task; foreig
  const h=await harness(t),pane=seed(h.runtime),p=h.runtime.project,chat=p.state.activeChat(pane)!;
  const task=p.journal.append({sender:'owner',to:['worker'],kind:'task',text:'LAST TASK',thread:'T1'});pane.transcript.at(-1)!.runtime={turnInstanceId:'turn-own',recordSeqs:[task.seq]};
  chat.promotion={target:p.dir,sid:pane.id,source:{chat:{id:chat.id}},intro:'SUBJECT INTRO'};chat.documents=[{project:p.dir,path:'claim.md'}];writeFileSync(join(h.dir,'.harness/MEMORY.md'),'## Цель\nSAVED MEMORY');
- p.state.saveProposals({project:p.dir,proposals:[{proposalId:'own',version:2,from:'worker',turnInstanceId:'turn-own',confirmed:false,seats:[{label:'Юрист',kind:'worker'}]},{proposalId:'foreign',version:1,from:'worker',turnInstanceId:'other-chat',confirmed:false,seats:[{label:'FOREIGN SECRET'}]}]});p.state.saveChats(p.registry);
+ p.state.saveProposals({project:p.dir,proposals:[{proposalId:'own',version:2,from:'worker',turnInstanceId:'turn-own',confirmed:false,seats:[{label:'Юрист',kind:'worker',sid:'worker-12345',operationId:'c12345'}]},{proposalId:'foreign',version:1,from:'worker',turnInstanceId:'other-chat',confirmed:false,seats:[{label:'FOREIGN SECRET'}]}]});p.state.saveChats(p.registry);
  const out=transferSnapshot(p,pane,[])!;const text=JSON.stringify(out.facts);for(const value of ['SUBJECT INTRO','claim.md','SAVED MEMORY','LAST TASK','own','Юрист'])assert.ok(text.includes(value),value);assert.doesNotMatch(text,/FOREIGN SECRET/);
 });
 test('245: failure after early session callback but before model start retries transfer, without false notice',async t=>{
@@ -59,4 +59,41 @@ test('246/249: pending owner ack from same thread is included; settled and unrel
  p.journal.append({sender:'worker',to:['owner'],kind:'question',thread:'case',text:'WAIT OWNER',ack:'pending'});
  p.journal.append({sender:'worker',to:['owner'],kind:'question',thread:'another-chat',text:'UNRELATED',ack:'pending'});
  p.state.saveChats(p.registry);const snapshot=transferSnapshot(p,pane,[])!;assert.match(JSON.stringify(snapshot.facts),/WAIT OWNER/);assert.doesNotMatch(JSON.stringify(snapshot.facts),/UNRELATED/);
+});
+
+test('246 round 2: actual prompt separates proposed classes from owner-created seats after vendor switch',async t=>{
+ const claude=new FakeProvider('claude'),codex=new FakeProvider('codex'),h=await harness(t,{seats:'  lead: {kind: orchestrator, role: orchestrator, vendor: claude, model: w1, mode: read}',deps:{providers:{claude,codex}}});
+ claude.onRun=async(s,_text,ctx)=>{ctx.modelStarted?.();if(s.id==='lead'){const r=await ctx.tools.proposeSeats({seats:['FIRST','SECOND'].map(label=>({kind:'worker',label,vendor:'claude',model:'w1',mode:'read',intro:'Analyse the evidence'}))});assert.equal(r.ok,true)}return {text:'Composition proposed',sessionId:'old'}};
+ await h.runtime.runTurn('lead','build team');const q=(await h.runtime.teamProposals(OWNER)).proposals[0]!;
+ await h.runtime.createOwnerSeat({project:h.dir,proposalId:q.proposalId,version:q.version,seatIndex:0,kind:'researcher'},OWNER);await h.runtime.idle();
+ const saved=h.runtime.project.state.readProposals();h.runtime.paneSet('lead',{model:'c1'},OWNER);await h.runtime.runTurn('lead','continue');
+ const line=codex.calls[0]!.message.split('\n').find(s=>s.startsWith('> {"proposalId":'));assert.ok(line);const data=JSON.parse(line.slice(2));
+ assert.equal(data.seats[0].kind,'researcher');assert.equal(data.seats[0].created,true);assert.equal(data.seats[0].state,'создана');assert.equal(data.seats[0].createdBy,'владелец (интерфейс)');
+ assert.equal(data.seats[1].kind,'worker');assert.equal(data.seats[1].created,false);assert.equal(data.seats[1].state,'ожидает');assert.equal(data.seats[1].createdBy,null);assert.equal(data.seats[1].requestedBy,null);
+ assert.deepEqual(data.originalSeats,q.seats);assert.deepEqual(h.runtime.project.state.readProposals(),saved);assert.equal(h.runtime.registry.get(q.seats[0]!.sid)!.kind,'researcher');
+});
+
+test('246 round 2: incomplete materialization is pending; missing or mismatched creation evidence refuses',async t=>{
+ const h=await harness(t),pane=seed(h.runtime),p=h.runtime.project;pane.transcript.at(-1)!.runtime={turnInstanceId:'own',recordSeqs:[]};p.state.saveChats(p.registry);
+ const q={proposalId:'own',version:1,from:'worker',turnInstanceId:'own',confirmed:false,seats:[{label:'FIRST',kind:'worker',sid:'worker-12345',operationId:'c12345'}],ownerSeats:{0:{kind:'researcher',created:false}}};
+ p.state.saveProposals({project:p.dir,proposals:[q]});
+ const row=()=>JSON.parse(transferSnapshot(p,pane,[])!.facts.find(f=>f.label==='Незавершённое предложение команды')!.text).seats[0];
+ assert.equal(row().kind,'researcher');assert.equal(row().state,'ожидает');assert.equal(row().requestedBy,'владелец (интерфейс)');
+ const op={operationId:'c12345',sid:'worker-12345',input:{kind:'researcher'},by:'владелец (интерфейс)',stages:{team:false,seatFile:false,chat:false,status:false,onboarding:false}};
+ p.state.saveMaterializations([op]);assert.equal(row().state,'создаётся');assert.equal(row().created,false);assert.equal(row().createdBy,null);
+ for(const malformed of [{...q,ownerSeats:{0:{kind:'researcher',created:true}}},{...q,ownerSeats:{0:{kind:'reviewer',created:false}}},{...q,ownerSeats:{0:{kind:'invented',created:false}}}]){
+  p.state.saveProposals({project:p.dir,proposals:[malformed]});assert.throws(()=>row(),(e:any)=>e.code==='proposal_invalid');
+ }
+ const {by,...withoutAuthor}=op;p.state.saveProposals({project:p.dir,proposals:[q]});for(const malformed of [{...op,sid:'other'},withoutAuthor,{...op,stages:{}}]){p.state.saveMaterializations([malformed]);assert.throws(()=>row(),(e:any)=>e.code==='proposal_invalid')}
+});
+
+for(const vendor of ['claude','codex'] as const)for(const lost of [false,true])test('248 round 2: opt out bypasses corrupt proposal sources for '+vendor+(lost?' missing session':' fresh session'),async t=>{
+ const provider=new FakeProvider(vendor),h=await harness(t,{deps:{providers:{[vendor]:provider}}}),pane=seed(h.runtime),p=h.runtime.project;pane.vendor=vendor;pane.model=vendor==='claude'?'w1':'c1';pane.sessionId=lost?'old':null;p.state.savePanes(p.registry,p.journal);
+ await h.runtime.settingsPatch('owner',{contextTransferEnabled:false},OWNER);writeFileSync(join(h.dir,'.harness/state/team-proposals.json'),'{broken');
+ let proposalReads=0,materializationReads=0;const read=p.state.readProposals.bind(p.state),readOps=p.state.readMaterializations.bind(p.state);p.state.readProposals=()=>{proposalReads++;return read()};p.state.readMaterializations=()=>{materializationReads++;return readOps()};
+ provider.onRun=async(s,_m,ctx)=>{if(s.sessionId==='old')throw new ProviderError('session_missing','expired');return done(ctx,s.model)};
+ const events=collect(h.runtime);await h.runtime.runTurn('worker','CURRENT');assert.equal(provider.calls.length,lost?2:1);assert.ok(provider.calls.every(c=>c.message==='CURRENT'));assert.equal(proposalReads,0);assert.equal(materializationReads,0);
+ const notes=pane.transcript.filter(m=>m.contextTransfer);assert.equal(notes.length,1);assert.match(notes[0]!.text,/контекст не передан по настройке/);const meta=notes[0]!.contextTransfer as any;assert.equal(meta.enabled,false);assert.equal(meta.content,'');assert.equal(meta.chat,p.state.chats.active.worker);assert.equal(meta.project,h.dir);
+ await until(()=>events.events.some(e=>e.type==='contextTransfer'));assert.equal((events.events.find(e=>e.type==='contextTransfer')!.transfer as any).enabled,false);events.sub.close();
+ const id=p.state.chats.active.worker!;p.state.chats.active.worker='wrong';assert.throws(()=>transferSnapshot(p,pane,[],false),(e:any)=>e.code==='context_binding_invalid');p.state.chats.active.worker=id;
 });
