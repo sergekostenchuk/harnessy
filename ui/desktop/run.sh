@@ -1,6 +1,14 @@
-#!/bin/zsh
-# Запуск оболочки Harnessy. Берёт Electron из node_modules этой папки, иначе — из Workbench (~/ASVP/UI/asvh-workbench).
-cd "${0:a:h}" || exit 1
-E=./node_modules/.bin/electron; [ -x "$E" ] || E=~/ASVP/UI/asvh-workbench/node_modules/.bin/electron
-[ -x "$E" ] || { echo "Electron не найден: выполните npm install в $(pwd)"; exit 1; }
-exec "$E" .
+#!/bin/sh
+# Переходник Electron на TypeScript-ядро Harnessy; допускает ссылку на файл или каталог.
+harnessy_script_path=$0
+while [ -L "$harnessy_script_path" ]; do
+  harnessy_script_dir=$(CDPATH= cd "$(dirname "$harnessy_script_path")" && pwd -P) || exit 1
+  harnessy_script_link=$(readlink "$harnessy_script_path") || exit 1
+  case "$harnessy_script_link" in
+    /*) harnessy_script_path=$harnessy_script_link ;;
+    *) harnessy_script_path=$harnessy_script_dir/$harnessy_script_link ;;
+  esac
+done
+harnessy_script_dir=$(CDPATH= cd "$(dirname "$harnessy_script_path")" && pwd -P) || exit 1
+cd "$harnessy_script_dir/../.." || exit 1
+exec node packages/api/bin/harnessy.ts

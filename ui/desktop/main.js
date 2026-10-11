@@ -6,7 +6,7 @@ const fs = require('fs'), os = require('os'), path = require('path');
 
 const START = process.env.HARNESSY_URL || 'http://localhost:3777/sketches/proto/10-new-chat.html';
 const ORIGIN = new URL(START).origin;
-const HARNESS = process.env.HARNESS_DIR || path.join(__dirname, '..', '..', 'core');   // один корень ~/Harnessy/{core,ui}
+const HARNESS = process.env.HARNESS_DIR || __dirname;   // каталог лаунчера движка ui/desktop/run.sh
 const DARK = '#0a0a0b';
 
 app.setName('Harnessy');
@@ -21,7 +21,9 @@ async function ensureHarness(log) {
   const run = path.join(HARNESS, 'run.sh');
   if (!fs.existsSync(run)) { log('нет ' + run); return false; }
   log('харнесс не отвечает — запускаю ' + run);
-  const out = fs.openSync(path.join(HARNESS, 'logs', 'server-desktop.log'), 'a');
+  const logs = path.join(HARNESS, 'logs');
+  fs.mkdirSync(logs, { recursive: true });
+  const out = fs.openSync(path.join(logs, 'server-desktop.log'), 'a');
   spawn(run, [], { cwd: HARNESS, detached: true, stdio: ['ignore', out, out] }).unref();
   for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 500)); if (await harnessUp()) return true; }
   return false;

@@ -14,7 +14,7 @@ import os
 
 MAP_PATH = "/Users/kostenchuksergey/REPORTS/workbench-design/data/map.json"
 DEV_PATH = "/Users/kostenchuksergey/REPORTS/workbench-design/data/dev-timeline.json"
-TARGET_HTML = "/Users/kostenchuksergey/REPORTS/workbench-design/core/workbench-unified.html"
+TARGET_HTML = "/Users/kostenchuksergey/REPORTS/workbench-design/concept/workbench-unified.html"
 
 with open(MAP_PATH, "r", encoding="utf-8") as f:
     map_data = json.load(f)

@@ -1,1 +1,1 @@
-Golden-файлы записаны core/app/journal.py из main ba19cca. Фиксированные now_iso=2026-10-09T00:00:00.123+00:00 и new_id=hex(1791504000123)-abcdef. Числа целые; Unicode, экранирование, false/0, optional-поля, indent 2 без LF.
+Golden-файлы записаны Python-модулем app/journal.py из main ba19cca. Фиксированные now_iso=2026-10-09T00:00:00.123+00:00 и new_id=hex(1791504000123)-abcdef. Числа целые; Unicode, экранирование, false/0, optional-поля, indent 2 без LF.

@@ -2259,7 +2259,7 @@ window.addEventListener('hashchange', () => {
 """
 
 def main():
-    target_path = "/Users/kostenchuksergey/REPORTS/workbench-design/core/workbench-unified.html"
+    target_path = "/Users/kostenchuksergey/REPORTS/workbench-design/concept/workbench-unified.html"
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
     with open(target_path, "w", encoding="utf-8") as f:
         f.write(HTML_CONTENT)

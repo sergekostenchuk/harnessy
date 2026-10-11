@@ -1845,7 +1845,7 @@ selStudioFile('OmMapScreen.tsx');
 </html>
 """
 
-output_path = "/Users/kostenchuksergey/REPORTS/workbench-design/core/workbench-unified.html"
+output_path = "/Users/kostenchuksergey/REPORTS/workbench-design/concept/workbench-unified.html"
 with open(output_path, "w", encoding="utf-8") as f:
     f.write(content.strip() + "\n")
 print(f"Successfully wrote {len(content)} characters to {output_path}")

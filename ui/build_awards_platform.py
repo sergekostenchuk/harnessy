@@ -11,7 +11,7 @@ Operation Map, Code Diff, Live Preview, and 7 Invariants + 5 Passes.
 import json
 import os
 
-TARGET_HTML = "/Users/kostenchuksergey/REPORTS/workbench-design/core/harness-awards-platform.html"
+TARGET_HTML = "/Users/kostenchuksergey/REPORTS/workbench-design/concept/harness-awards-platform.html"
 
 html = r'''<!doctype html>
 <html lang="ru">
@@ -1644,7 +1644,7 @@ function switchC1Focus(tab) {
     frame.src = 'http://localhost:3000/#/om-map';
   } else if (tab === 'diff') {
     pass.style.display = 'none';
-    frame.src = 'http://localhost:8766/core/workbench-unified.html#code';
+    frame.src = 'http://localhost:8766/concept/workbench-unified.html#code';
   }
 }
 
