@@ -70,9 +70,10 @@ test('153: SDK readPane and merge use the active verified kind, never the seat n
  await r.runTurn('orchestrator','Попытка');await r.runTurn('lead','Попытка');assert.equal(results.orchestrator.read.code,'policy_denied');assert.equal(results.orchestrator.merge.code,'policy_denied');assert.equal(results.lead.read.ok,true);assert.equal(results.lead.merge.code,'no_repo');
 });
 
-test('153: all old owner creation doors refuse without effects, including owner-shaped payloads and fake proposal references',async t=>{
+// 156 opens the proposal-reference door only to a live bridge token; the legacy argument shape stays refused.
+test('153/156: all old owner creation doors refuse without effects, including owner-shaped payloads and fake proposal references',async t=>{
  const h=await fixture(t),r=h.runtime,manifest=readFileSync(join(h.dir,'.harness/team.yaml'));
- for(const route of ['/api/seats','/api/assign'])for(const body of [{role:'executor',model:'w1'},{role:'tester',model:'w2',from:'owner',trust:'owner',kind:'orchestrator',label:'owner'},{role:'reviewer',proposalId:'made-up',version:1}]){const reply=await call(h.api,route,{body});assert.equal(reply.status,409);assert.deepEqual(reply.body,refusal)}
+ for(const route of ['/api/seats','/api/assign'])for(const body of [{role:'executor',model:'w1'},{role:'tester',model:'w2',from:'owner',trust:'owner',kind:'orchestrator',label:'owner'},{role:'reviewer',proposalId:'made-up',version:1}]){const reply=await call(h.api,route,{body});if(route==='/api/seats'&&'proposalId' in body){assert.equal(reply.status,403);assert.equal(reply.body.code,'token_invalid')}else {assert.equal(reply.status,409);assert.deepEqual(reply.body,refusal)}}
  await assert.rejects(r.createSeat({role:'orchestrator'},OWNER),(e:any)=>e.code==='proposal_required');assert.deepEqual(readFileSync(join(h.dir,'.harness/team.yaml')),manifest);assert.equal(existsSync(r.project.state.materializationPath),false);assert.deepEqual(r.registry.ids,['worker']);assert.equal(r.journal.lastSeq,0);assert.equal(h.provider.calls.length,0);
 });
 

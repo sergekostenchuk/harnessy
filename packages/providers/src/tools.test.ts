@@ -32,3 +32,10 @@ test('assign_role specialization crosses Claude tool layer intact; strict bounds
  ])await assert.rejects(invokeTool('assign_role',bad,f.ctx));
  assert.equal(seen.length,2);
 });
+
+test('156: Claude proposal/create tools preserve version and reject missing fields, spoofing and UTF-8 overflow',async()=>{
+ const f=fixture('claude'),seen:unknown[]=[];f.ctx.tools.proposeSeats=async a=>{seen.push(a);return {ok:true,text:'proposal'}};f.ctx.tools.createSeats=async a=>{seen.push(a);return {ok:true,text:'created'}};
+ const seat={kind:'worker',label:'Юрист',vendor:'claude',model:'w1',mode:'read',intro:'я'.repeat(4096)},proposal={seats:[seat]};assert.equal((await invokeTool('propose_seats',proposal,f.ctx)).ok,true);assert.deepEqual(seen[0],proposal);assert.equal((await invokeTool('create_seats',{proposalId:'p1',version:2},f.ctx)).ok,true);
+ for(const value of [{seats:[{...seat,mode:undefined}]},{seats:[{...seat,model:undefined}]},{...proposal,from:'owner'},{seats:[{...seat,intro:'я'.repeat(4097)}]}])await assert.rejects(invokeTool('propose_seats',value,f.ctx));
+ await assert.rejects(invokeTool('create_seats',{proposalId:'p1'},f.ctx));assert.equal(seen.length,2);
+});

@@ -18,7 +18,11 @@ export interface AskArgs {to:string;text:string;thread?:string}
 export interface ReadPaneArgs {pane:string;last_n?:number}
 export interface MergeArgs {sha:string;message?:string}
 export interface AssignRoleArgs {role:string;model?:string;mode?:Mode;specialization?:{title:string;text:string}}
+export interface ProposedSeat {kind:'assistant'|'architect'|'worker'|'reviewer'|'tester'|'researcher';label:string;vendor:Vendor;model:string;mode:Mode;intro:string}
+export interface ProposeSeatsArgs {seats:ProposedSeat[];proposalId?:string;version?:number}
+export interface CreateSeatsArgs {proposalId:string;version:number}
 export interface PeerTools {
+ proposeSeats(a:ProposeSeatsArgs):Promise<ToolResult>;createSeats(a:CreateSeatsArgs):Promise<ToolResult>;
  send(a:SendArgs):Promise<ToolResult>;ask(a:AskArgs):Promise<ToolResult>;readPane(a:ReadPaneArgs):Promise<ToolResult>;
  merge(a:MergeArgs):Promise<ToolResult>;assignRole(a:AssignRoleArgs):Promise<ToolResult>
 }
@@ -55,7 +59,7 @@ export function snapshot(seat:Seat,ctx:TurnContext):Seat {
  !Array.isArray(ctx.writableRoots)||!ctx.writableRoots.every(p=>typeof p==='string')||typeof ctx.roleNote!=='string'||typeof ctx.relayDepth!=='number'||
  !(ctx.projectDir===null||typeof ctx.projectDir==='string')||typeof ctx.appUrl!=='string'||
  ['publish','askApproval','session','setHandle','registerProcessToken','revokeProcessToken'].some(k=>typeof (ctx as unknown as Record<string,unknown>)[k]!=='function')||
- ['send','ask','readPane','merge','assignRole'].some(k=>typeof (ctx.tools as unknown as Record<string,unknown>)[k]!=='function'))
+ ['send','ask','readPane','merge','assignRole','proposeSeats','createSeats'].some(k=>typeof (ctx.tools as unknown as Record<string,unknown>)[k]!=='function'))
  throw new ProviderError('protocol','invalid TurnContext');
  return {...seat,writePaths:[...seat.writePaths]};
 }

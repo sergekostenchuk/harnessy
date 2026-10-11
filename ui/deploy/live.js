@@ -231,7 +231,7 @@
     if(changed&&typeof eventsReset==='function')eventsReset();
     if(changed&&typeof resetJournal==='function'){resetJournal(H.project);if(H.on&&!H.snapshotOnly&&window.psKey==='log')journalFetch()}setTimeout(()=>dispatchEvent(new CustomEvent('live:status')),0);
     if(PAGE==='new') document.querySelectorAll('.status > span:first-child').forEach(el=>{ el.textContent=(H.noProject||!!(S.cx&&S.cx.noFolder))?'без проекта · модель ничего не читает':'папка '+((H.project||'').split('/').filter(Boolean).pop()||'проект')+(st.repo?' · git':'')+' · ролей '+(H.panes||[]).filter(p=>p.id!=='room').length; });   // строка папки — от движка, не статика скетча (Kimi UX-1 №85 п.2)
-    if(typeof sectionSync==='function')sectionSync();badges();
+    if(typeof sectionSync==='function')sectionSync();if(typeof proposalsSync==='function')proposalsSync();badges();
     if(PAGE==='new'){ S.ui.pane='room'; S.ui.fresh=true; S.ui.switched=false; save(); }   // стартовый экран — ВСЕГДА без роли · новый чат; выбор роли или чата отсюда = переход в чат (слово владельца 08.10)
     if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); renderWaiting(); }
   async function refreshChats(){ const binding=sendBinding();try{ const r=await api('/api/chats');if(!bindingCurrent(binding))return; H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } if(typeof sideChats==='function') await sideChats();if(window.HARNESS_BOOT)rememberLive(); }
@@ -254,6 +254,8 @@
     S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:hsys(m)?'sys':'live',who:hsys(m)?(/контекст передан/.test(m.text)?'харнесс · передача':'харнесс · вводная'):(m.role==='peer'?'сосед':who),pane:p.id,model:typeof m.model==='string'&&m.model?m.model:null,html:md(m.text.replace(/^\[от [^\]]+\]\s*/,'')),text:m.text,t:(m.ts||0)*1000,cost:{i:m.usage&&m.usage.input,o:m.usage&&m.usage.output,c:m.usage&&m.usage.cacheRead,ms:m.durationMs}});   // цена и модель — из реплики, не из настройки чата
     LOADED=cid;save();renderWaiting();render();await loadAttemptNotes(p,binding);if(!bindingCurrent(binding))return;
     if(onboard&&p.id!=='room'&&!r.messages.length&&!p.busy) await onboardOnce(p); }   // роль без вводной получает её при первом открытии чата (правило движка)
+
+
   // подключение к движку на всех экранах: боковая панель, настройки, подключения живут его данными (08.10)
   // TS-12: one project-bound transport for limits, chat, approvals and journal invalidations.
   const LIVE_EVENTS={source:null,project:null,generation:0,alive:true,listeners:new Set()};
@@ -280,9 +282,9 @@
   async function hConnect(){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)){ return; }   /* движок подключён, если статус есть — даже без единого места: иначе чистая машина (первый запуск) остаётся в демо-режиме и проект создать нельзя */
     if(applyStatus(st,request,true)===false)return;H.connected=true;if(window.HARNESS_BOOT)window.HARNESS_BOOT.accept(); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
     if(PAGE==='chat'){ if(H.pane&&H.pane.busy) H.cur={text:'',tools:[]};
-      let linkedProject=H.project;const es=H.events||(H.events=subscribeLiveEvents()); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='state') consumeState(ev); if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
+      let linkedProject=H.project;const es=H.events||(H.events=subscribeLiveEvents()); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='teamProposals'&&ev.project===H.project)void proposalsFetch(); if(ev.type==='state') consumeState(ev); if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
       es.onerror=()=>{ if(H.link!=='lost'){ H.link='lost'; hStatus(); if(!H.projectLinkChange)toast('Связь с движком потеряна — переподключаюсь…'); } };   // плановая смена проекта тоже закрывает SSE — это не потеря движка
-      es.onopen=async()=>{ if(H.link==='lost'){ const switching=H.projectLinkChange;H.link='ok'; hStatus(); await refreshStatus();if(!switching&&H.project===linkedProject)toast('Связь восстановлена');linkedProject=H.project;H.projectLinkChange=false; } };
+      es.onopen=async()=>{ if(H.link==='lost'){ const switching=H.projectLinkChange;H.link='ok'; hStatus(); await refreshStatus();void proposalsFetch();if(!switching&&H.project===linkedProject)toast('Связь восстановлена');linkedProject=H.project;H.projectLinkChange=false; }else void proposalsFetch(); };
       hStatus(); }
     if(PAGE==='now') nowLive();
     syncLiveEvents();await refreshChats();
@@ -1255,8 +1257,9 @@
     const away=document.querySelector('#v-away .lst');if(away&&!away.dataset.live){away.dataset.live='1';away.innerHTML='<div class="empty">События линии — в журнале (экран «Журнал»), карточки подтверждений — во вкладке «Чей ход».</div>';}
     const st=document.querySelector('.frame .top .st'); if(st) st.innerHTML='<i'+(total?' style="background:var(--accent)"':'')+'></i>'+(total?total+' '+plural(total)+' вас':'никто не ждёт')+' · движок'; }
   function nowLive(){ if(!H.on||NOW.es) return; NOW.es=subscribeLiveEvents(); nowDraw();
-    NOW.es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='approval'){ NOW.cards.set(ev.pane+'|'+ev.id,{pane:ev.pane,id:ev.id,title:ev.title,detail:ev.detail,since:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}); nowDraw(); }
+    NOW.es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='teamProposals'&&ev.project===H.project)void proposalsFetch();if(ev.type==='approval'){ NOW.cards.set(ev.pane+'|'+ev.id,{pane:ev.pane,id:ev.id,title:ev.title,detail:ev.detail,since:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}); nowDraw(); }
       else if(ev.type==='approvalResolved'){ NOW.cards.delete(ev.pane+'|'+ev.id); nowDraw(); }else if(ev.type==='state')consumeState(ev); };
+    NOW.es.onopen=async()=>{await refreshStatus();await proposalsFetch()};
     NOW.es.onerror=()=>{ const st=document.querySelector('.frame .top .st'); if(st) st.innerHTML='<i></i>связь потеряна · переподключение…'; }; syncLiveEvents(); }
   document.addEventListener('click',async e=>{ const b=e.target.closest('[data-ap-decision]'); if(!b||PAGE!=='now'||!H.on) return; e.preventDefault(); e.stopPropagation(); const li=b.closest('[data-ap]'); if(!li) return;
     let r=null; try{ r=await api('/api/approve',{pane:li.dataset.apPane,id:li.dataset.ap,decision:b.dataset.apDecision}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; } toast(b.dataset.apDecision==='allow'?'Разрешено':'Отказано'); NOW.cards.delete(li.dataset.apPane+'|'+li.dataset.ap); nowDraw(); },true);
@@ -1275,6 +1278,32 @@
   addEventListener('pageshow',event=>{if(event.persisted)return resumePage()});
   // End TS-09a.1 page lifecycle.
   window.LIVE={stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting};   // для cx.js (поле ввода)
+  // TS-09b3: proposal cards always confirm the exact displayed project and version.
+  const TP={project:null,generation:0,data:[],loading:false,queued:false,sending:false,error:null};
+  const proposalCurrent=(project,generation)=>!leftPage&&H.on&&!H.snapshotOnly&&H.project===project&&TP.project===project&&TP.generation===generation;
+  function proposalValid(q){return q&&typeof q.proposalId==='string'&&/^p[0-9a-f]{24}$/.test(q.proposalId)&&Number.isSafeInteger(q.version)&&q.version>0&&typeof q.confirmed==='boolean'&&Array.isArray(q.seats)&&q.seats.length>0&&q.seats.every(s=>s&&['sid','kind','label','vendor','model','mode','intro'].every(k=>typeof s[k]==='string'))}
+  function proposalsDraw(){if(!['chat','now'].includes(PAGE))return;let box=document.getElementById('live-team-proposals');
+    if(!H.on||H.snapshotOnly||leftPage||TP.project!==H.project){if(box)box.remove();return}
+    const host=PAGE==='chat'?document.querySelector('.frame.cur .main .feed')||document.querySelector('.frame .main .feed'):document.querySelector('.frame .main');if(!host)return;
+    if(!box){box=document.createElement('section');box.id='live-team-proposals';box.style.cssText='flex:none;max-height:45vh;overflow:auto;margin:12px 20px;padding:12px;border:1px solid var(--line);border-radius:12px';if(PAGE==='chat')host.parentElement.insertBefore(box,host);else host.appendChild(box)}
+    if(!TP.error&&!TP.data.length){box.remove();return}
+    box.innerHTML=TP.error?'<p role="alert">'+esc(TP.error)+'</p><button class="btn ghost" data-team-refresh>Повторить чтение</button>':TP.data.map(q=>'<article data-team-proposal="'+esc(q.proposalId)+'"><h3>Состав команды · версия '+q.version+'</h3>'+q.seats.map(s=>'<div style="padding:10px 0;border-top:1px solid var(--line)"><b>'+esc(s.label)+'</b><p>'+esc(s.kind)+' · '+esc(s.vendor)+' / '+esc(s.model)+' · '+esc(s.mode)+'</p><details><summary>Вводная участника</summary><pre style="white-space:pre-wrap;font:inherit">'+esc(s.intro)+'</pre></details></div>').join('')+(q.confirmed?'<p role="status">Версия подтверждена. Создание участников выполняет оркестратор.</p>':'<button type="button" class="btn p" data-team-confirm="'+esc(q.proposalId)+'" data-team-version="'+q.version+'" data-team-project="'+esc(TP.project)+'"'+(TP.sending?' disabled':'')+'>Подтвердить этот состав</button><p>Подтверждаются показанные имена, модели, режимы и вводные.</p>')+'</article>').join('');
+  }
+  function proposalsReset(){TP.generation++;TP.project=null;TP.data=[];TP.error=null;TP.loading=false;TP.queued=false;TP.sending=false;proposalsDraw()}
+  async function proposalsFetch(){if(!H.on||H.snapshotOnly||leftPage||!['chat','now'].includes(PAGE))return false;if(TP.project!==H.project){proposalsReset();TP.project=H.project}if(TP.loading){TP.queued=true;return false}
+    const project=TP.project,generation=TP.generation;TP.loading=true;
+    try{const r=await api('/api/seats/proposals');if(!proposalCurrent(project,generation))return false;if(!r||!r.ok||r.project!==project||!Array.isArray(r.proposals)||!r.proposals.every(proposalValid))throw Error(r&&r.error||'Не удалось прочитать состав команды');TP.data=r.proposals;TP.error=null}
+    catch(e){if(!proposalCurrent(project,generation))return false;TP.error=e.message||'Нет связи с движком';TP.data=[]}
+    if(!proposalCurrent(project,generation))return false;TP.loading=false;proposalsDraw();if(TP.queued){TP.queued=false;void proposalsFetch()}return !TP.error;
+  }
+  function proposalsSync(){if(!['chat','now'].includes(PAGE))return;if(TP.project!==H.project)void proposalsFetch();else proposalsDraw()}
+  document.addEventListener('click',async e=>{const refresh=e.target.closest('[data-team-refresh]'),button=e.target.closest('[data-team-confirm]');if(!refresh&&!button)return;e.preventDefault();e.stopPropagation();if(refresh){void proposalsFetch();return}
+    const project=button.dataset.teamProject,version=Number(button.dataset.teamVersion),proposalId=button.dataset.teamConfirm,generation=TP.generation;
+    if(TP.sending||!proposalCurrent(project,generation))return;const q=TP.data.find(q=>q.proposalId===proposalId&&q.version===version&&!q.confirmed);if(!q)return;
+    TP.sending=true;proposalsDraw();try{const r=await api('/api/seats/confirm',{project,proposalId,version});if(!proposalCurrent(project,generation))return;if(!r||!r.ok)throw Error(r&&r.error||'Подтверждение не сохранено');toast('Состав команды подтверждён · версия '+version)}catch(error){if(proposalCurrent(project,generation))toast(esc(error.message))}finally{if(proposalCurrent(project,generation)){TP.sending=false;await proposalsFetch()}}
+  },true);
+  addEventListener('pagehide',proposalsReset);
+  // End TS-09b3 proposals.
   // ── запуск
   composer(); restoreUI(); wireSearch(); refresh();restoreLiveSnapshot(); sideChats();
   if(PAGE==='chat'&&S.ui.sectionHint){toast(esc(S.ui.sectionHint));delete S.ui.sectionHint;save()}

@@ -15,7 +15,7 @@ interface Golden {
 const golden=JSON.parse(readFileSync(new URL('./fixtures/python.json',import.meta.url),'utf8')) as Golden;
 function freeze<T>(value:T):T {if(value&&typeof value==='object'){for(const v of Object.values(value))freeze(v);Object.freeze(value)}return value}
 for(const [i,c] of golden.memory.entries())test('[39] Python memory sections '+i+': placeholders, duplicate headings, order and Unicode',()=>{assert.deepEqual([...memorySections(c.text)],c.expected)});
-for(const c of golden.roleNotes)test('[39] Python roleNote '+c.name,()=>{assert.equal(roleNote(freeze(c.seat),freeze(c.deps)),c.expected)});
+for(const c of golden.roleNotes)test('[39] Python roleNote '+c.name,()=>{const note=roleNote(freeze(c.seat),freeze(c.deps));/* 156 adds the team-tool instructions to the orchestrator; historical fixture bytes stay unchanged. */assert.equal(note.replace(/ Команду создавай через propose_seats:.*$/,''),c.expected)});
 for(const c of golden.onboarding)test('[18,39,45] Python onboarding '+c.name,()=>{const deps={...c.deps,now:new Date(c.deps.now)};assert.equal(onboarding(freeze(c.seat),c.how,freeze(deps)),c.expected)});
 for(const [i,c] of golden.transcripts.entries())test('[39,46] Python transcript '+i+' with empty result skipped',()=>{assert.equal(transcriptText(freeze(c.transcript),c.limit),c.expected)});
 for(const c of golden.digests)test('[29,39,46] Python digest '+c.name+' returns unconsumed nextSeen',()=>{const before=structuredClone(c.viewer);assert.deepEqual(digest(freeze(c.viewer),freeze(c.others),(_,target)=>c.allowed.includes(target)),c.expected);assert.deepEqual(c.viewer,before)});
@@ -36,4 +36,10 @@ test('[29,39] denied digest never reads a forbidden transcript and disabled dige
 });
 test('[39] digest preserves the historical block budget rather than clipping the entire result',()=>{
  const c=golden.digests.find(c=>c.name==='limit')!,r=digest(c.viewer,c.others,()=>true);assert.equal(r.text,c.expected.text);assert.ok([...r.text].length>6000);assert.ok(r.text.startsWith(DIGEST_MARK));assert.equal(r.nextSeen.a,9);assert.equal(r.nextSeen.b,undefined)
+});
+
+test('156: proposal instructions follow kind, with legacy role fallback; another kind gains no team authority',()=>{
+ const fixture=golden.roleNotes.find(x=>x.seat.role==='orchestrator')!;
+ for(const seat of [{...fixture.seat,kind:'orchestrator' as const,role:'юрист'},{...fixture.seat}]){const note=roleNote(seat,fixture.deps);assert.match(note,/propose_seats: явно укажи kind, label, vendor, model, mode/);assert.match(note,/после подтверждения этой версии владельцем в окне вызывай create_seats/)}
+ assert.doesNotMatch(roleNote({...fixture.seat,kind:'worker',role:'orchestrator'},fixture.deps),/propose_seats|create_seats/);
 });

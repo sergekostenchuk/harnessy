@@ -1,4 +1,5 @@
 import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
+import {propose,proposals,confirm,create,restoreProposals,type ProposalInput,type ProposalRef} from './proposals.ts';
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
 import {isAbsolute} from 'node:path';
 import {expandUser,initProject,projectsRoot} from '@harnessy/projects';
@@ -89,6 +90,7 @@ export class Runtime {
  this.current=p;channel.on(event=>{if(!p.closed)this.onChannel(p,event)});
  try{await this.projectRegistry.rememberProject(path)}catch(e){lineErrors.push(message(e))}
  await this.actions.restorePendingAcks({runtime:this,project:p});
+ await restoreProposals(this,p);
  try{await restoreAssignments(this,p)}catch(e){lineErrors.push(message(e));for(const id of registry.ids)p.restoreFailed.set(id,message(e))}
  for(const id of p.materializing){p.restoreFailed.set(id,[...lineErrors].reverse().find(text=>text.startsWith('назначение '+id+' '))??lineErrors.at(-1)??'восстановление назначения не завершено')}p.materializing.clear();
  await restorePromotions(this,p);
@@ -252,9 +254,15 @@ export class Runtime {
  merge(scope:TurnScope,args:MergeArgs):Promise<MergeResult>{return this.scoped(scope,(_p,ctx)=>this.actions.merge(args,ctx))}
  async mergeOwner(args:MergeArgs,initiator:Initiator):Promise<MergeResult>{this.requireOwner(initiator);const p=this.project;if(!this.actions.mergeOwner)throw new RuntimeError('actions_required','порт действий обязателен',500);try{return await this.actions.mergeOwner(args,{runtime:this,project:p,initiator:Object.freeze({...initiator}),assertActive:()=>{this.same(p);this.requireOwner(initiator)}})}catch(e){return {ok:false,code:e instanceof RuntimeError||e instanceof JournalError?e.code:'merge_failed',error:message(e)}}}
  assignRole(scope:TurnScope,_args:AssignRoleArgs):Promise<AssignRoleResult>{return this.scoped(scope,()=>Promise.resolve({ok:false as const,code:'proposal_required',error:'участников создаёт оркестратор по подтверждённому предложению'}))}
+ proposeSeats(scope:TurnScope,input:ProposalInput){return this.scoped(scope,(_p,ctx)=>propose(this,ctx,input))}
+ createSeats(scope:TurnScope,input:ProposalRef){return this.scoped(scope,(_p,ctx)=>create(this,ctx,input))}
+ teamProposals(initiator:Initiator){return proposals(this,initiator)}
+ confirmTeam(input:ProposalRef,initiator:Initiator){return confirm(this,input,initiator)}
  toolsFor(scope:TurnScope):PeerTools {
  this.scopes.assert(scope);const p=this.project,turn=p.active.get(scope.seatId);if(!turn||turn.scope!==scope)throw new RuntimeError('turn_ended','ход не активен',403);
  return {
+ proposeSeats:async a=>{const r=await this.proposeSeats(scope,a);return r.ok?{ok:true,text:JSON.stringify(r)}:r},
+ createSeats:async a=>{const r=await this.createSeats(scope,a);return r.ok?{ok:true,text:JSON.stringify(r)}:r},
  send:async a=>{const r=await this.send(scope,a);return r.ok?{ok:true,text:'Запись #'+r.seq+' отправлена '+r.to.join(', ')+'; тред '+(r.thread||'без треда')+'.'}:r},
  readPane:a=>this.readPane(scope,a),
  ask:async a=>{const r=await this.ask(scope,a);return r.ok?{ok:true,text:r.reply||'(пустой ответ)'}:{...r,error:'Ответа нет: '+r.error}},
