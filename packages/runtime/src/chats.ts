@@ -4,15 +4,15 @@ import {RuntimeError,message,slice,object} from './errors.ts';
 import {owner,place,free,reserve,locked,same} from './operations.ts';
 import type {Runtime} from './runtime.ts';
 import type {ProjectState} from './types.ts';
-import {jsonClone,type Chat} from './state.ts';
+import {jsonClone,chatMetadata,type Chat} from './state.ts';
 import type {Pane} from './pane.ts';
 import {makeRoomIn} from './rooms.ts';
 
 export const SUMMARY_PROMPT='Напиши краткую выжимку этого разговора для передачи в новый чат той же роли: что решено, что сделано, открытые вопросы, чего ждёт владелец. Коротко, списком, без вступления.';
-export interface ChatMeta {id:string;pane:string;label:string;role:string|null;title:string;created:number;closed:number|null;model:string|null;vendor:string;messages:number;last:number;active:boolean}
+export interface ChatMeta {promotion?:{pending:boolean;target:string};revision:number;documents:import('./state.ts').DocumentRef[];id:string;pane:string;label:string;role:string|null;title:string;created:number;closed:number|null;model:string|null;vendor:string;messages:number;last:number;active:boolean}
 export function meta(p:ProjectState,c:Chat):ChatMeta {
- const pane=p.registry.get(c.pane),last=c.transcript.at(-1);
- return {id:c.id,pane:c.pane,label:pane?.label??c.pane,role:pane?.role??null,title:c.title||'',created:c.created,closed:c.closed??null,model:c.model,vendor:c.vendor,messages:c.transcript.length,last:last?.ts?Math.trunc(last.ts):c.created,active:p.state.chats.active[c.pane]===c.id};
+ chatMetadata(c);const promotion=object(c.promotion)&&typeof c.promotion.target==='string'?{pending:c.promotion.done===false,target:c.promotion.target}:null,refs=promotion?.pending&&object(c.promotion)&&object(c.promotion.input)&&Array.isArray(c.promotion.input.documents)?c.promotion.input.documents:c.documents??[];const pane=p.registry.get(c.pane),last=c.transcript.at(-1);
+ return {...(promotion?{promotion}:{}),revision:c.revision??0,documents:jsonClone(refs),id:c.id,pane:c.pane,label:pane?.label??c.pane,role:pane?.role??null,title:c.title||'',created:c.created,closed:c.closed??null,model:c.model,vendor:c.vendor,messages:c.transcript.length,last:last?.ts?Math.trunc(last.ts):c.created,active:p.state.chats.active[c.pane]===c.id};
 }
 export function closeChat(p:ProjectState,pane:Pane,carry:string):string {
  const c=p.state.activeChat(pane,false);if(!c)return '';

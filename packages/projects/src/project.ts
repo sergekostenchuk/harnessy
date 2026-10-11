@@ -7,15 +7,15 @@ import {ProjectError} from './errors.ts';
 export type Catalog=Partial<Record<Vendor,{id:string;label?:string}[]>>;
 export function defaultModel({roomModel,catalog}:{roomModel?:string;catalog:Catalog}):string {if(roomModel)return roomModel;for(const vendor of ['claude','codex'] as const){const model=catalog[vendor]?.find(m=>m.id);if(model)return model.id}return ''}
 export function projectsRoot(settings:Record<string,unknown>,env:NodeJS.ProcessEnv=process.env){return expandUser(String(settings.projectsRoot||env.HARNESS_PROJECTS_ROOT||'~/Harnessy-Projects'))}
-export interface InitDeps {gitops?:GitOps;defaultModel?:()=>string;vendorOf?:(model:string)=>Vendor|null;catalog?:Catalog;roomModel?:string;settings?:Record<string,unknown>;files?:FileOptions}
+export interface InitDeps {validatePath?:()=>void;gitops?:GitOps;defaultModel?:()=>string;vendorOf?:(model:string)=>Vendor|null;catalog?:Catalog;roomModel?:string;settings?:Record<string,unknown>;files?:FileOptions}
 export async function initProject(path:string,options:{git?:boolean;model?:string;orchestrator?:boolean}={},deps:InitDeps={}){return withGitLock(deps.gitops??gitops,path,async(git,lock)=>{
- const created=!validDir(path);writeDirectory(path);let gitOk=await git.ownRepo(path);
- if(options.git!==false&&!gitOk){const result=await git.run(['init','-q'],path);if(result.code!==0)throw new ProjectError('tool_failed','git init: '+[...result.stderr.trim()].slice(0,200).join(''));gitOk=true}
- const h=ensureLineLocked(lock,path,deps.files);let seeded=false;
+ deps.validatePath?.();const created=!validDir(path);writeDirectory(path);let gitOk=await git.ownRepo(path);
+ deps.validatePath?.();if(options.git!==false&&!gitOk){const result=await git.run(['init','-q'],path);if(result.code!==0)throw new ProjectError('tool_failed','git init: '+[...result.stderr.trim()].slice(0,200).join(''));gitOk=true}
+ deps.validatePath?.();const h=ensureLineLocked(lock,path,deps.files);let seeded=false;
  if(options.orchestrator!==false){const model=options.model||deps.defaultModel?.()||defaultModel({...(deps.roomModel?{roomModel:deps.roomModel}:{}),catalog:deps.catalog??{}}),vendor=deps.vendorOf?.(model)??(['claude','codex'] as const).find(v=>deps.catalog?.[v]?.some(m=>m.id===model));
  if(vendor){const mode=String(deps.settings?.defaultMode||'read');if(!MODE_IDS.includes(mode as Mode))throw new ProjectError('invalid_settings','defaultMode: '+[...MODE_IDS].sort().join(', '));seeded=(seedOrchestratorLocked(lock,h,vendor,model,mode as Mode,deps.files)).seeded}}
  return {created,git:gitOk,orchestrator:seeded,memory:join(h,'MEMORY.md')}
-})}
+}).catch(error=>{deps.validatePath?.();throw error})}
 export async function uniqueProject(root:string,name:string,options:Parameters<typeof initProject>[1]={},deps:InitDeps={}){return withPathLock(root,async()=>{
  writeDirectory(root);let path=join(root,name),n=2;while(existsSync(path))path=join(root,name+'-'+n++);const result=await initProject(path,options,deps);return {path,...result}
 })}

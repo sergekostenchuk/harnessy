@@ -4,7 +4,7 @@ import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {createRuntime,diskIO,withRoleActions,type Runtime,type StateIO} from './index.ts';
 import {jsonClone,type TranscriptMessage} from './state.ts';
-import {savedConversationAssignment,harness,OWNER,FakeProvider,completedActions} from './test-helpers.ts';
+import {savedConversationAssignment,harness,promotionInput,OWNER,FakeProvider,completedActions} from './test-helpers.ts';
 const seats='  orchestrator: {role: orchestrator, vendor: claude, label: оркестратор, model: w1, mode: read, digest: false}';
 const actions=withRoleActions(completedActions);
 type Harness=Awaited<ReturnType<typeof harness>>;
@@ -37,7 +37,7 @@ test('TS-04b r2: saved chat(room) → executor assignment preserves conversation
 test('TS-04b r2: chat without project → orchestrator runs onboarding and remains usable after restart',async t=>{
  const h=await harness(t,{seats,actions}),r=h.runtime,root=join(h.dir,'projects');mkdirSync(root);await r.settingsPatch('owner',{projectsRoot:root},OWNER);
  r.roomSet({model:'w1',folder:false},OWNER);const old=r.chat({pane:'room',message:'Проект из разговора'},OWNER);await r.idle();const source=answer(r,'room');assert.equal(old.seq,1);
- const assigned=await r.assignRoomRole({role:'orchestrator'},OWNER);await r.idle();assert.equal(assigned.created,true);assert.equal(r.journal.get(1)!.kind,'status');assert.equal(h.provider.calls.length,2);assert.equal(h.provider.calls[1]!.seat.id,'orchestrator');assert.match(h.provider.calls[1]!.message,/Владелец: Проект из разговора/);
+ const assigned=await r.assignRoomRole({...promotionInput(r),role:'orchestrator'},OWNER);await r.idle();assert.equal(assigned.created,true);assert.equal(r.journal.get(1)!.origin,'onboarding');assert.equal(h.provider.calls.length,2);assert.equal(h.provider.calls[1]!.seat.id,'orchestrator');assert.match(h.provider.calls[1]!.message,/Владелец: Проект из разговора/);
  copiedAnswer(r,'orchestrator',source);assert.equal(r.registry.get('orchestrator')!.status,'idle');assert.equal(r.journal.pendingFor('orchestrator').length,0);assert.equal(r.project.state.results(r.registry.get('orchestrator')!).length,1);
  await r.close();const {runtime:next,provider:f}=await reopen(t,h,assigned.project);assert.equal(f.calls.length,0);copiedAnswer(next,'orchestrator',source);
  next.chat({pane:'orchestrator',message:'После перезапуска проекта'},OWNER);await next.idle();assert.equal(f.calls.length,1);assert.match(f.calls[0]!.message,/После перезапуска проекта/);assert.equal(next.registry.get('orchestrator')!.status,'idle');assert.equal(next.journal.pendingFor('orchestrator').length,0);
@@ -55,10 +55,10 @@ test('TS-04b r2: roomMove cannot claim matching seq in a different journal, befo
  const original=JSON.parse(readFileSync(join(h.dir,'.harness','state','chats.json'),'utf8'));assert.ok(original.chats[original.active.room].transcript[1].runtime);assert.equal(original.chats[original.active.room].transcript[1].deliverySeq,1);
 });
 
-test('TS-04b r2: singleton replacement keeps old role receipts local and drops imported room receipts',async t=>{
+test('TS-04b r2: historical saved singleton replacement keeps old role receipts local and drops imported room receipts',async t=>{
  const h=await harness(t,{seats,actions}),r=h.runtime;r.chat({pane:'orchestrator',message:'Прежняя задача роли'},OWNER);await r.idle();const originalChat=r.project.state.chats.active.orchestrator!,local=answer(r,'orchestrator');
  r.roomSet({model:'w1'},OWNER);r.chat({pane:'room',message:'Разговор для замены роли'},OWNER);await r.idle();const source=answer(r,'room');await r.halt(true,OWNER);
- const assigned=await r.assignRoomRole({role:'orchestrator'},OWNER);await r.idle();assert.equal(assigned.replaced,true);assert.notEqual(assigned.chat.id,originalChat);copiedAnswer(r,'orchestrator',source);assert.equal(r.registry.get('orchestrator')!.status,'idle');assert.equal(r.project.state.results(r.registry.get('orchestrator')!).length,1);assert.deepEqual(r.project.state.chats.chats[originalChat]!.transcript[1]!.runtime,local.runtime);
+ const assigned=await savedConversationAssignment(r,{role:'orchestrator'});await r.idle();assert.equal(assigned.replaced,true);assert.notEqual(assigned.chat.id,originalChat);copiedAnswer(r,'orchestrator',source);assert.equal(r.registry.get('orchestrator')!.status,'idle');assert.equal(r.project.state.results(r.registry.get('orchestrator')!).length,1);assert.deepEqual(r.project.state.chats.chats[originalChat]!.transcript[1]!.runtime,local.runtime);
  await r.close();const {runtime:next,provider:f}=await reopen(t,h);assert.equal(f.calls.length,0);assert.equal(next.registry.get('orchestrator')!.status,'idle');assert.equal(next.journal.pendingFor('orchestrator').length,1);
  await next.halt(false,OWNER);await next.idle();assert.equal(f.calls.length,1);assert.match(f.calls[0]!.message,/Прежняя задача роли/);assert.equal(next.project.state.results(next.registry.get('orchestrator')!).length,2);
  next.chat({pane:'orchestrator',message:'Задача новой роли'},OWNER);await next.idle();assert.equal(f.calls.length,2);assert.match(f.calls[1]!.message,/Задача новой роли/);assert.equal(next.journal.pendingFor('orchestrator').length,0);

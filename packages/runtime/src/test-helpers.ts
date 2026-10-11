@@ -2,6 +2,8 @@ import {mkdtempSync,mkdirSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setImmediate as immediate} from 'node:timers/promises';
+import assert from 'node:assert/strict';
+import {parseCompat,compatJson} from '@harnessy/journal';
 import type {TestContext} from 'node:test';
 import {Connections,ProjectRegistry,Settings,Pins} from '@harnessy/projects';
 import type {Provider,Seat,TurnContext,Vendor} from '@harnessy/providers';
@@ -46,4 +48,14 @@ export async function savedConversationAssignment(runtime:Runtime,args:import('.
  const {assignConversation,chatSnapshot}=await import('./roles.ts'),{meta}=await import('./chats.ts'),p=runtime.project;
  const result=await assignConversation(runtime,p,args,chatSnapshot(p,p.registry.get('room')!),'сохранённое назначение из разговора');
  return {pane:result.result.pane.settings(),chat:meta(p,result.result.chat),replaced:result.replaced};
+}
+
+// TS-09b2: owner promotion is bound to a saved chat revision, including legacy /api/assign.
+export function promotionInput(runtime:Runtime){const list=runtime.chatsList(OWNER),id=list.active.room!,chat=list.chats.find(c=>c.id===id)!;return {chat:id,project:runtime.project.dir,revision:chat.revision,documents:chat.documents}}
+
+// 154 extends stored chats with a persisted revision; all pre-extension bytes still match the historical goldens.
+export function legacyChatBytes(text:string){
+ const data=parseCompat(text) as {chats:Record<string,{revision?:number;revisionHash?:string}>};
+ for(const chat of Object.values(data.chats)){if(chat.revision!==undefined){assert.ok(Number.isSafeInteger(chat.revision)&&chat.revision>0);assert.match(chat.revisionHash??'',/^[0-9a-f]{64}$/);delete chat.revision;delete chat.revisionHash}}
+ return compatJson(data,2);
 }
