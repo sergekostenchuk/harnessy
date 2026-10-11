@@ -45,7 +45,7 @@ export class Runtime {
  private pane(id:string,p=this.project):Pane{const pane=p.registry.get(id);if(!pane)throw new RuntimeError('pane_unknown','нет окна',404);return pane}
  labelOf(id:string,p=this.project){return id==='owner'?'владелец':id==='harness'?'харнесс':p.registry.get(id)?.label??id}
  subscribe(selector:Selector){if('pane' in selector)this.pane(selector.pane!);return this.project.bus.subscribe(selector)}
- projectPath(path:string):string {const target=canonicalPath(path),root=canonicalPath(projectsRoot(this.settings.effective()));if(target===root)throw new RuntimeError('path_is_root','это папка всех проектов: выберите или создайте проект внутри',400);return target}
+ projectPath(path:string,root=canonicalPath(projectsRoot(this.settings.effective()))):string {const target=canonicalPath(path);if(target===root)throw new RuntimeError('path_is_root','это папка всех проектов: выберите или создайте проект внутри',400);return target}
  private async changeProject<T>(operation:()=>Promise<T>):Promise<T> {
  const previous=this.opening;let release!:()=>void;this.opening=new Promise(r=>{release=r});await previous;
  try{return await operation()}finally{release()}
@@ -53,9 +53,16 @@ export class Runtime {
  async openProject(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean;roomModel?:string}={}):Promise<void> {
  return this.changeProject(()=>this.openProjectLocked(dir,options))
  }
- private async openProjectLocked(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean;roomModel?:string}):Promise<void> {
- if(options.expected)this.same(options.expected);const path=realpathSync(this.projectPath(dir)),roomModel=options.roomModel||this.current?.registry.get('room')?.model;await this.closeProjectLocked();
- const generation=++this.generation,harness=await withPathLock(path,lock=>ensureLineLocked(lock,this.projectPath(path))),lineErrors:string[]=[];let team=null,policy=null;
+ private async openProjectLocked(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean;roomModel?:string},root=canonicalPath(projectsRoot(this.settings.effective()))):Promise<void> {
+ if(options.expected)this.same(options.expected);const previous=this.current,path=realpathSync(this.projectPath(dir,root)),roomModel=options.roomModel||previous?.registry.get('room')?.model;await this.closeProjectLocked();
+ let harness:string;
+ try{harness=await withPathLock(path,lock=>ensureLineLocked(lock,this.projectPath(path,root)))}
+ catch(e){
+  // Closing hides project-scoped settings; retain the original root for both the check and the recovery door.
+  if(e instanceof RuntimeError&&e.code==='path_is_root'&&previous)await this.openProjectLocked(previous.dir,{},root);
+  throw e
+ }
+ const generation=++this.generation,lineErrors:string[]=[];let team=null,policy=null;
  try{team=loadTeam(harness);lineErrors.push(...team.warnings)}catch(e){lineErrors.push(message(e))}
  try{policy=new Policy(join(harness,'comms-policy.yaml'))}catch(e){lineErrors.push(message(e))}
  let registry!:Registry,owner!:Pane;

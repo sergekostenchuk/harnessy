@@ -17,14 +17,21 @@ for(const route of ['/api/project','/api/project/create','/api/room/move'])for(c
  if(route==='/api/room/move'){const opened=await call(h.api,route,{body:{path}});assert.equal(opened.status,400);assert.deepEqual(opened.body,error);assert.deepEqual(snapshot(root),before)}
 });
 
-for(const route of ['/api/project','/api/project/create','/api/room/move'])test('TS-10 r2: '+route+' rejects a directory replaced with the projects root while closing',async t=>{
+for(const route of ['/api/project','/api/project/create','/api/room/move'])for(const scope of ['owner','project','environment'])test('TS-10 r3: '+route+' retains the '+scope+' root and restores the owner door after a replacement while closing',async t=>{
  const h=await fixture(t),root=join(h.dir,'projects-root'),target=join(h.dir,'valid-project');mkdirSync(root);mkdirSync(target);writeFileSync(join(root,'keep'),'исходные байты');
- await h.runtime.settingsPatch('owner',{projectsRoot:root},OWNER);h.runtime.roomSet({model:'w1'},OWNER);const before=snapshot(root);
+ if(scope==='environment'){const old=process.env.HARNESS_PROJECTS_ROOT;process.env.HARNESS_PROJECTS_ROOT=root;t.after(()=>{if(old===undefined)delete process.env.HARNESS_PROJECTS_ROOT;else process.env.HARNESS_PROJECTS_ROOT=old})}
+ else {if(scope==='project')await h.runtime.settingsPatch('owner',{projectsRoot:join(h.dir,'other-owner-root')},OWNER);await h.runtime.settingsPatch(scope,{projectsRoot:root},OWNER)}
+ h.runtime.roomSet({model:'w1'},OWNER);const before=snapshot(root);
  const entered=deferred(),release=deferred(),close=h.provider.close.bind(h.provider);let once=true;t.after(()=>release.resolve());
  h.provider.close=async()=>{if(once){once=false;entered.resolve();await release.promise}return close()};
  const opening=call(h.api,route,{body:{path:target,create:true,git:false,model:'w1'}});await entered.promise;
  renameSync(target,target+'-original');symlinkSync(root,target);release.resolve();const response=await opening;
  assert.equal(response.status,400);assert.deepEqual(response.body,error);assert.deepEqual(snapshot(root),before);assert.equal(existsSync(join(root,'.harness')),false);assert.equal(h.provider.calls.length,0);
+ assert.equal(h.runtime.project.dir,h.dir);assert.equal(h.runtime.project.closed,false);assert.equal(h.runtime.registry.get('room')!.model,'w1');
+ if(scope==='project')assert.equal(h.runtime.settings.effective().projectsRoot,root);
+ const status=await call(h.api,'/api/status');assert.equal(status.status,200);assert.equal(status.body.project,h.dir);
+ const reopen=await call(h.api,'/api/project',{body:{path:h.dir}});assert.equal(reopen.status,200);assert.equal(reopen.body.project,h.dir);
+ const child=join(root,'safe-child'),create=await call(h.api,'/api/project/create',{body:{path:child,git:false,model:'w1'}});assert.equal(create.status,200);assert.equal(create.body.project,child);assert.ok(existsSync(join(child,'.harness','team.yaml')));assert.equal(existsSync(join(root,'.harness')),false);
 });
 
 test('118/127: missing root cannot be materialized; child projects and root navigation remain available',async t=>{
