@@ -4,7 +4,7 @@ import type {Initiator} from '@harnessy/journal';
 import {RuntimeError,object,deepFreeze} from './errors.ts';
 import {jsonClone} from './state.ts';
 import {owner,same} from './operations.ts';
-import {assignProposed,type Assignment} from './roles.ts';
+import {assignProposed,materializationProgress,type Assignment} from './roles.ts';
 import type {Runtime} from './runtime.ts';
 import type {ProjectState,ActionContext} from './types.ts';
 
@@ -65,7 +65,7 @@ export async function propose(runtime:Runtime,ctx:ActionContext,input:ProposalIn
   store.proposals=store.proposals.filter(x=>x!==old);store.proposals.push(q);p.state.saveProposals(store);question(p,q);p.state.saveProposals(store);publish(p);return receipt(p,q);
  });
 }
-export async function proposals(runtime:Runtime,initiator:Initiator){const p=owner(runtime,initiator);return withPathLock(p.dir,()=>{same(runtime,p);const store=read(p);for(const q of store.proposals){question(p,q);if(q.confirmed)confirmedNote(p,q)}if(store.proposals.length)p.state.saveProposals(store);return {ok:true as const,...jsonClone(store)}})}
+export async function proposals(runtime:Runtime,initiator:Initiator){const p=owner(runtime,initiator);return withPathLock(p.dir,()=>{same(runtime,p);const store=read(p);for(const q of store.proposals){question(p,q);if(q.confirmed)confirmedNote(p,q)}if(store.proposals.length)p.state.saveProposals(store);return {ok:true as const,project:store.project,proposals:jsonClone(store.proposals).map(q=>({...q,materializations:q.seats.map(s=>materializationProgress(p,s.operationId,s.sid))}))}})}
 export async function confirm(runtime:Runtime,input:ProposalRef,initiator:Initiator){
  const p=owner(runtime,initiator),wanted=ref(input),project=input.project;if(project!==p.dir)fail('proposal_project_changed','проект подтверждения не совпадает');
  return withPathLock(p.dir,()=>{same(runtime,p);if(runtime.project.dir!==project)fail('proposal_project_changed','проект подтверждения сменился');const store=read(p),q=find(store,wanted),already=q.confirmed;

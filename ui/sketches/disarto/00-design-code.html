@@ -19,6 +19,23 @@
   .no{display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--ink2)}.no u{width:26px;height:26px;border-radius:7px;display:block;position:relative;flex:none}.no u::after{content:"";position:absolute;inset:-2px;background:linear-gradient(to top right,transparent 46%,var(--bad) 46%,var(--bad) 54%,transparent 54%)}
   .drink{height:64px;border-radius:10px;background:radial-gradient(ellipse at 55% 110%,rgba(255,150,46,.75),rgba(214,104,24,.25) 40%,transparent 70%),linear-gradient(180deg,#1d0802,#341003 55%,#4a1a05);border:1px solid var(--line2);box-shadow:inset 0 0 0 1px rgba(240,154,58,.25),inset 0 0 26px rgba(208,106,22,.35)}
   .where{font-size:12.5px;color:var(--ink2);display:grid;gap:6px}.where div{display:grid;grid-template-columns:190px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}.where div:last-child{border-bottom:0}.where b{color:var(--ink);font-weight:500}
+
+/* TS-09b4: saved operation progress in the design-code palette. */
+[data-live-operations] { margin:16px 0; flex:none; }
+.frame .main > [data-live-operations] { margin:16px 22px; }
+.operation { padding:14px 16px; margin:10px 0; border:1px solid var(--line2); border-radius:12px; background:var(--panel); color:var(--ink); }
+.operation > b { display:block; font:500 13px var(--font); }
+.operation small { display:block; color:var(--ink2); font:10.5px var(--mono); line-height:1.5; }
+.operation-meter { display:flex; gap:4px; margin:10px 0 8px; }
+.operation-meter i { flex:1; height:5px; border-radius:1px; background:var(--tile); }
+.operation-meter i.on { background:var(--accent); }
+.operation-error { border-color:var(--bad-fill); }.operation-error p { color:var(--bad); font-size:12px; overflow-wrap:anywhere; }
+.operation-attention { border-color:var(--accent); }
+.operation-inline { border:0; padding:0; margin:0; background:transparent; max-width:360px; }
+.operation-inline > b { font-size:11px; }.operation-inline .operation-meter { margin:5px 0; }.operation-inline small { font-size:9px; }
+[data-operation-header] { margin-left:auto; min-width:0; }
+[data-operation-locked], .operation-button:disabled { opacity:.6; cursor:progress; }
+@media(max-width:700px){ [data-operation-header] { max-width:55%; }.operation-inline small { white-space:normal; }.operation-inline > b { font-size:10px; } }
 </style></head>
 <body><div class="sheet">
   <h1>Harnessy · лист 00 · дизайн-код</h1>
@@ -77,6 +94,15 @@
           <div class="cap2" style="margin-top:14px">сегмент и переключатель</div>
           <div class="rowx"><span class="seg"><span class="on">Обзор</span><span>Проекты</span><span>Причины</span></span><span class="tog on"></span><span class="tog"></span></div></div>
       </div></section>
+
+    <section id="operation-progress"><h2>ход операции · операция идёт<i></i></h2>
+      <div class="three">
+        <div class="box"><div class="cap2">в кнопке</div><button type="button" class="btn p operation-button" disabled>Создаём…</button><p class="t3" style="margin-top:12px">Повторное нажатие подсвечивает ту же операцию.</p></div>
+        <div class="box"><div class="cap2">карточка в ленте чата</div><div class="operation" role="status"><b>Harnessy создаёт оркестратора…</b><div class="operation-meter" role="progressbar" aria-label="Создание оркестратора" aria-valuemin="0" aria-valuemax="4" aria-valuenow="1"><i class="on"></i><i></i><i></i><i></i></div><small>шаг 2 из 4 · вводная и документы</small></div></div>
+        <div class="box"><div class="cap2">строка в шапке чата</div><div class="operation operation-inline" role="status"><b>Harnessy создаёт оркестратора…</b><div class="operation-meter"><i class="on"></i><i></i><i></i><i></i></div><small>шаг 2 из 4 · вводная и документы</small></div></div>
+      </div>
+      <p class="t3">Папка → вводная и документы → место → первое поручение. Полоса меняется по сохранённым шагам; при сбое остаются причина и «Повторить».</p>
+    </section>
 
     <section><h2>правила<i></i></h2>
       <div class="two">

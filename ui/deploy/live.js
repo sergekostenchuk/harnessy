@@ -115,7 +115,7 @@
   function sendBinding(){ const pane=S.ui.pane||(H.pane&&H.pane.id)||'room',chat=(H.active||{})[pane]||null,project=H.project||'',identity=JSON.stringify([project,pane,chat]);
     if(identity!==bindingIdentity){ bindingIdentity=identity; bindingGeneration++; settingJobs.clear(); }
     return {project,pane,chat,generation:bindingGeneration}; }
-  function invalidateBinding(){ bindingIdentity=''; bindingGeneration++;bindingNavigation++; settingJobs.clear(); }
+  function invalidateBinding(){ bindingIdentity=''; bindingGeneration++;bindingNavigation++; settingJobs.clear();if(typeof operationsDraw==='function')operationsDraw(); }
   let leftPage=false,pageGeneration=0;addEventListener('pagehide',()=>{leftPage=true;invalidateBinding();if(window.HARNESS_BOOT)window.HARNESS_BOOT.invalidate();if(typeof suspendPage==='function')suspendPage()});
   function bindingCurrent(binding){ const current=sendBinding(); return current.project===binding.project&&current.pane===binding.pane&&current.chat===binding.chat&&current.generation===binding.generation; }
   const settingKey=b=>JSON.stringify([b.project,b.pane,b.chat,b.generation]);
@@ -272,7 +272,7 @@
     stopLiveEvents();const project=LIVE_EVENTS.project=H.project,generation=LIVE_EVENTS.generation,source=LIVE_EVENTS.source=new EventSource('/api/events/all');
     const current=()=>LIVE_EVENTS.alive&&LIVE_EVENTS.source===source&&LIVE_EVENTS.generation===generation&&H.project===project&&!H.snapshotOnly;
     source.onmessage=event=>{if(!current())return;let data;try{data=JSON.parse(event.data)}catch{return}if(!data||typeof data!=='object'||typeof data.type!=='string')return;
-      if(data.type==='limits'&&typeof limitsEvent==='function')limitsEvent(data);
+      if(data.type==='limits'&&typeof limitsEvent==='function')limitsEvent(data);if(typeof operationsEvent==='function')operationsEvent(data);
       for(const listener of [...LIVE_EVENTS.listeners])if(current()&&listener.onmessage)listener.onmessage(event);
     };
     source.onopen=async event=>{if(!current())return;if(typeof limitsRestart==='function')void limitsRestart();for(const listener of [...LIVE_EVENTS.listeners])if(current()&&listener.onopen)await listener.onopen(event);};
@@ -322,7 +322,7 @@
   const cols=()=>document.querySelectorAll('.feed .col');
   function scrollEnd(){ document.querySelectorAll('.feed').forEach(f=>f.scrollTop=f.scrollHeight); if(document.documentElement.hasAttribute('data-m')) window.scrollTo(0,document.documentElement.scrollHeight); }
   function render(){ cols().forEach(c=>{ c.querySelectorAll('.live-msg, .live-sep').forEach(x=>x.remove()); c.classList.toggle('live-demo-off',H.on||!S.ui.demo);
-      c.insertAdjacentHTML('beforeend','<div class="live-sep">'+(H.on?(S.chat.length?'ваш разговор · через харнесс':'разговор пуст'):(S.chat.length?'ваш разговор в прототипе · <a data-clear>очистить</a> · ':'разговор пуст · ')+'<a data-demo>'+(S.ui.demo?'скрыть пример':'пример разговора')+'</a>')+'</div>'+S.chat.map(bubble).join('')); }); selBar(); drawLive(); if(S.chat.length) scrollEnd(); }
+      c.insertAdjacentHTML('beforeend','<div class="live-sep">'+(H.on?(S.chat.length?'ваш разговор · через харнесс':'разговор пуст'):(S.chat.length?'ваш разговор в прототипе · <a data-clear>очистить</a> · ':'разговор пуст · ')+'<a data-demo>'+(S.ui.demo?'скрыть пример':'пример разговора')+'</a>')+'</div>'+S.chat.map(bubble).join('')); }); selBar(); drawLive();if(typeof operationsDraw==='function')operationsDraw(); if(S.chat.length) scrollEnd(); }
   document.addEventListener('click',e=>{ if(e.target.closest('a[data-demo]')){ S.ui.demo=!S.ui.demo; save(); render(); } });
   document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]'); if(!d||!H.pane) return; const q=S.draft||''; document.querySelectorAll('.live-direct').forEach(x=>x.remove());
     if(d.dataset.direct==='on'){ const binding=sendBinding(); S.ui.direct=S.ui.direct||{}; S.ui.direct[binding.pane]=true; save(); log('чат','Обращение напрямую к «'+paneName(H.pane)+'», минуя оркестратора'); toast('Напрямую к «'+esc(paneName(H.pane))+'» — записано в журнал'); if(window.CX) CX.render(); return q?onSend(q,null,binding):false; }
@@ -365,24 +365,82 @@
     const draw=()=>{ m.innerHTML='<div class="h">'+title+'</div>'+(items.length?items.map((it,i)=>'<div data-k="'+i+'" class="'+(sel.has(i)?'on':'')+(it.dis?' dis':'')+'"><i class="ck"></i>'+it.t+(it.r?' <small>'+it.r+'</small>':'')+'</div>').join('')+'<div class="ft"><span class="btn sm p" data-go>'+okLabel+(sel.size?' ('+sel.size+')':'')+'</span><span class="btn sm ghost" data-x>Отмена</span></div>':'<div class="dis">нечего предложить</div>'); };
     draw(); anchor.appendChild(m);
     const close=dismissLAMenu(m); m.addEventListener('click',e=>{ const d=e.target.closest('[data-k]'); if(d&&!d.classList.contains('dis')){ const i=+d.dataset.k; if(sel.has(i)) sel.delete(i); else sel.add(i); draw(); return; } if(e.target.closest('[data-x]')){ close(); return; } if(e.target.closest('[data-go]')){ if(!sel.size){ toast('Отметьте хотя бы один чат'); return; } close(); onPick([...sel].sort((a,b)=>a-b).map(i=>items[i])); } }); }
+  // TS-09b4: one progress view for bound long operations.
+  const OPS={items:new Map()};
+  const PROMOTION_STEPS=['папка','вводная и документы','место','первое поручение'];
+  function operationIdentity(op,row){const previous=op.previous;return row&&row.chat===op.binding.chat&&typeof row.operationId==='string'&&row.operationId&&
+    (previous?['operationId','chat','sourceProject','sourceRevision','target','pane'].every(k=>row[k]===previous[k]):row.sourceProject===op.binding.project&&row.sourceRevision===op.revision)&&(!op.operationId||row.operationId===op.operationId)}
+  function operationCurrent(op){if(!op||OPS.items.get(op.key)!==op||leftPage||op.navigation!==bindingNavigation)return false;
+    const same=H.project===op.binding.project&&(H.confirmedProjectGeneration||0)===op.confirmed;
+    if(same&&(op.projectOnly||bindingCurrent(op.binding)))return true;
+    return op.kind==='promotion'&&(H.confirmedProjectGeneration||0)<=op.confirmed+1&&((H.liveStatus||{}).promotions||[]).some(row=>operationIdentity(op,row)&&row.target===H.project);
+  }
+  function operationHTML(op,inline=false){const completed=Math.min(op.steps.length,op.completed),step=Math.min(op.steps.length,completed+1),caption=op.error?'Операция не завершена':completed===op.steps.length?'Готово':op.preparing||op.steps[step-1];
+    return '<div class="operation'+(inline?' operation-inline':'')+(op.error?' operation-error':'')+(op.attention?' operation-attention':'')+'" data-operation="'+esc(op.key)+'" role="status" aria-live="polite"><b>'+esc(op.title)+'</b><div class="operation-meter" role="progressbar" aria-label="'+esc(op.title)+'" aria-valuemin="0" aria-valuemax="'+op.steps.length+'"'+(op.preparing?'':' aria-valuenow="'+completed+'"')+'>'+op.steps.map((_,i)=>'<i'+(i<completed?' class="on"':'')+'></i>').join('')+'</div><small>шаг '+step+' из '+op.steps.length+' · '+esc(caption)+(op.attention?' · уже идёт':'')+'</small>'+(!inline&&op.error?'<p role="alert">'+esc(op.error)+'</p>'+(op.retry?'<button type="button" class="btn sm ghost" data-operation-retry="'+esc(op.key)+'"'+(op.running?' disabled':'')+'>'+esc(op.retryLabel||'Повторить')+'</button>':''):'')+'</div>';
+  }
+  function operationsDraw(){for(const [key,op]of OPS.items)if(!operationCurrent(op))OPS.items.delete(key);
+    const items=[...OPS.items.values()],html=items.map(op=>operationHTML(op)).join('');
+    let box=document.querySelector('[data-live-operations]');const host=document.querySelector('.frame.cur .feed .col')||document.querySelector('.frame .feed .col')||document.querySelector('.frame.cur .main')||document.querySelector('.frame .main')||document.querySelector('.main');
+    if(!items.length){if(box)box.remove()}else if(host){if(!box){box=document.createElement('section');box.setAttribute('data-live-operations','');host.appendChild(box)}if(box.innerHTML!==html)box.innerHTML=html;}
+    document.querySelectorAll('.frame .top').forEach(top=>{let line=top.querySelector('[data-operation-header]');if(!items.length){if(line)line.remove();return}if(!line){line=document.createElement('div');line.setAttribute('data-operation-header','');top.appendChild(line)}const content=operationHTML(items[0],true);if(line.innerHTML!==content)line.innerHTML=content});
+    const promoting=items.find(op=>op.kind==='promotion'&&op.running),moving=items.find(op=>op.kind==='move'&&op.running);
+    document.querySelectorAll('[data-la="assign"], [data-cx="role"], [data-la="move"], [data-la="mkdir"], [data-operation-locked]').forEach(button=>{const active=button.matches('[data-la="assign"], [data-cx="role"]')?promoting:button.matches('[data-la="move"], [data-la="mkdir"]')?moving:null;
+      if(active){if(!button.hasAttribute('data-operation-locked')){button.setAttribute('data-operation-locked','');button.__operationLabel=button.innerHTML;button.__operationDisabled=button.disabled}button.innerHTML=active.kind==='promotion'?'Создаём оркестратора…':'Переносим разговор…';button.setAttribute('data-operation-key',active.key);button.setAttribute('aria-disabled','true');if(button.tagName==='BUTTON')button.disabled=true}
+      else if(button.hasAttribute('data-operation-locked')){button.innerHTML=button.__operationLabel;button.disabled=button.__operationDisabled;button.removeAttribute('aria-disabled');button.removeAttribute('data-operation-locked');button.removeAttribute('data-operation-key')}
+    });
+  }
+  function operationAttention(key){const op=OPS.items.get(key);if(op&&operationCurrent(op)){op.attention=true;operationsDraw();document.querySelector('[data-operation="'+key+'"]')?.scrollIntoView?.({block:'nearest'});return true}return false}
+  function operationStart(key,kind,title,steps,binding=sendBinding(),options={}){const old=OPS.items.get(key);if(old&&old.running&&operationCurrent(old)){operationAttention(key);return null}
+    const op={key,kind,title,steps,binding,navigation:bindingNavigation,confirmed:H.confirmedProjectGeneration||0,completed:0,preparing:'подготовка',running:true,error:null,...options};OPS.items.set(key,op);operationsDraw();return op;
+  }
+  function operationEnd(op,error=null){if(!operationCurrent(op)){if(OPS.items.get(op?.key)===op)OPS.items.delete(op.key);operationsDraw();return}op.running=false;op.preparing=null;op.error=error;if(!error)OPS.items.delete(op.key);operationsDraw()}
+  function operationProgress(op,row){if(!operationIdentity(op,row))return;const p={completed:row.completed,error:row.error};
+    if(row.stepCount!==4||row.step!==Math.min(row.completed+1,4)||!Number.isInteger(p.completed)||p.completed<0||p.completed>4||!(p.error===null||typeof p.error==='string'))return;
+    if(p.completed<op.completed||op.error&&p.error===null&&p.completed===op.completed)return;op.operationId=row.operationId;op.completed=p.completed;op.preparing=null;op.error=p.error;operationsDraw();
+  }
+  function operationsStatus(){operationsDraw();const rows=(H.liveStatus||{}).promotions||[];if(!leftPage&&!H.snapshotOnly&&!OPS.items.has('promotion')){const binding=sendBinding(),row=rows.find(row=>row.chat===binding.chat&&row.stepCount===4&&Number.isInteger(row.completed)&&row.completed>=0&&row.completed<=4&&(row.completed<4||typeof row.error==='string')&&(row.error===null||typeof row.error==='string'));if(row)operationStart('promotion','promotion','Harnessy создаёт оркестратора…',PROMOTION_STEPS,binding,{previous:row,revision:row.sourceRevision,running:!row.error,retry:()=>promoteConversation(document.querySelector('.main'),sendBinding())})}for(const op of OPS.items.values())if(op.kind==='promotion')for(const row of rows)operationProgress(op,row);if(typeof TP!=='undefined'&&TP.project===H.project)operationsTeams(TP.data);operationsDraw()}
+  function operationsEvent(ev){if(!ev||ev.project!==H.project)return;if(ev.type==='promotion')for(const op of OPS.items.values())if(op.kind==='promotion')operationProgress(op,ev.promotion)}
+  document.addEventListener('click',event=>{const locked=event.target.closest('[data-operation-locked]');if(locked){event.preventDefault();event.stopImmediatePropagation();operationAttention(locked.dataset.operationKey);return}const retry=event.target.closest('[data-operation-retry]');if(!retry)return;event.preventDefault();event.stopImmediatePropagation();const op=OPS.items.get(retry.dataset.operationRetry);if(operationCurrent(op)&&!op.running&&op.retry){op.retry()}},true);
+  addEventListener('live:status',operationsStatus);addEventListener('pagehide',()=>{OPS.items.clear();operationsDraw()});
+  function proposalMaterialization(q,s){const rows=q.materializations;if(!Array.isArray(rows)||typeof s.operationId!=='string')return null;const matches=rows.filter(row=>row&&row.sid===s.sid&&row.operationId===s.operationId);if(matches.length!==1)return null;const row=matches[0],keys=['team','seatFile','chat','status','onboarding'];
+    if(!['pending','running','failed','complete'].includes(row.state)||!(row.error===null||typeof row.error==='string')||row.stages!==null&&(!row.stages||keys.some(k=>typeof row.stages[k]!=='boolean')))return null;
+    if(row.state==='pending'&&(row.stages!==null||row.error!==null)||row.state!=='pending'&&row.stages===null||row.state==='failed'&&!row.error||row.state==='complete'&&(row.error!==null||keys.some(k=>row.stages[k]!==true)))return null;return row;
+  }
+  function operationsTeams(proposals){for(const q of proposals){if(!q.confirmed)continue;const key='seats:'+q.proposalId+':'+q.version,states=q.seats.map(s=>proposalMaterialization(q,s)),known=states.every(Boolean),completed=states.filter(row=>row?.state==='complete').length;let op=OPS.items.get(key);
+    if(!op&&completed===q.seats.length)continue;
+    if(!op)op=operationStart(key,'seats','Harnessy создаёт места…',q.seats.map(s=>s.label),sendBinding(),{projectOnly:true,preparing:'ожидаем оркестратора'});
+    if(!op||!operationCurrent(op)||op.retrying)continue;const failed=states.findIndex(row=>row?.state==='failed');op.completed=completed;op.error=!known?'Состояние создания мест не получено':failed>=0?states[failed].error:null;op.running=known&&failed<0&&completed<q.seats.length;op.preparing=op.error?null:states.every(row=>row.state==='pending')?'ожидаем оркестратора':null;
+    op.retryLabel=failed>=0?'Повторить':'Повторить чтение';op.retry=async()=>{if(!operationCurrent(op)||op.running)return;if(failed<0){await proposalsFetch();return}const project=op.binding.project;op.retrying=true;op.running=true;operationsDraw();
+      try{const r=await api('/api/seats/owner',{project,proposalId:q.proposalId,version:q.version,seatIndex:failed,kind:proposalSeatKind(q,failed)});if(!operationCurrent(op))return;if(!r||!r.ok)throw Error(r&&r.error||'Создание места не завершено')}catch(error){operationEnd(op,error.message||'нет связи')}finally{op.retrying=false;op.running=false;if(operationCurrent(op))await proposalsFetch();else operationsDraw()}
+    };
+  }operationsDraw()}
+  async function moveConversation(anchor,input){const old=OPS.items.get('move');if(old&&old.running&&operationCurrent(old)){operationAttention('move');return false}
+    invalidateBinding();const binding=sendBinding(),op=operationStart('move','move','Harnessy переносит разговор…',['папка проекта','перенос разговора'],binding,{retry:()=>moveConversation(anchor,input)});
+    try{const r=await api('/api/room/move',input);if(!operationCurrent(op))return false;if(!r||!r.ok)throw Error(r&&r.error||'нет связи');
+      operationEnd(op);if(S.cx){S.cx.noFolder=false;delete S.cx.noFolderPending}S.ui.pane='room';save();const navigation=bindingNavigation;await refreshStatus();if(leftPage||navigation!==bindingNavigation||H.project!==r.project)return false;
+      S.chat.forEach(x=>{if(x.pane==='room')x.nf=false});save();render();log('настройка','Разговор переехал в проект '+r.project.split('/').pop());toast('Разговор переехал: '+esc(r.project.split('/').pop())+(r.carried?' · прежний разговор уйдёт следующим сообщением':''));return true;
+    }catch(error){operationEnd(op,error.message||'нет связи');return false}finally{if(op.running)operationEnd(op)}
+  }
+  // End TS-09b4 operation view.
   // TS-09b2: one bound promotion for both UI entrances.
   let promotionBusy=false;
   async function promoteConversation(anchor,binding=sendBinding()){
-    if(promotionBusy||!bindingCurrent(binding))return false;
+    if(promotionBusy||OPS.items.get('promotion')?.running&&operationCurrent(OPS.items.get('promotion'))){operationAttention('promotion');return false}if(!bindingCurrent(binding))return false;
     if((binding.pane!=='room'&&!((H.chatList||[]).find(c=>c.id===binding.chat)||{}).promotion?.pending)||!binding.chat){toast('Выберите разговор без роли');return false}
     if(S.cx&&S.cx.noFolderPending){toast('Сначала выберите модель разговора');return false}
-    promotionBusy=true;
+    promotionBusy=true;const progress=operationStart('promotion','promotion','Harnessy создаёт оркестратора…',PROMOTION_STEPS,binding,{retry:()=>promoteConversation(anchor,sendBinding())});
     try{
-      if(!await settingsReady(binding)||!bindingCurrent(binding)||leftPage)return false;
+      if(!await settingsReady(binding)||!bindingCurrent(binding)||leftPage){operationEnd(progress,'Настройка разговора не сохранена');return false;}
       const snapshot=await api('/api/chats/'+encodeURIComponent(binding.chat));
       if(!bindingCurrent(binding)||leftPage)return false;
       const chat=snapshot&&snapshot.chat;
-      if(!chat||chat.id!==binding.chat||chat.pane!==binding.pane||!Number.isSafeInteger(chat.revision)||!Array.isArray(chat.documents)){toast('Не удалось прочитать привязку разговора');return false}
-      if(!chat.model){toast('Сначала выберите модель разговора');return false}
+      if(!chat||chat.id!==binding.chat||chat.pane!==binding.pane||!Number.isSafeInteger(chat.revision)||!Array.isArray(chat.documents)){operationEnd(progress,'Не удалось прочитать привязку разговора');toast('Не удалось прочитать привязку разговора');return false}
+      if(!chat.model){operationEnd(progress,'Сначала выберите модель разговора');toast('Сначала выберите модель разговора');return false}
       const path='/api/chats/'+encodeURIComponent(chat.id)+'/orchestrator',body={project:binding.project,revision:chat.revision,documents:chat.documents,...(H.noProject&&!chat.promotion?.pending?{createProject:true}:{})},operation={...captureProjectOperation(path,body),previousPromotion:chat.promotion};
-      const r=await api(path,body,operation);if(!projectOperationCurrent(operation,r))return false;
+      progress.revision=chat.revision;progress.previous=chat.promotion?.operationId?chat.promotion:null;progress.preparing=null;operationsDraw();
+      const r=await api(path,body,operation);if(!operationCurrent(progress)||!projectOperationCurrent(operation,r))return false;
       if(!r||!r.ok){
-        toast('Не вышло: '+esc(r&&r.error||'нет связи'));
+        operationEnd(progress,r&&r.error||'нет связи');toast('Не вышло: '+esc(r&&r.error||'нет связи'));
         if(r&&r.code==='orchestrator_exists'&&r.chat)laMenu(anchor,'В проекте уже есть оркестратор',[{t:'Открыть существующий',id:r.chat}],async()=>{
           if(!bindingCurrent(binding)||leftPage)return;
           const out=await api('/api/chats/open',{chat:r.chat});if(!bindingCurrent(binding)||leftPage)return;
@@ -393,19 +451,19 @@
           if(bindingCurrent(selected)&&!leftPage&&PAGE==='new')location.href='01-chat.html';
         });return false;
       }
-      invalidateBinding();if(S.cx){S.cx.noFolder=false;delete S.cx.noFolderPending}H.projects=null;S.ui.pane=r.pane.id;S.ui.fresh=false;S.ui.switched=true;save();
+      operationEnd(progress);invalidateBinding();if(S.cx){S.cx.noFolder=false;delete S.cx.noFolderPending}H.projects=null;S.ui.pane=r.pane.id;S.ui.fresh=false;S.ui.switched=true;save();
       const selectedNavigation=bindingNavigation;await refreshStatus();if(leftPage||bindingNavigation!==selectedNavigation||H.project!==r.project||(H.active||{})[r.pane.id]!==r.chat.id)return false;
       S.ui.pane=r.pane.id;S.ui.fresh=false;S.ui.switched=true;save();pickPane();const selected=sendBinding();await loadChat({onboard:false});if(!bindingCurrent(selected)||leftPage)return false;
       toast((r.created?'Проект создан по разговору · ':'')+'Оркестратор назначен · разговор сохранён');
       if(PAGE==='new')location.href='01-chat.html';return true;
-    }catch(e){toast('Не удалось назначить оркестратора: '+esc(e.message));return false}finally{promotionBusy=false}
+    }catch(e){if(operationCurrent(progress)){operationEnd(progress,e.message||'нет связи');toast('Не удалось назначить оркестратора: '+esc(e.message))}return false}finally{promotionBusy=false;if(progress.running)operationEnd(progress);operationsDraw()}
   }
   // End TS-09b2 promotion.
   document.addEventListener('click',async e=>{ const la=e.target.closest('[data-la]'); if(!la) return; e.stopPropagation(); const m=S.chat[+la.dataset.i]; if(!m) return; const kind=la.dataset.la, anchor=la.closest('.live-acts');
     if(kind==='copy'){ try{ await navigator.clipboard.writeText(m.text||la.closest('.ai').innerText); toast('Скопировано'); }catch(x){ toast('Не удалось скопировать'); } return; }
     if(!H.on) { toast('Харнесс не подключён'); return; }
     if(kind==='handoff-none'){ toast('В команде пока один собеседник — сначала назначьте роль'); return; }
-    if(kind==='assign'){const binding=sendBinding();laMenu(anchor,'Назначить оркестратора этому разговору',[{t:'Оркестратор',r:'Сохранит разговор и предложит команду',dis:binding.pane!=='room'&&!((H.chatList||[]).find(c=>c.id===binding.chat)||{}).promotion?.pending}],()=>promoteConversation(anchor,binding));return}
+    if(kind==='assign'){if(promotionBusy){operationAttention('promotion');return}const binding=sendBinding();laMenu(anchor,'Назначить оркестратора этому разговору',[{t:'Оркестратор',r:'Сохранит разговор и предложит команду',dis:binding.pane!=='room'&&!((H.chatList||[]).find(c=>c.id===binding.chat)||{}).promotion?.pending}],()=>promoteConversation(anchor,binding));return}
     if(kind==='handoff'){ const me=H.pane?H.pane.id:'room'; const items=(H.panes||[]).filter(p=>p.id!=='room'&&p.id!==me).map(p=>({t:esc(paneName(p)),r:esc(modelName(p.model))+(p.busy?' · отвечает':''),id:p.id}));
       // правило — в движке: один ответ → уходит целиком сразу; два и больше → 409 needSelection → плашка выбора, владелец остаётся здесь
       laMulti(anchor,'передать контекст в чат · адресат прочитает и ответит (один ход модели)',items,'Передать',async picked=>{ const ids=picked.map(x=>x.id), names=picked.map(x=>x.t).join(', '); let r=null; try{ r=await api('/api/handoff',{to:ids,from:me,kind:'note'}); }catch(x){}
@@ -413,11 +471,9 @@
         if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
         noteHandoff(r); log('чат','Контекст передан: '+names); toast('Контекст передан: '+names+' · запись №'+r.seq+' — вы остались в этом чате'); }); return; }
     // новые проекты — в корень проектов движка, не рядом с текущим (урок 08.10: проект лёг внутрь репозитория harnessy)
-    if(kind==='mkdir'){ const def=(H.projectsRoot?H.projectsRoot+'/':(H.project||'').replace(/\/[^/]*$/,'/'))+'novyi-proekt'; laPath(anchor,'создать проект и git',def,async path=>{invalidateBinding();let r=null; try{ r=await api('/api/room/move',{path,create:true,git:true}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
-        if(S.cx){S.cx.noFolder=false;delete S.cx.noFolderPending;} S.ui.pane='room'; save(); await refreshStatus(); S.chat.forEach(x=>{ if(x.pane==='room') x.nf=false; }); save(); render(); log('настройка','Разговор переехал в новый проект '+path.split('/').pop()); toast('Проект создан (git, память, оркестратор), разговор переехал: '+esc(path.split('/').pop())+(r.carried?' · прежний разговор уйдёт следующим сообщением':'')); }); return; }
-    if(kind==='move'){ let pr=null; try{ pr=await api('/api/projects'); }catch(x){} const items=((pr&&pr.projects)||[]).map(p=>({t:esc(p.name),r:(p.seats==null?'? ролей':rolesN(p.seats))+(p.git?' · git':''),path:p.path}));
-      laMenu(anchor,'перейти с разговором в проект',items,async it=>{invalidateBinding();let r=null; try{ r=await api('/api/room/move',{path:it.path}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; }
-        if(S.cx){S.cx.noFolder=false;delete S.cx.noFolderPending;} S.ui.pane='room'; save(); await refreshStatus(); S.chat.forEach(x=>{ if(x.pane==='room') x.nf=false; }); save(); render(); log('настройка','Разговор переехал в проект '+it.t); toast('Разговор переехал: '+it.t+(r.carried?' · прежний разговор уйдёт следующим сообщением':'')); }); return; } });
+    if(kind==='mkdir'){if(operationAttention('move')&&OPS.items.get('move')?.running)return;const def=(H.projectsRoot?H.projectsRoot+'/':(H.project||'').replace(/\/[^/]*$/,'/'))+'novyi-proekt';laPath(anchor,'создать проект и git',def,path=>moveConversation(anchor,{path,create:true,git:true}));return}
+    if(kind==='move'){if(operationAttention('move')&&OPS.items.get('move')?.running)return;const binding=sendBinding();let pr=null;try{pr=await api('/api/projects')}catch(x){}if(!bindingCurrent(binding)||leftPage)return;
+      const items=((pr&&pr.projects)||[]).map(p=>({t:esc(p.name),r:(p.seats==null?'? ролей':rolesN(p.seats))+(p.git?' · git':''),path:p.path}));laMenu(anchor,'перейти с разговором в проект',items,it=>bindingCurrent(binding)&&moveConversation(anchor,{path:it.path}));return} });
   function reply(q,binding=sendBinding()){ if(H.on&&!H.pane){ cols().forEach(c=>c.insertAdjacentHTML('beforeend','<div class="ai live-msg"><span class="orb"></span><div><div class="thought">без роли · модель не выбрана</div><p>Выберите модель в строке ввода — тогда отправлю.</p></div></div>')); scrollEnd(); S.draft=q; save(); return; }
     if(H.on&&H.pane) return ask(q,binding); cols().forEach(c=>c.insertAdjacentHTML('beforeend','<div class="ai live-msg live-typing"><span class="orb"></span><div><div class="thought">думает…</div></div></div>')); scrollEnd();
     setTimeout(()=>{ S.chat.push({role:'ai',html:answer(q),t:now()}); S.chat=S.chat.slice(-40); save(); render(); },850); }
@@ -1344,7 +1400,7 @@
   }
   addEventListener('pageshow',event=>{if(event.persisted)return resumePage()});
   // End TS-09a.1 page lifecycle.
-  window.LIVE={stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting,get teamProposals(){return TP;},proposalsFetch,showTeamProposal,requestTeamProposal};   // для cx.js (поле ввода)
+  window.LIVE={stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,operationsDraw,operationAttention,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting,get teamProposals(){return TP;},proposalsFetch,showTeamProposal,requestTeamProposal};   // для cx.js (поле ввода)
   // TS-09b3: proposal cards always confirm the exact displayed project and version.
   const TP={project:null,generation:0,data:[],loading:false,queued:false,sending:false,error:null,focus:null,kinds:{}};
   const TEAM_KINDS=['orchestrator','assistant','architect','worker','reviewer','tester','researcher'];
@@ -1353,7 +1409,7 @@
   const proposalSeatKind=(q,i)=>q.ownerSeats&&q.ownerSeats[i]?q.ownerSeats[i].kind:q.seats[i].kind;
   function proposalValid(q){return q&&typeof q.proposalId==='string'&&/^p[0-9a-f]{24}$/.test(q.proposalId)&&Number.isSafeInteger(q.version)&&q.version>0&&typeof q.confirmed==='boolean'&&Array.isArray(q.seats)&&q.seats.length>0&&q.seats.every(s=>s&&['sid','kind','label','vendor','model','mode','intro'].every(k=>typeof s[k]==='string')&&TEAM_KINDS.includes(s.kind))&&(q.ownerSeats===undefined||q.ownerSeats&&typeof q.ownerSeats==='object'&&!Array.isArray(q.ownerSeats)&&Object.entries(q.ownerSeats).every(([i,v])=>/^(0|[1-9][0-9]*)$/.test(i)&&Number(i)<q.seats.length&&v&&TEAM_KINDS.includes(v.kind)&&typeof v.created==='boolean'))}
   function proposalsNotify(){if(typeof window!=='undefined'&&window.CX&&window.CX.proposalsChanged)window.CX.proposalsChanged()}
-  function proposalRow(q,s,i){const choice=q.ownerSeats&&q.ownerSeats[i],created=choice?choice.created:(H.panes||[]).some(p=>p.id===s.sid),kind=TP.kinds[proposalKindKey(q,i)]||proposalSeatKind(q,i),attrs=' data-team-project="'+esc(TP.project)+'" data-team-version="'+q.version+'" data-team-index="'+i+'"';
+  function proposalRow(q,s,i){const choice=q.ownerSeats&&q.ownerSeats[i],created=choice?choice.created:proposalMaterialization(q,s)?.state==='complete',kind=TP.kinds[proposalKindKey(q,i)]||proposalSeatKind(q,i),attrs=' data-team-project="'+esc(TP.project)+'" data-team-version="'+q.version+'" data-team-index="'+i+'"';
     return '<div class="proposal-seat" data-team-row><b>'+esc(s.label)+'</b><p>'+esc(s.vendor)+' / '+esc(s.model)+' · '+esc(s.mode)+'</p><label>Класс прав: один из семи <select data-team-kind="'+esc(q.proposalId)+'"'+attrs+(TP.sending||choice||created?' disabled':'')+'>'+TEAM_KINDS.map(k=>'<option value="'+k+'"'+(k===kind?' selected':'')+'>'+k+'</option>').join('')+'</select></label><details><summary>Вводная участника</summary><pre>'+esc(s.intro)+'</pre></details>'+(created?'<p role="status">'+(choice?'Создано владельцем':'Место создано')+'</p>':'<button type="button" class="btn ghost" data-team-create="'+esc(q.proposalId)+'"'+attrs+(TP.sending?' disabled':'')+'>'+(choice?'Завершить создание':'Создать эту роль')+'</button><p class="dim">Подтверждает только эту роль с выбранным классом, моделью, режимом и вводной.</p>')+'</div>';
   }
   function proposalsDraw(){proposalsNotify();if(!['chat','new','now'].includes(PAGE))return;let box=document.getElementById('live-team-proposals');
@@ -1366,8 +1422,8 @@
   function proposalsReset(){TP.generation++;TP.project=null;TP.data=[];TP.error=null;TP.loading=false;TP.queued=false;TP.sending=false;TP.focus=null;TP.kinds={};proposalsDraw()}
   async function proposalsFetch(){if(!H.on||H.snapshotOnly||leftPage||!['chat','new','now'].includes(PAGE))return false;if(TP.project!==H.project){proposalsReset();TP.project=H.project}if(TP.loading){TP.queued=true;return false}
     const project=TP.project,generation=TP.generation;TP.loading=true;
-    try{const r=await api('/api/seats/proposals');if(!proposalCurrent(project,generation))return false;if(!r||!r.ok||r.project!==project||!Array.isArray(r.proposals)||!r.proposals.every(proposalValid))throw Error(r&&r.error||'Не удалось прочитать состав команды');TP.data=r.proposals;TP.error=null;for(const q of TP.data)q.seats.forEach((_s,i)=>{if(q.ownerSeats&&q.ownerSeats[i])delete TP.kinds[proposalKindKey(q,i)]})}
-    catch(e){if(!proposalCurrent(project,generation))return false;TP.error=e.message||'Нет связи с движком';TP.data=[]}
+    try{const r=await api('/api/seats/proposals');if(!proposalCurrent(project,generation))return false;if(!r||!r.ok||r.project!==project||!Array.isArray(r.proposals)||!r.proposals.every(proposalValid))throw Error(r&&r.error||'Не удалось прочитать состав команды');TP.data=r.proposals;TP.error=null;for(const q of TP.data)q.seats.forEach((_s,i)=>{if(q.ownerSeats&&q.ownerSeats[i])delete TP.kinds[proposalKindKey(q,i)]});if(typeof refreshStatus==='function')await refreshStatus();if(proposalCurrent(project,generation))operationsTeams(TP.data)}
+    catch(e){if(!proposalCurrent(project,generation))return false;TP.error=e.message||'Нет связи с движком';TP.data=[];for(const op of OPS.items.values())if(op.kind==='seats')operationEnd(op,TP.error)}
     if(!proposalCurrent(project,generation))return false;TP.loading=false;proposalsDraw();if(TP.queued){TP.queued=false;void proposalsFetch()}return !TP.error;
   }
   function proposalsSync(){if(!['chat','new','now'].includes(PAGE))return;if(TP.project!==H.project)void proposalsFetch();else proposalsDraw()}
@@ -1375,10 +1431,15 @@
   async function requestTeamProposal(binding){if(!bindingCurrent(binding)||leftPage)return false;const o=(H.panes||[]).find(p=>p.kind==='orchestrator');if(!o){toast('Сначала назначьте оркестратора этому разговору');return false}
     invalidateBinding();S.ui.pane=o.id;save();pickPane();hStatus();const target=sendBinding();await loadChat({onboard:false});if(!bindingCurrent(target)||leftPage)return false;return onSend('зарегистрируй предложение',null,target);
   }
+  async function confirmProposal(project,version,proposalId,generation=TP.generation){
+    if(TP.sending||!proposalCurrent(project,generation))return;const q=TP.data.find(q=>q.proposalId===proposalId&&q.version===version&&!q.confirmed);if(!q)return;
+    const key='seats:'+proposalId+':'+version,progress=operationStart(key,'seats','Harnessy создаёт места…',q.seats.map(s=>s.label),sendBinding(),{projectOnly:true,preparing:'подтверждаем состав',retry:()=>confirmProposal(project,version,proposalId,generation)});if(!progress)return;
+    TP.sending=true;proposalsDraw();try{const r=await api('/api/seats/confirm',{project,proposalId,version});if(!proposalCurrent(project,generation))return;if(!r||!r.ok)throw Error(r&&r.error||'Подтверждение не сохранено');progress.preparing='ожидаем оркестратора';toast('Состав команды подтверждён · версия '+version)}catch(error){if(proposalCurrent(project,generation)){operationEnd(progress,error.message);toast(esc(error.message))}}finally{if(proposalCurrent(project,generation)){TP.sending=false;await proposalsFetch()}else operationEnd(progress)}
+  }
   document.addEventListener('change',e=>{const sel=e.target.closest('[data-team-kind]');if(!sel||!proposalCurrent(sel.dataset.teamProject,TP.generation)||TP.sending||sel.disabled)return;const q=TP.data.find(q=>q.proposalId===sel.dataset.teamKind&&q.version===Number(sel.dataset.teamVersion)),i=Number(sel.dataset.teamIndex);if(!q||!q.seats[i]||!TEAM_KINDS.includes(sel.value))return;TP.kinds[proposalKindKey(q,i)]=sel.value;proposalsDraw()});
   document.addEventListener('click',async e=>{if(e.target.closest('[data-team-close]')){e.preventDefault();e.stopPropagation();TP.focus=null;proposalsDraw();return}const refresh=e.target.closest('[data-team-refresh]'),create=e.target.closest('[data-team-create]'),button=create||e.target.closest('[data-team-confirm]');if(!refresh&&!button)return;e.preventDefault();e.stopPropagation();if(refresh){void proposalsFetch();return}
     const project=button.dataset.teamProject,version=Number(button.dataset.teamVersion),proposalId=button.dataset.teamCreate||button.dataset.teamConfirm,generation=TP.generation;
-    if(button.disabled||TP.sending||!proposalCurrent(project,generation))return;const q=TP.data.find(q=>q.proposalId===proposalId&&q.version===version);if(!q||!create&&q.confirmed)return;
+    if(button.disabled||TP.sending||!proposalCurrent(project,generation))return;const q=TP.data.find(q=>q.proposalId===proposalId&&q.version===version);if(!q||!create&&q.confirmed)return;if(!create){await confirmProposal(project,version,proposalId,generation);return}
     const index=Number(button.dataset.teamIndex);if(create&&!q.seats[index])return;const body=create?{project,proposalId,version,seatIndex:index,kind:TP.kinds[proposalKindKey(q,index)]||proposalSeatKind(q,index)}:{project,proposalId,version};
     TP.sending=true;proposalsDraw();try{const r=await api(create?'/api/seats/owner':'/api/seats/confirm',body);if(!proposalCurrent(project,generation))return;if(!r||!r.ok)throw Error(r&&r.error||'Действие не сохранено');if(create&&typeof refreshStatus==='function')await refreshStatus();if(proposalCurrent(project,generation))toast(create?'Роль создана: '+esc(q.seats[index].label):'Состав команды подтверждён · версия '+version)}catch(error){if(proposalCurrent(project,generation))toast(esc(error.message))}finally{if(proposalCurrent(project,generation)){TP.sending=false;await proposalsFetch()}}
   },true);

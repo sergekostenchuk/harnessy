@@ -108,3 +108,19 @@ for(const cut of ['none','intent','materialized'])test('154 МАСКАРАД: wo
  armed=false;r.project.closed=true;await r.close();const provider=new FakeProvider(),next=await createRuntime({...h.deps,providers:{claude:provider}},completedActions);t.after(()=>next.close());await next.idle();
  const repeated=await next.promoteChat(i.id,i.args,OWNER);await next.idle();assert.equal(repeated.pane.id,'orchestrator3');assert.equal(repeated.chat.id,i.id);assert.equal(next.registry.get('orchestrator')!.kind,'worker');assert.equal(next.registry.get('orchestrator')!.transcript[0]!.text,'existing worker answer');assert.equal(next.project.state.chats.active.orchestrator,oldChat);assert.equal(next.registry.get('orchestrator3')!.kind,'orchestrator');assert.equal(h.provider.calls.length+provider.calls.length,1);assert.equal(next.project.restoreFailed.size,0);assert.equal(next.journal.read({limit:0}).filter(x=>x.thread?.startsWith('promotion:')).length,2);
 });
+
+
+test('221: interrupted folder promotion exposes a resumable status after restart instead of an endless busy step',async t=>{
+ const h=await harness(t),r=h.runtime;await r.settingsPatch('owner',{projectsRoot:join(h.dir,'projects')},OWNER);r.roomSet({model:'w1',folder:false},OWNER);r.registry.get('room')!.record('me','Документы для команды');const i=input(r);
+ r.openProject=async()=>{throw Error('fixture failed to open target')};await assert.rejects(r.promoteChat(i.id,i.args,OWNER),/fixture failed to open target/);
+ r.project.closed=true;await r.close();const provider=new FakeProvider(),next=await createRuntime({...h.deps,providers:{claude:provider}},completedActions);t.after(()=>next.close());
+ const restored=next.chatGet(i.id,OWNER).chat.promotion!;assert.equal(restored.pending,true);assert.equal(restored.stepCount,4);assert.match(restored.error!,/Повторите «Назначить оркестратора»/);const operationId=restored.operationId;
+ const result=await next.promoteChat(i.id,i.args,OWNER);await next.idle();assert.equal(result.promotion!.operationId,operationId);assert.equal(result.promotion!.completed,4);assert.equal(result.promotion!.error,null);assert.equal(provider.calls.length,1);
+});
+
+
+test('221: legacy intent without progress remains resumable; malformed new progress is a typed refusal',async t=>{
+ const h=await harness(t),r=h.runtime;r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','Команда');const i=input(r);await r.promoteChat(i.id,i.args,OWNER);await r.idle();const c=r.project.state.chats.chats[i.id]!,saved=structuredClone(c.promotion) as any;
+ for(const bad of [null,{}, {completed:1}, {completed:1,error:true}, {completed:-1,error:null}, {completed:5,error:null}, {completed:1.5,error:null}]){c.promotion={...saved,progress:bad};await assert.rejects(r.promoteChat(i.id,i.args,OWNER),code('promotion_invalid'))}
+ c.promotion={...saved};delete (c.promotion as any).progress;const repeated=await r.promoteChat(i.id,i.args,OWNER);assert.equal(repeated.already,true);assert.equal(repeated.promotion!.completed,4);assert.equal(h.provider.calls.length,1);
+});

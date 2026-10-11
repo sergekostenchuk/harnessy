@@ -16,13 +16,14 @@ const HARNESS={seat:'harness',trust:'harness'} as const,OWNER={seat:'owner',trus
 const DEFAULT_TASK='Сформулируй по обсуждению цель проекта, свою предметную вводную и предложи состав команды. До подтверждения владельцем участников не создавай.';
 export interface PromotionInput {project?:unknown;revision?:unknown;documents?:unknown;task?:unknown;createProject?:unknown}
 interface Promotion {
- id:string;sid:string;target:string;root:string;boundary:number;done:boolean;
+ id:string;sid:string;target:string;root:string;boundary:number;done:boolean;progress?:{completed:number;error:string|null};
  input:{project:string;revision:number;documents:DocumentRef[];task:string;createProject:boolean};
  source:{pane:string;cwd:string;chat:Chat};model:string;vendor:Vendor;mode:Mode;intro:string;
 }
 function invalid(text='сохранённое повышение не читается'):never {throw new RuntimeError('promotion_invalid',text,409)}
 function parse(raw:unknown):Promotion {
  if(!object(raw)||typeof raw.id!=='string'||!/^c[0-9a-f]+$/.test(raw.id)||typeof raw.sid!=='string'||raw.sid.length>31||!/^orchestrator(?:[1-9][0-9]*)?$/.test(raw.sid)||typeof raw.target!=='string'||!isAbsolute(raw.target)||typeof raw.root!=='string'||!Number.isSafeInteger(raw.boundary)||Number(raw.boundary)<0||typeof raw.done!=='boolean'||!object(raw.input)||!object(raw.source)||!object(raw.source.chat)||typeof raw.source.pane!=='string'||typeof raw.source.cwd!=='string'||typeof raw.source.chat.id!=='string'||!Array.isArray(raw.source.chat.transcript)||raw.boundary!==raw.source.chat.transcript.length||typeof raw.model!=='string'||!raw.model||!['claude','codex'].includes(String(raw.vendor))||!MODE_IDS.includes(raw.mode as Mode)||typeof raw.intro!=='string')invalid();
+ if(raw.progress!==undefined&&(!object(raw.progress)||!Number.isInteger(raw.progress.completed)||Number(raw.progress.completed)<0||Number(raw.progress.completed)>4||!(raw.progress.error===null||typeof raw.progress.error==='string'&&raw.progress.error.length<=600)))invalid();
  const i=raw.input;if(typeof i.project!=='string'||!Number.isSafeInteger(i.revision)||!Array.isArray(i.documents)||!i.documents.every(d=>object(d)&&typeof d.project==='string'&&typeof d.path==='string')||typeof i.task!=='string'||typeof i.createProject!=='boolean')invalid();
  const op=raw as unknown as Promotion;if(op.source.pane!=='room'||op.source.chat.pane!=='room'||typeof op.source.chat.carry!=='string'||!isAbsolute(op.input.project)||!isAbsolute(op.root)||!isAbsolute(op.source.cwd)||op.input.revision<0||op.input.documents.length>50||op.source.chat.promotion!==undefined||!op.source.chat.transcript.every(m=>object(m)&&typeof m.role==='string'&&typeof m.text==='string'&&typeof m.ts==='number'))invalid();return deepFreeze(op);
 }
@@ -50,14 +51,17 @@ function availableSid(p:ProjectState):string {
  const occupied=new Set([...seats.keys(),...p.registry.ids,...Object.values(p.state.chats.chats).map(c=>c.pane)]);
  let sid='orchestrator',n=1;while(occupied.has(sid))sid='orchestrator'+(++n);return sid;
 }
-function save(p:ProjectState,c:Chat,op:Promotion){c.promotion=jsonClone(op);p.state.savePanes(p.registry,p.journal)}
+function publishProgress(p:ProjectState,c:Chat){if(!p.closed)p.owner.publish({type:'promotion',project:p.dir,promotion:promotionIdentity(c)})}
+function progress(c:Chat,op:Promotion,completed:number,error:string|null=null){const previous=promotionIdentity(c);return {...op,progress:{completed:Math.max(previous?.completed??0,completed),error}}}
+function save(p:ProjectState,c:Chat,op:Promotion){c.promotion=jsonClone(progress(c,op,op.done?4:c.pane===op.sid?3:op.target===op.input.project?1:0,op.done?null:op.progress?.error??null));p.state.savePanes(p.registry,p.journal);publishProgress(p,c)}
 function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,op:Promotion){
  same(runtime,p);if(op.target!==p.dir)invalid('папка повышения не совпадает');verifyDocuments(op.input.documents);
  let c=p.state.chats.chats[op.source.chat.id];if(c&&(!object(c.promotion)||c.promotion.id!==op.id))invalid('этот идентификатор занят другим разговором');
  if(c&&parse(c.promotion).done){p.state.savePanes(p.registry,p.journal);release(p,op);return c}
- if(!c){c=jsonClone(op.source.chat);c.promotion=jsonClone(op);p.state.chats.chats[c.id]=c;p.state.saveChats(p.registry)}
+ if(!c){c=jsonClone(op.source.chat);c.promotion=jsonClone(progress(c,op,1));p.state.chats.chats[c.id]=c;p.state.saveChats(p.registry);publishProgress(p,c)}
  // The marker precedes the seat file. A crash after a successful file write resumes the same identity.
  p.team=loadTeam(join(p.dir,'.harness'));const found=existing(p,op);p.materializing.add(op.sid);
+ c.promotion=jsonClone(progress(c,op,2));publishProgress(p,c);
  ensureSeatFileLocked(lock,p.team.harnessDir,op.id,roleFile(op),true);
  const seat=found??addSeatLocked(lock,p.team.harnessDir,{role:'orchestrator',kind:'orchestrator',label:'Оркестратор',vendor:op.vendor,model:op.model,mode:op.mode},{},{sid:op.sid,instructions:rolePath(op),file:null});
  if(seat.vendor!==op.vendor||seat.model!==op.model||seat.mode!==op.mode)invalid('настройки сохранённого места изменились');
@@ -101,6 +105,7 @@ export async function promoteChat(runtime:Runtime,id:string,args:PromotionInput,
   op=parse({id:opid,sid:'orchestrator',target,root,boundary:c.transcript.length,done:false,input:{project:p.dir,revision:c.revision,documents:refs,task,createProject:args.createProject??createProject},source:{pane:source.id,cwd:source.cwd,chat:sourceChat},model:source.model,vendor:source.vendor,mode:source.mode==='chat'?'read':source.mode,intro:promotionIntro(target,createProject?'Контекст прежнего разговора передан в этой же пачке.':transcriptText(c.transcript),refs)});
   if([...op.intro].length>100000)throw new RuntimeError('documents_invalid','ссылки на документы не помещаются во вводную: сократите список',400);
  }
+ op=parse({...op,progress:{completed:promotionIdentity(c)?.completed??0,error:null}});
  const source=p.registry.get(c.pane),revision=c.revision,oldPaneRevision=source?.revision;
  if(p.dir===op.input.project&&c.pane===op.source.pane&&c.revision!==op.input.revision)throw new RuntimeError('stale_chat','исходный разговор изменился после сохранения повышения',409);
  const owned=[op.sid,op.source.pane].filter(id=>p.materializing.has(id)||p.restoreFailed.has(id));
@@ -113,14 +118,14 @@ export async function promoteChat(runtime:Runtime,id:string,args:PromotionInput,
  try{
   await withPathLock(p.dir,lock=>{assertSource();verifyDocuments(op.input.documents);if(c.promotion===undefined){p.team=loadTeam(join(p.dir,'.harness'));if(op.target===p.dir){existing(p);op=parse({...op,sid:availableSid(p)})}p.materializing.add(op.source.pane);save(p,c,op)}else save(p,c,op);p.materializing.add(op.source.pane);if(op.target===p.dir)result=reply(p,materialize(runtime,p,lock,op),op,false)});if(op.target!==p.dir)assertSource();
   if(op.target!==p.dir){
-   const validatePath=()=>{assertSource();if(runtime.projectPath(op.target,op.root)!==op.target)throw new RuntimeError('project_changed','целевая папка изменилась',409)};validatePath();await initProject(op.target,{orchestrator:false,git:true},{validatePath,...(runtime.deps.gitops?{gitops:runtime.deps.gitops}:{})});assertSource();
+   const validatePath=()=>{assertSource();if(runtime.projectPath(op.target,op.root)!==op.target)throw new RuntimeError('project_changed','целевая папка изменилась',409)};validatePath();await initProject(op.target,{orchestrator:false,git:true},{validatePath,...(runtime.deps.gitops?{gitops:runtime.deps.gitops}:{})});assertSource();c.promotion=jsonClone(progress(c,op,1));publishProgress(p,c);
    await runtime.openProject(op.target,{expected:p,deferPumps:true,initialize:next=>withPathLock(next.dir,lock=>{const chat=materialize(runtime,next,lock,op);result=reply(next,chat,op,false)})});
   }
  }catch(e){for(const candidate of [p,...(()=>{try{return [runtime.project]}catch{return []}})()]){const chat=candidate.state.chats.chats[id];if(!candidate.closed&&object(chat?.promotion)&&chat.promotion.id===op.id)markFailure(candidate,chat,e)}throw e
  }finally{hold.release();for(const id of owned)if(p.editing.get(id)===hold.token)p.editing.delete(id)}
  const next=runtime.project;await runtime.resumeQueue(op.sid,next);return result!;
 }
-function markFailure(p:ProjectState,c:Chat,e:unknown){const ids=[c.pane];if(object(c.promotion)){try{const op=parse(c.promotion);ids.push(op.source.pane);if(p.team?.seats[op.sid]?.instructions===rolePath(op))ids.push(op.sid)}catch{}}for(const id of ids){p.materializing.delete(id);p.restoreFailed.set(id,message(e))}}
+function markFailure(p:ProjectState,c:Chat,e:unknown){const ids=[c.pane];if(object(c.promotion)){try{const op=parse(c.promotion);c.promotion=jsonClone(progress(c,op,promotionIdentity(c)?.completed??0,message(e).slice(0,600)));publishProgress(p,c);ids.push(op.source.pane);if(p.team?.seats[op.sid]?.instructions===rolePath(op))ids.push(op.sid)}catch{}}for(const id of ids){p.materializing.delete(id);p.restoreFailed.set(id,message(e))}}
 function release(p:ProjectState,op:Promotion){for(const id of [op.sid,op.source.pane]){p.materializing.delete(id);p.restoreFailed.delete(id)}}
 function targetCompleted(op:Promotion):boolean {
  let data:unknown;try{data=parseCompat(diskIO.read(join(op.target,'.harness/state/chats.json')))}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return false;throw e}
@@ -130,7 +135,7 @@ function targetCompleted(op:Promotion):boolean {
 }
 export async function restorePromotions(runtime:Runtime,p:ProjectState){
  for(const c of Object.values(p.state.chats.chats)){if(c.promotion===undefined)continue;
-  try{const op=parse(c.promotion);if(!op.done){p.materializing.add(op.source.pane);if(op.target===p.dir)await withPathLock(p.dir,lock=>materialize(runtime,p,lock,op));else if(targetCompleted(op)){save(p,c,{...op,done:true});release(p,op)}else {p.materializing.delete(op.source.pane);p.restoreFailed.set(op.source.pane,'Повышение сохранено. Повторите «Назначить оркестратора», чтобы открыть целевой проект.')}}}
+  try{const op=parse(c.promotion);if(!op.done){p.materializing.add(op.source.pane);if(op.target===p.dir)await withPathLock(p.dir,lock=>materialize(runtime,p,lock,op));else if(targetCompleted(op)){save(p,c,{...op,done:true});release(p,op)}else {markFailure(p,c,Error('Повышение сохранено. Повторите «Назначить оркестратора», чтобы открыть целевой проект.'))}}}
   catch(e){p.lineErrors.push('повышение '+c.id+' не завершено: '+message(e));markFailure(p,c,e)}
  }
 }

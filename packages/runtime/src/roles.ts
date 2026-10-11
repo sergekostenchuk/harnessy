@@ -17,16 +17,17 @@ export interface SeatInput {
  instructions:{path:string|null;content:string};label:string;writePaths:string[];worktree:string|null;mandate?:number;
 }
 export interface Assignment {
- operationId:string;sid:string;by:string;how:string;input:SeatInput;files:{seat:{path:string;content:string}|null};
+ operationId:string;sid:string;by:string;how:string;error?:string;input:SeatInput;files:{seat:{path:string;content:string}|null};
  source:{chat:Chat|null;carry:string};stages:{team:boolean;seatFile:boolean;chat:boolean;status:boolean;onboarding:boolean};
 }
 export interface CreateSeatInput {role?:unknown;model?:unknown;mode?:unknown;specialization?:unknown}
 interface Authority {by:string;how:string;assert():void;mandate?:number}
-const caches=new WeakMap<object,Map<string,Assignment>>();
+const caches=new WeakMap<object,Map<string,Assignment>>(),failures=new WeakMap<object,Map<string,string>>();
 const all=(op:Assignment)=>Object.values(op.stages).every(Boolean);
 function invalid():never {throw new RuntimeError('materialization_invalid','неверная запись назначения роли',409)}
 function valid(raw:unknown):Assignment {
  if(!object(raw)||typeof raw.operationId!=='string'||!/^c[0-9a-f]{5,}$/.test(raw.operationId)||typeof raw.sid!=='string'||!/^[a-z][a-z0-9_-]{0,30}$/.test(raw.sid)||['owner','harness','all','room'].includes(raw.sid)||typeof raw.by!=='string'||!raw.by||typeof raw.how!=='string'||!object(raw.input)||!object(raw.files)||!object(raw.source)||!object(raw.stages))invalid();
+ if(raw.error!==undefined&&(typeof raw.error!=='string'||!raw.error||raw.error.length>600))invalid();
  const i=raw.input,st=raw.stages;if(!Object.hasOwn(i,'kind'))i.kind=seatKind(undefined,i.role);else seatKind(i.kind);
  if(typeof i.role!=='string'||!i.role||!['claude','codex'].includes(String(i.vendor))||typeof i.model!=='string'||!i.model||!MODE_IDS.includes(i.mode as Mode)||!object(i.instructions)||(i.instructions.path!==null&&typeof i.instructions.path!=='string')||typeof i.instructions.content!=='string'||typeof i.label!=='string'||!Array.isArray(i.writePaths)||!i.writePaths.every(x=>typeof x==='string')||(i.worktree!==null&&typeof i.worktree!=='string')||typeof raw.source.carry!=='string'||!['team','seatFile','chat','status','onboarding'].every(k=>typeof st[k]==='boolean'))invalid();
  if(i.specialization!==undefined)specialization(i.specialization);
@@ -41,6 +42,11 @@ function operations(p:ProjectState):Map<string,Assignment> {
  const raw=p.state.readMaterializations();if(!Array.isArray(raw))invalid();const map=new Map<string,Assignment>();
  for(const item of raw){const op=valid(item);if(map.has(op.operationId))invalid();map.set(op.operationId,op);if(!all(op))p.materializing.add(op.sid)}
  caches.set(p.state,map);return map;
+}
+export function materializationProgress(p:ProjectState,operationId:string,sid:string){
+ const op=operations(p).get(operationId);if(!op)return {operationId,sid,state:'pending' as const,stages:null,error:null};if(op.sid!==sid)invalid();
+ const error=failures.get(p.state)?.get(operationId)??op.error??p.restoreFailed.get(sid)??null;
+ return {operationId,sid,stages:{...op.stages},state:error?'failed' as const:all(op)?'complete' as const:'running' as const,error};
 }
 function put(p:ProjectState,op:Assignment):void {
  const map=operations(p),next=new Map(map);next.set(op.operationId,op);
@@ -82,6 +88,15 @@ function matches(seat:Seat,i:SeatInput,op:Assignment):boolean {
 }
 function currentStatus(p:ProjectState,op:Assignment){return p.journal.read({limit:0,thread:'assignment:'+op.operationId}).find(r=>r.from==='harness'&&r.kind==='status'&&r.origin==='assign'&&r.to.includes('owner'))}
 function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,original:Assignment,authority:()=>void):{pane:Pane;chat:Chat} {
+ try{const result=materializeSteps(runtime,p,lock,original,authority),saved=operations(p).get(original.operationId)!;
+  if(saved.error!==undefined){const {error:_,...clean}=saved;put(p,clean)}failures.get(p.state)?.delete(original.operationId);if(!p.materializing.has(original.sid))p.restoreFailed.delete(original.sid);return result;
+ }catch(e){if(!p.closed){const error=message(e).slice(0,600)||'Назначение не завершено';let errors=failures.get(p.state);if(!errors){errors=new Map();failures.set(p.state,errors)}errors.set(original.operationId,error);
+  // Preserve the original failure even when the storage that failed cannot save its diagnostic.
+  try{const saved=operations(p).get(original.operationId);if(saved&&saved.sid===original.sid)put(p,{...saved,error})}catch{}
+  p.owner.publish({type:'teamProposals',project:p.dir});
+ }throw e}
+}
+function materializeSteps(runtime:Runtime,p:ProjectState,lock:PathLock,original:Assignment,authority:()=>void):{pane:Pane;chat:Chat} {
  let op=original;authority();same(runtime,p);
  if(all(op)){if(![...operations(p).values()].some(x=>x.sid===op.sid&&!all(x)))p.materializing.delete(op.sid);const pane=p.registry.get(op.sid),chat=p.state.chats.chats[op.operationId];if(!pane||!chat)invalid();return {pane,chat}}
  p.materializing.add(op.sid);

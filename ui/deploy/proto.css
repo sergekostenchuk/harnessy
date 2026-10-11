@@ -305,7 +305,7 @@ html[data-m] .cx-pop { position:fixed; left:12px !important; right:12px; width:a
 .cx-chip.empty { border-style:dashed; } .cx-chip.empty b { color:var(--ink2); font-weight:400; }
 .cx-path { font:12px var(--mono); }
 /* живая лента без нарисованного примера; чекбоксы и панель передачи контекста */
-html[data-proto] .feed .col.live-demo-off > :not(.live-msg):not(.live-sep):not(.live-cur):not(.live-ask) { display:none !important; }
+html[data-proto] .feed .col.live-demo-off > :not(.live-msg):not(.live-sep):not(.live-cur):not(.live-ask):not([data-live-operations]) { display:none !important; }
 .live-sep a[data-demo] { color:var(--ink3); }
 .live-ck { display:inline-flex; align-items:center; margin-right:8px; vertical-align:middle; } .live-ck input { width:14px; height:14px; accent-color:var(--accent); cursor:pointer; margin:0; }
 .ai.live-msg .live-ck { position:absolute; left:-26px; top:4px; } .ai.live-msg { position:relative; }
@@ -539,3 +539,19 @@ aside.side.ps .limits:focus-visible { outline:2px solid var(--accent); outline-o
 .cx-proposal-role{padding:10px 12px;border-bottom:1px solid var(--line)}
 .cx-proposal-role small{display:block;margin-top:4px;color:var(--ink2)}
 html[data-page="new"] .team-proposals{position:absolute;inset:20px;z-index:80;margin:0;max-height:calc(100% - 40px);background:var(--panel);box-shadow:0 12px 40px #0008}
+/* TS-09b4: saved operation progress in the design-code palette. */
+[data-live-operations] { margin:16px 0; flex:none; }
+.frame .main > [data-live-operations] { margin:16px 22px; }
+.operation { padding:14px 16px; margin:10px 0; border:1px solid var(--line2); border-radius:12px; background:var(--panel); color:var(--ink); }
+.operation > b { display:block; font:500 13px var(--font); }
+.operation small { display:block; color:var(--ink2); font:10.5px var(--mono); line-height:1.5; }
+.operation-meter { display:flex; gap:4px; margin:10px 0 8px; }
+.operation-meter i { flex:1; height:5px; border-radius:1px; background:var(--tile); }
+.operation-meter i.on { background:var(--accent); }
+.operation-error { border-color:var(--bad-fill); }.operation-error p { color:var(--bad); font-size:12px; overflow-wrap:anywhere; }
+.operation-attention { border-color:var(--accent); }
+.operation-inline { border:0; padding:0; margin:0; background:transparent; max-width:360px; }
+.operation-inline > b { font-size:11px; }.operation-inline .operation-meter { margin:5px 0; }.operation-inline small { font-size:9px; }
+[data-operation-header] { margin-left:auto; min-width:0; }
+[data-operation-locked], .operation-button:disabled { opacity:.6; cursor:progress; }
+@media(max-width:700px){ [data-operation-header] { max-width:55%; }.operation-inline small { white-space:normal; }.operation-inline > b { font-size:10px; } }

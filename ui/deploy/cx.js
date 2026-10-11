@@ -50,7 +50,7 @@
     if(box.__cx.ta) box.__cx.ta.placeholder=p&&!isRoom(p)?'Написать: '+L.paneName(p)+'…':'Написать сообщение…'; }
   function setBusy(on){ document.querySelectorAll('.cx-go').forEach(g=>{ if(g.classList.contains('busy')===!!on) return; const p=seat();g.classList.toggle('busy',!!on); g.title=on?'Остановить · Esc':H.on&&!(p&&p.model)?'выберите модель: у разговора нет сохранённой настройки':'Отправить · Enter'; g.innerHTML=on?'<i class="sq"></i>':svg('up');
     const box=g.closest('.box'), ta=box&&box.__cx&&box.__cx.ta; g.classList.toggle('off',!on&&(!(ta&&ta.value.trim())||H.on&&!(p&&p.model))); }); }
-  function renderAll(){ document.querySelectorAll('.box').forEach(b=>{ if(b.__cx){ build(b); render(b); } }); }
+  function renderAll(){ document.querySelectorAll('.box').forEach(b=>{ if(b.__cx){ build(b); render(b); } });if(L.operationsDraw)L.operationsDraw(); }
 
   // ── всплывающая панель: одна, от чипа; поле внизу — открывается вверх; внутри переходы с «Назад»
   let pop=null, stack=[];
