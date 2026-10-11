@@ -63,7 +63,7 @@ for(const bad of [null,{ok:false,error:'disk unreadable'}, {...snapshot(),projec
  v.functions.reset();await v.functions.fetch();assert.match(v.find('[data-events-body]').textContent,/Данные не прочитаны/);assert.doesNotMatch(v.find('[data-events-body]').textContent,/пока нет событий/);
 });
 
-for(const [key,file,state] of [['plan','02-plan','макет'],['swarm','04-swarm','макет'],['sens','13-sensors','макет'],['now','14-now','частично'],['events','09-events','частично'],['spend','05-spend','частично'],['first','19-first-run','частично'],['login','20-login-pour','макет'],['away','18-overlays','частично']])test('183: '+file+' keeps original blocks and specification after successful boot',()=>{
+for(const [key,file,state] of [['plan','02-plan','макет'],['swarm','04-swarm','частично'],['sens','13-sensors','макет'],['now','14-now','частично'],['events','09-events','частично'],['spend','05-spend','частично'],['first','19-first-run','частично'],['login','20-login-pour','макет'],['away','18-overlays','частично']])test('183: '+file+' keeps original blocks and specification after successful boot',()=>{
  const html=read('ui/sketches/disarto/'+file+'.html'),d=dom(part(html,'<body>','</body>'));Object.assign(d.document,{documentElement:d.html,body:d.body});
  const frames=[...d.document.querySelectorAll('.frame')],original=frames.map(f=>[...f.querySelectorAll('.top,.nums,.feed,.co,.views,.grid')]);
  const context:any={KEY:key,document:d.document,sessionStorage:{getItem:()=>null,setItem(){}},setTimeout:()=>1,clearTimeout(){}};context.window=context;const vm=createContext(context);
