@@ -15,7 +15,7 @@ function part(source:string,start:string,end:string){const a=source.indexOf(star
 const plain=(value:unknown)=>JSON.parse(JSON.stringify(value));
 type Data=Record<string,any>;
 function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;storage?:Map<string,string>}={}){
- const storage=options.storage??new Map<string,string>(),requests:{path:string;body:Data|undefined}[]=[],toasts:string[]=[],clicks:((event:Data)=>unknown)[]=[],pagehide:(()=>void)[]=[],elements=new Map<string,Data>(),rows:Data[]=[];
+ const storage=options.storage??new Map<string,string>(),requests:{path:string;body:Data|undefined}[]=[],toasts:string[]=[],clicks:((event:Data)=>unknown)[]=[],pagehide:(()=>void)[]=[],pageshow:((event:Data)=>unknown)[]=[],elements=new Map<string,Data>(),rows:Data[]=[];
  const H:Data={on:true,project:'/project-a',active:{worker:'chat-a'},panes:[{id:'worker',label:'воркер',model:'w1',vendor:'claude',role:'orchestrator',busy:false},{id:'room',label:'без роли',model:'w1',vendor:'claude'}],cur:null,asks:{},kinds:['question','note','verdict'],projects:[]};H.pane=H.panes[0];
  const S:Data={ui:{pane:'worker',direct:{worker:true}},chat:[],cx:{noFolder:false},draft:null},ta:Data={value:'question',style:{}};let rendered=0;
  const column={querySelectorAll:()=>[],classList:{toggle(){}},insertAdjacentHTML(){}};
@@ -25,7 +25,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
  const sandbox:Data={H,S,document,window:{},localStorage:{getItem:(key:string)=>storage.get(key)??null,setItem:(key:string,value:string)=>storage.set(key,value)},location:{pathname:'/21-journal.html',href:''},PAGE:'chat',
   fetch:async(path:string,opts?:{body:string})=>{const body=opts?.body?JSON.parse(opts.body):undefined;requests.push({path,body});return {json:async()=>options.fetch?options.fetch(path,body):({ok:true,pane:{...H.pane,...body}})}},
   toast:(text:string)=>toasts.push(text),esc:(value:unknown)=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),paneName:(p:Data)=>p.label,save(){},log(){},render(){rendered++},cols:()=>[column],drawLive(){},scrollEnd(){},md:(text:string)=>text,toolLine:()=>'',hStatus(){},now:()=>1791500000125,hhmm:()=>'',costLine:()=>'',actsLine:()=>'',ckBox:()=>'',onboardOnce:async()=>{},LOADED:null,
-  showWaiting(){},showRestore(){},renderWaiting(){},loadAttemptNotes:async()=>{},setTimeout(){},clearInterval(){},setInterval(){return 1},addEventListener(type:string,fn:()=>void){if(type==='pagehide')pagehide.push(fn)},dispatchEvent(){},CustomEvent:class {},confirm:()=>false,sideChats(){},
+  showWaiting(){},showRestore(){},renderWaiting(){},loadAttemptNotes:async()=>{},setTimeout(){},clearInterval(){},setInterval(){return 1},addEventListener(type:string,fn:(event:Data)=>unknown){if(type==='pagehide')pagehide.push(fn as ()=>void);if(type==='pageshow')pageshow.push(fn)},dispatchEvent(){},CustomEvent:class {},confirm:()=>false,sideChats(){},
   refreshStatus:async()=>{},refreshChats:async()=>{},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)||null},close(){},renderAll(){},draw(){},base:()=>'',modeLabel:(s:string)=>s,modelLabel:(s:string)=>s,ROOM:'room',isRoom:(p:Data)=>p.id==='room',ico:()=>'',pl:(n:number)=>String(n)};
  const context=createContext(sandbox);
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+
@@ -48,7 +48,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   '\nglobalThis.sidebar={expanded:projectExpanded,folder:projectFolder,toggle:toggleProjectFolder};',context);return (context as Data).sidebar as Data}
  function direct(){runInContext(part(live,"  document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]');",'  // ── переключение собеседника'),context);const listener=clicks.at(-1)!;
   return (mode:'on'|'orch')=>listener({target:{closest:(selector:string)=>selector==='[data-direct]'?{dataset:{direct:mode}}:null}}) as Promise<boolean>}
- return {H,S,ta,requests,toasts,storage,elements,rows,sandbox,context,functions,journal,sidebar,direct,clicks,pagehide,get rendered(){return rendered}};
+ return {H,S,ta,requests,toasts,storage,elements,rows,sandbox,context,functions,journal,sidebar,direct,clicks,pagehide,pageshow,get rendered(){return rendered}};
 }
 
 test('81/109: real HTTP setting and send are ordered; launch uses the accepted model',async t=>{
@@ -262,13 +262,14 @@ function firstPaint(html:string,storage=new Map<string,string>(),page='chat'){
  Object.assign(view.sandbox.document,{documentElement:root,getElementById:(id:string)=>nodes.get(id)||null,createElement:node,body:{appendChild(el:Data){nodes.set(el.id,el)}}});
  const original=view.sandbox.document.querySelectorAll;
  view.sandbox.document.querySelectorAll=(q:string)=>q==='aside.side.ps'?[side]:q==='aside.side.ps .ps-folders'?[folders]:q==='aside.side.ps .ps-proj'?[project]:q==='.frame .top > b'?[head]:original(q);
- Object.assign(view.sandbox,{setTimeout:(fn:()=>void,ms:number)=>{timers.set(++timerId,{fn,ms});return timerId},clearTimeout:(id:number)=>timers.delete(id),sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,v:string)=>storage.set(k,v)},badges(){},EventSource:class {},nowLive(){},journalLive(){},base:(path:string)=>path.split('/').pop(),PROJ_ITEMS:[],PIN:'',PAGE:page});
+ Object.assign(view.sandbox,{setTimeout:(fn:()=>void,ms:number)=>{timers.set(++timerId,{fn,ms});return timerId},clearTimeout:(id:number)=>timers.delete(id),sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,v:string)=>storage.set(k,v)},badges(){},EventSource:class {},nowLive(){},journalLive(){},journalFetch:async()=>{},SP:{generation:0},JR:{epoch:0},base:(path:string)=>path.split('/').pop(),PROJ_ITEMS:[],PIN:'',PAGE:page});
  view.sandbox.window=view.sandbox;view.sandbox.psKey=page;view.sandbox.location.pathname='/sketches/proto/'+(runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data)[page];view.H.on=false;view.H.panes=[];view.H.project=undefined;view.H.pane=null;
  const first=html.match(/<head>\s*<script>([\s\S]*?)<\/script>/);assert.ok(first,'first head script precedes styles and all frames');runInContext(first[1]!,view.context);
  runInContext(part(live,'  function applyStatus(','  // лента активного чата')+
   part(live,'  async function hConnect(','  // ── чат: настоящее')+
   part(live,'  const PROJECT_FOLD_KEY=','  async function openChatRow(')+
   part(live,'  function restoreLiveSnapshot(','  // End TS-11 snapshot.')+
+  part(live,'  // TS-09a.1: one lifecycle','  // End TS-09a.1 page lifecycle.')+
   '\nglobalThis.paint={restore:restoreLiveSnapshot,connect:hConnect,refresh:refreshStatus,apply:applyStatus,ready:liveFirstPaint,remember:rememberLive};',view.context);
  return {...view,root,attrs,timers,nodes,side,folders,project,head,status,storage,boot:view.sandbox.HARNESS_BOOT,paint:view.sandbox.paint,
   demoVisible:()=>!attrs.has('data-live-pending'),deadline(){for(const [id,timer] of timers)if(timer.ms===1500){timers.delete(id);timer.fn()}}};
@@ -374,4 +375,28 @@ test('TS-11 r2: rejected startup response leaves a cached preview read-only unti
  const old=v.paint.connect();v.boot.select('/next-project');gate.resolve(realStatus());await old;
  assert.equal(v.H.project,'/real/project');assert.equal(v.H.snapshotOnly,true);assert.equal(v.H.connected,undefined);assert.equal(v.storage.get('harnessy-live-project-v1'),'/next-project');
  const before=v.requests.length;assert.equal((await v.functions.api('/api/chat',{message:'keep preview read-only'})).code,'live_pending');assert.equal(v.requests.length,before);
+});
+
+test('152: all PROTO_PAGES share history return, invalidate old bindings/status, and confirm before accepting writes',async()=>{
+ const build=readFileSync(new URL('../../../ui/deploy/build.py',import.meta.url),'utf8'),pages=[...build.match(/PROTO_PAGES\s*=\s*\{([\s\S]*?)\}/)![1]!.matchAll(/"([0-9][^"]+)"\s*:/g)].map(m=>m[1]!);
+ const mapping=runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data;assert.equal(pages.length,18);
+ for(const page of pages){
+  const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/'+page+'.html',import.meta.url),'utf8'),key=Object.keys(mapping).find(k=>mapping[k]===page+'.html')||'',v=firstPaint(html,new Map(),key);
+  v.paint.apply(realStatus(),v.boot.capture(),true);await immediate();const old=v.boot.capture(),binding=v.functions.sendBinding(),gate=deferred<Data>(),fetch=v.sandbox.fetch;
+  v.sandbox.fetch=async(path:string)=>{if(path==='/api/status'){v.requests.push({path,body:undefined});return {json:()=>gate.promise}}return fetch(path)};
+  v.pagehide[0]!();const before=v.requests.length;await v.pageshow[0]!({persisted:false});assert.equal(v.requests.length,before,page+': ordinary pageshow is not a restore');
+  const resumed=v.pageshow[0]!({persisted:true});assert.equal(v.requests.at(-1)!.path,'/api/status');assert.equal(v.H.snapshotOnly,true,page);assert.equal(v.functions.bindingCurrent(binding),false,page);assert.equal(v.boot.current(old),false,page);
+  assert.equal((await v.functions.api('/api/chat',{message:'must wait for confirmation'})).code,'live_pending',page);
+  gate.resolve(projectStatus('/returned/'+page,'Returned '+page));await resumed;await immediate();
+  assert.equal(v.H.project,'/returned/'+page,page);assert.equal(v.H.snapshotOnly,false,page);assert.equal(v.storage.get('harnessy-live-project-v1'),'/returned/'+page,page);assert.equal(v.attrs.has('data-live-preview'),false,page);
+  assert.equal(v.paint.apply(projectStatus('/real/project','OLD'),old),false,page);assert.equal(v.requests.some(r=>r.body),false,page+': history return cannot post or call a model');
+ }
+});
+
+for(const reader of ['refresh','connect'])test('152: late '+reader+' status from a hidden page cannot undo its resumed project',async()=>{
+ const v=firstPaint(bootHtml,new Map(),'set'),old=deferred<Data>(),fresh=deferred<Data>();let calls=0;v.paint.apply(projectStatus('/project-a','A'),v.boot.capture(),true);
+ const fetch=v.sandbox.fetch;v.sandbox.fetch=async(path:string)=>path==='/api/status'?{json:()=>++calls===1?old.promise:fresh.promise}:fetch(path);
+ const pending=v.paint[reader]();v.pagehide[0]!();const restored=v.pageshow[0]!({persisted:true});fresh.resolve(projectStatus('/project-b','B'));await restored;
+ old.resolve(projectStatus('/project-a','OLD A'));await pending;
+ assert.equal(v.H.project,'/project-b');assert.equal(v.H.panes[0].label,'B');assert.equal(v.storage.get('harnessy-live-project-v1'),'/project-b');assert.equal(v.H.snapshotOnly,false);
 });
