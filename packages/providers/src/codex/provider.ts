@@ -1,5 +1,5 @@
 import {randomBytes} from 'node:crypto';
-import {ProviderError,snapshot,record,limitPlan,type Seat,type TurnContext,type Provider,type Usage,type ProviderLimits,type LimitWindow} from '../types.ts';
+import {ProviderError,snapshot,record,limitPlan,limitCredits,type Seat,type TurnContext,type Provider,type Usage,type ProviderLimits,type LimitWindow} from '../types.ts';
 import {asError,requireRecord,vendorError} from '../errors.ts';
 import {waitWithSignal} from '../cancellation.ts';
 import {childEnv} from '../env.ts';
@@ -21,7 +21,10 @@ export function codexLimits(raw:unknown,now=Date.now()/1000,plan:unknown=null):P
  if(!record(w)||typeof w.usedPercent!=='number'||!Number.isFinite(w.usedPercent)||w.usedPercent<0||w.usedPercent>100||!Number.isSafeInteger(w.windowDurationMins)||Number(w.windowDurationMins)<=0||!(w.resetsAt===null||typeof w.resetsAt==='number'&&Number.isFinite(w.resetsAt)&&w.resetsAt>0))return invalid;
  const minutes=Number(w.windowDurationMins);windows.push({label:minutes===300?'5 ч':minutes===10080?'неделя':minutes===43200?'месяц':minutes+' мин',percentUsed:w.usedPercent,resetsAt:w.resetsAt,windowMinutes:minutes});
  }
- return windows.length?{ok:true,plan:limitPlan(value.planType)??limitPlan(plan),windows,fetchedAt:now,source:'Codex app-server'}:{ok:false,code:'limits_unsupported',reason:'Codex: лимиты провайдер не отдаёт'};
+ const credits=value.credits==null?undefined:limitCredits(value.credits),reset=value.rateLimitResetCredits??raw.rateLimitResetCredits;
+ if(credits===null||reset!=null&&(!record(reset)||!Number.isSafeInteger(reset.availableCount)||Number(reset.availableCount)<0))return invalid;
+ const resetCredits=record(reset)?Number(reset.availableCount):undefined;
+ return windows.length||credits||resetCredits!==undefined?{ok:true,plan:limitPlan(value.planType)??limitPlan(plan),windows,fetchedAt:now,source:'Codex app-server',...(credits?{credits}:{}),...(resetCredits!==undefined?{resetCredits}:{})}:{ok:false,code:'limits_unsupported',reason:'Codex: лимиты провайдер не отдаёт'};
 }
 export interface CodexDependencies {transportFactory:TransportFactory;servers:()=>Promise<string[]>;router:()=>Promise<string[]|null>;env:NodeJS.ProcessEnv;cwd:string}
 export class CodexProvider implements Provider {

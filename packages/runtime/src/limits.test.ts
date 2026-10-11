@@ -47,3 +47,8 @@ test('TS-12 r2: snapshot revisions advance when the last quota disappears, acros
 test('TS-12 r2: an unchanged unsupported source does not send quota events into an idle subscription',async t=>{
  const h=await harness(t),events=collect(h.runtime),first=h.runtime.limitsSnapshot();t.after(()=>events.sub.close());await h.runtime.limits();h.clock.advance(60000);await h.runtime.limits();assert.equal(h.runtime.limitsSnapshot().revision,first.revision);assert.ok(!events.events.some(e=>e.type==='limits'));
 });
+
+
+test('215: Codex credits persist in the project snapshot and survive reload without adding a five-hour window',async t=>{
+ const h=await harness(t),clock=h.clock,provider=Object.assign(new FakeProvider('codex'),{limits:async():Promise<ProviderLimits>=>({ok:true,plan:'Pro',source:'fixture-secret',fetchedAt:clock.now()/1000,windows:[{label:'неделя',percentUsed:21,windowMinutes:10080,resetsAt:null}],credits:{hasCredits:true,unlimited:false,balance:62500},resetCredits:2})});const store=new LimitsStore(h.dir,clock,{codex:provider},()=>{});t.after(()=>store.close());await store.refresh();const next=new LimitsStore(h.dir,clock,{codex:provider},()=>{});t.after(()=>next.close());const row=next.snapshot().providers[0]!;assert.equal(row.credits!.balance,62500);assert.equal(row.resetCredits,2);assert.equal(row.windows.length,1);assert.equal(row.windows[0]!.windowMinutes,10080);assert.doesNotMatch(readFileSync(join(h.dir,'.harness/state/limits.json'),'utf8'),/fixture-secret/);
+});

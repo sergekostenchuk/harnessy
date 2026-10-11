@@ -28,8 +28,9 @@ export function claudeUsage(raw:unknown,now=Date.now()/1000,plan:string|null=nul
  const invalid:ProviderLimits={ok:false,code:'limits_invalid',reason:'Claude: неполный ответ лимитов подписки'};
  if(!record(raw)||!('five_hour'in raw)||!('seven_day'in raw))return invalid;
  const windows:LimitWindow[]=[],specs:[string,string,number][]=[['five_hour','5 ч',300],['seven_day','неделя',10080]];
- for(const key of Object.keys(raw).filter(key=>/^seven_day_[a-z][a-z0-9_]*$/.test(key))){
- const model=key.slice('seven_day_'.length),name=model==='oauth_apps'?'приложения':model.split('_').map(part=>part[0]!.toUpperCase()+part.slice(1)).join(' ');
+ for(const key of Object.keys(raw).filter(key=>key.startsWith('seven_day_'))){
+ const model=key.slice('seven_day_'.length);if(model.length>48||!/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(model))return invalid;
+ const name=model==='oauth_apps'?'приложения':model.split('_').map(part=>part[0]!.toUpperCase()+part.slice(1)).join(' ');
  specs.push([key,'неделя · '+name,10080]);
  }
  for(const [key,name,minutes] of specs){

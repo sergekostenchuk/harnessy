@@ -1,19 +1,21 @@
 import {lstatSync,readFileSync,writeFileSync,renameSync,unlinkSync,realpathSync} from 'node:fs';
 import {join,dirname} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {record,limitPlan,type Provider,type ProviderLimits,type LimitWindow,type LimitsCode,type Vendor} from '@harnessy/providers';
+import {record,limitPlan,limitCredits,type LimitCredits,type Provider,type ProviderLimits,type LimitWindow,type LimitsCode,type Vendor} from '@harnessy/providers';
 import type {Clock} from './types.ts';
 
 let nextLimitsRevision=0;
 const labels={claude:'Claude',codex:'Codex'},sources={claude:'claude.ai /usage',codex:'Codex app-server'};
 const reasons:Record<LimitsCode,string>={limits_unsupported:'лимиты провайдер не отдаёт',limits_not_applicable:'ключ API не имеет окон подписки',limits_auth:'вход по подписке недоступен',limits_rate_limited:'сервис лимитов просит повторить позже',limits_unavailable:'сервис лимитов временно недоступен',limits_invalid:'ответ или сохранённый снимок лимитов повреждён',limits_timeout:'чтение лимитов отменено или превысило время ожидания',limits_storage:'не удалось сохранить снимок лимитов'};
-type Saved={vendor:Vendor;plan:string|null;windows:LimitWindow[];fetchedAt:number};
+type Saved={vendor:Vendor;plan:string|null;windows:LimitWindow[];fetchedAt:number;credits?:LimitCredits;resetCredits?:number};
 function saved(raw:unknown,vendor:Vendor,now:number):Saved|null{
- if(!record(raw)||!(raw.plan===null||typeof raw.plan==='string'&&limitPlan(raw.plan)===raw.plan)||raw.vendor!==vendor||typeof raw.fetchedAt!=='number'||!Number.isFinite(raw.fetchedAt)||raw.fetchedAt<=0||raw.fetchedAt>now+60||!Array.isArray(raw.windows)||!raw.windows.length||raw.windows.length>20)return null;
+ if(!record(raw)||!(raw.plan===null||typeof raw.plan==='string'&&limitPlan(raw.plan)===raw.plan)||raw.vendor!==vendor||typeof raw.fetchedAt!=='number'||!Number.isFinite(raw.fetchedAt)||raw.fetchedAt<=0||raw.fetchedAt>now+60||!Array.isArray(raw.windows)||raw.windows.length>20)return null;
+ const credits=raw.credits===undefined?undefined:limitCredits(raw.credits),reset=raw.resetCredits;
+ if(credits===null||reset!==undefined&&(!Number.isSafeInteger(reset)||Number(reset)<0)||!raw.windows.length&&!credits&&reset===undefined)return null;
  const windows:LimitWindow[]=[];
  for(const w of raw.windows){if(!record(w)||typeof w.label!=='string'||!w.label||w.label.length>80||typeof w.percentUsed!=='number'||!Number.isFinite(w.percentUsed)||w.percentUsed<0||w.percentUsed>100||!Number.isSafeInteger(w.windowMinutes)||Number(w.windowMinutes)<=0||!(w.resetsAt===null||typeof w.resetsAt==='number'&&Number.isFinite(w.resetsAt)&&w.resetsAt>0))return null;
  windows.push({label:w.label,percentUsed:w.percentUsed,windowMinutes:Number(w.windowMinutes),resetsAt:w.resetsAt})}
- return {vendor,plan:raw.plan as string|null,windows,fetchedAt:raw.fetchedAt};
+ return {vendor,plan:raw.plan as string|null,windows,fetchedAt:raw.fetchedAt,...(credits?{credits}:{}),...(reset!==undefined?{resetCredits:Number(reset)}:{})};
 }
 export class LimitsStore {
  private revision=++nextLimitsRevision;private values=new Map<Vendor,Saved>();private errors=new Map<Vendor,LimitsCode>();private attempts=new Map<Vendor,number>();
@@ -32,7 +34,7 @@ export class LimitsStore {
  start(){if(this.closed||this.timer!==undefined)return;this.timer=this.clock.setTimeout(()=>{this.timer=undefined;void this.refresh().finally(()=>this.start())},60000)}
  snapshot(){const now=this.clock.now()/1000;return {ok:true as const,project:this.dir,revision:this.revision,updatedAt:this.values.size?Math.max(...[...this.values.values()].map(v=>v.fetchedAt)):null,
  providers:(Object.keys(this.providers) as Vendor[]).map(vendor=>{const value=this.values.get(vendor),code=this.errors.get(vendor)??(!value?(this.providers[vendor]?.limits?'limits_unavailable':'limits_unsupported'):null);return {vendor,plan:value?.plan??null,status:code==='limits_not_applicable'?'not_applicable':code?'unavailable':'ok',label:labels[vendor],source:sources[vendor],sourceConnected:typeof this.providers[vendor]?.limits==='function',fetchedAt:value?.fetchedAt??null,
- windows:value?.windows.map(w=>({...w,resetsIn:w.resetsAt===null?null:Math.max(0,w.resetsAt-now)}))??[],stale:!value||!!code||now-value.fetchedAt>900,...(code?{code,reason:labels[vendor]+': '+reasons[code]}:{})}})}
+ windows:value?.windows.map(w=>({...w,resetsIn:w.resetsAt===null?null:Math.max(0,w.resetsAt-now)}))??[],...(value?.credits?{credits:value.credits}:{}),...(value?.resetCredits!==undefined?{resetCredits:value.resetCredits}:{}),stale:!value||!!code||now-value.fetchedAt>900,...(code?{code,reason:labels[vendor]+': '+reasons[code]}:{})}})}
  }
  async refresh(vendor?:Vendor,force=false){if(this.closed)return;await Promise.all((vendor?[vendor]:Object.keys(this.providers) as Vendor[]).map(v=>this.refreshVendor(v,force)))}
  private async refreshVendor(vendor:Vendor,force:boolean):Promise<void>{

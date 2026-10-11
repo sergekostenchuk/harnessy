@@ -128,3 +128,10 @@ test('213: Claude usage keeps Fable and additional named model windows, and skip
  const missing=claudeUsage({five_hour:quotaUsage.five_hour,seven_day:quotaUsage.seven_day});assert.equal(missing.ok,true);if(missing.ok)assert.equal(missing.windows.length,2);
 });
 for(const value of [{utilization:101,resets_at:null},{utilization:'95',resets_at:null},{utilization:12},{utilization:12,resets_at:'invalid'}])test('213: malformed additional Claude model quota is a typed refusal '+JSON.stringify(value),()=>{const r=claudeUsage({...quotaUsage,seven_day_fable:value});assert.equal(r.ok,false);if(!r.ok)assert.equal(r.code,'limits_invalid')});
+
+
+for(const model of ['', 'fable_', 'fable__extra', '<img>', 'fable-name', 'fable'+'x'.repeat(44)])test('213 r2: malformed model-window name is a typed invalid response, including HTTP 200: '+model,async()=>{
+ const raw={...quotaUsage,['seven_day_'+model]:{utilization:21,resets_at:null}},direct=claudeUsage(raw);assert.equal(direct.ok,false);if(!direct.ok)assert.equal(direct.code,'limits_invalid');
+ const p=new ClaudeProvider({env:{},readOauthLogin:async()=>({token:'fixture-secret',plan:'Max'}),usageFetch:(async()=>new Response(JSON.stringify(raw),{status:200})) as typeof fetch});const result=await p.limits();assert.equal(result.ok,false);if(!result.ok)assert.equal(result.code,'limits_invalid');
+});
+test('213 r2: model names with nonempty segments and the maximum supported length remain valid',()=>{for(const model of ['fable_5', 'fable'+'x'.repeat(43)]){const r=claudeUsage({...quotaUsage,['seven_day_'+model]:{utilization:21,resets_at:null}});assert.equal(r.ok,true);if(r.ok)assert.equal(r.windows.at(-1)!.percentUsed,21)}});
