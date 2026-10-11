@@ -44,3 +44,19 @@ test('1/12: connections projection, route reset/environment on next turn, and ch
  const iface=await call(h.api,'/api/connections/route',{body:{provider:'codex',route:'iface',iface:'utun4'}});assert.equal(iface.body.applies,'только проверка выхода: трафик идёт системным маршрутом');assert.equal(h.codex.resets,1);
  assert.deepEqual((await call(h.api,'/api/connections/check',{body:{provider:'router'}})).body,{ok:false,error:'проверка выхода: claude или codex'});
 });
+
+test('168/184: journal project summary covers all records; exact filters precede pagination and retain seq boundaries',async t=>{
+ const h=await fixture(t);
+ for(let i=1;i<=205;i++)h.runtime.journal.append({sender:i%2?'owner':'harness',to:i%3?'worker':['owner','worker'],kind:i%2?'question':'note',thread:i%5?'one':'two',text:'event '+i});
+ const page=await call(h.api,'/api/journal?kind=note&from=harness&to=owner&thread=one&limit=4');
+ assert.equal(page.body.project,h.dir);assert.deepEqual(page.body.summary,{total:205,byKind:{question:103,note:102}});
+ const expected=Array.from({length:205},(_,i)=>i+1).filter(n=>n%2===0&&n%3===0&&n%5!==0);assert.deepEqual(page.body.records.map((r:{seq:number})=>r.seq),expected.slice(-4));
+ const before=page.body.records[0].seq,older=await call(h.api,'/api/journal?kind=note&from=harness&to=owner&thread=one&before='+before+'&limit=0');
+ assert.deepEqual([...older.body.records,...page.body.records].map(r=>r.seq),expected);assert.deepEqual(older.body.summary,page.body.summary);
+ const fresh=await call(h.api,'/api/journal?kind=note&since='+before+'&limit=0');assert.ok(fresh.body.records.every((r:{seq:number;kind:string})=>r.seq>before&&r.kind==='note'));assert.deepEqual(fresh.body.summary,page.body.summary);
+ const empty=await call(h.api,'/api/journal?from=nonexistent');assert.deepEqual(empty.body.records,[]);assert.equal(empty.body.summary.total,205);
+ assert.equal((await call(h.api,'/api/connections')).body.project,h.dir);
+ for(const query of ['kind=unknown','kind=note&kind=question','from=owner&from=harness','to=worker&to=owner']){const r=await call(h.api,'/api/journal?'+query);assert.equal(r.status,400,query);assert.equal(r.body.code,'journal_filter_invalid')}
+ const protocol=await call(h.api,'/api/journal?since=-1&before=1&limit=0');assert.deepEqual(protocol.body.records.map((r:{seq:number})=>r.seq),[0]);assert.deepEqual(protocol.body.summary,page.body.summary);
+ assert.equal((await call(h.api,'/api/journal?kind=ack')).status,200); // persisted system records use the same filter.
+});

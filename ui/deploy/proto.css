@@ -430,3 +430,25 @@ html[data-page="spend"] [data-c="router"] { flex:none !important; }
 html[data-page="spend"] .main a, .sp-link, [data-pane="priceList"] a, [data-live-spend] a { color:var(--accent); text-decoration:none; }
 html[data-page="spend"] .main a:hover, .sp-link:hover, [data-pane="priceList"] a:hover { text-decoration:underline; }
 [data-pane="priceList"] .sp-actions { padding:0 12px 10px; }
+
+/* TS-15a: specification is not a connection status; these labels survive boot.ready(). */
+.spec-heading { min-width:0; }
+.spec-banner { padding:8px 20px; border-bottom:1px solid var(--line2); background:var(--raised); color:var(--ink2); font-size:11px; line-height:1.5; }
+.spec-block { padding:8px 10px; margin-bottom:10px; border-left:2px solid var(--accent); color:var(--ink2); font-size:11px; line-height:1.5; }
+html[data-page="now"] .nums > .spec-block { grid-column:1/-1; }
+html[data-page="events"] .app.free { display:block!important; overflow:auto; padding:0!important; }
+html[data-page="events"] .g3 { padding:20px; grid-template-columns:minmax(220px,1fr) minmax(400px,1.6fr) minmax(220px,1fr); }
+html[data-page="events"] .feed { min-width:0; }
+.events-source { overflow-wrap:anywhere; color:var(--ink2); font-size:12px; margin-bottom:6px; }
+.events-kinds { display:flex; flex-wrap:wrap; gap:5px; margin:12px 0; }
+.events-filters { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+.events-filters label { color:var(--ink2); font-size:11px; min-width:0; }
+.events-filters input { display:block; width:100%; margin-top:4px; background:var(--panel); border:1px solid var(--line2); border-radius:6px; padding:7px; color:var(--ink); font:12px var(--font); }
+[data-events-error]:not(:empty) { border:1px solid var(--bad); padding:10px; margin-bottom:10px; color:var(--ink2); }
+[data-event-feed] summary { cursor:pointer; overflow-wrap:anywhere; }
+[data-event-feed] q { white-space:pre-wrap; overflow-wrap:anywhere; }
+.events-route,.events-preview { display:block; margin-top:4px; overflow-wrap:anywhere; }
+.events-route { font:10px var(--mono); color:var(--ink3); }
+[data-event-feed] .ffoot { flex-wrap:wrap; }
+[data-event-feed] button:disabled { opacity:.5; cursor:not-allowed; }
+@media(max-width:759px){html[data-page="events"] .g3 { grid-template-columns:1fr; padding:16px; } html[data-page="events"] .feed { grid-row:1; } .spec-banner { padding:10px 16px; } }
