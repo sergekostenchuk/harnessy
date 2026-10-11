@@ -4,7 +4,7 @@ import {withPathLock,canonicalPath,MODE_IDS} from '@harnessy/team';
 import {ownerPaths,readObject,writeJson,object,truthy} from './files.ts';
 import {orderedClone,orderedKeys,parseCompat} from '@harnessy/journal';
 import {priceList,type ModelPrice} from './price-list.ts';
-import {BILLING_KEYS,billingConfig} from './billing.ts';
+import {BILLING_KEYS,billingConfig,mergeBilling} from './billing.ts';
 import {ProjectError} from './errors.ts';
 import {SETTINGS_APPLIES,SETTINGS_SCOPE} from './strings.ts';
 function repr(key:string){
@@ -25,6 +25,14 @@ export class Settings {
  private prices(owner:Record<string,unknown>):ModelPrice[]{try{return Object.hasOwn(owner,'priceList')?priceList(owner.priceList):[]}catch(e){throw new ProjectError('pricelist_unreadable','прайс-лист владельца не читается: '+(e as Error).message,409,e)}}
  priceList(){return this.prices(this.readOwner())}
  billing(){try{return billingConfig(this.readOwner())}catch(e){throw new ProjectError('billing_unreadable','Настройки подписок не читаются: '+(e as Error).message,409,e)}}
+ async patchBilling(changes:unknown){
+  const path=canonicalPath(this.ownerFile);
+  return withPathLock(path,()=>{
+   const owner=this.readOwner(true,path),previous=billingConfig(owner),config=mergeBilling(previous,changes),saved=orderedClone(owner);
+   for(const key of ['subscriptionPrices','subscriptionDates'] as const)if(JSON.stringify(previous[key])!==JSON.stringify(config[key]))saved[key]=config[key];
+   writeJson(path,saved);return {ok:true as const,scope:'owner' as const,config,ts:Math.floor(this.now()/1000)};
+  });
+ }
  private merged(owner:Record<string,unknown>,project:Record<string,unknown>){const overrides=orderedClone(project);for(const key of ['priceList',...BILLING_KEYS])delete overrides[key];return orderedClone(owner,overrides)}
  get(){const owner=this.readOwner(),path=this.projectPath(),project=path?readObject(path):{};this.prices(owner);return {ok:true as const,owner,project,effective:this.merged(owner,project),applies:SETTINGS_APPLIES}}
  // Broken prices must not prevent opening a project or reaching the owner's repair endpoint.

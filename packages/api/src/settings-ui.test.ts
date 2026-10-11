@@ -146,3 +146,26 @@ test('219: settings preserve other-account payment, bind a new payment to curren
  await v.find('[data-billing-save]').emit('click');const saved=h.runtime.settings.billing().subscriptionDates;assert.equal(saved.length,2);assert.equal(saved[0]!.account,'old@example.test');assert.equal(saved[1]!.account,'a@example.test');assert.equal(saved[1]!.amount,37);assert.match(v.find('.pane').textContent,/введено владельцем/);
  email='b@example.test';await v.find('[data-billing-reload]').emit('click');assert.equal(v.find('[data-billing-date]').value,'');assert.match(v.find('.pane').textContent,/a@example.test.*для другой учётной записи/);assert.equal((await call(h.api,'/api/billing')).body.payments.length,0);
 });
+
+const priceAmount=(index=0)=>'[data-billing-row="'+index+'"][data-billing-key="amount"]';
+const paymentField=(key:string)=>'[data-billing-vendor="claude"][data-billing-'+key+']';
+async function editBilling(v:ReturnType<typeof settingsUi>,selector:string,value:string){const input=v.find(selector);input.value=value;await input.emit('input')}
+test('TS-14c r2: price-only save sends one record and preserves a payment saved after the draft opened',async t=>{
+ const h=await fixture(t);h.provider.auth=async()=>({loggedIn:true,email:'a@example.test',plan:'pro'});
+ const v=settingsUi(async(path,body)=>(await call(h.api,path,body?{body}:{})).body,h.dir);await v.ready();await v.go('subscriptions');await editBilling(v,priceAmount(),'123');
+ const payment={vendor:'codex',account:'b@example.test',date:'2026-11-01',plan:'Pro',amount:200,currency:'USD',enteredAt:1791700000};
+ await call(h.api,'/api/settings',{body:{scope:'owner',patch:{subscriptionDates:[payment]}}});await v.find('[data-billing-save]').emit('click');
+ assert.deepEqual(h.runtime.settings.billing().subscriptionDates,[payment]);assert.equal(h.runtime.settings.billing().subscriptionPrices[0]!.amount,123);assert.match(v.find('.pane').textContent,/Сохранено/);
+ const request=v.requests.find(r=>r.body?.changes);assert.equal(request.path,'/api/billing');assert.equal(request.body.changes.length,1);assert.equal(request.body.changes[0].collection,'subscriptionPrices');
+});
+for(const scenario of ['different plans','same account price and date','same field conflict'] as const)test('TS-14c r2: two actual settings windows — '+scenario,async t=>{
+ const h=await fixture(t);h.provider.auth=async()=>({loggedIn:true,email:'a@example.test',plan:'pro'});
+ await h.runtime.settings.patch('owner',{subscriptionDates:[{vendor:'claude',account:'a@example.test',date:'2026-11-01',plan:null,amount:20,currency:'USD'}]});
+ const fetch=async(path:string,body?:any)=>(await call(h.api,path,body?{body}:{})).body,a=settingsUi(fetch,h.dir),b=settingsUi(fetch,h.dir);await a.ready();await b.ready();await a.go('subscriptions');await b.go('subscriptions');
+ await editBilling(a,scenario==='same account price and date'?paymentField('amount'):priceAmount(),'123');
+ await editBilling(b,scenario==='same account price and date'?paymentField('date'):priceAmount(scenario==='different plans'?1:0),scenario==='same account price and date'?'2026-11-20':'456');
+ await b.find('[data-billing-save]').emit('click');await a.find('[data-billing-save]').emit('click');const saved=h.runtime.settings.billing();
+ if(scenario==='different plans'){assert.equal(saved.subscriptionPrices[0]!.amount,123);assert.equal(saved.subscriptionPrices[1]!.amount,456)}
+ else if(scenario==='same account price and date'){assert.equal(saved.subscriptionDates[0]!.amount,123);assert.equal(saved.subscriptionDates[0]!.date,'2026-11-20')}
+ else {assert.equal(saved.subscriptionPrices[0]!.amount,456);assert.equal(a.find(priceAmount()).value,'123');assert.match(a.find('[role="alert"]').textContent,/другом окне/);assert.doesNotMatch(a.find('.pane').textContent,/Сохранено/);await a.find('[data-billing-reload]').emit('click');assert.equal(a.find(priceAmount()).value,'456')}
+});

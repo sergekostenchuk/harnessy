@@ -44,3 +44,20 @@ test('219: payments are account-bound; a different or missing login never inheri
  email=undefined;b=(await call(h.api,'/api/billing')).body;assert.equal(b.payments.length,0);assert.equal(b.subscriptions[0].account,null);assert.deepEqual(h.runtime.settings.billing().subscriptionDates,rows);
  for(const row of [{...rows[0],account:'<bad>'},{...rows[0],amount:3,currency:undefined},{...rows[0],enteredAt:0}])assert.equal((await call(h.api,'/api/settings',{body:{scope:'owner',patch:{subscriptionDates:[row]}}})).body.code,'billing_invalid');
 });
+
+test('TS-14c r2: keyed owner patches reject malformed/conflicting edits atomically and preserve neighbours',async t=>{
+ const h=await fixture(t);await h.runtime.settings.patch('owner',{keep:'owner',subscriptionPrices:prices});const path=join(h.dir,'owner-settings.json'),before=readFileSync(path,'utf8');
+ const change={collection:'subscriptionPrices',before:prices[0],after:{...prices[0],amount:125}};
+ for(const changes of [undefined,[{}],[{...change,before:undefined}],[change,change],[{...change,after:{...change.after,plan:'renamed'}}]]){const r=await call(h.api,'/api/billing',{body:{changes}});assert.equal(r.status,400);assert.equal(r.body.code,'billing_invalid');assert.equal(readFileSync(path,'utf8'),before)}
+ const conflict=await call(h.api,'/api/billing',{body:{changes:[change,{collection:'subscriptionPrices',before:{...prices[1],amount:999},after:{...prices[1],amount:10}}]}});assert.equal(conflict.status,409);assert.equal(conflict.body.code,'billing_conflict');assert.equal(readFileSync(path,'utf8'),before);
+ assert.equal((await call(h.api,'/api/billing',{body:{changes:[change]}})).status,200);assert.equal(h.runtime.settings.effective().keep,'owner');assert.deepEqual(h.runtime.settings.billing().subscriptionPrices[1],prices[1]);
+ const deletion={...change,after:null};assert.equal((await call(h.api,'/api/billing',{body:{changes:[deletion]}})).body.code,'billing_conflict','stale deletion cannot erase a concurrent field edit');
+});
+test('TS-14c r2: account A quota cannot supply account B tier, price or extra-usage flag',async t=>{
+ const h=await fixture(t);let email='a@example.test';h.provider.auth=async()=>({loggedIn:true,email,subscriptionType:'max'});
+ Object.assign(h.provider,{limits:async()=>({ok:true,plan:'Max',planLevel:email==='a@example.test'?'5x':'20x',extraUsageEnabled:true,source:'fixture',fetchedAt:h.clock.now()/1000,windows:[{label:'неделя',percentUsed:18,windowMinutes:10080,resetsAt:null}]})});
+ await h.runtime.settings.patch('owner',{subscriptionPrices:[prices[0],{...prices[0],plan:'Max 20x',amount:200}],subscriptionDates:['a','b'].map(n=>({vendor:'claude',account:n+'@example.test',date:'2026-11-01',plan:null}))});
+ await h.runtime.limits();assert.equal(h.runtime.limitsSnapshot().providers[0]!.account,email);assert.equal((await call(h.api,'/api/billing')).body.subscriptions[0].plan,'Max 5x');
+ email='b@example.test';let b=(await call(h.api,'/api/billing')).body;assert.equal(b.subscriptions[0].account,email);assert.match(b.subscriptions[0].detectedPlan,/уровень неизвестен/);assert.equal(b.subscriptions[0].amount,null);assert.equal(b.subscriptions[0].extraUsageEnabled,null);assert.ok(b.payments.every((p:any)=>p.amount===null));
+ h.clock.advance(300000);await h.runtime.limits();b=(await call(h.api,'/api/billing')).body;assert.equal(b.subscriptions[0].plan,'Max 20x');assert.equal(b.subscriptions[0].amount,200);
+});

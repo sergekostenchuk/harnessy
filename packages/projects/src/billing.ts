@@ -1,3 +1,4 @@
+import {isDeepStrictEqual} from 'node:util';
 import {object} from './files.ts';
 import {ProjectError} from './errors.ts';
 export interface SubscriptionPrice {vendor:'claude'|'codex';plan:string;amount:number|null;currency:string}
@@ -29,9 +30,35 @@ export function billingConfig(owner:Record<string,unknown>){
  for(const key of ['limitSwitchCheaper','limitWarn80'])if(Object.hasOwn(owner,key)&&typeof owner[key]!=='boolean')bad('Настройка '+key+': нужен флаг');
  return {subscriptionPrices:prices,subscriptionDates:dates,limitSwitchCheaper:owner.limitSwitchCheaper===true,limitWarn80:owner.limitWarn80===true};
 }
-export function billingSnapshot(config:ReturnType<typeof billingConfig>,sources:{vendor:string;connected:boolean;plan:string|null;level?:string|null;extraUsageEnabled?:boolean|null;account?:string|null}[],now:number){
+// Compare only edited fields under the owner-file lock; neighbouring rows and fields survive.
+export function mergeBilling(config:ReturnType<typeof billingConfig>,raw:unknown){
+ if(!Array.isArray(raw)||raw.length>100)bad('Изменения подписок: ожидается список до 100 записей');
+ const result=structuredClone(config),seen=new Set<string>();
+ const equal=isDeepStrictEqual;
+ const key=(collection:string,r:Record<string,unknown>)=>JSON.stringify([r.vendor,collection==='subscriptionPrices'?r.plan:r.account??null]);
+ const conflict=():never=>{throw new ProjectError('billing_conflict','Эта запись изменена в другом окне. Перечитайте настройки подписок и повторите изменение.',409)};
+ for(const change of raw){
+  if(!object(change)||Object.keys(change).some(k=>!['collection','before','after'].includes(k))||!Object.hasOwn(change,'before')||!Object.hasOwn(change,'after')||typeof change.collection!=='string'||!['subscriptionPrices','subscriptionDates'].includes(change.collection))bad('Изменение подписки: нужны collection, before и after');
+  const collection=change.collection as 'subscriptionPrices'|'subscriptionDates',validate=collection==='subscriptionPrices'?subscriptionPrices:subscriptionDates;
+  const row=(v:unknown)=>v===null?null:validate([v])[0]! as unknown as Record<string,unknown>;
+  const before=row(change.before),after=row(change.after);if(!before&&!after)bad('Пустое изменение подписки');
+  const id=key(collection,(before??after)!);if(before&&after&&key(collection,after)!==id)bad('Ключ записи нельзя менять: удалите старую и добавьте новую');
+  const unique=collection+id;if(seen.has(unique))bad('Изменение записи повторяется');seen.add(unique);
+  const rows=result[collection] as unknown as Record<string,unknown>[],index=rows.findIndex(r=>key(collection,r)===id),current=rows[index];
+  if(!before){if(current){if(!equal(validate([current]),validate([after])))conflict()}else rows.push(after!);continue}
+  if(!current){if(after)conflict();continue}
+  if(!after){if(!equal(validate([current]),validate([before])))conflict();rows.splice(index,1);continue}
+  for(const field of new Set([...Object.keys(before),...Object.keys(after)])){
+   if(equal(before[field],after[field]))continue;
+   if(field!=='enteredAt'&&!equal(current[field],before[field])&&!equal(current[field],after[field]))conflict();
+   if(Object.hasOwn(after,field))current[field]=after[field];else delete current[field];
+  }
+ }
+ return billingConfig(result);
+}
+export function billingSnapshot(config:ReturnType<typeof billingConfig>,sources:{vendor:string;connected:boolean;plan:string|null;level?:string|null;levelUnknown?:boolean;extraUsageEnabled?:boolean|null;account?:string|null}[],now:number){
  const today=new Date(now*1000),month=today.getUTCMonth(),year=today.getUTCFullYear();
- const subscriptions=sources.map(s=>{const account=s.account??null,manual=account?config.subscriptionDates.find(d=>d.vendor===s.vendor&&d.account===account):undefined,detected=s.plan?(s.plan+(s.level?' '+s.level:'')):null,plan=manual?.plan??detected,price=config.subscriptionPrices.find(p=>p.vendor===s.vendor&&p.plan===plan),amount=manual?.amount??price?.amount??null,currency=manual?.amount!=null?manual.currency:price?.currency;
+ const subscriptions=sources.map(s=>{const account=s.account??null,manual=account?config.subscriptionDates.find(d=>d.vendor===s.vendor&&d.account===account):undefined,detected=s.plan?(s.plan+(s.level?' '+s.level:s.levelUnknown?' · уровень неизвестен':'')):null,plan=manual?.plan??detected,price=config.subscriptionPrices.find(p=>p.vendor===s.vendor&&p.plan===plan),amount=manual?.amount??price?.amount??null,currency=manual?.amount!=null?manual.currency:price?.currency;
   return {...s,account,plan,detectedPlan:detected,planSource:manual?.plan?'owner':'provider',date:manual?.date??null,amount,currency:currency??null,enteredAt:manual?.enteredAt??null};});
  const bindings=config.subscriptionDates.map(d=>({...d,status:!d.account?'unbound':sources.some(s=>s.connected&&s.vendor===d.vendor&&s.account===d.account)?'current':'other_account'}));
  const payments=subscriptions.flatMap(s=>{if(!s.connected||!s.date)return [];const anchor=new Date(s.date),day=anchor.getUTCDate();

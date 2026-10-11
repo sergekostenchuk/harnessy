@@ -46,9 +46,14 @@ export function metaRoutes(r:Runtime):Route[]{return [
  const selected=all.filter(record=>record.seq>since&&(before===undefined||record.seq<before)&&matches(record.thread,filters.thread)&&(!filters.kind||record.kind===filters.kind)&&matches(record.from,filters.from)&&(!filters.to||record.to.some(to=>matches(to,filters.to))));
  if(before!==undefined)selected.sort((a,b)=>a.seq-b.seq);
  return json({project:p.dir,records:limit?selected.slice(-limit):selected,summary:{total:projectRecords.length,byKind:Object.fromEntries(counts)},lastSeq:p.journal.lastSeq,cursors:p.journal.cursors,threads:threads(p)})}},
+ {method:'POST',path:'/api/billing',style:'J',handle:async({body})=>json(await r.settings.patchBilling(body.changes))},
  {method:'GET',path:'/api/billing',handle:async()=>{
  const {p,claude,codex}=await metadata(r,true),config=r.settings.billing(),limits=r.limitsSnapshot().providers;
- const sources=([{vendor:'claude',auth:claude},{vendor:'codex',auth:codex}] as const).map(({vendor,auth})=>{const info=limits.find(l=>l.vendor===vendor);return {vendor,connected:auth.loggedIn===true,account:auth.loggedIn===true&&typeof auth.email==='string'&&/^[^\s@]+@[^\s@]+$/.test(auth.email.trim())?auth.email.trim().toLowerCase():null,plan:limitPlan('plan' in auth?auth.plan:'subscriptionType' in auth?auth.subscriptionType:null)??info?.plan??null,level:info?.planLevel??null,extraUsageEnabled:info?.extraUsageEnabled??null}});
+ const sources=([{vendor:'claude',auth:claude},{vendor:'codex',auth:codex}] as const).map(({vendor,auth})=>{
+  const info=limits.find(l=>l.vendor===vendor),account=auth.loggedIn===true&&typeof auth.email==='string'&&/^[^\s@]+@[^\s@]+$/.test(auth.email.trim())?auth.email.trim().toLowerCase():null,matched=!!account&&info?.account===account;
+  const plan=limitPlan('plan' in auth?auth.plan:'subscriptionType' in auth?auth.subscriptionType:null)??(matched?info?.plan:null)??null,level=matched?info?.planLevel??null:null;
+  return {vendor,connected:auth.loggedIn===true,account,plan,level,levelUnknown:plan==='Max'&&!level,extraUsageEnabled:matched?info?.extraUsageEnabled??null:null};
+ });
  return json({ok:true,project:p.dir,...billingSnapshot(config,sources,r.clock.now()/1000)})
  }},
  {method:'GET',path:'/api/connections',handle:async()=>{
