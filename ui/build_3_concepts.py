@@ -1453,7 +1453,7 @@ selStudioFile('OmMapScreen.tsx');
 </html>
 """
 
-output_path = "/Users/kostenchuksergey/REPORTS/workbench-design/core/workbench-unified.html"
+output_path = "/Users/kostenchuksergey/REPORTS/workbench-design/concept/workbench-unified.html"
 with open(output_path, "w", encoding="utf-8") as f:
     f.write(html.strip() + "\n")
 print(f"Successfully compiled 3 Concepts to {output_path} ({len(html)} bytes)")

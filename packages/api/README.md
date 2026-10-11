@@ -2,7 +2,7 @@
 
 HTTP/SSE-порт нового ядра Harnessy. Node.js 22+, без внешнего HTTP-фреймворка.
 
-Запуск из корня: `core/run.sh` или `node packages/api/bin/harnessy.ts`.
+Запуск из корня: `ui/desktop/run.sh` или `node packages/api/bin/harnessy.ts`.
 Сервер слушает `127.0.0.1:${PORT:-3777}`. `CHAT_WORK_DIR` задаёт папку без проекта,
 `HARNESS_PROJECTS_ROOT` — корень создаваемых проектов, `HARNESSY_SITE` — каталог
 `sketches`. Файлы владельца задаются `HARNESS_{LAST_PROJECT,PROJECTS,PINS,SETTINGS,CONNECTIONS}_FILE`.
@@ -29,5 +29,5 @@ SSE подписывается на шину текущего проекта: `a
 HTTP-тесты рядом с кодом используют временные папки, случайные порты, провайдеры и
 часы-дублёры. `fixtures/errors.json` — независимые формы Python `server.py`; успешные
 формы сверяются по полям и данным, включая реальные git/чаты/подтверждения.
-`bootstrap.test.ts` запускает фактический `core/run.sh` с тестовой подстановкой модулей
+`bootstrap.test.ts` запускает фактический `ui/desktop/run.sh` с тестовой подстановкой модулей
 Node, без SDK-процессов и обращений к моделям. Полный прогон: `npm test` в корне.

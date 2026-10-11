@@ -1,10 +1,11 @@
 # Harnessy
 
-The owner's window over a team of AI agents: roles (seats) with their own instructions, a shared exchange journal with delivery cursors, an exchange policy, context hand-off between agents, and the owner's veto on everything that has consequences. One repository, three parts:
+The owner's window over a team of AI agents: roles (seats) with their own instructions, a shared exchange journal with delivery cursors, an exchange policy, context hand-off between agents, and the owner's veto on everything that has consequences. One repository, two parts:
 
-- **`packages/`** — the new core in TypeScript (Node 22, strict TS, tests next to the code): `providers`, `journal`, `team`, `projects`, `context`, `runtime` merged; `api` is next. See `packages/README.md` for the rules and the module map.
-- **`core/`** — the Python engine (aiohttp, `127.0.0.1:3777`) that still runs the product today and serves as the behaviour specification until release 0.1; it is removed in one commit after the switch (tag `mvp-python` marks the state before the rewrite).
+- **`packages/`** — the running TypeScript core (Node 22, strict TS, tests next to the code): `providers`, `journal`, `team`, `projects`, `context`, `runtime`, `api`. See `packages/README.md` for the rules and the module map.
 - **`ui/`** — the window: design code and screen sketches (`ui/sketches/disarto`), the prototype with the live layer (`ui/deploy`), and the Electron shell (`ui/desktop`). The window is kept as is; the core must serve the same HTTP/SSE contract.
+
+The Python engine is preserved in Git history under the `mvp-python` tag. Running the engine requires Node.js, not Python; the separate UI build still uses Python.
 
 Русская версия: [README.ru.md](README.ru.md).
 
@@ -15,7 +16,7 @@ flowchart TB
   subgraph UI["Window · ui/ (unchanged when the core switches)"]
     E["Electron · ui/desktop"] --> W["Web window · ui/deploy"]
   end
-  W <-->|"HTTP + SSE · 127.0.0.1:3777"| API["api · the window contract (TS-05) — today core/ in Python"]
+  W <-->|"HTTP + SSE · 127.0.0.1:3777"| API["api · HTTP/SSE · TypeScript"]
   API --> RT["runtime · queues, turns, recovery, scope"]
   RT --> PV["providers · Claude · Codex"]
   RT --> J["journal · exchange log, policy, evidence"]
@@ -30,9 +31,9 @@ flowchart TB
 ## Run (today)
 
 ```bash
-~/Harnessy/core/run.sh          # engine on 127.0.0.1:3777 (needs `claude login` and a Codex login)
-~/Harnessy/ui/desktop/run.sh    # Electron window; it starts the engine itself if the port is silent
-npm test                        # new core: strict build of all packages + tests (376 as of 2026-10-09)
+~/Harnessy/ui/desktop/run.sh          # engine on 127.0.0.1:3777 (needs `claude login` and a Codex login)
+~/Harnessy/ui/desktop/electron.sh # Electron window; it starts the engine itself if the port is silent
+npm test                        # strict build of all packages + tests
 ```
 
 ## Six architecture questions
@@ -41,7 +42,7 @@ Status marks: **[code]** — merged into `main` and covered by tests; **[contrac
 
 ### 1. Is there a single source of truth for project state?
 
-**Yes: the project folder.** Everything about a project lives in `<project>/.harness/` as plain files, the same formats for the Python engine and the new core **[code]**:
+**Yes: the project folder.** Everything about a project lives in `<project>/.harness/` as plain files, formats retained from the Python-era engine **[code]**:
 
 | file | holds |
 |---|---|
@@ -92,7 +93,7 @@ The model produces text and events; it does not touch the world directly.
 
 - **Electron is a thin shell** (`ui/desktop`): `main.js` opens `http://localhost:3777/sketches/proto/10-new-chat.html`, checks `/api/status`, and if the port is silent starts the engine itself (`run.sh`) and waits. The renderer runs with context isolation and no Node; the only native bridge is `window.harnessy.pickFolder` (preload) for the Finder folder picker **[code]**.
 - **The window is a web app** served by the engine itself from `ui/deploy/out/site` under `/sketches`: the live layer (`live.js`, `cx.js`, `ctx.js`, `set.js`, `conn.js`) talks to the engine over HTTP and SSE (`/api/events`) on `127.0.0.1:3777`. Requests are protected by Host/Origin/`Sec-Fetch-Site`/Content-Type checks so a foreign page in the browser cannot drive the engine **[code]**.
-- **Backend = packages.** Since 09.10.2026 the live engine is the TypeScript core (`packages/api/bin/harnessy.ts`, launched by `run.sh`); `core/` (Python) is kept only as the behavioural reference until TS-06 step 5 removes it (tag `mvp-python` keeps the history). The `api` package (TS-05, **[code]**) reproduces the same routes and JSON forms byte for byte on top of `runtime`, `projects` and `journal`, and `core/run.sh` becomes a shim that starts the Node entry point, so neither the window nor Electron changes when the core switches (TS-06).
+- **Backend = packages.** Since 09.10.2026 the live engine is TypeScript (`packages/api/bin/harnessy.ts`). The launcher `ui/desktop/run.sh` starts Node. The `api` package serves the existing HTTP/SSE contract; the unchanged root window lives in `ui/legacy/index.html`. The former Python engine is available in Git history (`mvp-python`).
 
 ## Roadmap: publishing, connecting models, payments and learning **[plan]**
 
@@ -191,4 +192,5 @@ Sources: [1] Coolify Docs, List resources — https://coolify.io/docs/api/endpoi
 
 - `packages/README.md` — rules of the new core, storage principle, module map, the main acceptance scenario (our own team's work reproduced inside Harnessy).
 - `packages/tasks/TS-0N.md` — the outcome tables and contracts each package was built against.
-- `core/app/server.py` — the Python engine: the behaviour the new core reproduces.
+- `packages/api/src/bootstrap.ts` — engine startup and the root window.
+- `mvp-python` — the historical Python engine and its behaviour tests.

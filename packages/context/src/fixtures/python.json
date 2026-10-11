@@ -1,5 +1,5 @@
 {
-  "source": "core/app functions extracted with AST, without importing the server or providers; fixed time; TS-04a:46 empty-message exception",
+  "source": "Python-era app functions extracted with AST, without importing the server or providers; fixed time; TS-04a:46 empty-message exception",
   "memory": [
     {
       "text": "# Память\n## Цель\nсайт школы танцев\n(заглушка)\n## Что ожидаем\n—\n## Критерии успеха\n работает\n## Критерии провала\n падение\n## Риски\nсроки: две недели\n## Где что лежит\n src/ — код\n## 2\nВторой\n## 1\nПервый\n## ßЕКЦИЯ\nтекст\n## __proto__\nзначение\n",

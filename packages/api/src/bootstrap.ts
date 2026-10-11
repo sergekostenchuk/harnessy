@@ -32,7 +32,7 @@ export async function bootstrap(options:BootstrapOptions={}){
  const close=()=>{options.signal?.removeEventListener('abort',onStop);return closeJob??=(api?api.close():runtime.close())};
  const onStop=()=>{void close().catch(()=>{})};options.signal?.addEventListener('abort',onStop,{once:true});
  try{
- await runtime.openProject(startDir,{deferPumps:true});cancelled(options.signal);api=createApi({runtime,siteDir,indexFile:join(repositoryRoot,'core/index.html'),port});const url=await api.listen();cancelled(options.signal);deps.appUrl=url;
+ await runtime.openProject(startDir,{deferPumps:true});cancelled(options.signal);api=createApi({runtime,siteDir,indexFile:join(repositoryRoot,'ui/legacy/index.html'),port});const url=await api.listen();cancelled(options.signal);deps.appUrl=url;
  const p=runtime.project;log('[harness] линия: '+p.dir+' · мест '+p.registry.ids.length+' · политика v'+(p.policy?.version??'—')+' · записей '+p.journal.lastSeq+(p.lineErrors.length?' · ошибки: '+p.lineErrors.join('; '):''));
  log('[harness] '+url);log('[harness] claude: '+((await stoppable(options.findClaude?.()??displayClaude(env),options.signal))||'НЕ НАЙДЕН')+'; node для моста Codex: '+process.execPath);
  log('[harness] прототип Harnessy: '+(await isDirectory(siteDir)?url+'/sketches/proto/01-chat.html':'папки нет — '+siteDir));

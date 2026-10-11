@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,realpathSync,existsSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,relative} from 'node:path';
 import {createServer} from 'node:http';
 import {spawn} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
@@ -48,7 +48,7 @@ test('18/71: queued model starts only after HTTP listens and sees actual ephemer
  const app=await bootstrap({...h.options,env:{...h.env,HARNESS_NO_LAST:'1'}});t.after(()=>app.close());await app.runtime.idle();assert.equal(httpStatus,200);assert.equal(h.codex.calls.length,1);assert.equal(h.codex.calls[0]!.ctx.appUrl,app.url);assert.ok(!app.url.endsWith(':0'))
 });
 
-for(const throughLink of [false,true])test('10/17/18: actual Electron core/run.sh'+(throughLink?' via directory symlink':'')+' launches TS, serves unchanged root/static and exits on SIGTERM, duplicate port fails', {timeout:20_000},async t=>{
+for(const via of ['direct','directory link','file link','relative file link'])test('10/17/18/179/180: actual ui/desktop/run.sh via '+via+' launches TS, serves unchanged root/static and exits on SIGTERM, duplicate port fails', {timeout:20_000},async t=>{
  const h=setup(t),trace=join(h.root,'trace'),hook=join(h.root,'providers.mjs'),site=join(h.root,'site');mkdirSync(site);mkdirSync(join(site,'proto'));writeFileSync(join(site,'proto/10-new-chat.html'),'<title>Window</title>');
  // Node's test-only module substitution prevents any SDK process or model call in the child.
  const providers=pathToFileURL(join(repositoryRoot,'packages/providers/src/index.ts')).href;
@@ -60,10 +60,12 @@ mock.module(${JSON.stringify(providers)},{namedExports:{...original,ClaudeProvid
  const wrappers=join(h.root,'test-bin');mkdirSync(wrappers);const quote=(s:string)=>"'"+s.replaceAll("'","'\"'\"'")+"'";
  writeFileSync(join(wrappers,'node'),'#!/bin/sh\nexec '+quote(process.execPath)+' --experimental-test-module-mocks --import '+quote(pathToFileURL(hook).href)+' "$@"\n',{mode:0o755});
  const env={...process.env,...h.env,HARNESS_NO_LAST:'1',HARNESSY_SITE:site,NODE_OPTIONS:'',PATH:wrappers+':'+(process.env.PATH??'')};
- const coreDir=throughLink?join(h.root,'HARNESS'):join(repositoryRoot,'core');if(throughLink)symlinkSync(join(repositoryRoot,'core'),coreDir,'dir');const script=join(coreDir,'run.sh');
+ const launcher=join(repositoryRoot,'ui/desktop/run.sh');let script=launcher;
+ if(via==='directory link'){const dir=join(h.root,'HARNESS link');symlinkSync(join(repositoryRoot,'ui/desktop'),dir,'dir');script=join(dir,'run.sh')}
+ if(via==='file link'||via==='relative file link'){script=join(h.root,'run link.sh');symlinkSync(via==='file link'?launcher:relative(h.root,launcher),script)}
  const child=spawn('/bin/sh',[script],{cwd:h.root,env,stdio:['ignore','pipe','pipe']});let stdout='',stderr='';child.stdout.on('data',d=>stdout+=d);child.stderr.on('data',d=>stderr+=d);const ended=new Promise<{code:number|null;signal:NodeJS.Signals|null}>(resolve=>child.once('exit',(code,signal)=>resolve({code,signal})));t.after(()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL')});
  const url=await new Promise<string>((resolve,reject)=>{const onData=()=>{const m=stdout.match(/^\[harness\] (http:\/\/127\.0\.0\.1:\d+)$/m);if(m){child.stdout.off('data',onData);resolve(m[1]!)}};child.stdout.on('data',onData);child.once('exit',()=>reject(Error('child exited: '+stderr)));onData()});
- const status=await fetch(url+'/api/status').then(r=>r.json()) as any;assert.equal(status.auth.claude.authMethod,'subscription');const root=await fetch(url+'/').then(r=>r.text());assert.match(root,/POST/);assert.match(root,/\/api\/sessions\/open/);assert.equal((await fetch(url+'/sketches/proto/10-new-chat.html')).status,200);
+ const status=await fetch(url+'/api/status').then(r=>r.json()) as any;assert.equal(status.auth.claude.authMethod,'subscription');const root=await fetch(url+'/').then(r=>r.text());assert.match(root,/POST/);assert.match(root,/\/api\/sessions\/open/);assert.equal(root,readFileSync(join(repositoryRoot,'ui/legacy/index.html'),'utf8'));assert.equal((await fetch(url+'/sketches/proto/10-new-chat.html')).status,200);
  const duplicate=spawn('/bin/sh',[script],{cwd:h.root,env:{...env,PORT:new URL(url).port},stdio:['ignore','pipe','pipe']});let duplicateError='';duplicate.stderr.on('data',d=>duplicateError+=d);duplicate.stdout.resume();const code=await new Promise<number|null>(resolve=>duplicate.once('exit',resolve));assert.notEqual(code,0);assert.match(duplicateError,/EADDRINUSE/);
  child.kill('SIGTERM');const exit=await ended;assert.equal(exit.code,0);assert.equal(exit.signal,null);assert.match(readFileSync(trace,'utf8'),/claude closed/);assert.match(readFileSync(trace,'utf8'),/codex closed/);assert.match(stdout,/вход Claude по подписке: да \(subscription\)/)
 });
