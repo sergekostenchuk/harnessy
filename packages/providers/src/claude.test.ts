@@ -89,3 +89,12 @@ test('[TS-04a:47] Claude modelStarted runs once immediately before queryFn',asyn
  const provider=new ClaudeProvider({...h.deps,queryFn:args=>{assert.equal(started,1);order.push('query');return original(args)}});
  await provider.runTurn(f.seat,'x',f.ctx);assert.deepEqual(order,['started','query']);assert.equal(started,1);assert.equal(terminals(f.events).length,1);await provider.close()
 });
+
+for(const [usage,expected] of [
+ [{input_tokens:8,output_tokens:2,cache_read_input_tokens:3},{input:8,output:2,cacheRead:3}],
+ [{input_tokens:0,output_tokens:0,cache_read_input_tokens:0},{input:0,output:0,cacheRead:0}],
+ [{input_tokens:8},{input:8,output:null,cacheRead:null}],
+ [{input_tokens:-1,output_tokens:Infinity,cache_read_input_tokens:'3'},{input:null,output:null,cacheRead:null}]
+])test('175: Claude raw usage keeps fresh input separate from cache: '+JSON.stringify(usage),async()=>{
+ const f=fixture('claude'),p=new ClaudeProvider(harness([init,{...done,usage}]).deps);await p.runTurn(f.seat,'x',f.ctx);const end=f.events.at(-1);assert.ok(end?.type==='done');assert.deepEqual(end.usage,expected);await p.close();
+});

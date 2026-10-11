@@ -92,7 +92,7 @@ export class ClaudeProvider implements Provider {
  throw vendorError('claude',vendorText,undefined,undefined,sessionId)
  }
  if(!streamed){text=assistant||(typeof m.result==='string'?m.result:'');if(text)ctx.publish({type:'delta',text})}
- const u=record(m.usage)?m.usage:{},num=(v:unknown)=>typeof v==='number'?v:null;
+ const u=record(m.usage)?m.usage:{},num=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)&&v>=0?v:null;
  terminal=true;ctx.publish({type:'done',sessionId,model:seat.model,durationMs:typeof m.duration_ms==='number'?m.duration_ms:Date.now()-started,
  usage:{input:num(u.input_tokens),output:num(u.output_tokens),cacheRead:num(u.cache_read_input_tokens)}});break
  }

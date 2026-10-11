@@ -1,6 +1,7 @@
 export type Mode = 'chat'|'read'|'check'|'web'|'ask'|'edit'|'all';
 export type Vendor = 'claude'|'codex';
 export interface Seat { id:string; vendor:Vendor; label:string; model:string; mode:Mode; cwd:string; sessionId:string|null; writePaths:string[]; worktree:string|null }
+/** input is fresh input only; cacheRead is disjoint. Missing/invalid measurements stay null. */
 export interface Usage {input:number|null;output:number|null;cacheRead:number|null}
 export type TurnEvent =
  | {type:'delta';text:string}|{type:'tool';name:string;detail:string}|{type:'toolError';text:string}
