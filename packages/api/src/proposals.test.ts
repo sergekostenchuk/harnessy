@@ -44,8 +44,8 @@ for(const stage of ['proposal','question','confirmation','seat'])test('156: inte
  const h=await setup(t,{deps:{stateIO:io}}),append=h.runtime.journal.append.bind(h.runtime.journal);let cut=stage==='question';h.runtime.journal.append=input=>{const r=append(input);if(cut&&input.origin==='team-proposal'){cut=false;throw Error('question saved')}return r};
  if(stage==='proposal')armed=true;const res=await h.post('/api/seats/propose',{seats:[member()]});if(['proposal','question'].includes(stage))assert.equal(res.body.ok,false);else assert.equal(res.body.ok,true);
  const q=(await call(h.api,'/api/seats/proposals')).body.proposals[0],ref={proposalId:q.proposalId,version:q.version};assert.equal(h.runtime.journal.read({limit:0}).filter(r=>r.origin==='team-proposal').length,1);
- if(stage==='confirmation')armed=true;const confirmation=await call(h.api,'/api/seats/confirm',{body:{...ref,project:h.dir}});assert.equal(confirmation.body.ok,stage!=='confirmation');assert.equal((await call(h.api,'/api/seats/confirm',{body:{...ref,project:h.dir}})).body.ok,true);
- if(stage==='seat')armed=true;const first=await h.post('/api/seats',ref);assert.equal(first.body.ok,stage!=='seat');const second=await h.post('/api/seats',ref);assert.equal(second.body.ok,true,JSON.stringify(second.body));await until(()=>h.provider.calls.some(c=>c.seat.id===q.seats[0].sid));
+ if(stage==='confirmation'||stage==='seat')armed=true;const confirmation=await call(h.api,'/api/seats/confirm',{body:{...ref,project:h.dir}});assert.equal(confirmation.body.ok,!['confirmation','seat'].includes(stage));assert.equal((await call(h.api,'/api/seats/confirm',{body:{...ref,project:h.dir}})).body.ok,true);
+ const first=await h.post('/api/seats',ref);assert.equal(first.body.ok,true);const second=await h.post('/api/seats',ref);assert.equal(second.body.ok,true,JSON.stringify(second.body));await until(()=>h.provider.calls.some(c=>c.seat.id===q.seats[0].sid));
  h.end.resolve({text:'done',sessionId:null});await h.run;await h.runtime.idle();await h.runtime.close();const provider=new FakeProvider(),next=await createRuntime({...h.deps,providers:{claude:provider,codex:h.codex}},completedActions);t.after(()=>next.close());await next.idle();assert.equal(provider.calls.length,0);assert.equal(next.project.state.chats.active[q.seats[0].sid],q.seats[0].operationId);assert.equal(next.journal.read({limit:0}).filter(r=>r.origin==='team-proposal').length,1);assert.equal(next.journal.read({limit:0}).filter(r=>r.origin==='team-proposal-confirm').length,1);
 });
 
@@ -59,7 +59,9 @@ test('156 absence: corrupt store and copied foreign project store are rejected, 
 });
 
 test('104/156 ОКНА: create rechecks turn after lock wait and never trusts caller seats',async t=>{
- const h=await setup(t),q=await h.propose(),ref={proposalId:q.proposalId,version:1};await call(h.api,'/api/seats/confirm',{body:{...ref,project:h.dir}});
+ const h=await setup(t),q=await h.propose(),ref={proposalId:q.proposalId,version:1};
+ // Historical confirmed intent before materialization: still an input to the agent bridge.
+ const store=h.runtime.project.state.readProposals() as any;store.proposals[0].confirmed=true;h.runtime.project.state.saveProposals(store);
  const entered=deferred(),gate=deferred(),held=withPathLock(h.dir,async()=>{entered.resolve();await gate.promise});await entered.promise;const scope=h.runtime.project.active.get('lead')!.scope,creating=h.runtime.createSeats(scope,{...ref,...{seats:[{...member(),mode:'all',label:'forged'}]}});h.runtime.scopes.revoke(scope);gate.resolve();await held;const result=await creating;assert.equal(result.ok,false);assert.equal(h.runtime.registry.ids.length,2);
 });
 
@@ -82,7 +84,7 @@ for(const cut of ['question','confirmation'])test('156 restart: durable '+cut+' 
 test('156: retry of a partly created team preserves the first participant answer and newer active chat',async t=>{
  let armed=false;const io:StateIO={...diskIO,write(path,text){diskIO.write(path,text);if(armed&&path.endsWith('seat-materialization.json')){const ops=JSON.parse(text);if(ops.length===2&&ops[1].stages.chat){armed=false;throw Error('second seat interrupted')}}}};
  const h=await setup(t,{deps:{stateIO:io}}),q=await h.propose({seats:[member('Первый юрист'),member('Второй юрист')]}),ref={proposalId:q.proposalId,version:1},[first,second]=q.proposal.seats;
- await call(h.api,'/api/seats/confirm',{body:{...ref,project:h.dir}});armed=true;assert.equal((await h.post('/api/seats',ref)).body.ok,false);
+ armed=true;assert.equal((await call(h.api,'/api/seats/confirm',{body:{...ref,project:h.dir}})).body.ok,false);
  await until(()=>h.runtime.registry.get(first.sid)?.transcript.some(m=>m.role==='ai')===true&&!h.runtime.registry.get(first.sid)?.busy);const old=structuredClone(h.runtime.project.state.chats.chats[first.operationId]!.transcript);
  const fresh=await call(h.api,'/api/chats/new',{body:{pane:first.sid,carry:'none'}});assert.equal(fresh.body.ok,true,JSON.stringify(fresh.body));assert.notEqual(fresh.body.chat.id,first.operationId);
  const retried=await h.post('/api/seats',{...ref,seats:[{...member('Подмена'),mode:'all'}]});assert.equal(retried.body.ok,true,JSON.stringify(retried.body));assert.equal(h.runtime.project.state.chats.active[first.sid],fresh.body.chat.id);assert.deepEqual(h.runtime.project.state.chats.chats[first.operationId]!.transcript,old);
@@ -158,7 +160,7 @@ test('241/242: owner creates one proposed row twice, changes kind without changi
  assert.equal((await h.post('/api/seats',{proposalId:q.proposalId,version:1})).body.code,'proposal_unconfirmed');
  assert.equal((await call(h.api,'/api/seats/owner',{body:{...ref,seatIndex:0,kind:'worker'}})).body.code,'proposal_seat_locked');
  assert.equal((await h.post('/api/seats/propose',{proposalId:q.proposalId,version:1,seats:[member('Замена')]})).body.code,'proposal_stale');
- await call(h.api,'/api/seats/confirm',{body:ref});const rest=await h.post('/api/seats',{proposalId:q.proposalId,version:1});assert.equal(rest.status,200,rest.text);await until(()=>h.provider.calls.filter(c=>c.seat.id===s.sid).length===1);
+ await call(h.api,'/api/onboard',{body:{project:h.dir,pane:s.sid,chat:s.operationId}});await call(h.api,'/api/seats/confirm',{body:ref});const rest=await h.post('/api/seats',{proposalId:q.proposalId,version:1});assert.equal(rest.status,200,rest.text);await until(()=>h.provider.calls.filter(c=>c.seat.id===s.sid).length===1);
  assert.equal(h.runtime.registry.ids.length,4);assert.equal(h.runtime.registry.get(s.sid)!.kind,'reviewer');assert.equal(h.runtime.project.state.chats.active[s.sid],s.operationId);
  assert.equal(readFileSync(join(h.dir,'.harness/roles/seats',s.sid+'.md'),'utf8'),member().intro);assert.equal(h.runtime.journal.read({limit:0}).filter(r=>r.origin==='onboarding'&&r.to.includes(s.sid)).length,1);
 });

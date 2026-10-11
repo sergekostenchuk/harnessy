@@ -580,3 +580,9 @@ html[data-page="new"] .team-proposals{position:absolute;inset:20px;z-index:80;ma
 .md-artifact img,.md-artifact video { display:block; max-width:100%; max-height:320px; width:auto; margin:12px auto 0; border-radius:7px; object-fit:contain; }
 .md-file-dialog { width:min(850px,calc(100vw - 48px)); max-height:85vh; overflow:auto; padding:24px; border:1px solid var(--line2); border-radius:14px; background:var(--bg); color:var(--ink); }.md-file-dialog::backdrop { background:#0009; }.md-file-dialog h3 { font:500 15px var(--font); overflow-wrap:anywhere; }.md-file-dialog > button { margin-top:18px; }
 .events-markdown { margin:12px 0; }.md-table:focus-visible,.md-body a:focus-visible,.md-code button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+
+/* TS-09b6: saved knowledge shown before the first model turn. */
+.role-knowledge{margin:16px 24px;padding:18px 20px;border:1px solid var(--line,#29292d);border-radius:12px;background:var(--panel,#141416);max-height:42vh;overflow:auto}
+.role-knowledge summary{font-size:15px;font-weight:600;cursor:pointer;list-style-position:inside}
+.role-knowledge pre{font:inherit;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;margin:14px 0 0;color:var(--text,#dedee1)}
+.role-knowledge [role=alert]{color:var(--red,#da596d)}

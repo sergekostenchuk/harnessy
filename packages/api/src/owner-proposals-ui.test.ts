@@ -24,7 +24,7 @@ function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body:any,r
  async refreshStatus(){const status=await box.api('/api/status');H.project=status.project;H.panes=status.panes;box.pickPane()},
  async onSend(text:string,_ta:any,binding:any){if(!box.LIVE.bindingCurrent(binding)||box.leftPage)return false;return box.api('/api/chat',{pane:binding.pane,message:text})}};
  box.window=box;const vm=createContext(box);
- runInContext(part('  let bindingGeneration','  function md(')+part('  // TS-09b4: one progress view','  // TS-09b2:')+part('  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+'globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,sendBinding,bindingCurrent,invalidateBinding,get teamProposals(){return TP},proposalsFetch,showTeamProposal,requestTeamProposal};globalThis.resetProposals=proposalsReset;',vm);
+ runInContext(part('  let bindingGeneration','  function md(')+part('  // TS-09b4: one progress view','  // TS-09b2:')+part('  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+'globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,sendBinding,bindingCurrent,invalidateBinding,get teamProposals(){return TP},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};globalThis.resetProposals=proposalsReset;',vm);
  runInContext(cx,vm);
  const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};
  const settle=async()=>{do{await Promise.all([...pending]);await immediate()}while(pending.size)};
@@ -37,7 +37,7 @@ for(const page of ['chat','new'])test('240/241/242 DOM+HTTP '+page+': free label
  await v.find('[data-cx-team-open]').emit('click');const select=v.find('[data-team-kind]');select.value='researcher';await select.emit('change');assert.equal(v.find('[data-team-confirm]').disabled,true);
  const button=v.find('[data-team-create]'),click=button.emit('click');await entered.promise;await button.emit('click');assert.equal(v.requests.filter(r=>r.path==='/api/seats/owner').length,1);gate.resolve();await click;await v.settle();
  const request=v.requests.find(r=>r.path==='/api/seats/owner');assert.equal(request.body.kind,'researcher');assert.equal(request.body.project,h.dir);const stored=(await h.runtime.teamProposals(OWNER)).proposals[0]!;
- assert.equal(h.runtime.registry.get(stored.seats[0]!.sid)!.kind,'researcher');assert.equal(h.runtime.registry.get(stored.seats[1]!.sid),null);assert.match(v.find('[data-team-proposal]').textContent,/Создано владельцем/);assert.equal(v.find('.feed').textContent,'Разговор остаётся');
+ assert.equal(h.runtime.registry.get(stored.seats[0]!.sid)!.kind,'researcher');assert.equal(h.runtime.registry.get(stored.seats[1]!.sid),null);assert.match(v.find('[data-team-proposal]').textContent,/создана владельцем как researcher/);assert.equal(v.find('.feed').textContent,'Разговор остаётся');
  await v.find('[data-team-confirm]').emit('click');assert.equal((await h.runtime.teamProposals(OWNER)).proposals[0]!.confirmed,true);if(page==='new'){await v.find('[data-team-close]').emit('click');assert.equal(v.document.querySelector('#live-team-proposals'),null);assert.ok(v.document.querySelector('[data-cx="role"]'))}
 });
 

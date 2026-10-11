@@ -26,7 +26,7 @@ export function ownerRoutes(r:Runtime):Route[]{return [
  {method:'GET',path:'/api/seats/proposals',style:'J',handle:()=>r.teamProposals(OWNER).then(json)},
  {method:'POST',path:'/api/seats/owner',style:'J',handle:async({request,body})=>{if(request.headers['x-pane-token']||body.from!==undefined)return json({ok:false,code:'policy_denied',error:'эту роль создаёт только владелец'},403);return json(await r.createOwnerSeat(body,OWNER))}},
  {method:'POST',path:'/api/seats/confirm',style:'J',handle:async({request,body})=>{if(request.headers['x-pane-token']||body.from!==undefined)return json({ok:false,code:'policy_denied',error:'состав подтверждает только владелец'},403);return json(await r.confirmTeam(body,OWNER))}},
- {method:'POST',path:'/api/onboard',handle:async({body})=>json(await r.onboard(string(body.pane),OWNER))},
+ {method:'POST',path:'/api/onboard',handle:async({body})=>json(await r.onboard(string(body.pane),OWNER,body))},
  {method:'POST',path:'/api/handoff',handle:async({body})=>json(await r.handoff(body,OWNER))},
  {method:'POST',path:'/api/chat',style:'E',handle:({body})=>json(r.chat(body,OWNER))},
  {method:'POST',path:'/api/steer',style:'E',handle:async({body})=>json(await r.steer(string(body.pane),string(body.message),OWNER))},

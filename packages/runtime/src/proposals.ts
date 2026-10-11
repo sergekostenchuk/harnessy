@@ -1,10 +1,13 @@
 import {randomBytes,createHash} from 'node:crypto';
+import {realpathSync} from 'node:fs';
+import {join,relative,isAbsolute,sep} from 'node:path';
+import {roleKnowledgeText,type RoleKnowledge,type TeamMemberKnowledge} from '@harnessy/context';
 import {withPathLock,SEAT_KINDS,MODE_IDS,loadTeam,readManifest,type PathLock,type SeatKind,type Vendor,type Mode} from '@harnessy/team';
 import type {Initiator} from '@harnessy/journal';
 import {RuntimeError,object,deepFreeze} from './errors.ts';
-import {jsonClone} from './state.ts';
+import {jsonClone,chatMetadata,diskIO,type Chat} from './state.ts';
 import {owner,same} from './operations.ts';
-import {assignProposed,materializationProgress,type Assignment} from './roles.ts';
+import {assignProposed,materializationProgress,assignmentSnapshot,proposalAssignment,type Assignment} from './roles.ts';
 import type {Runtime} from './runtime.ts';
 import type {ProjectState,ActionContext} from './types.ts';
 
@@ -50,6 +53,27 @@ function confirmedNote(p:ProjectState,q:TeamProposal){
  if(!saved)p.channel.postCore({to:[q.from],kind:'note',text,thread:q.thread,reply_to:q.questionSeq,origin:'team-proposal-confirm'},HARNESS);
 }
 function publish(p:ProjectState){if(!p.closed)p.owner.publish({type:'teamProposals',project:p.dir})}
+export function proposalTeam(p:ProjectState,q:TeamProposal):TeamMemberKnowledge[] {
+ const members=q.seats.map((s,i):TeamMemberKnowledge=>{
+  const choice=q.ownerSeats?.[i],op=assignmentSnapshot(p,s.operationId,s.sid),pane=p.registry.get(s.sid),chat=p.state.chats.chats[s.operationId];
+  const complete=materializationProgress(p,s.operationId,s.sid).state==='complete';if(complete&&(!pane||chat?.pane!==s.sid)||choice?.created&&!complete||choice&&op&&choice.kind!==op.input.kind)invalid('состав не совпадает с сохранённым назначением');
+  const kind=op?.input.kind??choice?.kind??s.kind;if(pane&&pane.kind!==kind)invalid('класс созданного места не совпадает с назначением');
+  return {id:s.sid,label:pane?.label??s.label,kind,proposedKind:s.kind,model:pane?.model??s.model,mode:pane?.mode??s.mode,task:s.intro,state:complete?'created':op?'creating':'proposed',chat:complete?s.operationId:null,createdBy:complete?op!.by:null};
+ });
+ const lead=p.registry.get(q.from);if(!lead||lead.kind!=='orchestrator')invalid('оркестратор предложения отсутствует');const chat=p.state.chats.active[lead.id];
+ return [{id:lead.id,label:lead.label,kind:'orchestrator',proposedKind:'orchestrator',model:lead.model,mode:lead.mode,task:'Ведёт обмен команды и разговор с владельцем',state:'created',chat:chat??null,createdBy:null},...members];
+}
+export function roleKnowledge(p:ProjectState,chat:Chat):RoleKnowledge|null {
+ if(p.state.chats.active[chat.pane]!==chat.id)return null;
+ const assignment=proposalAssignment(p,chat.pane);if(!assignment)return null;
+ const store=read(p),q=[...store.proposals].reverse().find(q=>q.seats.some(s=>s.sid===chat.pane&&s.operationId===assignment.operationId));if(!q)invalid('предложение созданной роли не найдено');
+ const seat=q.seats.find(s=>s.sid===chat.pane)!;if(!p.registry.get(chat.pane))invalid('место разговора отсутствует');
+ const source=Object.values(p.state.chats.chats).find(c=>c.pane===q.from&&q.turnInstanceId&&(c.turns?.some(turn=>turn.turnInstanceId===q.turnInstanceId)||c.transcript.some(m=>object(m.runtime)&&m.runtime.turnInstanceId===q.turnInstanceId)||p.state.chats.active[q.from]===c.id&&p.active.get(q.from)?.scope.turnInstanceId===q.turnInstanceId));
+ if(!source)invalid('исходный разговор предложения не найден');chatMetadata(source);
+ let memory='';try{const file=realpathSync(join(p.dir,'.harness/MEMORY.md')),path=relative(realpathSync(p.dir),file);if(isAbsolute(path)||path==='..'||path.startsWith('..'+sep))invalid('память роли находится вне проекта');memory=diskIO.read(file)}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e}
+ const input={project:p.dir,pane:chat.pane,chat:chat.id,proposalId:q.proposalId,version:q.version,memory,documents:jsonClone(source.documents??[]),intro:seat.intro,team:proposalTeam(p,q)};
+ return {...input,text:roleKnowledgeText(input)};
+}
 export async function propose(runtime:Runtime,ctx:ActionContext,input:ProposalInput){
  const p=runtime.project;authority(ctx,p);if(!Array.isArray(input.seats)||input.seats.length<1||input.seats.length>12)invalid('состав должен содержать от 1 до 12 мест');
  const seats=deepFreeze(input.seats.map(seatInput)),update=input.proposalId!==undefined||input.version!==undefined?ref(input):null;
@@ -65,12 +89,12 @@ export async function propose(runtime:Runtime,ctx:ActionContext,input:ProposalIn
   store.proposals=store.proposals.filter(x=>x!==old);store.proposals.push(q);p.state.saveProposals(store);question(p,q);p.state.saveProposals(store);publish(p);return receipt(p,q);
  });
 }
-export async function proposals(runtime:Runtime,initiator:Initiator){const p=owner(runtime,initiator);return withPathLock(p.dir,()=>{same(runtime,p);const store=read(p);for(const q of store.proposals){question(p,q);if(q.confirmed)confirmedNote(p,q)}if(store.proposals.length)p.state.saveProposals(store);return {ok:true as const,project:store.project,proposals:jsonClone(store.proposals).map(q=>({...q,materializations:q.seats.map(s=>materializationProgress(p,s.operationId,s.sid))}))}})}
+export async function proposals(runtime:Runtime,initiator:Initiator){const p=owner(runtime,initiator);return withPathLock(p.dir,()=>{same(runtime,p);const store=read(p);for(const q of store.proposals){question(p,q);if(q.confirmed)confirmedNote(p,q)}if(store.proposals.length)p.state.saveProposals(store);return {ok:true as const,project:p.dir,proposals:store.proposals.map(q=>({...jsonClone(q),team:proposalTeam(p,q),materializations:q.seats.map(s=>materializationProgress(p,s.operationId,s.sid))}))}})}
 export async function confirm(runtime:Runtime,input:ProposalRef,initiator:Initiator){
  const p=owner(runtime,initiator),wanted=ref(input),project=input.project;if(project!==p.dir)fail('proposal_project_changed','проект подтверждения не совпадает');
- return withPathLock(p.dir,()=>{same(runtime,p);if(runtime.project.dir!==project)fail('proposal_project_changed','проект подтверждения сменился');const store=read(p),q=find(store,wanted),already=q.confirmed;
-  question(p,q);q.confirmed=true;p.state.saveProposals(store);confirmedNote(p,q);publish(p);return {ok:true as const,project:p.dir,proposalId:q.proposalId,version:q.version,already};
- });
+ const result=await withPathLock(p.dir,lock=>{same(runtime,p);if(runtime.project.dir!==project)fail('proposal_project_changed','проект подтверждения сменился');const store=read(p),q=find(store,wanted),already=q.confirmed;
+  question(p,q);q.confirmed=true;p.state.saveProposals(store);const seats=q.seats.map((_s,i)=>materializeSeat(runtime,p,lock,q,i,()=>same(runtime,p)));confirmedNote(p,q);publish(p);return {ok:true as const,project:p.dir,proposalId:q.proposalId,version:q.version,already,seats};
+ });for(const seat of result.seats)if(!p.closed)void runtime.resumeQueue(seat.pane,p);return result;
 }
 export async function create(runtime:Runtime,ctx:ActionContext,input:ProposalRef){
  const p=runtime.project;authority(ctx,p);const wanted=ref(input);
@@ -79,9 +103,9 @@ export async function create(runtime:Runtime,ctx:ActionContext,input:ProposalRef
  });
  for(const seat of result.seats){ctx.assertActive();void runtime.resumeQueue(seat.pane,p)}return result;
 }
-function materializeSeat(runtime:Runtime,p:ProjectState,lock:PathLock,q:TeamProposal,index:number,assert:()=>void){
+function materializeSeat(runtime:Runtime,p:ProjectState,lock:PathLock,q:TeamProposal,index:number,assert:()=>void,awaitFirstOpen=false){
  const s=q.seats[index]!,selection=q.ownerSeats?.[index],kind=selection?.kind??s.kind,file={path:'roles/seats/'+s.sid+'.md',content:s.intro};
- const op:Assignment={operationId:s.operationId,sid:s.sid,by:selection?'владелец (интерфейс)':'оркестратор '+q.from+' по подтверждению владельца',how:'по подтверждённому составу '+q.proposalId+' версии '+q.version,input:{specialization:{title:s.label,text:s.intro},role:kind,kind,label:s.label,vendor:s.vendor,model:s.model,mode:s.mode,instructions:{path:file.path,content:file.content},writePaths:[],worktree:null},files:{seat:file},source:{chat:null,carry:''},stages:{team:false,seatFile:false,chat:false,status:false,onboarding:false}};
+ const op:Assignment={...(awaitFirstOpen?{awaitFirstOpen:true}:{}),operationId:s.operationId,sid:s.sid,by:selection?'владелец (интерфейс)':'оркестратор '+q.from+' по подтверждению владельца',how:'по подтверждённому составу '+q.proposalId+' версии '+q.version,input:{specialization:{title:s.label,text:s.intro},role:kind,kind,label:s.label,vendor:s.vendor,model:s.model,mode:s.mode,instructions:{path:file.path,content:file.content},writePaths:[],worktree:null},files:{seat:file},source:{chat:null,carry:''},stages:{team:false,seatFile:false,chat:false,status:false,onboarding:false}};
  const out=assignProposed(runtime,p,lock,op,assert);return {pane:out.pane.id,chat:out.chat.id,label:s.label};
 }
 export async function createOwnerSeat(runtime:Runtime,input:OwnerSeatInput,initiator:Initiator){
@@ -94,9 +118,9 @@ export async function createOwnerSeat(runtime:Runtime,input:OwnerSeatInput,initi
   if(selection&&selection.kind!==chosen||object(saved)&&object(saved.input)&&saved.input.kind!==chosen)fail('proposal_seat_locked','создание уже начато с другим классом прав');
   p.team=loadTeam(p.team!.harnessDir);if(chosen==='orchestrator'&&Object.values(p.team.seats).some(x=>x.kind==='orchestrator'&&x.id!==s.sid))fail('role_taken','в проекте уже есть оркестратор');
   question(p,q);q.ownerSeats??={};q.ownerSeats[Number(index)]??={kind:chosen,created:false};p.state.saveProposals(store);
-  const seat=materializeSeat(runtime,p,lock,q,Number(index),()=>same(runtime,p));q.ownerSeats[Number(index)]!.created=true;p.state.saveProposals(store);publish(p);
+  const seat=materializeSeat(runtime,p,lock,q,Number(index),()=>same(runtime,p),true);q.ownerSeats[Number(index)]!.created=true;p.state.saveProposals(store);publish(p);
   return {ok:true as const,project:p.dir,proposalId:q.proposalId,version:q.version,seatIndex:index,...seat,already:!!saved};
  });
  if(!p.closed)void runtime.resumeQueue(result.pane,p);return result;
 }
-export async function restoreProposals(runtime:Runtime,p:ProjectState){try{await withPathLock(p.dir,lock=>{same(runtime,p);const store=read(p);for(const q of store.proposals){question(p,q);if(q.confirmed)confirmedNote(p,q);for(const [index,selection] of Object.entries(q.ownerSeats??{}))if(!selection.created){materializeSeat(runtime,p,lock,q,Number(index),()=>same(runtime,p));selection.created=true}}if(store.proposals.length)p.state.saveProposals(store)})}catch(e){p.lineErrors.push('предложения команды: '+(e as Error).message)}}
+export async function restoreProposals(runtime:Runtime,p:ProjectState){try{await withPathLock(p.dir,lock=>{same(runtime,p);const store=read(p);for(const q of store.proposals){question(p,q);if(q.confirmed)confirmedNote(p,q);for(const [index,selection] of Object.entries(q.ownerSeats??{}))if(!selection.created){materializeSeat(runtime,p,lock,q,Number(index),()=>same(runtime,p),true);selection.created=true}}if(store.proposals.length)p.state.saveProposals(store)})}catch(e){p.lineErrors.push('предложения команды: '+(e as Error).message)}}
