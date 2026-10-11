@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import type {ProviderLimits} from '@harnessy/providers';
 import {LimitsStore} from './limits.ts';
 import {harness,FakeProvider,FakeClock,deferred,until,collect,OWNER} from './test-helpers.ts';
-const live=(now:number,percent=18):ProviderLimits=>({ok:true,plan:null,fetchedAt:now/1000,source:'fixture',windows:[{label:'5 ч',percentUsed:percent,resetsAt:now/1000+60,windowMinutes:300}]});
+const live=(now:number,percent=18):Extract<ProviderLimits,{ok:true}>=>({ok:true,plan:null,fetchedAt:now/1000,source:'fixture',windows:[{label:'5 ч',percentUsed:percent,resetsAt:now/1000+60,windowMinutes:300}]});
 test('144/200: quotas persist only measurements, throttle scheduled reads for five minutes and turn reads for 60 seconds and emit an event',async t=>{
  const clock=new FakeClock();let reads=0;const provider=Object.assign(new FakeProvider(),{limits:async()=>{reads++;return {...live(clock.now()),token:'fixture-secret'}}});
  const h=await harness(t,{deps:{providers:{claude:provider},clock}}),events=collect(h.runtime);t.after(()=>events.sub.close());
@@ -105,4 +105,21 @@ test('214 r2: an older shared measurement retained by a failed peer cannot repla
  const provider=Object.assign(new FakeProvider('codex'),{limits:async()=>result}),seed=new LimitsStore(h.dir,clock,{codex:provider},()=>{},dir);await seed.refresh();seed.close();clock.advance(300000);result={ok:false,code:'limits_unavailable',reason:''};const peer=new LimitsStore(h.dir,clock,{codex:provider},()=>{},dir);await peer.refresh();peer.close();
  const latest={vendor:'codex',plan:'Pro',fetchedAt:clock.now()/1000,windows:[{label:'неделя',percentUsed:42,windowMinutes:10080,resetsAt:null}],credits:{hasCredits:true,unlimited:false,balance:62500},resetCredits:2};writeFileSync(path,JSON.stringify({version:1,project:h.dir,providers:[latest]}));
  const opened=new LimitsStore(h.dir,clock,{codex:provider},()=>{},dir);t.after(()=>opened.close());await opened.refresh();const row=opened.snapshot().providers[0]!;assert.equal(row.code,'limits_unavailable');assert.equal(row.fetchedAt,latest.fetchedAt);assert.equal(row.windows[0]?.percentUsed,42);assert.equal(row.credits?.balance,62500);assert.equal(row.resetCredits,2);assert.deepEqual(JSON.parse(readFileSync(path,'utf8')).providers,[latest]);
+});
+
+test('TS-14c r2: quota account binding persists in shared/project caches; missing or changing identity stays unbound',async t=>{
+ const h=await harness(t),clock=h.clock,dir=join(h.dir,'account-cache');let email:string|undefined='a@example.test',changeDuring=false;
+ const provider=Object.assign(new FakeProvider(),{auth:async()=>({loggedIn:true,email}),limits:async():Promise<ProviderLimits>=>{if(changeDuring)email='b@example.test';return {...live(clock.now()),ok:true,plan:'Max',planLevel:'5x',extraUsageEnabled:true}}});
+ const store=new LimitsStore(h.dir,clock,{claude:provider},()=>{},dir);t.after(()=>store.close());await store.refresh();assert.equal(store.snapshot().providers[0]!.account,'a@example.test');
+ const reopened=new LimitsStore(h.dir,clock,{claude:provider},()=>{},dir);t.after(()=>reopened.close());assert.equal(reopened.snapshot().providers[0]!.account,'a@example.test');assert.equal(reopened.snapshot().providers[0]!.planLevel,'5x');
+ changeDuring=true;clock.advance(300000);await store.refresh();assert.equal(store.snapshot().providers[0]!.account,null);
+ changeDuring=false;email=undefined;clock.advance(300000);await store.refresh();assert.equal(store.snapshot().providers[0]!.account,null);
+ // Legacy project caches still render quota but cannot corroborate a billing account.
+ const legacy=join(h.dir,'legacy-account');mkdirSync(join(legacy,'.harness/state'),{recursive:true});writeFileSync(join(legacy,'.harness/state/limits.json'),JSON.stringify({version:1,project:legacy,providers:[{...live(clock.now()),vendor:'claude',plan:'Max',planLevel:'5x'}]}));
+ const old=new LimitsStore(legacy,clock,{claude:provider},()=>{},join(legacy,'shared'));t.after(()=>old.close());assert.equal(old.snapshot().providers[0]!.account,null);assert.equal(old.snapshot().providers[0]!.planLevel,'5x');
+});
+test('TS-14c r2: identity lookup is bounded by the quota timeout, without starting a late measurement',async t=>{
+ const h=await harness(t),gate=deferred<{loggedIn:boolean;email:string}>();let reads=0;
+ const provider=Object.assign(new FakeProvider(),{auth:()=>gate.promise,limits:async()=>{reads++;return live(h.clock.now())}}),store=new LimitsStore(h.dir,h.clock,{claude:provider},()=>{},join(h.dir,'account-timeout'));t.after(()=>store.close());
+ const pending=store.refresh();h.clock.advance(10000);await pending;assert.equal(store.snapshot().providers[0]!.code,'limits_timeout');gate.resolve({loggedIn:true,email:'late@example.test'});await Promise.resolve();await Promise.resolve();assert.equal(reads,0);assert.equal(store.snapshot().providers[0]!.account,null);
 });

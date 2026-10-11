@@ -2,8 +2,9 @@ import {join} from 'node:path';
 import {statSync} from 'node:fs';
 import {MODES,pyTruthy} from '@harnessy/team';
 import {KINDS,SYSTEM_KINDS} from '@harnessy/journal';
-import {projectsRoot,validDir,ROUTES} from '@harnessy/projects';
+import {projectsRoot,validDir,ROUTES,billingSnapshot} from '@harnessy/projects';
 import {RuntimeError,promotionIdentity,type Runtime,type ProjectState} from '@harnessy/runtime';
+import {limitPlan} from '@harnessy/providers';
 import {CLAUDE_MODELS,CODEX_FALLBACK} from './catalog.ts';
 import {OWNER,string,integer,type Route} from './routes.ts';
 import {json,slice,text} from './responses.ts';
@@ -45,6 +46,16 @@ export function metaRoutes(r:Runtime):Route[]{return [
  const selected=all.filter(record=>record.seq>since&&(before===undefined||record.seq<before)&&matches(record.thread,filters.thread)&&(!filters.kind||record.kind===filters.kind)&&matches(record.from,filters.from)&&(!filters.to||record.to.some(to=>matches(to,filters.to))));
  if(before!==undefined)selected.sort((a,b)=>a.seq-b.seq);
  return json({project:p.dir,records:limit?selected.slice(-limit):selected,summary:{total:projectRecords.length,byKind:Object.fromEntries(counts)},lastSeq:p.journal.lastSeq,cursors:p.journal.cursors,threads:threads(p)})}},
+ {method:'POST',path:'/api/billing',style:'J',handle:async({body})=>json(await r.settings.patchBilling(body.changes))},
+ {method:'GET',path:'/api/billing',handle:async()=>{
+ const {p,claude,codex}=await metadata(r,true),config=r.settings.billing(),limits=r.limitsSnapshot().providers;
+ const sources=([{vendor:'claude',auth:claude},{vendor:'codex',auth:codex}] as const).map(({vendor,auth})=>{
+  const info=limits.find(l=>l.vendor===vendor),account=auth.loggedIn===true&&typeof auth.email==='string'&&/^[^\s@]+@[^\s@]+$/.test(auth.email.trim())?auth.email.trim().toLowerCase():null,matched=!!account&&info?.account===account;
+  const plan=limitPlan('plan' in auth?auth.plan:'subscriptionType' in auth?auth.subscriptionType:null)??(matched?info?.plan:null)??null,level=matched?info?.planLevel??null:null;
+  return {vendor,connected:auth.loggedIn===true,account,plan,level,levelUnknown:plan==='Max'&&!level,extraUsageEnabled:matched?info?.extraUsageEnabled??null:null};
+ });
+ return json({ok:true,project:p.dir,...billingSnapshot(config,sources,r.clock.now()/1000)})
+ }},
  {method:'GET',path:'/api/connections',handle:async()=>{
  const {p,claude,codex,models}=await metadata(r,true),seats=(v:string)=>[...p.registry.panes.values()].filter(p=>p.vendor===v&&p.id!=='room').map(p=>p.id),other=models.filter(m=>!m.id.startsWith('gpt'));
  const providers:Record<string,unknown>[]=[{id:'claude',name:'Claude',kind:'подписка · вход через claude',auth:claude,models:CLAUDE_MODELS.length,seats:seats('claude'),routable:true,route:r.connections.get('claude')},{id:'codex',name:'Codex',kind:'подписка ChatGPT · codex app-server',auth:codex,models:models.length-other.length,seats:seats('codex'),routable:true,route:r.connections.get('codex')}];

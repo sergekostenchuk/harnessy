@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createContext,runInContext} from 'node:vm';
+import {dom} from './ui-dom-test-helpers.ts';
+import {fixture,call,until,deferred} from './test-helpers.ts';
+const code=readFileSync(new URL('../../../ui/deploy/conn.js',import.meta.url),'utf8');
+test('218: connection card records one billing date via HTTP, preserves the other provider and accepts a later correction',async t=>{
+ const h=await fixture(t);let email='a@example.test';h.provider.auth=async()=>({loggedIn:true,email});await h.runtime.settings.patch('owner',{subscriptionDates:[{vendor:'codex',date:'2026-01-15',plan:'Pro'}]});
+ const d=dom('<div class="frame"><main class="main"><div id="v-list"><div class="sum"></div><div class="list"></div></div></main></div>'),requests:any[]=[],toasts:string[]=[],H={project:h.dir,on:true,panes:[],models:{}};let pending=0,gate:ReturnType<typeof deferred>|null=null;
+ const context:any={document:d.document,location:{pathname:'/11-connections.html',hash:''},addEventListener:d.window.addEventListener.bind(d.window),setTimeout:(f:()=>void)=>f(),requestAnimationFrame:(f:()=>void)=>f(),LIVE:{H,esc:(s:any)=>String(s??''),toast:(s:string)=>toasts.push(s),api:async(path:string,body:any)=>{requests.push({path,body});pending++;try{if(gate&&path==='/api/billing')await gate.promise;return (await call(h.api,path,body?{body}:{})).body}finally{pending--}}}};context.window=context;
+ runInContext(code,createContext(context));await until(()=>!pending);const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};
+ await find('[data-pv="claude"]').emit('click');find('[data-subscription-date]').value='2026-10-31';await find('[data-subscription-save]').emit('click');
+ assert.equal(h.runtime.settings.billing().subscriptionDates.find(d=>d.vendor==='claude')!.date,'2026-10-31');assert.equal(h.runtime.settings.billing().subscriptionDates.find(d=>d.vendor==='codex')!.date,'2026-01-15');assert.equal(find('[data-subscription-save]').disabled,false);
+ find('[data-subscription-date]').value='2026-10-30';await find('[data-subscription-save]').emit('click');assert.equal(h.runtime.settings.billing().subscriptionDates.find(d=>d.vendor==='claude')!.date,'2026-10-30');assert.equal(requests.filter(r=>r.body?.changes).length,2);assert.match(toasts.at(-1)!,/Дата сохранена/);
+ const existing=h.runtime.settings.billing().subscriptionDates,own=existing.find(x=>x.vendor==='claude')!;
+ await h.runtime.settings.patch('owner',{subscriptionDates:existing.map(x=>x===own?{...x,amount:88,currency:'EUR'}:x)});
+ find('[data-subscription-date]').value='2026-10-28';await find('[data-subscription-save]').emit('click');assert.equal(h.runtime.settings.billing().subscriptionDates.find(d=>d.vendor==='claude')!.amount,88,'date-only card preserves another window’s amount');
+ email='b@example.test';find('[data-subscription-date]').value='2026-10-29';await find('[data-subscription-save]').emit('click');assert.equal(requests.filter(r=>r.body?.changes).length,3);assert.match(toasts.at(-1)!,/Учётная запись сменилась/);email='a@example.test';
+ gate=deferred();find('[data-subscription-date]').value='2026-10-29';const pendingSave=find('[data-subscription-save]').emit('click');H.project='/another-project';gate.resolve(undefined);await pendingSave;assert.equal(requests.filter(r=>r.body?.changes).length,3,'a stale card must not write after a project switch');
+});

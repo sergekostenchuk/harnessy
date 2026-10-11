@@ -3,7 +3,7 @@ import {homedir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {record,type Provider,type ProviderLimits,type LimitsCode,type Vendor} from '@harnessy/providers';
 import type {Clock} from './types.ts';
-import {SharedLimitsCache,saved,atomicJSON,reasons,nextAttempt,type SharedSnapshot,type Saved} from './limits-cache.ts';
+import {SharedLimitsCache,saved,limitAccount,atomicJSON,reasons,nextAttempt,type SharedSnapshot,type Saved} from './limits-cache.ts';
 
 let nextLimitsRevision=0;
 const sharedJobs=new Map<string,Promise<void>>(),labels={claude:'Claude',codex:'Codex'},sources={claude:'claude.ai /usage',codex:'Codex app-server'};
@@ -27,7 +27,7 @@ export class LimitsStore {
  // The minute tick only adopts other engines' snapshots; shared claim() gates network reads to five minutes.
  start(){if(this.closed||this.timer!==undefined)return;this.timer=this.clock.setTimeout(()=>{this.timer=undefined;void this.refresh().finally(()=>this.start())},60000)}
  snapshot(){const now=this.clock.now()/1000;return {ok:true as const,project:this.dir,revision:this.revision,updatedAt:this.values.size?Math.max(...[...this.values.values()].map(v=>v.fetchedAt)):null,
- providers:(Object.keys(this.providers) as Vendor[]).map(vendor=>{const value=this.values.get(vendor),code=this.errors.get(vendor)??(!value?(this.providers[vendor]?.limits?'limits_unavailable':'limits_unsupported'):null);return {vendor,plan:value?.plan??null,status:code==='limits_not_applicable'?'not_applicable':code?'unavailable':'ok',label:labels[vendor],source:sources[vendor],sourceConnected:typeof this.providers[vendor]?.limits==='function',fetchedAt:value?.fetchedAt??null,
+ providers:(Object.keys(this.providers) as Vendor[]).map(vendor=>{const value=this.values.get(vendor),code=this.errors.get(vendor)??(!value?(this.providers[vendor]?.limits?'limits_unavailable':'limits_unsupported'):null);return {vendor,account:value?.account??null,plan:value?.plan??null,planLevel:value?.planLevel??null,extraUsageEnabled:value?.extraUsageEnabled??null,status:code==='limits_not_applicable'?'not_applicable':code?'unavailable':'ok',label:labels[vendor],source:sources[vendor],sourceConnected:typeof this.providers[vendor]?.limits==='function',fetchedAt:value?.fetchedAt??null,
  windows:value?.windows.map(w=>({...w,resetsIn:w.resetsAt===null?null:Math.max(0,w.resetsAt-now)}))??[],...(value?.credits?{credits:value.credits}:{}),...(value?.resetCredits!==undefined?{resetCredits:value.resetCredits}:{}),nextAttemptAt:this.nextAttempts.get(vendor)??null,stale:!value||!!code||now-value.fetchedAt>900,...(code?{code,reason:labels[vendor]+': '+reasons[code]}:{})}})}
  }
  private adopt(row:SharedSnapshot,notify=true){if(this.closed)return;const vendor=row.vendor,before=JSON.stringify([this.values.get(vendor),this.errors.get(vendor),this.nextAttempts.get(vendor)]);
@@ -48,7 +48,13 @@ export class LimitsStore {
  const current=this.cache.load(vendor);if(current&&this.turns.has(vendor)&&current.attemptedAt>this.turns.get(vendor)!){this.turns.delete(vendor);afterTurn=false}if(current&&this.clock.now()/1000<nextAttempt(current,afterTurn)){this.adopt(current);return}
  const claim=this.cache.claim(vendor,afterTurn,this.values.get(vendor)??null);token=claim.token;if(token)this.turns.delete(vendor);if(!token){this.adopt(claim.row);return}
  timer=this.clock.setTimeout(()=>abort.abort(),10000);const cancelled=new Promise<ProviderLimits>(resolve=>abort.signal.addEventListener('abort',()=>resolve({ok:false,code:'limits_timeout',reason:''}),{once:true}));
- let result:ProviderLimits;try{result=await Promise.race([Promise.resolve().then(()=>provider.limits!(abort.signal)),cancelled])}catch{result={ok:false,code:'limits_unavailable',reason:''}}
+ const measure=async()=>{
+  const identity=async()=>{try{const a=await provider.auth();return a.loggedIn===true?limitAccount(a.email):null}catch{return null}};
+  const before=await identity();if(abort.signal.aborted)return {ok:false as const,code:'limits_timeout' as const,reason:''};
+  const result=await provider.limits!(abort.signal);if(!result.ok)return result;
+  const after=await identity();return {...result,account:before&&before===after?before:null};
+ };
+ let result:ProviderLimits;try{result=await Promise.race([measure(),cancelled])}catch{result={ok:false,code:'limits_unavailable',reason:''}}
  const row=this.cache.complete(vendor,token,result);if(row)this.adopt(row);
  }catch{if(!this.closed){this.errors.set(vendor,'limits_storage');this.nextAttempts.set(vendor,this.clock.now()/1000+300);this.revision=++nextLimitsRevision;this.publish()}}
  finally{this.clock.clearTimeout(timer);this.aborts.delete(abort)}
