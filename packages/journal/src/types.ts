@@ -2,7 +2,7 @@ export const KINDS=['task','status','question','answer','review-request','verdic
 export const SYSTEM_KINDS=['protocol','rejected','policy','ack'] as const;
 export const REPLY_KIND={question:'answer',task:'status','review-request':'verdict'} as const;
 export type Kind=typeof KINDS[number];
-export type JournalCode='kind_unknown'|'to_invalid'|'to_unknown'|'self_addressed'|'text_empty'|'text_too_long'|'reply_to_missing'|'evidence_invalid'|'score_invalid'|'round_invalid'|'reply_to_required'|'sha_required'|'sha_unknown'|'evidence_required'|'evidence_outside'|'evidence_missing'|'evidence_contract'|'policy_denied'|'ack_not_pending'|'ack_closed'|'write_failed'|'initiator_invalid';
+export type JournalCode='kind_unknown'|'to_invalid'|'to_unknown'|'self_addressed'|'text_empty'|'text_too_long'|'reply_to_missing'|'evidence_invalid'|'score_invalid'|'round_invalid'|'reply_to_required'|'sha_required'|'sha_unknown'|'evidence_required'|'evidence_outside'|'evidence_missing'|'evidence_contract'|'policy_denied'|'ack_not_pending'|'ack_closed'|'write_failed'|'initiator_invalid'|'before_invalid';
 export class JournalError extends Error {
  readonly code:JournalCode;readonly maybeWritten?:true;
  constructor(code:JournalCode,message:string,maybeWritten?:true){super(message);this.name='JournalError';this.code=code;if(maybeWritten)this.maybeWritten=maybeWritten}

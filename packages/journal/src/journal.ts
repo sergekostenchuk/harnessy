@@ -75,8 +75,9 @@ export class Journal {
  return this.write(rec)
  }
  get(seq:number):Record_|null {this.recover();for(let i=this.records.length-1;i>=0;i--)if(this.records[i]!.seq===seq)return this.records[i]!;return null}
- read({since=0,limit=200,thread=null,kinds}: {since?:number;limit?:number;thread?:string|null;kinds?:readonly string[]}={}):Record_[]{
- this.recover();const out=this.records.filter(r=>r.seq>since&&(thread===null||r.thread===thread)&&(!kinds?.length||kinds.includes(r.kind)));return limit?out.slice(-limit):out
+ read({since=0,limit=200,thread=null,kinds,before}: {since?:number;limit?:number;thread?:string|null;kinds?:readonly string[];before?:number|undefined}={}):Record_[]{
+ if(before!==undefined&&(!Number.isSafeInteger(before)||before<=0))throw new JournalError('before_invalid','before: ожидается целое число больше нуля');
+ this.recover();const out=this.records.filter(r=>r.seq>since&&(before===undefined||r.seq<before)&&(thread===null||r.thread===thread)&&(!kinds?.length||kinds.includes(r.kind)));if(before!==undefined)out.sort((a,b)=>a.seq-b.seq);return limit?out.slice(-limit):out
  }
  repliesTo(seq:number):Record_[]{this.recover();return this.records.filter(r=>r.reply_to===seq)}
  pendingFor(seat:string):DeliveryEntry[]{

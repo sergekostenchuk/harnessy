@@ -8,6 +8,16 @@ import {RuntimeError,createRuntime,withRoleActions} from './index.ts';
 import {harness,OWNER,FakeProvider,completedActions,deferred,until} from './test-helpers.ts';
 const actions=withRoleActions(completedActions),error=(code:string)=>(e:unknown)=>e instanceof RuntimeError&&e.code===code;
 
+for(const path of ['assign','move','project'] as const)test('81: actual reply model survives '+path+' and restart without copying execution receipts',async t=>{
+ const h=await harness(t,{actions,seats:'  orchestrator: {role: orchestrator, vendor: claude, label: оркестратор, model: w1, mode: read}'}),r=h.runtime;
+ h.provider.onRun=async(_seat,text,ctx)=>{ctx.modelStarted?.();ctx.publish({type:'done',model:'w2',sessionId:'s1',durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:text.includes('original question')?'source answer':'onboarding',sessionId:'s1'}};
+ r.roomSet({model:'w1',folder:path!=='project'},OWNER);r.chat({pane:'room',message:'original question'},OWNER);await r.idle();assert.equal(r.registry.get('room')!.transcript.at(-1)!.model,'w2');
+ let target='room';if(path==='move')await r.roomMove({path:join(h.dir,'destination'),create:true,git:false},OWNER);
+ else {if(path==='project')await r.settingsPatch('owner',{projectsRoot:join(h.dir,'projects')},OWNER);const assigned=await r.assignRoomRole({role:'orchestrator'},OWNER);target=assigned.pane.id}
+ await r.idle();const original=r.registry.get(target)!.transcript.find(m=>m.role==='ai'&&m.text==='source answer')!;assert.ok(original);assert.equal(original.model,'w2');assert.equal(Object.hasOwn(original,'runtime'),false);assert.equal(Object.hasOwn(original,'deliverySeq'),false);
+ const nextDir=r.project.dir;await r.close();const next=await createRuntime({...h.deps,projectDir:nextDir,providers:{claude:new FakeProvider()}},actions);t.after(()=>next.close());assert.equal(next.registry.get(target)!.transcript.find(m=>m.text==='source answer')!.model,'w2');
+});
+
 test('17/55: role catalogue, exact refusals, owner privilege and room history survive settings and restart',async t=>{
  const h=await harness(t),r=h.runtime;assert.equal(r.roleCatalog().find(x=>x.role==='executor')!.reason,'сначала оркестратор — он разворачивает проект и вводит роли');
  assert.throws(()=>r.roomSet({model:'missing'},OWNER),error('model_unknown'));await assert.rejects(r.assignRoomRole({role:'tester'},OWNER),error('room_missing'));assert.throws(()=>r.roomSet({model:'w1'},{seat:'worker',trust:'agent'}),error('policy_denied'));

@@ -90,3 +90,48 @@ test('20/128: onboarding placeholder yields to first nonempty ai; meaningful tit
  await r.chatsNew({pane:'worker',carry:'none'},OWNER);pane.record('ai','Ответ раньше синхронизации');pane.record('me','  🧠'.repeat(61)+'\nвторая строка');r.project.state.savePanes(r.registry,r.journal);const second=r.project.state.activeChat(pane,false)!;assert.equal(second.title,[...pane.transcript[1]!.text.trim().split('\n')[0]!].slice(0,60).join(''));assert.equal([...second.title].length,60);assert.notEqual(second.title,'Ответ раньше синхронизации');
  second.title='вводная роли';r.project.state.savePanes(r.registry,r.journal);assert.equal(second.title,[...pane.transcript[1]!.text.trim().split('\n')[0]!].slice(0,60).join(''));
 });
+
+test('81/109: response uses done.model across settings changes, chat reopening and process restart',async t=>{
+ const h=await harness(t),r=h.runtime,gate=deferred(),entered=deferred();
+ h.provider.onRun=async(seat,_text,ctx)=>{ctx.modelStarted?.();entered.resolve();await gate.promise;ctx.publish({type:'done',model:seat.model,sessionId:'s1',durationMs:2,usage:{input:1,output:1,cacheRead:0}});return {text:'original model result',sessionId:'s1'}};
+ r.chat({pane:'worker',message:'first'},OWNER);await entered.promise;r.paneSet('worker',{model:'w2'},OWNER);gate.resolve();await r.idle();
+ const pane=r.registry.get('worker')!,chat=r.project.state.activeChat(pane,false)!;assert.equal(pane.model,'w2');assert.equal(r.chatGet(chat.id,OWNER).messages.at(-1)!.model,'w1');
+ await r.runTurn('worker','next turn');assert.equal(h.provider.calls.at(-1)!.seat.model,'w2');assert.equal(h.provider.calls.at(-1)!.seat.sessionId,'s1');
+ await r.chatsNew({pane:'worker',carry:'none'},OWNER);await r.chatsOpen({chat:chat.id},OWNER);assert.equal(r.chatGet(chat.id,OWNER).messages.filter(m=>m.role==='ai')[0]!.model,'w1');
+ await r.close();const next=await createRuntime({...h.deps,providers:{claude:new FakeProvider()}},completedActions);t.after(()=>next.close());assert.equal(next.chatGet(chat.id,OWNER).messages.filter(m=>m.role==='ai')[0]!.model,'w1');
+});
+
+test('81/109: vendor change during a turn keeps the old result but never imports its late session',async t=>{
+ const codex=new FakeProvider('codex'),h=await harness(t,{deps:{providers:{claude:new FakeProvider(),codex}}}),r=h.runtime,provider=h.deps.providers.claude as FakeProvider,gate=deferred(),entered=deferred();
+ provider.onRun=async(seat,_text,ctx)=>{ctx.modelStarted?.();entered.resolve();await gate.promise;ctx.session('late-claude-session');assert.equal(r.registry.get('worker')!.sessionId,null);ctx.publish({type:'done',model:seat.model,sessionId:'late-claude-session',durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'old provider result',sessionId:'late-claude-session'}};
+ r.chat({pane:'worker',message:'old'},OWNER);await entered.promise;const pane=r.registry.get('worker')!,before=pane.settings();const response=r.paneSet('worker',{model:'c1',mode:'full',cwd:h.dir,sessionId:'forged',digest:false,role:'reviewer'},OWNER);assert.equal(response.appliesFrom,'next');assert.equal(response.pane.vendor,'codex');assert.equal(response.pane.model,'c1');assert.equal(pane.mode,before.mode);assert.equal(pane.digest,before.digest);assert.equal(pane.role,before.role);assert.equal(pane.sessionId,null);
+ gate.resolve();await r.idle();assert.equal(pane.model,'c1');assert.equal(pane.vendor,'codex');assert.equal(pane.sessionId,null);assert.equal(pane.transcript.at(-1)!.model,'w1');
+ await r.runTurn('worker','new');assert.equal(codex.calls[0]!.seat.model,'c1');assert.equal(codex.calls[0]!.seat.sessionId,null);assert.equal(codex.calls[0]!.seat.vendor,'codex');
+});
+
+test('81/109: session_missing retries the immutable original model after a next-turn choice',async t=>{
+ const h=await harness(t),r=h.runtime,provider=h.provider,pane=r.registry.get('worker')!,gate=deferred(),entered=deferred();pane.sessionId='missing';let count=0;
+ provider.onRun=async(seat,_text,ctx)=>{if(++count===1){entered.resolve();await gate.promise;throw new (await import('@harnessy/providers')).ProviderError('session_missing','gone')}ctx.modelStarted?.();ctx.publish({type:'done',model:seat.model,sessionId:'new',durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'retry result',sessionId:'new'}};
+ const turn=r.runTurn('worker','retry');await entered.promise;r.paneSet('worker',{model:'w2'},OWNER);gate.resolve();await turn;assert.deepEqual(provider.calls.map(call=>call.seat.model),['w1','w1']);assert.equal(provider.calls[1]!.seat.sessionId,null);assert.equal(pane.model,'w2');assert.equal(pane.transcript.at(-1)!.model,'w1');
+});
+
+test('81/109: current bridge and interrupt timeout use launch vendor after a next-turn vendor choice',async t=>{
+ const codex=new FakeProvider('codex'),h=await harness(t,{deps:{providers:{claude:new FakeProvider(),codex}}}),r=h.runtime,gate=deferred<{text:string;sessionId:null;interrupted:true}>(),entered=deferred();let interrupts=0;
+ r.paneSet('worker',{model:'c1'},OWNER);codex.onRun=async(_seat,_text,ctx)=>{ctx.modelStarted?.();ctx.registerProcessToken('old-codex-token');ctx.setHandle({interrupt:async()=>{interrupts++},steer:async()=>{}});entered.resolve();return gate.promise};
+ const turn=r.runTurn('worker','old Codex');await entered.promise;r.paneSet('worker',{model:'w2'},OWNER);assert.equal(r.validateBridge('worker','old-codex-token').seatId,'worker');
+ await r.resetVendor('claude');assert.equal(interrupts,0);codex.onReset=async()=>{gate.resolve({text:'partial',sessionId:null,interrupted:true})};r.interrupt('worker',OWNER);h.clock.advance(30_000);await turn;
+ assert.equal(interrupts,1);assert.equal(codex.resets,1);assert.equal(r.registry.get('worker')!.vendor,'claude');assert.throws(()=>r.validateBridge('worker','old-codex-token'),error('token_invalid'));
+});
+
+test('81/109: vendor selection away and back cannot revive the old session',async t=>{
+ const codex=new FakeProvider('codex'),h=await harness(t,{deps:{providers:{claude:new FakeProvider(),codex}}}),r=h.runtime,provider=h.deps.providers.claude as FakeProvider,gate=deferred(),entered=deferred();let first=true;
+ provider.onRun=async(seat,_text,ctx)=>{ctx.modelStarted?.();if(first){first=false;entered.resolve();await gate.promise;ctx.session('stale-session');assert.equal(r.registry.get('worker')!.sessionId,null)}ctx.publish({type:'done',model:seat.model,sessionId:'new-session',durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'response',sessionId:'new-session'}};
+ r.chat({pane:'worker',message:'old'},OWNER);await entered.promise;r.paneSet('worker',{model:'c1'},OWNER);r.paneSet('worker',{model:'w2'},OWNER);gate.resolve();await r.idle();assert.equal(r.registry.get('worker')!.sessionId,null);await r.runTurn('worker','next');assert.equal(provider.calls.at(-1)!.seat.sessionId,null);assert.equal(provider.calls.at(-1)!.seat.model,'w2');
+});
+
+test('81: actual done model can differ from the request; missing done never borrows configured model',async t=>{
+ const {runtime:r,provider:f}=await harness(t);
+ f.onRun=async(_s,_m,c)=>{c.modelStarted?.();c.publish({type:'done',model:'w2',sessionId:null,durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'actual w2',sessionId:null}};
+ await r.runTurn('worker','actual');assert.equal(r.registry.get('worker')!.model,'w1');assert.equal(r.registry.get('worker')!.transcript.at(-1)!.model,'w2');
+ f.onRun=async(_s,_m,c)=>{c.modelStarted?.();return {text:'legacy without model',sessionId:null}};await r.runTurn('worker','missing');assert.equal(Object.hasOwn(r.registry.get('worker')!.transcript.at(-1)!,'model'),false);
+});

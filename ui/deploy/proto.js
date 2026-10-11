@@ -49,7 +49,7 @@
     const folders=rail?'<i class="ps-sep"></i><div class="nav" data-folders title="Проекты и чаты">'+ico('folder')+'</div>':'<div class="grp">проекты</div><div class="ps-folders"><div class="ps-chat more">проекты — из движка</div></div>';
     const log=(rail?'<i class="ps-sep"></i>':'<div class="grp"></div>')+item(['log','Журнал','']);
     const foot=rail?'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="nav'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Использовано → Расход">'+ico('spend')+'</div><div class="nav" data-go="profile" title="Профиль"><span class="av">S<i></i></span></div></div>'
-      :'<div class="ps-foot">'+item(['away','Уйти · окно · поиск',''])+item(['set','Настройки',''])+'<div class="limits'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Использовано — открыть расход"><div class="cap">использовано</div>'+limit('Claude · неделя',62)+limit('Codex · 5 часов',94)+'</div>'+
+      :'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="limits'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Использовано — открыть расход"><div class="cap">использовано</div>'+limit('Claude · неделя',62)+limit('Codex · 5 часов',94)+'</div>'+
        '<div class="user" data-go="profile" title="Профиль"><span class="av">S<i></i></span><div>Serge<small>9616166@gmail.com</small></div><span class="chev">⌄</span></div></div>';
     return head+top+'<div class="ps-scroll">'+work+pins+folders+log+'</div>'+foot; }
   window.psKey=KEY;
@@ -69,6 +69,7 @@
     if(e.target.closest('[data-col]')){ toggleSide(); return; }
     const fd=e.target.closest('.grp.fold'); if(fd){ const f=fd.dataset.fold, open=!foldOpen(f); try{ localStorage.setItem(FOLD_KEY+':'+f,open?'1':'0'); }catch(x){} renderSide(); dispatchEvent(new Event('resize')); return; }
     const g=e.target.closest('[data-go]'); if(!g) return; const k=g.dataset.go;
+    if(k==='away'){e.preventDefault();e.stopPropagation();if(KEY==='away'){const button=document.getElementById('leave');if(button)button.click()}else location.href=PAGES.away+'#leave';return}
     if(k==='profile'){ if(window.LIVE) return;   // меню профиля рисует рабочий слой (live.js); старый кадр с тремя меню — только без движка
       if(KEY==='set'&&frames[1]) show(1); else location.href=PAGES.set+'#f2'; return; }
     if(k===KEY){ if(frames.length>1&&cur) show(0); return; }
@@ -78,14 +79,14 @@
   // ── навигация телефона: кнопка ☰ и выдвижная панель со всеми экранами
   function mobileNav(){ if(document.querySelector('.m-btn')) return;
     const X={new:'<path d="M12 5v14M5 12h14"/>',conn:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',away:'<path d="M20 14.5A8 8 0 1 1 9.500 4a6.500 6.500 0 0 0 10.500 10.500z"/>'};
-    const item=(k,tx,extra)=>'<a class="m-i'+(k===KEY?' on':'')+(extra==='p'?' p':'')+'" href="'+PAGES[k]+'"><svg viewBox="0 0 24 24">'+(IC[k]||X[k]||'')+'</svg>'+tx+(extra&&extra!=='p'?'<small>'+extra+'</small>':'')+'</a>';
+    const item=(k,tx,extra)=>'<a class="m-i'+(k===KEY?' on':'')+(extra==='p'?' p':'')+'" href="'+PAGES[k]+(k==='away'?'#leave':'')+'"><svg viewBox="0 0 24 24">'+(IC[k]||X[k]||'')+'</svg>'+tx+(extra&&extra!=='p'?'<small>'+extra+'</small>':'')+'</a>';
     const btn=document.createElement('button'); btn.className='m-btn'; btn.setAttribute('aria-label','Меню'); btn.textContent='☰';
     const bg=document.createElement('div'); bg.className='m-bg';
     const dr=document.createElement('nav'); dr.className='m-drawer';
     dr.innerHTML='<div class="m-h"><i><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></i>Harnessy<span data-mx>×</span></div>'+item('new','Новый чат','p')+
       '<div class="m-g">работа</div>'+item('now','Сейчас','2')+item('chat','Чат')+item('plan','План · карта')+item('doc','Документ стадии')+item('art','Артефакты')+item('mem','Память проекта')+item('res','Ресёрч')+
       '<div class="m-g">команда</div>'+item('swarm','Стая агентов')+item('sens','Датчики')+item('spend','Расход')+item('conn','Подключения и лимиты')+
-      '<div class="m-g">прочее</div>'+item('log','Журнал')+item('set','Настройки')+item('away','Уйти · окно · поиск')+
+      '<div class="m-g">прочее</div>'+item('log','Журнал')+item('set','Настройки')+item('away','Уйти')+
       '<div class="m-f"><a href="../disarto/'+FILE+'">этот экран листом, с пояснениями ↗</a><a href="../disarto/index.html">все скетчи ↗</a></div>';
     document.body.append(btn,bg,dr);
     const open=v=>document.documentElement.classList.toggle('m-open',v);

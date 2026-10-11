@@ -39,7 +39,7 @@ export interface RuntimeDeps {
  id?:()=>string;defaultDir?:string;settings?:Settings|((currentProject:()=>string|null)=>Settings);pins?:Pins|((currentProject:()=>string|null,chatMeta:(id:string)=>import('@harnessy/projects').ChatMeta|null)=>Pins);
 }
 export interface ActiveTurn {
- scope:TurnScope;controller:AbortController;pane:Pane;records:TurnRecords;deliverySeq:number;
+ scope:TurnScope;controller:AbortController;pane:Pane;readonly vendor:Vendor|'human';records:TurnRecords;deliverySeq:number;
  relayDepth:number;attemptNumber:number;handle:TurnHandle|null;started:boolean;stopRequested:boolean;terminal:RuntimeEvent|null;partial:string;
  finished:Promise<void>;finish():void;timer:unknown;resetWait:Promise<void>;releaseReset():void;result:ResultMessage|null;injected:import('./state.ts').TranscriptMessage[];
 }

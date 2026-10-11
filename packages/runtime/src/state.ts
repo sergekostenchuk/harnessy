@@ -11,12 +11,12 @@ export const diskIO:StateIO={read:path=>new TextDecoder('utf-8',{fatal:true}).de
  mkdirSync(dirname(path),{recursive:true});atomicWrite(path,text);const fd=openSync(dirname(path),'r');try{fsyncSync(fd)}finally{closeSync(fd)}
 },rename(from,to){renameSync(from,to);const fd=openSync(dirname(to),'r');try{fsyncSync(fd)}finally{closeSync(fd)}}};
 export interface Receipt {turnInstanceId:string;recordSeqs:number[];effectsPending:boolean;interrupted:boolean;nextSeen:Record<string,number>}
-export interface TranscriptMessage {role:string;text:string;ts:number;[key:string]:unknown}
+export interface TranscriptMessage {role:string;text:string;ts:number;model?:string;[key:string]:unknown}
 export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}
 export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;deliverySeq?:number;status?:'uncertain'}
 export interface Chat {id:string;pane:string;title:string;created:number;closed:number|null;model:string;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;[key:string]:unknown}
 export function jsonClone<T>(value:T):T{return parseCompat(compatJson(value)) as T}
-const CONVERSATION_FIELDS=new Set(['role','text','ts','usage','durationMs']);
+const CONVERSATION_FIELDS=new Set(['role','text','ts','model','usage','durationMs']);
 // Execution receipts belong to the source seat and journal, never to transferred history.
 export function conversationHistory(messages:readonly TranscriptMessage[]):TranscriptMessage[] {
  return jsonClone(messages.map(message=>{
