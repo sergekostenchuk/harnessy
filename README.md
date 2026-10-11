@@ -72,7 +72,7 @@ Process memory is a cache of these files: the runtime rebuilds panes, chats, cur
 - **Process tokens** **[code]**: a Codex process gets a per-process secret; the HTTP bridge maps token → seat → active scope and rejects foreign or revoked tokens (`token_invalid`) and idle processes (`turn_ended`); the scope is re-checked right before each protected effect, after all awaits.
 - **Mandate** **[code]**: an orchestrator may create a seat only inside a turn that started from the owner's own record, taken from an immutable snapshot of the turn's records.
 - **Permissions and files** **[code]**: a seat's mode (chat / read / check / web / ask / edit / all) is mapped to the provider's canonical permission set; writable roots are the project root or the seat's own worktree; risky actions raise an approval card to the owner.
-- **Merging** **[code]/[contract]**: only roles listed in `mergeRoles` and the owner, only a SHA with an accepted verdict, only on the integration branch with a clean tree.
+- **Merging** **[code]**: only roles listed in `mergeRoles` and the owner, only a SHA with an accepted verdict, only on the integration branch with a clean tree.
 - **The owner's switch** **[code]**: `halt` interrupts running turns and holds every queue; only the owner can lift it.
 
 ### 4. How are actions with external consequences separated from text generation?
@@ -92,7 +92,7 @@ The model produces text and events; it does not touch the world directly.
 
 - **Electron is a thin shell** (`ui/desktop`): `main.js` opens `http://localhost:3777/sketches/proto/10-new-chat.html`, checks `/api/status`, and if the port is silent starts the engine itself (`run.sh`) and waits. The renderer runs with context isolation and no Node; the only native bridge is `window.harnessy.pickFolder` (preload) for the Finder folder picker **[code]**.
 - **The window is a web app** served by the engine itself from `ui/deploy/out/site` under `/sketches`: the live layer (`live.js`, `cx.js`, `ctx.js`, `set.js`, `conn.js`) talks to the engine over HTTP and SSE (`/api/events`) on `127.0.0.1:3777`. Requests are protected by Host/Origin/`Sec-Fetch-Site`/Content-Type checks so a foreign page in the browser cannot drive the engine **[code]**.
-- **Backend = packages.** Today the engine is `core/` (Python). The `api` package (TS-05, **[contract]**) reproduces the same routes and JSON forms byte for byte on top of `runtime`, `projects` and `journal`, and `core/run.sh` becomes a shim that starts the Node entry point, so neither the window nor Electron changes when the core switches (TS-06).
+- **Backend = packages.** Since 09.10.2026 the live engine is the TypeScript core (`packages/api/bin/harnessy.ts`, launched by `run.sh`); `core/` (Python) is kept only as the behavioural reference until TS-06 step 5 removes it (tag `mvp-python` keeps the history). The `api` package (TS-05, **[code]**) reproduces the same routes and JSON forms byte for byte on top of `runtime`, `projects` and `journal`, and `core/run.sh` becomes a shim that starts the Node entry point, so neither the window nor Electron changes when the core switches (TS-06).
 
 ## Roadmap: publishing, connecting models, payments and learning **[plan]**
 
