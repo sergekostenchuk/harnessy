@@ -12,24 +12,25 @@ const screens={doc:'17-doc',art:'15-artifacts',mem:'16-memory',res:'12-research'
 const sections={doc:'docs',art:'artifacts',mem:'memory',res:'research'} as const;
 type Page=keyof typeof screens;
 const part=(s:string,a:string,b:string)=>{const x=s.indexOf(a),y=s.indexOf(b,x+a.length);assert.ok(x>=0&&y>x,a);return s.slice(x,y)};
-function view(page:Page,fetch:(path:string,body?:any)=>Promise<any>){
+function view(page:Page,fetch:(path:string,body?:any)=>Promise<any>,boot=false){
  const raw=readFileSync(new URL('../../../ui/sketches/disarto/'+screens[page]+'.html',import.meta.url),'utf8');
  const d=dom(raw.slice(raw.indexOf('<div class="frame"'),raw.indexOf('<script')));Object.assign(d.document,{documentElement:d.html,body:d.body});
  const H:any={on:false,project:'/projects/a',panes:[],pane:null,snapshotOnly:false,active:{}},S:any={ui:{pane:'room'},chat:[],dec:{}},hooks:Function[]=[],requests:any[]=[],toasts:string[]=[],pending=new Set<Promise<any>>(),timers:Function[]=[];
  const hx=new Proxy({close(){}},{get:()=>()=>''});
  const sandbox:any={H,S,PAGE:page,document:d.document,window:null,HX:hx,hooks,location:{href:'',pathname:'/sketches/proto/'+screens[page]+'.html'},esc:(s:any)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),base:(s:string)=>s.split('/').filter(Boolean).pop()||'',
-  toast:(s:string)=>toasts.push(s),save(){},log(){},now:()=>1,hhmm:()=> '12:00',badges(){},pickPane(){},renderWaiting(){},modelName:(id:string)=>id,
+  toast:(s:string)=>toasts.push(s),save(){},log(){},now:()=>1,hhmm:()=> '12:00',badges(){},pickPane(){},renderWaiting(){},modelName:(id:string)=>id,hStatus(){},sideChats(){},liveFirstPaint(){},render(){},cols:()=>[],SEL:null,LOADED:null,SP:{generation:0},JR:{epoch:0},sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,v:string)=>storage.set(k,v)},
   addEventListener:d.window.addEventListener.bind(d.window),dispatchEvent(){},CustomEvent:class{},setTimeout:(f:Function)=>{timers.push(f)},clearTimeout(){},
   api:async(path:string,body?:any)=>{requests.push({path,body});const p=fetch(path,body);pending.add(p);try{return await p}finally{pending.delete(p)}}};sandbox.window=sandbox;
- const context=createContext(sandbox);
+ const storage=new Map<string,string>(),context=createContext(sandbox);
  for(const script of raw.matchAll(/<script>([\s\S]*?)<\/script>/g))runInContext(script[1]!,context);
- runInContext(part(live,'  // TS-09a: project materials','  // лента активного чата')+'\nglobalThis.sections={fetch:sectionFetch,draw:sectionDraw,sync:sectionSync,changing:sectionChanging,request:sectionRequest,applyStatus,PS};',context);
+ if(boot)runInContext(proto.split('/* LIVE_BOOT_END */')[0]!,context);
+ runInContext(part(live,'  let bindingGeneration','  function md(')+part(live,'  function rememberLive(','  // лента активного чата')+part(live,'  // TS-09a.1: one lifecycle','  // End TS-09a.1 page lifecycle.')+'\nglobalThis.sections={fetch:sectionFetch,draw:sectionDraw,sync:sectionSync,changing:sectionChanging,request:sectionRequest,applyStatus,refreshStatus,resumePage,sendBinding,bindingCurrent,PS};',context);
  // Register the actual old hooks too: they must stay harmless after the engine connects.
  const lines=live.split('\n');for(let i=0;i<lines.length;i++)if(lines[i]!.startsWith('  if(')&&lines[i]!.includes("PAGE==='"+page+"'")){const end=lines.indexOf('  }',i+1);assert.ok(end>i);runInContext(lines.slice(i,end+1).join('\n'),context);i=end}
  H.on=true;
  const find=(selector:string)=>{const el=d.document.querySelector(selector);assert.ok(el,selector);return el};
  const settle=async()=>{do{await Promise.allSettled([...pending]);await immediate()}while(pending.size)};
- return {...d,H,S,hooks,requests,toasts,timers,sandbox,context,functions:sandbox.sections,find,settle};
+ return {...d,H,S,hooks,requests,toasts,timers,sandbox,context,storage,functions:sandbox.sections,find,settle};
 }
 const data=(page:Page,project='/projects/a',orch:any=null)=>({ok:true,project,section:sections[page],empty:true,items:[],limited:[],limits:SECTION_LIMITS,orchestrator:orch,memoryState:page==='mem'?'template':null});
 
@@ -95,4 +96,60 @@ test('140: actual applyStatus and project POST evict old documents before repain
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+'\nglobalThis.changeProject=api;',v.context);
  await v.sandbox.changeProject('/api/project',{path:other});assert.doesNotMatch(v.find('.main').textContent,/OLD PROJECT DOCUMENT/);
  v.functions.applyStatus((await call(h.api,'/api/status')).body);await v.settle();assert.match(v.find('.main').textContent,/NEW PROJECT DOCUMENT/);assert.doesNotMatch(v.find('.main').textContent,/OLD PROJECT DOCUMENT/);assert.equal(h.provider.calls.length,0);
+});
+
+for(const page of Object.keys(screens) as Page[])test('152: '+page+' returns from history, confirms HTTP project, refreshes and posts to its real orchestrator',async t=>{
+ const h=await fixture(t,{seats:'  lead: {role: orchestrator, label: Старший юрист, vendor: claude, model: w1, mode: read}'});h.runtime.halt(true,OWNER);
+ const v=view(page,async(path,body)=>(await call(h.api,path,body?{body}:{})).body,true);v.H.project=h.dir;
+ await v.functions.fetch();const binding=v.functions.sendBinding(),token=v.sandbox.HARNESS_BOOT.capture(),start=v.requests.length;
+ await v.window.emit('pagehide',{persisted:true});assert.equal(v.functions.PS.alive,false);
+ await v.window.emit('pageshow',{persisted:true});await v.settle();
+ assert.equal(v.functions.PS.alive,true);assert.equal(v.H.snapshotOnly,false);assert.equal(v.H.project,h.dir);assert.equal(v.functions.bindingCurrent(binding),false);assert.equal(v.sandbox.HARNESS_BOOT.current(token),false);
+ assert.equal(v.requests[start]!.path,'/api/status');assert.equal(v.requests.slice(start).filter(r=>r.path==='/api/project/sections/'+sections[page]).length,1);assert.equal(v.requests.slice(start).some(r=>r.body),false);
+ const reads=v.requests.length;await v.find('[data-section-refresh]').emit('click');assert.equal(v.requests.length,reads+1);
+ v.find('[data-section-text]').value='Материалы после возврата '+page;const seq=h.runtime.journal.lastSeq;await v.find('[data-section-request]').emit('click');
+ assert.equal(v.requests.at(-1)!.path,'/api/project/sections/'+sections[page]+'/request');assert.equal(h.runtime.journal.lastSeq,seq+1);assert.deepEqual(h.runtime.journal.read({since:seq})[0]!.to,['lead']);assert.match(v.toasts.at(-1)!,/Поручение записано/);assert.equal(h.provider.calls.length,0);
+});
+
+const status=(project='/projects/a')=>({project,panes:[],activeChats:{},models:{}});
+const material=(text:string)=>({...data('doc','/projects/a',{pane:'lead',label:'Оркестратор'}),empty:false,items:[{name:'current.md',path:'.harness/docs/current.md',stage:null,bytes:text.length,modifiedAt:'2026-10-11T12:00:00Z',format:'text',text,truncated:false}]});
+for(const kind of ['read','request'])test('152: late '+kind+' from before pagehide cannot replace returned same-project data or clear the new draft',async()=>{
+ const old=deferred<any>();let holding=false;
+ const v=view('doc',async(path,body)=>holding&&(kind==='request'?!!body:path==='/api/project/sections/docs')?old.promise:path==='/api/status'?status():path==='/api/chats'?{chats:[]}:body?{ok:true,seq:1}:material('CURRENT MATERIAL'),true);
+ await v.functions.fetch();holding=true;const pending=kind==='read'?v.functions.fetch():(v.find('[data-section-text]').value='OLD TASK',v.find('[data-section-request]').emit('click'));
+ await v.window.emit('pagehide',{persisted:true});holding=false;await v.window.emit('pageshow',{persisted:true});await immediate();
+ v.find('[data-section-text]').value='NEW DRAFT';old.resolve(kind==='read'?material('STALE MATERIAL'):{ok:true,seq:999});await pending;await v.settle();
+ assert.match(v.find('.main').textContent,/CURRENT MATERIAL/);assert.doesNotMatch(v.find('.main').textContent,/STALE MATERIAL|999/);assert.equal(v.find('[data-section-text]').value,'NEW DRAFT');assert.doesNotMatch(v.toasts.join('\n'),/999/);assert.equal(v.functions.PS.sending,false);
+});
+
+test('152: resume waits for current status, reads its new project, and ignores a status from before leaving',async()=>{
+ const old=deferred<any>(),fresh=deferred<any>();let calls=0;
+ const v=view('res',async(path)=>path==='/api/status'?(++calls===1?old.promise:fresh.promise):path==='/api/chats'?{chats:[]}:data('res',calls>1?'/projects/b':'/projects/a'),true);
+ await v.functions.fetch();const pending=v.functions.refreshStatus();await v.window.emit('pagehide',{persisted:true});const count=v.requests.length,restored=v.window.emit('pageshow',{persisted:true});
+ assert.equal(v.H.snapshotOnly,true);assert.equal(v.requests.slice(count).some(r=>r.path==='/api/project/sections/research'),false);assert.equal(v.document.querySelector('[data-section-request]'),null);
+ fresh.resolve(status('/projects/b'));await restored;old.resolve(status('/projects/a'));assert.equal(await pending,null);await v.settle();
+ assert.equal(v.H.project,'/projects/b');assert.equal(v.functions.PS.data.project,'/projects/b');assert.match(v.document.title,/Ресёрч · b/);assert.equal(v.storage.get('harnessy-live-project-v1'),'/projects/b');
+});
+
+for(const failure of [null,{ok:false,error:'offline'},{project:'/projects/a'},'network'])test('152: failed resume stays read-only, explains the failure and can retry through Refresh, '+JSON.stringify(failure),async()=>{
+ let broken=true;
+ const v=view('doc',async path=>{if(path==='/api/status'){if(failure==='network'&&broken)throw Error('network');return broken?failure:status()}return path==='/api/chats'?{chats:[]}:material('CONFIRMED')},true);
+ await v.functions.fetch();await v.window.emit('pagehide',{persisted:true});await v.window.emit('pageshow',{persisted:true});
+ assert.equal(v.H.snapshotOnly,true);assert.equal(v.document.querySelector('[data-section-request]'),null);assert.equal(v.document.querySelector('article'),null);assert.match(v.find('[role="alert"]').textContent,/Не удалось подтвердить проект/);
+ broken=false;await v.find('[data-section-refresh]').emit('click');await v.settle();assert.equal(v.H.snapshotOnly,false);assert.equal(v.functions.PS.alive,true);assert.match(v.find('.main').textContent,/CONFIRMED/);assert.ok(v.document.querySelector('[data-section-request]'));
+});
+
+test('152: initial or missing persisted flag never resumes or duplicates the first page load',async()=>{
+ const v=view('mem',async()=>data('mem'),true);await v.functions.fetch();const before=v.requests.length,generation=v.functions.PS.generation,binding=v.functions.sendBinding();
+ await v.window.emit('pageshow',{persisted:false});await v.window.emit('pageshow',{});
+ assert.equal(v.requests.length,before);assert.equal(v.functions.PS.generation,generation);assert.equal(v.functions.bindingCurrent(binding),true);
+});
+
+test('152: a second departure invalidates the in-flight resume; another return can confirm and read again',async()=>{
+ const gates=[deferred<any>(),deferred<any>()];let calls=0;
+ const v=view('art',async path=>path==='/api/status'?gates[calls++]!.promise:path==='/api/chats'?{chats:[]}:data('art','/projects/b'),true);
+ await v.window.emit('pagehide',{persisted:true});const first=v.window.emit('pageshow',{persisted:true});await v.window.emit('pagehide',{persisted:true});
+ gates[0]!.resolve(status('/projects/obsolete'));await first;assert.equal(v.functions.PS.alive,false);assert.equal(v.H.snapshotOnly,true);assert.equal(v.H.project,'/projects/a');assert.equal(v.requests.filter(r=>r.path==='/api/project/sections/artifacts').length,0);
+ await v.window.emit('pageshow',{persisted:false});assert.equal(calls,1);const second=v.window.emit('pageshow',{persisted:true});gates[1]!.resolve(status('/projects/b'));await second;await v.settle();
+ assert.equal(v.functions.PS.alive,true);assert.equal(v.H.snapshotOnly,false);assert.equal(v.H.project,'/projects/b');assert.equal(v.functions.PS.data.project,'/projects/b');assert.equal(v.requests.filter(r=>r.path==='/api/project/sections/artifacts').length,1);
 });

@@ -95,7 +95,7 @@
     if(identity!==bindingIdentity){ bindingIdentity=identity; bindingGeneration++; settingJobs.clear(); }
     return {project,pane,chat,generation:bindingGeneration}; }
   function invalidateBinding(){ bindingIdentity=''; bindingGeneration++; settingJobs.clear(); }
-  let leftPage=false;addEventListener('pagehide',()=>{leftPage=true;invalidateBinding()});
+  let leftPage=false,pageGeneration=0;addEventListener('pagehide',()=>{leftPage=true;invalidateBinding();if(window.HARNESS_BOOT)window.HARNESS_BOOT.invalidate();if(typeof suspendPage==='function')suspendPage()});
   function bindingCurrent(binding){ const current=sendBinding(); return current.project===binding.project&&current.pane===binding.pane&&current.chat===binding.chat&&current.generation===binding.generation; }
   const settingKey=b=>JSON.stringify([b.project,b.pane,b.chat,b.generation]);
   function configureSetting(perform){ const binding=sendBinding(),key=settingKey(binding),previous=settingJobs.get(key),job={promise:null};
@@ -198,15 +198,14 @@
     PS.receipt='Поручение записано в журнал: №'+reply.seq;toast(PS.receipt);input.value='';button.textContent=PS.receipt;return true;
   }
   if(SECTION_PAGES[PAGE]){
-    addEventListener('pagehide',()=>{PS.alive=false;PS.generation++});
     document.addEventListener('click',async event=>{if(!H.on)return;const button=event.target.closest('[data-section-refresh], [data-section-request], [data-section-conversation]');
       if(!button){if(event.target.closest('.frame .main .top, .panel')){event.preventDefault();event.stopImmediatePropagation()}return}
       event.preventDefault();event.stopImmediatePropagation();if(button.disabled)return;
-      if(button.hasAttribute('data-section-refresh'))await sectionFetch();else if(button.hasAttribute('data-section-conversation'))sectionConversation();else await sectionRequest(button);
+      if(button.hasAttribute('data-section-refresh')){if(H.snapshotOnly)await resumePage();else await sectionFetch()}else if(button.hasAttribute('data-section-conversation'))sectionConversation();else await sectionRequest(button);
     },true);
   }
   // End TS-09a project sections.
-  function applyStatus(st,request,connected=false){if(window.HARNESS_BOOT&&!window.HARNESS_BOOT.confirm(st.project||'',request))return false;if(connected){H.on=true;H.snapshotOnly=false}H.liveStatus=st;const changed=H.project!==(st.project||''),previousRoom=(H.panes||[]).find(p=>p.id==='room');H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.defaultDir=st.defaultDir||''; H.roleCatalog=st.roleCatalog||[]; H.noProject=!!st.noProject; H.projectsRoot=st.projectsRoot||''; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; H.halted=!!st.halted; H.kinds=st.kinds||[]; H.threads=st.threads||{};
+  function applyStatus(st,request,connected=false){if(leftPage||window.HARNESS_BOOT&&!window.HARNESS_BOOT.confirm(st.project||'',request))return false;if(connected){H.on=true;H.snapshotOnly=false}H.liveStatus=st;const changed=H.project!==(st.project||''),previousRoom=(H.panes||[]).find(p=>p.id==='room');H.panes=st.panes; H.models=st.models||{}; H.modes=st.modes||[]; H.project=st.project||''; H.defaultDir=st.defaultDir||''; H.roleCatalog=st.roleCatalog||[]; H.noProject=!!st.noProject; H.projectsRoot=st.projectsRoot||''; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; H.halted=!!st.halted; H.kinds=st.kinds||[]; H.threads=st.threads||{};
     if(changed){S.chat=[];H.chatList=[];H.pins=[];H.projects=null;const selectedRoom=(H.panes||[]).find(p=>p.id==='room');if(previousRoom&&selectedRoom&&previousRoom.model!==selectedRoom.model)toast('у проекта своя настройка модели: '+esc(modelName(selectedRoom.model)));}
     if(changed&&typeof resetJournal==='function'){resetJournal(H.project);if(H.on&&!H.snapshotOnly&&window.psKey==='log')journalFetch()}setTimeout(()=>dispatchEvent(new CustomEvent('live:status')),0);
     if(PAGE==='new') document.querySelectorAll('.status > span:first-child').forEach(el=>{ el.textContent=(H.noProject||!!(S.cx&&S.cx.noFolder))?'без проекта · модель ничего не читает':'папка '+((H.project||'').split('/').filter(Boolean).pop()||'проект')+(st.repo?' · git':'')+' · ролей '+(H.panes||[]).filter(p=>p.id!=='room').length; });   // строка папки — от движка, не статика скетча (Kimi UX-1 №85 п.2)
@@ -214,7 +213,7 @@
     if(PAGE==='new'){ S.ui.pane='room'; S.ui.fresh=true; S.ui.switched=false; save(); }   // стартовый экран — ВСЕГДА без роли · новый чат; выбор роли или чата отсюда = переход в чат (слово владельца 08.10)
     if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); renderWaiting(); }
   async function refreshChats(){ const binding=sendBinding();try{ const r=await api('/api/chats');if(!bindingCurrent(binding))return; H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } if(typeof sideChats==='function') await sideChats();if(window.HARNESS_BOOT)rememberLive(); }
-  async function refreshStatus(){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){} if(st&&Array.isArray(st.panes)){ if(applyStatus(st,request)===false)return null; await refreshChats(); hStatus(); if(window.CX) CX.render(); } return st; }
+  async function refreshStatus(connected=false){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){} if(!st||!Array.isArray(st.panes))return null; if(applyStatus(st,request,connected)===false)return null; await refreshChats(); hStatus(); if(window.CX) CX.render(); return st; }
   // лента активного чата — из харнесса (один источник правды для Electron, браузера и сервера); цена хода у старых реплик неизвестна
   let LOADED=null; const ONB={};
   // вводная роли при первом открытии её чата — в том числе когда чата ещё нет (место посеяно при создании проекта; Kimi UX-1 №85 п.4); движок повторно не шлёт
@@ -223,8 +222,8 @@
     const done=new Map();for(const record of r.records){const a=record.attempt;if(record.from==='harness'&&record.kind==='note'&&record.origin==='attempt'&&record.to&&record.to.length===1&&record.to[0]==='owner'&&a&&typeof a.turnInstanceId==='string'&&a.turnInstanceId&&a.done===true&&a.pane===p.id&&record.thread==='attempt:'+a.turnInstanceId&&['retry','skip','finish'].includes(a.action))done.set(a.turnInstanceId,record)}
     const notes=[...done.values()].map(record=>{const a=record.attempt,text='владелец решил: '+({retry:'повторить ход',skip:'пропустить записи прежнего хода',finish:'завершить восстановление'}[a.action]);return {role:'ai',src:'sys',who:'харнесс',pane:p.id,text,html:md(text),t:Date.parse(record.ts),attemptId:a.turnInstanceId}});
     S.chat=S.chat.filter(m=>!m.attemptId).concat(notes).sort((a,b)=>a.t-b.t);save();render();}
-  async function loadChat(){ if(!H.on||PAGE!=='chat') return; const p=H.pane, cid=p?(H.active||{})[p.id]:null,binding=sendBinding();
-    if(!cid){ S.chat=[]; save(); LOADED=cid||'none';renderWaiting();render();await loadAttemptNotes(p,binding);if(!bindingCurrent(binding))return;if(p&&!p.busy) await onboardOnce(p); return; }
+  async function loadChat({onboard=true,visible=false}={}){ if(!H.on||PAGE!=='chat'&&!(visible&&cols().length)) return; const p=H.pane, cid=p?(H.active||{})[p.id]:null,binding=sendBinding();
+    if(!cid){ S.chat=[]; save(); LOADED=cid||'none';renderWaiting();render();await loadAttemptNotes(p,binding);if(!bindingCurrent(binding))return;if(onboard&&p&&!p.busy) await onboardOnce(p); return; }
     if(LOADED!==cid){S.chat=[];save();render()}
     let r=null; try{ r=await api('/api/chats/'+cid); }catch(e){} if(!r||!Array.isArray(r.messages)){ return; }
     const who=p.id==='room'?'Без роли':paneName(p);
@@ -232,7 +231,7 @@
     if(!bindingCurrent(binding)) return;
     S.chat=r.messages.map(m=>m.role==='me'?{role:'me',text:m.text,t:(m.ts||0)*1000}:{role:'ai',src:hsys(m)?'sys':'live',who:hsys(m)?(/контекст передан/.test(m.text)?'харнесс · передача':'харнесс · вводная'):(m.role==='peer'?'сосед':who),pane:p.id,model:typeof m.model==='string'&&m.model?m.model:null,html:md(m.text.replace(/^\[от [^\]]+\]\s*/,'')),text:m.text,t:(m.ts||0)*1000,cost:{i:m.usage&&m.usage.input,o:m.usage&&m.usage.output,c:m.usage&&m.usage.cacheRead,ms:m.durationMs}});   // цена и модель — из реплики, не из настройки чата
     LOADED=cid;save();renderWaiting();render();await loadAttemptNotes(p,binding);if(!bindingCurrent(binding))return;
-    if(p.id!=='room'&&!r.messages.length&&!p.busy) await onboardOnce(p); }   // роль без вводной получает её при первом открытии чата (правило движка)
+    if(onboard&&p.id!=='room'&&!r.messages.length&&!p.busy) await onboardOnce(p); }   // роль без вводной получает её при первом открытии чата (правило движка)
   // подключение к движку на всех экранах: боковая панель, настройки, подключения живут его данными (08.10)
   async function hConnect(){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)){ return; }   /* движок подключён, если статус есть — даже без единого места: иначе чистая машина (первый запуск) остаётся в демо-режиме и проект создать нельзя */
     if(applyStatus(st,request,true)===false)return;H.connected=true;if(window.HARNESS_BOOT)window.HARNESS_BOOT.accept(); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
@@ -1025,6 +1024,20 @@
     NOW.es.onerror=()=>{ const st=document.querySelector('.frame .top .st'); if(st) st.innerHTML='<i></i>связь потеряна · переподключение…'; }; }
   document.addEventListener('click',async e=>{ const b=e.target.closest('[data-ap-decision]'); if(!b||PAGE!=='now'||!H.on) return; e.preventDefault(); e.stopPropagation(); const li=b.closest('[data-ap]'); if(!li) return;
     let r=null; try{ r=await api('/api/approve',{pane:li.dataset.apPane,id:li.dataset.ap,decision:b.dataset.apDecision}); }catch(x){} if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; } toast(b.dataset.apDecision==='allow'?'Разрешено':'Отказано'); NOW.cards.delete(li.dataset.apPane+'|'+li.dataset.ap); nowDraw(); },true);
+  // TS-09a.1: one lifecycle for all prototype pages.
+  function suspendPage(){pageGeneration++;PS.alive=false;PS.generation++;JR.epoch++;JR.loadingMore=false}
+  async function resumePage(){const generation=++pageGeneration;leftPage=false;invalidateBinding();if(window.HARNESS_BOOT){window.HARNESS_BOOT.invalidate();window.HARNESS_BOOT.preview()}
+    H.snapshotOnly=true;PS.alive=true;sectionChanging();SP.generation++;JR.epoch++;S.chat=[];H.cur=null;H.asks={};SEL=null;LOADED=null;S.ui.openChat=null;
+    if(S.pending){S.draft=S.draft||S.pending.text;S.pending=null}save();render();
+    const status=await refreshStatus(true);if(leftPage||generation!==pageGeneration)return false;
+    if(!status){PS.error='Не удалось подтвердить проект после возврата. Повторите чтение или перезагрузите страницу.';PS.loading=false;sectionDraw();toast(PS.error);return false}
+    if(cols().length){const pane=H.pane?H.pane.id:'room';if(S.ui.pane!==pane){invalidateBinding();S.ui.pane=pane;save()}
+      await loadChat({onboard:false,visible:true});if(leftPage||generation!==pageGeneration)return false;
+    }
+    H.connected=true;if(window.HARNESS_BOOT)window.HARNESS_BOOT.accept();liveFirstPaint();if(PAGE==='log')void journalFetch();return true;
+  }
+  addEventListener('pageshow',event=>{if(event.persisted)return resumePage()});
+  // End TS-09a.1 page lifecycle.
   window.LIVE={stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting};   // для cx.js (поле ввода)
   // ── запуск
   composer(); restoreUI(); wireSearch(); refresh();restoreLiveSnapshot(); sideChats();

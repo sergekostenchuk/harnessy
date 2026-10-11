@@ -15,6 +15,7 @@
   const boot=window.HARNESS_BOOT={snapshot,
     capture(){return Object.freeze({generation,request:++requested})},
     current(token){return !!token&&token.generation===generation&&Number.isSafeInteger(token.request)&&token.request>0&&token.request<=requested&&token.request>=confirmed},
+    invalidate(){generation++},
     select(project){if(typeof project==='string'){generation++;switching=true;write(PROJECT,project)}},
     confirm(project,token){if(!boot.current(token)||typeof project!=='string'||switching&&read(PROJECT)!==project)return false;confirmed=token.request;switching=false;write(PROJECT,project);return true},
     save(status,chats,projects,pins){if(!status||typeof status.project!=='string'||!Array.isArray(status.panes)||!Array.isArray(chats))return;
