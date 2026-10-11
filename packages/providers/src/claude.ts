@@ -27,8 +27,13 @@ async function readOauthLogin(env:NodeJS.ProcessEnv,signal:AbortSignal):Promise<
 export function claudeUsage(raw:unknown,now=Date.now()/1000,plan:string|null=null):ProviderLimits{
  const invalid:ProviderLimits={ok:false,code:'limits_invalid',reason:'Claude: неполный ответ лимитов подписки'};
  if(!record(raw)||!('five_hour'in raw)||!('seven_day'in raw))return invalid;
- const windows:LimitWindow[]=[];
- for(const [key,name,minutes] of [['five_hour','5 ч',300],['seven_day','неделя',10080],['seven_day_sonnet','неделя · Sonnet',10080],['seven_day_opus','неделя · Opus',10080],['seven_day_oauth_apps','неделя · приложения',10080],['seven_day_cowork','неделя · Cowork',10080]] as const){
+ const windows:LimitWindow[]=[],specs:[string,string,number][]=[['five_hour','5 ч',300],['seven_day','неделя',10080]];
+ for(const key of Object.keys(raw).filter(key=>key.startsWith('seven_day_'))){
+ const model=key.slice('seven_day_'.length);if(model.length>48||!/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(model))return invalid;
+ const name=model==='oauth_apps'?'приложения':model.split('_').map(part=>part[0]!.toUpperCase()+part.slice(1)).join(' ');
+ specs.push([key,'неделя · '+name,10080]);
+ }
+ for(const [key,name,minutes] of specs){
  const value=raw[key];if(value===null||value===undefined)continue;
  if(!record(value)||typeof value.utilization!=='number'||!Number.isFinite(value.utilization)||value.utilization<0||value.utilization>100||!(value.resets_at===null||typeof value.resets_at==='string'))return invalid;
  const resetsAt=value.resets_at===null?null:Date.parse(value.resets_at)/1000;if(resetsAt!==null&&(!Number.isFinite(resetsAt)||resetsAt<=0))return invalid;
@@ -160,8 +165,9 @@ export class ClaudeProvider implements Provider {
  try{
  const response=await waitWithSignal(()=>this.deps.usageFetch('https://api.anthropic.com/api/oauth/usage',{headers:{Authorization:'Bearer '+login.token,'anthropic-beta':'oauth-2025-04-20',Accept:'application/json'},redirect:'error',signal:stop}),stop);
  if(response.status===401||response.status===403)return {ok:false,code:'limits_auth',reason:'Claude: вход по подписке истёк или недоступен'};
- if(response.status===429)return {ok:false,code:'limits_rate_limited',reason:'Claude: сервис лимитов просит повторить позже'};
- if(!response.ok)return {ok:false,code:'limits_unavailable',reason:'Claude: сервис лимитов временно недоступен'};
+ const retry=response.headers.get('retry-after'),delay=retry===null?NaN:/^\d+$/.test(retry.trim())?Number(retry):Math.ceil((Date.parse(retry)-Date.now())/1000),retryAfterSeconds=Number.isFinite(delay)&&delay>=0?delay:undefined;
+ if(response.status===429)return {ok:false,code:'limits_rate_limited',reason:'Claude: сервис лимитов просит повторить позже',...(retryAfterSeconds!==undefined?{retryAfterSeconds}:{})};
+ if(!response.ok)return {ok:false,code:'limits_unavailable',reason:'Claude: сервис лимитов временно недоступен',...(response.status>=500&&retryAfterSeconds!==undefined?{retryAfterSeconds}:{})};
  return claudeUsage(await waitWithSignal(()=>response.json(),stop),Date.now()/1000,login.plan);
  }catch{return {ok:false,code:stop.aborted?'limits_timeout':'limits_unavailable',reason:stop.aborted?'Claude: чтение лимитов отменено или превысило время ожидания':'Claude: сервис лимитов временно недоступен'}}
  }

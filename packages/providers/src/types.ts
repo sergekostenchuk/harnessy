@@ -5,7 +5,14 @@ export interface Seat { id:string; vendor:Vendor; label:string; model:string; mo
 export interface Usage {input:number|null;output:number|null;cacheRead:number|null}
 export interface LimitWindow {label:string;percentUsed:number;resetsAt:number|null;windowMinutes:number}
 export type LimitsCode='limits_unsupported'|'limits_not_applicable'|'limits_auth'|'limits_rate_limited'|'limits_unavailable'|'limits_invalid'|'limits_timeout'|'limits_storage';
-export type ProviderLimits={ok:true;plan:string|null;windows:LimitWindow[];fetchedAt:number;source:string}|{ok:false;code:LimitsCode;reason:string};
+export interface LimitCredits {hasCredits:boolean;unlimited:boolean;balance:number|null}
+export function limitCredits(raw:unknown):LimitCredits|null {
+ if(!record(raw)||typeof raw.hasCredits!=='boolean'||raw.unlimited!==undefined&&typeof raw.unlimited!=='boolean')return null;
+ const balance=typeof raw.balance==='string'&&/^\d+(?:\.\d+)?$/.test(raw.balance)?Number(raw.balance):raw.balance;
+ if(!(balance===null||balance===undefined||typeof balance==='number'&&Number.isFinite(balance)&&balance>=0)||raw.hasCredits&&!raw.unlimited&&balance==null)return null;
+ return {hasCredits:raw.hasCredits,unlimited:raw.unlimited===true,balance:typeof balance==='number'?balance:null};
+}
+export type ProviderLimits={ok:true;plan:string|null;windows:LimitWindow[];fetchedAt:number;source:string;credits?:LimitCredits;resetCredits?:number}|{ok:false;code:LimitsCode;reason:string;retryAfterSeconds?:number};
 export function limitPlan(value:unknown):string|null {const plans:Record<string,string>={max:'Max',pro:'Pro',plus:'Plus',team:'Team',business:'Business',enterprise:'Enterprise',edu:'Edu',free:'Free',go:'Go'};return typeof value==='string'&&Object.hasOwn(plans,value.toLowerCase())?plans[value.toLowerCase()]!:null}
 export type TurnEvent =
  | {type:'delta';text:string}|{type:'tool';name:string;detail:string}|{type:'toolError';text:string}

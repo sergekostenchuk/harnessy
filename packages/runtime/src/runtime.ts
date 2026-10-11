@@ -42,7 +42,7 @@ export class Runtime {
  }
  get project():ProjectState{if(!this.current||this.current.closed)throw new RuntimeError('project_closed','проект закрыт');return this.current}
  get registry(){return this.project.registry}get owner(){return this.project.owner}get journal(){return this.project.journal}get channel(){return this.project.channel}get lineErrors(){return [...this.project.lineErrors]}get halted(){return this.project.halted}
- private quota(p:ProjectState){let store=this.quotas.get(p);if(!store){store=new LimitsStore(p.dir,this.clock,this.deps.providers,()=>{if(!p.closed)p.bus.publish('owner',{type:'limits',...store!.snapshot()})});this.quotas.set(p,store)}return store}
+ private quota(p:ProjectState){let store=this.quotas.get(p);if(!store){store=new LimitsStore(p.dir,this.clock,this.deps.providers,()=>{if(!p.closed)p.bus.publish('owner',{type:'limits',...store!.snapshot()})},this.deps.limitsCacheDir);this.quotas.set(p,store)}return store}
  limitsSnapshot(){return this.quota(this.project).snapshot()}
  async limits(){const p=this.project,store=this.quota(p);await store.refresh();this.same(p);return store.snapshot()}
  private provider(vendor:Vendor|'human'){const provider=vendor==='human'?null:this.deps.providers[vendor];if(!provider)throw new RuntimeError('no_provider','нет провайдера: '+vendor,503);return provider}
