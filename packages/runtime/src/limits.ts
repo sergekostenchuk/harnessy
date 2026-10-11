@@ -31,7 +31,8 @@ export class LimitsStore {
  windows:value?.windows.map(w=>({...w,resetsIn:w.resetsAt===null?null:Math.max(0,w.resetsAt-now)}))??[],...(value?.credits?{credits:value.credits}:{}),...(value?.resetCredits!==undefined?{resetCredits:value.resetCredits}:{}),nextAttemptAt:this.nextAttempts.get(vendor)??null,stale:!value||!!code||now-value.fetchedAt>900,...(code?{code,reason:labels[vendor]+': '+reasons[code]}:{})}})}
  }
  private adopt(row:SharedSnapshot,notify=true){if(this.closed)return;const vendor=row.vendor,before=JSON.stringify([this.values.get(vendor),this.errors.get(vendor),this.nextAttempts.get(vendor)]);
- if(row.value)this.values.set(vendor,row.value);else this.values.delete(vendor);if(row.code)this.errors.set(vendor,row.code);else this.errors.delete(vendor);this.nextAttempts.set(vendor,nextAttempt(row));
+ // A pending or failed attempt may have no shared measurement; only explicit non-applicability clears the last one.
+ const previous=this.values.get(vendor);if(row.code==='limits_not_applicable')this.values.delete(vendor);else if(row.value&&(!previous||row.value.fetchedAt>=previous.fetchedAt))this.values.set(vendor,row.value);if(row.code)this.errors.set(vendor,row.code);else this.errors.delete(vendor);this.nextAttempts.set(vendor,nextAttempt(row));
  if(notify&&before!==JSON.stringify([this.values.get(vendor),this.errors.get(vendor),this.nextAttempts.get(vendor)])){this.persist();this.revision=++nextLimitsRevision;this.publish()}
  }
  async refresh(vendor?:Vendor,afterTurn=false){if(this.closed)return;if(vendor&&afterTurn)this.turns.set(vendor,this.clock.now()/1000);await Promise.all((vendor?[vendor]:Object.keys(this.providers) as Vendor[]).map(v=>this.refreshVendor(v,afterTurn)))}

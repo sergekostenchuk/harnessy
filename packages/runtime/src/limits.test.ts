@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,mkdirSync,existsSync,symlinkSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,existsSync,symlinkSync,unlinkSync} from 'node:fs';
 import {join} from 'node:path';
 import type {ProviderLimits} from '@harnessy/providers';
 import {LimitsStore} from './limits.ts';
@@ -81,4 +81,28 @@ test('215: Codex credits survive both caches and a failed refresh without invent
 
 test('215: Codex credits persist in the project snapshot and survive reload without adding a five-hour window',async t=>{
  const h=await harness(t),clock=h.clock,provider=Object.assign(new FakeProvider('codex'),{limits:async():Promise<ProviderLimits>=>({ok:true,plan:'Pro',source:'fixture-secret',fetchedAt:clock.now()/1000,windows:[{label:'неделя',percentUsed:21,windowMinutes:10080,resetsAt:null}],credits:{hasCredits:true,unlimited:false,balance:62500},resetCredits:2})});const store=new LimitsStore(h.dir,clock,{codex:provider},()=>{},join(h.dir,'limits-cache'));t.after(()=>store.close());await store.refresh();const next=new LimitsStore(h.dir,clock,{codex:provider},()=>{},join(h.dir,'limits-cache'));t.after(()=>next.close());const row=next.snapshot().providers[0]!;assert.equal(row.credits!.balance,62500);assert.equal(row.resetCredits,2);assert.equal(row.windows.length,1);assert.equal(row.windows[0]!.windowMinutes,10080);assert.doesNotMatch(readFileSync(join(h.dir,'.harness/state/limits.json'),'utf8'),/fixture-secret/);
+});
+
+for(const code of ['limits_rate_limited','limits_unavailable'] as const)test(`214 r2: an empty peer reservation and ${code} preserve the project measurement and credits until success or not_applicable`,async t=>{
+ const clock=new FakeClock(),a=await harness(t,{deps:{clock}}),b=await harness(t,{deps:{clock}}),dir=join(a.dir,'shared-new-cache'),path=join(a.dir,'.harness/state/limits.json');
+ const measured={ok:true as const,plan:'Pro',source:'fixture',fetchedAt:clock.now()/1000,windows:[{label:'неделя',percentUsed:42,windowMinutes:10080,resetsAt:null}],credits:{hasCredits:true,unlimited:false,balance:62500},resetCredits:2};
+ const gate=deferred<ProviderLimits>();let reads=0,result:ProviderLimits=measured;const provider=Object.assign(new FakeProvider('codex'),{limits:async()=>{reads++;return reads===2?gate.promise:result}});
+ const seed=new LimitsStore(a.dir,clock,{codex:provider},()=>{},dir);await seed.refresh();seed.close();const saved=JSON.parse(readFileSync(path,'utf8')).providers[0];
+ unlinkSync(join(dir,'codex.json'));const active=new LimitsStore(a.dir,clock,{codex:provider},()=>{},dir);t.after(()=>active.close());
+ const peer=new LimitsStore(b.dir,clock,{codex:provider},()=>{},dir);t.after(()=>peer.close());const pending=peer.refresh();await until(()=>reads===2);
+ const opened=new LimitsStore(a.dir,clock,{codex:provider},()=>{},dir);t.after(()=>opened.close());const during=opened.snapshot().providers[0]!,duringDisk=JSON.parse(readFileSync(path,'utf8')).providers;
+ gate.resolve({ok:false,code,reason:'fixture-secret'});await pending;await Promise.all([active.refresh(),opened.refresh()]);
+ assert.equal(during.windows[0]?.percentUsed,42);assert.equal(during.credits?.balance,62500);assert.equal(during.resetCredits,2);assert.equal(during.fetchedAt,measured.fetchedAt);assert.deepEqual(duringDisk,[saved]);
+ for(const store of [active,opened]){const row=store.snapshot().providers[0]!;assert.equal(row.status,'unavailable');assert.equal(row.code,code);assert.equal(row.windows[0]?.percentUsed,42);assert.equal(row.credits?.balance,62500);assert.equal(row.resetCredits,2);assert.equal(row.fetchedAt,measured.fetchedAt);assert.equal(row.nextAttemptAt,clock.now()/1000+300);assert.equal(row.stale,true)}
+ assert.deepEqual(JSON.parse(readFileSync(path,'utf8')).providers,[saved]);assert.equal(reads,2);const reopened=new LimitsStore(a.dir,clock,{codex:provider},()=>{},dir);t.after(()=>reopened.close());assert.equal(reopened.snapshot().providers[0]!.credits?.balance,62500);
+ clock.advance(300000);result={...measured,fetchedAt:clock.now()/1000,windows:[{...measured.windows[0]!,percentUsed:17}],credits:{...measured.credits,balance:60000},resetCredits:1};await peer.refresh();await opened.refresh();let row=opened.snapshot().providers[0]!;assert.equal(row.status,'ok');assert.equal(row.windows[0]?.percentUsed,17);assert.equal(row.credits?.balance,60000);assert.equal(row.resetCredits,1);
+ const revision=opened.snapshot().revision;clock.advance(300000);result={ok:false,code:'limits_not_applicable',reason:''};await peer.refresh();await opened.refresh();row=opened.snapshot().providers[0]!;assert.equal(row.status,'not_applicable');assert.deepEqual(row.windows,[]);assert.equal(row.credits,undefined);assert.equal(row.resetCredits,undefined);assert.equal(row.fetchedAt,null);assert.equal(opened.snapshot().updatedAt,null);assert.ok(opened.snapshot().revision>revision);assert.deepEqual(JSON.parse(readFileSync(path,'utf8')).providers,[]);
+ const cleared=new LimitsStore(a.dir,clock,{codex:provider},()=>{},dir);t.after(()=>cleared.close());assert.equal(cleared.snapshot().providers[0]!.status,'not_applicable');assert.deepEqual(cleared.snapshot().providers[0]!.windows,[]);assert.equal(reads,4);
+});
+
+test('214 r2: an older shared measurement retained by a failed peer cannot replace newer project data',async t=>{
+ const h=await harness(t),clock=h.clock,dir=join(h.dir,'older-shared'),path=join(h.dir,'.harness/state/limits.json');let result:ProviderLimits={ok:true,plan:'Pro',source:'fixture',fetchedAt:clock.now()/1000,windows:[{label:'неделя',percentUsed:18,windowMinutes:10080,resetsAt:null}],credits:{hasCredits:true,unlimited:false,balance:1},resetCredits:0};
+ const provider=Object.assign(new FakeProvider('codex'),{limits:async()=>result}),seed=new LimitsStore(h.dir,clock,{codex:provider},()=>{},dir);await seed.refresh();seed.close();clock.advance(300000);result={ok:false,code:'limits_unavailable',reason:''};const peer=new LimitsStore(h.dir,clock,{codex:provider},()=>{},dir);await peer.refresh();peer.close();
+ const latest={vendor:'codex',plan:'Pro',fetchedAt:clock.now()/1000,windows:[{label:'неделя',percentUsed:42,windowMinutes:10080,resetsAt:null}],credits:{hasCredits:true,unlimited:false,balance:62500},resetCredits:2};writeFileSync(path,JSON.stringify({version:1,project:h.dir,providers:[latest]}));
+ const opened=new LimitsStore(h.dir,clock,{codex:provider},()=>{},dir);t.after(()=>opened.close());await opened.refresh();const row=opened.snapshot().providers[0]!;assert.equal(row.code,'limits_unavailable');assert.equal(row.fetchedAt,latest.fetchedAt);assert.equal(row.windows[0]?.percentUsed,42);assert.equal(row.credits?.balance,62500);assert.equal(row.resetCredits,2);assert.deepEqual(JSON.parse(readFileSync(path,'utf8')).providers,[latest]);
 });
