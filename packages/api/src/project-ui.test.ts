@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,mkdtempSync,mkdirSync,realpathSync,rmSync} from 'node:fs';
+import {readFileSync,mkdtempSync,mkdirSync,realpathSync,rmSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {ProjectRegistry,initProject} from '@harnessy/projects';
@@ -157,4 +157,29 @@ for(const window of ['create-reply','status-reply'])test('83 ОКНА: new rolel
  const entered=deferred(),gate=deferred<any>();let hold=true;
  const v=ui(async path=>{if(hold&&path===(window==='create-reply'?'/api/chats/new':'/api/status')){entered.resolve();return gate.promise}return path==='/api/chats'?{chats:[]}:{pins:[],ok:true,chat:{id:'created'}}});
  await v.functions.sideChats();const clicking=v.document.querySelector('[data-new-room]')!.emit('click');await entered.promise;v.functions.invalidateBinding();v.H.project='/projects/b';v.functions.sendBinding();v.functions.invalidateBinding();v.H.project='/projects/a';v.functions.sendBinding();hold=false;gate.resolve(window==='create-reply'?{ok:true,chat:{id:'created'}}:{project:'/projects/a',panes:[{id:'room',model:'w1',label:'без роли'}],activeChats:{room:'created'},defaultDir:'/home/no-project'});await clicking;assert.equal(v.context.location.href,'');assert.equal(v.requests.some(r=>r.path==='/api/chats/open'),false);
+});
+
+for(const page of ['new','chat'])test('172/186: '+page+' pins saved chats via HTTP once and removes missing targets from the pinned list',async t=>{
+ const h=await fixture(t);h.runtime.roomSet({model:'w1'},OWNER);const chat=(await call(h.api,'/api/chats/new',{body:{pane:'room',carry:'none'}})).body.chat;
+ const gate=deferred(),seen=deferred();let hold=true;const v=ui(async(path,body)=>{if(path==='/api/pins'&&body&&hold){seen.resolve();await gate.promise}return (await call(h.api,path,{body})).body});v.context.PAGE=page;await v.functions.refreshStatus();await v.functions.sideChats();assert.match(v.document.querySelector('.ps-pins')!.textContent,/закреплённых пока нет/);
+ const pin=v.document.querySelector('[data-pin-toggle="chat"][data-chat-id="'+chat.id+'"]')!;assert.ok(pin);const first=pin.emit('click');await seen.promise;await pin.emit('click');gate.resolve();await first;assert.equal(v.requests.filter(r=>r.path==='/api/pins'&&r.body).length,1);assert.equal(v.requests.find(r=>r.path==='/api/pins'&&r.body)!.body.on,true);assert.match(v.toasts.at(-1)!,/Закреплено/);assert.equal(v.document.querySelectorAll('.ps-pins [data-pin-chat]').length,1);
+ hold=false;delete h.runtime.project.state.chats.chats[chat.id];await v.document.querySelector('.ps-pins [data-pin-toggle="chat"]')!.emit('click');assert.equal((await call(h.api,'/api/pins')).body.pins.length,0);assert.match(v.document.querySelector('.ps-pins')!.textContent,/закреплённых пока нет/);assert.equal(h.provider.calls.length,0);
+ const denied=await call(h.api,'/api/pins',{body:{kind:'folder',path:h.dir,on:true,project:'/other'}});assert.equal(denied.status,409);assert.equal((await call(h.api,'/api/pins')).body.pins.length,0);
+});
+
+test('172/186: pin identity includes project; read failure retains evidence and late writes have no false receipt',async()=>{
+ const other={kind:'chat',path:'/projects/b',chat:'same',name:'b',title:'Other project',current:false};let broken=false,hold=false;const gate=deferred<any>(),seen=deferred();
+ const v=ui(async(path,body)=>{if(path==='/api/chats')return {chats:[{id:'same',pane:'room',title:'Current conversation',active:true}]};if(path==='/api/pins'&&body){if(hold){seen.resolve();return gate.promise}return {ok:false,error:'write failed'}}return broken?{ok:false,error:'cannot read pins'}:{pins:[other]}});await v.functions.sideChats();
+ const currentPin=v.document.querySelector('.ps-folders [data-pin-toggle="chat"]')!;assert.equal(currentPin.dataset.pinOn,'1');assert.equal(v.document.querySelector('.ps-pins [data-pin-toggle="chat"]')!.dataset.pinOn,'0');await currentPin.emit('click');assert.match(v.toasts.at(-1)!,/write failed/);assert.equal(v.document.querySelectorAll('.ps-pins [data-pin-chat]').length,1);
+ broken=true;await v.functions.sideChats();assert.match(v.document.querySelector('.ps-pins')!.textContent,/не прочитаны/);assert.match(v.document.querySelector('.ps-pins')!.textContent,/Other project/);assert.equal(v.document.querySelector('.ps-folders [data-pin-toggle="chat"]')!.disabled,true);broken=false;await v.document.querySelector('[data-pins-refresh]')!.emit('click');assert.equal(v.document.querySelector('.ps-folders [data-pin-toggle="chat"]')!.disabled,false);
+ hold=true;const old=v.document.querySelector('.ps-folders [data-pin-toggle="chat"]')!.emit('click');await seen.promise;const before=v.toasts.length;v.H.project='/projects/b';v.H.confirmedProjectGeneration=1;v.H.project='/projects/a';v.H.confirmedProjectGeneration=2;gate.resolve({ok:true,on:true,pins:[other]});await old;assert.equal(v.toasts.length,before);assert.equal(v.document.querySelector('.ps-folders [data-pin-toggle="chat"]')!.dataset.pinOn,'1');
+});
+
+test('TS-15e r2/1: damaged pin storage returns a typed HTTP error, preserves bytes and the sidebar snapshot until retry',async t=>{
+ const h=await fixture(t),file=join(h.dir,'pins.json');assert.deepEqual((await call(h.api,'/api/pins')).body.pins,[]);
+ await call(h.api,'/api/pins',{body:{kind:'folder',path:h.dir,on:true}});const saved=readFileSync(file),v=ui(async(path,body)=>(await call(h.api,path,{body})).body);await v.functions.refreshStatus();await v.functions.sideChats();assert.equal(v.document.querySelectorAll('.ps-pins [data-pin-folder]').length,1);
+ const damaged='[{"kind":"folder","path":"/saved-evidence",';writeFileSync(file,damaged);
+ for(const body of [undefined,{kind:'folder',path:join(h.dir,'missing-target'),on:false,project:h.dir},{kind:'folder',path:h.dir,on:true,project:h.dir}]){const r=await call(h.api,'/api/pins',{body});assert.equal(r.status,409);assert.equal(r.body.code,'pins_unreadable');assert.equal(readFileSync(file,'utf8'),damaged)}
+ await v.functions.sideChats();assert.match(v.document.querySelector('.ps-pins')!.textContent,/не прочитаны/);assert.doesNotMatch(v.document.querySelector('.ps-pins')!.textContent,/закреплённых пока нет/);assert.equal(v.document.querySelectorAll('.ps-pins [data-pin-folder]').length,1);assert.equal(v.document.querySelector('.ps-pins [data-pin-toggle]')!.disabled,true);
+ writeFileSync(file,saved);await v.document.querySelector('[data-pins-refresh]')!.emit('click');assert.equal(v.document.querySelector('[data-pins-refresh]'),null);assert.equal(v.document.querySelector('.ps-pins [data-pin-toggle]')!.disabled,false);await v.document.querySelector('.ps-pins [data-pin-toggle]')!.emit('click');assert.deepEqual((await call(h.api,'/api/pins')).body.pins,[]);
 });

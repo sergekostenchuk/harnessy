@@ -68,9 +68,10 @@ export function metaRoutes(r:Runtime):Route[]{return [
  return json({ok:true,project:p.dir,providers,routes:ROUTES})
  }},
  {method:'POST',path:'/api/connections/route',handle:async({body})=>{
+ const p=r.project;if(body.project!==undefined&&body.project!==p.dir)throw new RuntimeError('project_changed','проект сменился',409);
  const v=string(body.provider);if(v!=='claude'&&v!=='codex')return json({ok:false,error:'маршрут задаётся только провайдерам, чьи процессы запускает движок: claude, codex'},400);
  const {processRestartNeeded:_,...route}=await r.setRoute(v,{route:string(body.route)||'direct',proxy:string(body.proxy),iface:string(body.iface),label:string(body.label),expect:string(body.expect)},OWNER);
- return json({ok:true,provider:v,route,applies:route.route==='iface'?'только проверка выхода: трафик идёт системным маршрутом':'со следующего хода'})
+ sameProject(r,p);return json({ok:true,project:p.dir,provider:v,route,applies:route.route==='iface'?'только проверка выхода: трафик идёт системным маршрутом':'со следующего хода'})
  }},
- {method:'POST',path:'/api/connections/check',handle:async({body})=>{const v=string(body.provider);if(v!=='claude'&&v!=='codex')return json({ok:false,error:'проверка выхода: claude или codex'},400);const p=r.project,check=await r.connections.check(v);sameProject(r,p);return json({ok:true,provider:v,check,route:r.connections.get(v)})}}
+ {method:'POST',path:'/api/connections/check',handle:async({body})=>{const p=r.project;if(body.project!==undefined&&body.project!==p.dir)throw new RuntimeError('project_changed','проект сменился',409);const v=string(body.provider);if(v!=='claude'&&v!=='codex')return json({ok:false,error:'проверка выхода: claude или codex'},400);const check=await r.connections.check(v);sameProject(r,p);return json({ok:true,project:p.dir,provider:v,check,route:r.connections.get(v)})}}
 ]}

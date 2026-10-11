@@ -15,7 +15,7 @@ export function ownerRoutes(r:Runtime):Route[]{return [
  {method:'POST',path:'/api/chats/:id/orchestrator',style:'J',handle:async({params,body})=>json(await r.promoteChat(params.id!,body,OWNER))},
  {method:'GET',path:'/api/chats/:id',style:'E',handle:({params})=>json(r.chatGet(params.id!,OWNER))},
  {method:'GET',path:'/api/pins',handle:()=>json(r.pinsGet(OWNER))},
- {method:'POST',path:'/api/pins',handle:async({body})=>json(await r.pinSet(body,OWNER))},
+ {method:'POST',path:'/api/pins',handle:async({body})=>{if(body.project!==undefined&&body.project!==r.project.dir)throw new RuntimeError('project_changed','проект сменился',409);return json(await r.pinSet(body,OWNER))}},
  {method:'GET',path:'/api/settings',handle:()=>json(r.settingsGet(OWNER))},
  {method:'POST',path:'/api/settings',handle:async({body})=>json(await r.settingsPatch(body.scope,body.patch,OWNER))},
  {method:'GET',path:'/api/context/:id',handle:({params})=>r.registry.get(params.id!)?json(r.context(params.id!)):json({ok:false,error:'нет такого места'},404)},
