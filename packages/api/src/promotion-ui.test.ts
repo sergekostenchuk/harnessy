@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {setImmediate as immediate} from 'node:timers/promises';
 import {fixture,call,OWNER,deferred} from './test-helpers.ts';
@@ -54,4 +54,25 @@ test('154 UI: repeat from partially materialized role uses saved documents and c
 
 test('154 UI: promotion on the new-chat page survives applyStatus selecting room, then navigates to the promoted chat',async t=>{
  const h=await fixture(t),v=await ui(h,undefined,{page:'new'}),id=v.H.active.room;await v.click('composer');await v.settle();await h.runtime.idle();assert.equal(v.context.location.href,'01-chat.html');assert.equal(v.S.ui.pane,'orchestrator');assert.equal(v.H.active.orchestrator,id);assert.equal(v.S.ui.fresh,false);
+});
+
+for(const nextChoice of ['other','back','pagehide'])test('154 ОКНА: executed POST reply cannot undo '+nextChoice+' through the real api/boot boundary',async t=>{
+ const h=await fixture(t),v=await ui(h),storage=new Map<string,string>(),entered=deferred(),release=deferred();
+ await h.runtime.settingsPatch('owner',{projectsRoot:h.dir+'/projects'},OWNER);v.H.noProject=true;
+ Object.assign(v.context,{rememberLive(){},sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,value:string)=>storage.set(k,value)}});
+ const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');runInContext(proto.slice(0,proto.indexOf('/* LIVE_BOOT_END */')),v.context);
+ const boot=v.context.HARNESS_BOOT;boot.select(h.dir);boot.confirm(h.dir,boot.capture());let sections=0;
+ v.context.sectionChanging=()=>{sections++};
+ v.context.fetch=async(path:string,opts?:{body:string})=>{const response=await call(h.api,path,opts?{body:JSON.parse(opts.body)}:{});if(path.endsWith('/orchestrator')){await h.runtime.idle();entered.resolve();await release.promise}return {json:async()=>response.body}};
+ runInContext('globalThis.api=(()=>{'+part(live,'  const api=','  // TS-07: waiting controls')+'return api;})();',v.context);
+ const promoting=v.context.LIVE.promoteConversation(v.find('.live-acts'),v.context.LIVE.sendBinding());await entered.promise;
+ if(nextChoice==='pagehide')await v.window.emit('pagehide');
+ else {
+  const next=h.dir+'/other-project';mkdirSync(next);v.context.LIVE.invalidateBinding();assert.equal((await v.context.api('/api/project',{path:next})).ok,true);await v.context.refreshStatus(true);
+  if(nextChoice==='back'){v.context.LIVE.invalidateBinding();assert.equal((await v.context.api('/api/project',{path:h.dir})).ok,true);await v.context.refreshStatus(true)}
+ }
+ const selected=storage.get('harnessy-live-project-v1'),statusToken=boot.capture(),sectionCount=sections,project=v.H.project;
+ release.resolve();assert.equal(await promoting,false);assert.equal(storage.get('harnessy-live-project-v1'),selected);assert.equal(sections,sectionCount);assert.equal(v.H.project,project);
+ if(nextChoice!=='pagehide'){assert.equal(boot.confirm(project,statusToken),true);assert.equal((await v.context.refreshStatus(true)).project,project)}
+ assert.equal(h.provider.calls.length,1);
 });

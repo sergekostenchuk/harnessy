@@ -56,13 +56,22 @@
 
   // ── мост к харнессу: если страницу отдал сам харнесс (~/HARNESS, :3777), чат идёт к настоящей модели по подписке, ответ — потоком событий
   const H={on:false,panes:[],pane:null,cur:null,asks:{}};
-  const api=(p,body)=>{if(body&&H.snapshotOnly)return Promise.resolve({ok:false,code:'live_pending',error:'движок ещё не подтвердил проект'});const project=H.project,changing=!!body&&/^\/api\/(?:project(?:\/create)?|room\/move|assign|chats\/[^/]+\/orchestrator)$/.test(p);if(changing)H.projectLinkChange=true; return fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined).then(r=>r.json()).then(r=>{
-    if(changing&&(!r.ok||r.project===project))H.projectLinkChange=false;
-    if(changing&&r.ok&&typeof r.project==='string'&&window.HARNESS_BOOT)window.HARNESS_BOOT.select(r.project);
-    if(changing&&r.ok&&r.project!==project&&typeof sectionChanging==='function')sectionChanging();
-    if(r.waiting&&(r.project||project)===H.project){ const id=typeof r.pane==='string'?r.pane:(r.pane&&r.pane.id)||body&&body.pane||(p.match(/^\/api\/panes\/([^/]+)/)||[])[1]; const pane=(H.panes||[]).find(x=>x.id===id); if(pane){ pane.waiting=r.waiting; showWaiting(pane,r.waiting,r.project||project); } }
-    if(r.code==='restore_failed'&&r.project===H.project) showRestore(r.project,r.error);
-    return r; }).catch(error=>{if(changing)H.projectLinkChange=false;throw error}); };
+  const api=(()=>{let projectGeneration=0;return (p,body)=>{
+    if(body&&H.snapshotOnly)return Promise.resolve({ok:false,code:'live_pending',error:'движок ещё не подтвердил проект'});
+    const project=H.project,changing=!!body&&/^\/api\/(?:project(?:\/create)?|room\/move|assign|chats\/[^/]+\/orchestrator)$/.test(p);
+    if(changing){projectGeneration++;H.projectLinkChange=true}
+    const generation=projectGeneration,navigation=typeof bindingNavigation==='number'?bindingNavigation:null;
+    const current=()=>generation===projectGeneration&&(navigation===null||navigation===bindingNavigation)&&(typeof leftPage==='undefined'||!leftPage);
+    return fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:undefined).then(r=>r.json()).then(r=>{
+      if(!current())return {ok:false,code:'binding_changed',error:'Привязка изменилась; ответ относится к прежнему выбору'};
+      if(changing&&(!r.ok||r.project===project))H.projectLinkChange=false;
+      if(changing&&r.ok&&typeof r.project==='string'&&window.HARNESS_BOOT)window.HARNESS_BOOT.select(r.project);
+      if(changing&&r.ok&&r.project!==project&&typeof sectionChanging==='function')sectionChanging();
+      if(r.waiting&&(r.project||project)===H.project){ const id=typeof r.pane==='string'?r.pane:(r.pane&&r.pane.id)||body&&body.pane||(p.match(/^\/api\/panes\/([^/]+)/)||[])[1]; const pane=(H.panes||[]).find(x=>x.id===id); if(pane){ pane.waiting=r.waiting; showWaiting(pane,r.waiting,r.project||project); } }
+      if(r.code==='restore_failed'&&r.project===H.project) showRestore(r.project,r.error);
+      return r;
+    }).catch(error=>{if(changing&&current())H.projectLinkChange=false;throw error});
+  }})();
   // TS-07: waiting controls bind the click to the displayed project and episode.
   const warningSeen=new Set();
   function warningEvent(ev){ if(!ev.warning) return false; const key=H.project+'\u0000'+ev.pane+'\u0000'+ev.warning; if(warningSeen.has(key)) return true; warningSeen.add(key); return false; }

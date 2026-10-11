@@ -1,6 +1,6 @@
 import {existsSync,realpathSync,statSync,readFileSync} from 'node:fs';
 import {join,relative,isAbsolute,sep} from 'node:path';
-import {withPathLock,loadTeam,addSeatLocked,ensureSeatFileLocked,canonicalPath,MODE_IDS,type PathLock,type Mode,type Vendor} from '@harnessy/team';
+import {withPathLock,loadTeam,readManifest,addSeatLocked,ensureSeatFileLocked,canonicalPath,MODE_IDS,type PathLock,type Mode,type Vendor} from '@harnessy/team';
 import {initProject,projectsRoot,projectNameFrom} from '@harnessy/projects';
 import {transcriptText,promotionIntro} from '@harnessy/context';
 import type {Initiator} from '@harnessy/journal';
@@ -22,7 +22,7 @@ interface Promotion {
 }
 function invalid(text='сохранённое повышение не читается'):never {throw new RuntimeError('promotion_invalid',text,409)}
 function parse(raw:unknown):Promotion {
- if(!object(raw)||typeof raw.id!=='string'||!/^c[0-9a-f]+$/.test(raw.id)||raw.sid!=='orchestrator'||typeof raw.target!=='string'||!isAbsolute(raw.target)||typeof raw.root!=='string'||!Number.isSafeInteger(raw.boundary)||Number(raw.boundary)<0||typeof raw.done!=='boolean'||!object(raw.input)||!object(raw.source)||!object(raw.source.chat)||typeof raw.source.pane!=='string'||typeof raw.source.cwd!=='string'||typeof raw.source.chat.id!=='string'||!Array.isArray(raw.source.chat.transcript)||raw.boundary!==raw.source.chat.transcript.length||typeof raw.model!=='string'||!raw.model||!['claude','codex'].includes(String(raw.vendor))||!MODE_IDS.includes(raw.mode as Mode)||typeof raw.intro!=='string')invalid();
+ if(!object(raw)||typeof raw.id!=='string'||!/^c[0-9a-f]+$/.test(raw.id)||typeof raw.sid!=='string'||raw.sid.length>31||!/^orchestrator(?:[1-9][0-9]*)?$/.test(raw.sid)||typeof raw.target!=='string'||!isAbsolute(raw.target)||typeof raw.root!=='string'||!Number.isSafeInteger(raw.boundary)||Number(raw.boundary)<0||typeof raw.done!=='boolean'||!object(raw.input)||!object(raw.source)||!object(raw.source.chat)||typeof raw.source.pane!=='string'||typeof raw.source.cwd!=='string'||typeof raw.source.chat.id!=='string'||!Array.isArray(raw.source.chat.transcript)||raw.boundary!==raw.source.chat.transcript.length||typeof raw.model!=='string'||!raw.model||!['claude','codex'].includes(String(raw.vendor))||!MODE_IDS.includes(raw.mode as Mode)||typeof raw.intro!=='string')invalid();
  const i=raw.input;if(typeof i.project!=='string'||!Number.isSafeInteger(i.revision)||!Array.isArray(i.documents)||!i.documents.every(d=>object(d)&&typeof d.project==='string'&&typeof d.path==='string')||typeof i.task!=='string'||typeof i.createProject!=='boolean')invalid();
  const op=raw as unknown as Promotion;if(op.source.pane!=='room'||op.source.chat.pane!=='room'||typeof op.source.chat.carry!=='string'||!isAbsolute(op.input.project)||!isAbsolute(op.root)||!isAbsolute(op.source.cwd)||op.input.revision<0||op.input.documents.length>50||op.source.chat.promotion!==undefined||!op.source.chat.transcript.every(m=>object(m)&&typeof m.role==='string'&&typeof m.text==='string'&&typeof m.ts==='number'))invalid();return deepFreeze(op);
 }
@@ -44,6 +44,11 @@ function existing(p:ProjectState,op?:Promotion){const seat=Object.values(p.team?
  }
  if(seat&&!own)throw new RuntimeError('orchestrator_exists','В проекте уже есть оркестратор. Откройте существующий разговор.',409,{fields:{pane:seat.id,chat:p.state.chats.active[seat.id]??null}});
  return seat;
+}
+function availableSid(p:ProjectState):string {
+ const seats=readManifest(join(p.dir,'.harness')).get('seats') as Map<string,unknown>;
+ const occupied=new Set([...seats.keys(),...p.registry.ids,...Object.values(p.state.chats.chats).map(c=>c.pane)]);
+ let sid='orchestrator',n=1;while(occupied.has(sid))sid='orchestrator'+(++n);return sid;
 }
 function save(p:ProjectState,c:Chat,op:Promotion){c.promotion=jsonClone(op);p.state.savePanes(p.registry,p.journal)}
 function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,op:Promotion){
@@ -106,7 +111,7 @@ export async function promoteChat(runtime:Runtime,id:string,args:PromotionInput,
  const assertSource=()=>{same(runtime,p);p.state.sync(p.registry);if(c.revision!==revision||source&&(p.registry.get(source.id)!==source||p.state.chats.active[source.id]!==c.id)||source?.revision!==oldPaneRevision)throw new RuntimeError('stale_chat','разговор изменился во время повышения',409)};
  let result:ReturnType<typeof reply>;
  try{
-  await withPathLock(p.dir,lock=>{assertSource();verifyDocuments(op.input.documents);if(c.promotion===undefined){p.team=loadTeam(join(p.dir,'.harness'));if(op.target===p.dir)existing(p);p.materializing.add(op.source.pane);save(p,c,op)}else save(p,c,op);p.materializing.add(op.source.pane);if(op.target===p.dir)result=reply(p,materialize(runtime,p,lock,op),op,false)});if(op.target!==p.dir)assertSource();
+  await withPathLock(p.dir,lock=>{assertSource();verifyDocuments(op.input.documents);if(c.promotion===undefined){p.team=loadTeam(join(p.dir,'.harness'));if(op.target===p.dir){existing(p);op=parse({...op,sid:availableSid(p)})}p.materializing.add(op.source.pane);save(p,c,op)}else save(p,c,op);p.materializing.add(op.source.pane);if(op.target===p.dir)result=reply(p,materialize(runtime,p,lock,op),op,false)});if(op.target!==p.dir)assertSource();
   if(op.target!==p.dir){
    const validatePath=()=>{assertSource();if(runtime.projectPath(op.target,op.root)!==op.target)throw new RuntimeError('project_changed','целевая папка изменилась',409)};validatePath();await initProject(op.target,{orchestrator:false,git:true},{validatePath,...(runtime.deps.gitops?{gitops:runtime.deps.gitops}:{})});assertSource();
    await runtime.openProject(op.target,{expected:p,deferPumps:true,initialize:next=>withPathLock(next.dir,lock=>{const chat=materialize(runtime,next,lock,op);result=reply(next,chat,op,false)})});
