@@ -50,7 +50,7 @@ export async function chatsNew(runtime:Runtime,input:{pane?:unknown;carry?:unkno
    if(pane.status!=='idle')throw new RuntimeError('recovering','ответ модели сохранён; завершается восстановление доставки');
    const snapshot=jsonClone(p.state.chats),saved={sessionId:pane.sessionId,transcript:pane.transcript,carry:pane.carry,seen:pane.seen};
    try {
-    p.state.sync(p.registry);
+    if(old)p.state.sync(p.registry);
     if(pane.id!=='room'){if(carry==='summary'&&old?.transcript.length)old.closed=Math.floor(runtime.clock.now()/1000);else carryText=closeChat(p,pane,carry)}
     const c=p.state.newChat(pane,carryText);p.state.savePanes(p.registry,p.journal);done=true;return {ok:true as const,chat:meta(p,c),pane:pane.settings(),carried:!!carryText};
    }catch(e){p.state.chats=snapshot;Object.assign(pane,saved);throw e}

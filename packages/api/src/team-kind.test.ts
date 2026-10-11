@@ -27,6 +27,18 @@ for(const entrance of ['projectCreate','roomMove'])test('102: '+entrance+' creat
  if(entrance==='projectCreate'){await call(h.api,'/api/room',{body:{model:'w2'}});assert.equal(r.project.state.chats.active.room,id);assert.equal((await call(h.api,'/api/chats/'+id)).body.chat.model,'w2')}
 });
 
+test('83/r2: first POST chats/new in a project with a team and no room saves exactly one room chat',async t=>{
+ const h=await fixture(t),r=h.runtime;assert.equal(r.registry.get('room'),null);
+ const before=(await call(h.api,'/api/chats')).body;assert.equal(before.chats.some((c:any)=>c.pane==='room'),false);
+ const added=await call(h.api,'/api/chats/new',{body:{pane:'room',carry:'none'}});assert.equal(added.status,200,added.text);const id=added.body.chat.id;
+ const list=(await call(h.api,'/api/chats')).body,rooms=list.chats.filter((c:any)=>c.pane==='room');assert.equal(rooms.length,1);assert.equal(rooms[0].id,id);assert.equal(rooms[0].active,true);assert.equal(rooms[0].closed,null);assert.equal(rooms[0].model,null);assert.equal(rooms[0].messages,0);assert.deepEqual(list.chats.filter((c:any)=>c.pane!=='room'),before.chats);
+ const disk=JSON.parse(readFileSync(r.project.state.chatsPath,'utf8'));assert.deepEqual(Object.values(disk.chats).filter((c:any)=>c.pane==='room').map((c:any)=>c.id),[id]);assert.equal(disk.active.room,id);
+ await r.closeProject();await r.openProject(h.dir);assert.equal(r.project.state.chats.active.room,id);assert.equal((await call(h.api,'/api/chats')).body.chats.filter((c:any)=>c.pane==='room').length,1);
+ r.registry.get('room')!.record('me','Сохранить в первом разговоре.');
+ const second=await call(h.api,'/api/chats/new',{body:{pane:'room',carry:'none'}});assert.equal(second.status,200);assert.notEqual(second.body.chat.id,id);assert.equal(second.body.chat.messages,0);
+ const after=(await call(h.api,'/api/chats')).body;assert.equal(after.chats.filter((c:any)=>c.pane==='room').length,2);assert.equal(after.active.room,second.body.chat.id);assert.equal((await call(h.api,'/api/chats/'+id)).body.messages[0].text,'Сохранить в первом разговоре.');assert.equal(h.provider.calls.length,0);
+});
+
 test('83/102: a saved empty conversation with model:null restores its own unselected state after another chat selected a model',async t=>{
  const h=await fixture(t),path=join(h.dir,'empty');await call(h.api,'/api/project/create',{body:{path,git:false}});const r=h.runtime,first=r.project.state.chats.active.room!;
  const created=await call(h.api,'/api/chats/new',{body:{pane:'room',carry:'none'}});assert.equal(created.status,200);assert.equal(created.body.chat.model,null);assert.notEqual(created.body.chat.id,first);

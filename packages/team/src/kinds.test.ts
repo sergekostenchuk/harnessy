@@ -42,3 +42,17 @@ test('153: free role names select the verified kind template; merge roles reject
 test('153: a manifest cannot masquerade a team participant as the reserved roleless room',async t=>{
  const {h,file}=await setup(t);writeFileSync(file,'seats: {room: {kind: orchestrator, role: юрист, vendor: claude}}');assert.throws(()=>loadTeam(h),(e:unknown)=>e instanceof TeamError&&e.code==='team_invalid'&&e.message.includes('room зарезервировано'));
 });
+
+test('153/r2: legacy and explicit addSeat cannot duplicate an orchestrator with a domain role',async t=>{
+ const {h,file}=await setup(t);writeFileSync(file,'seats: {lead: {kind: orchestrator, role: юрист, vendor: claude, model: w1}}');const original=readFileSync(file);
+ for(const input of [{role:'orchestrator'},{kind:'orchestrator' as const,role:'юрист'}]){
+  await assert.rejects(addSeat(h,{...input,vendor:'claude',model:'w1',mode:'read'}),(e:unknown)=>e instanceof TeamError&&e.code==='role_taken');assert.deepEqual(readFileSync(file),original);
+ }
+ assert.deepEqual(Object.keys(loadTeam(h).seats),['lead']);
+});
+
+test('153/r2: a worker named orchestrator does not occupy the orchestrator kind for legacy addSeat',async t=>{
+ const {h,file}=await setup(t);writeFileSync(file,'seats: {legal: {kind: worker, role: orchestrator, label: Оркестратор, vendor: claude, model: w1}}');
+ const added=await addSeat(h,{role:'orchestrator',vendor:'claude',model:'w1',mode:'read'});assert.equal(added.kind,'orchestrator');assert.equal(added.id,'orchestrator');
+ const team=loadTeam(h);assert.equal(team.seats.legal!.kind,'worker');assert.deepEqual(Object.values(team.seats).filter(s=>s.kind==='orchestrator').map(s=>s.id),[added.id]);
+});
