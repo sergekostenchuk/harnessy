@@ -8,10 +8,10 @@ import {fixture,call,deferred,until} from './test-helpers.ts';
 const read=(path:string)=>readFileSync(new URL('../../../'+path,import.meta.url),'utf8');
 const live=read('ui/deploy/live.js'),set=read('ui/deploy/set.js');
 function part(source:string,start:string,end:string){const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return source.slice(a,b)}
-function settingsUi(fetch?:(path:string,body?:any)=>Promise<any>){
+function settingsUi(fetch?:(path:string,body?:any)=>Promise<any>,project='/projects/p1'){
  const d=dom('<div class="frame cur"><div class="main"><div class="top"><span class="st"></span><div class="r"></div></div><div class="set"></div></div></div>'),storage=new Map<string,string>(),writes:string[]=[],toasts:string[]=[],logs:any[]=[],requests:any[]=[],hooks:any[]=[];let pending=0;
  Object.assign(d.document,{documentElement:d.html,body:d.body});
- const H:any={on:true,project:'/projects/p1',panes:[{id:'worker',model:'w1',role:'executor',mode:'read',label:'воркер'}],modes:[{id:'read',label:'Чтение'},{id:'edit',label:'Правка'}],roleCatalog:[],models:{claude:[{id:'w1'}]}};
+ const H:any={on:true,project,panes:[{id:'worker',model:'w1',role:'executor',mode:'read',label:'воркер'}],modes:[{id:'read',label:'Чтение'},{id:'edit',label:'Правка'}],roleCatalog:[],models:{claude:[{id:'w1'}]}};
  const responses=(path:string)=>path==='/api/status'?{project:H.project,policy:{path:'policy'},team:{path:'team'}}:path==='/api/settings'?{ok:true,owner:{},project:{},effective:{defaultMode:'read'}}:{ok:true,providers:[]};
  const L:any={H,esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),toast:(s:string)=>toasts.push(s),log:(...a:any[])=>logs.push(a),paneName:(p:any)=>p.label,refreshStatus:async()=>{},api:async(path:string,body?:any)=>{requests.push({path,body});pending++;try{return await (fetch?fetch(path,body):responses(path))}finally{pending--}}};
  const context:any={LIVE:L,H,S:{ui:{set:{t:[0,0,0,0,0,0],s:[1,1,1]}},chat:[]},PAGE:'set',document:d.document,location:{pathname:'/06-settings.html',host:'127.0.0.1:3794',hash:'',href:''},history:{pushState(_a:any,_b:any,hash:string){context.location.hash=hash}},
@@ -45,6 +45,20 @@ test('111: confirmed project setting comes from actual HTTP saved shape; navigat
  await v.find('[data-pick-mode]').emit('click');await v.find('.live-menu [data-k="1"]').emit('click');await v.ready();
  assert.equal(h.runtime.settings.effective().defaultMode,'edit');assert.match(v.find('.rcpt').textContent,/✓ проект .*действует со следующего назначения/);assert.equal(v.logs.length,1);assert.equal(v.writes.length,0);
  await v.go('look');await v.go('rights');assert.match(v.find('.rcpt').textContent,/✓ проект/);assert.doesNotMatch(v.find('.rcpt').textContent,/сегодня|каждой роли/);
+});
+
+test('TS-10 r2: a settings GET begun before a confirmed HTTP write cannot roll back its receipt',async t=>{
+ const h=await fixture(t),arrived=deferred(),release=deferred();let delayed=true;t.after(()=>release.resolve());
+ const v=settingsUi(async(path,body)=>{
+  const response=await call(h.api,path,body?{body}:{});
+  if(path==='/api/settings'&&!body&&delayed){delayed=false;arrived.resolve();await release.promise}
+  return response.body;
+ },h.dir);
+ await arrived.promise;await v.go('rights');await v.find('[data-pick-mode]').emit('click');await v.find('.live-menu [data-k="1"]').emit('click');
+ await until(()=>v.find('.rcpt').textContent.includes('✓ проект'));
+ const confirmed=v.find('.rcpt').textContent;assert.match(confirmed,/✓ проект/);assert.equal(h.runtime.settings.effective().defaultMode,'edit');assert.equal(v.logs.length,1);
+ release.resolve();await v.ready();assert.equal(v.find('.rcpt').textContent,confirmed);assert.match(v.find('[data-pick-mode]').textContent,/Правка/);assert.equal(v.logs.length,1);
+ await v.window.emit('live:status');await v.ready();assert.match(v.find('.rcpt').textContent,/✓ проект/);assert.match(v.find('[data-pick-mode]').textContent,/Правка/);assert.equal(v.logs.length,1);
 });
 
 for(const response of [{ok:false,error:'denied'},{ok:true},{ok:true,scope:'project',saved:[],effective:{}}])test('111: refused or incomplete setting response cannot produce a success receipt '+JSON.stringify(response),async()=>{

@@ -27,6 +27,13 @@ test('114/126: missing file is empty; malformed file or analytic turn gives type
  rmSync(path);const empty=await call(h.api,'/api/spend');assert.equal(empty.status,200);assert.equal(empty.body.totals.turns,0);assert.equal(empty.body.totals.averageDurationMs,null);assert.deepEqual(empty.body.byModel,[]);assert.equal(JSON.stringify(h.runtime.project.state.chats),memory);
 });
 
+for(const invalid of [Buffer.from([0xff]),Buffer.from([0xe2,0x82]),Buffer.from([0xc0,0xaf])])test('TS-10 r2: invalid UTF-8 '+invalid.toString('hex')+' cannot become a counted turn',async t=>{
+ const h=await fixture(t);await h.runtime.runTurn('worker','kept');const path=h.runtime.project.state.chatsPath,memory=JSON.stringify(h.runtime.project.state.chats),bytes=readFileSync(path),needle=Buffer.from('готов: worker'),index=bytes.indexOf(needle);assert.ok(index>=0);
+ const damaged=Buffer.concat([bytes.subarray(0,index),invalid,bytes.subarray(index+Buffer.byteLength('г'))]);writeFileSync(path,damaged);
+ const response=await call(h.api,'/api/spend');assert.equal(response.status,409);assert.equal(response.body.ok,false);assert.equal(response.body.code,'spend_unreadable');assert.match(response.body.error,/^chats.json не читается:/);assert.equal(response.body.totals,undefined);
+ assert.deepEqual(readFileSync(path),damaged);assert.equal(JSON.stringify(h.runtime.project.state.chats),memory);
+});
+
 for(const period of ['', '0','007','week','7&period=30'])test('126: invalid period '+JSON.stringify(period)+' is a typed 400',async t=>{
  const h=await fixture(t),r=await call(h.api,'/api/spend?period='+period);assert.equal(r.status,400);assert.deepEqual(r.body,{ok:false,code:'period_invalid',error:'period: ожидается 7, 30, 90 или all'});
 });

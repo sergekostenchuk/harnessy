@@ -23,7 +23,7 @@ export async function spend(runtime:Runtime,query:URLSearchParams){
  const raw=query.get('period')??'all';if(query.getAll('period').length>1||!['7','30','90','all'].includes(raw))throw new RuntimeError('period_invalid','period: ожидается 7, 30, 90 или all',400);
  const period=raw as Period,p=runtime.project,now=runtime.clock.now(),since=period==='all'?null:(now-Number(period)*86_400_000)/1000;
  let data:unknown;
- try{data=parseCompat(await readFile(join(p.dir,'.harness','state','chats.json'),'utf8'))}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')data={chats:{}};else throw new RuntimeError('spend_unreadable','chats.json не читается: '+text(error),409)}
+ try{data=parseCompat(new TextDecoder('utf-8',{fatal:true}).decode(await readFile(join(p.dir,'.harness','state','chats.json'))))}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')data={chats:{}};else throw new RuntimeError('spend_unreadable','chats.json не читается: '+text(error),409)}
  if(p.closed||runtime.project!==p)throw new RuntimeError('project_changed','проект сменился',409);
  const fail=(reason:string):never=>{throw new RuntimeError('spend_unreadable','chats.json не читается: '+reason,409)};
  if(!object(data)||!object(data.chats))return fail('неверная форма');

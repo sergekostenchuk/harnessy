@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,mkdirSync,readFileSync,readdirSync,symlinkSync,writeFileSync} from 'node:fs';
+import {existsSync,mkdirSync,readFileSync,readdirSync,renameSync,symlinkSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {RuntimeError} from '@harnessy/runtime';
 import {fixture,call,OWNER,deferred} from './test-helpers.ts';
@@ -15,6 +15,16 @@ for(const route of ['/api/project','/api/project/create','/api/room/move'])for(c
  const response=await call(h.api,route,{body:{path,create:true,git:true,model:'w1'}});
  assert.equal(response.status,400);assert.deepEqual(response.body,error);assert.equal(h.runtime.project,original);assert.equal(original.closed,false);assert.deepEqual(snapshot(root),before);assert.equal(h.provider.calls.length,0);
  if(route==='/api/room/move'){const opened=await call(h.api,route,{body:{path}});assert.equal(opened.status,400);assert.deepEqual(opened.body,error);assert.deepEqual(snapshot(root),before)}
+});
+
+for(const route of ['/api/project','/api/project/create','/api/room/move'])test('TS-10 r2: '+route+' rejects a directory replaced with the projects root while closing',async t=>{
+ const h=await fixture(t),root=join(h.dir,'projects-root'),target=join(h.dir,'valid-project');mkdirSync(root);mkdirSync(target);writeFileSync(join(root,'keep'),'исходные байты');
+ await h.runtime.settingsPatch('owner',{projectsRoot:root},OWNER);h.runtime.roomSet({model:'w1'},OWNER);const before=snapshot(root);
+ const entered=deferred(),release=deferred(),close=h.provider.close.bind(h.provider);let once=true;t.after(()=>release.resolve());
+ h.provider.close=async()=>{if(once){once=false;entered.resolve();await release.promise}return close()};
+ const opening=call(h.api,route,{body:{path:target,create:true,git:false,model:'w1'}});await entered.promise;
+ renameSync(target,target+'-original');symlinkSync(root,target);release.resolve();const response=await opening;
+ assert.equal(response.status,400);assert.deepEqual(response.body,error);assert.deepEqual(snapshot(root),before);assert.equal(existsSync(join(root,'.harness')),false);assert.equal(h.provider.calls.length,0);
 });
 
 test('118/127: missing root cannot be materialized; child projects and root navigation remain available',async t=>{

@@ -58,7 +58,7 @@
     if(!same(b)||generation!==loadGeneration) return; CONN=connections; if(cur==='profile') render(); }
   async function projectSetting(patch,b){ let r=null; try{ r=await api('/api/settings',{scope:'project',patch}); }catch(x){} if(!same(b)){ toast('Проект сменился — настройка относится к прежнему проекту'); return false; }
     if(!r||!r.ok||r.scope!=='project'||!r.saved||typeof r.saved!=='object'||Array.isArray(r.saved)||!r.effective||typeof r.effective!=='object'||Array.isArray(r.effective)){ toast('Не вышло: '+esc((r&&r.error)||'нет подтверждения сохранённой настройки')); return false; }
-    SET={...(SET||{}),project:r.saved,effective:r.effective,applies:r.applies}; return true; }
+    loadGeneration++; SET={...(SET||{}),project:r.saved,effective:r.effective,applies:r.applies}; return true; }
   // ── действия
   document.addEventListener('click',async e=>{ const disabled=e.target.closest('[data-set-disabled]'); if(disabled){ e.preventDefault(); e.stopImmediatePropagation(); toast(disabled.title); return; }
     const tl=e.target.closest('[data-set-local]'); if(tl){ e.preventDefault(); e.stopImmediatePropagation(); const on=!tl.classList.contains('on'); tl.classList.toggle('on',on); document.documentElement.classList.toggle('less-motion',on); try{ localStorage.setItem('harnessy-less-motion',on?'1':'0'); }catch(x){} toast(on?'Меньше анимации: включено':'Анимация: как обычно'); L.log('настройка','Меньше анимации: '+(on?'включено':'выключено')); return; }

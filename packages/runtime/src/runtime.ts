@@ -12,7 +12,7 @@ import {execFileSync} from 'node:child_process';
 import {realpathSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {ensureLine,loadTeam,instructionsFor,canonicalPath,type Vendor} from '@harnessy/team';
+import {ensureLineLocked,withPathLock,loadTeam,instructionsFor,canonicalPath,type Vendor} from '@harnessy/team';
 import {Journal,Channel,Policy,JournalError,pythonTrim,type AgentPostInput,type Initiator,type Record_,type DeliveryEntry,type ChannelEvent} from '@harnessy/journal';
 import {openProjectGit,writableRoots,Connections,ProjectRegistry,Settings,Pins,gitops} from '@harnessy/projects';
 import {digest,roleNote,contextCard} from '@harnessy/context';
@@ -54,7 +54,8 @@ export class Runtime {
  return this.changeProject(()=>this.openProjectLocked(dir,options))
  }
  private async openProjectLocked(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean;roomModel?:string}):Promise<void> {
- if(options.expected)this.same(options.expected);const path=realpathSync(this.projectPath(dir)),roomModel=options.roomModel||this.current?.registry.get('room')?.model;await this.closeProjectLocked();const generation=++this.generation,harness=await ensureLine(path),lineErrors:string[]=[];let team=null,policy=null;
+ if(options.expected)this.same(options.expected);const path=realpathSync(this.projectPath(dir)),roomModel=options.roomModel||this.current?.registry.get('room')?.model;await this.closeProjectLocked();
+ const generation=++this.generation,harness=await withPathLock(path,lock=>ensureLineLocked(lock,this.projectPath(path))),lineErrors:string[]=[];let team=null,policy=null;
  try{team=loadTeam(harness);lineErrors.push(...team.warnings)}catch(e){lineErrors.push(message(e))}
  try{policy=new Policy(join(harness,'comms-policy.yaml'))}catch(e){lineErrors.push(message(e))}
  let registry!:Registry,owner!:Pane;
