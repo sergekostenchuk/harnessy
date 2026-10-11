@@ -88,3 +88,36 @@ test('156: retry of a partly created team preserves the first participant answer
  const retried=await h.post('/api/seats',{...ref,seats:[{...member('Подмена'),mode:'all'}]});assert.equal(retried.body.ok,true,JSON.stringify(retried.body));assert.equal(h.runtime.project.state.chats.active[first.sid],fresh.body.chat.id);assert.deepEqual(h.runtime.project.state.chats.chats[first.operationId]!.transcript,old);
  await until(()=>h.provider.calls.some(c=>c.seat.id===second.sid));assert.equal(h.provider.calls.filter(c=>c.seat.id===first.sid).length,1);assert.equal(h.runtime.registry.get(second.sid)!.label,'Второй юрист');assert.equal(h.runtime.registry.get(second.sid)!.mode,'read');
 });
+
+for(const update of [false,true])for(const cut of ['intent','question','receipt'])test('156 round 2: exact propose retry after durable '+cut+(update?' while updating':'')+' resumes one proposal/version',async t=>{
+ let armed=false,writes=0;const io:StateIO={...diskIO,write(path,text){diskIO.write(path,text);if(armed&&path.endsWith('team-proposals.json')&&++writes===(cut==='receipt'?2:1)&&cut!=='question'){armed=false;throw Error('persisted before failure')}}};
+ const h=await setup(t,{deps:{stateIO:io}}),first=update?await h.propose():null,body={...(first?{proposalId:first.proposalId,version:first.version}:{}),seats:[member(update?'Новая версия':'Юрист')]};
+ const append=h.runtime.journal.append.bind(h.runtime.journal);h.runtime.journal.append=input=>{const out=append(input);if(armed&&cut==='question'&&input.origin==='team-proposal'){armed=false;throw Error('question persisted before failure')}return out};
+ armed=true;const failed=await h.post('/api/seats/propose',body);assert.equal(failed.body.ok,false);
+ const persisted=JSON.parse(readFileSync(join(h.dir,'.harness/state/team-proposals.json'),'utf8')).proposals[0];
+ const retry=await h.propose(body);assert.equal(retry.proposalId,persisted.proposalId);assert.equal(retry.version,update?2:1);assert.deepEqual(retry.proposal.seats,persisted.seats);
+ const again=await h.propose(body);assert.equal(again.proposalId,retry.proposalId);assert.equal(again.version,retry.version);
+ const list=(await call(h.api,'/api/seats/proposals')).body;assert.equal(list.proposals.length,1);assert.equal(h.runtime.journal.read({limit:0}).filter(r=>r.origin==='team-proposal').length,update?2:1);
+});
+
+test('156 round 2: creation receipt precedes child completion; new participant can ask its creator',{timeout:10000},async t=>{
+ const {createActions}=await import('@harnessy/runtime');
+ const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: юрист, vendor: claude, model: w1, mode: read}',actions:createActions(),before:dir=>writeFileSync(join(dir,'.harness/comms-policy.yaml'),'version: 1\nroutes: [{from: "*", to: "*", kinds: "*"}]\nobserve: {}\n')}),go=deferred<any>(),entered=deferred(),receipt=deferred(),answered=deferred(),childStarted=deferred(),releaseChild=deferred();
+ let leadRuns=0,childRuns=0,childReply:any;
+ h.provider.onRun=async(seat,_message,ctx)=>{ctx.modelStarted?.();
+  if(seat.id==='lead'){ctx.registerProcessToken('lead-token');if(++leadRuns===1){entered.resolve();const ref=await go.promise;const made=await ctx.tools.createSeats(ref);assert.equal(made.ok,true);receipt.resolve();return {text:'Команда создана',sessionId:null}}return {text:'Прочитай договор поставки',sessionId:null}}
+  if(++childRuns>1)return {text:'Принято',sessionId:null};childStarted.resolve();await releaseChild.promise;
+  childReply=await ctx.tools.ask({to:'lead',text:'Какой договор читать?'});answered.resolve();return {text:childReply.ok?childReply.text:childReply.error,sessionId:null};
+ };
+ h.runtime.chat({pane:'lead',message:'Создай команду'},OWNER);await entered.promise;
+ const q=await call(h.api,'/api/seats/propose',{body:{from:'lead',seats:[member()]},headers:{'X-Pane-Token':'lead-token'}});assert.equal(q.status,200,q.text);
+ const ref={proposalId:q.body.proposalId,version:q.body.version};assert.equal((await call(h.api,'/api/seats/confirm',{body:{...ref,project:h.dir}})).status,200);go.resolve(ref);await childStarted.promise;
+ // A real child is blocked before its ask. The creator still receives its durable receipt.
+ await receipt.promise;assert.equal(Boolean(childReply),false);releaseChild.resolve();await answered.promise;await h.runtime.idle();assert.equal(childReply.ok,true);assert.match(childReply.text,/договор поставки/);assert.ok(leadRuns>=2);
+});
+
+test('156 round 2: legacy proposal derives its retry key; a stored key for different content is rejected',async t=>{
+ const h=await setup(t),q=await h.propose(),path=join(h.dir,'.harness/state/team-proposals.json'),saved=JSON.parse(readFileSync(path,'utf8'));
+ delete saved.proposals[0].requestKey;writeFileSync(path,JSON.stringify(saved));assert.equal((await h.propose()).proposalId,q.proposalId);
+ saved.proposals[0].requestKey='sha256:'+'a'.repeat(64);writeFileSync(path,JSON.stringify(saved));const reply=await h.post('/api/seats/propose',{seats:[member()]});assert.equal(reply.body.code,'proposal_invalid');assert.equal(JSON.parse(readFileSync(path,'utf8')).proposals.length,1);
+});
