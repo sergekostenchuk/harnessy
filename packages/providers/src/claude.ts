@@ -165,8 +165,9 @@ export class ClaudeProvider implements Provider {
  try{
  const response=await waitWithSignal(()=>this.deps.usageFetch('https://api.anthropic.com/api/oauth/usage',{headers:{Authorization:'Bearer '+login.token,'anthropic-beta':'oauth-2025-04-20',Accept:'application/json'},redirect:'error',signal:stop}),stop);
  if(response.status===401||response.status===403)return {ok:false,code:'limits_auth',reason:'Claude: вход по подписке истёк или недоступен'};
- if(response.status===429)return {ok:false,code:'limits_rate_limited',reason:'Claude: сервис лимитов просит повторить позже'};
- if(!response.ok)return {ok:false,code:'limits_unavailable',reason:'Claude: сервис лимитов временно недоступен'};
+ const retry=response.headers.get('retry-after'),delay=retry===null?NaN:/^\d+$/.test(retry.trim())?Number(retry):Math.ceil((Date.parse(retry)-Date.now())/1000),retryAfterSeconds=Number.isFinite(delay)&&delay>=0?delay:undefined;
+ if(response.status===429)return {ok:false,code:'limits_rate_limited',reason:'Claude: сервис лимитов просит повторить позже',...(retryAfterSeconds!==undefined?{retryAfterSeconds}:{})};
+ if(!response.ok)return {ok:false,code:'limits_unavailable',reason:'Claude: сервис лимитов временно недоступен',...(response.status>=500&&retryAfterSeconds!==undefined?{retryAfterSeconds}:{})};
  return claudeUsage(await waitWithSignal(()=>response.json(),stop),Date.now()/1000,login.plan);
  }catch{return {ok:false,code:stop.aborted?'limits_timeout':'limits_unavailable',reason:stop.aborted?'Claude: чтение лимитов отменено или превысило время ожидания':'Claude: сервис лимитов временно недоступен'}}
  }

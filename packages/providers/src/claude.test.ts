@@ -135,3 +135,8 @@ for(const model of ['', 'fable_', 'fable__extra', '<img>', 'fable-name', 'fable'
  const p=new ClaudeProvider({env:{},readOauthLogin:async()=>({token:'fixture-secret',plan:'Max'}),usageFetch:(async()=>new Response(JSON.stringify(raw),{status:200})) as typeof fetch});const result=await p.limits();assert.equal(result.ok,false);if(!result.ok)assert.equal(result.code,'limits_invalid');
 });
 test('213 r2: model names with nonempty segments and the maximum supported length remain valid',()=>{for(const model of ['fable_5', 'fable'+'x'.repeat(43)]){const r=claudeUsage({...quotaUsage,['seven_day_'+model]:{utilization:21,resets_at:null}});assert.equal(r.ok,true);if(r.ok)assert.equal(r.windows.at(-1)!.percentUsed,21)}});
+
+for(const status of [429,503])for(const format of ['seconds','date','invalid'])test('214: Claude '+status+' exposes only parsed Retry-After ('+format+')',async()=>{
+ const retry=format==='seconds'?'720':format==='date'?new Date(Date.now()+720000).toUTCString():'secret-header',p=new ClaudeProvider({env:{},readOauthLogin:async()=>({token:'fixture-secret',plan:'Max'}),usageFetch:(async()=>new Response('fixture-secret',{status,headers:{'retry-after':retry}})) as typeof fetch});
+ const result=await p.limits();assert.equal(result.ok,false);if(result.ok)return;assert.equal(result.code,status===429?'limits_rate_limited':'limits_unavailable');if(format==='invalid')assert.equal(result.retryAfterSeconds,undefined);else assert.ok(result.retryAfterSeconds!>=719&&result.retryAfterSeconds!<=720);assert.doesNotMatch(JSON.stringify(result),/fixture-secret|secret-header/);
+});

@@ -12,7 +12,7 @@ export function limitCredits(raw:unknown):LimitCredits|null {
  if(!(balance===null||balance===undefined||typeof balance==='number'&&Number.isFinite(balance)&&balance>=0)||raw.hasCredits&&!raw.unlimited&&balance==null)return null;
  return {hasCredits:raw.hasCredits,unlimited:raw.unlimited===true,balance:typeof balance==='number'?balance:null};
 }
-export type ProviderLimits={ok:true;plan:string|null;windows:LimitWindow[];fetchedAt:number;source:string;credits?:LimitCredits;resetCredits?:number}|{ok:false;code:LimitsCode;reason:string};
+export type ProviderLimits={ok:true;plan:string|null;windows:LimitWindow[];fetchedAt:number;source:string;credits?:LimitCredits;resetCredits?:number}|{ok:false;code:LimitsCode;reason:string;retryAfterSeconds?:number};
 export function limitPlan(value:unknown):string|null {const plans:Record<string,string>={max:'Max',pro:'Pro',plus:'Plus',team:'Team',business:'Business',enterprise:'Enterprise',edu:'Edu',free:'Free',go:'Go'};return typeof value==='string'&&Object.hasOwn(plans,value.toLowerCase())?plans[value.toLowerCase()]!:null}
 export type TurnEvent =
  | {type:'delta';text:string}|{type:'tool';name:string;detail:string}|{type:'toolError';text:string}
