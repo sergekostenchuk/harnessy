@@ -38,10 +38,11 @@ export function metaRoutes(r:Runtime):Route[]{return [
  {method:'GET',path:'/api/journal',handle:({query})=>{let before:number|undefined;
  if(query.has('before')){const raw=query.get('before')!;before=Number(raw);if(query.getAll('before').length!==1||!/^\d+$/.test(raw)||!Number.isSafeInteger(before)||before<=0)return json({ok:false,code:'before_invalid',error:'before: ожидается целое число больше нуля'},400)}
  let since=integer(query.get('since')??'0',NaN),limit=integer(query.get('limit')??'100',NaN);if(!Number.isFinite(since)||!Number.isFinite(limit)){since=0;limit=100}const p=r.project;
- const filters=Object.fromEntries(['kind','from','to'].map(key=>[key,query.get(key)||null]));
+ const filters=Object.fromEntries(['kind','from','to','thread'].map(key=>[key,query.get(key)||null]));
  if(['kind','from','to'].some(key=>query.getAll(key).length>1)||filters.kind&&!new Set<string>([...KINDS,...SYSTEM_KINDS]).has(filters.kind))return json({ok:false,code:'journal_filter_invalid',error:'фильтр журнала: один kind из каталога, from и to — идентификаторы участников'},400);
  const all=p.journal.read({since:Math.min(0,since),limit:0}),projectRecords=all.filter(record=>record.seq>0),counts=new Map<string,number>();for(const record of projectRecords)counts.set(record.kind,(counts.get(record.kind)||0)+1);
- const selected=all.filter(record=>record.seq>since&&(before===undefined||record.seq<before)&&(!query.get('thread')||record.thread===query.get('thread'))&&(!filters.kind||record.kind===filters.kind)&&(!filters.from||record.from===filters.from)&&(!filters.to||record.to.includes(filters.to)));
+ const matches=(value:string|null,filter:string|null|undefined)=>!filter||value!==null&&value.toLowerCase()===filter.toLowerCase();
+ const selected=all.filter(record=>record.seq>since&&(before===undefined||record.seq<before)&&matches(record.thread,filters.thread)&&(!filters.kind||record.kind===filters.kind)&&matches(record.from,filters.from)&&(!filters.to||record.to.some(to=>matches(to,filters.to))));
  if(before!==undefined)selected.sort((a,b)=>a.seq-b.seq);
  return json({project:p.dir,records:limit?selected.slice(-limit):selected,summary:{total:projectRecords.length,byKind:Object.fromEntries(counts)},lastSeq:p.journal.lastSeq,cursors:p.journal.cursors,threads:threads(p)})}},
  {method:'GET',path:'/api/connections',handle:async()=>{

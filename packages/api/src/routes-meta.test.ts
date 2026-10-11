@@ -60,3 +60,21 @@ test('168/184: journal project summary covers all records; exact filters precede
  const protocol=await call(h.api,'/api/journal?since=-1&before=1&limit=0');assert.deepEqual(protocol.body.records.map((r:{seq:number})=>r.seq),[0]);assert.deepEqual(protocol.body.summary,page.body.summary);
  assert.equal((await call(h.api,'/api/journal?kind=ack')).status,200); // persisted system records use the same filter.
 });
+
+test('209: journal from/to/thread match every case without rewriting records or widening exact matches',async t=>{
+ const h=await fixture(t);
+ h.runtime.journal.append({sender:'Owner',to:['worker','Другой'],kind:'note',thread:'Assignment:AbC',text:'first'});
+ h.runtime.journal.append({sender:'owner',to:'WORKER',kind:'note',thread:'assignment:abc',text:'second'});
+ h.runtime.journal.append({sender:'owner',to:'worker',kind:'note',thread:'assignment:abcd',text:'different thread'});
+ h.runtime.journal.append({sender:'owners',to:'worker-2',kind:'note',text:'no thread'});
+ const original=(await call(h.api,'/api/journal?limit=0')).body.records;
+ for(const [from,to,thread] of [['owner','worker','assignment:abc'],['OWNER','WORKER','ASSIGNMENT:ABC'],['OwNeR','WoRkEr','AsSiGnMeNt:aBc']]){
+  const q=new URLSearchParams({from:from!,to:to!,thread:thread!,kind:'note',limit:'0'}),r=await call(h.api,'/api/journal?'+q);assert.equal(r.status,200);assert.deepEqual(r.body.records,original.slice(0,2));assert.equal(r.body.summary.total,4);
+  q.set('before','3');q.set('since','1');assert.deepEqual((await call(h.api,'/api/journal?'+q)).body.records,original.slice(1,2));
+ }
+ assert.deepEqual((await call(h.api,'/api/journal?to='+encodeURIComponent('дРуГоЙ'))).body.records,original.slice(0,1));
+ for(const query of ['from=own','to=work','thread=assignment:ab','thread=absent'])assert.deepEqual((await call(h.api,'/api/journal?'+query)).body.records,[],query);
+ assert.deepEqual((await call(h.api,'/api/journal?from=&to=&thread=&limit=0')).body.records,original);
+ assert.deepEqual(h.runtime.journal.read({since:0,limit:0}),original);
+ assert.equal((await call(h.api,'/api/journal?kind=NOTE')).status,400,'kind remains a typed enumeration');
+});
