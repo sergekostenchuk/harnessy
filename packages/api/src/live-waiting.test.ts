@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,rmSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {createRuntime} from '@harnessy/runtime';
 import {ProviderError} from '@harnessy/providers';
@@ -22,7 +22,8 @@ function ui(options:{realFinish?:boolean}={}){
  const events=source.slice(source.indexOf('  function hEvent('),source.indexOf('  const isDirect='));
  const finish=options.realFinish?source.slice(source.indexOf('  function finish('),source.indexOf('  function hEvent('))+'\nconst originalFinish=finish;finish=ev=>{noteFinish();originalFinish(ev)};':'';
  const status=source.slice(source.indexOf('  function applyStatus('),source.indexOf('  async function refreshChats('));
- runInContext(helpers+'\n'+finish+'\n'+events+'\n'+status+'\nglobalThis.testing={api,hEvent,applyStatus,consumeState,waitingControls,showWaiting,showRestore};',context);
+ const names=source.split('\n').find(line=>line.startsWith('  const modelName='));assert.ok(names);
+ runInContext(helpers+'\n'+finish+'\n'+events+'\n'+names+'\n'+status+'\nglobalThis.testing={api,hEvent,applyStatus,consumeState,waitingControls,showWaiting,showRestore};',context);
  const functions=(context as unknown as {testing:{api(path:string,body?:unknown):Promise<unknown>;hEvent(e:unknown):void;applyStatus(st:unknown):void;consumeState(e:unknown):void;waitingControls(p:unknown,info:unknown,project:string,compact?:boolean):string;showWaiting(p:unknown,info:unknown,project:string):void;showRestore(project:string,error:string):void}}).testing;
  async function click(dataset:Record<string,string>){const button={dataset,disabled:false};let stopped=false;await listeners[0]!({target:{closest(){return button}},preventDefault(){},stopImmediatePropagation(){stopped=true}});assert.equal(stopped,true);assert.equal(button.disabled,false)}
  function sidebar(all:unknown[]){const context=createContext({H,all,pins:[],PIN:'',esc:sandbox.esc,paneName:sandbox.paneName,waitingControls:functions.waitingControls});runInContext(source.slice(source.indexOf('    const seats=(H.panes'),source.indexOf('    const projHTML='))+'\nglobalThis.sidebar=chatsHTML;',context);return String((context as unknown as {sidebar:string}).sidebar)}
@@ -72,13 +73,15 @@ test('97 window: central API refusal opens the door, delayed response of another
  view.sandbox.fetch=async()=>({json:async()=>({ok:false,code:'restore_failed',project:'/project-b',error:'назначение не восстановлено'})}) as unknown as Awaited<ReturnType<typeof view.sandbox.fetch>>;await view.functions.api('/api/chat',{pane:'worker',message:'текст'});assert.match(view.cards.get('live-waiting')!.innerHTML,/Повторить восстановление проекта/);
 });
 
-test('TS-07 r2/2: cold window exposes the owner door for an uncertain first room turn with no saved chat',async t=>{
+for(const legacy of [false,true])test('TS-07 r2/2 + TS-10/124: cold window exposes the owner door for an uncertain first room turn with '+(legacy?'no legacy chat':'an analytic turn and empty message history'),async t=>{
  const h=await fixture(t,{seats:'{}'});await call(h.api,'/api/room',{body:{model:'w1',folder:false}});
  h.provider.onRun=async(_seat,_text,ctx)=>{ctx.modelStarted?.();throw new ProviderError('transport_lost','first room result unknown')};
- assert.equal((await call(h.api,'/api/chat',{body:{pane:'room',message:'first question'}})).status,200);await h.runtime.idle();assert.equal(h.provider.calls.length,1);await h.api.close();
+ assert.equal((await call(h.api,'/api/chat',{body:{pane:'room',message:'first question'}})).status,200);await h.runtime.idle();assert.equal(h.provider.calls.length,1);const chatsPath=h.runtime.project.state.chatsPath;await h.api.close();
+ // Older projects can have only attempts.json. New failed model turns also persist chat.turns[], never a fabricated response.
+ if(legacy)rmSync(chatsPath);
  const provider=new FakeProvider(),runtime=await createRuntime({...h.deps,providers:{claude:provider}},completedActions);t.after(()=>runtime.close());
  const api=createApi({runtime,siteDir:h.siteDir,indexFile:h.indexFile,port:0});await api.listen();t.after(()=>api.close());
- const status=await call(api,'/api/status'),chats=await call(api,'/api/chats');assert.equal(chats.body.chats.length,0);const room=status.body.panes.find((p:{id:string})=>p.id==='room');assert.ok(room.waiting);
+ const status=await call(api,'/api/status'),chats=await call(api,'/api/chats');assert.equal(chats.body.chats.length,legacy?0:1);if(!legacy){assert.equal(chats.body.chats[0].messages,0);const spend=await call(api,'/api/spend');assert.equal(spend.body.totals.turns,1);assert.equal(spend.body.totals.outcomes.error,1)}const room=status.body.panes.find((p:{id:string})=>p.id==='room');assert.ok(room.waiting);
  const view=ui();view.H.on=true;view.functions.applyStatus(status.body);assert.equal(provider.calls.length,0);const card=view.cards.get('live-waiting')!;assert.ok(card);assert.match(card.innerHTML,/data-attempt-action="retry"/);assert.match(card.innerHTML,/data-attempt-action="skip"/);
  const sidebar=view.sidebar(chats.body.chats);assert.match(sidebar,/data-attempt-pane="room"/);assert.doesNotMatch(sidebar,/в проекте пока нет ролей и чатов/);
  view.sandbox.fetch=async(path,options)=>({json:async()=>(await call(api,path,{...(options?.body?{body:JSON.parse(options.body)}:{})})).body});

@@ -35,7 +35,7 @@ function moveInput(p:ProjectState,source:Chat):Chat {
  return jsonClone({...source,cwd:p.dir,sessionId:null,carry});
 }
 function transferRoom(runtime:Runtime,p:ProjectState,source:Chat,mode:string,failure:string):Pane {
- const room=makeRoomIn(p,runtime,source.model,mode,source.vendor as Vendor);if(!room)throw new RuntimeError('room_missing',failure,400);
+ const room=p.registry.get('room')??makeRoomIn(p,runtime,source.model,mode,source.vendor as Vendor);if(!room)throw new RuntimeError('room_missing',failure,400);
  const moved=source.cwd!==p.dir,copy=moved?moveInput(p,source):source;
  // The active chat of the destination folder is independent of the source chat.
  p.state.newChat(room);room.transcript=conversationHistory(copy.transcript);room.carry=copy.carry;room.sessionId=!moved&&source.vendor===room.vendor?source.sessionId:null;
@@ -44,10 +44,11 @@ function transferRoom(runtime:Runtime,p:ProjectState,source:Chat,mode:string,fai
 function initDeps(runtime:Runtime,p:ProjectState,room:Pane){return {...(runtime.deps.gitops?{gitops:runtime.deps.gitops}:{}),catalog:p.registry.models,roomModel:room.model,settings:runtime.settings.effective(),vendorOf:(model:string)=>vendorOf(p,model)}}
 export async function roomMove(runtime:Runtime,input:{path?:unknown;create?:unknown;git?:unknown},initiator:Initiator) {
  const p=owner(runtime,initiator),room=p.registry.get('room');if(!room?.model)throw new RuntimeError('room_missing','нет разговора без роли',400);
- const hold=reserve(p,[...p.registry.panes.values()],'идёт ход: переезд, когда все окна свободны',true),source=chatSnapshot(p,room),path=expandUser(pythonTrim(String(input.path||'')));
+ const requested=expandUser(pythonTrim(String(input.path||'')));if(pyTruthy(input.create)&&(!requested||!isAbsolute(requested)))throw new RuntimeError('path_invalid','нужен абсолютный путь папки',400);
+ if(!requested)throw new RuntimeError('path_invalid','папки нет: '+requested,400);
+ const path=runtime.projectPath(requested),hold=reserve(p,[...p.registry.panes.values()],'идёт ход: переезд, когда все окна свободны',true),source=chatSnapshot(p,room);
  try {
   if(pyTruthy(input.create)){
-   if(!path||!isAbsolute(path))throw new RuntimeError('path_invalid','нужен абсолютный путь папки',400);
    try{await initProject(path,{git:input.git===undefined||pyTruthy(input.git),model:room.model},initDeps(runtime,p,room))}catch(e){throw new RuntimeError('project_failed','проект не создан: '+message(e),400,{cause:e})}
   }
   same(runtime,p);if(!validDir(path))throw new RuntimeError('path_invalid','папки нет: '+path,400);

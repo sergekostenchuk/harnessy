@@ -7,6 +7,7 @@ import {RuntimeError,type Runtime,type ProjectState} from '@harnessy/runtime';
 import {CLAUDE_MODELS,CODEX_FALLBACK} from './catalog.ts';
 import {OWNER,string,integer,type Route} from './routes.ts';
 import {json,slice,text} from './responses.ts';
+import {spend} from './spend.ts';
 export function sameProject(r:Runtime,p:ProjectState):void {if(p.closed||r.project!==p)throw new RuntimeError('project_changed','проект сменился',409)}
 export const threads=(p:ProjectState)=>Object.fromEntries(p.channel.threads);
 export async function metadata(r:Runtime,connections=false){
@@ -19,6 +20,7 @@ export async function metadata(r:Runtime,connections=false){
  return {p,claude,codex,models:models.status==='fulfilled'?models.value:structuredClone(CODEX_FALLBACK)}
 }
 export function metaRoutes(r:Runtime):Route[]{return [
+ {method:'GET',path:'/api/spend',style:'J',handle:async({query})=>json(await spend(r,query))},
  {method:'GET',path:'/api/status',handle:async()=>{
  const {p,claude,codex,models}=await metadata(r);
  return json({project:p.dir,defaultDir:r.defaultDir,models:{claude:CLAUDE_MODELS,codex:models},modes:MODES,kinds:KINDS,
