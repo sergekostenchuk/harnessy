@@ -49,7 +49,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   '\nglobalThis.sidebar={expanded:projectExpanded,folder:projectFolder,toggle:toggleProjectFolder};',context);return (context as Data).sidebar as Data}
  function direct(){runInContext(part(live,"  document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]');",'  // ── переключение собеседника'),context);const listener=clicks.at(-1)!;
   return (mode:'on'|'orch')=>listener({target:{closest:(selector:string)=>selector==='[data-direct]'?{dataset:{direct:mode}}:null}}) as Promise<boolean>}
- return {H,S,ta,requests,toasts,storage,elements,rows,sandbox,context,functions,journal,sidebar,direct,clicks,pagehide,pageshow,get rendered(){return rendered}};
+ return {H,S,ta,requests,toasts,storage,elements,rows,sandbox,context,functions,journal,sidebar,direct,clicks,hidePage:()=>pagehide.forEach(fn=>fn()),showPage:(event:Data)=>Promise.all(pageshow.map(fn=>fn(event))),get rendered(){return rendered}};
 }
 
 test('81/109: real HTTP setting and send are ordered; launch uses the accepted model',async t=>{
@@ -83,7 +83,7 @@ for(const change of ['project','pane','chat','away-back','pagehide'])test('81/10
  const setting=view.functions.setSeat({model:'w2'},'Модель'),sending=view.functions.onSend('question',view.ta);await until(()=>view.requests.length===1);
  if(change==='project')view.H.project='/project-b';if(change==='pane')view.S.ui.pane='room';if(change==='chat')view.H.active.worker='chat-b';
  if(change==='away-back'){view.functions.invalidateBinding();view.S.ui.pane='room';view.functions.sendBinding();view.S.ui.pane='worker';view.functions.invalidateBinding()}
- if(change==='pagehide')view.pagehide[0]!();
+ if(change==='pagehide')view.hidePage();
  gate.resolve({});assert.equal(await setting,false);assert.equal(await sending,false);assert.equal(view.requests.length,1);assert.equal(view.ta.value,'question');assert.equal(view.S.draft,'question');assert.equal(view.H.panes[0].model,'w1');
 });
 
@@ -124,7 +124,7 @@ for(const change of ['pane','project','chat','away-back','pagehide'])test('TS-08
  if(change==='pane'){h.runtime.roomSet({model:'w1',folder:false},OWNER);view.functions.invalidateBinding();view.S.ui.pane='room';view.H.pane=view.H.panes[1]}
  if(change==='project')view.H.project='/project-b';if(change==='chat')view.H.active.orchestrator='c-other';
  if(change==='away-back'){view.functions.invalidateBinding();view.S.ui.pane='room';view.functions.sendBinding();view.S.ui.pane='orchestrator';view.H.pane=view.H.panes.at(-1);view.functions.invalidateBinding()}
- if(change==='pagehide')view.pagehide[0]!();
+ if(change==='pagehide')view.hidePage();
  history.resolve({messages:[],chat:{model:'w1'}});assert.equal(await sending,false);await h.runtime.idle();
  assert.equal(h.provider.calls.length,0);assert.equal(view.requests.filter(r=>r.path==='/api/chat').length,0);assert.equal(view.S.draft,'ONLY for orchestrator');assert.equal(view.S.chat.filter((m:Data)=>m.role==='me').length,0);
 });
@@ -263,10 +263,11 @@ function firstPaint(html:string,storage=new Map<string,string>(),page='chat'){
  Object.assign(view.sandbox.document,{documentElement:root,getElementById:(id:string)=>nodes.get(id)||null,createElement:node,body:{appendChild(el:Data){nodes.set(el.id,el)}}});
  const original=view.sandbox.document.querySelectorAll;
  view.sandbox.document.querySelectorAll=(q:string)=>q==='aside.side.ps'?[side]:q==='aside.side.ps .ps-folders'?[folders]:q==='aside.side.ps .ps-proj'?[project]:q==='.frame .top > b'?[head]:original(q);
- Object.assign(view.sandbox,{setTimeout:(fn:()=>void,ms:number)=>{timers.set(++timerId,{fn,ms});return timerId},clearTimeout:(id:number)=>timers.delete(id),sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,v:string)=>storage.set(k,v)},badges(){},limitsDraw(){},EventSource:class {},nowLive(){},journalLive(){},journalFetch:async()=>{},SP:{generation:0},JR:{epoch:0},base:(path:string)=>path.split('/').pop(),PROJ_ITEMS:[],PIN:'',PAGE:page});
+ Object.assign(view.sandbox,{setTimeout:(fn:()=>void,ms:number)=>{timers.set(++timerId,{fn,ms});return timerId},clearTimeout:(id:number)=>timers.delete(id),sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,v:string)=>storage.set(k,v)},badges(){},limitsDraw(){},EventSource:class {close(){}},nowLive(){},journalLive(){},journalFetch:async()=>{},SP:{generation:0},JR:{epoch:0},base:(path:string)=>path.split('/').pop(),PROJ_ITEMS:[],PIN:'',PAGE:page});
  view.sandbox.window=view.sandbox;view.sandbox.psKey=page;view.sandbox.location.pathname='/sketches/proto/'+(runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data)[page];view.H.on=false;view.H.panes=[];view.H.project=undefined;view.H.pane=null;
  const first=html.match(/<head>\s*<script>([\s\S]*?)<\/script>/);assert.ok(first,'first head script precedes styles and all frames');runInContext(first[1]!,view.context);
  runInContext(part(live,'  function applyStatus(','  // лента активного чата')+
+  part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+
   part(live,'  async function hConnect(','  // ── чат: настоящее')+
   part(live,'  const PROJECT_FOLD_KEY=','  async function openChatRow(')+
   part(live,'  function restoreLiveSnapshot(','  // End TS-11 snapshot.')+
@@ -398,8 +399,8 @@ test('152: all PROTO_PAGES share history return, invalidate old bindings/status,
   const old=v.boot.capture(),binding=v.functions.sendBinding(),gate=deferred<Data>(),fetch=v.sandbox.fetch;
   v.sandbox.onboardOnce=async()=>{throw Error('history return must not onboard')};
   v.sandbox.fetch=async(path:string)=>{if(['/api/status','/api/chats','/api/chats/chat-b'].includes(path)){v.requests.push({path,body:undefined});return {json:()=>path==='/api/status'?gate.promise:Promise.resolve(path==='/api/chats'?{chats:[{id:'chat-b',pane:'worker',title:'B',messages:2,active:true}],active:{worker:'chat-b'}}:{messages:[{role:'me',text:'QUESTION FROM B'},{role:'ai',text:'ANSWER FROM B',model:'w1'}]})}}return fetch(path)};
-  v.pagehide[0]!();const before=v.requests.length;await v.pageshow[0]!({persisted:false});assert.equal(v.requests.length,before,page+': ordinary pageshow is not a restore');
-  const resumed=v.pageshow[0]!({persisted:true});assert.equal(v.requests.at(-1)!.path,'/api/status');assert.equal(v.H.snapshotOnly,true,page);assert.equal(v.functions.bindingCurrent(binding),false,page);assert.equal(v.boot.current(old),false,page);
+  v.hidePage();const before=v.requests.length;await v.showPage({persisted:false});assert.equal(v.requests.length,before,page+': ordinary pageshow is not a restore');
+  const resumed=v.showPage({persisted:true});assert.equal(v.requests.at(-1)!.path,'/api/status');assert.equal(v.H.snapshotOnly,true,page);assert.equal(v.functions.bindingCurrent(binding),false,page);assert.equal(v.boot.current(old),false,page);
   assert.equal(v.H.cur,null,page);assert.equal(Object.keys(v.H.asks).length,0,page);assert.equal(v.S.pending,null,page);assert.equal(v.S.draft,'unsent draft from A',page);assert.equal(v.S.ui.openChat,null,page);for(const column of columns)assert.doesNotMatch(column.textContent,/CACHED ANSWER FROM A|OLD STREAM|OLD QUESTION/,page);
   assert.equal((await v.functions.api('/api/chat',{message:'must wait for confirmation'})).code,'live_pending',page);
   gate.resolve({...projectStatus('/returned/'+page,'Returned '+page),activeChats:{worker:'chat-b'}});await resumed;await immediate();
@@ -413,7 +414,7 @@ test('152: all PROTO_PAGES share history return, invalidate old bindings/status,
 for(const reader of ['refresh','connect'])test('152: late '+reader+' status from a hidden page cannot undo its resumed project',async()=>{
  const v=firstPaint(bootHtml,new Map(),'set'),old=deferred<Data>(),fresh=deferred<Data>();let calls=0;v.paint.apply(projectStatus('/project-a','A'),v.boot.capture(),true);
  const fetch=v.sandbox.fetch;v.sandbox.fetch=async(path:string)=>path==='/api/status'?{json:()=>++calls===1?old.promise:fresh.promise}:fetch(path);
- const pending=v.paint[reader]();v.pagehide[0]!();const restored=v.pageshow[0]!({persisted:true});fresh.resolve(projectStatus('/project-b','B'));await restored;
+ const pending=v.paint[reader]();v.hidePage();const restored=v.showPage({persisted:true});fresh.resolve(projectStatus('/project-b','B'));await restored;
  old.resolve(projectStatus('/project-a','OLD A'));await pending;
  assert.equal(v.H.project,'/project-b');assert.equal(v.H.panes[0].label,'B');assert.equal(v.storage.get('harnessy-live-project-v1'),'/project-b');assert.equal(v.H.snapshotOnly,false);
 });
@@ -427,10 +428,10 @@ test('TS-09a.1 r2: real HTTP return replaces project A feed with B history and r
   if(path===oldPath&&holdOld){oldEntered.resolve();await oldGate.promise}if(path===newPath){newEntered.resolve();await newGate.promise}return {json:async()=>result}};
  runInContext(part(live,'  // лента активного чата','  // подключение к движку'),v.context);
  v.paint.apply(a,v.boot.capture(),true);await v.functions.loadChat({onboard:false});assert.match(d.document.querySelector('.feed')!.textContent,/ANSWER FROM A/);
- holdOld=true;const pending=v.functions.loadChat({onboard:false});await oldEntered.promise;v.pagehide[0]!();
+ holdOld=true;const pending=v.functions.loadChat({onboard:false});await oldEntered.promise;v.hidePage();
  const b=join(h.dir,'project-b');mkdirSync(join(b,'.harness'),{recursive:true});writeFileSync(join(b,'.harness','team.yaml'),readFileSync(join(h.dir,'.harness','team.yaml')));
  assert.equal((await call(h.api,'/api/project',{body:{path:b}})).body.ok,true);answer='ANSWER FROM B';await h.runtime.runTurn('worker','question B');const status=(await call(h.api,'/api/status')).body;newPath='/api/chats/'+status.activeChats.worker;
- const calls=h.provider.calls.length,seq=h.runtime.journal.lastSeq,start=v.requests.length,restored=v.pageshow[0]!({persisted:true});await newEntered.promise;
+ const calls=h.provider.calls.length,seq=h.runtime.journal.lastSeq,start=v.requests.length,restored=v.showPage({persisted:true});await newEntered.promise;
  assert.equal(v.H.project,b);assert.equal(v.H.active.worker,status.activeChats.worker);assert.doesNotMatch(d.document.querySelector('.feed')!.textContent,/ANSWER FROM A|ANSWER FROM B/);assert.match(d.document.querySelector('.top > b')!.textContent,/project-b$/);
  newGate.resolve();await restored;oldGate.resolve();await pending;await h.runtime.idle();
  assert.match(d.document.querySelector('.feed')!.textContent,/ANSWER FROM B/);assert.doesNotMatch(d.document.querySelector('.feed')!.textContent,/ANSWER FROM A/);assert.equal(v.S.chat.at(-1).text,'ANSWER FROM B');assert.equal(h.provider.calls.length,calls);assert.equal(h.runtime.journal.lastSeq,seq);assert.equal(v.requests.slice(start).some(r=>r.body),false);assert.equal(v.requests.slice(start).filter(r=>r.path===newPath).length,1);
@@ -443,7 +444,7 @@ for(const current of ['no-active-chat','empty-active-chat','no-pane'])test('TS-0
  v.sandbox.fetch=async(path:string,options?:{body:string})=>{const body=options?.body?JSON.parse(options.body):undefined;v.requests.push({path,body});return {json:async()=>(await call(h.api,path,body?{body}:{})).body}};
  runInContext(part(live,'  // лента активного чата','  // подключение к движку'),v.context);
  v.paint.apply((await call(h.api,'/api/status')).body,v.boot.capture(),true);d.document.querySelector('.col')!.innerHTML='<div class="ai live-msg">OLD ANSWER</div>';v.S.chat=[{role:'ai',text:'OLD ANSWER',html:'OLD ANSWER'}];
- v.pagehide[0]!();await v.pageshow[0]!({persisted:true});await h.runtime.idle();
+ v.hidePage();await v.showPage({persisted:true});await h.runtime.idle();
  assert.doesNotMatch(d.document.querySelector('.feed')!.textContent,/OLD ANSWER/);assert.equal(v.S.chat.length,0);assert.equal(h.provider.calls.length,0);assert.equal(v.requests.some(r=>r.body||r.path==='/api/onboard'),false);
  assert.equal(v.requests.some(r=>r.path.startsWith('/api/chats/')&&!r.path.endsWith('/new')),current!=='no-pane'); // 83: a real place now has a saved empty chat even without messages.
 });
@@ -452,8 +453,8 @@ for(const change of ['pane','chat','pagehide'])test('TS-09a.1 r2: a late restore
  const v=firstPaint(bootHtml,new Map(),'chat'),d=historyDOM(v),history=deferred<Data>();let reads=0;
  const status={...realStatus(),project:'/project-b',panes:[realStatus().panes[0]!,{id:'room',label:'Без роли',model:'w1',vendor:'claude'}],activeChats:{worker:'chat-b',room:'chat-room'}};
  v.sandbox.fetch=async(path:string)=>{v.requests.push({path,body:undefined});return {json:async()=>path==='/api/status'?status:path==='/api/chats'?{chats:[],active:status.activeChats}:path==='/api/chats/chat-b'?(reads++,await history.promise):{messages:[{role:'ai',text:'CURRENT SELECTION'}]}}};
- v.S.chat=[{role:'ai',text:'OLD A',html:'OLD A'}];d.document.querySelector('.col')!.innerHTML='<div class="ai live-msg">OLD A</div>';v.pagehide[0]!();const restored=v.pageshow[0]!({persisted:true});await until(()=>reads===1);
- v.functions.invalidateBinding();if(change==='pane'){v.S.ui.pane='room';v.sandbox.pickPane()}if(change==='chat')v.H.active.worker='chat-c';if(change==='pagehide')v.pagehide[0]!();
+ v.S.chat=[{role:'ai',text:'OLD A',html:'OLD A'}];d.document.querySelector('.col')!.innerHTML='<div class="ai live-msg">OLD A</div>';v.hidePage();const restored=v.showPage({persisted:true});await until(()=>reads===1);
+ v.functions.invalidateBinding();if(change==='pane'){v.S.ui.pane='room';v.sandbox.pickPane()}if(change==='chat')v.H.active.worker='chat-c';if(change==='pagehide')v.hidePage();
  if(change!=='pagehide')await v.functions.loadChat({onboard:false,visible:true});history.resolve({messages:[{role:'ai',text:'STALE RETURNED HISTORY'}]});await restored;
  const text=d.document.querySelector('.feed')!.textContent;assert.doesNotMatch(text,/STALE RETURNED HISTORY|OLD A/);if(change!=='pagehide')assert.match(text,/CURRENT SELECTION/);assert.equal(v.requests.some(r=>r.body),false);
 });

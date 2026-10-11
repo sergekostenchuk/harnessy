@@ -98,3 +98,26 @@ for(const [usage,expected] of [
 ])test('175: Claude raw usage keeps fresh input separate from cache: '+JSON.stringify(usage),async()=>{
  const f=fixture('claude'),p=new ClaudeProvider(harness([init,{...done,usage}]).deps);await p.runTurn(f.seat,'x',f.ctx);const end=f.events.at(-1);assert.ok(end?.type==='done');assert.deepEqual(end.usage,expected);await p.close();
 });
+
+const quotaUsage={five_hour:{utilization:18,resets_at:'2026-10-12T00:00:00Z'},seven_day:{utilization:62.4,resets_at:'2026-10-18T00:00:00Z'},seven_day_sonnet:{utilization:12,resets_at:null}};
+test('200: Claude subscription windows use the current OAuth login without exposing credentials',async()=>{
+ const requests:{url:string;options:RequestInit|undefined}[]=[];
+ const p=new ClaudeProvider({env:{},readOauthLogin:async()=> ({token:'fixture-secret',plan:'Max'}),usageFetch:(async(url,options)=>{requests.push({url:String(url),options});return new Response(JSON.stringify({...quotaUsage,accessToken:'must-not-escape'}))}) as typeof fetch});
+ const result=await p.limits();assert.equal(result.ok,true);if(!result.ok)return;
+ assert.equal(result.plan,'Max');assert.deepEqual(result.windows.map(w=>[w.label,w.percentUsed,w.windowMinutes]),[['5 ч',18,300],['неделя',62.4,10080],['неделя · Sonnet',12,10080]]);
+ assert.equal(result.windows[0]!.resetsAt,Date.parse(quotaUsage.five_hour.resets_at)/1000);assert.equal(requests[0]!.url,'https://api.anthropic.com/api/oauth/usage');assert.equal(requests[0]!.options!.redirect,'error');assert.equal((requests[0]!.options!.headers as Record<string,string>).Authorization,'Bearer fixture-secret');assert.doesNotMatch(JSON.stringify(result),/secret|accessToken/);
+});
+for(const [status,code] of [[401,'limits_auth'],[403,'limits_auth'],[429,'limits_rate_limited'],[503,'limits_unavailable']] as const)test('200: Claude usage '+status+' preserves a typed safe reason, never the response body',async()=>{
+ const p=new ClaudeProvider({env:{},readOauthLogin:async()=> ({token:'fixture-secret',plan:'Max'}),usageFetch:(async()=>new Response('fixture-secret',{status})) as typeof fetch});const result=await p.limits();assert.equal(result.ok,false);if(!result.ok)assert.equal(result.code,code);assert.doesNotMatch(JSON.stringify(result),/fixture-secret/);
+});
+for(const body of [{},{five_hour:quotaUsage.five_hour},{...quotaUsage,seven_day:{utilization:'62',resets_at:null}},{...quotaUsage,five_hour:{utilization:101,resets_at:null}}])test('200: incomplete or forged Claude quota cannot become a live percentage '+JSON.stringify(body),async()=>{
+ const p=new ClaudeProvider({env:{},readOauthLogin:async()=> ({token:'fixture',plan:null}),usageFetch:(async()=>new Response(JSON.stringify(body))) as typeof fetch});const result=await p.limits();assert.equal(result.ok,false);if(!result.ok)assert.equal(result.code,'limits_invalid');
+});
+test('200: absent login and cancelled usage do not start an authenticated request or leak errors',async()=>{
+ const missing=new ClaudeProvider({env:{},readOauthLogin:async()=>null,usageFetch:(async()=>{throw Error('unexpected request')}) as typeof fetch});const no=await missing.limits();assert.equal(no.ok,false);if(!no.ok)assert.equal(no.code,'limits_auth');
+ const control=new AbortController();const p=new ClaudeProvider({env:{},readOauthLogin:async()=> ({token:'fixture-secret',plan:'Max'}),usageFetch:(async()=>{control.abort();return new Promise(()=>{})}) as typeof fetch});const result=await p.limits(control.signal);assert.equal(result.ok,false);if(!result.ok)assert.equal(result.code,'limits_timeout');assert.doesNotMatch(JSON.stringify(result),/fixture-secret/);
+});
+
+test('200: API-only credentials are not applicable to subscription windows and do not call usage',async()=>{
+ let requests=0;const p=new ClaudeProvider({env:{ANTHROPIC_API_KEY:'fixture-only'},readOauthLogin:async()=>null,usageFetch:(async()=>{requests++;throw Error('unexpected request')}) as typeof fetch});const result=await p.limits();assert.equal(result.ok,false);if(!result.ok)assert.equal(result.code,'limits_not_applicable');assert.equal(requests,0);assert.doesNotMatch(JSON.stringify(result),/fixture-only/);
+});

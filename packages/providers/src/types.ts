@@ -3,6 +3,10 @@ export type Vendor = 'claude'|'codex';
 export interface Seat { id:string; vendor:Vendor; label:string; model:string; mode:Mode; cwd:string; sessionId:string|null; writePaths:string[]; worktree:string|null }
 /** input is fresh input only; cacheRead is disjoint. Missing/invalid measurements stay null. */
 export interface Usage {input:number|null;output:number|null;cacheRead:number|null}
+export interface LimitWindow {label:string;percentUsed:number;resetsAt:number|null;windowMinutes:number}
+export type LimitsCode='limits_unsupported'|'limits_not_applicable'|'limits_auth'|'limits_rate_limited'|'limits_unavailable'|'limits_invalid'|'limits_timeout'|'limits_storage';
+export type ProviderLimits={ok:true;plan:string|null;windows:LimitWindow[];fetchedAt:number;source:string}|{ok:false;code:LimitsCode;reason:string};
+export function limitPlan(value:unknown):string|null {const plans:Record<string,string>={max:'Max',pro:'Pro',plus:'Plus',team:'Team',business:'Business',enterprise:'Enterprise',edu:'Edu',free:'Free',go:'Go'};return typeof value==='string'&&Object.hasOwn(plans,value.toLowerCase())?plans[value.toLowerCase()]!:null}
 export type TurnEvent =
  | {type:'delta';text:string}|{type:'tool';name:string;detail:string}|{type:'toolError';text:string}
  | {type:'approval';id:string;title:string;detail:string}|{type:'approvalResolved';id:string;decision:'allow'|'deny'|'timeout'}
@@ -37,6 +41,7 @@ export interface Provider {
  listSessions(cwd:string):Promise<{id:string;title:string;updated:number}[]>;
  sessionMessages(cwd:string,id:string):Promise<{role:'me'|'ai';text:string}[]>;
  auth():Promise<{loggedIn:boolean;[k:string]:unknown}>;models():Promise<{id:string;label:string}[]>;
+ limits?(signal?:AbortSignal):Promise<ProviderLimits>;
  reset():Promise<void>;close():Promise<void>
 }
 export function record(v:unknown):v is Record<string,unknown>{return typeof v==='object'&&v!==null&&!Array.isArray(v)}

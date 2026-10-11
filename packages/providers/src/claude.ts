@@ -1,6 +1,9 @@
 import {execFile} from 'node:child_process';
+import {readFile} from 'node:fs/promises';
+import {homedir} from 'node:os';
+import {join} from 'node:path';
 import {query,listSessions,getSessionMessages,type Options,type SDKUserMessage,type Query} from '@anthropic-ai/claude-agent-sdk';
-import {ProviderError,snapshot,approval,record,type Seat,type TurnContext,type Provider} from './types.ts';
+import {ProviderError,snapshot,approval,record,limitPlan,type Seat,type TurnContext,type Provider,type ProviderLimits,type LimitWindow} from './types.ts';
 import {vendorError,asError} from './errors.ts';
 import {waitWithSignal} from './cancellation.ts';
 import {claudeBinary,childEnv} from './env.ts';
@@ -9,7 +12,29 @@ import {SYSTEM_CHAT,peerNote,claudeTeamNote,toolDetail,mergeMessages} from './te
 import {sdkServer} from './tools.ts';
 export interface ClaudeDependencies {
  queryFn:typeof query;listSessionsFn:typeof listSessions;getSessionMessagesFn:typeof getSessionMessages;
- findBinary:()=>Promise<string|null>;authStatus:(binary:string,env:NodeJS.ProcessEnv,signal?:AbortSignal)=>Promise<unknown>;env:NodeJS.ProcessEnv
+ findBinary:()=>Promise<string|null>;authStatus:(binary:string,env:NodeJS.ProcessEnv,signal?:AbortSignal)=>Promise<unknown>;env:NodeJS.ProcessEnv;
+ readOauthLogin:(env:NodeJS.ProcessEnv,signal:AbortSignal)=>Promise<{token:string;plan:string|null}|null>;usageFetch:typeof fetch
+}
+// Read credentials only inside the product; never return credentials or vendor error bodies.
+async function readOauthLogin(env:NodeJS.ProcessEnv,signal:AbortSignal):Promise<{token:string;plan:string|null}|null>{
+ if(env.CLAUDE_CODE_OAUTH_TOKEN)return {token:env.CLAUDE_CODE_OAUTH_TOKEN,plan:null};
+ let raw:string;
+ if(process.platform==='darwin'&&!env.CLAUDE_CONFIG_DIR){raw=await new Promise<string>((resolve,reject)=>execFile('/usr/bin/security',['find-generic-password','-s','Claude Code-credentials','-w'],{signal,timeout:5000,maxBuffer:65536},(error,stdout)=>error?reject(Error('credentials unavailable')):resolve(stdout)))}
+ else raw=await readFile(join(env.CLAUDE_CONFIG_DIR||join(env.HOME||homedir(),'.claude'),'.credentials.json'),{encoding:'utf8',signal});
+ const data:unknown=JSON.parse(raw),oauth=record(data)&&record(data.claudeAiOauth)?data.claudeAiOauth:null;
+ return oauth&&typeof oauth.accessToken==='string'&&oauth.accessToken?{token:oauth.accessToken,plan:limitPlan(oauth.subscriptionType)}:null;
+}
+export function claudeUsage(raw:unknown,now=Date.now()/1000,plan:string|null=null):ProviderLimits{
+ const invalid:ProviderLimits={ok:false,code:'limits_invalid',reason:'Claude: неполный ответ лимитов подписки'};
+ if(!record(raw)||!('five_hour'in raw)||!('seven_day'in raw))return invalid;
+ const windows:LimitWindow[]=[];
+ for(const [key,name,minutes] of [['five_hour','5 ч',300],['seven_day','неделя',10080],['seven_day_sonnet','неделя · Sonnet',10080],['seven_day_opus','неделя · Opus',10080],['seven_day_oauth_apps','неделя · приложения',10080],['seven_day_cowork','неделя · Cowork',10080]] as const){
+ const value=raw[key];if(value===null||value===undefined)continue;
+ if(!record(value)||typeof value.utilization!=='number'||!Number.isFinite(value.utilization)||value.utilization<0||value.utilization>100||!(value.resets_at===null||typeof value.resets_at==='string'))return invalid;
+ const resetsAt=value.resets_at===null?null:Date.parse(value.resets_at)/1000;if(resetsAt!==null&&(!Number.isFinite(resetsAt)||resetsAt<=0))return invalid;
+ windows.push({label:name,percentUsed:value.utilization,resetsAt,windowMinutes:minutes});
+ }
+ return windows.length?{ok:true,plan:limitPlan(plan),windows,fetchedAt:now,source:'claude.ai /usage'}:{ok:false,code:'limits_unavailable',reason:'Claude: окна подписки пока не опубликованы'};
 }
 function authStatus(binary:string,env:NodeJS.ProcessEnv,signal?:AbortSignal):Promise<unknown>{
  return new Promise((resolve,reject)=>execFile(binary,['auth','status'],{env,timeout:15000,...(signal?{signal}:{})},(error,stdout)=>{
@@ -35,7 +60,7 @@ export class ClaudeProvider implements Provider {
  readonly vendor='claude' as const;private active=new Map<string,{query:Query|null;abort:AbortController}>();
  private deps:ClaudeDependencies;
  constructor(deps:Partial<ClaudeDependencies>={}){
- this.deps={queryFn:query,listSessionsFn:listSessions,getSessionMessagesFn:getSessionMessages,findBinary:()=>claudeBinary(),authStatus,env:process.env,...deps}
+ this.deps={queryFn:query,listSessionsFn:listSessions,getSessionMessagesFn:getSessionMessages,findBinary:()=>claudeBinary(),authStatus,env:process.env,readOauthLogin,usageFetch:fetch,...deps}
  }
  async runTurn(input:Seat,message:string,ctx:TurnContext){
  const seat=snapshot(input,ctx);if(seat.vendor!=='claude')throw new ProviderError('protocol','wrong provider');
@@ -126,6 +151,20 @@ export class ClaudeProvider implements Provider {
  async auth(){const binary=await this.deps.findBinary();if(!binary)throw new ProviderError('no_binary','claude не найден; задай CLAUDE_BIN');
  const a=await this.deps.authStatus(binary,childEnv('claude',{},this.deps.env));if(!record(a)||typeof a.loggedIn!=='boolean')throw new ProviderError('protocol','invalid claude auth status');return {...a,loggedIn:a.loggedIn}}
  async models(){return []}
+ async limits(signal?:AbortSignal):Promise<ProviderLimits>{
+ const timeout=AbortSignal.timeout(10000),stop=signal?AbortSignal.any([signal,timeout]):timeout;
+ let login:{token:string;plan:string|null}|null;
+ try{login=await waitWithSignal(()=>this.deps.readOauthLogin(this.deps.env,stop),stop)}catch{return {ok:false,code:stop.aborted?'limits_timeout':this.deps.env.ANTHROPIC_API_KEY?'limits_not_applicable':'limits_auth',reason:stop.aborted?'Claude: чтение лимитов отменено или превысило время ожидания':this.deps.env.ANTHROPIC_API_KEY?'Claude: ключ API не имеет окон подписки':'Claude: вход по подписке недоступен'}}
+ if(!login&&this.deps.env.ANTHROPIC_API_KEY)return {ok:false,code:'limits_not_applicable',reason:'Claude: ключ API не имеет окон подписки'};
+ if(!login)return {ok:false,code:'limits_auth',reason:'Claude: нужен действующий вход по подписке'};
+ try{
+ const response=await waitWithSignal(()=>this.deps.usageFetch('https://api.anthropic.com/api/oauth/usage',{headers:{Authorization:'Bearer '+login.token,'anthropic-beta':'oauth-2025-04-20',Accept:'application/json'},redirect:'error',signal:stop}),stop);
+ if(response.status===401||response.status===403)return {ok:false,code:'limits_auth',reason:'Claude: вход по подписке истёк или недоступен'};
+ if(response.status===429)return {ok:false,code:'limits_rate_limited',reason:'Claude: сервис лимитов просит повторить позже'};
+ if(!response.ok)return {ok:false,code:'limits_unavailable',reason:'Claude: сервис лимитов временно недоступен'};
+ return claudeUsage(await waitWithSignal(()=>response.json(),stop),Date.now()/1000,login.plan);
+ }catch{return {ok:false,code:stop.aborted?'limits_timeout':'limits_unavailable',reason:stop.aborted?'Claude: чтение лимитов отменено или превысило время ожидания':'Claude: сервис лимитов временно недоступен'}}
+ }
  async reset(){for(const a of this.active.values()){a.abort.abort();a.query?.close()}}
  async close(){await this.reset()}
 }
