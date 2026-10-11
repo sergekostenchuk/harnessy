@@ -1,12 +1,70 @@
-import {transcriptText} from '@harnessy/context';
+import {transcriptText,type ConversationSnapshot} from '@harnessy/context';
+import {realpathSync} from 'node:fs';
+import {join,relative,isAbsolute,sep} from 'node:path';
 import {orderedClone,pythonTrim,type Initiator} from '@harnessy/journal';
 import {RuntimeError,message,slice,object} from './errors.ts';
 import {owner,place,free,reserve,locked,same} from './operations.ts';
 import type {Runtime} from './runtime.ts';
 import type {ProjectState} from './types.ts';
-import {jsonClone,chatMetadata,type Chat} from './state.ts';
+import {jsonClone,chatMetadata,diskIO,type Chat} from './state.ts';
 import type {Pane} from './pane.ts';
 import {makeRoomIn} from './rooms.ts';
+import {SEAT_KINDS,type SeatKind} from '@harnessy/team';
+
+function proposalRows(p:ProjectState,q:Record<string,unknown>,seats:unknown[]){
+ const invalid=():never=>{throw new RuntimeError('proposal_invalid','состояние строк предложения для контекста повреждено',409)};
+ if(q.ownerSeats!==undefined&&!object(q.ownerSeats))invalid();
+ const selections=object(q.ownerSeats)?q.ownerSeats:{},operations=p.state.readMaterializations();if(!Array.isArray(operations))return invalid();
+ for(const [index,selection] of Object.entries(selections))if(!/^(0|[1-9][0-9]*)$/.test(index)||Number(index)>=seats.length||!object(selection)||!SEAT_KINDS.includes(selection.kind as SeatKind)||typeof selection.created!=='boolean')invalid();
+ return seats.map((raw,index)=>{
+  if(!object(raw)||!SEAT_KINDS.includes(raw.kind as SeatKind)||typeof raw.sid!=='string'||typeof raw.operationId!=='string')return invalid();
+  const selected=selections[index],selection=object(selected)?selected:null,found=operations.filter(op=>object(op)&&op.operationId===raw.operationId);
+  if(found.length>1)invalid();const operation=found[0],stages=object(operation)?operation.stages:null;
+  if(operation!==undefined&&(!object(operation)||operation.sid!==raw.sid||!object(operation.input)||!SEAT_KINDS.includes(operation.input.kind as SeatKind)||typeof operation.by!=='string'||!object(stages)||!['team','seatFile','chat','status','onboarding'].every(k=>typeof stages[k]==='boolean')))invalid();
+  const op=operation as {input:{kind:SeatKind};by:string;stages:Record<string,boolean>}|undefined,actual=p.registry.get(raw.sid);
+  if(selection&&op&&selection.kind!==op.input.kind||actual&&(!op||actual.kind!==op.input.kind))invalid();
+  const created=!!op&&['team','seatFile','chat','status','onboarding'].every(k=>op.stages[k]);
+  if(created&&(!actual||p.state.chats.chats[raw.operationId]?.pane!==raw.sid)||selection?.created===true&&!created)invalid();
+  return {...raw,kind:actual?.kind??op?.input.kind??selection?.kind??raw.kind,created,state:created?'создана':op?'создаётся':'ожидает',createdBy:created?op!.by:null,requestedBy:op?.by??(selection?'владелец (интерфейс)':q.confirmed?'оркестратор '+q.from:null)};
+ });
+}
+
+// Capture only the saved active conversation, before injecting this turn's records.
+export function transferSnapshot(p:ProjectState,pane:Pane,records:readonly import('@harnessy/journal').Record_[],enabled=true):ConversationSnapshot|null {
+ const id=p.state.chats.active[pane.id];if(!id){if(pane.transcript.length)throw new RuntimeError('context_binding_invalid','не сохранена привязка истории к разговору',409);return null}const c=p.state.chats.chats[id];
+ if(p.state.dir!==p.dir||!c||c.id!==id||c.pane!==pane.id)throw new RuntimeError('context_binding_invalid','сохранённый контекст относится к другому разговору',409);
+ // Opt-out needs only the binding for its receipt. Do not inspect history or side files.
+ if(!enabled)return {project:p.dir,chat:id,messages:[],facts:[]};
+ chatMetadata(c);
+ const messages=c.transcript.filter(m=>!pane.uncommitted.has(m)&&!m.contextTransfer&&['me','ai','peer'].includes(m.role));
+ if(!messages.length&&!c.turns?.length)return null;
+ // Explicit foreign provenance is never accepted as this chat's history. Promotion
+ // within the same chat legitimately changes pane identity, not project/chat identity.
+ for(const m of messages)if(m.project!==undefined&&m.project!==p.dir||m.chat!==undefined&&m.chat!==id||object(m.provenance)&&(m.provenance.project!==p.dir||m.provenance.chat!==id))throw new RuntimeError('context_binding_invalid','стенограмма содержит чужую привязку',409);
+ const turns=new Set(messages.flatMap(m=>object(m.runtime)&&typeof m.runtime.turnInstanceId==='string'?[m.runtime.turnInstanceId]:[]));
+ for(const turn of c.turns??[])turns.add(turn.turnInstanceId);
+ const seqs=new Set(messages.flatMap(m=>object(m.runtime)&&Array.isArray(m.runtime.recordSeqs)?m.runtime.recordSeqs.filter((n):n is number=>Number.isSafeInteger(n)):[]));
+ for(const r of records)seqs.add(r.seq);
+ const history=p.journal.read({limit:0}).filter(r=>seqs.has(r.seq));
+ if(history.some(r=>!r.to.includes(pane.id)&&!r.to.includes('*')))throw new RuntimeError('context_binding_invalid','запись контекста адресована другому месту',409);
+ const threads=new Set(history.flatMap(r=>r.thread?[r.thread]:[]));
+ const facts:ConversationSnapshot['facts']=[];
+ const promotion=c.promotion;if(object(promotion)&&promotion.target===p.dir&&promotion.sid===pane.id&&object(promotion.source)&&object(promotion.source.chat)&&promotion.source.chat.id===id&&typeof promotion.intro==='string')facts.push({label:'Предметная вводная при повышении',text:promotion.intro});
+ else {const intro=history.find(r=>r.origin==='onboarding'&&r.from==='harness');if(intro)facts.push({label:'Вводная роли',text:intro.text})}
+ let memory='';try{const file=realpathSync(join(p.dir,'.harness/MEMORY.md')),path=relative(realpathSync(p.dir),file);if(isAbsolute(path)||path==='..'||path.startsWith('..'+sep))throw new RuntimeError('context_binding_invalid','память находится вне проекта',409);memory=diskIO.read(file)}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e}
+ if(memory.trim())facts.push({label:'Память проекта',text:memory});
+ if(c.documents?.length)facts.push({label:'Прикреплённые документы (ссылки)',text:JSON.stringify(c.documents)});
+ const store=p.state.readProposals();if(!object(store)||store.project!==p.dir||!Array.isArray(store.proposals))throw new RuntimeError('proposal_invalid','предложения для контекста не читаются',409);
+ for(const q of store.proposals){if(!object(q)||q.from!==pane.id||!turns.has(String(q.turnInstanceId)))continue;
+  if(typeof q.proposalId!=='string'||!Number.isSafeInteger(q.version)||!Array.isArray(q.seats)||typeof q.confirmed!=='boolean')throw new RuntimeError('proposal_invalid','предложение для контекста повреждено',409);
+  const seats=proposalRows(p,q,q.seats);if(q.confirmed&&seats.every(s=>s.created))continue;
+  facts.push({label:'Незавершённое предложение команды',text:JSON.stringify({proposalId:q.proposalId,version:q.version,confirmed:q.confirmed,seats,originalSeats:q.seats})});
+ }
+ const pending=p.channel.pendingAcks().filter(r=>seqs.has(r.seq)||r.from===pane.id&&r.thread&&threads.has(r.thread));
+ if(pending.length)facts.push({label:'Ожидающие подтверждения владельца',text:JSON.stringify(pending.map(r=>({seq:r.seq,kind:r.kind,text:r.text,thread:r.thread})))});
+ const task=[...history].reverse().find(r=>r.from==='owner'&&['task','question'].includes(r.kind));if(task)facts.push({label:'Последнее поручение владельца · №'+task.seq,text:task.text});
+ return jsonClone({project:p.dir,chat:id,messages:messages.map(({role,text,ts})=>({role,text,ts})),facts});
+}
 
 export const SUMMARY_PROMPT='Напиши краткую выжимку этого разговора для передачи в новый чат той же роли: что решено, что сделано, открытые вопросы, чего ждёт владелец. Коротко, списком, без вступления.';
 export interface PromotionIdentity {operationId:string;chat:string;sourceProject:string;sourceRevision:number;target:string;pane:string}

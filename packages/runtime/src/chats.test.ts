@@ -21,14 +21,15 @@ test('20/51: role new text/none closes old, open only text carries; extra messag
  await r.chatsNew({pane:'worker',carry:'none'},OWNER);assert.equal(r.registry.get('worker')!.carry,'');assert.equal(first.closed!==null,true);assert.equal(r.chatsList(OWNER).chats.length,3);
 });
 
-test('20/28: summary uses exact prompt, belongs to old chat, and does not consume pending input',async t=>{
+for(const sessionId of [null,'existing-session'])test('20/28/245: summary keeps its exact instruction with '+(sessionId?'existing session':'restored context')+', belongs to old chat, and does not consume pending input',async t=>{
  const {runtime:r,provider:f}=await harness(t),old=history(r);await r.halt(true,OWNER);r.postOwner({to:'worker',kind:'task',text:'очередь'},OWNER);await r.idle();
+ r.registry.get('worker')!.sessionId=sessionId;r.project.state.savePanes(r.registry,r.journal);
  // Keep the pending input; enable launches without kicking the queue during this diagnostic scenario.
- r.project.halted=false;f.onRun=async(_s,prompt,ctx)=>{ctx.modelStarted?.();return {text:prompt===SUMMARY_PROMPT?' Решено: один шаг. ':'ответ очереди',sessionId:'summary-session'}};
+ r.project.halted=false;f.onRun=async(_s,prompt,ctx)=>{ctx.modelStarted?.();return {text:prompt===SUMMARY_PROMPT||prompt.endsWith('\nНовое сообщение:\n'+SUMMARY_PROMPT)?' Решено: один шаг. ':'ответ очереди',sessionId:'summary-session'}};
  const result=await r.chatsNew({pane:'worker',carry:'summary'},OWNER);assert.equal(result.carried,true);assert.match(r.registry.get('worker')!.carry,/Выжимка прежнего чата/);assert.equal(old.transcript.at(-1)!.text,' Решено: один шаг. ');assert.equal(old.closed!==null,true);
  // The summary's durable receipt has deliverySeq zero: it did not claim the queued task.
  assert.equal(old.transcript.at(-1)!.deliverySeq,0);assert.deepEqual((old.transcript.at(-1)!.runtime as {recordSeqs:number[]}).recordSeqs,[]);
- f.onRun=null;await r.idle();assert.equal(f.calls[0]!.message,SUMMARY_PROMPT);assert.equal(r.journal.cursors.worker,r.journal.lastSeq);
+ f.onRun=null;await r.idle();if(sessionId)assert.equal(f.calls[0]!.message,SUMMARY_PROMPT);else{assert.match(f.calls[0]!.message,/Контекст этого разговора/);assert.match(f.calls[0]!.message,/Первая строка/);assert.ok(f.calls[0]!.message.endsWith('\nНовое сообщение:\n'+SUMMARY_PROMPT))}assert.equal(r.journal.cursors.worker,r.journal.lastSeq);
 });
 
 test('28: halted/failed summary leaves the active chat; post-launch stop cannot switch it',async t=>{
