@@ -274,9 +274,10 @@ export class Runtime {
  pane.busy=true;pane.touched=true;pane.revision++;const launchModel=pane.model;
  const scope=this.scopes.create(p.dir,id,randomUUID()),controller=new AbortController();let releaseReset!:()=>void,finish!:()=>void;
  const turn:ActiveTurn={scope,controller,pane,vendor:pane.vendor,records,deliverySeq:Math.max(0,...entries.map(e=>e.deliverySeq)),relayDepth,attemptNumber:0,handle:null,started:false,stopRequested:false,terminal:null,partial:'',finished:new Promise(r=>{finish=r}),finish:()=>finish(),timer:undefined,resetWait:new Promise(r=>{releaseReset=r}),releaseReset:()=>releaseReset(),result:null,injected};p.active.set(id,turn);this.stateEvent(p,pane);
- let success=false,terminalSent=false;
+ let success=false,terminalSent=false,launchVendor:Vendor|null=null;
  try{
  if(!validDir(pane.cwd))throw new RuntimeError('cwd_changed','папки нет: '+pane.cwd);const provider=this.provider(turn.vendor),vendor=provider.vendor,epoch=p.processEpoch.get(vendor)??0,sessionEpoch=pane.sessionEpoch;
+ launchVendor=vendor;
  const summary=digest(pane,p.registry.others(id),(a,b)=>p.registry.canObserve(a,b)),nextSeen=summary.nextSeen;
  let prompt=messageText;if(pane.carry){prompt='Прежний разговор (был без папки, продолжается здесь):\n'+pane.carry+'\n\n---\nНовое сообщение:\n'+prompt;pane.publish({type:'note',text:'в сообщение добавлен прежний разговор'})}
  if(summary.text){prompt=summary.text+'\n\n---\nСообщение тебе:\n'+prompt;pane.publish({type:'note',text:'в сообщение добавлена сводка соседей ('+[...summary.text].length+' символов)'})}
@@ -302,7 +303,7 @@ export class Runtime {
  for(const m of injected)pane.uncommitted.delete(m);
  const response=timestampMessage('ai',result.text,this.clock.now()) as ResultMessage;const held=(turn as ActiveTurn).terminal;
  if(held?.type==='done'){if(typeof held.model==='string'&&held.model)response.model=held.model;if(object(held.usage))response.usage=structuredClone(held.usage);if(typeof held.durationMs==='number'&&Number.isFinite(held.durationMs))response.durationMs=held.durationMs}
- response.outcome=interrupted?'interrupted':held?.type==='error'?'error':'ok';if(response.outcome==='error')response.errorCode=typeof held?.code==='string'?held.code:'internal';
+ response.vendor=launchVendor;response.outcome=interrupted?'interrupted':held?.type==='error'?'error':'ok';if(response.outcome==='error')response.errorCode=typeof held?.code==='string'?held.code:'internal';
  response.deliverySeq=turn.deliverySeq;response.runtime={turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),effectsPending:true,interrupted,nextSeen};turn.result=response;
  p.state.commitResult(pane,p.registry,response);
  const receipt=p.state.attempts[id];if(receipt?.turnInstanceId===scope.turnInstanceId)p.state.clearAttempt(id);
@@ -315,7 +316,7 @@ export class Runtime {
  if(!turn.result){pane.transcript=pane.transcript.filter(m=>!injected.includes(m));for(const m of injected)pane.uncommitted.delete(m);
  if(!turn.started){try{p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
  else {   // модель уже могла действовать (modelStarted), результата нет: неопределённый исход не повторяется автоматически — долговечный uncertain до действия владельца (ревью №111 п.1)
-  try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,outcome:'error',errorCode:e instanceof ProviderError?e.code:'internal'})}catch(error){p.lineErrors.push(message(error))}
+  try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:e instanceof ProviderError?e.code:'internal'})}catch(error){p.lineErrors.push(message(error))}
   try{p.state.uncertain(id)}catch(error){p.lineErrors.push(message(error))}
   pane.status='uncertain';pane.uncertainNote=waitingError(p,pane).message;if(!p.closed)pane.publish({type:'note',text:pane.uncertainNote,warning:this.warningId(p,pane,'uncertain')})}
  }else {pane.status='recovering';pane.recoveryNote='ответ модели сохранён; завершается восстановление доставки';pane.publish({type:'note',text:pane.recoveryNote,warning:this.warningId(p,pane,'recovery')})}

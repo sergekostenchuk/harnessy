@@ -20,7 +20,7 @@ test('Codex stream, tools, usage and duplicate/foreign terminals',async()=>{
  }});
  const f=fixture(),p=new CodexProvider(h.deps),result=await p.runTurn(f.seat,'x',f.ctx);
  assert.equal(result.text,'hello');assert.deepEqual(f.sessions,['thread']);assert.equal(terminals(f.events).length,1);assert.equal(f.events.filter(e=>e.type==='delta').length,1);
- assert.ok(f.events.some(e=>e.type==='toolError'));const done=f.events.at(-1);assert.ok(done?.type==='done');assert.deepEqual(done.usage,{input:8,output:2,cacheRead:3});
+ assert.ok(f.events.some(e=>e.type==='toolError'));const done=f.events.at(-1);assert.ok(done?.type==='done');assert.deepEqual(done.usage,{input:5,output:2,cacheRead:3});
  const start=h.transports[0]!.requests.find(r=>r.method==='thread/start')!.params as Record<string,unknown>;assert.equal(typeof start.developerInstructions,'string');assert.equal(start.sandbox,'workspace-write');
  const turn=h.transports[0]!.requests.find(r=>r.method==='turn/start')!.params as Record<string,unknown>;assert.equal((turn.sandboxPolicy as {type:string}).type,'workspaceWrite');assert.equal(f.handle,null);await p.close();
 });
@@ -99,4 +99,19 @@ for(const status of ['completed','interrupted'] as const)test('[TS-04a:47] Codex
  assert.equal(started,1);order.push('turn/start');const id='turn-'+(++t.turn);queueMicrotask(()=>t.notify('turn/completed',{threadId:'thread',turn:{id,status}}));return {turn:{id}}
  }}),provider=new CodexProvider(h.deps);
  const result=await provider.runTurn(f.seat,'x',f.ctx);assert.equal(result.interrupted,status==='interrupted'?true:undefined);assert.deepEqual(order,['started','turn/start']);assert.equal(started,1);assert.equal(terminals(f.events).length,1);await provider.close()
+});
+
+for(const [usage,expected] of [
+ [{inputTokens:8,outputTokens:2,cachedInputTokens:3},{input:5,output:2,cacheRead:3}],
+ [{inputTokens:3,outputTokens:0,cachedInputTokens:3},{input:0,output:0,cacheRead:3}],
+ [{inputTokens:0,outputTokens:0,cachedInputTokens:0},{input:0,output:0,cacheRead:0}],
+ [{inputTokens:8,outputTokens:2},{input:null,output:2,cacheRead:null}],
+ [{outputTokens:2,cachedInputTokens:3},{input:null,output:2,cacheRead:3}],
+ [{inputTokens:2,outputTokens:2,cachedInputTokens:3},{input:null,output:2,cacheRead:null}],
+ [{inputTokens:Infinity,outputTokens:-1,cachedInputTokens:'3'},{input:null,output:null,cacheRead:null}]
+])test('175: Codex raw usage subtracts cached input exactly once: '+JSON.stringify(usage),async()=>{
+ const h=codexHarness(t=>{const base=t.responder;t.responder=(m,p,t)=>{if(m!=='turn/start')return base(m,p,t);const id='turn-'+(++t.turn);queueMicrotask(()=>{
+  t.notify('thread/tokenUsage/updated',{threadId:'thread',turnId:id,tokenUsage:{last:usage}});t.notify('turn/completed',{threadId:'thread',turn:{id,status:'completed'}});
+ });return {turn:{id}}}}),f=fixture(),p=new CodexProvider(h.deps);
+ await p.runTurn(f.seat,'x',f.ctx);const end=f.events.at(-1);assert.ok(end?.type==='done');assert.deepEqual(end.usage,expected);await p.close();
 });

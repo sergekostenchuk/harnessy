@@ -90,8 +90,9 @@ export class CodexProvider implements Provider {
  else if(item.type==='commandExecution'&&(String(item.status).toLowerCase().includes('fail')||typeof item.exitCode==='number'&&item.exitCode!==0))
  ctx.publish({type:'toolError',text:'команда завершилась ('+String(item.status)+', код '+String(item.exitCode)+'): '+String(item.aggregatedOutput??item.output??'').slice(-300)})
  }else if(method==='thread/tokenUsage/updated'){
- const u=record(p.tokenUsage)&&record(p.tokenUsage.last)?p.tokenUsage.last:{},num=(v:unknown)=>typeof v==='number'?v:null;
- usage={input:num(u.inputTokens),output:num(u.outputTokens),cacheRead:num(u.cachedInputTokens)}
+ const u=record(p.tokenUsage)&&record(p.tokenUsage.last)?p.tokenUsage.last:{},num=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)&&v>=0?v:null;
+ const total=num(u.inputTokens),cached=num(u.cachedInputTokens),inconsistent=total!==null&&cached!==null&&cached>total;
+ usage={input:total!==null&&cached!==null&&!inconsistent?total-cached:null,output:num(u.outputTokens),cacheRead:inconsistent?null:cached}
  }else if(method==='turn/completed'){
  const turn=requireRecord(p.turn,'turn');if(typeof turn.id!=='string'||!turn.id)throw new ProviderError('protocol','missing terminal turn id',sessionId);if(turn.id!==active.turnId)return;settled=true;
  if(turn.status==='failed'){const error=requireRecord(turn.error,'turn error');if(typeof error.message!=='string')throw new ProviderError('protocol','missing turn error message',sessionId);

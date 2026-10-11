@@ -8,5 +8,6 @@ export * from './slug.ts';
 export * from './registry.ts';
 export * from './pins.ts';
 export * from './settings.ts';
+export {priceList,type ModelPrice} from './price-list.ts';
 export * from './connections.ts';
 export {ownerPaths,validDir,expandUser} from './files.ts';

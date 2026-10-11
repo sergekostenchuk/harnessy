@@ -42,3 +42,12 @@ test('125: transferred answers are explicitly marked, execution receipts and mod
  const input={role:'ai',text:'answer',ts:1,model:'w1',usage:{input:1,output:2,cacheRead:0},durationMs:3,deliverySeq:4,runtime:{turnInstanceId:'local'},outcome:'error' as const,errorCode:'bad'};
  const copy=conversationHistory([input])[0]!;assert.equal(copy.origin,'transferred');assert.equal(copy.deliverySeq,undefined);assert.equal(copy.runtime,undefined);assert.equal(copy.outcome,undefined);assert.deepEqual(copy.usage,input.usage);assert.equal(input.deliverySeq,4);
 });
+
+for(const failed of [false,true])test('174: '+(failed?'failed':'completed')+' turn retains launch vendor across a live vendor change and restart',async t=>{
+ const {FakeProvider}=await import('./test-helpers.ts'),claude=new FakeProvider('claude'),codex=new FakeProvider('codex'),h=await harness(t,{deps:{providers:{claude,codex}}}),r=h.runtime,entered=deferred(),gate=deferred();t.after(()=>gate.resolve());
+ claude.onRun=async(seat,_message,ctx)=>{ctx.modelStarted?.();entered.resolve();await gate.promise;if(failed)throw new ProviderError('transport_lost','lost');ctx.publish({type:'done',model:seat.model,sessionId:'claude-session',usage:{input:1,output:2,cacheRead:3},durationMs:4});return {text:'answer',sessionId:'claude-session'}};
+ const turn=r.runTurn('worker','question');const outcome=turn.catch(e=>e);await entered.promise;r.paneSet('worker',{model:'c1'},OWNER);gate.resolve();await outcome;
+ const chat=chats(h)[0],record=failed?chat.turns[0]:chat.transcript.find((m:any)=>m.role==='ai');assert.equal(record.vendor,'claude');assert.equal(record.model,'w1');assert.equal(r.registry.get('worker')!.vendor,'codex');
+ await r.openProject(h.dir);const restored=failed?chats(h)[0].turns[0]:chats(h)[0].transcript.find((m:any)=>m.role==='ai');assert.deepEqual(restored,record);
+ if(!failed){await r.runTurn('worker','next');const reply=chats(h)[0].transcript.filter((m:any)=>m.role==='ai').at(-1);assert.equal(reply.vendor,'codex');assert.equal(reply.model,'c1');assert.equal(codex.calls[0]!.seat.sessionId,null)}
+});

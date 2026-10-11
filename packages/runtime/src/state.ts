@@ -13,12 +13,12 @@ export const diskIO:StateIO={read:path=>new TextDecoder('utf-8',{fatal:true}).de
 export interface Receipt {turnInstanceId:string;recordSeqs:number[];effectsPending:boolean;interrupted:boolean;nextSeen:Record<string,number>}
 export type TurnOutcome='ok'|'interrupted'|'error';
 export interface TranscriptMessage {role:string;text:string;ts:number;model?:string;outcome?:TurnOutcome;errorCode?:string;origin?:'transferred';[key:string]:unknown}
-export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;outcome:'error';errorCode:string}
+export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;vendor?:'claude'|'codex'|null;outcome:'error';errorCode:string}
 export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}
 export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;deliverySeq?:number;status?:'uncertain'}
 export interface Chat {id:string;pane:string;title:string;created:number;closed:number|null;model:string|null;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;turns?:AnalyticalTurn[];[key:string]:unknown}
 export function jsonClone<T>(value:T):T{return parseCompat(compatJson(value)) as T}
-const CONVERSATION_FIELDS=new Set(['role','text','ts','model','usage','durationMs']);
+const CONVERSATION_FIELDS=new Set(['role','text','ts','model','vendor','usage','durationMs']);
 // Execution receipts belong to the source seat and journal, never to transferred history.
 export function conversationHistory(messages:readonly TranscriptMessage[]):TranscriptMessage[] {
  return jsonClone(messages.map(message=>{
