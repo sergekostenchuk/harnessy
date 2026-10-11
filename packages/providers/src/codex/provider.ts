@@ -14,10 +14,10 @@ export function codexLimits(raw:unknown,now=Date.now()/1000,plan:unknown=null):P
  const invalid:ProviderLimits={ok:false,code:'limits_invalid',reason:'Codex: неполный ответ лимитов подписки'};
  if(!record(raw))return invalid;
  const value=record(raw.rateLimitsByLimitId)&&record(raw.rateLimitsByLimitId.codex)?raw.rateLimitsByLimitId.codex:raw.rateLimits;
- if(!record(value)||!('primary'in value)||!('secondary'in value))return invalid;
+ if(!record(value))return invalid;
  const windows:LimitWindow[]=[];
  for(const key of ['primary','secondary']){
- const w=value[key];if(w===null)continue;
+ const w=value[key];if(w===null||w===undefined)continue;
  if(!record(w)||typeof w.usedPercent!=='number'||!Number.isFinite(w.usedPercent)||w.usedPercent<0||w.usedPercent>100||!Number.isSafeInteger(w.windowDurationMins)||Number(w.windowDurationMins)<=0||!(w.resetsAt===null||typeof w.resetsAt==='number'&&Number.isFinite(w.resetsAt)&&w.resetsAt>0))return invalid;
  const minutes=Number(w.windowDurationMins);windows.push({label:minutes===300?'5 ч':minutes===10080?'неделя':minutes===43200?'месяц':minutes+' мин',percentUsed:w.usedPercent,resetsAt:w.resetsAt,windowMinutes:minutes});
  }
