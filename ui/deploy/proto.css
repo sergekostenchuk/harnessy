@@ -519,3 +519,13 @@ html[data-page="spend"] .sp-policy button:not(:disabled){cursor:pointer}
 .set .rows .row.sp-billing-account{display:flex;flex-wrap:wrap;gap:12px}.sp-billing-account>div{flex:1 0 100%}.sp-billing-account label{flex:1 1 180px;min-width:0}.sp-billing-account input{display:block;max-width:100%;box-sizing:border-box;margin-top:4px}
 
 .panel:has([data-subscription-date]) a{color:var(--amber)}
+
+aside.side.ps .limits { cursor:pointer; }
+aside.side.ps .limits:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.limits-dialog .sp-limit-window { margin:14px 0; }
+.limits-dialog .sp-limit-window .sp-value { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.limits-dialog .sp-limit-window .sp-value b { font-size:28px; font-weight:500; }
+.limits-dialog .sp-limit-window small { display:block; margin-top:7px; line-height:1.5; color:var(--ink3); }
+.sp-limit .ticks.bad i.on { background:var(--bad-fill); }
+.sp-limit .sp-value b.bad { color:var(--bad); }
+.sp-limit-extra { color:var(--ink2); font-size:12px; }
