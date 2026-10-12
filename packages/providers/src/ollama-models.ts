@@ -25,9 +25,11 @@ export async function ollamaRequest(fetcher:typeof fetch,url:string,timeoutMs:nu
   try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks)))}catch{throw new ProviderError('protocol',source+': неверный JSON')}
  },stop)}catch(e){if(signal?.aborted)throw new ProviderError('cancelled',source+': чтение отменено');if(e instanceof ProviderError&&e.code!=='cancelled')throw e;throw new ProviderError('transport_lost',source+': '+(stop.aborted?'истёк срок ожидания':'нет связи'))}
 }
+interface PullJob {controller:AbortController;waiters:number;settled:boolean;done:Promise<void>}
 interface LocalModel {name:string;remote?:string}
 export class OllamaModels {
  reason:string|undefined;
+ private pulls=new Map<string,PullJob>();
  private cloud:CliModel[]=[];private attemptedAt:number|null=null;private generation=0;
  private fetcher:typeof fetch;private httpTimeoutMs:number;private pullTimeoutMs:number;private now:()=>number;
  constructor(fetcher:typeof fetch,httpTimeoutMs:number,pullTimeoutMs=OLLAMA_PULL_TIMEOUT_MS,now:()=>number=Date.now){this.fetcher=fetcher;this.httpTimeoutMs=httpTimeoutMs;this.pullTimeoutMs=pullTimeoutMs;this.now=now}
@@ -53,7 +55,21 @@ export class OllamaModels {
   for(const m of local)if(m.remote)try{installed.add(ollamaCloudName(m.remote))}catch{/* An unrelated local registry name is not a service model. */}
   return [...local.map(m=>({id:m.name,label:m.name+' · '+(m.remote||/(?:[:\-])cloud$/.test(m.name)?'облако':'локально')})),...this.cloud.filter(m=>!installed.has(m.id)).map(m=>({...m,label:m.label+' · добавится при первом ходе'}))];
  }
+ // Publish the operation before its first read: absence-check and pull are one shared job.
  async prepare(model:string,signal:AbortSignal){
+  if(signal.aborted)throw new ProviderError('cancelled','Добавление модели отменено');
+  let job=this.pulls.get(model);
+  if(!job){
+   const created:PullJob={controller:new AbortController(),waiters:0,settled:false,done:Promise.resolve()};this.pulls.set(model,created);
+   created.done=this.pull(model,created.controller.signal).finally(()=>{created.settled=true;if(this.pulls.get(model)===created)this.pulls.delete(model)});
+   void created.done.catch(()=>{}); // All subscribers may cancel before the shared request settles.
+   job=created;
+  }
+  job.waiters++;
+  try{await waitWithSignal(()=>job!.done,signal)}
+  finally{job.waiters--;if(!job.waiters&&!job.settled){job.controller.abort();if(this.pulls.get(model)===job)this.pulls.delete(model)}}
+ }
+ private async pull(model:string,signal:AbortSignal){
   if((await this.local(signal)).some(m=>m.name===model))return;
   await this.remote(signal);
   if(!this.cloud.some(m=>m.id===model))throw new ProviderError('model_unsupported','Ollama: модель отсутствует в облачном каталоге');
