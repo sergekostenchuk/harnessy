@@ -674,3 +674,16 @@ html[data-page="conn"] .pay small{display:block;font-size:10px;line-height:1.4;m
 html[data-page="conn"] .main .ovl{overflow:hidden}html[data-page="conn"] .main .panel{max-width:calc(100% - 24px)}html[data-page="conn"] .foot-note{white-space:normal;overflow-wrap:anywhere;gap:12px}html[data-page="conn"] .foot-note>span{min-width:0}
 
 html[data-page="conn"] .main:has(>[data-connections-status]){grid-template-rows:auto auto minmax(0,1fr)}html[data-page="conn"] [data-connections-status]{margin:0;padding:8px 20px;align-items:center}html[data-page="conn"] .views{min-height:0;overflow:hidden}html[data-page="conn"] .view{min-height:0;overflow-y:auto}
+/* TS-15f: keep the three sketch steps, with room for the actual operation and team. */
+html[data-proto][data-page="first"] .app { overflow:auto; padding:32px 24px; align-items:start; }
+html[data-proto][data-page="first"] .fr { width:min(560px, 100%); padding:12px 0 32px; }
+html[data-proto][data-page="first"] .fr .pick select { display:block; width:100%; margin-top:8px; padding:6px 8px; border:1px solid var(--line2); border-radius:6px; background:var(--bg); color:var(--ink); font:12px var(--font); }
+html[data-proto][data-page="first"] .fr p { color:var(--ink2); font-size:13px; line-height:1.5; }
+html[data-proto][data-page="first"] .fr .feed { max-height:360px; overflow:auto; padding:12px 0; margin-top:12px; }
+html[data-proto][data-page="first"] .fr .feed .col { width:100%; max-width:none; }
+html[data-proto][data-page="first"] .fr .team-proposals { margin:12px 0; }
+html[data-proto][data-page="first"] .first-team-actions { display:flex; flex-wrap:wrap; gap:8px; }
+html[data-proto][data-page="first"] [data-first-door] .done { margin-top:12px; }
+html[data-proto][data-page="first"] [aria-disabled="true"] { opacity:.55; }
+html[data-proto][data-page="first"] .fr a { color:var(--accent); }
+html[data-proto][data-page="first"] .fr .kv b { overflow-wrap:anywhere; }

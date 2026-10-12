@@ -4,7 +4,7 @@
    Подсказки — в ⓘ. Прогноза расхода нет: факт показывает live.js под ответом. Подключается сборкой после live.js. */
 (function(){
   if(!document.documentElement.hasAttribute('data-proto')||!window.LIVE) return;
-  const L=window.LIVE, PAGE=document.documentElement.dataset.page||''; if(PAGE!=='new'&&PAGE!=='chat') return;
+  const L=window.LIVE, PAGE=document.documentElement.dataset.page||''; if(PAGE!=='new'&&PAGE!=='chat'&&PAGE!=='first') return;
   const esc=L.esc, H=L.H, S=()=>L.S;
   function cx(){ const s=S(); if(!s.cx) s.cx={folder:'',rights:null,model:null,modes:{},att:[],conn:{},noFolder:false}; return s.cx; }
   const ROOM='room', isRoom=p=>!!p&&p.id===ROOM, seats=()=>(H.panes||[]).filter(p=>p.id!==ROOM), room=()=>(H.panes||[]).find(p=>p.id===ROOM);
