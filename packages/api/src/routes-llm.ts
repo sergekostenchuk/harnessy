@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {keySlot,type ProviderConfig,discoverDraft,validateDiscoveryDraft,LlmError,validRoute,catalogProviders,catalogModels,modelInfo,validateResolvedRoutes} from '@harnessy/llm';
+import {keySlot,type ProviderConfig,discoverDraft,validateDiscoveryDraft,LlmError,validRoute,catalogProviders,catalogProviderNames,catalogModels,modelInfo,validateResolvedRoutes} from '@harnessy/llm';
 import type {Runtime} from '@harnessy/runtime';
 import {RuntimeError} from '@harnessy/runtime';
 import type {Route,RequestContext} from './routes.ts';
@@ -47,7 +47,7 @@ export function llmRoutes(r:Runtime):Route[]{
   await publish(id,raw,ctx.body.revision??null,secret);
   return json(await receipt(id));
  }},
- {method:'GET',path:'/api/llm/providers',style:'J',handle:ctx=>{owner(ctx);return json({ok:true,providers:Object.keys(r.settings.llmProviders()).map(item),catalog:catalogProviders()})}},
+ {method:'GET',path:'/api/llm/providers',style:'J',handle:ctx=>{owner(ctx);return json({ok:true,providers:Object.keys(r.settings.llmProviders()).map(item),catalog:catalogProviders(),catalogNames:catalogProviderNames()})}},
  {method:'GET',path:'/api/llm/providers/catalog/:id',style:'J',handle:ctx=>{owner(ctx);return json({ok:true,models:catalogModels(ctx.params.id!).map(modelInfo)})}},
  {method:'GET',path:'/api/llm/providers/:id',style:'J',handle:ctx=>{owner(ctx);return json({ok:true,...item(ctx.params.id!)})}},
  {method:'POST',path:'/api/llm/providers/:id',style:'J',handle:async ctx=>{owner(ctx);fields(ctx.body,['config','revision']);const id=ctx.params.id!,config=validateResolvedRoutes({[id]:ctx.body.config})[id]!;await publish(id,config,ctx.body.revision??null);return json({ok:true,...item(id)})}},

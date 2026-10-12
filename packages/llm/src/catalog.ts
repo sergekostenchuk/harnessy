@@ -1,10 +1,11 @@
-import {getBuiltinModels,getBuiltinProviders,type BuiltinProvider} from '@earendil-works/pi-ai/providers/all';
+import {builtinProviders,getBuiltinModels,getBuiltinProviders,type BuiltinProvider} from '@earendil-works/pi-ai/providers/all';
 import type {Api,Model} from '@earendil-works/pi-ai';
 import {validateRoutes,validateCompat} from './config.ts';
 import {LlmError} from './errors.ts';
 import type {ProviderConfig,ProviderRoutes,ModelInfo,ModelConfig} from './types.ts';
 const keyApis=new Set(['openai-completions','openai-responses','anthropic-messages','mistral-conversations']);
 export function catalogProviders(){return getBuiltinProviders().filter(id=>getBuiltinModels(id).some(m=>keyApis.has(m.api)))}
+export function catalogProviderNames(){const names=new Map(builtinProviders().map(p=>[p.id,p.name]));return Object.fromEntries(catalogProviders().map(id=>{const name=names.get(id);return [id,typeof name==='string'&&name.trim()?name:id]}))}
 export function catalogModels(id:string):Model<Api>[]{if(!getBuiltinProviders().includes(id as BuiltinProvider))throw new LlmError('config_invalid');const models=getBuiltinModels(id as BuiltinProvider).filter(m=>keyApis.has(m.api));if(!models.length)throw new LlmError('transport_unsupported');return structuredClone(models) as Model<Api>[]}
 function resolveModels(id:string,config:ProviderConfig,discovery=false):Model<Api>[] {
  const source=config.catalog??(!config.api&&!config.baseURL&&getBuiltinProviders().includes(id as BuiltinProvider)?id:undefined),base=source?catalogModels(source):[],byId=new Map(base.map(m=>[m.id,m]));

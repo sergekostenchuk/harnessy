@@ -296,7 +296,8 @@
     <section id="api-connection"><h2>Подключить по API<i></i></h2>
       <p class="conn-note">Маршрут модели · графит и коньяк · макет состояний формы</p>
       <div class="grid g2"><div class="box"><div class="cap2">1 · провайдер и адрес</div>
-        <label>Провайдер <select aria-label="Провайдер API"><option>Выберите из каталога</option><option>Anthropic</option><option>OpenAI</option><option selected>Свой адрес</option></select></label>
+        <label>Провайдер <select aria-label="Провайдер API"><option value="" selected>Свой адрес</option><option value="anthropic" title="anthropic">Anthropic</option><option value="deepseek" title="deepseek">DeepSeek</option><option value="moonshotai" title="moonshotai">Moonshot AI</option><option value="openai" title="openai">OpenAI</option><option value="qwen-token-plan" title="qwen-token-plan">Qwen Token Plan</option><option value="zai" title="zai">Z.AI</option></select></label>
+        <p class="conn-note">Названия из каталога pi-ai; идентификатор — в подсказке. Если названия нет, показан идентификатор.</p>
         <p><label>Название <input placeholder="Мой сервер моделей" aria-label="Название маршрута"></label></p>
         <label>Протокол <select aria-label="Протокол API"><option>OpenAI · Chat Completions</option><option>OpenAI · Responses</option><option>Anthropic · Messages</option></select></label>
         <p><label>Базовый адрес <input placeholder="https://example.com/v1" aria-label="Базовый адрес API"></label></p>
