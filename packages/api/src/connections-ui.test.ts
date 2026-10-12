@@ -58,3 +58,28 @@ for(const reopen of ['closed','claude','codex'])test('TS-15e r2/2: saved route r
  if(reopen==='codex')assert.equal(v.find('.cbody').innerHTML,otherCard,'updating Claude must not replace the Codex dialog');if(reopen==='closed')assert.equal(v.document.querySelector('.ovl.on'),null);if(reopen!=='claude'){await v.window.emit('keydown',{key:'Escape'});await v.find('[data-pv="claude"]').emit('click')}
  assert.match(v.find('.cbody').textContent,/127\.0\.0\.1:8080/);assert.equal(v.find('[data-rapply]').disabled,true);assert.equal(h.provider.calls.length,0);
 });
+
+for(const reopen of ['claude','codex','closed'])test('211a: follow-up GET refreshes a reopened '+reopen+' card after route POST',async t=>{
+ const h=await fixture(t),gate=deferred(),seen=deferred();let hold=false;
+ const v=ui(async(path,body)=>{const r=await call(h.api,path,{body});if(path==='/api/connections'&&hold){hold=false;seen.resolve();await gate.promise}return r.body},h.dir);
+ await v.settle();await v.find('[data-pv="claude"]').emit('click');await v.find('[data-rv="proxy"]').emit('click');v.find('[data-rf="proxy"]').value='http://127.0.0.1:8080';await v.find('[data-rf="proxy"]').emit('input');
+ hold=true;const saving=v.find('[data-rapply]').emit('click');await seen.promise;await v.window.emit('keydown',{key:'Escape'});if(reopen!=='closed')await v.find('[data-pv="'+reopen+'"]').emit('click');
+ gate.resolve();await saving;await v.settle();assert.equal(h.runtime.connections.get('claude').route,'proxy');assert.match(v.find('[data-pv="claude"]').textContent,/127\.0\.0\.1:8080/);
+ if(reopen==='closed')assert.equal(v.document.querySelector('.ovl.on'),null);else if(reopen==='codex'){assert.match(v.find('.cbody').textContent,/Codex/);assert.doesNotMatch(v.find('.cbody').textContent,/127\.0\.0\.1:8080/)}else{assert.match(v.find('.cbody').textContent,/Сейчас.*127\.0\.0\.1:8080/);assert.equal(v.find('[data-rf="proxy"]').value,'http://127.0.0.1:8080');assert.equal(v.find('[data-rapply]').disabled,true)}
+ assert.equal(v.requests.filter(r=>r.path==='/api/connections/route').length,1);assert.equal(h.provider.calls.length,0);
+});
+
+test('211a: accepted snapshot updates current route while preserving edits made in the reopened card',async()=>{
+ const gate=deferred<any>(),seen=deferred();let hold=false;const v=ui(async path=>{if(path==='/api/billing')return {ok:false};if(hold){hold=false;seen.resolve();return gate.promise}return data()});await v.settle();await v.find('[data-pv="claude"]').emit('click');hold=true;const loading=v.find('[data-connections-refresh]').emit('click');await seen.promise;
+ await v.window.emit('keydown',{key:'Escape'});await v.find('[data-pv="claude"]').emit('click');await v.find('[data-rv="iface"]').emit('click');v.find('[data-rf="iface"]').value='utun5';await v.find('[data-rf="iface"]').emit('input');v.find('[data-rf="label"]').value='my draft';await v.find('[data-rf="label"]').emit('input');
+ gate.resolve(data('/a',{route:'proxy',proxy:'http://127.0.0.1:8080'}));await loading;assert.match(v.find('.cbody').textContent,/Сейчас.*127\.0\.0\.1:8080/);assert.equal(v.find('[data-rf="iface"]').value,'utun5');assert.equal(v.find('[data-rf="label"]').value,'my draft');assert.equal(v.find('[data-rapply]').disabled,false);assert.equal(v.requests.some(r=>r.body),false);
+});
+
+test('211a: delayed follow-up GET cannot refresh a card of the next project',async()=>{
+ const gate=deferred<any>(),seen=deferred();let project='/a',hold=false;const v=ui(async path=>{if(path==='/api/billing')return {ok:false};if(hold){hold=false;seen.resolve();return gate.promise}return data(project)});await v.settle();await v.find('[data-pv="claude"]').emit('click');hold=true;const loading=v.find('[data-connections-refresh]').emit('click');await seen.promise;
+ project='/b';v.H.project=project;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await until(()=>v.find('[data-connections-status]').dataset.project==='/b');await v.find('[data-pv="claude"]').emit('click');gate.resolve(data('/a',{route:'proxy',proxy:'http://old.invalid:8080'}));await loading;assert.equal(v.find('[data-connections-status]').dataset.project,'/b');assert.doesNotMatch(v.find('.cbody').textContent,/old\.invalid/);assert.equal(v.find('[data-rapply]').disabled,true);
+});
+
+test('211a: refreshing route data does not discard an unsaved subscription date in the same card',async()=>{
+ const billing={ok:true,project:'/a',subscriptions:[{vendor:'claude',account:'fixture@example.test'}],config:{subscriptionDates:[]}};const v=ui(async path=>path==='/api/billing'?billing:data());await v.settle();await v.find('[data-pv="claude"]').emit('click');v.find('[data-subscription-date]').value='2027-02-15';await v.find('[data-connections-refresh]').emit('click');assert.equal(v.find('[data-subscription-date]').value,'2027-02-15');assert.equal(v.requests.some(r=>r.body),false);
+});
