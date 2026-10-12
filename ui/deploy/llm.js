@@ -59,7 +59,7 @@
   if(!r||!r.ok){status(d,error(r));return}
   if(kind==='discover'){if(!Array.isArray(r.models)){status(d,'Неверный список моделей');return}d.models=r.models;d.selected=new Set([...d.selected].filter(id=>d.models.some(m=>m.id===id)));modelList(d);status(d,d.models.length?'Выберите модели и сохраните подключение':'Провайдер вернул пустой список · можно ввести имя модели');return}
   field('secret').value='';
-  if(kind==='delete-key'){d.key=r.key;credential(d);status(d,'Ключ удалён');return}
+  if(kind==='delete-key'){d.config=r.config;d.revision=r.revision;d.key=r.key;credential(d);status(d,'Ключ удалён');return}
   if(kind==='save'){d.revision=r.revision;d.config=r.config;d.id=r.id;status(d,'Подключение сохранено');L.toast('Подключение сохранено · '+esc(r.config.displayName||r.id));}
   else L.toast('Подключение удалено');close();await load();if(current(d.binding)&&L.refreshStatus)await L.refreshStatus();
  }

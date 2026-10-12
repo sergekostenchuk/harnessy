@@ -1,3 +1,4 @@
+import {keySlot} from '@harnessy/llm';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,renameSync,mkdirSync,rmdirSync} from 'node:fs';
@@ -11,8 +12,8 @@ test('draft discovery is owner-only, strict, explicit and never persists a route
  assert.equal((await call(h.api,root+'/demo/save',{body:{config:draft.config,secret},headers:{'x-pane-token':'fake'}})).status,403);
  assert.equal((await call(h.api,root+'/discover',{body:{...draft,config:{...draft.config,apiKey:secret}}})).body.code,'config_invalid');assert.equal(requests.length,0);
  let r=await call(h.api,root+'/discover',{body:draft});assert.equal(r.status,200);assert.equal(r.body.models[0].id,'example');assert.deepEqual(requests,['Bearer '+secret]);assert.equal(await keys.resolveKey('demo'),null);assert.deepEqual((await call(h.api,root)).body.providers,[]);assert.doesNotMatch(r.text,RegExp(secret));
- r=await call(h.api,root+'/demo/save',{body:{config:{...draft.config,models:[{id:'example'}]},secret,revision:null}});assert.equal(r.status,200);assert.equal(r.body.config.keyRef,'demo');assert.equal(await keys.resolveKey('demo'),secret);assert.doesNotMatch(r.text,RegExp(secret));assert.doesNotMatch(readFileSync(join(h.dir,'owner-settings.json'),'utf8'),RegExp(secret));assert.doesNotMatch((await call(h.api,'/api/trace')).text,RegExp(secret));
- const saved=r.body;r=await call(h.api,root+'/demo/save',{body:{config:saved.config,secret:'replacement-fixture',revision:null}});assert.equal(r.status,409);assert.equal(r.body.code,'llm_conflict');assert.equal(await keys.resolveKey('demo'),secret);
+ r=await call(h.api,root+'/demo/save',{body:{config:{...draft.config,models:[{id:'example'}]},secret,revision:null}});assert.equal(r.status,200);assert.equal(r.body.config.keyRef,'demo');assert.equal(await keys.resolveKey(keySlot('demo',r.body.config.keyGeneration)),secret);assert.doesNotMatch(r.text,RegExp(secret));assert.doesNotMatch(readFileSync(join(h.dir,'owner-settings.json'),'utf8'),RegExp(secret));assert.doesNotMatch((await call(h.api,'/api/trace')).text,RegExp(secret));
+ const saved=r.body;r=await call(h.api,root+'/demo/save',{body:{config:saved.config,secret:'replacement-fixture',revision:null}});assert.equal(r.status,409);assert.equal(r.body.code,'llm_conflict');assert.equal(await keys.resolveKey(keySlot('demo',saved.config.keyGeneration)),secret);
 });
 test('draft cannot carry a stored key to changed URL, protocol, catalog or redirected destination',limits,async t=>{
  let targetCalls=0,headers:string[]=[];const target=await endpoint(t,(_b,_req,res)=>{targetCalls++;res.end('{}')}),source=await endpoint(t,(_b,req,res)=>{headers.push(String(req.headers.authorization));res.writeHead(302,{location:target.url+'/models'});res.end()}),keys=new MemoryKeys(),h=await fixture(t,{deps:{llmKeys:keys}});
@@ -23,9 +24,9 @@ test('draft cannot carry a stored key to changed URL, protocol, catalog or redir
 test('save rolls back key on settings failure, and settings stay unchanged on partial key write failure',limits,async t=>{
  const keys=new MemoryKeys(),h=await fixture(t,{deps:{llmKeys:keys}}),file=join(h.dir,'owner-settings.json');let r=await call(h.api,root+'/demo/save',{body:{config:config('https://example.test/v1'),secret}});assert.equal(r.status,200);const saved=r.body,bytes=readFileSync(file,'utf8'),put=keys.put.bind(keys);let obstruct=true;
  keys.put=async(id,value)=>{await put(id,value);if(obstruct){obstruct=false;renameSync(file,file+'.backup');mkdirSync(file)}};
- r=await call(h.api,root+'/demo/save',{body:{config:{...saved.config,displayName:'new'},revision:saved.revision,secret:'new-fixture-key'}});assert.equal(r.body.code,'write_failed');assert.equal(await keys.resolveKey('demo'),secret);rmdirSync(file);renameSync(file+'.backup',file);assert.equal(readFileSync(file,'utf8'),bytes);
+ r=await call(h.api,root+'/demo/save',{body:{config:{...saved.config,displayName:'new'},revision:saved.revision,secret:'new-fixture-key'}});assert.equal(r.body.code,'write_failed');assert.equal(await keys.resolveKey(keySlot('demo',saved.config.keyGeneration)),secret);rmdirSync(file);renameSync(file+'.backup',file);assert.equal(readFileSync(file,'utf8'),bytes);
  let fail=true;keys.put=async(id,value)=>{await put(id,value);if(fail){fail=false;throw Error('unsafe '+value)}};
- r=await call(h.api,root+'/demo/save',{body:{config:{...saved.config,displayName:'new'},revision:saved.revision,secret:'new-fixture-key'}});assert.equal(r.body.code,'credential_unavailable');assert.equal(await keys.resolveKey('demo'),secret);assert.equal(readFileSync(file,'utf8'),bytes);assert.doesNotMatch(r.text,/unsafe|new-fixture-key/);
+ r=await call(h.api,root+'/demo/save',{body:{config:{...saved.config,displayName:'new'},revision:saved.revision,secret:'new-fixture-key'}});assert.equal(r.body.code,'credential_unavailable');assert.equal(await keys.resolveKey(keySlot('demo',saved.config.keyGeneration)),secret);assert.equal(readFileSync(file,'utf8'),bytes);assert.equal(keys.rows.size,1);assert.doesNotMatch(r.text,/unsafe|new-fixture-key/);
 });
 test('catalog draft discovery stays offline and keyless; missing fields refuse before any write',limits,async t=>{
  const h=await fixture(t,{deps:{llmKeys:new MemoryKeys(),llmFetch:async()=>{assert.fail('catalog discovery must be offline')}}});const r=await call(h.api,root+'/discover',{body:{id:'my-api',config:{catalog:'anthropic'}}});assert.equal(r.status,200);assert.ok(r.body.models.length>0);
@@ -35,6 +36,6 @@ test('catalog draft discovery stays offline and keyless; missing fields refuse b
 test('first save removes newly written key when config cannot be committed; concurrent save refuses stale draft',limits,async t=>{
  const keys=new MemoryKeys(),h=await fixture(t,{deps:{llmKeys:keys}}),file=join(h.dir,'owner-settings.json');await h.runtime.settings.patch('owner',{keep:true});const bytes=readFileSync(file,'utf8'),put=keys.put.bind(keys);let obstruct=true;
  keys.put=async(id,value)=>{await put(id,value);if(obstruct){obstruct=false;renameSync(file,file+'.backup');mkdirSync(file)}};
- let r=await call(h.api,root+'/new/save',{body:{config:config('https://example.test'),secret}});assert.equal(r.body.code,'write_failed');assert.equal(await keys.resolveKey('new'),null);rmdirSync(file);renameSync(file+'.backup',file);assert.equal(readFileSync(file,'utf8'),bytes);
- keys.put=put;const results=await Promise.all(['first-fixture','second-fixture'].map(secret=>call(h.api,root+'/new/save',{body:{config:config('https://example.test'),secret,revision:null}})));assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);r=results.find(r=>r.status===200)!;assert.equal((await keys.describe('new')).mask,r.body.key.mask);
+ let r=await call(h.api,root+'/new/save',{body:{config:config('https://example.test'),secret}});assert.equal(r.body.code,'write_failed');assert.equal(keys.rows.size,0);rmdirSync(file);renameSync(file+'.backup',file);assert.equal(readFileSync(file,'utf8'),bytes);
+ keys.put=put;const results=await Promise.all(['first-fixture','second-fixture'].map(secret=>call(h.api,root+'/new/save',{body:{config:config('https://example.test'),secret,revision:null}})));assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);r=results.find(r=>r.status===200)!;assert.equal((await keys.describe(keySlot('new',r.body.config.keyGeneration))).mask,r.body.key.mask);
 });

@@ -1,3 +1,4 @@
+import {keySlot} from '@harnessy/llm';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -19,13 +20,14 @@ function ui(fetch:(path:string,body?:Data)=>Promise<Data>){
 }
 test('connections draft discovers only on click, saves key plus selected models and exposes safe metadata',opts,async t=>{
  let network=0;const server=await endpoint(t,(_b,_req,res)=>{network++;res.end(JSON.stringify({data:[{id:'model-one',name:'First model'},{id:'model-two'}]}))}),keys=new MemoryKeys(),h=await fixture(t,{deps:{llmKeys:keys}});
+ const stored=async()=>{const config=h.runtime.settings.llmProviders()['my-api'];return config?.keyRef?keys.resolveKey(keySlot(config.keyRef,config.keyGeneration)):null};
  const v=ui(async(path,body)=>(await call(h.api,path,body?{body}:{})).body);await v.L.loadLlmRoutes();await v.click('[data-llm-add]');assert.equal(network,0);
  await v.input('id','my-api');await v.input('name','Мой сервер');await v.input('url',server.url);await v.input('api','openai-completions');await v.input('secret','fixture-secret-5678');
  await v.click('[data-llm-action="discover"]');assert.equal(network,1);assert.equal((await call(h.api,'/api/llm/providers')).body.providers.length,0);
- const checkbox=v.find('[data-llm-model="model-one"]');(checkbox as any).checked=true;await checkbox.emit('change');await v.click('[data-llm-action="save"]');assert.equal(await keys.resolveKey('my-api'),'fixture-secret-5678');assert.equal(v.document.querySelector('.llm-dialog'),null);assert.equal(v.L.apiRoutes[0].id,'api:my-api');assert.deepEqual(JSON.parse(JSON.stringify(v.L.apiRoutes[0].models)),[{id:'model-one',label:'First model'}]);
+ const checkbox=v.find('[data-llm-model="model-one"]');(checkbox as any).checked=true;await checkbox.emit('change');await v.click('[data-llm-action="save"]');assert.equal(await stored(),'fixture-secret-5678');assert.equal(v.document.querySelector('.llm-dialog'),null);assert.equal(v.L.apiRoutes[0].id,'api:my-api');assert.deepEqual(JSON.parse(JSON.stringify(v.L.apiRoutes[0].models)),[{id:'model-one',label:'First model'}]);
  await v.click('[data-llm-edit="my-api"]');assert.equal(v.find('[data-llm-field="secret"]').value,'');assert.match(v.find('[data-llm-key-info]').textContent,/••••••••5678/);assert.doesNotMatch(v.document.innerHTML,/fixture-secret/);assert.equal(network,1);
- await v.input('url','');await v.click('[data-llm-action="delete-key"]');assert.equal(await keys.resolveKey('my-api'),null);assert.match(v.find('[data-llm-key-info]').textContent,/ключа нет/);
- await v.input('url',server.url);await v.input('secret','replacement-fixture');await v.click('[data-llm-action="save"]');assert.equal(await keys.resolveKey('my-api'),'replacement-fixture');await v.click('[data-llm-edit="my-api"]');await v.click('[data-llm-action="delete"]');assert.equal(await keys.resolveKey('my-api'),null);assert.equal(v.L.apiRoutes.length,0);
+ await v.input('url','');await v.click('[data-llm-action="delete-key"]');assert.equal(await stored(),null);assert.match(v.find('[data-llm-key-info]').textContent,/ключа нет/);
+ await v.input('url',server.url);await v.input('secret','replacement-fixture');await v.click('[data-llm-action="save"]');assert.equal(await stored(),'replacement-fixture');await v.click('[data-llm-edit="my-api"]');await v.click('[data-llm-action="delete"]');assert.equal(await stored(),null);assert.equal(v.L.apiRoutes.length,0);assert.equal(keys.rows.size,0);
 });
 test('late discovery cannot overwrite edited form or new dialog; duplicate action and project switch are bounded',opts,async()=>{
  const pending=deferred<Data>();let finds=0;const v=ui(async(path)=>path.endsWith('/discover')?(finds++,await pending.promise):{ok:true,providers:[],catalog:[]});await v.flush();await v.click('[data-llm-add]');await v.input('id','mine');await v.input('url','https://example.test');await v.input('api','openai-completions');const reading=v.click('[data-llm-action="discover"]');await v.flush();await v.click('[data-llm-action="discover"]');assert.equal(finds,1);await v.input('url','https://new.test');pending.resolve({ok:true,models:[{id:'stale'}]});await reading;assert.equal(v.document.querySelector('[data-llm-model="stale"]'),null);assert.match(v.find('[data-llm-status]').textContent,/Форма изменилась/);
