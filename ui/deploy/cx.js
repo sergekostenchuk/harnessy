@@ -16,7 +16,7 @@
   const MODES_UI={search:['Поиск','search'],think:['Думать','think'],sub:['Субагенты','sub']};
   const seat=()=>H.on?H.pane:null;
   const modeLabel=id=>{ const m=(H.modes||[]).find(x=>x.id===id); return m?m.label:(id||'права не заданы'); };
-  const allModels=()=>{ const out=[]; Object.entries(H.models||{}).forEach(([v,ms])=>(ms||[]).forEach(m=>out.push(Object.assign({vendor:v},m)))); return out; };
+  const allModels=()=>{ const out=[]; Object.entries(H.models||{}).forEach(([v,ms])=>(ms||[]).forEach(m=>out.push(Object.assign({vendor:v},m)))); for(const p of L.apiRoutes||[])for(const m of p.models)if(!out.some(x=>x.vendor===p.id&&x.id===m.id))out.push({vendor:p.id,...m}); return out; };
   const modelLabel=(id,vendor)=>{ const m=allModels().find(x=>x.id===id&&(!vendor||x.vendor===vendor)); return m?m.label:id==='default'?'по умолчанию программы':(id||'модель не выбрана'); };
   const chip=(k,ico,text,o)=>{ o=o||{}; return '<span class="cx-chip'+(o.cls?' '+o.cls:'')+'" data-cx="'+k+'" title="'+esc(o.title||'')+'">'+svg(ico)+'<b>'+esc(text)+'</b><i>▾</i></span>'; };
 
@@ -76,10 +76,12 @@
   const connectionKind=kind=>({subscription:'подписка',apikey:'ключ API',local:'локально'}[kind]||'вид подключения не указан');
   const modelsN=n=>n+' '+(n%10===1&&n%100!==11?'модель':n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'модели':'моделей');
   const modelMode=()=>{const p=seat();return p&&(!isRoom(p)||p.busy)?p.mode:cx().noFolder?'chat':'read'};
-  const modeStamp=()=>JSON.stringify([modelMode(),H.turnModes||{},H.models||{}]);
+  const modeStamp=()=>JSON.stringify([modelMode(),H.turnModes||{},H.models||{},L.apiRoutes||[]]);
   function modelSupport(vendor,model){if(model&&model.via==='provider-router'&&(!model.viaStatus||model.viaStatus.ok!==true))return {ok:false,reason:model.viaStatus&&typeof model.viaStatus.reason==='string'&&model.viaStatus.reason.trim()?model.viaStatus.reason:'provider-router не отвечает: движок не сообщил доступность'};const p=pop&&pop.__models&&pop.__models.rows&&pop.__models.rows.find(p=>p.id===vendor);
     if(p&&(p.installed===null||p.checking))return {ok:false,reason:'Программа проверяется, повторите через несколько секунд'};
     if(p&&p.installed===false)return {ok:false,reason:'Программа не установлена'};
+    if(vendor.startsWith('api:')&&L.apiRoutesError)return {ok:false,reason:L.apiRoutesError};
+    if(vendor.startsWith('api:')&&(L.apiRoutes||[]).some(p=>p.id===vendor))return {ok:true};
     const mode=modelMode(),cap=H.turnModes&&H.turnModes[vendor]&&H.turnModes[vendor][mode];
     return cap&&cap.ok===true?{ok:true,note:typeof cap.note==='string'?cap.note:''}:{ok:false,reason:'Ходы в режиме «'+modeLabel(mode)+'» недоступны: '+(cap&&typeof cap.reason==='string'&&cap.reason.trim()?cap.reason:'движок не сообщил поддержку режима')};}
   function modelRows(response){
@@ -91,8 +93,8 @@
       rows.push({id:p.id,title:p.title,kind:p.kind,subtitle:typeof p.subtitle==='string'?p.subtitle:'',installed:p.installed,checking:p.checking===true,models,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''});
     }return rows;
   }
-  function modelGroups(panel=pop){const metadata=panel&&panel.__models&&panel.__models.rows||[];
-    const groups=[...new Set([...Object.keys(H.models||{}),...metadata.map(p=>p.id)])].map(id=>{const detail=metadata.find(p=>p.id===id),models=Array.isArray(H.models&&H.models[id])?H.models[id]:[];
+  function modelGroups(panel=pop){const metadata=[...(panel&&panel.__models&&panel.__models.rows||[]),...(L.apiRoutes||[])];
+    const groups=[...new Set([...Object.keys(H.models||{}),...metadata.map(p=>p.id)])].filter(id=>!id.startsWith('api:')||metadata.some(p=>p.id===id)).map(id=>{const detail=metadata.find(p=>p.id===id),models=detail&&id.startsWith('api:')?detail.models:Array.isArray(H.models&&H.models[id])?H.models[id]:[];
       return {id,vendor:id,title:detail?detail.title:id,kind:detail?detail.kind:null,subtitle:detail?detail.subtitle:'',availability:detail&&(detail.installed===null||detail.checking)?'проверяется…':detail&&detail.installed===false?'не установлена':'',modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id,via:m.via,viaStatus:m.viaStatus}))};});
     const codex=groups.find(g=>g.id==='codex'),routed=codex?codex.models.filter(m=>m.via==='provider-router'):[];
     if(routed.length){codex.models=codex.models.filter(m=>m.via!=='provider-router');groups.splice(groups.indexOf(codex)+1,0,{id:'provider-router',vendor:'codex',title:'provider-router',kind:'local',subtitle:'локально · через Codex',availability:codex.availability,modelsReason:'',models:routed})}return groups;
@@ -104,9 +106,9 @@
   }
   async function loadModels(panel){if(!modelsCurrent(panel))return;
     const state=panel.__models||(panel.__models={rows:null,error:'',loading:false,saving:false,request:0,revision:0,modes:modeStamp(),events:null});
-    if(!state.events&&typeof L.subscribeLiveEvents==='function')state.events=L.subscribeLiveEvents(e=>{let ev;try{ev=JSON.parse(e.data)}catch{return}if(ev.type==='providers'&&(!ev.project||ev.project===panel.__binding.project)&&modelsCurrent(panel))void loadModels(panel)});
+    if(!state.events&&typeof L.subscribeLiveEvents==='function')state.events=L.subscribeLiveEvents(e=>{let ev;try{ev=JSON.parse(e.data)}catch{return}if(['providers','llm.routes'].includes(ev.type)&&(!ev.project||ev.project===panel.__binding.project)&&modelsCurrent(panel))void loadModels(panel)});
     const request=++state.request;state.loading=true;state.error='';redrawModels(panel);let r=null;
-    try{if(H.on)r=await L.api('/api/providers/catalog')}catch{}
+    try{if(H.on){if(L.loadLlmRoutes)await L.loadLlmRoutes();if(!modelsCurrent(panel)||request!==state.request)return;r=await L.api('/api/providers/catalog')}}catch{}
     if(!modelsCurrent(panel)||request!==state.request)return;state.loading=false;const rows=modelRows(r);
     if(rows){state.rows=rows;redrawModels(panel);const stamp=modeStamp();let status=null;
       try{status=await L.api('/api/status')}catch{}

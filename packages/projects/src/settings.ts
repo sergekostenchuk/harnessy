@@ -22,15 +22,15 @@ export class Settings {
  private llmChanged(){for(const fn of this.llmListeners)try{fn()}catch{}}
  llmProviders(){try{const owner=this.readOwner();return validateResolvedRoutes(Object.hasOwn(owner,'llmProviders')?owner.llmProviders:{})}catch{throw new LlmError('settings_unreadable')}}
  llmRevision(value:ProviderConfig|undefined){return value===undefined?null:createHash('sha256').update(JSON.stringify(value)).digest('hex')}
- async changeLlmProvider(id:string,value:ProviderConfig|undefined,revision:unknown,beforeSave?:()=>Promise<void>){
+ async changeLlmProvider(id:string,value:ProviderConfig|undefined,revision:unknown,beforeSave?:()=>Promise<void|(()=>Promise<void>)>){
   if(!validRoute(id))throw new LlmError('config_invalid');if(value!==undefined)value=validateResolvedRoutes({[id]:value})[id]!;
   const path=canonicalPath(this.ownerFile);
   const result=await withPathLock(path,async()=>{
    let owner,rows;try{owner=this.readOwner(true,path);rows=validateResolvedRoutes(Object.hasOwn(owner,'llmProviders')?owner.llmProviders:{})}catch{throw new LlmError('settings_unreadable')}
    if(revision!==this.llmRevision(rows[id]))throw new ProjectError('llm_conflict','Настройки маршрута изменились; перечитайте их',409);
    if(value===undefined&&!Object.hasOwn(rows,id))throw new LlmError('provider_unknown');
-   await beforeSave?.();if(value===undefined)delete rows[id];else rows[id]=value;
-   writeJson(path,{...owner,llmProviders:rows});return {config:value??null,revision:this.llmRevision(value)};
+   const rollback=await beforeSave?.();if(value===undefined)delete rows[id];else rows[id]=value;
+   try{writeJson(path,{...owner,llmProviders:rows})}catch{if(rollback)await rollback();throw new ProjectError('write_failed','Настройки маршрута не записаны; изменения отменены',500)}return {config:value??null,revision:this.llmRevision(value)};
   });this.llmChanged();return result;
  }
  projectPath(){const path=this.currentProject();return path?join(path,'.harness','state','settings.json'):null}

@@ -15,7 +15,8 @@ function run() {
   var status=0, value=null;
   if(input.op==='put') {
    if(typeof input.key!=='string'||! /^[\x21-\x7e]{8,4096}$/.test(input.key)) return JSON.stringify({ok:false,code:'key_invalid'});
-   var row={key:input.key,updatedAt:Date.now()};
+   if(input.updatedAt!==undefined&&(!Number.isSafeInteger(input.updatedAt)||input.updatedAt<0)) return JSON.stringify({ok:false,code:'key_invalid'});
+   var row={key:input.key,updatedAt:input.updatedAt===undefined?Date.now():input.updatedAt};
    var payload=$(JSON.stringify(row)).dataUsingEncoding($.NSUTF8StringEncoding);
    query.setObjectForKey(payload,$.kSecValueData);
    status=Number($.SecItemAdd(query,null));

@@ -293,6 +293,25 @@
         </div>
       </div></section>
 
+    <section id="api-connection"><h2>Подключить по API<i></i></h2>
+      <p class="conn-note">Маршрут модели · графит и коньяк · макет состояний формы</p>
+      <div class="grid g2"><div class="box"><div class="cap2">1 · провайдер и адрес</div>
+        <label>Провайдер <select aria-label="Провайдер API"><option>Выберите из каталога</option><option>Anthropic</option><option>OpenAI</option><option selected>Свой адрес</option></select></label>
+        <p><label>Название <input placeholder="Мой сервер моделей" aria-label="Название маршрута"></label></p>
+        <label>Протокол <select aria-label="Протокол API"><option>OpenAI · Chat Completions</option><option>OpenAI · Responses</option><option>Anthropic · Messages</option></select></label>
+        <p><label>Базовый адрес <input placeholder="https://example.com/v1" aria-label="Базовый адрес API"></label></p>
+        <div class="cap2">2 · ключ</div><label>Ключ API <input type="password" autocomplete="new-password" placeholder="Вставьте ключ" aria-label="Ключ API"></label>
+        <p class="conn-note">После сохранения: ••••••••1234 · 12 октября, 14:00. Ключ хранится в связке ключей macOS.</p><button class="btn sm" disabled>Заменить ключ</button> <button class="btn sm ghost" disabled>Удалить ключ</button>
+      </div><div class="box"><div class="cap2">3 · модели</div><button class="btn" disabled>Найти модели</button><p class="conn-note">Из каталога — без сети. Для своего адреса — запрос списка по нажатию.</p>
+        <label><input type="checkbox" checked> Модель из каталога</label><p><label><input type="checkbox"> Другая модель</label></p>
+        <button class="btn p" disabled>Сохранить</button> <button class="btn ghost" disabled>Отмена</button>
+        <p role="status" class="conn-note">Ищу модели… · повторный запуск недоступен</p>
+        <p role="alert" style="color:var(--bad)">Провайдер отклонил ключ или доступ · auth. Исправьте ключ и повторите поиск.</p>
+        <p class="conn-note">Настройки изменились в другом окне · перечитайте маршрут перед сохранением.</p>
+        <p class="conn-note">Маршрут сохранён · доступен отдельной группой в выборе модели чата. Чтение · правка · полный доступ.</p>
+      </div></div>
+    </section>
+
     <section id="first-program-models"><h2>Первый запуск · программы и модели<i></i></h2>
       <div class="grid g2"><div class="box"><b>Claude Code</b><p class="conn-note">подписка · модели из статуса</p><select aria-label="Модель · Claude Code"><option value="">Выберите модель</option><option>Fable 5.1</option></select></div>
       <div class="box"><b>Antigravity</b><p class="conn-note">подписка · режим чтения недоступен</p><select aria-label="Модель · Antigravity"><option value="">Выберите модель</option><option disabled>Gemini · нет изоляции инструментов на ход</option></select></div>

@@ -108,3 +108,13 @@ no implicit retries, cancellation, truncation and route changes. Keychain tests
 use doubles; they do not touch the owner's keychain or send live model requests.
 
 Google’s native pi-ai adapter rejects guarded fetch; it is excluded with non-retryable `transport_unsupported`. Configure Google via a custom OpenAI-compatible address (`https://generativelanguage.googleapis.com/v1beta/openai`) and explicit models instead. Custom routes require a nonempty `models` list.
+
+### Owner connection form (TS-21c)
+
+Connections → “Подключить по API” edits an in-memory draft. Keys are held only in the password input and explicit request; closed drafts discard them. Discovery never saves a route, checks catalog entries offline, and calls a custom endpoint only on an owner click. Selected models are required to save. Saved routes appear as `api:<route-id>` groups in the chat model picker.
+
+- `POST /api/llm/providers/discover {id,config,secret?}` validates a draft (models may be empty only here) and returns candidate models. A stored key can be used only with the same catalog, protocol and base URL; otherwise `credential_target_changed`. Redirects are refused.
+- `POST /api/llm/providers/:id/save {config,revision,secret?}` validates before writes and checks revision under the owner settings lock. A failed config write rolls the key back, including its prior timestamp; key failure leaves config unchanged. A failed rollback is a typed credential error, never a success receipt.
+- The existing key metadata/delete and route delete endpoints handle explicit owner actions. No HTTP response, trace or config includes the key itself.
+
+`discoverDraft` is separate from the runtime service: its allowance for an empty model selection cannot reach settings persistence or model execution.

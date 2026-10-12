@@ -1,4 +1,4 @@
-import {LlmError,validRoute,catalogProviders,catalogModels,modelInfo,validateResolvedRoutes} from '@harnessy/llm';
+import {discoverDraft,validateDiscoveryDraft,LlmError,validRoute,catalogProviders,catalogModels,modelInfo,validateResolvedRoutes} from '@harnessy/llm';
 import type {Runtime} from '@harnessy/runtime';
 import {RuntimeError} from '@harnessy/runtime';
 import type {Route,RequestContext} from './routes.ts';
@@ -9,7 +9,29 @@ function fields(body:Record<string,unknown>,keys:string[]){if(Object.keys(body).
 export function llmRoutes(r:Runtime):Route[]{
  const selected=(id:string)=>{const rows=r.settings.llmProviders();if(!validRoute(id)||!Object.hasOwn(rows,id))throw new LlmError('provider_unknown');return rows[id]!};
  const item=(id:string)=>{const config=selected(id);return {id,config,revision:r.settings.llmRevision(config),models:r.llm.models(id)}};
+ const secretValue=(value:unknown)=>{if(typeof value!=='string'||!/^[\x21-\x7e]{8,4096}$/.test(value))throw new LlmError('config_invalid');return value};
+ const replaceKey=async(id:string,secret:string)=>{
+  const previous=await r.llmKeys.resolveKey(id),meta=await r.llmKeys.describe(id);
+  const rollback=async()=>{try{if(previous===null)await r.llmKeys.delete(id);else await r.llmKeys.put(id,previous,meta.updatedAt??undefined)}catch{throw new LlmError('credential_unavailable')}};
+  try{await r.llmKeys.put(id,secret)}catch{await rollback();throw new LlmError('credential_unavailable')}return rollback;
+ };
  return [
+ {method:'POST',path:'/api/llm/providers/discover',style:'J',handle:async ctx=>{
+  owner(ctx);fields(ctx.body,['id','config','secret']);const id=ctx.body.id;if(typeof id!=='string'||!validRoute(id))throw new LlmError('config_invalid');
+  const config=validateDiscoveryDraft(id,ctx.body.config),secret=ctx.body.secret===undefined?undefined:secretValue(ctx.body.secret),saved=r.settings.llmProviders()[id],revision=r.settings.llmRevision(saved);
+  const sameTarget=saved&&saved.catalog===config.catalog&&saved.api===config.api&&saved.baseURL===config.baseURL;
+  if(secret===undefined&&saved?.keyRef&&!sameTarget)throw new RuntimeError('credential_target_changed','Адрес или протокол изменён: введите ключ для нового адреса',409);
+  const draft={...config,...(secret!==undefined||sameTarget&&saved?.keyRef?{keyRef:id}:{})};
+  const models=await discoverDraft(id,draft,{resolveKey:async()=>{if(secret!==undefined)return secret;if(!sameTarget)return null;const key=await r.llmKeys.resolveKey(id);if(revision!==r.settings.llmRevision(r.settings.llmProviders()[id]))throw new LlmError('route_changed');return key},...(r.deps.llmFetch?{fetch:r.deps.llmFetch}:{})});
+  return json({ok:true,models});
+ }},
+ {method:'POST',path:'/api/llm/providers/:id/save',style:'J',handle:async ctx=>{
+  owner(ctx);fields(ctx.body,['config','revision','secret']);const id=ctx.params.id!,secret=ctx.body.secret===undefined?undefined:secretValue(ctx.body.secret);
+  const raw=ctx.body.config;if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new LlmError('config_invalid');
+  const checked=validateResolvedRoutes({[id]:raw})[id]!,config={...checked,...(secret!==undefined?{keyRef:id}:{})};
+  await r.settings.changeLlmProvider(id,config,ctx.body.revision??null,secret!==undefined?()=>replaceKey(id,secret):undefined);
+  return json({ok:true,...item(id),key:config.keyRef?await r.llmKeys.describe(id):{present:false,mask:null,updatedAt:null}});
+ }},
  {method:'GET',path:'/api/llm/providers',style:'J',handle:ctx=>{owner(ctx);return json({ok:true,providers:Object.keys(r.settings.llmProviders()).map(item),catalog:catalogProviders()})}},
  {method:'GET',path:'/api/llm/providers/catalog/:id',style:'J',handle:ctx=>{owner(ctx);return json({ok:true,models:catalogModels(ctx.params.id!).map(modelInfo)})}},
  {method:'GET',path:'/api/llm/providers/:id',style:'J',handle:ctx=>{owner(ctx);return json({ok:true,...item(ctx.params.id!)})}},
