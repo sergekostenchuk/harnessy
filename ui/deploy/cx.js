@@ -83,6 +83,7 @@
     if(!state||state.project!==H.project||state.loading&&!state.data.length)return html+note('Читаю предложения команды…');
     if(state.error)return html+note(esc(state.error))+row('Повторить чтение',{a:' data-cx-team-refresh'});
     const q=state.data[state.data.length-1];if(!q)return html+note('Предложение не зарегистрировано. Если оркестратор описал состав в разговоре, попросите его: «зарегистрируй предложение».')+row('Попросить оркестратора',{a:' data-cx-team-request'});
+    if(state.data.some(previous=>previous!==q&&previous.confirmed)){const n=q.seats.length;html+=note('+'+n+' '+(n===1?'место':n>=2&&n<=4?'места':'мест')+' к составу')}
     html+=q.seats.map((s,i)=>{const member=L.proposalMember(q,i),created=member&&member.state==='created';return '<div class="cx-proposal-role">'+row('<b>'+esc(s.label)+'</b>',{a:' data-cx-team-create="'+esc(q.proposalId)+'" data-cx-team-index="'+i+'"',r:esc(L.proposalStateText(member))})+'<small>Класс прав: '+esc(member?member.kind:s.kind)+' · '+esc(s.vendor)+' / '+esc(s.model)+' · '+esc(s.mode)+'</small><p>'+esc(s.intro.split('\n')[0])+'</p>'+row(created?'Открыть чат':'Создать эту роль',{a:' data-cx-team-create="'+esc(q.proposalId)+'" data-cx-team-index="'+i+'"'})+row('Класс и вводная…',{a:' data-cx-team-open="'+esc(q.proposalId)+'"'})+'</div>'}).join('');
     return html+row(q.confirmed?'Посмотреть подтверждённый состав':'Подтвердить состав…',{a:' data-cx-team-open="'+esc(q.proposalId)+'"',r:'версия '+q.version})+note('Класс прав: один из семи. Имя роли и вводная могут быть любыми.');
   }

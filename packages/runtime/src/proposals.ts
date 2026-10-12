@@ -34,8 +34,13 @@ function read(p:ProjectState):Store {
  }
  return raw as unknown as Store;
 }
-function ref(input:ProposalRef){if(!token(input.proposalId,'p')||!Number.isSafeInteger(input.version)||Number(input.version)<1)invalid('нужны proposalId и положительная целая version');return {proposalId:input.proposalId as string,version:input.version as number}}
-function find(store:Store,input:ProposalRef){const wanted=ref(input),q=store.proposals.find(q=>q.proposalId===wanted.proposalId);if(!q)fail('proposal_not_found','предложение не найдено',404);if(q.version!==wanted.version)fail('proposal_stale','версия предложения изменилась');return q}
+function ref(input:ProposalRef){
+ if(input.proposalId===undefined&&input.version!==undefined)invalid('version без proposalId: для нового состава не передавай ни proposalId, ни version; для обновления возьми оба поля из ответа propose_seats');
+ if(!token(input.proposalId,'p'))invalid('proposalId не из ответа движка; для нового состава не передавай proposalId');
+ if(!Number.isSafeInteger(input.version)||Number(input.version)<1)invalid('нужна положительная целая version из ответа propose_seats вместе с proposalId');
+ return {proposalId:input.proposalId as string,version:input.version as number};
+}
+function find(store:Store,input:ProposalRef){const wanted=ref(input),q=store.proposals.find(q=>q.proposalId===wanted.proposalId);if(!q)fail('proposal_not_found','предложение не найдено: возьми proposalId из ответа propose_seats или не передавай его',404);if(q.version!==wanted.version)fail('proposal_stale','версия предложения изменилась');return q}
 function authority(ctx:ActionContext,p:ProjectState){ctx.assertActive();if(ctx.scope.projectDir!==p.dir)fail('proposal_project_changed','проект предложения сменился');if(p.registry.get(ctx.scope.seatId)?.kind!=='orchestrator')fail('policy_denied','состав команды предлагает и создаёт только оркестратор',403)}
 function proposalKey(from:string,seats:ReturnType<typeof seatInput>[],update:ReturnType<typeof ref>|null,turnInstanceId?:string){return 'sha256:'+createHash('sha256').update(JSON.stringify({from,update,seats,...(turnInstanceId?{turnInstanceId}:{})})).digest('hex')}
 function savedRequestKey(q:TeamProposal){return proposalKey(q.from,q.seats.map(({sid,operationId,...input})=>seatInput(input)),q.version===1?null:{proposalId:q.proposalId,version:q.version-1},q.turnInstanceId)}
@@ -82,7 +87,9 @@ export async function propose(runtime:Runtime,ctx:ActionContext,input:ProposalIn
   // Only this turn's unconfirmed intent can be retried. A confirmed composition or a new turn is a new proposal.
   if(retry){question(p,retry);p.state.saveProposals(store);publish(p);return receipt(p,retry)}
   const old=update?find(store,update):null;
-  if(old?.confirmed||old?.ownerSeats&&Object.keys(old.ownerSeats).length)fail('proposal_stale','подтверждённый состав заморожен; создайте новое предложение');if(old&&old.from!==ctx.scope.seatId)fail('policy_denied','предложение принадлежит другому оркестратору',403);
+  if(old&&old.from!==ctx.scope.seatId)fail('policy_denied','предложение принадлежит другому оркестратору',403);
+  if(old?.confirmed)fail('proposal_confirmed','состав '+old.proposalId+' уже подтверждён и создан; для добавления мест вызови propose_seats без proposalId, перечислив только новые места');
+  if(old?.ownerSeats&&Object.keys(old.ownerSeats).length)fail('proposal_stale','создание мест уже начато; для добавления мест вызови propose_seats без proposalId, перечислив только новые места');
   const proposalId=old?.proposalId??'p'+randomBytes(12).toString('hex'),version=(old?.version??0)+1;
   const manifest=readManifest(p.team!.harnessDir).get('seats') as Map<string,unknown>,assignments=p.state.readMaterializations();if(!Array.isArray(assignments))invalid('сохранённые назначения не читаются');
   const allocated=new Set<string>(assignments.map(op=>object(op)?String(op.operationId):''));const q:TeamProposal={turnInstanceId:ctx.scope.turnInstanceId,requestKey:key,proposalId,version,from:ctx.scope.seatId,thread:'team:'+proposalId+':'+version,questionSeq:null,confirmed:false,seats:seats.map(s=>{let operationId='';for(let n=0;n<100;n++){const id='c'+Math.floor(p.now()).toString(16)+randomBytes(2).toString('hex');if(!store.proposals.some(x=>x.seats.some(s=>s.operationId===id))&&!p.state.chats.chats[id]&&!allocated.has(id)&&!manifest.has(s.kind+'-'+id.slice(1))&&!p.registry.get(s.kind+'-'+id.slice(1))){operationId=id;allocated.add(id);break}}if(!operationId)invalid('не удалось выделить идентификатор места');return {...s,sid:s.kind+'-'+operationId.slice(1),operationId}})};
