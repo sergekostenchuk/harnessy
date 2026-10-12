@@ -220,6 +220,10 @@ html[data-m][data-page="conn"] .row .pay{flex:1 1 100%;margin-left:44px;max-widt
 
 .proxy-add-fields .live-f{margin:0}.proxy-add-fields{gap:12px}.proxy-add-fields>small{margin-top:-6px}.proxy-add-keys{display:grid;gap:6px;max-height:150px;overflow:auto;margin-top:6px}.proxy-add-fields label.proxy-add-key{display:grid;grid-template-columns:18px 1fr auto;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line2);border-radius:9px;background:var(--raised);color:var(--ink);cursor:pointer}.proxy-add-key.on{border-color:var(--accent)!important}.proxy-add-key input{width:auto;accent-color:var(--accent)}.proxy-add-key small{display:block;margin-top:2px}.proxy-add-key b{color:var(--ok);font:11px var(--mono)}.proxy-add-key-label{font-size:12px;color:var(--ink2)}.proxy-add-icon{display:block;width:26px;height:26px;fill:none;stroke:var(--accent);stroke-width:1.3}
 
+/* TS-23e: recovery inside the provider card, sketch 25 / frame 10. */
+.login-recovery{margin-top:12px;padding:14px 16px;border:1px solid color-mix(in srgb,var(--bad) 24%,var(--line));border-radius:8px;background:color-mix(in srgb,var(--bad) 4%,var(--bg));text-align:left;cursor:default}
+.login-recovery strong{display:block;color:var(--bad);font-size:14px;line-height:1.45}.login-recovery p{margin:6px 0 12px;font-size:12.5px;line-height:1.6;color:var(--ink2)}
+.login-recovery-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.login-recovery-actions .btn{white-space:normal;text-align:left}.first-login-check{margin-top:10px}.first-login-check .btn{font-size:12px}
 </style></head>
 <body><div class="sheet">
   <h1>Harnessy · лист 00 · дизайн-код</h1>
@@ -527,6 +531,13 @@ html[data-m][data-page="conn"] .row .pay{flex:1 1 100%;margin-left:44px;max-widt
 <div class="two">
   <div class="box"><div class="cap2">так говорим</div><p style="margin:0;font-size:12.5px;color:var(--ink2)">Прокси · VPS · «через что подключаемся» · «напрямую — сервис видит ваш адрес» · «если не ответит — через …» · «менять каждые N минут» · «работает / не отвечает» · страна и адрес после проверки · «через него ходят: Claude, Codex».</p></div>
   <div class="box"><div class="cap2">так не говорим</div><p style="margin:0;font-size:12.5px;color:var(--ink3)">выход · цепочка · маршрут провайдера · ретранслятор · привязка · revision · ожидаемый IP · ID выхода · коды вроде project_changed в заголовке. Технические причины — только под «подробнее».</p></div>
+</div>
+<div data-login-recovery-design class="box" style="margin-top:16px">
+<div class="cap2">Первый запуск и «+ Подключить» · кадр 10</div>
+<h3>Чем отвечаем</h3><p class="conn-note">Одна модель для начала. Остальные подключите потом в «Подключениях».</p>
+<div class="conn-program"><b>Claude Code · подписка</b>
+<section class="login-recovery" aria-label="Восстановить подключение"><strong>Claude Code недоступен из вашего региона</strong><p>Сервис сообщил, что из вашего региона он недоступен. Подключите прокси или свой VPS и повторите проверку входа.</p><div class="login-recovery-actions"><button type="button" class="btn p" disabled>Подключить через прокси или VPS</button><button type="button" class="btn ghost" disabled>Выбрать другую модель</button></div></section></div>
+<p class="conn-note">Регион и блокировку называем только по подтверждённой причине движка. При неизвестной причине: «Не отвечает» и «Не удалось проверить вход. Причина не установлена. Можно повторить проверку, подключить прокси или VPS либо выбрать другую модель». После «Сохранить и использовать» вход проверяется сам. «Только сохранить» не меняет подключение.</p>
 </div>
 <div data-proxy-add-design class="proxy-add-spec">
 <div class="cap2">Добавить · два шага · кадры 4–5</div>

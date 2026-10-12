@@ -21,7 +21,7 @@ function ui(handler?:(path:string,body:any)=>Promise<any>,initial:any=catalog(pr
  Object.assign(d.document,{documentElement:d.html,body:d.body,visibilityState:'visible'});const H:any={on:true,project,confirmedProjectGeneration:0,panes:[{id:'worker',vendor:'antigravity',model:'model-a',label:'Воркер 1'}],models:{}};
  const defaults=(path:string,body:any)=>path==='/api/providers/catalog'?structuredClone(initial):path==='/api/connections'?{ok:true,project:H.project,providers:[],routes:['direct','proxy','iface']}:path==='/api/billing'?{ok:false}:path.endsWith('/probe')?{ok:true,provider:path.split('/')[3],model:body.model,approvalId:'probe-'+path.split('/')[3],status:'awaiting_approval',price:{kind:'subscription',label:'расходуется подписка'}}:path==='/api/approve'?{ok:true}:null;
  const context:any={document:d.document,location:{pathname:'/11-connections.html',hash:''},addEventListener:d.window.addEventListener.bind(d.window),setTimeout:(f:()=>void)=>f(),requestAnimationFrame:(f:()=>void)=>f(),LIVE:{H,esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),toast:(s:string)=>toasts.push(s),paneName:(p:any)=>p.label,log(){},subscribeLiveEvents(onmessage:any){const stream={onmessage,onopen:null,closed:false,close(){stream.closed=true}};streams.push(stream);return stream},providerLimitHTML:(_id:string,_name:string,_kind:string,supported:boolean)=>supported?'<p>Неделя · 42 % · остаток 58 %</p>':'<p>Провайдер лимиты не отдаёт.</p>',api:async(path:string,body?:any,operation?:any)=>{requests.push({path,body});const task=(async()=>{if(httpApi)return httpApi(path,body,operation);const result=await handler?.(path,body);return result===undefined?defaults(path,body):result})();pending.set(task,{path,body});try{return await task}finally{pending.delete(task)}}}};context.window=context;
- const vm=createContext(context);if(transport){context.H=H;context.fetch=transport;const live=read('ui/deploy/live.js');httpApi=runInContext('(function(){'+live.slice(live.indexOf('  const api='),live.indexOf('  // TS-07: waiting controls'))+'return api})()',vm)}runInContext(read('ui/sketches/disarto/app.js'),vm);runInContext(raw.slice(raw.indexOf('<script>')+8,raw.indexOf('</script>',raw.indexOf('<script>'))),vm);runInContext(read('ui/deploy/conn.js'),vm);
+ const vm=createContext(context);if(transport){context.H=H;context.fetch=transport;const live=read('ui/deploy/live.js');httpApi=runInContext('(function(){'+live.slice(live.indexOf('  const api='),live.indexOf('  // TS-07: waiting controls'))+'return api})()',vm)}runInContext(read('ui/sketches/disarto/app.js'),vm);runInContext(raw.slice(raw.indexOf('<script>')+8,raw.indexOf('</script>',raw.indexOf('<script>'))),vm);runInContext(read('ui/deploy/network-recovery.js'),vm);runInContext(read('ui/deploy/conn.js'),vm);
  const find=(s:string)=>{const node=d.document.querySelector(s);assert.ok(node,s);return node};const settle=async(skip:(request:{path:string;body:any})=>boolean=()=>false)=>{for(let i=0;i<30;i++){await Promise.allSettled([...pending].filter(([,request])=>!skip(request)).map(([task])=>task));await Promise.resolve();if([...pending.values()].every(skip))return}throw Error('UI did not settle')};
  const posts=(suffix='')=>requests.filter(r=>r.body&&r.path.endsWith(suffix));return {...d,H,context,requests,toasts,find,settle,streams,posts};
 }
@@ -307,4 +307,25 @@ test('350: provider card exposes failed probe code, safe excerpt and measured du
 
 for(const verification of ['verified','unverified'])test('22c: provider card shows observed relay status '+verification,{timeout:15000},async()=>{
  const v=ui(undefined,catalog(provider({network:{configured:true,verification}})));await open(v);assert.equal(v.find('[data-program-network]').textContent,'Программа ходит через выход: '+(verification==='verified'?'проверено':'не проверено'));assert.equal(v.posts().length,0);
+});
+
+for(const failure of ['region','blocked','offline','unresponsive'])test('TS-23e: provider recovery '+failure+' remains in the card and rechecks only after save-and-use',async()=>{
+ let checked=false;const p=()=>provider({login:checked?login():{...login('unknown'),failure}}),v=ui(async path=>{if(path==='/api/providers/catalog')return catalog(p());if(path.endsWith('/check')){checked=true;return {ok:true,login:login()}}});await v.settle();await v.find('#addbtn').emit('click');await v.find('[data-program-open="antigravity"]').emit('click');
+ const opens:any[]=[];v.context.LIVE.network={openAdd:(o:any)=>opens.push(o),setProviders(){},summary:()=>'',card:()=>''};let closed=0;v.context.LIVE.networkAdd={close:()=>closed++};
+ assert.match(v.find('[data-login-recovery]').textContent,({region:/регион/,blocked:/блокиров/,offline:/нет связи/,unresponsive:/Причина не установлена/})[failure]!);
+ await v.find('[data-login-connect]').emit('click');assert.equal(opens[0].provider,'antigravity');assert.equal(v.posts('/check').length,0);
+ opens[0].onSaved({ok:true},{usedFor:null});await v.settle();assert.equal(v.posts('/check').length,0);
+ opens[0].onSaved({ok:true},{usedFor:'antigravity'});await v.settle();assert.equal(v.posts('/check').length,1);assert.equal(closed,1);assert.equal(v.document.querySelector('[data-login-recovery]'),null);
+ opens[0].onSaved({ok:true},{usedFor:'antigravity'});await v.settle();assert.equal(v.posts('/check').length,1);assert.equal(v.posts('/probe').length,0);
+});
+
+test('TS-23e: unknown login without network evidence has no proxy diagnosis; another model returns to the catalog',async()=>{
+ let p=provider({login:{...login('unknown'),reason:'регион заблокирован (непроверенный текст)'}});const v=ui(async path=>path==='/api/providers/catalog'?catalog(p):undefined);await open(v);assert.equal(v.document.querySelector('[data-login-recovery]'),null);
+ p=provider({login:{...login('unknown'),failure:'unresponsive'}});await refreshPrograms(v);await v.find('[data-login-other]').emit('click');assert.ok(v.find('[data-program-open="antigravity"]'));assert.equal(v.posts().length,0);
+});
+
+for(const change of ['project','card'])test('TS-23e: delayed save cannot recheck after changing '+change,async()=>{
+ const v=ui(undefined,catalog(provider({login:{...login('unknown'),failure:'offline'}})));await open(v);const opens:any[]=[];v.context.LIVE.network={openAdd:(o:any)=>opens.push(o),setProviders(){},summary:()=>'',card:()=>''};v.context.LIVE.networkAdd={close(){}};await v.find('[data-login-connect]').emit('click');
+ if(change==='project'){v.H.project='/b';v.H.confirmedProjectGeneration++;await v.window.emit('live:status');v.H.project='/a';v.H.confirmedProjectGeneration++;await v.window.emit('live:status')}else{await v.find('[data-login-other]').emit('click');await v.find('[data-program-open="antigravity"]').emit('click')}
+ opens[0].onSaved({ok:true},{usedFor:'antigravity'});await v.settle();assert.equal(v.posts('/check').length,0);
 });

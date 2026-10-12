@@ -22,9 +22,10 @@ async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body
  };
  c.window=c;await c.refreshStatus();const vm=createContext(c);
  runInContext(part('  function captureProjectOperation','  // TS-07: waiting controls')+part('  let bindingGeneration','  function md(')+part('  const isDirect=','  function rememberLive(')+part('  // TS-09b4: one progress view','  // TS-09b2:')+part('  // TS-09b2:','  // End TS-09b2 promotion.')+part('  function reply(','  function composer(')+part('  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+part('  // TS-15f:','  // End TS-15f first run.')+'globalThis.first={draw:firstDraw,next:firstNext,send:firstSend,state:FIRST,go:firstGo,binding:sendBinding,invalidate:invalidateBinding,proposals:proposalsFetch,proposalsReset,TP,catalog:firstCatalog,models:FIRST_MODELS};',vm);
+ const recoveryOpens:any[]=[];c.LIVE={H,esc:c.esc,network:{openAdd:(options:any)=>recoveryOpens.push(options)},networkAdd:{close(){}},firstModelsDraw:c.first.draw};runInContext(readFileSync(new URL('../../../ui/deploy/network-recovery.js',import.meta.url),'utf8'),vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  const settle=async()=>{do{await Promise.all([...pending]);await immediate()}while(pending.size)};
- await settle();return {...d,H,S,c,vm,find,requests,toasts,settle,streams,f:c.first};
+ await settle();return {...d,H,S,c,vm,find,requests,toasts,settle,streams,recoveryOpens,f:c.first};
 }
 async function promote(v:Awaited<ReturnType<typeof ui>>){await v.find('.st[data-s="1"] [data-go="2"]').emit('click');await v.find('.st[data-s="2"] [data-go="3"]').emit('click');await v.find('[data-first-promote]').emit('click');await v.settle();assert.ok(v.H.panes.some((p:any)=>p.kind==='orchestrator'),v.toasts.join(' | '))}
 
@@ -266,4 +267,18 @@ test('320: an old catalogue response cannot replace ready models after persisted
  const api=v.c.api;let hold=true;v.c.api=async(path:string,body:any)=>{const result=await api(path,body);if(hold&&path==='/api/providers/catalog'){hold=false;seen.resolve();await gate.promise}return result};
  const old=v.f.catalog();await seen.promise;await v.window.emit('pagehide',{persisted:true});checking=false;await v.window.emit('pageshow',{persisted:true});await v.settle();
  assert.equal(v.find('[data-first-program="copilot"] option[value="shared"]').disabled,false);gate.resolve();await old;assert.equal(v.find('[data-first-program="copilot"] option[value="shared"]').disabled,false);assert.equal(v.streams.filter(s=>!s.closed).length,1);
+});
+
+for(const action of ['use','save','changed'])test('TS-23e: first run keeps recovery in model step; '+action,async t=>{
+ const h=await fixture(t);let checked=false;const v=await ui(h,undefined,{},(path,response)=>{
+  if(path==='/api/providers/catalog'){const rows=programs();return {...rows,providers:rows.providers.map(p=>({...p,login:{state:checked?'ok':'unknown',command:'login',...(p.id==='claude'&&!checked?{failure:'region'}:{})}}))}}
+  if(path==='/api/providers/claude/check'){checked=true;return {ok:true,login:{state:'ok',command:'login'}}}return response;
+ });v.f.go(2);assert.equal(v.find('.st[data-s="2"]').classList.contains('on'),true);assert.equal(v.document.querySelectorAll('.st[data-s]').length,3);assert.match(v.find('[data-login-recovery="claude"]').textContent,/регион/);
+ assert.equal(v.find('.st[data-s="2"] [data-go="3"]').getAttribute('aria-disabled'),'true');await v.find('.st[data-s="2"] [data-go="3"]').emit('click');assert.equal(v.document.querySelector('[data-first-promote]'),null);
+ await v.find('[data-login-connect="claude"]').emit('click');assert.equal(v.recoveryOpens[0].provider,'claude');
+ if(action==='changed'){await v.find('[data-login-other="claude"]').emit('click');assert.equal(v.document.activeElement?.getAttribute('data-first-model'),'')}
+ v.recoveryOpens[0].onSaved({ok:true},{usedFor:action==='save'?null:'claude'});await v.settle();
+ assert.equal(v.requests.filter(r=>r.path==='/api/providers/claude/check').length,action==='use'?1:0);
+ assert.equal(v.requests.filter(r=>r.body&&/orchestrator|\/probe|\/send/.test(r.path)).length,0);
+ if(action==='use')assert.equal(v.document.querySelector('[data-login-recovery]'),null);
 });
