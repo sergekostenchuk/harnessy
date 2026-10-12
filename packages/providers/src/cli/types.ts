@@ -38,3 +38,10 @@ export interface CliDescriptor {
  failure?(result:CliProcessResult):{code:ErrorCode;text:string};
 }
 export interface CliDependencies {execute:CliExecutor;env:NodeJS.ProcessEnv;cwd:string;temporaryDirectory:string;probeTimeoutMs:number;turnTimeoutMs:number;maxBytes:number}
+
+/** Metadata remains usable when an isolated, permission-safe turn is unavailable. */
+export interface CliUnavailableDescriptor extends Pick<CliDescriptor,'id'|'name'|'binary'|'login'|'version'|'models'|'forbiddenEnv'> {
+ auth:CliProbe<CliAuth>;
+ capabilities:{headless:boolean;resume:boolean;mcp:false;limits:false};
+ unavailableReason:string;
+}

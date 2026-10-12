@@ -1,16 +1,19 @@
 import {CliProvider} from './cli/provider.ts';
+import {readCliMetadata} from './cli/query.ts';
+import {ANTIGRAVITY} from './antigravity.ts';
 import {executeCli} from './cli/process.ts';
 import {createHmac,randomBytes} from 'node:crypto';
 import {ProviderError,record,type Provider,type Vendor,type TurnContext} from './types.ts';
-import type {CliDescriptor,CliDependencies,CliSeat,CliContext,CliAuth,CliModel,CliCommand} from './cli/types.ts';
+import type {CliDescriptor,CliUnavailableDescriptor,CliDependencies,CliSeat,CliContext,CliAuth,CliModel,CliCommand} from './cli/types.ts';
 
 /** Subscription descriptors are added here by TS-20b/c; credentials are never stored here. */
-export const CLI_DESCRIPTORS:readonly CliDescriptor[]=[];
+export const CLI_DESCRIPTORS:readonly (CliDescriptor|CliUnavailableDescriptor)[]=[ANTIGRAVITY];
 export interface CatalogLogin {state:'ok'|'none'|'unknown'|'error';account?:string;command:string;checkedAt?:number;reason?:string}
 // Public checkedAt and SSE at are epoch milliseconds (durationMs is elapsed milliseconds).
-export interface CatalogRow {id:string;title:string;kind:'subscription'|'apikey'|'local';binary:string;installed:boolean;version:string|null;login:CatalogLogin;models:CliModel[];capabilities:{headless:boolean;resume:boolean;mcp:boolean;limits:boolean};limits?:{ref:string};routes?:string}
+export interface CatalogRow {id:string;title:string;kind:'subscription'|'apikey'|'local';binary:string;installed:boolean;version:string|null;login:CatalogLogin;models:CliModel[];capabilities:{headless:boolean;resume:boolean;mcp:boolean;limits:boolean};limits?:{ref:string};routes?:string;reason?:string}
 export interface CatalogEntry {
  id:string;title:string;binary:string;login:CliCommand;forbiddenEnv:readonly string[];capabilities:CatalogRow['capabilities'];routes?:string;
+ unavailableReason?:string;
  version():Promise<string>;auth():Promise<CliAuth>;models():Promise<CliModel[]>;
  runTurn(seat:CliSeat,message:string,ctx:CliContext):Promise<{text:string;sessionId:string|null;interrupted?:boolean}>;
  close?():Promise<void>;
@@ -19,7 +22,14 @@ export const shellQuote=(text:string)=>"'"+text.replaceAll("'","'\\''")+"'";
 export function loginCommand(entry:CatalogEntry){return [entry.binary,...entry.login.args].map(shellQuote).join(' ')}
 const safeText=(v:unknown):v is string=>typeof v==='string'&&!!v&&!/[\x00-\x1f\x7f]/.test(v);
 const maskAccount=(value:unknown)=>typeof value==='string'&&value.trim()?value.trim().slice(0,1)+'•••'+(value.includes('@')?'@'+value.split('@').at(-1):''):undefined;
-export function cliEntry(description:CliDescriptor,deps:Partial<CliDependencies>={}):CatalogEntry{
+export function cliEntry(description:CliDescriptor|CliUnavailableDescriptor,deps:Partial<CliDependencies>={}):CatalogEntry{
+ if('unavailableReason'in description){
+  const d=description,options={...deps,env:{...(deps.env??process.env)}},reason=d.unavailableReason;
+  if(!safeText(reason))throw new ProviderError('protocol','Нет причины недоступности хода');
+  return {id:d.id,title:d.name,binary:d.binary,login:{args:[...d.login.args]},forbiddenEnv:[...d.forbiddenEnv],capabilities:{...d.capabilities},unavailableReason:reason,
+   version:()=>readCliMetadata(d.binary,d.forbiddenEnv,d.version,options),auth:()=>readCliMetadata(d.binary,d.forbiddenEnv,d.auth,options),models:()=>readCliMetadata(d.binary,d.forbiddenEnv,d.models,options),
+   runTurn:async()=>{throw new ProviderError('capability_unsupported',reason)}};
+ }
  const p=new CliProvider(description,deps);return {id:p.vendor,title:description.name,binary:description.binary,login:{args:[...description.login.args]},forbiddenEnv:[...description.forbiddenEnv],capabilities:{headless:true,resume:!!description.resume,mcp:true,limits:!!description.limits},version:()=>p.version(),auth:()=>p.auth(),models:()=>p.models(),runTurn:(s,m,c)=>p.runTurn(s,m,c),close:()=>p.close()};
 }
 export function builtinEntries(providers:Partial<Record<Vendor,Provider>>,models:Partial<Record<Vendor,{id:string;label?:string}[]>>,deps:Partial<CliDependencies>={}):CatalogEntry[]{
@@ -40,7 +50,7 @@ export class ProviderCatalog {
  accountIdentity(auth:CliAuth):string|null{return auth?.loggedIn===true&&typeof auth.email==='string'&&auth.email.trim()?createHmac('sha256',this.salt).update(auth.email.trim().toLowerCase()).digest('hex'):null}
  read(id:string):Promise<{row:CatalogRow;changed:boolean;identity:string|null}>{this.get(id);const previous=this.reading.get(id)??Promise.resolve(),work=previous.then(()=>this.readNow(id),()=>this.readNow(id));this.reading.set(id,work);void work.finally(()=>{if(this.reading.get(id)===work)this.reading.delete(id)}).catch(()=>{});return work}
  private async readNow(id:string):Promise<{row:CatalogRow;changed:boolean;identity:string|null}>{const e=this.get(id);let identity:string|null=null;
- const row:CatalogRow={id:e.id,title:e.title,kind:'subscription',binary:e.binary,installed:false,version:null,login:{state:'unknown',command:loginCommand(e)},models:[],capabilities:{...e.capabilities},...(e.capabilities.limits?{limits:{ref:'/api/limits#'+e.id}}:{}),...(e.routes?{routes:e.routes}:{})};
+ const row:CatalogRow={id:e.id,title:e.title,kind:'subscription',binary:e.binary,installed:false,version:null,login:{state:'unknown',command:loginCommand(e)},models:[],capabilities:{...e.capabilities},...(e.capabilities.limits?{limits:{ref:'/api/limits#'+e.id}}:{}),...(e.routes?{routes:e.routes}:{}),...(e.unavailableReason?{reason:e.unavailableReason}:{})};
  try{const version=await e.version();row.installed=true;if(!safeText(version)||version.length>128)throw new ProviderError('protocol','Версия программы не прочитана');row.version=version;
  const auth=await e.auth();if(!record(auth)||typeof auth.loggedIn!=='boolean')throw new ProviderError('protocol','Состояние входа не прочитано');identity=this.accountIdentity(auth);const account=maskAccount(auth.email);row.login={...row.login,state:auth.loggedIn?'ok':'none',checkedAt:Date.now(),...(account?{account}:{})};
  if(auth.loggedIn){const ms=await e.models();if(!Array.isArray(ms)||ms.some(m=>!m||!safeText(m.id)||!safeText(m.label))||new Set(ms.map(m=>m.id)).size!==ms.length)throw new ProviderError('models_unavailable','Модели не прочитаны');row.models=ms.map(m=>({id:m.id,label:m.label}))}
