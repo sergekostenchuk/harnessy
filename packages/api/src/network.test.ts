@@ -143,3 +143,15 @@ test('22a r2: SSH save validates real file containment, including symlink ancest
  assert.equal((await call(h.api,root+'/exits')).status,200);assert.equal((await call(h.api,root+'/exits/ssh/delete',{body:{revision:current.revision}})).status,200);
  renameSync(base,base+'-old');symlinkSync(base+'-old',base);assert.equal((await save(h.api,ssh)).body.code,'ssh_key_invalid');
 });
+
+
+test('22i: exit prices are optional, finite and revision-protected; malformed fields never alter the stored exit',limits,async t=>{
+ const h=await setup(t);let row=(await save(h.api,{...direct,price:{monthlyUsd:15,perGbUsd:.2}})).body;assert.deepEqual(row.config.price,{monthlyUsd:15,perGbUsd:.2});
+ const disk=new Settings(h.file);assert.deepEqual(disk.network().exits.direct?.price,row.config.price);
+ for(const price of [null,{},'15',{monthlyUsd:'15'},{monthlyUsd:-1},{perGbUsd:1e20},{perGbUsd:null},{monthlyUsd:1,currency:'EUR'}]){
+  const result=await save(h.api,{...direct,price},row.revision);assert.equal(result.body.code,'network_invalid',JSON.stringify(price));assert.deepEqual(h.runtime.settings.network().exits.direct?.price,{monthlyUsd:15,perGbUsd:.2});
+ }
+ const old=row.revision;row=(await save(h.api,{...direct,price:{monthlyUsd:0}},row.revision)).body;assert.deepEqual(row.config.price,{monthlyUsd:0});assert.equal((await save(h.api,{...direct,price:{perGbUsd:2}},old)).body.code,'network_conflict');
+ row=(await save(h.api,direct,row.revision)).body;assert.equal(row.config.price,undefined);assert.equal(new Settings(h.file).network().exits.direct?.price,undefined);
+ const proxyRow=(await save(h.api,{...proxy,price:{perGbUsd:.15}},null,'price-fixture-password')).body;assert.deepEqual(proxyRow.config.price,{perGbUsd:.15});assert.equal(proxyRow.password.present,true);
+});
