@@ -399,6 +399,7 @@
     stopLiveEvents();const project=LIVE_EVENTS.project=H.project,generation=LIVE_EVENTS.generation,source=LIVE_EVENTS.source=new EventSource('/api/events/all');
     const current=()=>LIVE_EVENTS.alive&&LIVE_EVENTS.source===source&&LIVE_EVENTS.generation===generation&&H.project===project&&!H.snapshotOnly;
     source.onmessage=event=>{if(!current())return;let data;try{data=JSON.parse(event.data)}catch{return}if(!data||typeof data!=='object'||typeof data.type!=='string')return;
+      if(data.type==='state'&&typeof consumeState==='function')consumeState(data);
       if(data.type==='limits'&&typeof limitsEvent==='function')limitsEvent(data);if(typeof operationsEvent==='function')operationsEvent(data);
       for(const listener of [...LIVE_EVENTS.listeners])if(current()&&listener.onmessage)listener.onmessage(event);
     };
@@ -412,7 +413,7 @@
   async function hConnect(){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)){ return; }   /* движок подключён, если статус есть — даже без единого места: иначе чистая машина (первый запуск) остаётся в демо-режиме и проект создать нельзя */
     if(applyStatus(st,request,true)===false)return;H.connected=true;if(window.HARNESS_BOOT)window.HARNESS_BOOT.accept(); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
     if(PAGE==='chat'||PAGE==='first'){ if(H.pane&&H.pane.busy) H.cur={text:'',tools:[]};
-      let linkedProject=H.project;const es=H.events||(H.events=subscribeLiveEvents()); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='teamProposals'&&ev.project===H.project){void proposalsFetch();void knowledgeFetch();} if(ev.type==='state'){consumeState(ev);if(KN.data)void knowledgeFetch();} if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
+      let linkedProject=H.project;const es=H.events||(H.events=subscribeLiveEvents()); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='teamProposals'&&ev.project===H.project){void proposalsFetch();void knowledgeFetch();} if(ev.type==='state'&&KN.data)void knowledgeFetch(); if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
       es.onerror=()=>{ if(H.link!=='lost'){ H.link='lost'; hStatus(); if(!H.projectLinkChange)toast('Связь с движком потеряна — переподключаюсь…'); } };   // плановая смена проекта тоже закрывает SSE — это не потеря движка
       es.onopen=async()=>{ if(H.link==='lost'){ const switching=H.projectLinkChange;H.link='ok'; hStatus(); await refreshStatus();void proposalsFetch();if(!switching&&H.project===linkedProject)toast('Связь восстановлена');linkedProject=H.project;H.projectLinkChange=false; }else void proposalsFetch(); };
       hStatus(); }

@@ -7,6 +7,7 @@ import {dom} from './ui-dom-test-helpers.ts';
 import {deferred,fixture,call,sse} from './test-helpers.ts';
 import {ProviderCatalog,cliEntry} from '../../providers/src/index.ts';
 import {cliFixture} from '../../providers/src/cli/test-support.ts';
+import {collect} from '../../runtime/src/test-helpers.ts';
 
 type Data=Record<string,any>;
 const cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
@@ -142,6 +143,19 @@ test('358: an already open rights menu cannot adopt a fresh binding after an uns
  for(const path of [other.dir,h.dir])assert.equal((await call(h.api,'/api/project',{body:{path}})).status,200);
  bind((await call(h.api,'/api/status')).body);await v.status();await v.find('[data-cx-mode="all"]').emit('click');
  assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{mode:'all',binding:expected}}]);assert.equal(receipt?.status,409,receipt?.text);assert.equal(h.runtime.registry.get('worker')!.mode,'read');
+});
+
+for(const page of ['chat','new'])for(const door of ['rights','model'])test('358: fresh '+door+' permission in '+page+' works after a completed turn through the shared state stream',async t=>{
+ const h=await fixture(t),events=collect(h.runtime);t.after(()=>events.sub.close());let receipt:Awaited<ReturnType<typeof call>>|undefined;
+ const initial=(await call(h.api,'/api/status')).body,v=ui({page,fetch:async(path,body)=>{if(path==='/api/providers/catalog')return catalogue();receipt=await call(h.api,path,{body});return receipt.body}});
+ Object.assign(v.H,{project:initial.project,panes:plain(initial.panes),active:plain(initial.activeChats)});v.H.pane=v.H.panes.find((p:Data)=>p.id==='worker');v.S.ui.pane='worker';await v.status();
+ const sources:Data[]=[];v.ctx.drawLive=()=>{};v.ctx.paneName=(p:Data)=>p.label;v.ctx.EventSource=class{onmessage:((e:Data)=>void)|null=null;constructor(){sources.push(this)}close(){}};v.H.events={onmessage(){}};
+ runInContext('var warningSeen=new Set();\n'+part(live,'  function consumeState(','  function waitingControls(')+part(live,'  const LIVE_EVENTS=','  async function hConnect(')+'\nsyncLiveEvents();',v.ctx);
+ await h.runtime.runTurn('worker','fixture turn');const states=events.events.filter(e=>e.type==='state'&&e.pane==='worker');assert.ok(states.length>=2);
+ for(const event of events.events){if(event.type==='state')sources[0]!.onmessage({data:JSON.stringify(event)});if(event.type==='done')v.H.cur=null}await v.status();
+ assert.deepEqual(plain(v.H.pane.settingsBinding),h.runtime.paneBinding('worker'));assert.notEqual(v.H.pane.settingsBinding.revision,initial.panes[0].settingsBinding.revision);
+ if(door==='rights'){await v.find('[data-cx="rights"]').emit('click');await v.find('[data-cx-mode="all"]').emit('click')}else{await v.open();await v.find('[data-cx-full-access="agy"]').emit('click');await v.find('[data-cx-access-confirm]').emit('click')}
+ assert.equal(receipt?.status,200,receipt?.text);assert.equal(h.runtime.registry.get('worker')!.mode,'all');assert.equal(h.provider.calls.length,1);
 });
 
 for(const page of ['chat','new','first'])test('306: '+page+' room passes vendor and the program default without launching a turn',async()=>{
