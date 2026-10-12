@@ -5,6 +5,7 @@ import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
 import {deferred,fixture,sse,call} from './test-helpers.ts';
 import {ProviderCatalog,ProviderError,LoginTerminal,type CatalogEntry} from '@harnessy/providers';
+import {ollamaFixture} from '../../providers/src/ollama-test-helpers.ts';
 import {antigravityFixture} from '../../providers/src/antigravity-test-helpers.ts';
 import type {TestContext} from 'node:test';
 const read=(p:string)=>readFileSync(new URL('../../../'+p,import.meta.url),'utf8');
@@ -273,4 +274,12 @@ test('317: cold catalog and card show checking until the program is read; confir
  source.get('antigravity').version=async()=>{throw new ProviderError('no_binary','missing')};await call(h.api,'/api/providers/antigravity/check',{body:{}});await refreshPrograms(v);
  assert.match(v.find('.cbody').textContent,/Программа не установлена/);assert.doesNotMatch(v.find('.conn-facts').textContent,/проверяется/);assert.equal(v.find('[data-program-terminal]').disabled,true);assert.equal(v.find('[data-program-probe]').disabled,true);
  assert.ok(f.capture().every(c=>!c.args.includes('stream-json')));
+});
+
+
+test('334: actual Ollama catalogue renders daemon, cloud/local labels, signin and owner-only probe with unknown cloud login',async t=>{
+ const f=await ollamaFixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}});await call(h.api,'/api/providers/ollama/check',{body:{}});
+ const handler=async(path:string,body:any)=>(await call(h.api,path,{...(body?{body}:{})})).body,v=ui(handler,undefined,undefined,h.dir);await v.settle();await v.find('[data-pv="ollama"]').emit('click');await v.settle();
+ assert.match(v.body.textContent,/Ollama.*облако и локально/);assert.match(v.body.textContent,/Демон.*доступен · 0.40.2/);assert.match(v.body.textContent,/glm-5.3:cloud · облако/);assert.match(v.body.textContent,/gemma4:latest · локально/);assert.match(v.body.textContent,/signin/);assert.match(v.body.textContent,/Неизвестно/);const button=v.find('[data-program-probe="ollama"]');assert.equal(button.disabled,false);await button.emit('click');await v.settle();assert.equal(v.find('[data-program-confirm]').disabled,false);assert.equal(f.capture().length,0);
+ f.setOffline(true);await call(h.api,'/api/providers/ollama/check',{body:{}});await refreshPrograms(v);assert.match(v.body.textContent,/демон не запущен/);assert.match(v.body.textContent,/ollama serve/);assert.equal(v.find('[data-program-probe="ollama"]').disabled,true);assert.equal(f.capture().length,0);
 });

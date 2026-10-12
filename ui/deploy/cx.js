@@ -88,12 +88,12 @@
     for(const p of response.providers){
       if(!p||!text(p.id)||ids.has(p.id)||!text(p.title)||!['subscription','apikey','local'].includes(p.kind)||!Array.isArray(p.models)||p.installed!==null&&typeof p.installed!=='boolean'||typeof p.checking!=='boolean')return null;
       ids.add(p.id);const models=[],seen=new Set();for(const m of p.models){if(!m||!text(m.id)||!text(m.label)||seen.has(m.id))return null;seen.add(m.id);models.push({id:m.id,label:m.label})}
-      rows.push({id:p.id,title:p.title,kind:p.kind,installed:p.installed,checking:p.checking===true,models,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''});
+      rows.push({id:p.id,title:p.title,kind:p.kind,subtitle:typeof p.subtitle==='string'?p.subtitle:'',installed:p.installed,checking:p.checking===true,models,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''});
     }return rows;
   }
   function modelGroups(panel=pop){const metadata=panel&&panel.__models&&panel.__models.rows||[];
     const groups=[...new Set([...Object.keys(H.models||{}),...metadata.map(p=>p.id)])].map(id=>{const detail=metadata.find(p=>p.id===id),models=Array.isArray(H.models&&H.models[id])?H.models[id]:[];
-      return {id,vendor:id,title:detail?detail.title:id,kind:detail?detail.kind:null,availability:detail&&(detail.installed===null||detail.checking)?'проверяется…':detail&&detail.installed===false?'не установлена':'',modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id,via:m.via,viaStatus:m.viaStatus}))};});
+      return {id,vendor:id,title:detail?detail.title:id,kind:detail?detail.kind:null,subtitle:detail?detail.subtitle:'',availability:detail&&(detail.installed===null||detail.checking)?'проверяется…':detail&&detail.installed===false?'не установлена':'',modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id,via:m.via,viaStatus:m.viaStatus}))};});
     const codex=groups.find(g=>g.id==='codex'),routed=codex?codex.models.filter(m=>m.via==='provider-router'):[];
     if(routed.length){codex.models=codex.models.filter(m=>m.via!=='provider-router');groups.splice(groups.indexOf(codex)+1,0,{id:'provider-router',vendor:'codex',title:'provider-router',kind:'local',subtitle:'локально · через Codex',availability:codex.availability,modelsReason:'',models:routed})}return groups;
   }

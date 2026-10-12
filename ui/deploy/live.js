@@ -1380,7 +1380,7 @@
       const support=row?firstSupport(row.id):{ok:false,reason:'нет данных · подключите модель в «Подключениях»'},rows=row?models.filter(m=>m.vendor===row.id):[];
       const html='<option value="">Выберите модель</option>'+rows.map(m=>'<option value="'+esc(m.id)+'"'+(!support.ok?' disabled':'')+'>'+esc(m.label||m.id)+(support.reason||support.note?' · '+esc(support.reason||support.note):'')+'</option>').join('');if(select.innerHTML!==html)select.innerHTML=html;
       select.setAttribute('aria-label','Модель · '+title.textContent);select.value=row&&row.id===FIRST.vendor&&rows.some(m=>m.id===FIRST.model)?FIRST.model:'';select.disabled=!live||!rows.length||FIRST.busy||!!orch;select.hidden=false;card.classList.toggle('on',!!select.value);
-      card.querySelector('small').textContent=!live?'макет · движок не подключён':!support.ok?support.reason:rows.length?(orch?'Оркестратор: '+modelName(orch.model):row.title+' · моделей: '+rows.length+(support.note?' · '+support.note:'')):'нет данных'+(row&&row.reason?' · '+row.reason:' · подключите модель в «Подключениях»');
+      card.querySelector('small').textContent=!live?'макет · движок не подключён':!support.ok?support.reason:rows.length?(orch?'Оркестратор: '+modelName(orch.model):row.title+(row.subtitle?' · '+row.subtitle:'')+' · моделей: '+rows.length+(support.note?' · '+support.note:'')):'нет данных'+(row&&row.reason?' · '+row.reason:' · подключите модель в «Подключениях»');
     }
     const error=root.querySelector('[data-first-model-error]');error.hidden=!FIRST_MODELS.error;error.querySelector('span').textContent=FIRST_MODELS.error;
   }
