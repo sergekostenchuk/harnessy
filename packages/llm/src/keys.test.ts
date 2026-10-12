@@ -4,6 +4,23 @@ import {MacKeyStore} from './keys.ts';
 import {KEYCHAIN_SCRIPT} from './keychain-script.ts';
 import {runInNewContext} from 'node:vm';
 const options={timeout:10000};
+test('21c.2: JXA queries avoid Ref-valued Security and CoreFoundation constants',()=>{
+ assert.doesNotMatch(KEYCHAIN_SCRIPT,/\$\.(?:kSec|kCF)/);
+});
+test('21c.2: live macOS Keychain put/get/delete uses only the isolated dummy account',{
+ skip:process.env.HARNESS_KEYCHAIN_LIVE==='1'?false:'HARNESS_KEYCHAIN_LIVE=1 required',timeout:60000,
+},async()=>{
+ assert.equal(process.platform,'darwin','live Keychain test requires macOS');
+ const store=new MacKeyStore(),account='harnessy-selftest',secret='probe-not-a-real-key-0001',startedAt=Date.now();
+ try{
+  await store.put(account,secret);
+  assert.equal(await store.resolveKey(account),secret);
+  const description=await store.describe(account);
+  assert.equal(description.present,true);assert.equal(description.mask,'••••••••0001');
+  assert.ok(description.updatedAt!==null&&description.updatedAt>=startedAt&&description.updatedAt<=Date.now());
+ }finally{await store.delete(account)}
+ assert.equal(await store.resolveKey(account),null);
+});
 test('arbitrary route Keychain references use stdin only; descriptions expose only presence mask and date',options,async()=>{
  const rows=new Map<string,any>(),seen:any[]=[];const store=new MacKeyStore({platform:'darwin',execute:async r=>{seen.push(r);const body=JSON.parse(r.input!);if(body.op==='put')rows.set(body.provider,{key:body.key,updatedAt:100});if(body.op==='delete')rows.delete(body.provider);return {stdout:JSON.stringify({ok:true,value:rows.get(body.provider)??null}),stderr:'',code:0,signal:null}}});
  assert.deepEqual(await store.describe('my-gateway'),{present:false,mask:null,updatedAt:null});await store.put('my-gateway','private-fixture-1234');assert.equal(await store.resolveKey('my-gateway'),'private-fixture-1234');assert.deepEqual(await store.describe('my-gateway'),{present:true,mask:'••••••••1234',updatedAt:100});await store.put('my-gateway','replacement-5678');assert.equal((await store.describe('my-gateway')).mask,'••••••••5678');await store.delete('my-gateway');assert.equal(await store.resolveKey('my-gateway'),null);for(const r of seen)assert.doesNotMatch(JSON.stringify({args:r.args,env:r.env}),/private-fixture|replacement/);

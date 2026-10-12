@@ -19,6 +19,7 @@
   .no{display:flex;gap:10px;align-items:center;font-size:12.5px;color:var(--ink2)}.no u{width:26px;height:26px;border-radius:7px;display:block;position:relative;flex:none}.no u::after{content:"";position:absolute;inset:-2px;background:linear-gradient(to top right,transparent 46%,var(--bad) 46%,var(--bad) 54%,transparent 54%)}
   .drink{height:64px;border-radius:10px;background:radial-gradient(ellipse at 55% 110%,rgba(255,150,46,.75),rgba(214,104,24,.25) 40%,transparent 70%),linear-gradient(180deg,#1d0802,#341003 55%,#4a1a05);border:1px solid var(--line2);box-shadow:inset 0 0 0 1px rgba(240,154,58,.25),inset 0 0 26px rgba(208,106,22,.35)}
   .where{font-size:12.5px;color:var(--ink2);display:grid;gap:6px}.where div{display:grid;grid-template-columns:190px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}.where div:last-child{border-bottom:0}.where b{color:var(--ink);font-weight:500}
+  .llm-status.is-error{padding:12px 14px;border:1px solid var(--bad-fill);border-radius:8px;color:var(--bad);font:600 16px/1.5 var(--font);overflow-wrap:anywhere}
 
 /* TS-09b4: saved operation progress in the design-code palette. */
 [data-live-operations] { margin:16px 0; flex:none; }
@@ -305,7 +306,9 @@
         <p class="conn-note">После сохранения: ••••••••1234 · 12 октября, 14:00. Ключ хранится в связке ключей macOS.</p><button class="btn sm" disabled>Заменить ключ</button> <button class="btn sm ghost" disabled>Удалить ключ</button>
       </div><div class="box"><div class="cap2">3 · модели</div><button class="btn" disabled>Найти модели</button><p class="conn-note">Из каталога — без сети. Для своего адреса — запрос списка по нажатию.</p>
         <label><input type="checkbox" checked> Модель из каталога</label><p><label><input type="checkbox"> Другая модель</label></p>
+        <p class="llm-status is-error" role="alert">Подключение не сохранено. Хранилище ключей недоступно.</p>
         <button class="btn p" disabled>Сохранить</button> <button class="btn ghost" disabled>Отмена</button>
+        <p class="conn-note">Диалог остаётся открытым, введённые данные сохранены в форме. Ключ скрыт; можно повторить сохранение.</p>
         <p role="status" class="conn-note">Ищу модели… · повторный запуск недоступен</p>
         <p role="alert" style="color:var(--bad)">Провайдер отклонил ключ или доступ · auth. Исправьте ключ и повторите поиск.</p>
         <p class="conn-note">Настройки изменились в другом окне · перечитайте маршрут перед сохранением.</p>
