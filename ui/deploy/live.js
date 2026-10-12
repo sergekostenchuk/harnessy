@@ -1352,10 +1352,18 @@
   async function firstNext(){if(FIRST.busy||leftPage)return;firstSelectPane();firstDraw();const root=firstRoot();if(!H.on||H.snapshotOnly){firstGo(3);return}
     const orch=(H.panes||[]).find(p=>p.kind==='orchestrator');if(orch){const binding=sendBinding();await loadChat({onboard:false,visible:true});if(!leftPage&&bindingCurrent(binding))firstGo(3);return}
     if(!firstModels().some(m=>m.id===FIRST.model)){toast('Сначала выберите модель разговора');return}
-    let binding=sendBinding();
-    if(!binding.chat){const model=FIRST.model,folder=FIRST.folder,navigation=bindingNavigation;FIRST.busy=true;
-      try{const r=await api('/api/chats/new',{pane:'room',carry:'none'});if(leftPage||!bindingCurrent(binding))return;if(!r||!r.ok||!r.chat?.id)throw Error(r&&r.error||'Не удалось открыть разговор');
-        await refreshStatus();const current=sendBinding();if(leftPage||bindingNavigation!==navigation||current.project!==binding.project||current.pane!==binding.pane||current.chat!==r.chat.id||FIRST.model!==model||FIRST.folder!==folder){toast('Разговор изменился; повторите выбор');return}binding=current;
+    let binding=sendBinding(),pending;
+    try{const entries=S.firstRoomCreations;if(entries!==undefined&&(!entries||typeof entries!=='object'||Array.isArray(entries)))throw Error('Не удалось прочитать созданный разговор');const exists=entries&&Object.hasOwn(entries,binding.project);pending=exists?entries[binding.project]:null;
+      if(exists&&(!pending||!pending.binding||pending.binding.project!==binding.project||pending.binding.pane!=='room'||pending.binding.chat!==null||typeof pending.chat!=='string'||!/^[a-zA-Z0-9_-]{1,128}$/.test(pending.chat)))throw Error('Не удалось прочитать созданный разговор');
+    }catch(error){toast(esc(error.message));return}
+    if(pending||!binding.chat){const model=FIRST.model,folder=FIRST.folder,navigation=bindingNavigation;FIRST.busy=true;
+      try{if(!pending){const r=await api('/api/chats/new',{pane:'room',carry:'none'});if(!r||!r.ok||typeof r.chat?.id!=='string'||!/^[a-zA-Z0-9_-]{1,128}$/.test(r.chat.id)||r.chat.pane!=='room')throw Error(r&&r.error||'Не удалось открыть разговор');
+          pending={binding:{project:binding.project,pane:binding.pane,chat:binding.chat},chat:r.chat.id};S.firstRoomCreations=S.firstRoomCreations||{};S.firstRoomCreations[binding.project]=pending;save();
+          if(leftPage||!bindingCurrent(binding))return;
+        }
+        await refreshStatus();const current=sendBinding();if(leftPage||bindingNavigation!==navigation||current.project!==binding.project||current.pane!==binding.pane)return;
+        if(current.chat!==pending.chat){if(current.chat){delete S.firstRoomCreations[binding.project];save()}toast('Разговор изменился; повторите выбор');return}
+        delete S.firstRoomCreations[binding.project];save();if(FIRST.model!==model||FIRST.folder!==folder){toast('Выбор модели изменился; повторите выбор');return}binding=current;
       }catch(error){if(!leftPage&&H.project===binding.project)toast(esc(error.message));return}finally{FIRST.busy=false;firstDraw()}
     }
     FIRST.door={binding,model:FIRST.model,folder:FIRST.folder};root.querySelector('[data-first-door]').innerHTML='<div class="done"><b>Назначить оркестратора</b><p>'+esc(modelName(FIRST.model))+' · '+esc(FIRST.folder&&!H.noProject?H.project:'новый проект по разговору')+'</p><p>Разговор и документы сохранятся. Harnessy создаст роль и запустит её первое поручение. Состав команды вы подтвердите отдельно.</p><button class="btn p" type="button" data-first-promote>Назначить этому разговору оркестратора</button><button class="btn ghost" type="button" data-first-cancel>Отмена</button></div>';
