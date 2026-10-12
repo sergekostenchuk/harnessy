@@ -1,3 +1,4 @@
+import {LlmError} from '@harnessy/llm';
 import type {ServerResponse} from 'node:http';
 import {compatJson,JournalError} from '@harnessy/journal';
 import {ProjectError} from '@harnessy/projects';
@@ -14,6 +15,7 @@ export function pythonJson(value:unknown,ascii=true):string {const raw=compatJso
 const lifecycle=new Set(['recovering','uncertain','merge_uncertain','stale_session','project_changed','steer_failed','ack_closed','actions_invalid','project_closed','restore_failed','stale_attempt','not_waiting','decision_exists','decision_invalid']);
 export function failure(error:unknown,style:'E'|'F'|'J'='F',statuses:Record<string,number>={}):Reply {
  if(error instanceof HttpError)return error.reply;
+ if(error instanceof LlmError)return json({ok:false,code:error.code,error:error.message},error.status);
  const code=error instanceof RuntimeError||error instanceof ProjectError||error instanceof JournalError||error instanceof ProviderError||error instanceof TeamError?error.code:'internal_error';
  const status=statuses[code]??(code==='write_failed'?500:lifecycle.has(code)?409:error instanceof RuntimeError||error instanceof ProjectError?error.status:error instanceof JournalError||error instanceof TeamError?400:error instanceof ProviderError?404:500);
  if(code==='direct_required'||code==='selection_required')return json({ok:false,...(error instanceof RuntimeError?error.fields:{}),error:text(error)},status);

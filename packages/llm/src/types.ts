@@ -1,11 +1,11 @@
 export type Api='openai-completions'|'openai-responses'|'anthropic-messages';
 export type Reasoning='off'|'minimal'|'low'|'medium'|'high'|'xhigh'|'max';
 export type Json=null|boolean|number|string|Json[]|{[key:string]:Json};
-export type ContentBlock={type:'text';text:string;signature?:string}|{type:'reasoning';text:string;signature?:string}|{type:'image';data:string;mimeType:string}|{type:'tool-call';id:string;name:string;arguments:Record<string,Json>;signature?:string};
+export type ContentBlock={type:'text';text:string;signature?:string}|{type:'reasoning';text:string;signature?:string;redacted?:boolean}|{type:'image';data:string;mimeType:string}|{type:'tool-call';id:string;name:string;arguments:Record<string,Json>;signature?:string};
 export interface Message {role:'system'|'user'|'assistant'|'tool';content:ContentBlock[];toolCallId?:string;toolName?:string;isError?:boolean;replay?:{api:string;provider:string;model:string}}
 export interface Tool {name:string;description:string;parameters:Record<string,Json>}
 export interface Usage {input:number;output:number;cacheRead:number;cacheWrite:number;totalTokens:number}
-export type FailureCode='provider_unknown'|'model_unsupported'|'config_invalid'|'settings_unreadable'|'missing_credential'|'credential_unavailable'|'auth'|'rate_limited'|'invalid_request'|'context_overflow'|'provider_error'|'transport'|'timeout'|'cancelled'|'stream_closed'|'empty_response'|'discovery_invalid'|'discovery_unsupported';
+export type FailureCode='route_changed'|'provider_unknown'|'model_unsupported'|'config_invalid'|'settings_unreadable'|'missing_credential'|'credential_unavailable'|'auth'|'rate_limited'|'invalid_request'|'context_overflow'|'provider_error'|'transport'|'timeout'|'cancelled'|'stream_closed'|'empty_response'|'discovery_invalid'|'discovery_unsupported';
 export interface Failure {code:FailureCode;reason:string;retryable:boolean}
 export type FinishReason='stop'|'length'|'tool-calls'|'error'|'cancelled';
 export type StreamChunk={type:'block-start';index:number;blockType:ContentBlock['type']}|{type:'text-delta'|'reasoning-delta';index:number;text:string}|{type:'tool-call-delta';index:number;argumentsDelta:string}|{type:'block-end';index:number;block:ContentBlock}|{type:'usage';usage:Usage}|{type:'finish';reason:FinishReason;failure?:Failure;message?:Message;usage:Usage|null};
