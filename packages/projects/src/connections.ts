@@ -1,3 +1,4 @@
+import {readFileSync} from 'node:fs';
 import {withPathLock,canonicalPath} from '@harnessy/team';
 import {execute} from './gitops.ts';
 import {ownerPaths,readObject,writeJson,object,pythonTrim} from './files.ts';
@@ -14,6 +15,10 @@ export class Connections {
  private config(raw:unknown):RouteConfig {const c=object(raw)?raw:{},last=object(c.lastCheck)?c.lastCheck as unknown as CheckResult:null;
  return {route:ROUTES.includes(c.route as never)?c.route as RouteConfig['route']:'direct',proxy:String(c.proxy||''),iface:String(c.iface||''),label:String(c.label||''),expect:String(c.expect||''),lastCheck:last,state:last?.state||'not_checked',rev:counter(c.rev),seq:counter(c.seq??last?.seq)}
  }
+ async withLegacyRoutes<T>(read:(rows:Record<string,unknown>)=>Promise<T>):Promise<T>{return withPathLock(this.path,async lock=>{
+  let raw:unknown;try{raw=JSON.parse(readFileSync(lock.path,'utf8'))}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')raw={};else throw new ProjectError('network_unreadable','Прежние сетевые настройки не читаются',409)}
+  if(!object(raw))throw new ProjectError('network_unreadable','Прежние сетевые настройки не читаются',409);return read(raw);
+ })}
  get(vendor:string){return this.config(readObject(this.path)[vendor])}
  async setRoute(vendor:string,route:string='direct',proxy='',iface='',label='',expect=''){return withPathLock(this.path,lock=>{
  vendor=pythonTrim(vendor||'');route=pythonTrim(route||'direct');proxy=pythonTrim(proxy||'');iface=pythonTrim(iface||'');label=[...pythonTrim(label||'')].slice(0,40).join('');expect=pythonTrim(expect||'');

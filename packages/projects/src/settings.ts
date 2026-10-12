@@ -1,3 +1,4 @@
+import {validateNetwork,type NetworkConfig} from './network-config.ts';
 import {createHash} from 'node:crypto';
 import {validateResolvedRoutes,validRoute,LlmError,type ProviderConfig} from '@harnessy/llm';
 import {join} from 'node:path';
@@ -29,9 +30,24 @@ export class Settings {
    let owner,rows;try{owner=this.readOwner(true,path);rows=validateResolvedRoutes(Object.hasOwn(owner,'llmProviders')?owner.llmProviders:{})}catch{throw new LlmError('settings_unreadable')}
    if(revision!==this.llmRevision(rows[id]))throw new ProjectError('llm_conflict','Настройки маршрута изменились; перечитайте их',409);
    if(value===undefined&&!Object.hasOwn(rows,id))throw new LlmError('provider_unknown');
+   // Route and chain share this file and lock: publish their removal in one rename.
+   if(value===undefined&&Object.hasOwn(owner,'network')){
+    let network:NetworkConfig;try{network=validateNetwork(owner.network)}catch{throw new ProjectError('network_unreadable','Настройки выходов не читаются',409)}
+    delete network.chains['api:'+id];owner.network=network;
+   }
    const rollback=await beforeSave?.();if(value===undefined)delete rows[id];else rows[id]=value;
    try{writeJson(path,{...owner,llmProviders:rows})}catch{if(rollback)await rollback();throw new ProjectError('write_failed','Настройки маршрута не записаны; изменения отменены',500)}return {config:value??null,revision:this.llmRevision(value)};
   });this.llmChanged();return result;
+ }
+ network(){try{return validateNetwork(this.readOwner().network)}catch(e){if(e instanceof ProjectError&&e.code==='iface_unsupported')throw e;throw new ProjectError('network_unreadable','Настройки выходов не читаются',409)}}
+ async changeNetwork<T>(edit:(config:NetworkConfig,providers:Record<string,ProviderConfig>)=>Promise<{result:T;rollback?:()=>Promise<void>}>) {
+  const path=canonicalPath(this.ownerFile);return withPathLock(path,async()=>{
+   let owner:Record<string,unknown>,config:NetworkConfig;try{owner=this.readOwner(true,path);config=validateNetwork(owner.network)}catch{throw new ProjectError('network_unreadable','Настройки выходов не читаются',409)}
+   const before=JSON.stringify(config),changed=await edit(config,validateResolvedRoutes(owner.llmProviders??{}));
+   try{const next=validateNetwork(config);if(before!==JSON.stringify(next))writeJson(path,{...owner,network:next})}
+   catch(e){await changed.rollback?.();if(e instanceof ProjectError&&e.code==='network_invalid')throw e;throw new ProjectError('write_failed','Выходы не записаны; изменения отменены',500)}
+   return changed.result;
+  });
  }
  projectPath(){const path=this.currentProject();return path?join(path,'.harness','state','settings.json'):null}
  private readOwner(writing=false,path=canonicalPath(this.ownerFile)){
@@ -51,14 +67,14 @@ export class Settings {
    writeJson(path,saved);return {ok:true as const,scope:'owner' as const,config,ts:Math.floor(this.now()/1000)};
   });
  }
- private merged(owner:Record<string,unknown>,project:Record<string,unknown>){const overrides=orderedClone(project);for(const key of ['llmProviders','priceList','traceEnabled','traceMaxMiB',...BILLING_KEYS])delete overrides[key];return orderedClone(owner,overrides)}
+ private merged(owner:Record<string,unknown>,project:Record<string,unknown>){const overrides=orderedClone(project);for(const key of ['network','llmProviders','priceList','traceEnabled','traceMaxMiB',...BILLING_KEYS])delete overrides[key];return orderedClone(owner,overrides)}
  get(){const owner=this.readOwner(),path=this.projectPath(),project=path?readObject(path):{};this.prices(owner);return {ok:true as const,owner,project,effective:this.merged(owner,project),applies:SETTINGS_APPLIES}}
  // Broken prices must not prevent opening a project or reaching the owner's repair endpoint.
  effective(){const path=this.projectPath();return this.merged(readObject(this.ownerFile),path?readObject(path):{})}
  async patch(scope:unknown,patch:unknown){
  scope=truthy(scope)?String(scope):'owner';if(!['owner','project'].includes(String(scope))||!object(patch)||!Object.keys(patch).length)throw new ProjectError('invalid_settings',SETTINGS_SCOPE);
  const changes=orderedClone(patch);
- for(const key of orderedKeys(changes)){const value=changes[key];if(key==='llmProviders')throw new ProjectError('invalid_settings','Маршруты меняются через /api/llm/providers');if([...key].length>40||!(/^[\p{L}\p{N}]+$/u.test(key.replaceAll('_',''))))throw new ProjectError('invalid_settings','ключ '+repr(key)+' не годится');
+ for(const key of orderedKeys(changes)){const value=changes[key];if(key==='network')throw new ProjectError('invalid_settings','Выходы меняются через /api/network');if(key==='llmProviders')throw new ProjectError('invalid_settings','Маршруты меняются через /api/llm/providers');if([...key].length>40||!(/^[\p{L}\p{N}]+$/u.test(key.replaceAll('_',''))))throw new ProjectError('invalid_settings','ключ '+repr(key)+' не годится');
  if(key==='traceEnabled'||key==='traceMaxMiB'){if(scope!=='owner')throw new ProjectError('invalid_settings',key+': только область owner');if(value!==null&&(key==='traceEnabled'?typeof value!=='boolean':!Number.isSafeInteger(value)||Number(value)<1||Number(value)>128))throw new ProjectError('invalid_settings',key+': нужен флаг или размер от 1 до 128 МиБ')}
  if(key==='priceList'){if(scope!=='owner')throw new ProjectError('invalid_settings','priceList: только область owner');if(value!==null)changes[key]=priceList(value)}
  if(BILLING_KEYS.includes(key as never)){if(scope!=='owner')throw new ProjectError('billing_invalid',key+': только область owner');if(value!==null)billingConfig({[key]:value})}

@@ -42,3 +42,15 @@ test('versioned Keychain accounts validate both components and never overwrite a
  assert.equal(run('gateway:'+generation).ok,false);assert.equal(adds,1);assert.equal(updates,0);
  for(const id of ['gateway:bad','gateway:'+generation+':extra','../other:'+generation,'constructor:'+generation])assert.equal(run(id).code,'key_invalid');assert.equal(adds,1);assert.equal(updates,0);
 });
+test('22a: proxy passwords share the Keychain backend with a separate service, stdin and a full mask even for short passwords',options,async()=>{
+ const rows=new Map<string,unknown>(),seen:any[]=[];const execute:any=async(r:any)=>{seen.push(r);const body=JSON.parse(r.input),id=(body.purpose??'api-key')+':'+body.provider;if(body.op==='put')rows.set(id,{key:body.key,updatedAt:100});if(body.op==='delete')rows.delete(id);return {stdout:JSON.stringify({ok:true,value:rows.get(id)??null}),stderr:'',code:0,signal:null}};
+ const proxy=new MacKeyStore({purpose:'proxy-password',platform:'darwin',execute}),api=new MacKeyStore({platform:'darwin',execute}),id=keySlot('same-id',randomUUID());
+ await api.put(id,'api-fixture-value');await proxy.put(id,'я');assert.equal(await api.resolveKey(id),'api-fixture-value');assert.equal(await proxy.resolveKey(id),'я');assert.deepEqual(await proxy.describe(id),{present:true,mask:'••••••••',updatedAt:100});await proxy.delete(id);assert.equal(await api.resolveKey(id),'api-fixture-value');
+ for(const value of ['', 'x\ny', 'x'.repeat(4097), 'я'.repeat(2049)])await assert.rejects(proxy.put(id,value),{code:'config_invalid'});await assert.rejects(api.put(id,'я'),{code:'config_invalid'});
+ for(const r of seen)assert.doesNotMatch(JSON.stringify({args:r.args,env:r.env}),/api-fixture-value|я/);
+});
+test('22a: native Keychain selects the proxy namespace and preserves immutable generation writes',options,()=>{
+ const gen='00000000-0000-4000-8000-000000000001',services:string[]=[];let adds=0,updates=0;
+ const run=(purpose?:string)=>{const dollar:any=(s:string)=>({s,dataUsingEncoding(){return {}},lengthOfBytesUsingEncoding(){return Buffer.byteLength(s)}});Object.assign(dollar,{NSFileHandle:{fileHandleWithStandardInput:{readDataToEndOfFile:{length:80}}},NSString:{alloc:{initWithDataEncoding:()=>JSON.stringify({op:'put',provider:'same:'+gen,key:'я',...(purpose?{purpose}:{})})}},NSMutableDictionary:{alloc:{get init(){return {setObjectForKey(value:any,key:any){if(key.s==='svce')services.push(value.s)},removeObjectForKey(){}}}}},SecItemAdd(){adds++;return -25299},SecItemUpdate(){updates++;return 0}});return JSON.parse(runInNewContext(KEYCHAIN_SCRIPT+';run()',{$:dollar,ObjC:{import(){},unwrap:(s:string)=>s}}))};
+ assert.equal(run('proxy-password').code,'keystore_failed');assert.equal(adds,1);assert.equal(updates,0);assert.deepEqual(services,['Harnessy proxy password']);assert.equal(run().code,'key_invalid');assert.equal(run('arbitrary').code,'key_invalid');assert.equal(adds,1);
+});
