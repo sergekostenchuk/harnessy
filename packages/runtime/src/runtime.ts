@@ -24,7 +24,7 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {ensureLineLocked,withPathLock,loadTeam,instructionsFor,canonicalPath,type Vendor} from '@harnessy/team';
 import {Journal,Channel,Policy,JournalError,pythonTrim,type AgentPostInput,type Initiator,type Record_,type DeliveryEntry,type ChannelEvent} from '@harnessy/journal';
-import {NetworkSettings,openProjectGit,writableRoots,Connections,ProjectRegistry,Settings,Pins,gitops} from '@harnessy/projects';
+import {NetworkChecks,NetworkSettings,openProjectGit,writableRoots,Connections,ProjectRegistry,Settings,Pins,gitops} from '@harnessy/projects';
 import {digest,roleNote,contextCard,conversationTransfer,transferSettings,transferLabel,TRANSFER_DEFAULTS,type ConversationTransfer} from '@harnessy/context';
 import {ProviderError,type TurnContext,type PeerTools,type SendArgs,type AskArgs,type ReadPaneArgs,type MergeArgs,type AssignRoleArgs} from '@harnessy/providers';
 import {Pane,Registry,validDir} from './pane.ts';
@@ -40,7 +40,7 @@ const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Ini
 type AttemptDecision=NonNullable<Record_['attempt']>;
 function turnMeasurements(event:Record<string,unknown>|null){if(event?.type!=='done')return {};const raw=object(event.usage)?event.usage:{},value=(key:string)=>typeof raw[key]==='number'&&Number.isSafeInteger(raw[key])&&raw[key]>=0?raw[key] as number:null;return {usage:{input:value('input'),output:value('output'),cacheRead:value('cacheRead')},...(event.usageIncomplete===true?{usageIncomplete:true as const}:{}),...(typeof event.durationMs==='number'?{durationMs:event.durationMs}:{})}}
 export class Runtime {
- readonly providerOperations:ProviderOperations;readonly network:NetworkSettings;
+ readonly providerOperations:ProviderOperations;readonly network:NetworkSettings;readonly networkChecks:NetworkChecks;
  private apiAgents=new Map<string,ApiAgent>();readonly llmKeys:KeyStore;private unsubscribeLlm:()=>void;
  get llm(){return this.modelService(()=>this.settings.llmProviders(),listener=>this.settings.onLlmRoutesChanged(listener))}
  private modelService(routes:LlmDependencies['routes'],subscribeRoutes:NonNullable<LlmDependencies['subscribeRoutes']>,p=this.project){return createLlmService({routes,resolveKey:(ref,generation)=>this.llmKeys.resolveKey(keySlot(ref,generation)),subscribeRoutes,...(this.deps.llmFetch?{fetch:this.deps.llmFetch}:{}),trace:event=>{p.trace.record(event.kind,{outcome:event.outcome,reason:traceReason(event.code??'none'),durationMs:event.durationMs,data:{id:event.requestId,vendor:event.provider,model:event.model,code:event.code,...event.usage}})}})}
@@ -55,7 +55,8 @@ export class Runtime {
  this.unsubscribeLlm=this.settings.onLlmRoutesChanged(()=>{const p=this.current;if(p&&!p.closed){this.syncApiModels(p);p.bus.publish('owner',{type:'llm.routes',providers:Object.keys(this.settings.llmProviders())})}});
  this.pins=typeof deps.pins==='function'?deps.pins(current,id=>this.chatMeta(id)):deps.pins??new Pins(undefined,current,id=>this.chatMeta(id));this.traceSettings();
  this.providerOperations=new ProviderOperations(this,deps.providerCatalog??new ProviderCatalog([...builtinEntries(deps.providers,deps.models??{}),...CLI_DESCRIPTORS.map(d=>cliEntry(d)),ollamaEntry()],undefined,{cacheDir:deps.catalogCacheDir??catalogCacheDirectory()}),deps.loginTerminal??new LoginTerminal());
- this.network=new NetworkSettings(this.settings,deps.networkKeys??new MacKeyStore({purpose:'proxy-password'}),this.connections,()=>this.providerOperations.catalog.ids())
+ this.network=new NetworkSettings(this.settings,deps.networkKeys??new MacKeyStore({purpose:'proxy-password'}),this.connections,()=>this.providerOperations.catalog.ids());
+ this.networkChecks=new NetworkChecks(this.settings,this.network,deps.networkCheckOptions)
  }
  private traceSettings(){try{const owner=this.settings.effective();this.traceConfig={enabled:owner.traceEnabled!==false,maxBytes:Number.isSafeInteger(owner.traceMaxMiB)&&Number(owner.traceMaxMiB)>=1&&Number(owner.traceMaxMiB)<=128?Number(owner.traceMaxMiB)*1024*1024:16*1024*1024}}catch{}}
  traceTool<T>(scope:TurnScope,name:string,args:unknown,run:()=>Promise<T>){this.scopes.assert(scope);const p=this.project;return p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId))}
