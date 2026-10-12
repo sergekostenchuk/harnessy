@@ -3,12 +3,12 @@ import type {Api,Model} from '@earendil-works/pi-ai';
 import {validateRoutes,validateCompat} from './config.ts';
 import {LlmError} from './errors.ts';
 import type {ProviderConfig,ProviderRoutes,ModelInfo,ModelConfig} from './types.ts';
-const keyApis=new Set(['openai-completions','openai-responses','anthropic-messages','google-generative-ai','mistral-conversations']);
+const keyApis=new Set(['openai-completions','openai-responses','anthropic-messages','mistral-conversations']);
 export function catalogProviders(){return getBuiltinProviders().filter(id=>getBuiltinModels(id).some(m=>keyApis.has(m.api)))}
-export function catalogModels(id:string):Model<Api>[]{if(!getBuiltinProviders().includes(id as BuiltinProvider))throw new LlmError('config_invalid');return structuredClone(getBuiltinModels(id as BuiltinProvider)) as Model<Api>[]}
+export function catalogModels(id:string):Model<Api>[]{if(!getBuiltinProviders().includes(id as BuiltinProvider))throw new LlmError('config_invalid');const models=getBuiltinModels(id as BuiltinProvider).filter(m=>keyApis.has(m.api));if(!models.length)throw new LlmError('transport_unsupported');return structuredClone(models) as Model<Api>[]}
 export function routeModels(id:string,config:ProviderConfig):Model<Api>[] {
- const source=config.catalog??(getBuiltinProviders().includes(id as BuiltinProvider)?id:undefined),base=source?catalogModels(source):[],byId=new Map(base.map(m=>[m.id,m]));
- if(!source&&(!config.api||!config.baseURL)||config.modelOverrides&&(!source||Object.keys(config.modelOverrides).some(k=>!byId.has(k))))throw new LlmError('config_invalid');
+ const source=config.catalog??(!config.api&&!config.baseURL&&getBuiltinProviders().includes(id as BuiltinProvider)?id:undefined),base=source?catalogModels(source):[],byId=new Map(base.map(m=>[m.id,m]));
+ if(!source&&(!config.api||!config.baseURL||!config.models?.length)||config.modelOverrides&&(!source||Object.keys(config.modelOverrides).some(k=>!byId.has(k))))throw new LlmError('config_invalid');
  const rows:ModelConfig[]=config.models??base.map(m=>({id:m.id,...config.modelOverrides?.[m.id]}));
  return rows.map(row=>{const old=byId.get(row.id),api=config.api??old?.api,url=config.baseURL??old?.baseUrl;
   if(!api||!url||!keyApis.has(api))throw new LlmError('config_invalid');

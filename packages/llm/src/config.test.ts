@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {validateResolvedRoutes,routeModels,catalogProviders} from './catalog.ts';
 import {createLlmService} from './service.ts';
-import {config,endpoint} from './test-helpers.ts';
+import {config,endpoint,collect,prompt,openai} from './test-helpers.ts';
 const options={timeout:10000};
 test('catalog routes need no network; custom models and overrides resolve every field without ambient credentials',options,async()=>{
  const route={catalog:'anthropic',keyRef:'anthropic',modelOverrides:{}};const routes=validateResolvedRoutes({anthropic:route});const native=routeModels('anthropic',routes.anthropic!);assert.ok(native.length>0);const id=native[0]!.id;
@@ -21,4 +21,14 @@ test('discovery rejects redirected credentials and forged/oversized replies; can
 });
 test('discovery cannot send a newly resolved key to a replaced route address',options,async()=>{
  let rows:any={custom:{...config('https://old.example.test/v1'),keyRef:'custom'}},release!:(key:string)=>void,calls=0;const wait=new Promise<string>(r=>release=r),svc=createLlmService({routes:()=>rows,resolveKey:()=>wait,fetch:async()=>{calls++;throw Error()}}),pending=svc.discover('custom');rows={custom:{...config('https://new.example.test/v1'),keyRef:'custom'}};release('new-endpoint-key');await assert.rejects(pending,{code:'route_changed'});assert.equal(calls,0);
+});
+
+test('unsupported catalog transport is not advertised, fails before any request and is never retryable',options,async()=>{
+ assert.equal(catalogProviders().includes('google'),false);assert.throws(()=>validateResolvedRoutes({g:{catalog:'google'}}),{code:'transport_unsupported'});
+ let calls=0;const svc=createLlmService({routes:()=>({g:{catalog:'google'}}),resolveKey:async()=>null,fetch:async()=>{calls++;throw Error('must not dispatch')}});
+ const result=await collect(svc,{...prompt,provider:'g'});assert.equal(result.finish.failure?.code,'transport_unsupported');assert.equal(result.finish.failure?.retryable,false);assert.equal(calls,0);
+});
+test('custom routes require models even when id is a catalog name; Google-compatible own address remains available',options,async t=>{
+ for(const id of ['custom','google','openai'])for(const models of [undefined,[]])assert.throws(()=>validateResolvedRoutes({[id]:{api:'openai-completions',baseURL:'https://example.test/v1',...(models?{models}:{})}}),{code:'config_invalid'});
+ const server=await endpoint(t,(_body,_req,res)=>openai(res));const svc=createLlmService({routes:()=>({google:config(server.url)}),resolveKey:async()=>null});assert.equal((await collect(svc,{...prompt,provider:'google'})).finish.reason,'stop');
 });

@@ -33,3 +33,10 @@ test('parallel updates to different routes merge; same revision cannot overwrite
  const h=await fixture(t,{deps:{llmKeys:new MemoryKeys()}});const [a,b]=await Promise.all(['alpha','beta'].map(id=>call(h.api,'/api/llm/providers/'+id,{body:{config:config('https://example.test/'+id)}})));assert.equal(a!.status,200);assert.equal(b!.status,200);assert.deepEqual(Object.keys(h.runtime.llm.routes()).sort(),['alpha','beta']);
  const results=await Promise.all(['one','two'].map(name=>call(h.api,'/api/llm/providers/alpha',{body:{config:{...config('https://example.test/alpha'),displayName:name},revision:a!.body.revision}})));assert.deepEqual(results.map(x=>x.status).sort(),[200,409]);assert.equal(h.runtime.llm.routes().beta!.baseURL,'https://example.test/beta');
 });
+
+test('save refuses empty custom models and unsupported catalog without writing settings',options,async t=>{
+ const h=await fixture(t,{deps:{llmKeys:new MemoryKeys()}}),before=h.runtime.settings.llmProviders();
+ for(const config of [{api:'openai-completions',baseURL:'https://example.test/v1'},{api:'openai-completions',baseURL:'https://example.test/v1',models:[]}]){const r=await call(h.api,'/api/llm/providers/custom',{body:{config}});assert.equal(r.status,400);assert.equal(r.body.code,'config_invalid')}
+ const r=await call(h.api,'/api/llm/providers/google-route',{body:{config:{catalog:'google'}}});assert.equal(r.status,400);assert.equal(r.body.code,'transport_unsupported');assert.match(r.body.error,/защищённый транспорт/);assert.deepEqual(h.runtime.settings.llmProviders(),before);
+ assert.equal((await call(h.api,'/api/llm/providers')).body.catalog.includes('google'),false);assert.equal((await call(h.api,'/api/llm/providers/catalog/google')).body.code,'transport_unsupported');
+});

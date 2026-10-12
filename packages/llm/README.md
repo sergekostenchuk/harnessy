@@ -63,7 +63,7 @@ Catalog providers supply protocol, endpoint and models without network access.
 cannot coexist with `models`. Route/model `compat` and `reasoningEfforts`, and
 route `defaultContextWindow`/`defaultMaxTokens`, are validated before saving.
 Explicit custom protocols: OpenAI Completions, OpenAI Responses, Anthropic
-Messages. Catalog routes additionally support Google Generative AI and Mistral
+Messages. Catalog routes additionally support Mistral
 Conversations. OAuth, Bedrock, Vertex and Azure configuration are not expressible
 by a key+endpoint route and are refused. Unspecified custom model limits default
 to 32768/4096 as configuration defaults, not measured service capabilities.
@@ -106,3 +106,5 @@ No local fork or DSH performance patch is installed. HTTP doubles cover the
 three custom wire protocols, tool replay, usage/cache semantics, safe failures,
 no implicit retries, cancellation, truncation and route changes. Keychain tests
 use doubles; they do not touch the owner's keychain or send live model requests.
+
+Google’s native pi-ai adapter rejects guarded fetch; it is excluded with non-retryable `transport_unsupported`. Configure Google via a custom OpenAI-compatible address (`https://generativelanguage.googleapis.com/v1beta/openai`) and explicit models instead. Custom routes require a nonempty `models` list.
