@@ -114,3 +114,16 @@ for(const suffix of ['proxy.invalid:8443','proxy.invalid/not-allowed','proxy.inv
 test('23b r2 UI: malformed userinfo remains private and cannot silently become a valid address',opts,async()=>{
  const v=ui(async path=>response(path));await v.flush();await step(v);await v.proxyInput('address','https://alice:SecretNotInHtml%GG@proxy.invalid:8443');await v.click('[data-proxy-action="back"]');await v.click('[data-proxy-action="next"]');assert.doesNotMatch(v.find('.proxy-add-dialog').innerHTML,/SecretNotInHtml/);await v.click('[data-proxy-action="check"]');assert.equal(v.requests.some(r=>r.path.endsWith('/preview')),false);assert.match(v.find('[data-proxy-result]').textContent,/Не удалось разобрать/);
 });
+
+for(const selector of ['[data-proxy-top]','[data-net-list] .proxy-add'])test('23a/23b: inventory '+selector+' opens the two-step form and shows the saved measured entry',opts,async t=>{
+ const h=await fixture(t,{deps:{networkKeys:new MemoryKeys(),networkCheckOptions:{execute:async spec=>output(spec.input!)}}}),v=ui(async(path,body)=>(await call(h.api,path,body===undefined?{}:{body})).body);
+ await v.flush();await v.click('[data-v="exits"]');await v.click(selector);assert.match(v.find('.proxy-add-dialog').textContent,/Что добавляем/);assert.equal(v.document.querySelector('[data-net-field="id"]'),null);
+ await v.click('[data-proxy-action="next"]');await v.proxyInput('address','socks5://alice:fixture-password@proxy.test:1080');await v.click('[data-proxy-action="check"]');await v.click('[data-proxy-action="save"]');await v.flush();
+ assert.match(v.find('[data-net-list]').textContent,/Нидерландыработает.*192.0.2.5.*ещё не использовался/);assert.equal(v.document.querySelectorAll('[data-proxy-id]').length,1);assert.equal(v.requests.filter(r=>r.path.endsWith('/save')).length,1);assert.equal(h.provider.calls.length,0);
+});
+
+test('23a/23b: save and use refreshes the inventory provider names after its old chain was cached',opts,async t=>{
+ const catalog=new ProviderCatalog(builtinEntries({claude:new FakeProvider()},{},{execute:async()=>({code:0,signal:null,stdout:'1.0',stderr:''})})),h=await fixture(t,{deps:{providerCatalog:catalog,networkKeys:new MemoryKeys(),networkCheckOptions:{execute:async spec=>output(spec.input!)}}}),v=ui(async(path,body)=>(await call(h.api,path,body===undefined?{}:{body})).body);
+ await v.flush();v.L.network.setProviders('programs',[{id:'claude',title:'Claude Code'}]);await v.flush();v.L.network.openAdd({provider:'claude',title:'Claude Code'});await v.flush();await v.click('[data-proxy-action="next"]');await v.proxyInput('address','socks5://proxy.test:1080');await v.click('[data-proxy-action="check"]');await v.click('[data-proxy-action="use"]');await v.flush();
+ const card=v.find('[data-proxy-id]'),id=card.getAttribute('data-proxy-id');assert.deepEqual(h.runtime.settings.network().chains.claude,[id]);assert.match(card.textContent,/через него ходятClaude Code/);assert.equal(h.provider.calls.length,0);
+});
