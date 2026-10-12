@@ -107,3 +107,60 @@ test('211a r2: an old date save cannot continue after project A to B to A naviga
  const gate=deferred<any>(),seen=deferred();let project='/a',hold=false;const billing=()=>({ok:true,project,subscriptions:[{vendor:'claude',account:'a@test'}],config:{subscriptionDates:[{vendor:'claude',account:'a@test',date:'2027-02-15'}]}}),v=ui(async(path,body)=>{if(path==='/api/billing'){if(hold&&!body){hold=false;seen.resolve();return gate.promise}return billing()}return data(project)});await v.settle();await v.find('[data-pv="claude"]').emit('click');v.find('[data-subscription-date]').value='2027-06-10';await v.find('[data-subscription-date]').emit('input');hold=true;const saving=v.find('[data-subscription-save]').emit('click');await seen.promise;
  for(const next of ['/b','/a']){project=next;v.H.project=next;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await until(()=>v.find('[data-connections-status]').dataset.project===next)}await v.find('[data-pv="claude"]').emit('click');gate.resolve(billing());await saving;assert.equal(v.requests.some(r=>r.body?.changes),false);assert.equal(v.find('[data-subscription-date]').value,'2027-02-15');
 });
+
+for(const changeAccount of [false,true])test('211a r3: a delayed save receipt preserves a newer date edit'+(changeAccount?' after account A-B-A':''),async t=>{
+ const h=await fixture(t);let account='a@example.test',hold=false;
+ h.provider.auth=async()=>({loggedIn:true,email:account});
+ await h.runtime.settings.patch('owner',{subscriptionDates:[
+  {vendor:'claude',account:'a@example.test',date:'2027-02-15',plan:'Max'},
+  {vendor:'claude',account:'b@example.test',date:'2027-03-21',plan:'Max'}
+ ]});
+ const gate=deferred(),seen=deferred();
+ const v=ui(async(path,body)=>{
+  const r=await call(h.api,path,{body});
+  if(path==='/api/billing'&&body&&hold){hold=false;seen.resolve();await gate.promise}
+  return r.body;
+ },h.dir);
+ await v.settle();await v.find('[data-pv="claude"]').emit('click');
+ v.find('[data-subscription-date]').value='2027-06-10';await v.find('[data-subscription-date]').emit('input');
+ hold=true;const saving=v.find('[data-subscription-save]').emit('click');await seen.promise;
+ if(changeAccount){for(const next of ['b@example.test','a@example.test']){account=next;await v.find('[data-connections-refresh]').emit('click');assert.ok(v.find('.cbody').textContent.includes(next))}}
+ v.find('[data-subscription-date]').value='2027-11-30';await v.find('[data-subscription-date]').emit('input');
+ gate.resolve();await saving;await v.settle();
+ const shown=v.find('[data-subscription-date]').value,saved=h.runtime.settings.billing().subscriptionDates.find(x=>x.account==='a@example.test')?.date;
+ t.diagnostic(JSON.stringify({changeAccount,shown,newDraft:'2027-11-30',saved,posts:v.requests.filter(r=>r.body?.changes).length,toasts:v.toasts,modelCalls:h.provider.calls.length}));
+ assert.equal(saved,'2027-06-10','the old request was already committed before its delayed receipt');
+ assert.equal(shown,'2027-11-30','receipt must not erase a later edit');
+ const beforeNext=v.toasts.length;await v.find('[data-subscription-save]').emit('click');assert.equal(h.runtime.settings.billing().subscriptionDates.find(x=>x.account===account)?.date,'2027-11-30');assert.ok(v.toasts.length>beforeNext);assert.doesNotMatch(v.toasts.at(-1)!,/Не вышло/);
+ assert.equal(h.provider.calls.length,0);
+});
+
+
+for(const moment of ['read','post','reload'] as const)test('211a r3: edits and focus survive a delayed billing '+moment,async t=>{
+ const h=await fixture(t),account='a@example.test';h.provider.auth=async()=>({loggedIn:true,email:account});await h.runtime.settings.patch('owner',{subscriptionDates:[{vendor:'claude',account,date:'2027-02-15',plan:'Max'}]});
+ const gate=deferred(),seen=deferred();let hold=false,posted=false;
+ const v=ui(async(path,body)=>{const r=await call(h.api,path,{body});if(path==='/api/billing'){if(body)posted=true;if(hold&&(moment==='read'&&!body&&!posted||moment==='post'&&body||moment==='reload'&&!body&&posted)){hold=false;seen.resolve();await gate.promise}}return r.body},h.dir);await v.settle();await v.find('[data-pv="claude"]').emit('click');v.find('[data-subscription-date]').value='2027-06-10';await v.find('[data-subscription-date]').emit('input');hold=true;
+ const saving=v.find('[data-subscription-save]').emit('click');await seen.promise;const input=v.find('[data-subscription-date]');input.value='2027-11-30';await input.emit('input');input.focus();gate.resolve();await saving;await v.settle();assert.equal(v.find('[data-subscription-date]').value,'2027-11-30');assert.equal(v.document.activeElement,v.find('[data-subscription-date]'));assert.equal(h.runtime.settings.billing().subscriptionDates[0]!.date,'2027-06-10');
+});
+
+for(const change of ['account','provider','project','revert'] as const)test('211a r3: delayed date receipt cannot overwrite '+change,async t=>{
+ const h=await fixture(t);let account='a@example.test';h.provider.auth=async()=>({loggedIn:true,email:account});await h.runtime.settings.patch('owner',{subscriptionDates:[{vendor:'claude',account,date:'2027-02-15',plan:'Max'},{vendor:'claude',account:'b@example.test',date:'2027-03-21',plan:'Max'}]});
+ const gate=deferred(),seen=deferred();let hold=false;const v=ui(async(path,body)=>{const r=await call(h.api,path,{body});if(path==='/api/billing'&&body&&hold){hold=false;seen.resolve();await gate.promise}return r.body},h.dir);await v.settle();await v.find('[data-pv="claude"]').emit('click');v.find('[data-subscription-date]').value='2027-06-10';await v.find('[data-subscription-date]').emit('input');hold=true;const saving=v.find('[data-subscription-save]').emit('click');await seen.promise;
+ if(change==='account'){account='b@example.test';await v.find('[data-connections-refresh]').emit('click');v.find('[data-subscription-date]').value='2027-12-24';await v.find('[data-subscription-date]').emit('input')}
+ if(change==='provider'){await v.window.emit('keydown',{key:'Escape'});await v.find('[data-pv="codex"]').emit('click')}
+ if(change==='project'){await v.window.emit('pagehide')}
+ if(change==='revert'){v.find('[data-subscription-date]').value='2027-02-15';await v.find('[data-subscription-date]').emit('input')}
+ const toasts=v.toasts.length;gate.resolve();await saving;assert.equal(h.runtime.settings.billing().subscriptionDates.find(x=>x.account==='a@example.test')!.date,'2027-06-10');
+ if(change==='account'){assert.equal(v.find('[data-subscription-date]').value,'2027-12-24');assert.match(v.find('.cbody').textContent,/b@example.test/);assert.equal(v.toasts.length,toasts)}
+ if(change==='provider'){assert.match(v.find('.cbody').textContent,/Codex/);assert.equal(v.toasts.length,toasts)}
+ if(change==='project'){assert.equal(v.document.querySelector('.ovl.on'),null);assert.equal(v.toasts.length,toasts)}
+ if(change==='revert'){assert.equal(v.find('[data-subscription-date]').value,'2027-02-15');await v.find('[data-subscription-save]').emit('click');assert.equal(h.runtime.settings.billing().subscriptionDates.find(x=>x.account==='a@example.test')!.date,'2027-02-15')}
+});
+
+
+for(const moment of ['menu','post','status'] as const)test('211a r3 await audit: model '+moment+' cannot continue across project selection',async()=>{
+ const gate=deferred<any>(),seen=deferred();let project='/a',callback:any,refreshes=0;
+ const v=ui(async(path,body)=>{if(body){if(moment==='post'){seen.resolve();await gate.promise}return {ok:true}}return path==='/api/billing'?{ok:false}:data(project)});await v.settle();v.H.panes=[{id:'worker',vendor:'claude',model:'old',role:'worker',mode:'read'}];v.H.models={claude:[{id:'new',label:'New'}]};v.context.confirm=()=>true;v.context.LIVE.paneName=(p:any)=>p.id;v.context.LIVE.laMenu=(_el:any,_title:any,_items:any,cb:any)=>{callback=cb};v.context.LIVE.refreshStatus=async()=>{refreshes++;if(moment==='status'){seen.resolve();await gate.promise}};await v.window.emit('live:status');await v.find('[data-pick-model="worker"]').emit('click');
+ const move=async()=>{project='/b';v.H.project=project;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await until(()=>v.find('[data-connections-status]').dataset.project==='/b')};
+ if(moment==='menu'){await move();await callback({id:'new'});assert.equal(v.requests.some(r=>r.body),false)}else{const choosing=callback({id:'new'});await seen.promise;await move();const toasts=v.toasts.length;gate.resolve({ok:true});await choosing;assert.equal(v.toasts.length,toasts);assert.equal(refreshes,moment==='post'?0:1)}assert.equal(v.find('[data-connections-status]').dataset.project,'/b');
+});
