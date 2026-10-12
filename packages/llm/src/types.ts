@@ -13,11 +13,11 @@ export interface GenerateOptions {provider:string;model:string;messages:Message[
 export interface RetryPolicy {mode:'normal'|'always';maxRetries?:number;initialDelayMs?:number;maxDelayMs?:number;jitterRatio?:number}
 export type Compat=Record<string,boolean|string>;
 export interface ModelConfig {id:string;name?:string;contextWindow?:number;maxTokens?:number;input?:('text'|'image')[];reasoning?:boolean;reasoningEfforts?:Partial<Record<Reasoning,string|null>>;compat?:Compat}
-export interface ProviderConfig {displayName?:string;catalog?:string;api?:Api;baseURL?:string;keyRef?:string;models?:ModelConfig[];modelOverrides?:Record<string,Omit<ModelConfig,'id'>>;compat?:Compat;reasoningEfforts?:Partial<Record<Reasoning,string|null>>;defaultContextWindow?:number;defaultMaxTokens?:number;timeoutMs?:number;retryPolicy?:RetryPolicy}
+export interface ProviderConfig {displayName?:string;catalog?:string;api?:Api;baseURL?:string;keyRef?:string;keyGeneration?:string;models?:ModelConfig[];modelOverrides?:Record<string,Omit<ModelConfig,'id'>>;compat?:Compat;reasoningEfforts?:Partial<Record<Reasoning,string|null>>;defaultContextWindow?:number;defaultMaxTokens?:number;timeoutMs?:number;retryPolicy?:RetryPolicy}
 export type ProviderRoutes=Record<string,ProviderConfig>;
 export interface ModelInfo {id:string;name:string;api:string;contextWindow:number;maxTokens:number;input:('text'|'image')[];reasoning:boolean;reasoningEfforts?:Partial<Record<Reasoning,string|null>>}
 export interface LlmTrace {kind:'llm.request'|'llm.response';requestId:string;provider:string;model:string;outcome:'ok'|'failed'|'cancelled';code?:FailureCode;durationMs:number;usage?:Usage}
-export interface LlmDependencies {routes:()=>ProviderRoutes;resolveKey:(keyRef:string)=>Promise<string|null>;trace?:(event:LlmTrace)=>void;fetch?:typeof fetch;subscribeRoutes?:(listener:()=>void)=>()=>void}
+export interface LlmDependencies {routes:()=>ProviderRoutes;resolveKey:(keyRef:string,generation?:string)=>Promise<string|null>;trace?:(event:LlmTrace)=>void;fetch?:typeof fetch;subscribeRoutes?:(listener:()=>void)=>()=>void}
 export interface DiscoveredModel {id:string;name:string;api?:string;contextWindow?:number;maxTokens?:number;input?:('text'|'image')[];reasoning?:boolean}
 export interface RoutesChanged {type:'llm.routes';providers:string[]}
 /** One model request; never executes tools or performs retries. Finish is terminal, including setup failures. */

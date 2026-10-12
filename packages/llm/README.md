@@ -108,3 +108,15 @@ no implicit retries, cancellation, truncation and route changes. Keychain tests
 use doubles; they do not touch the owner's keychain or send live model requests.
 
 Google’s native pi-ai adapter rejects guarded fetch; it is excluded with non-retryable `transport_unsupported`. Configure Google via a custom OpenAI-compatible address (`https://generativelanguage.googleapis.com/v1beta/openai`) and explicit models instead. Custom routes require a nonempty `models` list.
+
+### Owner connection form (TS-21c)
+
+Connections → “Подключить по API” edits an in-memory draft. Keys are held only in the password input and explicit request; closed drafts discard them. Discovery never saves a route, checks catalog entries offline, and calls a custom endpoint only on an owner click. Selected models are required to save. Saved routes appear as `api:<route-id>` groups in the chat model picker.
+
+- `POST /api/llm/providers/discover {id,config,secret?}` validates a draft (models may be empty only here) and returns candidate models. A stored key can be used only with the same catalog, protocol and base URL; otherwise `credential_target_changed`. Redirects are refused.
+- `POST /api/llm/providers/:id/save {config,revision,secret?}` validates before writes and checks revision under the owner settings lock. Keys use immutable generation slots: `keyRef` remains the route id; `keyGeneration` is a server-generated UUID. Readers capture both fields with the endpoint and resolve exactly that slot. Save stages a new generation, atomically publishes endpoint + generation under revision/lock, then removes the previous generation. A failed config write removes the unpublished generation and leaves the old config, key and timestamp unchanged. Cleanup failures are typed errors, never silent success.
+- The existing key metadata/delete and route delete endpoints handle explicit owner actions. No HTTP response, trace or config includes the key itself.
+
+`discoverDraft` is separate from the runtime service: its allowance for an empty model selection cannot reach settings persistence or model execution.
+
+`resolveKey(ref, generation?)` receives the captured generation. `keySlot(ref, generation)` maps it to the KeyStore account; omitted generation reads legacy TS-21a slots, which HTTP writes never overwrite. The key-only save door uses the same publication path. Key deletion publishes a fresh missing generation (fail closed, new revision), and route deletion removes its captured slot after config publication. Recreating a route uses a new UUID, so an old snapshot cannot alias a new secret. A client may echo the current generation, but cannot choose another one.

@@ -1,4 +1,4 @@
-import {createLlmService,MacKeyStore,type KeyStore} from '@harnessy/llm';
+import {createLlmService,keySlot,MacKeyStore,type KeyStore} from '@harnessy/llm';
 import {TraceStore,currentTrace,traceReason,type TraceContext} from './trace.ts';
 import {ProviderOperations} from './provider-operations.ts';
 import {ProviderCatalog,LoginTerminal,builtinEntries,CLI_DESCRIPTORS,cliEntry,ollamaEntry} from '@harnessy/providers';
@@ -39,7 +39,7 @@ type AttemptDecision=NonNullable<Record_['attempt']>;
 export class Runtime {
  readonly providerOperations:ProviderOperations;
  readonly llmKeys:KeyStore;private unsubscribeLlm:()=>void;
- get llm(){const p=this.project;return createLlmService({routes:()=>this.settings.llmProviders(),resolveKey:ref=>this.llmKeys.resolveKey(ref),subscribeRoutes:listener=>this.settings.onLlmRoutesChanged(listener),...(this.deps.llmFetch?{fetch:this.deps.llmFetch}:{}),trace:event=>{p.trace.record(event.kind,{outcome:event.outcome,reason:traceReason(event.code??'none'),durationMs:event.durationMs,data:{id:event.requestId,vendor:event.provider,model:event.model,code:event.code,...event.usage}})}})}
+ get llm(){const p=this.project;return createLlmService({routes:()=>this.settings.llmProviders(),resolveKey:(ref,generation)=>this.llmKeys.resolveKey(keySlot(ref,generation)),subscribeRoutes:listener=>this.settings.onLlmRoutesChanged(listener),...(this.deps.llmFetch?{fetch:this.deps.llmFetch}:{}),trace:event=>{p.trace.record(event.kind,{outcome:event.outcome,reason:traceReason(event.code??'none'),durationMs:event.durationMs,data:{id:event.requestId,vendor:event.provider,model:event.model,code:event.code,...event.usage}})}})}
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
  private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();private cliQuotas=new WeakMap<ProjectState,ProviderLimitsStore>();
  readonly deps:RuntimeDeps;readonly actions:RuntimeActions;

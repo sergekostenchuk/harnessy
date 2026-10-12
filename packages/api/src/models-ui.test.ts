@@ -25,7 +25,7 @@ const catalogue=()=>({ok:true,providers:[
 ].map(p=>({...p,installed:true as boolean|null,checking:false}))});
 const modes=()=>Object.fromEntries(catalogue().providers.map(p=>[p.id,Object.fromEntries(['read','edit','all','chat'].map(m=>[m,
  p.id==='agy'?m==='all'?{ok:true,note:'без инструментов Harnessy'}:{ok:false,reason:'нет изоляции инструментов на ход'}:p.id==='copilot'&&m==='edit'?{ok:false,reason:'нет флага для этого режима'}:{ok:true}]))]));
-function ui(options:{page?:string;room?:boolean;statusFetch?:()=>Promise<Data>;fetch?:(path:string,body:Data|undefined)=>Promise<Data>}={}){
+function ui(options:{apiRoutes?:Data[];page?:string;room?:boolean;statusFetch?:()=>Promise<Data>;fetch?:(path:string,body:Data|undefined)=>Promise<Data>}={}){
  const d=dom('<div class="frame cur"><div class="main"><div class="feed"></div><div class="box"><input class="in live-in"><div class="bar2"></div></div></div></div>');
  d.html.setAttribute('data-proto','');d.html.setAttribute('data-page',options.page??'chat');Object.assign(d.document,{documentElement:d.html,body:d.body});
  const pane:Data={id:options.room?'room':'worker',label:options.room?'без роли':'воркер',vendor:'claude',model:'shared',mode:'read',busy:false};
@@ -41,7 +41,7 @@ function ui(options:{page?:string;room?:boolean;statusFetch?:()=>Promise<Data>;f
  ctx.window=ctx;const context=createContext(ctx);
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function applyStatus(','  async function refreshChats(')+
   '\nglobalThis.binding={api,sendBinding,bindingCurrent,invalidateBinding,configureSetting,applyStatus};',context);
- ctx.LIVE={H,S,esc,...ctx.binding,save(){},log(){},toast:ctx.toast,paneName:(p:Data)=>p.label,busy:()=>false,hStatus(){},
+ ctx.LIVE={H,S,esc,...ctx.binding,...(options.apiRoutes?{apiRoutes:options.apiRoutes,loadLlmRoutes:async()=>true}:{}),save(){},log(){},toast:ctx.toast,paneName:(p:Data)=>p.label,busy:()=>false,hStatus(){},
   refreshStatus:async()=>{if(lastPane){Object.assign(H.pane,lastPane);await d.window.emit('live:status')}},
   subscribeLiveEvents(onmessage:(event:Data)=>void){const listener={onmessage,close(){listeners.delete(listener)}};listeners.add(listener);return listener}};
  (d.document.querySelector('.box') as any).__cx={ta:d.document.querySelector('input'),send(){}};
@@ -334,4 +334,12 @@ test('334: Ollama has its own cloud/local group; daemon refusal disables its mod
  assert.match(v.find('[data-cx-program="ollama"]').textContent,/Ollama.*облако и локально.*2 модели/);assert.match(v.select('ollama','glm-5.3:cloud').textContent,/облако/);assert.match(v.select('ollama','gemma4:latest').textContent,/локально/);assert.equal(v.select('ollama','glm-5.3:cloud').disabled,false);assert.doesNotMatch(v.find('[data-cx-program="codex"]').textContent,/glm-5.3/);assert.doesNotMatch(v.find('[data-cx-program="router"]').textContent,/glm-5.3/);
  v.H.turnModes.ollama={read:{ok:false,reason:'демон не запущен; запустите ollama serve'}};await v.providers(next);assert.equal(v.select('ollama','glm-5.3:cloud').disabled,true);assert.match(v.find('[data-cx-program="ollama"] [data-cx-group-reason]').textContent,/демон не запущен/);await v.select('ollama','glm-5.3:cloud').emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
  v.H.turnModes.ollama={read:{ok:true}};await v.providers(next);await v.select('ollama','glm-5.3:cloud').emit('click');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{vendor:'ollama',model:'glm-5.3:cloud'}}]);
+});
+
+for(const mode of ['read','edit','all'])test('TS-21c: saved API route is a separate group and selectable in '+mode,{timeout:15000},async()=>{
+ const routes=[{id:'api:my-route',title:'Мой API',kind:'apikey',installed:true,checking:false,models:[{id:'shared',label:'Моя модель'}]}],v=ui({apiRoutes:routes});v.H.pane.mode=mode;await v.open();
+ assert.match(v.find('[data-cx-program="api:my-route"]').textContent,/Мой API/);const button=v.select('api:my-route','shared');assert.equal(button.disabled,false);await button.emit('click');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{vendor:'api:my-route',model:'shared'}}]);
+});
+test('TS-21c: removing a route while menu is open cannot select a stale model',{timeout:15000},async()=>{
+ const routes=[{id:'api:mine',title:'API',kind:'apikey',installed:true,checking:false,models:[{id:'shared',label:'Model'}]}],v=ui({apiRoutes:routes});await v.open();const old=v.select('api:mine','shared');routes.splice(0);await v.status();assert.equal(v.document.querySelector('[data-cx-program="api:mine"]'),null);await old.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
 });

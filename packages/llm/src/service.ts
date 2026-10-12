@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {routeModels,modelInfo,validateResolvedRoutes,catalogProviders} from './catalog.ts';
+import {routeModels,modelInfo,validateResolvedRoutes,catalogProviders,validateDiscoveryDraft} from './catalog.ts';
 import {discover} from './discovery.ts';
 import {piStream,assistant,terminalBlock,usage} from './pi-adapter.ts';
 import {LlmError,classify,failure} from './errors.ts';
@@ -15,7 +15,7 @@ function validRequest(r:GenerateOptions){
 export function createLlmService(deps:LlmDependencies):LlmService {
  const routes=()=>validateResolvedRoutes(deps.routes());
  const route=(id:string)=>{const all=routes();if(!validRoute(id)||!Object.hasOwn(all,id))throw new LlmError('provider_unknown');return all[id]!};
- const resolveKey=async(r:ProviderConfig,signal:AbortSignal)=>{if(!r.keyRef)return null;let key;try{key=await abortable(deps.resolveKey(r.keyRef),signal)}catch(e){if(signal.aborted)throw new LlmError('cancelled');throw new LlmError('credential_unavailable')}if(!key)throw new LlmError('missing_credential');if(!/^[\x21-\x7e]{1,4096}$/.test(key))throw new LlmError('credential_unavailable');return key};
+ const resolveKey=async(r:ProviderConfig,signal:AbortSignal)=>{if(!r.keyRef)return null;let key;try{key=await abortable(deps.resolveKey(r.keyRef,r.keyGeneration),signal)}catch(e){if(signal.aborted)throw new LlmError('cancelled');throw new LlmError('credential_unavailable')}if(!key)throw new LlmError('missing_credential');if(!/^[\x21-\x7e]{1,4096}$/.test(key))throw new LlmError('credential_unavailable');return key};
  const service:LlmService={
  routes,models:id=>routeModels(id,route(id)).map(modelInfo),retryPolicy:id=>structuredClone(route(id).retryPolicy??{mode:'normal',maxRetries:5,initialDelayMs:1000,maxDelayMs:30000,jitterRatio:.2}),
  onRoutesChanged(listener){return deps.subscribeRoutes?.(()=>{try{listener({type:'llm.routes',providers:Object.keys(routes())})}catch{}})??(()=>{})},
@@ -53,4 +53,9 @@ export function createLlmService(deps:LlmDependencies):LlmService {
   })();
  }
  };return service;
+}
+
+export async function discoverDraft(id:string,raw:unknown,deps:Pick<LlmDependencies,'resolveKey'|'fetch'>,signal?:AbortSignal){
+ const config=validateDiscoveryDraft(id,raw);if(!config.baseURL)return routeModels(id,config).map(modelInfo);const timer=new AbortController(),combined=signal?AbortSignal.any([signal,timer.signal]):timer.signal,t=setTimeout(()=>timer.abort(),config.timeoutMs??15000);
+ try{const key=config.keyRef?await abortable(deps.resolveKey(config.keyRef,config.keyGeneration),combined):null;if(config.keyRef&&!key)throw new LlmError('missing_credential');if(key&&!/^[\x21-\x7e]{1,4096}$/.test(key))throw new LlmError('credential_unavailable');return await abortable(discover(config,key,deps.fetch,combined),combined)}catch(e){if(timer.signal.aborted&&!signal?.aborted)throw new LlmError('timeout');if(e instanceof LlmError)throw e;throw new LlmError('credential_unavailable')}finally{clearTimeout(t)}
 }

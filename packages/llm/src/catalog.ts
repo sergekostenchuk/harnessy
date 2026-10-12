@@ -6,9 +6,10 @@ import type {ProviderConfig,ProviderRoutes,ModelInfo,ModelConfig} from './types.
 const keyApis=new Set(['openai-completions','openai-responses','anthropic-messages','mistral-conversations']);
 export function catalogProviders(){return getBuiltinProviders().filter(id=>getBuiltinModels(id).some(m=>keyApis.has(m.api)))}
 export function catalogModels(id:string):Model<Api>[]{if(!getBuiltinProviders().includes(id as BuiltinProvider))throw new LlmError('config_invalid');const models=getBuiltinModels(id as BuiltinProvider).filter(m=>keyApis.has(m.api));if(!models.length)throw new LlmError('transport_unsupported');return structuredClone(models) as Model<Api>[]}
-export function routeModels(id:string,config:ProviderConfig):Model<Api>[] {
+function resolveModels(id:string,config:ProviderConfig,discovery=false):Model<Api>[] {
  const source=config.catalog??(!config.api&&!config.baseURL&&getBuiltinProviders().includes(id as BuiltinProvider)?id:undefined),base=source?catalogModels(source):[],byId=new Map(base.map(m=>[m.id,m]));
- if(!source&&(!config.api||!config.baseURL||!config.models?.length)||config.modelOverrides&&(!source||Object.keys(config.modelOverrides).some(k=>!byId.has(k))))throw new LlmError('config_invalid');
+ if(!source&&(!config.api||!config.baseURL||!discovery&&!config.models?.length)||config.modelOverrides&&(!source||Object.keys(config.modelOverrides).some(k=>!byId.has(k))))throw new LlmError('config_invalid');
+ if(config.api)validateCompat(config.api,config.compat);
  const rows:ModelConfig[]=config.models??base.map(m=>({id:m.id,...config.modelOverrides?.[m.id]}));
  return rows.map(row=>{const old=byId.get(row.id),api=config.api??old?.api,url=config.baseURL??old?.baseUrl;
   if(!api||!url||!keyApis.has(api))throw new LlmError('config_invalid');
@@ -20,5 +21,8 @@ export function routeModels(id:string,config:ProviderConfig):Model<Api>[] {
   if(m.maxTokens>m.contextWindow)throw new LlmError('config_invalid');return m;
  });
 }
+export function routeModels(id:string,config:ProviderConfig){return resolveModels(id,config)}
+// Discovery validates the same config but cannot require the models it is about to discover.
+export function validateDiscoveryDraft(id:string,raw:unknown){const config=validateRoutes({[id]:raw})[id]!;if(config.keyRef!==undefined&&config.keyRef!==id)throw new LlmError('config_invalid');resolveModels(id,config,true);return config}
 export function validateResolvedRoutes(raw:unknown):ProviderRoutes{const routes=validateRoutes(raw);for(const [id,r]of Object.entries(routes)){if(r.keyRef!==undefined&&r.keyRef!==id)throw new LlmError('config_invalid');routeModels(id,r)}return routes}
 export function modelInfo(m:Model<Api>):ModelInfo{return {id:m.id,name:m.name,api:m.api,contextWindow:m.contextWindow,maxTokens:m.maxTokens,input:[...m.input],reasoning:m.reasoning,...(m.thinkingLevelMap?{reasoningEfforts:{...m.thinkingLevelMap}}:{})}}

@@ -7,7 +7,8 @@ function run() {
   var data=$.NSFileHandle.fileHandleWithStandardInput.readDataToEndOfFile;
   if(Number(data.length)>16384) return JSON.stringify({ok:false,code:'key_invalid'});
   var input=JSON.parse(ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data,$.NSUTF8StringEncoding)));
-  if(typeof input.provider!=='string' || !/^[a-z][a-z0-9_-]{0,63}$/.test(input.provider) || ['__proto__','constructor','prototype'].indexOf(input.provider)>=0 || ['get','put','delete'].indexOf(input.op)<0) return JSON.stringify({ok:false,code:'key_invalid'});
+  var parts=typeof input.provider==='string'?input.provider.split(':'):[];
+  if(parts.length<1 || parts.length>2 || !/^[a-z][a-z0-9_-]{0,63}$/.test(parts[0]) || ['__proto__','constructor','prototype'].indexOf(parts[0])>=0 || parts.length===2&&!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(parts[1]) || ['get','put','delete'].indexOf(input.op)<0) return JSON.stringify({ok:false,code:'key_invalid'});
   var query=$.NSMutableDictionary.alloc.init;
   query.setObjectForKey($.kSecClassGenericPassword,$.kSecClass);
   query.setObjectForKey($('Harnessy API key'),$.kSecAttrService);
@@ -19,7 +20,7 @@ function run() {
    var payload=$(JSON.stringify(row)).dataUsingEncoding($.NSUTF8StringEncoding);
    query.setObjectForKey(payload,$.kSecValueData);
    status=Number($.SecItemAdd(query,null));
-   if(status===-25299) {
+   if(status===-25299 && parts.length===1) {
     query.removeObjectForKey($.kSecValueData);
     var update=$.NSMutableDictionary.alloc.init; update.setObjectForKey(payload,$.kSecValueData);
     status=Number($.SecItemUpdate(query,update));

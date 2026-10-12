@@ -1,3 +1,4 @@
+import {keySlot} from '@harnessy/llm';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
@@ -10,12 +11,12 @@ test('owner saves independent routes, validates revisions, manages keys and dele
  let r=await call(h.api,path,{body:{config:config('https://example.test/v1')}});assert.equal(r.status,200);const rev=r.body.revision;
  assert.equal((await call(h.api,path,{body:{config:config('https://other.test/v1')}})).body.code,'llm_conflict');
  assert.equal((await call(h.api,'/api/llm/providers/other',{body:{config:config('https://other.test/v1')}})).status,200);
- r=await call(h.api,path+'/key',{body:{secret:'fixture-secret-1234',revision:rev}});assert.equal(r.status,200);assert.equal(r.body.key.mask,'••••••••1234');assert.equal(r.body.config.keyRef,'custom');assert.doesNotMatch(r.text,/fixture-secret/);const next=r.body.revision;
+ r=await call(h.api,path+'/key',{body:{secret:'fixture-secret-1234',revision:rev}});assert.equal(r.status,200);assert.equal(r.body.key.mask,'••••••••1234');assert.equal(r.body.config.keyRef,'custom');assert.doesNotMatch(r.text,/fixture-secret/);const next=r.body.revision,keyId=keySlot('custom',r.body.config.keyGeneration);
  for(const endpoint of ['/api/settings','/api/llm/providers',path,path+'/key','/api/trace'])assert.doesNotMatch((await call(h.api,endpoint)).text,/fixture-secret/);
  assert.doesNotMatch(readFileSync(join(h.dir,'owner-settings.json'),'utf8'),/fixture-secret/);
  assert.equal((await call(h.api,path+'/check',{body:{}})).body.checked,'configuration');
- assert.equal((await call(h.api,path+'/delete',{body:{revision:rev}})).body.code,'llm_conflict');assert.equal(await keys.resolveKey('custom'),'fixture-secret-1234');
- assert.equal((await call(h.api,path+'/delete',{body:{revision:next}})).status,200);assert.equal(await keys.resolveKey('custom'),null);assert.equal((await call(h.api,path)).status,404);assert.deepEqual(Object.keys(svc.routes()),['other']);assert.equal(events.length,4);
+ assert.equal((await call(h.api,path+'/delete',{body:{revision:rev}})).body.code,'llm_conflict');assert.equal(await keys.resolveKey(keyId),'fixture-secret-1234');
+ assert.equal((await call(h.api,path+'/delete',{body:{revision:next}})).status,200);assert.equal(await keys.resolveKey(keyId),null);assert.equal((await call(h.api,path)).status,404);assert.deepEqual(Object.keys(svc.routes()),['other']);assert.equal(events.length,4);
 });
 test('every HTTP LLM door is owner-only and generic settings cannot bypass validation',options,async t=>{
  const h=await fixture(t,{deps:{llmKeys:new MemoryKeys()}});for(const [method,path] of [['GET','/api/llm/providers'],['GET','/api/llm/providers/catalog/openai'],['GET','/api/llm/providers/x'],['POST','/api/llm/providers/x'],['POST','/api/llm/providers/x/delete'],['POST','/api/llm/providers/x/check'],['POST','/api/llm/providers/x/discover'],['GET','/api/llm/providers/x/key'],['POST','/api/llm/providers/x/key'],['POST','/api/llm/providers/x/key/delete']]){const r=await call(h.api,path!,{method:method!,headers:{'x-pane-token':'forged'},...(method==='POST'?{body:{}}:{})});assert.equal(r.status,403,path);assert.equal(r.body.code,'owner_only')}

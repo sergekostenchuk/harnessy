@@ -12,6 +12,13 @@ test('strict writes reject secrets, foreign key references, invalid protocols, u
  const base=config('https://example.test/v1');const mutations:any[]=[{apiKey:'forbidden'},{headers:{Authorization:'forbidden'}},{keyRef:'other'},{api:'openai-codex-responses'},{baseURL:'https://user:password@example.test/v1'},{baseURL:'https://example.test/?api_key=forbidden'},{baseURL:'file:///tmp/file'},{timeoutMs:0},{defaultMaxTokens:-1},{models:[{id:'a',contextWindow:100,maxTokens:101}]},{models:[{id:'a'},{id:'a'}]},{models:[{id:'a',unexpected:true}]},{reasoningEfforts:{magic:'anything'}},{compat:{supportsFoo:true}},{api:'anthropic-messages',compat:{maxTokensField:'max_tokens'}},{modelOverrides:{missing:{name:'Missing'}}},{retryPolicy:{mode:'always',maxRetries:5}}];
  for(const patch of mutations)assert.throws(()=>validateResolvedRoutes({custom:{...base,...patch}}),{code:'config_invalid'});for(const id of ['__proto__','constructor','../other','api:x'])assert.throws(()=>validateResolvedRoutes(JSON.parse('{"'+id+'":'+JSON.stringify(base)+'}')),{code:'config_invalid'});
 });
+test('key generations must be valid and bound to a key reference in persisted configuration',options,()=>{
+ const base=config('https://example.test/v1'),generation='00000000-0000-4000-8000-000000000001';
+ for(const keyGeneration of [null,123,'bad','../other'])assert.throws(()=>validateResolvedRoutes({custom:{...base,keyRef:'custom',keyGeneration} as any}),{code:'config_invalid'});
+ assert.throws(()=>validateResolvedRoutes({custom:{...base,keyGeneration:generation}}),{code:'config_invalid'});
+ assert.equal(validateResolvedRoutes({custom:{...base,keyRef:'custom',keyGeneration:generation}}).custom!.keyGeneration,generation);
+ assert.equal(validateResolvedRoutes({custom:{...base,keyRef:'custom'}}).custom!.keyGeneration,undefined);
+});
 test('OpenAI and Anthropic discovery use their own auth headers and never mutate configured models',options,async t=>{
  for(const api of ['openai-completions','anthropic-messages'] as const){const e=await endpoint(t,(_b,req,res)=>{assert.equal(req.url,'/v1/models');assert.equal(req.headers[api==='anthropic-messages'?'x-api-key':'authorization'],api==='anthropic-messages'?'fixture-secret':'Bearer fixture-secret');res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data:[{id:'fresh-model',display_name:'Fresh'}]}))});const svc=createLlmService({routes:()=>({custom:{...config(e.url+'/v1',api),keyRef:'custom'}}),resolveKey:async()=> 'fixture-secret'});assert.deepEqual(await svc.discover('custom'),[{id:'fresh-model',name:'Fresh'}]);assert.equal(svc.models('custom')[0]!.id,'test-model')}
 });

@@ -15,3 +15,9 @@ test('Keychain rejects bad routes/keys, unsupported platforms and malformed reco
 test('native keychain script accepts new route ids and fails before native calls for forged ids',options,()=>{
  const run=(provider:string)=>JSON.parse(runInNewContext(KEYCHAIN_SCRIPT+';run()',{$:{NSFileHandle:{fileHandleWithStandardInput:{readDataToEndOfFile:{length:80}}},NSString:{alloc:{initWithDataEncoding:()=>JSON.stringify({op:'get',provider})}}},ObjC:{import(){},unwrap:(s:string)=>s}}));assert.equal(run('../escape').code,'key_invalid');assert.equal(run('constructor').code,'key_invalid');assert.equal(run('new-owner-gateway').code,'keystore_failed');
 });
+test('versioned Keychain accounts validate both components and never overwrite a generation',options,()=>{
+ const generation='00000000-0000-4000-8000-000000000001';let updates=0,adds=0;
+ const run=(provider:string)=>{const dollar:any=(_s:string)=>({dataUsingEncoding(){return {}}});Object.assign(dollar,{NSFileHandle:{fileHandleWithStandardInput:{readDataToEndOfFile:{length:80}}},NSString:{alloc:{initWithDataEncoding:()=>JSON.stringify({op:'put',provider,key:'fixture-secret'})}},NSMutableDictionary:{alloc:{get init(){return {setObjectForKey(){},removeObjectForKey(){}}}}},SecItemAdd(){adds++;return -25299},SecItemUpdate(){updates++;return 0}});return JSON.parse(runInNewContext(KEYCHAIN_SCRIPT+';run()',{$:dollar,ObjC:{import(){},unwrap:(s:string)=>s}}))};
+ assert.equal(run('gateway:'+generation).ok,false);assert.equal(adds,1);assert.equal(updates,0);
+ for(const id of ['gateway:bad','gateway:'+generation+':extra','../other:'+generation,'constructor:'+generation])assert.equal(run(id).code,'key_invalid');assert.equal(adds,1);assert.equal(updates,0);
+});
