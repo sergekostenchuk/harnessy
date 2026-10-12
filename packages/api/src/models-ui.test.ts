@@ -4,7 +4,7 @@ import {readFileSync,existsSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {setImmediate as immediate} from 'node:timers/promises';
 import {dom} from './ui-dom-test-helpers.ts';
-import {deferred,fixture,call,sse} from './test-helpers.ts';
+import {deferred,fixture,call,sse,until} from './test-helpers.ts';
 import {ProviderCatalog,cliEntry} from '../../providers/src/index.ts';
 import {cliFixture} from '../../providers/src/cli/test-support.ts';
 import {collect} from '../../runtime/src/test-helpers.ts';
@@ -342,4 +342,9 @@ for(const mode of ['read','edit','all'])test('TS-21c: saved API route is a separ
 });
 test('TS-21c: removing a route while menu is open cannot select a stale model',{timeout:15000},async()=>{
  const routes=[{id:'api:mine',title:'API',kind:'apikey',installed:true,checking:false,models:[{id:'shared',label:'Model'}]}],v=ui({apiRoutes:routes});await v.open();const old=v.select('api:mine','shared');routes.splice(0);await v.status();assert.equal(v.document.querySelector('[data-cx-program="api:mine"]'),null);await old.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+});
+test('344: actual model menu renders HTTP union, pending pull labels and partial-source reason', {timeout:8000},async t=>{
+ const {ollamaFixture}=await import('../../providers/src/ollama-test-helpers.ts');const f=await ollamaFixture(t);f.setCloud({models:[{name:'gpt-oss:20b'}]});const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}});await call(h.api,'/api/providers/ollama/check',{body:{}});
+ let currentApi=h.api;const v=ui({fetch:async(path,body)=>(await call(currentApi,path,{...(body?{body}:{})})).body});v.H.models.ollama=(await call(h.api,'/api/status')).body.models.ollama;v.H.turnModes.ollama={read:{ok:true}};await v.open();await until(()=>!!v.document.querySelector('[data-cx-vendor="ollama"][data-cx-model="gpt-oss:20b-cloud"]'));assert.match(v.select('ollama','gpt-oss:20b-cloud').textContent,/облако · добавится при первом ходе/);assert.equal(v.select('ollama','gpt-oss:20b-cloud').disabled,false);assert.match(v.select('ollama','gemma4:latest').textContent,/локально/);assert.equal(f.pulls.length,0);
+ const broken=await ollamaFixture(t);broken.setCloudStatus(503);const other=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([broken.entry])}});await call(other.api,'/api/providers/ollama/check',{body:{}});const next=(await call(other.api,'/api/providers/catalog')).body;currentApi=other.api;await v.providers(next);await until(()=>v.body.textContent.includes('Не удалось обновить облачный каталог'));assert.match(v.body.textContent,/Не удалось обновить облачный каталог.*HTTP 503/);assert.equal(v.select('ollama','glm-5.3:cloud').disabled,false);
 });
