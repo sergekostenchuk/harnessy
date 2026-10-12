@@ -96,5 +96,5 @@ export class ApiAgent implements Provider {
    receipt();if(changed)throw new ProviderError('turn_failed','route_changed: маршрут API изменился');if(signal.aborted)throw new ProviderError('cancelled','Ход отменён');throw e;
   }finally{controller.abort();unsubscribe();ctx.setHandle(null);this.active.delete(controller);settle()}
  }
- private failed(failure:Failure){return new ProviderError(failure.code==='model_unsupported'?'model_unsupported':failure.code==='cancelled'?'cancelled':'turn_failed',failure.code+': '+failure.reason)}
+ private failed(failure:Failure){return new ProviderError(failure.code==='network_unavailable'?'network_unavailable':failure.code==='model_unsupported'?'model_unsupported':failure.code==='cancelled'?'cancelled':'turn_failed',failure.code+': '+failure.reason)}
 }

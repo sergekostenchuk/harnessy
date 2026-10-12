@@ -80,3 +80,10 @@ for(const model of ['glm-5.3:cloud','gpt-oss:20b-cloud'])test('21g: saved cloud 
  await until(()=>stream.frames.some(e=>e.type==='error'));const error=stream.frames.find(e=>e.type==='error');assert.equal(error.code,'cloud_api_required');assert.match(error.message,/облачные модели — через Ollama Cloud по API/);assert.equal(h.runtime.registry.get('worker')!.status,'idle');assert.match((await call(h.api,'/api/trace')).body.records.find((r:any)=>r.kind==='turn.end').reason.text,/облачные модели — через Ollama Cloud по API/);assert.equal(h.runtime.registry.get('worker')!.model,model);
  const select=await call(h.api,'/api/panes/worker',{body:{vendor:'ollama',model}});assert.equal(select.status,409);assert.equal(f.capture().length,0);
 });
+
+test('22c: configured cloud Ollama fails before daemon or pull, local models still bypass the relay',{timeout:20000},async t=>{
+ const {h,f}=await setup(t);await h.runtime.settings.changeNetwork(async config=>{config.migrated=true;config.chains.ollama=[];return {result:undefined}});
+ // TS-21g no longer offers cloud models; exercise a seat saved before that change.
+ const rejected=await call(h.api,'/api/panes/worker',{body:{vendor:'ollama',model:'glm-5.3:cloud'}});assert.equal(rejected.status,409);const pane=h.runtime.registry.get('worker')!;pane.vendor='ollama';pane.model='glm-5.3:cloud';pane.touched=true;const settings=pane.settings();await assert.rejects(h.runtime.runTurn('worker','cloud'),e=>(e as {code:string}).code==='capability_unsupported'&&/Ollama Cloud.*API/.test(String(e)));assert.deepEqual(pane.settings(),settings);assert.equal(f.capture().length,0);assert.equal(f.pulls.length,0);
+ await call(h.api,'/api/panes/worker',{body:{vendor:'ollama',model:'gemma4:latest'}});assert.equal(await h.runtime.runTurn('worker','local'),'готов');assert.equal(f.capture().length,1);assert.equal(h.runtime.networkRelay.stats().length,0);
+});

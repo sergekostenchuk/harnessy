@@ -34,9 +34,10 @@ export interface RuntimeActions {
  cancelAsks(scope:TurnScope,reason:string):void;
 }
 export interface RuntimeDeps {
+ networkRelayOptions?:import('./network-relay.ts').RelayOptions;
  networkCheckOptions?:{execute?:typeof import('@harnessy/providers').executeCli;sshDir?:string};
  networkKeys?:import('@harnessy/llm').KeyStore;
- sshTunnels?:import('./ssh-tunnels.ts').SshTunnels;
+ sshTunnels?:Pick<import('./ssh-tunnels.ts').SshTunnels,'ensure'|'get'|'subscribe'|'snapshots'|'stop'|'close'>;
  llmKeys?:import('@harnessy/llm').KeyStore;llmFetch?:typeof fetch;
  catalogCacheDir?:string;providerCatalog?:import('@harnessy/providers').ProviderCatalog;loginTerminal?:import('@harnessy/providers').LoginTerminal;
  projectDir:string;providers:Partial<Record<Vendor,Provider>>;appUrl:string;models?:ModelCatalog;clock?:Clock;limitsCacheDir?:string;

@@ -39,7 +39,7 @@ export function llmRoutes(r:Runtime):Route[]{
   const sameTarget=saved&&saved.catalog===config.catalog&&saved.api===config.api&&saved.baseURL===config.baseURL;
   if(secret===undefined&&saved?.keyRef&&!sameTarget)throw new RuntimeError('credential_target_changed','Адрес или протокол изменён: введите ключ для нового адреса',409);
   const draft={...config,...(secret!==undefined||sameTarget&&saved?.keyRef?{keyRef:id}:{})};if(saved?.keyGeneration)draft.keyGeneration=saved.keyGeneration;else delete draft.keyGeneration;
-  const models=await discoverDraft(id,draft,{resolveKey:async()=>{if(secret!==undefined)return secret;if(!sameTarget||!saved?.keyRef)return null;const key=await r.llmKeys.resolveKey(keySlot(id,saved!.keyGeneration));if(revision!==r.settings.llmRevision(r.settings.llmProviders()[id]))throw new LlmError('route_changed');return key},...(r.deps.llmFetch?{fetch:r.deps.llmFetch}:{})});
+  const models=await discoverDraft(id,draft,{resolveKey:async()=>{if(secret!==undefined)return secret;if(!sameTarget||!saved?.keyRef)return null;const key=await r.llmKeys.resolveKey(keySlot(id,saved!.keyGeneration));if(revision!==r.settings.llmRevision(r.settings.llmProviders()[id]))throw new LlmError('route_changed');return key},fetch:r.routedFetch('api:'+id)});
   return json({ok:true,models});
  }},
  {method:'POST',path:'/api/llm/providers/:id/save',style:'J',handle:async ctx=>{

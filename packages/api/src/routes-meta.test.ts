@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdirSync} from 'node:fs';
+import net from 'node:net';
+import {listen} from '../../runtime/src/network-test-helpers.ts';
 import {join} from 'node:path';
 import {ProviderError} from '@harnessy/providers';
 import {Connections} from '@harnessy/projects';
@@ -32,16 +34,16 @@ for(const path of ['/api/status','/api/connections'])test('65: '+path+' rejects 
  const dir=join(h.dir,'next');mkdirSync(dir);await h.runtime.projectSet(dir,{},OWNER);gate.resolve({loggedIn:true});const a=await read;assert.equal(a.status,409);assert.deepEqual(a.body,{ok:false,code:'project_changed',error:'проект сменился'});
 });
 
-test('1/12: connections projection, route reset/environment on next turn, and check through projects port',async t=>{
+test('22c replaces 1/12: legacy writes refuse; saved proxy migrates to relay; legacy read/check survive',{timeout:20000},async t=>{
  let file='';const h=await fixture(t,{deps:{connections:new Connections((file=join('/tmp','harnessy-ts05-connection-'+process.pid+'-'+Math.random()+'.json')),{now:()=>1791500000125,curl:async args=>args.at(-1)==='https://ipapi.co/1.2.3.4/json/'?{code:0,stdout:'{"country_name":"Test"}',stderr:''}:{code:0,stdout:'{"ip":"1.2.3.4"}\n0.025',stderr:''}})}});
  t.after(async()=>{await import('node:fs/promises').then(fs=>fs.rm(file,{force:true}))});h.codex.models=async()=>[{id:'gpt-test',label:'GPT'},{id:'other-model',label:'other'}];
  const all=await call(h.api,'/api/connections');assert.equal(all.body.providers.length,3);assert.deepEqual(all.body.routes,['direct','proxy','iface']);assert.equal(all.body.providers[2].routable,false);assert.equal(all.body.providers[2].route,null);
  assert.deepEqual((await call(h.api,'/api/connections/route',{body:{provider:'router'}})).body,{ok:false,error:'маршрут задаётся только провайдерам, чьи процессы запускает движок: claude, codex'});
- assert.equal((await call(h.api,'/api/connections/route',{body:{provider:'claude',route:'proxy',proxy:'not-url'}})).status,400);
- const changed=await call(h.api,'/api/connections/route',{body:{provider:'claude',route:'proxy',proxy:'http://127.0.0.1:4321',label:'выход'}});assert.equal(changed.status,200);assert.equal(changed.body.applies,'со следующего хода');assert.equal('processRestartNeeded' in changed.body.route,false);assert.equal(h.provider.resets,1);
- await h.runtime.runTurn('worker','работа');assert.equal(h.provider.calls[0]!.ctx.env.HTTPS_PROXY,'http://127.0.0.1:4321');
+ const port=await listen(t,net.createServer()),oldUrl='http://127.0.0.1:'+port;await h.runtime.connections.setRoute('claude','proxy',oldUrl,'','legacy');
+ const changed=await call(h.api,'/api/connections/route',{body:{provider:'claude',route:'direct'}});assert.equal(changed.status,409);assert.equal(changed.body.code,'network_route_moved');assert.equal(h.provider.resets,0);assert.equal(h.runtime.connections.get('claude').proxy,oldUrl);
+ await h.runtime.runTurn('worker','работа');assert.match(h.provider.calls[0]!.ctx.env.HTTPS_PROXY!,/^http:\/\/harnessy:[A-Za-z0-9_-]{43}@127\.0\.0\.1:\d+$/);assert.notEqual(h.provider.calls[0]!.ctx.env.HTTPS_PROXY,oldUrl);assert.deepEqual(h.runtime.settings.network().chains.claude,['legacy-claude']);
  const check=await call(h.api,'/api/connections/check',{body:{provider:'claude'}});assert.equal(check.status,200);assert.equal(check.body.check.ok,true);assert.equal(check.body.check.ip,'1.2.3.4');assert.equal(check.body.route.lastCheck.ip,'1.2.3.4');
- const iface=await call(h.api,'/api/connections/route',{body:{provider:'codex',route:'iface',iface:'utun4'}});assert.equal(iface.body.applies,'только проверка выхода: трафик идёт системным маршрутом');assert.equal(h.codex.resets,1);
+ const iface=await call(h.api,'/api/connections/route',{body:{provider:'codex',route:'iface',iface:'utun4'}});assert.equal(iface.status,409);assert.equal(iface.body.code,'iface_unsupported');assert.equal(h.codex.resets,0);
  assert.deepEqual((await call(h.api,'/api/connections/check',{body:{provider:'router'}})).body,{ok:false,error:'проверка выхода: claude или codex'});
 });
 

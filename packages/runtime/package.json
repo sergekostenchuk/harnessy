@@ -1,6 +1,6 @@
 {
   "name": "@harnessy/runtime", "version": "0.1.0", "private": true, "type": "module", "exports": "./src/index.ts",
   "scripts": {"build": "tsc -p tsconfig.json --noEmit"},
-  "dependencies": {"@harnessy/llm": "0.1.0", "@harnessy/providers": "0.1.0", "@harnessy/journal": "0.1.0", "@harnessy/team": "0.1.0", "@harnessy/projects": "0.1.0", "@harnessy/context": "0.1.0"},
+  "dependencies": {"@harnessy/llm": "0.1.0", "undici": "7.30.0", "@harnessy/providers": "0.1.0", "@harnessy/journal": "0.1.0", "@harnessy/team": "0.1.0", "@harnessy/projects": "0.1.0", "@harnessy/context": "0.1.0"},
   "devDependencies": {"typescript": "7.0.2", "@types/node": "22.20.5"}
 }

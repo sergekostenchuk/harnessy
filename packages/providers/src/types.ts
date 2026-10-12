@@ -38,7 +38,7 @@ export interface PeerTools {
  send(a:SendArgs):Promise<ToolResult>;ask(a:AskArgs):Promise<ToolResult>;readPane(a:ReadPaneArgs):Promise<ToolResult>;
  merge(a:MergeArgs):Promise<ToolResult>;assignRole(a:AssignRoleArgs):Promise<ToolResult>
 }
-export type RouteEnv=Partial<Record<'HTTPS_PROXY'|'HTTP_PROXY'|'ALL_PROXY'|'https_proxy'|'http_proxy'|'all_proxy',string>>;
+export type RouteEnv=Partial<Record<'HTTPS_PROXY'|'HTTP_PROXY'|'ALL_PROXY'|'https_proxy'|'http_proxy'|'all_proxy'|'NO_PROXY'|'no_proxy'|'NODE_OPTIONS'|'NODE_USE_ENV_PROXY'|'HARNESS_RELAY_PROXY',string>>;
 export const FORBIDDEN_ENV={claude:['ANTHROPIC_API_KEY','CLAUDECODE','CLAUDE_CODE_SIMPLE'],codex:['OPENAI_API_KEY']} as const;
 export interface TurnHandle {interrupt():Promise<void>;steer(text:string):Promise<void>}
 export interface ToolTrace {id:string;name:string;phase:'call'|'result'|'warning';data?:unknown;outcome?:'ok'|'failed'|'rejected'|'timeout'|'cancelled';reason?:string;error?:string}
@@ -51,7 +51,7 @@ export interface TurnContext {
  peers:{id:string;label:string;vendor:Vendor}[];tools:PeerTools;relayDepth:number;projectDir:string|null;appUrl:string;
  registerProcessToken(token:string):void;revokeProcessToken(token:string):void;writableRoots:string[]
 }
-export type ErrorCode='no_binary'|'not_logged_in'|'session_missing'|'model_unsupported'|'cloud_api_required'|'protocol'|'transport_lost'|'cancelled'|'busy'|'cwd_changed'|'turn_failed'|'unknown_request'|'models_unavailable'|'mode_unsupported'|'capability_unsupported'|'permission_denied'|'provider_unknown'|'not_installed'|'platform_unsupported'|'login_terminal_failed'|'login_changed'|'state_dir_tampered';
+export type ErrorCode='network_unavailable'|'no_binary'|'not_logged_in'|'session_missing'|'model_unsupported'|'cloud_api_required'|'protocol'|'transport_lost'|'cancelled'|'busy'|'cwd_changed'|'turn_failed'|'unknown_request'|'models_unavailable'|'mode_unsupported'|'capability_unsupported'|'permission_denied'|'provider_unknown'|'not_installed'|'platform_unsupported'|'login_terminal_failed'|'login_changed'|'state_dir_tampered';
 export class ProviderError extends Error {
  code:ErrorCode;vendorText:string;sessionId:string|null;
  constructor(code:ErrorCode,vendorText:string,sessionId:string|null=null){super(vendorText);this.name='ProviderError';this.code=code;this.vendorText=vendorText;this.sessionId=sessionId}

@@ -8,7 +8,7 @@ import {CHAT_INSTRUCTIONS,codexTeamNote,mergeMessages} from '../text.ts';
 import {RpcClient,spawnTransport,type TransportFactory} from './client.ts';
 import {argumentsFor,BASE_OVERRIDES,overrides,userServers,sparkRouter,tomlKey} from './overrides.ts';
 import {serverRequest} from './protocol.ts';
-interface ProcessRecord {client:RpcClient;cwd:string;peers:string;token:string;revoke:()=>void}
+interface ProcessRecord {client:RpcClient;cwd:string;peers:string;network:string;token:string;revoke:()=>void}
 interface Active {seat:Seat;ctx:TurnContext;client:RpcClient|null;threadId:string|null;turnId:string|null;stopRequested:boolean;reject:(e:ProviderError)=>void}
 export function codexLimits(raw:unknown,now=Date.now()/1000,plan:unknown=null):ProviderLimits{
  const invalid:ProviderLimits={ok:false,code:'limits_invalid',reason:'Codex: неполный ответ лимитов подписки'};
@@ -34,9 +34,10 @@ export class CodexProvider implements Provider {
  constructor(deps:Partial<CodexDependencies>={}){this.deps={transportFactory:spawnTransport,servers:userServers,router:sparkRouter,env:process.env,cwd:process.cwd(),...deps}}
  private async dispose(id:string,r:ProcessRecord){if(this.clients.get(id)===r)this.clients.delete(id);r.revoke();await r.client.close()}
  private async process(seat:Seat,ctx:TurnContext){
+ const network=JSON.stringify(ctx.env);
  const peers=JSON.stringify(ctx.peers.map(p=>[p.id,p.label,p.vendor]).sort((a,b)=>a[0]!.localeCompare(b[0]!)));
  if(ctx.signal.aborted)throw new ProviderError('cancelled','ход отменён');
- const old=this.clients.get(seat.id);if(old&&old.cwd===seat.cwd&&old.peers===peers&&!old.client.closed)return old.client;
+ const old=this.clients.get(seat.id);if(old&&old.cwd===seat.cwd&&old.peers===peers&&old.network===network&&!old.client.closed)return old.client;
  if(old)await this.dispose(seat.id,old);
  const generation=this.generation,servers=await waitWithSignal(()=>this.deps.servers(),ctx.signal),router=await waitWithSignal(()=>this.deps.router(),ctx.signal);
  if(ctx.signal.aborted||generation!==this.generation)throw new ProviderError('cancelled','ход отменён');
@@ -47,7 +48,7 @@ export class CodexProvider implements Provider {
  ctx.registerProcessToken(token);registered=true;
  client=new RpcClient(this.deps.transportFactory({cwd:seat.cwd,args:argumentsFor(overrides(seat,ctx,token,servers,router)),env:childEnv('codex',ctx.env,this.deps.env),secrets:[token]}),[token]);
  client.setServerHandler((m,p)=>serverRequest(m,p,ctx,null,null));
- const entry={client,cwd:seat.cwd,peers,token,revoke};this.clients.set(seat.id,entry);
+ const entry={client,cwd:seat.cwd,peers,network,token,revoke};this.clients.set(seat.id,entry);
  client.onFailure(()=>{if(this.clients.get(seat.id)===entry)this.clients.delete(seat.id);revoke();void entry.client.close().catch(()=>{})});
  await client.initialize(ctx.signal);
  if(generation!==this.generation||ctx.signal.aborted)throw new ProviderError('cancelled','процесс закрыт во время запуска');

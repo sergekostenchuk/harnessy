@@ -76,11 +76,10 @@ export function metaRoutes(r:Runtime,router:RouterSource={health:routerHealthRea
  providers.push({id:'router',name:'provider-router',kind:'локально · 127.0.0.1:11435 · '+(health.ok?(health.families.join(', ')||'нет данных · список моделей пуст'):'нет данных · '+health.reason),auth:{loggedIn:health.ok},health:health.ok?'доступен':'нет данных · '+health.reason,models:health.ok?health.models.length:null,seats:seats('codex').filter(id=>other.some(m=>m.id===p.registry.get(id)?.model)),routable:false,route:null,note:'выход в сеть у роутера свой — движок его маршрут не задаёт'});
  return json({ok:true,project:p.dir,providers,routes:ROUTES})
  }},
- {method:'POST',path:'/api/connections/route',handle:async({body})=>{
+ {method:'POST',path:'/api/connections/route',style:'J',handle:async({body})=>{
  const p=r.project;if(body.project!==undefined&&body.project!==p.dir)throw new RuntimeError('project_changed','проект сменился',409);
  const v=string(body.provider);if(v!=='claude'&&v!=='codex')return json({ok:false,error:'маршрут задаётся только провайдерам, чьи процессы запускает движок: claude, codex'},400);
- const {processRestartNeeded:_,...route}=await r.setRoute(v,{route:string(body.route)||'direct',proxy:string(body.proxy),iface:string(body.iface),label:string(body.label),expect:string(body.expect)},OWNER);
- sameProject(r,p);return json({ok:true,project:p.dir,provider:v,route,applies:route.route==='iface'?'только проверка выхода: трафик идёт системным маршрутом':'со следующего хода'})
+ return await r.setRoute(v,{route:string(body.route)||'direct',proxy:string(body.proxy),iface:string(body.iface),label:string(body.label),expect:string(body.expect)},OWNER);
  }},
  {method:'POST',path:'/api/connections/check',handle:async({body})=>{const p=r.project;if(body.project!==undefined&&body.project!==p.dir)throw new RuntimeError('project_changed','проект сменился',409);const v=string(body.provider);if(v!=='claude'&&v!=='codex')return json({ok:false,error:'проверка выхода: claude или codex'},400);const check=await r.connections.check(v);sameProject(r,p);return json({ok:true,project:p.dir,provider:v,check,route:r.connections.get(v)})}}
 ]}

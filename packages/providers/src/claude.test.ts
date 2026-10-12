@@ -160,3 +160,9 @@ test('220: objects without utilization do not invalidate five-hour and weekly wi
  const base={five_hour:quotaUsage.five_hour,seven_day:quotaUsage.seven_day},expected=claudeUsage(base,123);
  for(const key of ['seven_day_breakdown','seven_day_future_metadata','seven_day_'])for(const value of [{},{as_of:'2026-10-12T06:12:00Z',rows:[]},{rows:[{utilization:150,resets_at:'not-a-window'}]}])assert.deepEqual(claudeUsage({...base,[key]:value},123),expected);
 });
+
+test('22c: Claude child gets the complete relay environment including Node transport and loopback bypass',{timeout:10000},async t=>{
+ const f=fixture('claude'),h=harness([init,done]),p=new ClaudeProvider(h.deps);t.after(()=>p.close());
+ f.ctx.env={HTTP_PROXY:'http://127.0.0.1:19999',HTTPS_PROXY:'http://127.0.0.1:19999',ALL_PROXY:'http://127.0.0.1:19999',NO_PROXY:'localhost,127.0.0.1',NODE_OPTIONS:'--require /fixture/relay.cjs',NODE_USE_ENV_PROXY:'1',HARNESS_RELAY_PROXY:'http://127.0.0.1:19999'};await p.runTurn(f.seat,'fixture',f.ctx);
+ for(const [key,value]of Object.entries(f.ctx.env))assert.equal(h.options[0]!.options!.env![key],value);
+});

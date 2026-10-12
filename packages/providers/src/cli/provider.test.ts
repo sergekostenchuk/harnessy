@@ -47,3 +47,8 @@ test('259: all mode is an explicit flag choice, metadata nonzero exit is refused
  const deps={cwd:f.dir,env:f.env,execute:async()=>({stdout:'{"loggedIn":false}',stderr:'',code:1,signal:null})},p=new CliProvider(f.description,deps);t.after(()=>p.close());await assert.rejects(p.auth(),{code:'protocol'});
  const auth=f.description.auth;if(!('command'in auth))throw Error('fixture');const accepted=new CliProvider({...f.description,auth:{...auth,exitCodes:[0,1]}},deps);t.after(()=>accepted.close());assert.deepEqual(await accepted.auth(),{loggedIn:false});
 });
+
+test('22c: CLI auth and models checks inside a turn inherit the same route as the model process',{timeout:20000},async t=>{
+ const f=await cliFixture(t,'probe');await f.provider.runTurn(f.seat,'fixture',f.ctx);
+ const rows=f.capture().filter(r=>['auth','models','turn'].includes(r.action));assert.deepEqual(rows.map(r=>r.action),['auth','models','turn']);assert.ok(rows.every(r=>r.proxy===f.ctx.env.HTTPS_PROXY));
+});
