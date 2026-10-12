@@ -5,7 +5,7 @@ import http,{type Server,type IncomingMessage,type ServerResponse} from 'node:ht
 import type {Socket} from 'node:net';
 import {fileURLToPath} from 'node:url';
 import {ProxyAgent} from 'undici';
-import {type NetworkExit,type NetworkSettings,type Settings,type ExitCheck} from '@harnessy/projects';
+import {type NetworkExit,type NetworkSettings,type Settings,type ExitCheck,networkRevision} from '@harnessy/projects';
 import {untilAbort} from './agent-cancel.ts';
 import {ProviderError,type RouteEnv} from '@harnessy/providers';
 import {NetworkError,connectHop,destination,loopback,type Destination,type Hop} from './network-wire.ts';
@@ -34,11 +34,14 @@ export class NetworkRelay {
   if(tunnel?.state!=='up'||!tunnel.url)throw new NetworkError();const url=new URL(tunnel.url);if(url.protocol!=='socks5h:'||url.hostname!=='127.0.0.1'||url.username||url.password||!url.port)throw new NetworkError();return {id:exit.id,type:'proxy',url:tunnel.url};
  }
  begin(provider:string,lane:string,signal:AbortSignal,notice?:(text:string)=>void){if(this.closed)throw new NetworkError();const key=provider+'\0'+lane;if(this.turns.has(key))throw new NetworkError();const turn=new NetworkTurn(this,provider,key,signal,notice);this.turns.set(key,turn);return turn}
+ beginCheck(provider:string,lane:string,exit:string,revision:string,signal:AbortSignal,guard:()=>void){guard();const turn=this.begin(provider,'check:'+lane,signal);turn.checkExit={id:exit,revision,guard};return turn}
  scope<T>(turn:NetworkTurn,run:()=>Promise<T>){return this.scopes.run(turn,run)}
- async release(turn:NetworkTurn){if(this.turns.get(turn.key)===turn)this.turns.delete(turn.key);if(/\0(?:fetch:|prepare:|probe:)/.test(turn.key)){const pending=this.listeners.get(turn.key);this.listeners.delete(turn.key);if(pending){const l=await pending;await l.agent.destroy();await new Promise<void>(r=>l.server.close(()=>r()))}}}
+ async release(turn:NetworkTurn){if(this.turns.get(turn.key)===turn)this.turns.delete(turn.key);if(/\0(?:fetch:|prepare:|probe:|check:)/.test(turn.key)){const pending=this.listeners.get(turn.key);this.listeners.delete(turn.key);if(pending){const l=await pending;await l.agent.destroy();await new Promise<void>(r=>l.server.close(()=>r()))}}}
  scoped(provider:string){const turn=this.scopes.getStore();return turn?.provider===provider?turn:undefined}
  async choose(turn:NetworkTurn){
   await this.network.migrate();const snapshot=this.selection.snapshot(turn.provider);turn.snapshot=snapshot;if(!snapshot.configured)return;
+  if(turn.checkExit){turn.assert();const index=snapshot.exits.findIndex(e=>e.id===turn.checkExit!.id);if(index<0)throw new NetworkError();const combined=AbortSignal.any([turn.signal,AbortSignal.timeout(this.options.timeoutMs??10000),this.stop.signal]),hop=await untilAbort(combined,()=>this.hop(snapshot.exits[index]!));let socket:Socket|undefined;
+   try{if(hop.type!=='direct')socket=this.track(await connectHop(hop,null,combined,this.options.tlsCa));turn.assert();if(combined.aborted)throw new NetworkError();turn.index=index;turn.hop=hop;return}finally{socket?.destroy()}}
   const {ids,reason}=this.selection.candidates(snapshot);let why=reason;
   for(const index of ids){let socket:Socket|undefined;const started=performance.now();try{
    const combined=AbortSignal.any([turn.signal,AbortSignal.timeout(this.options.timeoutMs??10000),this.stop.signal]);
@@ -67,14 +70,14 @@ export class NetworkRelay {
   this.track(client);if(!this.authorized(req)){this.denied(provider);client.end('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="Harnessy"\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');return}const abort=new AbortController();client.once('close',()=>abort.abort());
   try{if(!req.url||/[/?#@\s]/.test(req.url))throw new NetworkError();const url=new URL('http://'+req.url),target=destination(url.hostname,Number(url.port)||80);if(!req.url.endsWith(':'+target.port))throw new NetworkError();
    const opened=await this.connection(provider,target,abort.signal,turn),upstream=opened.socket!;this.observe(provider,opened.id,upstream,opened.connectMs);if(client.destroyed){upstream.destroy();return}
-   (await this.listeners.get(turn?.key??provider))!.verified=true;turn?.sent();client.write('HTTP/1.1 200 Connection Established\r\n\r\n');if(head.length)upstream.write(head);
+   (await this.listeners.get(turn?.key??provider))!.verified=true;if(turn){turn.requests++;turn.sent()}client.write('HTTP/1.1 200 Connection Established\r\n\r\n');if(head.length)upstream.write(head);
    if(turn)turn.watch(upstream);client.pipe(upstream);upstream.pipe(client);client.once('close',()=>upstream.destroy());upstream.once('close',()=>client.destroy());upstream.resume();
   }catch{if(!client.destroyed)client.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')}
  }
  private async request(provider:string,req:IncomingMessage,res:ServerResponse,turn?:NetworkTurn){
   if(!this.authorized(req)){this.denied(provider);res.writeHead(407,{'Proxy-Authenticate':'Basic realm="Harnessy"',Connection:'close','Content-Length':'0'});res.end();return}const abort=new AbortController();res.once('close',()=>abort.abort());
   try{const url=new URL(req.url??'');if(url.protocol!=='http:'||url.username||url.password||url.hash)throw new NetworkError();const target=destination(url.hostname,Number(url.port)||80),opened=await this.connection(provider,target,abort.signal,turn),socket=opened.socket!;this.observe(provider,opened.id,socket,opened.connectMs);if(abort.signal.aborted){socket.destroy();return}
-   (await this.listeners.get(turn?.key??provider))!.verified=true;turn?.sent();const headers:http.OutgoingHttpHeaders={...req.headers,host:url.host};for(const key of ['proxy-authorization','proxy-connection','connection','keep-alive','upgrade',...(req.headers.connection??'').toLowerCase().split(',').map(s=>s.trim())])delete headers[key];headers.connection='close';
+   (await this.listeners.get(turn?.key??provider))!.verified=true;if(turn){turn.requests++;turn.sent()}const headers:http.OutgoingHttpHeaders={...req.headers,host:url.host};for(const key of ['proxy-authorization','proxy-connection','connection','keep-alive','upgrade',...(req.headers.connection??'').toLowerCase().split(',').map(s=>s.trim())])delete headers[key];headers.connection='close';
    const agent=new http.Agent({keepAlive:false});agent.createConnection=()=>socket;
    const outgoing=http.request({hostname:target.host,port:target.port,method:req.method,path:url.pathname+url.search,headers,agent},response=>{if(turn&&(response.statusCode??0)>=500){turn.fail('server_error');response.destroy();res.writeHead(502);res.end();return}res.writeHead(response.statusCode??502,response.headers);response.pipe(res)});
    const stop=()=>outgoing.destroy();res.once('close',stop);outgoing.once('close',()=>{res.off('close',stop);agent.destroy()});outgoing.on('error',()=>{if(!abort.signal.aborted&&!turn?.signal.aborted)turn?.fail('connection');if(!res.headersSent)res.writeHead(502);res.end()});if(turn)turn.watch(socket);req.pipe(outgoing);socket.resume();
@@ -118,16 +121,17 @@ export class NetworkRelay {
 
 /** One immutable exit per runtime turn. A stable per-seat listener keeps CLI processes reusable. */
 export class NetworkTurn {
- retryBlocked=false;fetchManaged=false;snapshot:RouteSnapshot|undefined;index=0;hop:Hop|undefined;choice:{reserve:boolean;reason:SwitchReason|null}|undefined;agent:ProxyAgent|undefined;
+ retryBlocked=false;requests=0;fetchManaged=false;snapshot:RouteSnapshot|undefined;index=0;hop:Hop|undefined;choice:{reserve:boolean;reason:SwitchReason|null}|undefined;agent:ProxyAgent|undefined;
+ checkExit:{id:string;revision:string;guard:()=>void}|undefined;
  readonly sockets=new Set<Socket>();private controller=new AbortController();readonly signal:AbortSignal;private pending:Promise<void>|undefined;failure:NetworkError|undefined;rejection:NetworkError|undefined;private ended=false;private notified=false;
  private timers=new Map<Socket,ReturnType<typeof setTimeout>>();
  private relay:NetworkRelay;readonly provider:string;readonly key:string;private notice:((text:string)=>void)|undefined;
  constructor(relay:NetworkRelay,provider:string,key:string,signal:AbortSignal,notice?: (text:string)=>void){this.relay=relay;this.provider=provider;this.key=key;this.notice=notice;this.signal=AbortSignal.any([signal,this.controller.signal])}
  ready(){return this.pending??=this.relay.choose(this)}
- assert(){if(this.rejection)throw this.rejection;if(this.failure)throw this.failure;if(this.signal.aborted||this.ended)throw new ProviderError('cancelled','Ход отменён');if(this.snapshot){this.relay.selection.current(this.snapshot);if(this.hop)this.relay.selection.allowed(this.snapshot,this.index)}}
+ assert(){if(this.rejection)throw this.rejection;if(this.failure)throw this.failure;if(this.signal.aborted||this.ended)throw new ProviderError('cancelled','Ход отменён');if(this.checkExit)this.checkExit.guard();if(this.snapshot){this.relay.selection.current(this.snapshot);if(this.checkExit){const exit=this.snapshot.exits.find(e=>e.id===this.checkExit!.id);if(!this.snapshot.configured||!exit||networkRevision(exit)!==this.checkExit.revision)throw new NetworkError()}else if(this.hop)this.relay.selection.allowed(this.snapshot,this.index)}}
  sent(){if(this.notified)return;this.notified=true;if(this.choice?.reserve){const exit=this.snapshot!.exits[this.index]!;this.notice?.('Ход ушёл через резервный выход «'+exit.label+'» · '+switchReason[this.choice.reason??'connection'])}}
  reject(error:NetworkError){this.rejection=error;this.controller.abort();for(const socket of this.sockets)socket.destroy()}
- fail(reason:SwitchReason){if(this.failure||this.signal.aborted||this.ended||!this.snapshot||!this.hop)return;this.relay.selection.failed(this.snapshot,this.index,reason);this.failure=new NetworkError('network_unavailable',switchReason[reason]+'; ход остановлен, следующий ход выберет резерв той же страны');this.controller.abort();for(const socket of this.sockets)socket.destroy()}
+ fail(reason:SwitchReason){if(this.failure||this.signal.aborted||this.ended||!this.snapshot||!this.hop)return;if(!this.checkExit)this.relay.selection.failed(this.snapshot,this.index,reason);this.failure=new NetworkError('network_unavailable',switchReason[reason]+(this.checkExit?'; проверка выбранного выхода остановлена':'; ход остановлен, следующий ход выберет резерв той же страны'));this.controller.abort();for(const socket of this.sockets)socket.destroy()}
  watch(socket:Socket){if(this.fetchManaged)return;this.touch(socket);socket.once('error',()=>this.fail('connection'));socket.on('data',()=>this.touch(socket));socket.once('close',()=>{clearTimeout(this.timers.get(socket));this.timers.delete(socket)})}
  touch(socket:Socket){clearTimeout(this.timers.get(socket));if(this.ended||this.signal.aborted)return;const timer=setTimeout(()=>this.fail('silence'),this.snapshot!.policy.silenceSeconds*1000);timer.unref();this.timers.set(socket,timer)}
  async run<T>(callback:()=>Promise<T>){

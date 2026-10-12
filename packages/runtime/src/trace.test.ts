@@ -75,3 +75,7 @@ test('365: public usage counter names survive writes and reads while credential 
  assert.doesNotMatch(readFileSync(s.path,'utf8'),/Tiny!|access_token/);for(const row of rows.slice(1))assert.equal(Object.hasOwn(row.data as object,'totalTokens'),false);
  const restored=new TraceStore(s.project);t.after(()=>restored.close());assert.deepEqual((await restored.read())[0]!.data,{...usage,usage});
 });
+
+test('22f: typed public network results survive trace; malformed IP/country/exit/identity values cannot smuggle credentials',async t=>{
+ const s=store(t),id='11111111-1111-4111-8111-111111111111';s.record('network.provider_check',{data:{checkId:id,exit:'vps-1',ip:'198.51.100.2',country:'Germany',state:'done',response:true,latencyMs:12}});s.record('network.provider_check',{data:{checkId:'credential=PRIVATE',exit:'credential=PRIVATE',ip:'198.51.100.2 credential=PRIVATE',country:'credential=PRIVATE',state:'token=PRIVATE'}});await s.flush();const rows=await s.read(),raw=JSON.stringify(rows);assert.match(raw,/198.51.100.2/);assert.match(raw,/Germany/);assert.match(raw,/vps-1/);assert.match(raw,new RegExp(id));assert.doesNotMatch(raw,/PRIVATE/);
+});
