@@ -29,6 +29,12 @@ test('22a: owner exits and ordered chains cover programs, API routes and Ollama;
  assert.equal((await call(h.api,root+'/providers/not-registered',{body:{exits:[],revision:null}})).body.code,'provider_unknown');assert.equal((await call(h.api,root+'/providers/api:missing')).body.code,'provider_unknown');
 });
 
+test('22b/r3: saving an SSH exit rejects a writable root and uses the same root check as tunnel startup',limits,async t=>{
+ const h=await setup(t),home=sshHome(t,h.dir),directory=join(home,'.ssh'),config={id:'ssh',type:'ssh',label:'VPS',host:'vps.example.test',port:22,user:'owner',keyPath:'~/.ssh/id_ed25519'};
+ for(const mode of [0o777,0o775,0o702]){fs.chmodSync(directory,mode);const r=await save(h.api,config);assert.equal(r.status,400);assert.equal(r.body.code,'ssh_key_invalid');assert.equal(h.runtime.settings.network().exits.ssh,undefined)}
+ fs.chmodSync(directory,0o755);assert.equal((await save(h.api,config)).status,200);
+});
+
 test('22a: all HTTP doors deny model authority; malformed configs and generic settings cannot bypass validation',limits,async t=>{
  const h=await setup(t);const routes=[{path:root+'/exits'},{path:root+'/exits/proxy-a/save',body:{config:proxy,revision:null,password:'fixture-secret'}},{path:root+'/exits/proxy-a/delete',body:{revision:null}},{path:root+'/providers/claude'},{path:root+'/providers/claude',body:{exits:[],revision:null}}];
  for(const route of routes){for(const headers of [{'x-pane-token':'forged'},{'x-harness-pane':'worker'}])assert.equal((await call(h.api,route.path,{...(route.body?{body:route.body}:{}),headers})).status,403);if(route.body)assert.equal((await call(h.api,route.path,{body:{...route.body,from:'owner'}})).status,403)}

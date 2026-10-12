@@ -16,3 +16,4 @@ export {ownerPaths,validDir,expandUser} from './files.ts';
 export * from './network-config.ts';
 export * from './network.ts';
 export * from './network-check.ts';
+export {trustedSshDirectory} from './ssh-directory.ts';

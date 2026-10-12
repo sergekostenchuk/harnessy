@@ -7,6 +7,7 @@ import {resolve,relative,isAbsolute,join} from 'node:path';
 import {validRoute,validGeneration} from '@harnessy/llm';
 import {object} from './files.ts';
 import {ProjectError} from './errors.ts';
+import {trustedSshDirectory} from './ssh-directory.ts';
 export type NetworkExit={id:string;label:string;expectedIp?:string}&(
  {type:'direct'}|{type:'proxy';url:string;login?:string;passwordRef?:string;passwordGeneration?:string}|
  {type:'ssh';host:string;port:number;user:string;keyPath:string});
@@ -21,7 +22,7 @@ export function validProviderId(id:unknown):id is string{return typeof id==='str
 export function validateSshKey(exit:NetworkExit){
  if(exit.type!=='ssh')return;
  try{
-  const home=homedir(),base=realpathSync(join(home,'.ssh')),expected=join(realpathSync(home),'.ssh');
+  const home=homedir(),{path:base}=trustedSshDirectory(home),expected=join(realpathSync(home),'.ssh');
   const path=realpathSync(exit.keyPath.startsWith('~/.ssh/')?join(home,exit.keyPath.slice(2)):exit.keyPath),rel=relative(base,path);
   if(base!==expected||!rel||rel==='..'||rel.startsWith('../')||isAbsolute(rel)||!statSync(path).isFile())throw Error();
  }catch{throw new ProjectError('ssh_key_invalid','SSH: нужен существующий файл ключа внутри ~/.ssh; ссылка наружу недопустима')}

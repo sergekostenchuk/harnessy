@@ -6,6 +6,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {systemClock,type Clock} from './types.ts';
 import {spawnSsh,type SshSpawn,type SshExit,type SshProcess} from './ssh-process.ts';
 import {engineOwner,recoverSshDirectories,saveOwnership,type SshOwnership} from './ssh-ownership.ts';
+import {trustedSshDirectory} from '@harnessy/projects';
 
 export interface SshTunnelConfig {host:string;port:number;user:string;keyPath:string}
 const reasons={ssh_config_invalid:'Неверные настройки SSH-выхода',ssh_key_unavailable:'Ключ SSH недоступен: выберите файл в ~/.ssh',ssh_host_key_unknown:'Добавьте ключ хоста в known_hosts владельца',ssh_host_key_changed:'Ключ хоста изменился: проверьте known_hosts владельца',ssh_auth_failed:'Вход по ключу SSH не выполнен',ssh_unavailable:'Программа ssh недоступна',ssh_forward_failed:'SSH не смог открыть локальный SOCKS-порт',ssh_connect_failed:'SSH-соединение прервано или недоступно',ssh_timeout:'Истекло время запуска SSH-туннеля',ssh_stopped:'SSH-туннель остановлен',ssh_capacity:'Достигнут предел SSH-туннелей'} as const;
@@ -25,15 +26,15 @@ function configuration(input:SshTunnelConfig):SshTunnelConfig {
 }
 function paths(home:string,keyPath:string){
  try{
-  const directory=realpathSync(join(home,'.ssh')),file=realpathSync(keyPath.startsWith('~/')?join(home,keyPath.slice(2)):keyPath),within=relative(directory,file);
+  const {path:directory}=trustedSshDirectory(home),file=realpathSync(keyPath.startsWith('~/')?join(home,keyPath.slice(2)):keyPath),within=relative(directory,file);
   if(!isAbsolute(keyPath)&&!keyPath.startsWith('~/')||!within||within==='..'||within.startsWith('..'+sep)||isAbsolute(within)||!statSync(file).isFile()||/[\x00-\x1f\x7f%$]/.test(file))throw Error();
   return {key:file,known:join(home,'.ssh','known_hosts')};
  }catch{throw new SshTunnelError('ssh_key_unavailable')}
 }
 function copyKey(home:string,key:string,directory:string){let fd:number|undefined,bytes:Buffer|undefined;
  try{
-  const root=realpathSync(join(home,'.ssh')),before=statSync(root);fd=openSync(key,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
-  const file=fstatSync(fd),resolved=realpathSync(key),within=relative(root,resolved),after=statSync(resolved),rootAfter=statSync(realpathSync(join(home,'.ssh')));
+  const {path:root,stat:before}=trustedSshDirectory(home);fd=openSync(key,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+  const file=fstatSync(fd),resolved=realpathSync(key),within=relative(root,resolved),after=statSync(resolved),{stat:rootAfter}=trustedSshDirectory(home);
   if(!file.isFile()||file.uid!==process.getuid?.()||![0o400,0o600].includes(file.mode&0o7777)||file.size<1||file.size>1024*1024||before.dev!==rootAfter.dev||before.ino!==rootAfter.ino||file.dev!==after.dev||file.ino!==after.ino||!within||within==='..'||within.startsWith('..'+sep)||isAbsolute(within))throw Error();
   bytes=Buffer.alloc(file.size+1);let size=0,n=0;while(size<bytes.length&&(n=readSync(fd,bytes,size,bytes.length-size,null))>0)size+=n;
   if(size!==file.size||fstatSync(fd).mtimeMs!==file.mtimeMs)throw Error();
@@ -60,7 +61,7 @@ export class SshTunnels {
  constructor(options:SshTunnelOptions={}){this.options=options;this.clock=options.clock??systemClock;this.home=resolve(options.home??homedir());this.spawn=options.spawn??spawnSsh;
   if(/[\x00-\x1f\x7f%$]/.test(this.home))throw new SshTunnelError('ssh_config_invalid');
   for(const [name,value]of Object.entries(options))if(['startupTimeoutMs','retryBaseMs','retryMaxMs'].includes(name)&&(!Number.isSafeInteger(value)||Number(value)<1||Number(value)>120000))throw new SshTunnelError('ssh_config_invalid');
-  const engine=engineOwner();this.ownership=engine?{version:1,engine}:null;if(engine)recoverSshDirectories(options.temporaryDirectory??tmpdir());
+  const engine=engineOwner();this.ownership=engine?{version:1,engine}:null;if(engine)recoverSshDirectories(options.temporaryDirectory??tmpdir(),undefined,{binary:options.binary??'/usr/bin/ssh'});
  }
  get(id:string){const row=this.entries.get(id);return row?{...row.state}:null}
  snapshots(){return [...this.entries.values()].map(e=>({...e.state}))}
