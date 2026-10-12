@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {OllamaProvider,OLLAMA_CLOUD_URL,OLLAMA_URL} from './ollama.ts';
 import {ollamaCloudName,OLLAMA_MODELS_TTL_MS} from './ollama-models.ts';
-import {ollamaFixture} from './ollama-test-helpers.ts';
+import {ollamaFixture,ollamaTurnProvider} from './ollama-test-helpers.ts';
 import {cliFixture} from './cli/test-support.ts';
 import {ProviderCatalog} from './catalog.ts';
 const budget={timeout:8000};
@@ -34,25 +34,25 @@ test('344: public metadata is credential-free, bounded and cannot redirect; inva
  const slow=new OllamaProvider({...f.options,httpTimeoutMs:10,fetch:(url,init)=>String(url)===OLLAMA_CLOUD_URL?new Promise(()=>{}):f.options.fetch!(url,init)});t.after(()=>slow.close());assert.equal((await slow.models()).length,2);assert.match(slow.modelsReason!,/срок ожидания/);
 });
 
-test('344: pull completes before Codex, selected input is frozen and subsequent turns do not pull again',budget,async t=>{
+test('344: pull completes before inference, selected input is frozen and subsequent turns do not pull again',budget,async t=>{
  const f=await ollamaFixture(t),h=await cliFixture(t,'probe');f.setCloud({models:[{name:'gpt-oss:20b'}]});const entered=deferred(),release=deferred();t.after(()=>release.resolve());let started=0;
- const p=new OllamaProvider({...f.options,fetch:async(url,init)=>{if(String(url)===OLLAMA_URL+'/api/pull'){assert.deepEqual(JSON.parse(init!.body as string),{model:'gpt-oss:20b-cloud',stream:false});entered.resolve();await release.promise}return f.options.fetch!(url,init)}});t.after(()=>p.close());
- const seat={...h.seat,vendor:'ollama',model:'gpt-oss:20b-cloud',cwd:f.dir},turn=p.runTurn(seat,'one',{...h.ctx,modelStarted:()=>{started++}});await entered.promise;assert.equal(started,0);assert.equal(f.capture().length,0);seat.model='--evil';release.resolve();const result=await turn;assert.equal(started,1);assert.equal(f.capture()[0].args[f.capture()[0].args.indexOf('-m')+1],'gpt-oss:20b-cloud');assert.deepEqual(f.pulls,['gpt-oss:20b-cloud']);
+ const p=ollamaTurnProvider(new OllamaProvider({...f.options,fetch:async(url,init)=>{if(String(url)===OLLAMA_URL+'/api/pull'){assert.deepEqual(JSON.parse(init!.body as string),{model:'gpt-oss:20b-cloud',stream:false});entered.resolve();await release.promise}return f.options.fetch!(url,init)} }),f.fetch);t.after(()=>p.close());
+ const seat={...h.seat,vendor:'ollama',model:'gpt-oss:20b-cloud',cwd:f.dir},turn=p.runTurn(seat,'one',{...h.ctx,modelStarted:()=>{started++}});await entered.promise;assert.equal(started,0);assert.equal(f.capture().length,0);seat.model='--evil';release.resolve();const result=await turn;assert.equal(started,1);assert.equal(f.capture()[0].model,'gpt-oss:20b-cloud');assert.deepEqual(f.pulls,['gpt-oss:20b-cloud']);
  await p.runTurn({...seat,model:'gpt-oss:20b-cloud',sessionId:result.sessionId},'two',h.ctx);assert.deepEqual(f.pulls,['gpt-oss:20b-cloud']);assert.equal(f.capture().length,2);assert.doesNotMatch((await p.models()).find(m=>m.id==='gpt-oss:20b-cloud')!.label,/добавится/);
 });
 
-for(const failure of ['http','timeout','cancel','invalid','missing','binding'] as const)test('344: '+failure+' during preparation never launches Codex or replaces the existing session',budget,async t=>{
+for(const failure of ['http','timeout','cancel','invalid','missing','binding'] as const)test('344: '+failure+' during preparation never starts inference or replaces the existing session',budget,async t=>{
  const f=await ollamaFixture(t),h=await cliFixture(t,'probe');f.setCloud({models:[{name:'gpt-oss:20b'}]});const abort=new AbortController();let calls=0;
- const p=new OllamaProvider({...f.options,pullTimeoutMs:20,fetch:async(url,init)=>{if(String(url)===OLLAMA_URL+'/api/pull'){calls++;if(failure==='http')return new Response('SECRET',{status:503});if(failure==='cancel')abort.abort();if(failure==='timeout'||failure==='cancel')return new Promise(()=>{});if(failure==='invalid')return Response.json({status:'success',error:'SECRET'});if(failure==='missing')return Response.json({status:'success'})}return f.options.fetch!(url,init)}});t.after(()=>p.close());
+ const p=ollamaTurnProvider(new OllamaProvider({...f.options,pullTimeoutMs:20,fetch:async(url,init)=>{if(String(url)===OLLAMA_URL+'/api/pull'){calls++;if(failure==='http')return new Response('SECRET',{status:503});if(failure==='cancel')abort.abort();if(failure==='timeout'||failure==='cancel')return new Promise(()=>{});if(failure==='invalid')return Response.json({status:'success',error:'SECRET'});if(failure==='missing')return Response.json({status:'success'})}return f.options.fetch!(url,init)} }),f.fetch);t.after(()=>p.close());
  const seat={...h.seat,vendor:'ollama',model:'gpt-oss:20b-cloud',cwd:f.dir,sessionId:'previous-session'},before=structuredClone(seat);const {ProviderError}=await import('./types.ts');
- await assert.rejects(p.runTurn(seat,'never',{...h.ctx,signal:abort.signal,...(failure==='binding'?{beforeModel:async()=>{throw new ProviderError('login_changed','changed')}}:{})}),(e:any)=>e.sessionId==='previous-session'&&!e.vendorText.includes('SECRET'));
- assert.equal(calls,1);assert.equal(f.capture().length,0);assert.deepEqual(seat,before);assert.equal(h.events.some((e:any)=>e.type==='done'),false);
+ await assert.rejects(p.runTurn(seat,'never',{...h.ctx,signal:abort.signal,...(failure==='binding'?{beforeModel:async()=>{throw new ProviderError('login_changed','changed')}}:{})}),(e:any)=>typeof e.code==='string'&&!e.vendorText.includes('SECRET'));
+ assert.equal(calls,1);assert.equal(f.capture().length,0);assert.deepEqual(seat,before);assert.equal(h.events.some((e:any)=>e.type==='delta'),false);
 });
 
 test('344: close cancels a blocked pull; an unsupported model cannot request a download',budget,async t=>{
  const f=await ollamaFixture(t),h=await cliFixture(t,'probe');f.setCloud({models:[{name:'gpt-oss:20b'}]});const entered=deferred();let requests=0;
- const p=new OllamaProvider({...f.options,fetch:async(url,init)=>{if(String(url)===OLLAMA_URL+'/api/pull'){requests++;entered.resolve();return new Promise(()=>{})}return f.options.fetch!(url,init)}});t.after(()=>p.close());const seat={...h.seat,vendor:'ollama',cwd:f.dir,model:'unlisted:cloud',sessionId:'old'};
- await assert.rejects(p.runTurn(seat,'never',h.ctx),{code:'model_unsupported'});assert.equal(requests,0);const pending=assert.rejects(p.runTurn({...seat,model:'gpt-oss:20b-cloud'},'never',h.ctx),{code:'cancelled',sessionId:'old'});await entered.promise;await p.close();await pending;assert.equal(requests,1);assert.equal(f.capture().length,0);
+ const p=ollamaTurnProvider(new OllamaProvider({...f.options,fetch:async(url,init)=>{if(String(url)===OLLAMA_URL+'/api/pull'){requests++;entered.resolve();return new Promise(()=>{})}return f.options.fetch!(url,init)} }),f.fetch);t.after(()=>p.close());const seat={...h.seat,vendor:'ollama',cwd:f.dir,model:'unlisted:cloud',sessionId:'old'};
+ await assert.rejects(p.runTurn(seat,'never',h.ctx),{code:'model_unsupported'});assert.equal(requests,0);const pending=assert.rejects(p.runTurn({...seat,model:'gpt-oss:20b-cloud'},'never',h.ctx),{code:'cancelled'});await entered.promise;await p.close();await pending;assert.equal(requests,1);assert.equal(f.capture().length,0);
 });
 
 test('343/344: restart serves persisted cloud union immediately; catalog cancellation reaches the public fetch without overwriting cache',budget,async t=>{

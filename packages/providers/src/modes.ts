@@ -21,3 +21,6 @@ export function pathRules(seat:Seat,projectDir:string|null):string[]{
  if(projectDir)rules.push(...['Edit','Write','MultiEdit'].map(t=>t+'(//'+projectDir.replace(/^\/+/, '')+'/.harness/evidence/**)'));
  return rules;
 }
+
+// Modes enforced by the Harnessy-owned model/tool loop (API routes and Ollama).
+export const API_TURN_MODES={read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true},ask:{ok:true},check:{ok:false,reason:'Безопасный прогон команд для API-модели не подключён'},web:{ok:false,reason:'Веб-инструмент для API-модели не подключён'}};
