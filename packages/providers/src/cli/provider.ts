@@ -157,7 +157,7 @@ export class CliProvider {
    delta('',true);
    if(!answer&&done.text){answer=clean(done.text);ctx.publish({type:'delta',text:answer})}
    await dispose();terminal=true;ctx.publish({type:'done',sessionId,model:seat.model,durationMs:Date.now()-started,usage:usage(done.usage)});return {text:answer,sessionId};
-  }catch(e){const error=signal.aborted?new ProviderError('cancelled','ход отменён',sessionId):e instanceof ProviderError?new ProviderError(e.code,clean(e.vendorText),sessionId):protocol('ход не выполнен');if(!terminal){terminal=true;ctx.publish({type:'error',text:error.vendorText})}throw error}
+  }catch(e){const error=signal.aborted?new ProviderError('cancelled','ход отменён',sessionId):e instanceof ProviderError?new ProviderError(e.code,safeDiagnostic(clean(e.vendorText)),sessionId):protocol('ход не выполнен');if(!terminal){terminal=true;ctx.publish({type:'error',text:error.vendorText})}throw error}
   finally{abort.abort();try{await dispose()}finally{try{lease?.release()}finally{this.active.delete(seat.id);try{ctx.setHandle(null)}finally{release()}}}}
  }
  async reset(){const turns=[...this.active.values()];for(const a of turns)a.abort.abort();await Promise.all(turns.map(a=>a.done))}

@@ -25,3 +25,5 @@ export {OllamaProvider,ollamaEntry,OLLAMA_URL,OLLAMA_TIMEOUT_MS,OLLAMA_LOGIN_UNK
 
 export {catalogCacheDirectory} from './catalog-cache.ts';
 export {API_TURN_MODES} from './modes.ts';
+
+export {safeDiagnostic,hasPublicSecret,hasSecretField} from './diagnostic.ts';

@@ -321,7 +321,7 @@ export class Runtime {
  private async waitVendor(p:ProjectState,vendor:Vendor|'human'):Promise<void>{if(vendor==='human')return;while(p.resets.has(vendor)||p.routeJobs.has(vendor)){await Promise.all([p.resets.get(vendor),p.routeJobs.get(vendor)]);this.same(p)}}
  async runTurn(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol}={}):Promise<string> {
  const p=options.project??this.project,parent=options.entries?.length?p.trace.parentForJournal(options.entries.map(e=>e.record.seq)):currentTrace(),turnInstanceId=randomUUID(),started=this.clock.now(),span=p.trace.record('turn.start',{actor:'model:'+id,pane:id,chat:p.state.chats.active[id]??null,turnInstanceId,refs:{attemptId:turnInstanceId}},parent);
- return p.trace.run(span,async()=>{try{const text=await this.runTurnCore(id,messageText,options),result=p.registry.get(id)?.transcript.find(m=>object(m.runtime)&&m.runtime.turnInstanceId===turnInstanceId);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:result?.outcome==='interrupted'?'cancelled':result?.outcome==='error'?'failed':'ok',reason:result?.outcome==='error'?traceReason(result.errorCode,'Ошибка провайдера'):{code:'none',text:''},durationMs:this.clock.now()-started,data:{model:result?.model,usage:result?.usage}});return text}catch(e){const reason=traceReason((e as {code?:string}).code,message(e));p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:reason.code==='cancelled'?'cancelled':reason.code==='timeout'?'timeout':'failed',reason,durationMs:this.clock.now()-started});throw e}finally{this.finishTraceTools(p,turnInstanceId)}});
+ return p.trace.run(span,async()=>{try{const text=await this.runTurnCore(id,messageText,options),result=p.registry.get(id)?.transcript.find(m=>object(m.runtime)&&m.runtime.turnInstanceId===turnInstanceId);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:result?.outcome==='interrupted'?'cancelled':result?.outcome==='error'?'failed':'ok',reason:result?.outcome==='error'?traceReason(result.errorCode,'Ошибка провайдера'):{code:'none',text:''},durationMs:this.clock.now()-started,data:{model:result?.model,usage:result?.usage}});return text}catch(e){const failure=turnFailure(e,p.dir,this.clock.now()-started),reason=traceReason(failure.code,failure.reason);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:reason.code==='cancelled'?'cancelled':reason.code==='timeout'?'timeout':'failed',reason,durationMs:this.clock.now()-started});throw e}finally{this.finishTraceTools(p,turnInstanceId)}});
  }
  private async runTurnCore(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol}={}):Promise<string> {
  const p=options.project??this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);this.same(p);this.validateTurn(pane.vendor,pane.mode);
@@ -362,10 +362,10 @@ export class Runtime {
   if(teamNotice){teamSaved=true;pane.publish({type:'roleKnowledge',knowledge})}
   turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
  }},publish:event=>{
- if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:event.text,sessionId:pane.sessionId}:event;return}
- if(turn.stopRequested)return;if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
+ if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:turnFailure({message:event.text},p.dir,0).reason,sessionId:pane.sessionId}:event;return}
+ if(turn.stopRequested)return;if(event.type==='toolError')event={...event,text:turnFailure({message:event.text},p.dir,0).reason};if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
  },askApproval:(title,detail)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.askApproval(title,detail))},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;if(transfer&&!turn.started){earlySession=sid;return}pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
- if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(pane,handle)
+ if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(p,pane,handle)
  },env:this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[...p.registry.panes.values()].map(p=>({id:p.id,label:p.label,vendor:p.vendor as Vendor})),tools:this.toolsFor(scope),relayDepth:turn.relayDepth,projectDir:p.dir,appUrl:this.deps.appUrl,
  registerProcessToken:token=>{if(!p.closed&&(p.processEpoch.get(vendor)??0)===epoch)this.tokens.register(token,p.generation,id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,id,vendor),writableRoots:writableRoots(p.repoRoot,!!pane.worktree)};
  let result:{text:string;sessionId:string|null;interrupted?:boolean};const launchSeat=pane.providerSeat();
@@ -404,7 +404,7 @@ export class Runtime {
  if(!turn.result){pane.transcript=pane.transcript.filter(m=>!injected.includes(m));for(const m of injected)pane.uncommitted.delete(m);
  if(!turn.started){try{if(transfer&&pane.vendor===launchVendor&&pane.sessionEpoch===launchEpoch){pane.sessionId=null;p.state.savePanes(p.registry,p.journal)}p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
  else {   // модель уже могла действовать (modelStarted), результата нет: неопределённый исход не повторяется автоматически — долговечный uncertain до действия владельца (ревью №111 п.1)
-  try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:e instanceof ProviderError||e instanceof RuntimeError?e.code:'internal',...turnMeasurements(turn.terminal),failure:turnFailure(e,p.dir,this.clock.now()-(p.state.attempts[id]?.startedAt??this.clock.now()))})}catch(error){p.lineErrors.push(message(error))}
+  try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:turnFailure(e,p.dir,0).code,...turnMeasurements(turn.terminal),failure:turnFailure(e,p.dir,this.clock.now()-(p.state.attempts[id]?.startedAt??this.clock.now()))})}catch(error){p.lineErrors.push(message(error))}
   try{p.state.uncertain(id)}catch(error){p.lineErrors.push(message(error))}
   pane.status='uncertain';pane.uncertainNote=waitingError(p,pane).message;if(!p.closed)pane.publish({type:'note',text:pane.uncertainNote,warning:this.warningId(p,pane,'uncertain')})}
  }else {pane.status='recovering';pane.recoveryNote='ответ модели сохранён; завершается восстановление доставки';pane.publish({type:'note',text:pane.recoveryNote,warning:this.warningId(p,pane,'recovery')})}
@@ -417,12 +417,12 @@ export class Runtime {
  if(success&&!p.closed&&!options.entries&&pane.status==='idle')void this.kick(id);turn.finish()
  }
  }
- private interruptHandle(pane:Pane,handle:NonNullable<ActiveTurn['handle']>):void{try{void handle.interrupt().catch(e=>pane.publish({type:'toolError',text:slice(message(e),200)}))}catch(e){pane.publish({type:'toolError',text:slice(message(e),200)})}}
+ private interruptHandle(p:ProjectState,pane:Pane,handle:NonNullable<ActiveTurn['handle']>):void{try{void handle.interrupt().catch(e=>pane.publish({type:'toolError',text:turnFailure(e,p.dir,0).reason}))}catch(e){pane.publish({type:'toolError',text:turnFailure(e,p.dir,0).reason})}}
  cancelTurn(id:string,reason:string,p=this.project):boolean {
  const turn=p.active.get(id);if(!turn)return false;this.scopes.revoke(turn.scope);
  if(turn.stopRequested)return true;turn.stopRequested=true;turn.pane.denyApprovals();turn.controller.abort(reason);
- try{this.actions.cancelAsks(turn.scope,reason)}catch(e){turn.pane.publish({type:'toolError',text:message(e)})}
- if(turn.handle)this.interruptHandle(turn.pane,turn.handle);
+ try{this.actions.cancelAsks(turn.scope,reason)}catch(e){turn.pane.publish({type:'toolError',text:turnFailure(e,p.dir,0).reason})}
+ if(turn.handle)this.interruptHandle(p,turn.pane,turn.handle);
  turn.timer=this.clock.setTimeout(()=>{if(p.active.get(id)===turn)void this.resetVendor(turn.vendor as Vendor,p).catch(e=>this.report(p,turn.pane,e))},30_000);return true
  }
  interrupt(id:string,initiator:Initiator){this.requireOwner(initiator);const pane=this.pane(id);if(this.cancelTurn(id,'interrupt'))return {ok:true};pane.denyApprovals();return {ok:false,error:'нечего прерывать'}}
@@ -468,7 +468,7 @@ export class Runtime {
  async steer(id:string,text:string,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);text=pythonTrim(text);if(!text)throw new RuntimeError('text_empty','пустое сообщение',400);
  const turn=p.active.get(id),record=p.channel.postCore({to:[id],kind:'note',text,origin:'steer'},OWNER);
  try{if(!turn||turn.stopRequested||!turn.handle)throw new RuntimeError('turn_ended','ход не активен');this.scopes.assert(turn.scope);await turn.handle.steer(text);this.same(p);this.scopes.assert(turn.scope);pane.record('me',text);pane.publish({type:'steered',record});return {ok:true,seq:record.seq,steered:true}}
- catch(e){const reason='вмешательство не доставлено: '+slice(message(e),200);if(!p.closed)p.channel.postCore({to:['owner'],kind:'rejected',text:reason,reply_to:record.seq,origin:'steer'},HARNESS);throw new RuntimeError('steer_failed',reason,409,{cause:e})}
+ catch(e){const reason='вмешательство не доставлено: '+turnFailure(e,p.dir,0).reason;if(!p.closed)p.channel.postCore({to:['owner'],kind:'rejected',text:reason,reply_to:record.seq,origin:'steer'},HARNESS);throw new RuntimeError('steer_failed',reason,409,{cause:e})}
  }
  resetVendor(vendor:Vendor,p=this.project):Promise<void>{const existing=p.resets.get(vendor);if(existing)return existing;
  let resolve!:()=>void,reject!:(e:unknown)=>void;const reset=new Promise<void>((a,b)=>{resolve=a;reject=b});p.resets.set(vendor,reset);p.processEpoch.set(vendor,(p.processEpoch.get(vendor)??0)+1);this.tokens.revokeVendor(p.generation,vendor);
