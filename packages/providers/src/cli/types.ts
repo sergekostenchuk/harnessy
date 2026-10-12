@@ -20,6 +20,7 @@ export type CliEvent=
  | {type:'tool.call';id:string;name:string;input?:unknown}
  | {type:'tool.result';id:string;output?:unknown;outcome:NonNullable<ToolTrace['outcome']>;reason?:string}
  | {type:'done';text?:string;sessionId?:string|null;usage?:Usage;durationMs?:number}
+ | {type:'warning';id:string;code:string;text:string}
  | {type:'error';code:ErrorCode;text:string};
 export interface CliDescriptor {
  id:string;name:string;binary:string;

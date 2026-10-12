@@ -51,6 +51,7 @@ export class Runtime {
  private traceSettings(){try{const owner=this.settings.effective();this.traceConfig={enabled:owner.traceEnabled!==false,maxBytes:Number.isSafeInteger(owner.traceMaxMiB)&&Number(owner.traceMaxMiB)>=1&&Number(owner.traceMaxMiB)<=128?Number(owner.traceMaxMiB)*1024*1024:16*1024*1024}}catch{}}
  traceTool<T>(scope:TurnScope,name:string,args:unknown,run:()=>Promise<T>){this.scopes.assert(scope);const p=this.project;return p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId))}
  private traceProvider(p:ProjectState,pane:string,turn:string,event:NonNullable<TurnContext['traceEvent']> extends (e:infer E)=>void?E:never){const parent=p.trace.forTurn(turn),key=turn+':'+event.id;let spans=this.toolSpans.get(p);if(!spans){spans=new Map();this.toolSpans.set(p,spans)}
+  if(event.phase==='warning'){p.trace.record('provider.warning',{actor:'model:'+pane,data:{code:event.reason,error:event.error}},parent);return}
   if(event.phase==='call'){const span=p.trace.record('tool.call',{actor:'model:'+pane,data:{name:event.name,args:event.data}},parent);spans.set(key,{span,started:this.clock.now()})}
   else{const previous=spans.get(key),span=previous?.span??p.trace.record('tool.call',{actor:'model:'+pane,data:{name:event.name}},parent);p.trace.end(span,'tool.result',{actor:'model:'+pane,outcome:event.outcome??'ok',reason:event.reason?traceReason(event.reason,event.error):{code:'none',text:''},durationMs:previous?this.clock.now()-previous.started:null,data:{name:event.name,result:event.data}});spans.delete(key)}
  }
