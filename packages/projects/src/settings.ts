@@ -1,7 +1,7 @@
 import {validateNetwork,type NetworkConfig} from './network-config.ts';
 import {createHash} from 'node:crypto';
 import {validateResolvedRoutes,validRoute,LlmError,type ProviderConfig} from '@harnessy/llm';
-import {join} from 'node:path';
+import {join,dirname} from 'node:path';
 import {readFileSync} from 'node:fs';
 import {withPathLock,canonicalPath,MODE_IDS} from '@harnessy/team';
 import {ownerPaths,readObject,writeJson,object,truthy} from './files.ts';
@@ -18,6 +18,7 @@ function repr(key:string){
 export class Settings {
  private ownerFile:string;private currentProject:()=>string|null;private now:()=>number;
  constructor(ownerFile=ownerPaths().settings,currentProject:()=>string|null=()=>null,now=()=>Date.now()){this.ownerFile=ownerFile;this.currentProject=currentProject;this.now=now}
+ networkStatsPath(){return join(dirname(this.ownerFile),'.harnessy','network','stats.sqlite')}
  private llmListeners=new Set<()=>void>();
  onLlmRoutesChanged(listener:()=>void){this.llmListeners.add(listener);return ()=>{this.llmListeners.delete(listener)}}
  private llmChanged(){for(const fn of this.llmListeners)try{fn()}catch{}}

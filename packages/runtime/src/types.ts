@@ -34,6 +34,7 @@ export interface RuntimeActions {
  cancelAsks(scope:TurnScope,reason:string):void;
 }
 export interface RuntimeDeps {
+ networkStatsPath?:string;
  networkRelayOptions?:import('./network-relay.ts').RelayOptions;
  networkCheckOptions?:{execute?:typeof import('@harnessy/providers').executeCli;sshDir?:string};
  networkKeys?:import('@harnessy/llm').KeyStore;

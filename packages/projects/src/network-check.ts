@@ -10,8 +10,9 @@ import {networkRevision} from './network-config.ts';
 import {ProjectError} from './errors.ts';
 export interface ExitCheck {revision:string;checkedAt:number;ok:boolean;ip:string|null;country:string|null;durationMs:number|null;state:'checked'|'matches'|'mismatch'|'failed';reason?:string}
 export class NetworkChecks {
- private settings:Settings;private network:NetworkSettings;private execute:typeof executeCli;private sshDir:string;private checks=new Map<string,ExitCheck>();
+ private settings:Settings;private network:NetworkSettings;private execute:typeof executeCli;private sshDir:string;private checks=new Map<string,ExitCheck>();private listeners=new Set<(id:string,value:ExitCheck)=>void>();
  constructor(settings:Settings,network:NetworkSettings,options:{execute?:typeof executeCli;sshDir?:string}={}){this.settings=settings;this.network=network;this.execute=options.execute??executeCli;this.sshDir=options.sshDir??join(homedir(),'.ssh')}
+ subscribe(fn:(id:string,value:ExitCheck)=>void){this.listeners.add(fn);return()=>this.listeners.delete(fn)}
  snapshot(id:string,revision:string){const value=this.checks.get(id);return value?.revision===revision?structuredClone(value):null}
  keys(){
   const result:{name:string;path:string}[]=[];let entries;
@@ -28,6 +29,6 @@ export class NetworkChecks {
   try{const r=await request('https://api.ipify.org?format=json',10);same();if(r.code!==0||r.signal)throw Error();const cut=r.stdout.lastIndexOf('\n'),body=JSON.parse(r.stdout.slice(0,cut)),seconds=Number(r.stdout.slice(cut+1));if(!body||typeof body.ip!=='string'||!isIP(body.ip)||!Number.isFinite(seconds)||seconds<0)throw Error();value.ip=body.ip;value.durationMs=Math.round(seconds*1000);value.ok=true;value.state=exit.expectedIp?exit.expectedIp===value.ip?'matches':'mismatch':'checked';
    try{const geo=await request('https://ipapi.co/'+encodeURIComponent(body.ip)+'/json/',6);if(geo.code===0&&!geo.signal){const country=JSON.parse(geo.stdout.slice(0,geo.stdout.lastIndexOf('\n')))?.country_name;if(typeof country==='string'&&!hasPublicSecret(country)&&!(secret&&country.includes(secret))&&/^[\p{L}\p{M} .()-]{1,100}$/u.test(country))value.country=country}}catch(e){if(e instanceof ProjectError)throw e}if(!value.country)value.reason='Страна не получена';
   }catch(e){if(e instanceof ProjectError)throw e;value.reason='Проверка выхода не удалась: нет корректного ответа службы IP'}
-  if(through?.signal.aborted)throw new ProviderError('cancelled','Проверка отменена');same();this.checks.set(id,value);return structuredClone(value);
+  if(through?.signal.aborted)throw new ProviderError('cancelled','Проверка отменена');same();this.checks.set(id,value);for(const fn of this.listeners)try{fn(id,structuredClone(value))}catch{}return structuredClone(value);
  }
 }

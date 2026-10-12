@@ -11,6 +11,7 @@ export function networkRoutes(r:Runtime):Route[]{return [
  {method:'POST',path:'/api/network/checks/:id/start',style:'J',handle:ctx=>{owner(ctx);networkFields(ctx.body,['project','decision']);return json({ok:true,check:r.networkProviderChecks.start(ctx.params.id,ctx.body.project,ctx.body.decision,OWNER)})}},
  {method:'POST',path:'/api/network/checks/:id/cancel',style:'J',handle:ctx=>{owner(ctx);networkFields(ctx.body,['project']);return json({ok:true,check:r.networkProviderChecks.cancel(ctx.params.id,ctx.body.project,OWNER)})}},
  {method:'GET',path:'/api/network/checks/:id',style:'J',handle:ctx=>{owner(ctx);return json({ok:true,check:r.networkProviderChecks.get(ctx.params.id,ctx.query.get('project'),OWNER)})}},
+ {method:'GET',path:'/api/network/stats',style:'J',handle:ctx=>{owner(ctx);return json(r.networkStats.read(ctx.query.get('period')??'day'))}},
  {method:'GET',path:'/api/network/ssh-keys',style:'J',handle:ctx=>{owner(ctx);return json({ok:true,files:r.networkChecks.keys()})}},
  {method:'POST',path:'/api/network/exits/:id/check',style:'J',handle:async ctx=>{owner(ctx);networkFields(ctx.body,['revision']);return r.networkChecks.check(ctx.params.id!,ctx.body.revision).then(check=>json({ok:true,check}))}},
  {method:'GET',path:'/api/network/exits',style:'J',handle:async ctx=>{owner(ctx);return json({ok:true,exits:(await r.network.list()).map(row=>({...row,lastCheck:r.networkChecks.snapshot(row.config.id,row.revision!)}))})}},

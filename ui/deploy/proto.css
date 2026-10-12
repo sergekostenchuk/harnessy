@@ -812,3 +812,5 @@ html[data-proto]:not([data-m]) .fr{max-height:calc(100vh - 48px);overflow-y:auto
 html[data-page="conn"] .wrap{max-width:1080px}
 html[data-page="conn"] .list .row{grid-template-columns:34px minmax(130px,1.1fr) minmax(125px,1fr) 75px minmax(285px,1.65fr) 14px}
 html[data-m][data-page="conn"] .row .pay{flex:1 1 100%;margin-left:44px;max-width:calc(100% - 44px)}
+/* TS-22i.1: measured values only; compact rows and an honest empty state. */
+.net-stats-compact{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:6px;font:400 11px/18px var(--mono);color:var(--ink2)}.net-stat-missing{color:var(--ink3)}.row:has([data-net-summary]){position:relative;padding-bottom:36px}.row [data-net-stat-id] .net-stats-compact{position:absolute;left:64px;right:36px;bottom:10px;margin:0}.net-stats-empty{padding:52px 24px;text-align:center;color:var(--ink3)}.net-stats-empty h3{margin:0 0 8px;font-size:15px;font-weight:500;color:var(--ink2)}.net-stats-empty p{margin:0 0 18px;font-size:13px;line-height:1.5}
