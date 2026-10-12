@@ -336,9 +336,18 @@ test('334: Ollama has its own cloud/local group; daemon refusal disables its mod
  v.H.turnModes.ollama={read:{ok:true}};await v.providers(next);await v.select('ollama','glm-5.3:cloud').emit('click');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{vendor:'ollama',model:'glm-5.3:cloud'}}]);
 });
 
-for(const mode of ['read','edit','all'])test('TS-21c: saved API route is a separate group and selectable in '+mode,{timeout:15000},async()=>{
- const routes=[{id:'api:my-route',title:'Мой API',kind:'apikey',installed:true,checking:false,models:[{id:'shared',label:'Моя модель'}]}],v=ui({apiRoutes:routes});v.H.pane.mode=mode;await v.open();
+for(const mode of ['read','edit','all','check','web'])test('TS-21c/21e: saved API route is a separate group and selectable in '+mode,{timeout:15000},async()=>{
+ const routes=[{id:'api:my-route',title:'Мой API',kind:'apikey',installed:true,checking:false,models:[{id:'shared',label:'Моя модель'}]}],v=ui({apiRoutes:routes});v.H.pane.mode=mode;v.H.turnModes['api:my-route']={[mode]:{ok:true,...(mode==='web'?{note:'только загрузка страниц по адресу'}:{})}};await v.open();
+ if(mode==='web')assert.match(v.find('[data-cx-program="api:my-route"] [data-cx-group-reason]').textContent,/только загрузка страниц по адресу/);
  assert.match(v.find('[data-cx-program="api:my-route"]').textContent,/Мой API/);const button=v.select('api:my-route','shared');assert.equal(button.disabled,false);await button.emit('click');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{vendor:'api:my-route',model:'shared'}}]);
+});
+for(const vendor of ['api:my-route','ollama'])test('21e: model and rights menus use the engine web note for '+vendor,async()=>{
+ const entry={id:vendor,title:vendor,kind:vendor==='ollama'?'local':'apikey',installed:true,checking:false,models:[{id:'one',label:'One'}]},v=ui({apiRoutes:vendor.startsWith('api:')?[entry]:[]}),next=catalogue();if(vendor==='ollama')next.providers.push(entry);
+ v.H.models[vendor]=entry.models;v.H.turnModes[vendor]={check:{ok:true},web:{ok:true,note:'только загрузка страниц по адресу'}};v.H.pane.vendor=vendor;v.H.pane.mode='web';v.H.modes.push({id:'check',label:'Проверка'},{id:'web',label:'Веб'});await v.open();if(vendor==='ollama')await v.providers(next);
+ assert.equal(v.select(vendor,'one').disabled,false);assert.match(v.find('[data-cx-program="'+vendor+'"] [data-cx-group-reason]').textContent,/только загрузка страниц по адресу/);
+ await v.find('[data-cx="rights"]').emit('click');assert.match(v.find('.cx-pop').textContent,/только загрузка страниц по адресу/);
+ v.H.pane.mode='check';await v.open();assert.equal(v.select(vendor,'one').disabled,false);
+ delete v.H.turnModes[vendor].check;await v.status();assert.equal(v.select(vendor,'one').disabled,true);assert.match(v.find('[data-cx-program="'+vendor+'"] [data-cx-group-reason]').textContent,/движок не сообщил поддержку режима/);
 });
 test('TS-21c: removing a route while menu is open cannot select a stale model',{timeout:15000},async()=>{
  const routes=[{id:'api:mine',title:'API',kind:'apikey',installed:true,checking:false,models:[{id:'shared',label:'Model'}]}],v=ui({apiRoutes:routes});await v.open();const old=v.select('api:mine','shared');routes.splice(0);await v.status();assert.equal(v.document.querySelector('[data-cx-program="api:mine"]'),null);await old.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);

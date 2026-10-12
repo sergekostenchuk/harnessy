@@ -3,12 +3,13 @@ import {ProviderError,record,API_TURN_MODES,type Provider,type Seat,type TurnCon
 import {validRoute,type LlmService,type Message,type StreamChunk,type Failure,type ContentBlock} from '@harnessy/llm';
 import {AgentTools} from './agent-tools.ts';
 import {untilAbort,cancellable} from './agent-cancel.ts';
+import type {WebFetchOptions} from './agent-web.ts';
 
 export const apiRoute=(vendor:string)=>vendor.startsWith('api:')&&validRoute(vendor.slice(4))?vendor.slice(4):null;
 export const API_MODES=API_TURN_MODES;
 type Finish=Extract<StreamChunk,{type:'finish'}>;
 type Call=Extract<ContentBlock,{type:'tool-call'}>;
-export interface ApiAgentOptions {service:(signal?:AbortSignal)=>LlmService|Promise<LlmService>;prepareModel?:(model:string,signal:AbortSignal)=>Promise<void>;vendor?:string;maxSteps?:number;maxToolCalls?:number;shell?:CliExecutor;wait?:(ms:number,signal:AbortSignal)=>Promise<void>}
+export interface ApiAgentOptions {service:(signal?:AbortSignal)=>LlmService|Promise<LlmService>;prepareModel?:(model:string,signal:AbortSignal)=>Promise<void>;vendor?:string;maxSteps?:number;maxToolCalls?:number;shell?:CliExecutor;web?:WebFetchOptions;wait?:(ms:number,signal:AbortSignal)=>Promise<void>}
 function stopped(signal:AbortSignal){if(signal.aborted)throw new ProviderError('cancelled','Ход отменён')}
 const usageEmpty=():Usage=>({input:null,output:null,cacheRead:null});
 function protectMessage(service:LlmService,message:Message):Message {
@@ -49,7 +50,7 @@ export class ApiAgent implements Provider {
    const route=JSON.stringify(service.routes()[this.route]);
    unsubscribe=service.onRoutesChanged(()=>{let current:string|undefined;try{current=JSON.stringify(service.routes()[this.route])}catch{}if(current!==route){changed=true;controller.abort()}});
    stopped(signal);if(!Number.isSafeInteger(maxSteps)||maxSteps<1||maxSteps>256||!Number.isSafeInteger(maxCalls)||maxCalls<1||maxCalls>1024)throw new ProviderError('protocol','Неверные пределы агентного цикла');
-   const tools=new AgentTools(seat,ctx,signal,this.options.shell,service.redact);
+   const tools=new AgentTools(seat,ctx,signal,this.options.shell,service.redact,this.options.web);
    ctx.setHandle({interrupt:async()=>controller.abort(),steer:async()=>{throw new ProviderError('unknown_request','Сообщение будет передано следующим ходом Harnessy')}});
    for(let step=0;step<maxSteps;step++){
     const policy=service.retryPolicy(this.route);let finish:Finish|undefined;

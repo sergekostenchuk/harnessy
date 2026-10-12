@@ -23,4 +23,4 @@ export function pathRules(seat:Seat,projectDir:string|null):string[]{
 }
 
 // Modes enforced by the Harnessy-owned model/tool loop (API routes and Ollama).
-export const API_TURN_MODES={read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true},ask:{ok:true},check:{ok:false,reason:'Безопасный прогон команд для API-модели не подключён'},web:{ok:false,reason:'Веб-инструмент для API-модели не подключён'}};
+export const API_TURN_MODES={read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true},ask:{ok:true},check:{ok:true},web:{ok:true,note:'только загрузка страниц по адресу'}};

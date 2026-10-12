@@ -16,10 +16,18 @@ async function connect(h:Awaited<ReturnType<typeof fixture>>,url:string,mode='ed
  const pane=await call(h.api,'/api/panes/worker',{body:{vendor:'api:local',model:'test-model',mode}});assert.equal(pane.status,200,pane.text);return route.body.revision;
 }
 
+for(const mode of ['check','web'])test('21e HTTP: API '+mode+' applies its tool boundary inside a real model/tool loop',{skip:mode==='check'&&process.platform!=='darwin'},async t=>{
+ let step=0;const action=mode==='check'?{name:'shell',arguments:{command:'printf changed > guarded.txt'}}:{name:'web_fetch',arguments:{url:'http://127.0.0.1:3777/api/status'}};
+ const server=await endpoint(t,(_b,_q,res)=>answer(res,step++===0?action:'отказ учтён')),h=await fixture(t,{deps:{llmKeys:new MemoryKeys()}});await connect(h,server.url,mode);writeFileSync(join(h.dir,'guarded.txt'),'original');
+ const turn=await call(h.api,'/api/chat',{body:{pane:'worker',message:'boundary fixture'}});assert.equal(turn.status,200,turn.text);await h.runtime.idle();
+ assert.equal(server.bodies.length,2);assert.match(JSON.stringify(server.bodies[1].messages),mode==='check'?/shell_failed/:/web_url_denied/);assert.equal(readFileSync(join(h.dir,'guarded.txt'),'utf8'),'original');assert.equal(h.runtime.registry.get('worker')!.transcript.at(-1)!.text,'отказ учтён');assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+ const names=server.bodies[0].tools.map((x:any)=>x.function.name);assert.equal(names.includes('shell'),mode==='check');assert.equal(names.includes('web_fetch'),mode==='web');for(const name of ['write_file','edit_file','web_search'])assert.equal(names.includes(name),false);
+});
+
 test('21b HTTP: API selection, live tool loop, Harnessy history, artifacts, usage and linked trace without native sessions',async t=>{
  let step=0;const server=await endpoint(t,(_b,_req,res)=>answer(res,step++===0?{name:'write_file',arguments:{path:'artifacts/report.md',text:'FILE_PAYLOAD'}}:step===2?'FIRST_ANSWER':'SECOND_ANSWER'));
  const h=await fixture(t,{deps:{llmKeys:new MemoryKeys()}});await connect(h,server.url);const stream=collect(h.runtime);t.after(()=>stream.sub.close());
- const status=(await call(h.api,'/api/status')).body;assert.equal(status.models['api:local'][0].id,'test-model');assert.equal(status.turnModes['api:local'].all.ok,true);assert.equal(status.turnModes['api:local'].check.ok,false);
+ const status=(await call(h.api,'/api/status')).body;assert.equal(status.models['api:local'][0].id,'test-model');assert.equal(status.turnModes['api:local'].all.ok,true);assert.equal(status.turnModes['api:local'].check.ok,true);assert.equal(status.turnModes['api:local'].web.ok,true);assert.equal(status.turnModes['api:local'].web.note,'только загрузка страниц по адресу');
  assert.equal(await h.runtime.runTurn('worker','FIRST_QUESTION'),'FIRST_ANSWER');assert.equal(readFileSync(join(h.dir,'artifacts/report.md'),'utf8'),'FILE_PAYLOAD');
  const pane=h.runtime.registry.get('worker')!;assert.equal(pane.sessionId,null);assert.equal(pane.transcript.at(-1)!.artifacts!.paths[0],'artifacts/report.md');
  assert.equal(await h.runtime.runTurn('worker','SECOND_QUESTION'),'SECOND_ANSWER');assert.match(JSON.stringify(server.bodies[2].messages),/FIRST_ANSWER/);assert.match(JSON.stringify(server.bodies[2].messages),/SECOND_QUESTION/);
@@ -42,9 +50,10 @@ test('21b HTTP: role tools cannot bypass project role policy and failed requests
  const spend=await call(h.api,'/api/spend/turns?vendor=api%3Alocal');assert.equal(spend.status,200,spend.text);assert.equal(spend.body.items.length,1);assert.equal(spend.body.items[0].outcome,'error');assert.equal(spend.body.items[0].usage.output,4);assert.equal(spend.body.items[0].usageIncomplete,true);assert.equal(spend.body.items[0].cost,null);const totals=await call(h.api,'/api/spend');assert.match(totals.body.costReason,/измерения токенов неполны/);assert.equal(totals.body.totals.missingMeasurements,1);
 });
 
-test('21b HTTP: stale/unknown models and unsupported modes refuse without a model call; route removal retains the seat',async t=>{
+test('21b/21e HTTP: stale models refuse, check/web can be selected without a model call; route removal retains the seat',async t=>{
  const server=await endpoint(t,(_b,_q,res)=>answer(res,'unused')),h=await fixture(t,{deps:{llmKeys:new MemoryKeys()}});const revision=await connect(h,server.url,'read'),before=h.runtime.registry.get('worker')!.settings();
- for(const body of [{model:'not-in-route'},{mode:'check'},{mode:'web'}]){const r=await call(h.api,'/api/panes/worker',{body});assert.equal(r.status,409,r.text);assert.deepEqual(h.runtime.registry.get('worker')!.settings(),before)}
+ const refused=await call(h.api,'/api/panes/worker',{body:{model:'not-in-route'}});assert.equal(refused.status,409,refused.text);assert.deepEqual(h.runtime.registry.get('worker')!.settings(),before);
+ for(const mode of ['check','web']){const r=await call(h.api,'/api/panes/worker',{body:{mode}});assert.equal(r.status,200,r.text);assert.equal(h.runtime.registry.get('worker')!.mode,mode)}
  const deleted=await call(h.api,'/api/llm/providers/local/delete',{body:{revision}});assert.equal(deleted.status,200,deleted.text);assert.equal(h.runtime.registry.get('worker')!.vendor,'api:local');await assert.rejects(h.runtime.runTurn('worker','route gone'));assert.equal(server.bodies.length,0);assert.equal(h.provider.calls.length,0);
 });
 

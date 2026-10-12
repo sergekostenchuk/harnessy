@@ -41,7 +41,7 @@ for(const action of ['cancel','reset','route'])test('21b: '+action+' stops a tra
  if(action==='cancel')h.controller.abort();else if(action==='reset')await agent.reset();else{model.routes.local!.baseURL='http://127.0.0.1:2/v1';model.changed()}await rejected;answer.resolve();await Promise.resolve();assert.equal(existsSync(join(h.dir,'late')),false);assert.equal(model.requests.length,1);assert.equal(model.listeners.size,0);
 });
 
-for(const mode of ['check','web'] as const)test('21b: unsupported '+mode+' refuses before calling a model',async t=>{const h=agentFixture(t);h.seat.mode=mode;const model=modelDouble(()=>[end()]);await assert.rejects(new ApiAgent('local',{service:()=>model.service}).runTurn(h.seat,'task',h.ctx),{code:'mode_unsupported'});assert.equal(model.requests.length,0)});
+for(const mode of ['check','web'] as const)test('21e: '+mode+' reaches the model with bounded tools',async t=>{const h=agentFixture(t);h.seat.mode=mode;const model=modelDouble(()=>[end()]);await new ApiAgent('local',{service:()=>model.service}).runTurn(h.seat,'task',h.ctx);assert.equal(model.requests.length,1);const names=model.requests[0]!.tools!.map(t=>t.name);assert.ok(names.includes('read_file'));assert.equal(names.includes('shell'),mode==='check');assert.equal(names.includes('web_fetch'),mode==='web');assert.equal(names.includes('write_file'),false);assert.equal(names.includes('edit_file'),false)});
 
 test('21b: an old native session fails explicitly for Harnessy history recovery',async t=>{const h=agentFixture(t);h.seat.sessionId='legacy';const model=modelDouble(()=>[end()]);await assert.rejects(new ApiAgent('local',{service:()=>model.service}).runTurn(h.seat,'task',h.ctx),{code:'session_missing'});assert.equal(model.requests.length,0)});
 
