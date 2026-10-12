@@ -95,6 +95,10 @@
 #connections-spec .conn-auth-state > div { flex:1; min-width:0; }
 #connections-spec .conn-auth-state b { font:500 12px/1.5 var(--font); }
 #connections-spec .conn-auth-state small { display:block; color:var(--ink2); font:11px/1.5 var(--font); }
+#connections-spec .conn-limit-example { max-width:260px; }
+#connections-spec .conn-limit-example .row { display:flex; justify-content:space-between; gap:6px; margin-bottom:6px; font-size:10.5px; }
+#connections-spec .conn-limit-example .limit-provider { margin-bottom:10px; }
+#connections-spec .conn-limit-example .limit-reason { display:block; margin:4px 0 8px; color:var(--ink3); font:10px/1.4 var(--font); overflow-wrap:anywhere; }
 #connections-spec .conn-status-dot { width:7px; height:7px; border-radius:50%; background:var(--ink3); flex:none; }
 #connections-spec .conn-status-dot.ok { background:var(--ok); }
 #connections-spec .conn-status-dot.attention { background:var(--accent); }
@@ -213,6 +217,7 @@
         <div class="conn-auth-state" data-state="unchecked" role="status"><span class="conn-status-dot" aria-hidden="true"></span><div><b>Не проверен</b><small>Нажмите «Проверить вход».</small></div></div>
         <div class="conn-auth-state" data-state="checking" role="status" aria-busy="true"><span class="conn-spinner" aria-hidden="true"></span><div><b>Проверяем вход…</b><small>Пробный ход не запускается.</small></div><button type="button" class="btn sm" disabled>Проверяем…</button></div>
         <div class="conn-auth-state" data-state="ready" role="status"><span class="conn-status-dot ok" aria-hidden="true"></span><div><b>Вход проверен</b><small>Программа готова к ходу.</small></div></div>
+        <div class="conn-auth-state" data-state="unknown" role="status"><span class="conn-status-dot" aria-hidden="true"></span><div><b>Неизвестно · сохранён аккаунт, вход не проверен</b><small>Gemini · пробный ход недоступен.</small></div></div>
         <div class="conn-auth-state" data-state="signed-out" role="status"><span class="conn-status-dot attention" aria-hidden="true"></span><div><b>Вход не выполнен</b><small>Войдите в программе провайдера.</small></div></div>
         <div class="conn-auth-state" data-state="unavailable" role="status"><span class="conn-status-dot bad" aria-hidden="true"></span><div><b>Не удалось проверить вход</b><small>Программа не ответила. Состояние входа неизвестно.</small></div><button type="button" class="btn sm ghost" data-example-action="auth">Повторить</button></div>
         <div class="conn-auth-state" data-state="missing" role="status"><span class="conn-status-dot" aria-hidden="true"></span><div><b>Программа не найдена</b><small>Установите программу и повторите проверку.</small></div></div>
@@ -222,6 +227,7 @@
         <article class="conn-program"><h3>Модели · кто на них работает</h3><p class="conn-note">Образец списка Claude из скетча 11; реальные модели — из программы.</p>
           <ul class="conn-models"><li><div><b>Opus 5.5</b><small>придумывать · тяжёлый код</small></div><span>оркестратор · воркер 1</span></li><li><div><b>Sonnet 5.5</b><small>чтение · проверка · средний код</small></div><span>воркер 2 · хранитель</span></li><li><div><b>Haiku 4.5</b><small>мелочи</small></div><span class="conn-note">никто</span></li></ul>
           <details class="conn-empty-models"><summary>Состояния без списка моделей</summary><p role="status">Нет данных · программа вернула пустой список моделей.</p><p role="status">Не удалось прочитать модели. <button type="button" class="btn sm ghost" data-example-action="models">Повторить</button></p></details>
+          <p class="conn-note" data-state="models-empty" role="status">Модели: нет данных · CLI не даёт безопасного чтения моделей без создания сессии</p>
         </article>
         <article class="conn-program conn-trial-card"><h3>Пробный ход</h3><p class="conn-note">Один запрос выбранной модели. Запуск — только после отдельного разрешения владельца.</p>
           <dl class="conn-facts"><div><dt>Модель</dt><dd>выбранная модель</dd></div><div><dt>Цена</dt><dd>неизвестна · спишется по тарифу провайдера</dd></div></dl>
@@ -230,6 +236,16 @@
           <div class="conn-auth-state" data-state="trial-running" role="status" aria-busy="true"><span class="conn-spinner" aria-hidden="true"></span><div><b>Пробный ход…</b><small>Один ход уже запущен · образец.</small></div><button type="button" class="btn sm" disabled>Выполняется…</button></div>
           <div class="conn-auth-state" data-state="trial-unavailable" role="status"><span class="conn-status-dot" aria-hidden="true"></span><div><b>Пробный ход недоступен</b><small>Нет изолированного MCP-конфига и политики read/edit/all на ход.</small></div><button type="button" class="btn sm" disabled>Недоступно</button></div>
         </article>
+      </div>
+
+      <h3 class="conn-section-title">ИСПОЛЬЗОВАНО · Все лимиты</h3>
+      <div class="conn-spec-grid">
+        <article class="conn-program"><h3>ИСПОЛЬЗОВАНО</h3><p class="conn-note">Образцы месячного окна и отказа источника.</p><div class="conn-limit-example">
+          <div class="limit-provider" data-state="limits-month"><div class="row"><span>Copilot · месяц</span><b>25 %</b></div><div class="ticks" role="meter" aria-label="макет · Copilot · месяц" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+          <div class="limit-provider unavailable" data-state="limits-unavailable"><div class="row"><span>Copilot · лимиты</span></div><small class="limit-reason">нет данных · Лимиты программы временно недоступны</small></div>
+          <small class="conn-note">данные за 14:32 · образец</small>
+        </div></article>
+        <article class="conn-program"><h3>Все лимиты · Copilot</h3><div data-state="limits-month-detail"><div class="tn">25 % <small>месяц</small></div><p class="conn-note">остаток 75 % · сброс через 18 д 6 ч</p><p class="conn-note">данные за 14:32 · Copilot CLI · образец</p></div><p class="conn-note" data-state="limits-unavailable-detail">нет данных · Лимиты программы временно недоступны</p></article>
       </div>
 
       <h3 class="conn-section-title">Ключ API · маскирование и состояние</h3>
