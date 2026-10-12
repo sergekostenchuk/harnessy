@@ -41,3 +41,13 @@ test('save refuses empty custom models and unsupported catalog without writing s
  const r=await call(h.api,'/api/llm/providers/google-route',{body:{config:{catalog:'google'}}});assert.equal(r.status,400);assert.equal(r.body.code,'transport_unsupported');assert.match(r.body.error,/защищённый транспорт/);assert.deepEqual(h.runtime.settings.llmProviders(),before);
  assert.equal((await call(h.api,'/api/llm/providers')).body.catalog.includes('google'),false);assert.equal((await call(h.api,'/api/llm/providers/catalog/google')).body.code,'transport_unsupported');
 });
+
+for(const rejected of [false,true])test('365: configured slash model and long route IDs survive LLM trace '+(rejected?'refusal':'completion'),options,async t=>{
+ const route='local_openai_compatible_for_models',model='k2tex/qwen3.8-27b';
+ const server=await endpoint(t,(_body,_req,res)=>{if(rejected){res.writeHead(401,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{message:'credential=Tiny!',type:'auth_error'}}))}else openai(res)}),h=await fixture(t,{deps:{llmKeys:new MemoryKeys()}});
+ const saved=await call(h.api,'/api/llm/providers/'+route+'/save',{body:{config:{...config(server.url),models:[{id:model}]},revision:null}});assert.equal(saved.status,200,saved.text);
+ const result=await collect(h.runtime.llm,{...prompt,provider:route,model});assert.equal(result.finish.reason,rejected?'error':'stop');assert.equal(server.bodies[0].model,model);
+ const assertIds=(rows:any[])=>{const calls=rows.filter(row=>row.kind==='llm.request'||row.kind==='llm.response');assert.equal(calls.length,2);for(const row of calls){assert.equal(row.data.vendor,route);assert.equal(row.data.model,model);assert.equal(Object.hasOwn(row.data,'[секрет]'),false)}const response=calls.find(row=>row.kind==='llm.response')!;if(!rejected)assert.deepEqual({input:response.data.input,output:response.data.output,cacheRead:response.data.cacheRead,cacheWrite:response.data.cacheWrite,totalTokens:response.data.totalTokens},{input:10,output:4,cacheRead:2,cacheWrite:0,totalTokens:16})};
+ const trace=h.runtime.project.trace;assertIds(await trace.read());const bytes=readFileSync(trace.path,'utf8');assertIds(bytes.trim().split('\n').map(line=>JSON.parse(line)));assert.doesNotMatch(bytes,/Tiny!/);
+ await h.runtime.projectSet(h.dir,{reload:true},{seat:'owner',trust:'owner'});const read=await call(h.api,'/api/trace');assertIds(read.body.records);assert.doesNotMatch(read.text,/Tiny!/);
+});

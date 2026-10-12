@@ -1,4 +1,5 @@
-import {safeDiagnostic,hasSecretField} from '@harnessy/providers';
+import {validId,validRoute,type Usage} from '@harnessy/llm';
+import {safeDiagnostic,hasSecretField,hasPublicSecret} from '@harnessy/providers';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {randomUUID} from 'node:crypto';
 import {constants} from 'node:fs';
@@ -25,10 +26,15 @@ export function traceBindingId(value:unknown,kind:'chat'|'pane'|'turn'|'proposal
  return (kind==='pane'?/^[a-z][a-z0-9_-]{0,30}$/:/^c[0-9a-f]{1,64}$/).test(value);
 }
 // Free-form payloads are summarized, never copied: tool output may contain credentials without a recognizable prefix.
-// Only an exact top-level route from the engine table is public by construction.
+// HTTP templates come from the engine table. Model/route IDs use the settings schema
+// and the shared secret-marker check, not heuristics for file paths or opaque tokens.
+function traceMetadataId(value:string,key:string){return !hasPublicSecret(value)&&(key==='model'?validId(value):(key==='vendor'||key==='route')&&validRoute(value))}
+const usageCounters:Record<keyof Usage,true>={input:true,output:true,cacheRead:true,cacheWrite:true,totalTokens:true};
+// Usage fields are public counters, not credential fields; malformed values remain untrusted.
+function secretDataField(key:string,value:unknown){return hasSecretField(key)&&!(Object.hasOwn(usageCounters,key)&&typeof value==='number'&&Number.isSafeInteger(value)&&value>=0)}
 export function traceData(value:unknown,project:string,routes?:ReadonlySet<string>){let truncated=false,budget=2048;const visible=/^(name|action|page|kind|type|status|code|vendor|model|method|route|path|file|filename|binding|id|operationId|proposalId|tool|reason|error)$/;
  const clean=(text:string,key:string)=>traceText(text,project,key);
- const visit=(v:unknown,key='',depth=0):unknown=>{if(depth>4||budget<=0){truncated=true;return '[усечено]'}budget-=8;if(v===null||typeof v==='boolean'||typeof v==='number'&&Number.isFinite(v))return v;if(typeof v==='string'){if(hasSecretField(key)||!visible.test(key)){truncated=true;return '[усечено: '+v.length+' символов]'}const text=depth===1&&key==='route'&&routes?.has(v)?v:clean(v,key),limit=Math.min(256,budget);budget-=Math.min(text.length,limit);if(text!==v||text.length>limit)truncated=true;return text.slice(0,limit)}if(Array.isArray(v)){if(v.length>16)truncated=true;return v.slice(0,16).map(x=>visit(x,key,depth+1))}if(v&&typeof v==='object'){const entries=Object.entries(v);if(entries.length>24)truncated=true;return Object.fromEntries(entries.slice(0,24).map(([k,x])=>[hasSecretField(k)?'[секрет]':clean(k,'key').slice(0,60),hasSecretField(k)?(truncated=true,'[скрыто]'):visit(x,k,depth+1)]))}truncated=true;return '[усечено]'};
+ const visit=(v:unknown,key='',depth=0):unknown=>{if(depth>4||budget<=0){truncated=true;return '[усечено]'}budget-=8;if(v===null||typeof v==='boolean'||typeof v==='number'&&Number.isFinite(v))return v;if(typeof v==='string'){if(hasSecretField(key)||!visible.test(key)){truncated=true;return '[усечено: '+v.length+' символов]'}const text=depth===1&&(key==='route'&&routes?.has(v)||traceMetadataId(v,key))?v:clean(v,key),limit=Math.min(256,budget);budget-=Math.min(text.length,limit);if(text!==v||text.length>limit)truncated=true;return text.slice(0,limit)}if(Array.isArray(v)){if(v.length>16)truncated=true;return v.slice(0,16).map(x=>visit(x,key,depth+1))}if(v&&typeof v==='object'){const entries=Object.entries(v);if(entries.length>24)truncated=true;return Object.fromEntries(entries.slice(0,24).map(([k,x])=>[secretDataField(k,x)?'[секрет]':clean(k,'key').slice(0,60),secretDataField(k,x)?(truncated=true,'[скрыто]'):visit(x,k,depth+1)]))}truncated=true;return '[усечено]'};
  let data:unknown;try{data=visit(value);if(Buffer.byteLength(JSON.stringify(data))>4096){truncated=true;data={info:'[усечено: предел данных 4096 байт]'}}}catch{truncated=true;data={info:'[усечено: данные недоступны]'}}return {data,truncated};
 }
 // Every write and read selects this schema. The project path comes only from the owning store.
