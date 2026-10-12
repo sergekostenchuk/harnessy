@@ -1,0 +1,129 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createContext,runInContext} from 'node:vm';
+import {dom} from './ui-dom-test-helpers.ts';
+import {deferred,fixture} from './test-helpers.ts';
+const read=(p:string)=>readFileSync(new URL('../../../'+p,import.meta.url),'utf8');
+const login=(state='ok')=>({state,account:'u•••@example.test',command:'agy',checkedAt:100,reason:''});
+const provider=(extra:any={})=>({id:'antigravity',title:'Antigravity',kind:'subscription',binary:'agy',installed:true,version:'1.2.17',login:login(),models:[{id:'model-a',label:'Model A',default:true},{id:'model-b',label:'Model B'}],capabilities:{headless:true,resume:true,mcp:true,limits:false},...extra});
+const catalog=(...providers:any[])=>({ok:true,providers});
+function ui(handler?:(path:string,body:any)=>Promise<any>,initial:any=catalog(provider()),transport?:(path:string,init?:RequestInit)=>Promise<Response>){
+ let httpApi:((path:string,body:any,operation:any)=>Promise<any>)|null=null;
+ const raw=read('ui/sketches/disarto/11-connections.html'),d=dom(raw.slice(raw.indexOf('<body>'),raw.indexOf('<script>'))),requests:any[]=[],pending=new Set<Promise<any>>(),toasts:string[]=[],streams:any[]=[];
+ Object.assign(d.document,{documentElement:d.html,body:d.body,visibilityState:'visible'});const H:any={on:true,project:'/a',confirmedProjectGeneration:0,panes:[{id:'worker',vendor:'antigravity',model:'model-a',label:'Воркер 1'}],models:{}};
+ const defaults=(path:string,body:any)=>path==='/api/providers/catalog'?structuredClone(initial):path==='/api/connections'?{ok:true,project:H.project,providers:[],routes:['direct','proxy','iface']}:path==='/api/billing'?{ok:false}:path.endsWith('/probe')?{ok:true,provider:path.split('/')[3],model:body.model,approvalId:'probe-'+path.split('/')[3],status:'awaiting_approval',price:{kind:'subscription',label:'расходуется подписка'}}:path==='/api/approve'?{ok:true}:null;
+ const context:any={document:d.document,location:{pathname:'/11-connections.html',hash:''},addEventListener:d.window.addEventListener.bind(d.window),setTimeout:(f:()=>void)=>f(),requestAnimationFrame:(f:()=>void)=>f(),LIVE:{H,esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),toast:(s:string)=>toasts.push(s),paneName:(p:any)=>p.label,log(){},subscribeLiveEvents(onmessage:any){const stream={onmessage,onopen:null,closed:false,close(){stream.closed=true}};streams.push(stream);return stream},providerLimitHTML:(_id:string,_name:string,_kind:string,supported:boolean)=>supported?'<p>Неделя · 42 % · остаток 58 %</p>':'<p>Провайдер лимиты не отдаёт.</p>',api:async(path:string,body?:any,operation?:any)=>{requests.push({path,body});const task=(async()=>{if(httpApi)return httpApi(path,body,operation);const result=await handler?.(path,body);return result===undefined?defaults(path,body):result})();pending.add(task);try{return await task}finally{pending.delete(task)}}}};context.window=context;
+ const vm=createContext(context);if(transport){context.H=H;context.fetch=transport;const live=read('ui/deploy/live.js');httpApi=runInContext('(function(){'+live.slice(live.indexOf('  const api='),live.indexOf('  // TS-07: waiting controls'))+'return api})()',vm)}runInContext(read('ui/sketches/disarto/app.js'),vm);runInContext(raw.slice(raw.indexOf('<script>')+8,raw.indexOf('</script>',raw.indexOf('<script>'))),vm);runInContext(read('ui/deploy/conn.js'),vm);
+ const find=(s:string)=>{const node=d.document.querySelector(s);assert.ok(node,s);return node};const settle=async()=>{for(let i=0;i<30;i++){await Promise.allSettled([...pending]);await Promise.resolve();if(!pending.size)return}throw Error('UI did not settle')};
+ const posts=(suffix='')=>requests.filter(r=>r.body&&r.path.endsWith(suffix));return {...d,H,context,requests,toasts,find,settle,streams,posts};
+}
+async function open(v:ReturnType<typeof ui>){await v.settle();await v.find('[data-pv="antigravity"]').emit('click');}
+
+test('263/268: the catalog preserves the three sketch views and opens descriptor cards with real models, occupants, version and limits; reads never call a model',async()=>{
+ const v=ui(undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:true,limits:true},limits:{ref:'/api/limits#antigravity'}}),provider({id:'copilot',title:'GitHub Copilot',binary:'copilot',installed:false,version:null,models:[],login:login('none')})));await v.settle();
+ for(const selector of ['#v-list .sum','#v-list .list','#v-roles .rl','#v-roles .note','#v-keys .wrap'])assert.ok(v.find(selector));assert.match(v.find('#v-list .list').textContent,/Antigravity|GitHub Copilot/);await v.find('#addbtn').emit('click');assert.match(v.find('.cbody').textContent,/Программы подписок/);assert.match(v.find('.cbody').textContent,/Программа не установлена/);await v.find('[data-program-open="antigravity"]').emit('click');assert.match(v.find('.cbody').textContent,/1\.2\.17/);assert.match(v.find('.conn-models').textContent,/Воркер 1/);assert.match(v.find('.cbody').textContent,/42 %/);assert.equal(v.find('[data-program-probe]').disabled,false);assert.equal(v.posts().length,0);
+});
+
+test('263: explicit check uses the provider id without a model, distinguishes unknown/error login, and never starts a probe',async()=>{
+ const v=ui(async path=>path.endsWith('/check')?{ok:true,login:{...login('error'),reason:'fixture offline'}}:undefined);await open(v);await v.find('[data-program-check]').emit('click');assert.deepEqual(v.posts().map(r=>r.path),['/api/providers/antigravity/check']);assert.deepEqual(JSON.parse(JSON.stringify(v.posts()[0].body)),{});assert.match(v.find('.cbody').textContent,/Не удалось проверить вход/);assert.match(v.find('.cbody').textContent,/fixture offline/);assert.equal(v.find('[data-program-probe]').disabled,true);
+});
+
+test('263/269: Terminal receives only a descriptor id; returning to the window checks login exactly once, without a model call',async()=>{
+ const v=ui(async path=>path.endsWith('/login-terminal')?{ok:true,command:'agy'}:path.endsWith('/check')?{ok:true,login:login()}:undefined);await open(v);const button=v.find('[data-program-terminal]');await button.emit('click');assert.deepEqual(v.posts().map(r=>r.path),['/api/providers/antigravity/login-terminal']);assert.deepEqual(JSON.parse(JSON.stringify(v.posts()[0].body)),{});
+ await v.window.emit('blur');await v.window.emit('focus');await v.settle();await v.window.emit('focus');await v.settle();assert.deepEqual(v.posts().map(r=>r.path),['/api/providers/antigravity/login-terminal','/api/providers/antigravity/check']);assert.equal(v.posts('/api/approve').filter(r=>r.body.decision==='allow').length,0);
+});
+
+for(const code of ['platform_unsupported','provider_unknown','not_installed','owner_only'])test('269: typed Terminal refusal '+code+' does not claim a login or start a check',async()=>{
+ const v=ui(async path=>path.endsWith('/login-terminal')?{ok:false,code}:undefined);await open(v);await v.find('[data-program-terminal]').emit('click');assert.ok(v.find('.cbody [role="alert"]').textContent);await v.window.emit('blur');await v.window.emit('focus');await v.settle();assert.equal(v.posts().length,1);
+});
+
+test('263/271: probe only requests an owner card; cancel/Escape decline it, confirmation approves the exact selected model once',async()=>{
+ const gate=deferred<any>(),entered=deferred();const v=ui(async(path,body)=>{if(path==='/api/approve'&&body.decision==='allow'){entered.resolve();return gate.promise}});await open(v);
+ await v.find('[data-program-probe]').emit('click');assert.match(v.find('dialog').textContent,/расходуется подписка/);assert.equal(v.posts('/probe').length,1);assert.equal(v.posts('/api/approve').length,0);await v.find('[data-program-cancel]').emit('click');await v.settle();assert.equal(v.posts('/api/approve')[0].body.decision,'deny');assert.equal(v.document.querySelector('dialog'),null);
+ await v.find('[data-program-probe]').emit('click');await v.window.emit('keydown',{key:'Escape'});await v.settle();assert.equal(v.posts('/api/approve')[1].body.decision,'deny');assert.ok(v.find('.ovl.on'));const select=v.find('[data-program-model]');select.value='model-b';await select.emit('change');await v.find('[data-program-probe]').emit('click');assert.match(v.find('dialog').textContent,/Model B/);const button=v.find('[data-program-confirm]'),running=button.emit('click');await entered.promise;await button.emit('click');assert.equal(v.find('[data-program-probe]').disabled,true);await v.find('[data-program-probe]').emit('click');assert.equal(v.posts('/probe').length,3);assert.deepEqual(JSON.parse(JSON.stringify(v.posts('/probe').at(-1).body)),{model:'model-b'});assert.deepEqual(JSON.parse(JSON.stringify(v.posts('/api/approve').at(-1).body)),{pane:'owner',id:'probe-antigravity',decision:'allow',project:'/a'});
+ gate.resolve({ok:true});await running;await v.settle();assert.equal(v.find('[data-program-probe]').disabled,true);await v.streams[0].onmessage({data:JSON.stringify({type:'providers',provider:'antigravity',event:'probe',approvalId:'probe-antigravity',model:'model-b',status:'done',turn:{model:'model-b',usage:{input:4,output:8},durationMs:25,text:'fixture answer'},at:100})});await v.settle();assert.match(v.find('.cbody').textContent,/fixture answer/);assert.equal(v.find('[data-program-probe]').disabled,false);
+});
+
+for(const change of ['project','aba','pagehide','provider','model','account'])test('263/ОКНА: stale owner confirmation cannot run a different '+change,async()=>{
+ let source=catalog(provider(),provider({id:'copilot',title:'Copilot'}));const v=ui(async path=>path==='/api/providers/catalog'?structuredClone(source):undefined);await open(v);await v.find('[data-program-probe]').emit('click');const button=v.find('[data-program-confirm]');
+ if(change==='project'||change==='aba'){v.H.project='/b';v.H.confirmedProjectGeneration++;await v.window.emit('live:status');if(change==='aba'){v.H.project='/a';v.H.confirmedProjectGeneration++;await v.window.emit('live:status')}await v.settle()}
+ else if(change==='pagehide')await v.window.emit('pagehide');else if(change==='provider')await v.find('[data-pv="copilot"]').emit('click');else if(change==='model'){const select=v.find('[data-program-model]');select.value='model-b';await select.emit('change')}else {source=catalog(provider({login:{...login(),account:'z•••@example.test',checkedAt:200}}));await v.streams[0].onmessage({data:JSON.stringify({type:'providers'})});await v.settle()}
+ await button.emit('click');await v.settle();assert.equal(v.posts('/api/approve').filter(r=>r.body.decision==='allow').length,0);
+});
+
+for(const patch of [{models:null},{models:[{id:'x'}]},{login:null},{login:{state:'ok'}},{capabilities:null},{installed:null},{id:'x\" onclick=\"bad'},{limits:{ref:'https://example.test/private'}}])test('268/ОТСУТСТВИЕ: incomplete or forged catalog fails closed '+JSON.stringify(patch),async()=>{
+ const v=ui(undefined,catalog(provider(patch)));await v.settle();await v.find('#addbtn').emit('click');assert.match(v.find('.cbody').textContent,/Каталог не прочитан/);assert.equal(v.document.querySelector('[data-program-probe]'),null);assert.equal(v.posts().length,0);
+});
+
+test('268/МАСКАРАД: descriptor, price and result strings remain text; command is display only and accounts are masked',async()=>{
+ const p=provider({title:'<img src=x onerror=bad>',login:{...login(),command:'agy; touch /tmp/never-run',account:'unmasked@example.test'},models:[{id:'x" onclick="bad',label:'<script>bad</script>'}]});const v=ui(undefined,catalog(p));await open(v);assert.equal(v.document.querySelector('.cbody img'),null);assert.equal(v.document.querySelector('.cbody script'),null);assert.doesNotMatch(v.find('.cbody').textContent,/unmasked@example/);await v.find('[data-program-probe]').emit('click');await v.find('[data-program-confirm]').emit('click');await v.settle();await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'probe',provider:p.id,approvalId:'probe-antigravity',model:p.models[0].id,status:'done',turn:{model:p.models[0].id,usage:{},durationMs:1,text:'<img src=x onerror=bad>'},at:100})});assert.equal(v.document.querySelector('.cbody img'),null);assert.equal(v.posts('/probe').length,1);assert.equal(v.posts('/probe')[0].body.model,p.models[0].id);assert.equal(v.posts('/api/approve').length,1);
+});
+
+test('268/ОКНА: slow old catalog cannot overwrite a check; SSE refresh waits for it and repeated checks coalesce',async()=>{
+ const gate=deferred<any>(),entered=deferred();let checking=false,source=catalog(provider({login:login('none')}));const v=ui(async path=>{if(path==='/api/providers/catalog')return structuredClone(source);if(path.endsWith('/check')){checking=true;entered.resolve();return gate.promise}});await open(v);const button=v.find('[data-program-check]'),running=button.emit('click');await entered.promise;assert.equal(checking,true);await button.emit('click');const reads=v.requests.filter(r=>r.path==='/api/providers/catalog').length;await v.streams[0].onmessage({data:JSON.stringify({type:'providers'})});assert.equal(v.requests.filter(r=>r.path==='/api/providers/catalog').length,reads);source=catalog(provider());gate.resolve({ok:true,login:login()});await running;await v.settle();assert.equal(v.posts().length,1);assert.match(v.find('.cbody').textContent,/Вход проверен/);assert.equal(v.find('[data-program-probe]').disabled,false);
+});
+
+test('268: one shared SSE subscription refreshes descriptors and is closed on pagehide, restored once on pageshow',async()=>{
+ let rows=catalog(provider());const v=ui(async path=>path==='/api/providers/catalog'?rows:undefined);await open(v);assert.equal(v.streams.length,1);rows=catalog(provider({version:'2.0',login:login('none')}));await v.streams[0].onmessage({data:JSON.stringify({type:'providers'})});await v.settle();assert.match(v.find('.cbody').textContent,/2\.0/);assert.equal(v.find('[data-program-probe]').disabled,true);await v.window.emit('live:status');assert.equal(v.streams.length,1);
+ await v.window.emit('pagehide');assert.equal(v.streams[0].closed,true);const before=v.requests.length;await v.streams[0].onmessage({data:JSON.stringify({type:'providers'})});await v.settle();assert.equal(v.requests.length,before);await v.window.emit('pageshow',{persisted:true});await v.settle();assert.equal(v.streams.length,2);assert.equal(v.posts().length,0);
+});
+
+for(const p of [provider({installed:false}),provider({login:login('none')}),provider({login:login('unknown')}),provider({login:login('error')}),provider({models:[]}),provider({capabilities:{headless:false,resume:false,mcp:false,limits:false}})])test('263: a missing program, login, model or headless capability keeps the probe disabled '+JSON.stringify([p.installed,p.login.state,p.models.length,p.capabilities.headless]),async()=>{
+ const v=ui(undefined,catalog(p));await open(v);assert.equal(v.find('[data-program-probe]').disabled,true);await v.find('[data-program-probe]').emit('click');assert.equal(v.document.querySelector('dialog'),null);assert.equal(v.posts().length,0);
+});
+
+for(const change of ['project','aba','pagehide'])test('263: late check or Terminal reply cannot update or initiate work in a replacement '+change,async()=>{
+ const gate=deferred<any>(),seen=deferred();const v=ui(async path=>{if(path.endsWith('/login-terminal')){seen.resolve();return gate.promise}});await open(v);const running=v.find('[data-program-terminal]').emit('click');await seen.promise;await v.window.emit('blur');
+ if(change==='pagehide')await v.window.emit('pagehide');else{v.H.project='/b';v.H.confirmedProjectGeneration++;await v.window.emit('live:status');if(change==='aba'){v.H.project='/a';v.H.confirmedProjectGeneration++;await v.window.emit('live:status')}}gate.resolve({ok:true,command:'OLD COMMAND'});await running;await v.settle();await v.window.emit('focus');await v.settle();assert.equal(v.posts('/check').length,0);assert.doesNotMatch(v.document.textContent,/OLD COMMAND/);
+});
+
+test('268: failed catalog refresh preserves its last snapshot but disables auth/probe until a successful retry',async()=>{
+ let fail=false;const v=ui(async path=>path==='/api/providers/catalog'?fail?{ok:false,error:'fixture offline'}:catalog(provider()):undefined);await open(v);fail=true;await v.streams[0].onmessage({data:JSON.stringify({type:'providers'})});await v.settle();assert.match(v.find('#v-list .foot-note').textContent,/fixture offline/);assert.equal(v.find('[data-program-check]').disabled,true);assert.equal(v.find('[data-program-probe]').disabled,true);await v.find('[data-program-check]').emit('click');assert.equal(v.posts().length,0);
+ fail=false;await v.find('#addbtn').emit('click');await v.find('[data-program-refresh]').emit('click');await v.settle();await v.find('[data-program-open="antigravity"]').emit('click');assert.equal(v.find('[data-program-check]').disabled,false);
+});
+
+for(const override of [{provider:'copilot'},{model:'other'},{approvalId:null},{price:null},{price:{kind:'estimate',label:'cheap',amount:-1}},{status:'running'}])test('271/273: mismatched or missing probe binding cannot display approval '+JSON.stringify(override),async()=>{
+ const v=ui(async(path,body)=>path.endsWith('/probe')?{ok:true,provider:'antigravity',model:body.model,approvalId:'expected',status:'awaiting_approval',price:{kind:'subscription',label:'расходуется подписка'},...override}:undefined);await open(v);await v.find('[data-program-probe]').emit('click');assert.equal(v.document.querySelector('dialog'),null);assert.match(v.find('.cbody [role="alert"]').textContent,/привязка/);assert.equal(v.posts('/api/approve').length,0);
+});
+
+test('273: a pending different model is a conflict without a confirm button',async()=>{
+ const v=ui(async path=>path.endsWith('/probe')?{ok:false,code:'probe_conflict',pending:{approvalId:'other',model:'another-model'}}:undefined);await open(v);await v.find('[data-program-probe]').emit('click');assert.match(v.find('.cbody [role="alert"]').textContent,/Уже ожидается подтверждение another-model/);assert.equal(v.document.querySelector('[data-program-confirm]'),null);assert.equal(v.posts('/api/approve').length,0);
+});
+
+test('272: only matching provider, approval and model can complete a probe; old awaiting/running cannot replace its result',async()=>{
+ const v=ui();await open(v);await v.find('[data-program-probe]').emit('click');await v.find('[data-program-confirm]').emit('click');const event={type:'providers',event:'probe',provider:'antigravity',approvalId:'probe-antigravity',model:'model-a',status:'done',turn:{model:'model-a',usage:{},durationMs:5,text:'expected result'},at:100};
+ for(const override of [{provider:'copilot'},{approvalId:'other'},{model:'model-b'},{turn:{...event.turn,model:'model-b'}},{turn:null}]){await v.streams[0].onmessage({data:JSON.stringify({...event,...override})});assert.doesNotMatch(v.find('.cbody').textContent,/expected result/)}
+ await v.streams[0].onmessage({data:JSON.stringify(event)});assert.match(v.find('.cbody').textContent,/expected result/);await v.streams[0].onmessage({data:JSON.stringify({...event,status:'awaiting_approval'})});await v.streams[0].onmessage({data:JSON.stringify({...event,status:'running'})});assert.match(v.find('.cbody').textContent,/expected result/);assert.equal(v.document.querySelector('dialog'),null);
+});
+
+test('272: result received before the probe HTTP reply is retained and cannot open an already resolved approval',async()=>{
+ const seen=deferred(),gate=deferred<any>();const v=ui(async path=>{if(path.endsWith('/probe')){seen.resolve();return gate.promise}});await open(v);const request=v.find('[data-program-probe]').emit('click');await seen.promise;await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'probe',provider:'antigravity',approvalId:'early',model:'model-a',status:'done',turn:{model:'model-a',usage:{},durationMs:5,text:'early result'},at:100})});gate.resolve({ok:true,provider:'antigravity',model:'model-a',approvalId:'early',status:'awaiting_approval',price:{kind:'subscription',label:'расходуется подписка'}});await request;await v.settle();assert.match(v.find('.cbody').textContent,/early result/);assert.equal(v.document.querySelector('dialog'),null);assert.equal(v.posts('/api/approve').length,0);
+});
+
+test('263: HTTP limits arrival updates the open card without resetting the selected model; another project cannot update it',async()=>{
+ const v=ui(undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:true,limits:true}})));await open(v);const select=v.find('[data-program-model]');select.value='model-b';await select.emit('change');v.context.LIVE.providerLimitHTML=()=>'<p>Неделя · 91 %</p>';v.context.LIVE.onProviderLimits('/other');assert.doesNotMatch(v.find('[data-program-limits]').textContent,/91 %/);v.context.LIVE.onProviderLimits('/a');assert.match(v.find('[data-program-limits]').textContent,/91 %/);assert.equal(v.find('[data-program-model]'),select);assert.equal(select.value,'model-b');assert.equal(v.posts().length,0);
+});
+
+
+test('268/ОТСУТСТВИЕ: a real catalog HTTP 404 shows disabled design-code examples, then retry adopts a connected source',async t=>{
+ const h=await fixture(t);let connected=false,status=0;
+ const v=ui(undefined,undefined,async(path,init)=>{if(path==='/api/providers/catalog'&&connected)return Response.json(catalog(provider()));const r=await fetch(h.api.url+path,init);if(path==='/api/providers/catalog')status=r.status;return r});
+ v.H.project=h.dir;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();await v.find('#addbtn').emit('click');await v.settle();assert.equal(status,404);
+ assert.match(v.find('.cbody').textContent,/макет.*маршрут каталога ещё не подключён/);assert.equal(v.document.querySelectorAll('.cbody [data-program-mock]').length,3);assert.match(v.find('.cbody').textContent,/Antigravity/);assert.match(v.find('.cbody').textContent,/GitHub Copilot/);
+ for(const button of v.document.querySelectorAll('.cbody .conn-program button')){assert.equal(button.disabled,true);await button.emit('click')}
+ assert.equal(v.posts().length,0);assert.equal(h.provider.calls.length,0);connected=true;await v.find('[data-program-refresh]').emit('click');await v.settle();assert.equal(v.document.querySelector('[data-program-mock]'),null);assert.equal(v.find('[data-program-open="antigravity"]').disabled,false);
+});
+
+for(const status of [404,500])test('268/ОТСУТСТВИЕ: HTTP '+status+' after a successful snapshot preserves real cards without relabelling them as a mock',async()=>{
+ let failed=false;const v=ui(undefined,undefined,async(path)=>path==='/api/providers/catalog'?(failed?new Response('fixture unavailable',{status}):Response.json(catalog(provider()))):Response.json(path==='/api/connections'?{ok:true,project:'/a',providers:[],routes:['direct','proxy','iface']}:{ok:false}));
+ await v.settle();await v.find('#addbtn').emit('click');failed=true;await v.streams[0].onmessage({data:JSON.stringify({type:'providers'})});await v.settle();assert.match(v.find('.cbody').textContent,/показан предыдущий снимок/);assert.match(v.find('.cbody').textContent,/Antigravity/);assert.equal(v.document.querySelector('[data-program-mock]'),null);assert.equal(v.find('[data-program-open="antigravity"]').disabled,true);assert.equal(v.posts().length,0);
+});
+
+for(const event of ['status','catalog','reconnect','check'])test('263/СОСЕДИ: '+event+' updates an open program card without discarding the payment date or focus',async()=>{
+ const route={route:'direct',proxy:'',iface:'',label:'',expect:'',lastCheck:null},connections={ok:true,project:'/a',routes:['direct','proxy','iface'],providers:[{id:'claude',name:'Claude',kind:'подписка',auth:{loggedIn:true},models:2,seats:[],routable:true,route}]},billing={ok:true,project:'/a',config:{subscriptionDates:[{vendor:'claude',account:'a@example.test',date:'2027-02-15'}]},subscriptions:[{vendor:'claude',account:'a@example.test',detectedPlan:'Max'}]};
+ let version='1.0';const v=ui(async path=>path==='/api/connections'?connections:path==='/api/billing'?billing:path==='/api/providers/catalog'?catalog(provider({id:'claude',title:'Claude',version})):path.endsWith('/check')?{ok:true,login:login()}:undefined);
+ await v.settle();await v.find('[data-pv="claude"]').emit('click');const input=v.find('[data-subscription-date]');input.value='2027-12-25';await input.emit('input');input.focus();version='2.0';
+ if(event==='status')await v.window.emit('live:status');else if(event==='catalog')await v.streams[0].onmessage({data:JSON.stringify({type:'providers'})});else if(event==='reconnect')await v.streams[0].onopen();else await v.find('[data-program-check]').emit('click');await v.settle();
+ assert.equal(v.find('[data-subscription-date]').value,'2027-12-25');assert.equal(v.document.activeElement,v.find('[data-subscription-date]'));assert.equal(v.posts('/api/billing').length,0);if(event==='catalog'||event==='reconnect')assert.match(v.find('.conn-facts').textContent,/2\.0/);
+});

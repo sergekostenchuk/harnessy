@@ -89,7 +89,7 @@
     const project=H.project,changing=!!body&&/^\/api\/(?:project(?:\/create)?|room\/move|assign|chats\/[^/]+\/orchestrator)$/.test(p);
     if(changing){H.projectRequestGeneration=(H.projectRequestGeneration||0)+1;H.projectLinkChange=true}
     const captured=Object.assign(operation||{},captureProjectOperation(p,body)),trace=typeof traceRequest==='function'?traceRequest(operation):null;let response=null;
-    return fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json',...(trace?trace.headers:{})},body:JSON.stringify(body)}:trace?{headers:trace.headers}:undefined).then(r=>{response=r;return r.json()}).then(r=>{
+    return fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json',...(trace?trace.headers:{})},body:JSON.stringify(body)}:trace?{headers:trace.headers}:undefined).then(r=>{response=r;if(operation)operation.httpStatus=r.status;return r.json()}).then(r=>{
       if(!projectOperationCurrent(captured,r)){if(trace)traceReply(trace,r,true,response);return {ok:false,code:'binding_changed',error:'Привязка изменилась; ответ относится к прежнему выбору'}}if(trace)traceReply(trace,r,false,response);
       if(changing&&(!r.ok||r.project===project))H.projectLinkChange=false;
       if(changing&&r.ok&&typeof r.project==='string'&&window.HARNESS_BOOT)window.HARNESS_BOOT.select(r.project);
@@ -390,7 +390,7 @@
   // TS-12: one project-bound transport for limits, chat, approvals and journal invalidations.
   const LIVE_EVENTS={source:null,project:null,generation:0,alive:true,listeners:new Set()};
   function stopLiveEvents(){LIVE_EVENTS.generation++;if(LIVE_EVENTS.source)LIVE_EVENTS.source.close();LIVE_EVENTS.source=null;}
-  function subscribeLiveEvents(){const listener={onmessage:null,onopen:null,onerror:null,close(){LIVE_EVENTS.listeners.delete(listener)}};LIVE_EVENTS.listeners.add(listener);syncLiveEvents();return listener;}
+  function subscribeLiveEvents(onmessage=null){const listener={onmessage,onopen:null,onerror:null,close(){LIVE_EVENTS.listeners.delete(listener)}};LIVE_EVENTS.listeners.add(listener);syncLiveEvents();return listener;}
   function syncLiveEvents(){
     if(!LIVE_EVENTS.alive||!H.on||H.snapshotOnly||typeof EventSource!=='function'){if(LIVE_EVENTS.source)stopLiveEvents();return;}
     // Opening a stream replays pending approvals immediately, including when live:status starts it.
@@ -1051,7 +1051,7 @@
     el.removeAttribute('data-go');el.title='Все лимиты';el.setAttribute('role','group');el.setAttribute('tabindex','0');el.setAttribute('aria-label','Все лимиты');el.setAttribute('aria-haspopup','dialog');
     const providers=limitProviders(),unavailable=providers.filter(p=>spWindow(p).unavailable),ranked=providers.filter(p=>(p.id==='claude'||p.id==='codex'||/^подписка/.test(p.kind||'')||limitApi(p))&&!spWindow(p).unavailable).map((p,i)=>({p,i,n:(LIM.activity.find(g=>g.vendor===p.id)||{}).turns||0})).sort((a,b)=>b.n-a.n||a.i-b.i),visible=ranked.slice(0,Math.max(0,3-unavailable.length)).map(r=>r.p).concat(unavailable).slice(0,3),infos=visible.map(spWindow),dates=infos.map(info=>info.updatedAt).filter(t=>typeof t==='number'&&Number.isFinite(t)),stamp=dates.length?Math.min(...dates):null,meta=[infos.some(info=>info.mock)?'макет':'',infos.some(info=>!info.mock&&info.stale)?'устаревшие':'',stamp?'данные за '+new Date(stamp*1000).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):''].filter(Boolean).join(' · ');
     el.innerHTML='<div class="cap">ИСПОЛЬЗОВАНО</div>'+visible.map(sidebarLimitHTML).join('')+(!visible.length?'<p>'+esc(LIM.loading?'Читаю подключения…':LIM.error||(providers.length?'Окна подписок — в подробностях':'Нет подключённых провайдеров'))+'</p>':'')+(meta?'<small class="limit-note">'+esc(meta)+'</small>':'')+spButton('подробнее','data-spend-limits')+'<a class="sp-link" href="05-spend.html?period='+SP.period+'">Расход и лимиты →</a>';
-  });if(limitsDialog&&limitsDialog.hasAttribute('open'))limitsDialog.querySelector('.limits-cards').innerHTML=limitProviders().map(p=>spLimitHTML(p,true)).join('');}
+  });if(limitsDialog&&limitsDialog.hasAttribute('open'))limitsDialog.querySelector('.limits-cards').innerHTML=limitProviders().map(p=>spLimitHTML(p,true)).join('');if(PAGE==='conn'&&window.LIVE?.onProviderLimits)window.LIVE.onProviderLimits(H.project);}
   function limitsApply(data){
     if(!data||typeof data.ok!=='boolean'||data.project!==H.project||!Array.isArray(data.providers)||!Number.isSafeInteger(data.revision)||data.revision<0)return false;
     if(!data.ok&&(!data.providers.length||!data.providers.every(p=>p&&typeof p.vendor==='string'&&Array.isArray(p.windows)&&typeof p.ok==='boolean'&&(p.ok||typeof p.code==='string'&&typeof p.reason==='string'))))return false;
@@ -1741,7 +1741,7 @@
   }
   addEventListener('pageshow',event=>{if(event.persisted)return resumePage()});
   // End TS-09a.1 page lifecycle.
-  window.LIVE={stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,operationsDraw,operationAttention,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting,get teamProposals(){return TP;},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};   // для cx.js (поле ввода)
+  window.LIVE={subscribeLiveEvents,providerLimitHTML:(id,name,kind,supported)=>{if(!supported)return '<p class="conn-note">Провайдер лимиты не отдаёт.</p>';return spLimitHTML({id,name,kind},true)},stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,operationsDraw,operationAttention,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting,get teamProposals(){return TP;},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};   // для cx.js (поле ввода)
   // TS-09b3: proposal cards always confirm the exact displayed project and version.
   const TP={project:null,generation:0,data:[],loading:false,queued:false,sending:false,error:null,focus:null,kinds:{}};
   const KN={request:0,data:null,binding:null,error:null};

@@ -687,3 +687,40 @@ html[data-proto][data-page="first"] [data-first-door] .done { margin-top:12px; }
 html[data-proto][data-page="first"] [aria-disabled="true"] { opacity:.55; }
 html[data-proto][data-page="first"] .fr a { color:var(--accent); }
 html[data-proto][data-page="first"] .fr .kv b { overflow-wrap:anywhere; }
+
+/* TS-20e: connection components, graphite surfaces and cognac actions from sketch 11. */
+html[data-page="conn"] [data-connections-components] { min-width:0; }
+[data-connections-components] .conn-spec-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+[data-connections-components] .conn-program { padding:18px; border:1px solid var(--line2); border-radius:14px; background:var(--panel); min-width:0; }
+[data-connections-components] h3 { margin:0; font:500 15px/1.35 var(--font); color:var(--ink); }
+[data-connections-components] .conn-section-gap { margin-top:18px; }
+[data-connections-components] .conn-program-head { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+[data-connections-components] .conn-program-head > div { flex:1; min-width:120px; }
+[data-connections-components] .conn-program-head small,[data-connections-components] .conn-label { display:block; color:var(--ink3); font:10px/1.5 var(--mono); letter-spacing:.06em; text-transform:uppercase; }
+[data-connections-components] .conn-program-mark { display:grid; place-items:center; width:38px; height:38px; flex:none; border:1px solid var(--line2); border-radius:10px; background:var(--raised); font:500 16px var(--font); color:var(--ink2); }
+[data-connections-components] .conn-facts { display:grid; gap:9px; margin:14px 0; font:12px/1.5 var(--font); }
+[data-connections-components] .conn-facts > div { display:grid; grid-template-columns:140px minmax(0,1fr); gap:10px; }
+[data-connections-components] dt,[data-connections-components] .conn-note { color:var(--ink2); }
+[data-connections-components] dd { margin:0; overflow-wrap:anywhere; }
+[data-connections-components] .conn-note { font:11.5px/1.55 var(--font); margin:8px 0; }
+[data-connections-components] .conn-login-command { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; padding:12px; background:var(--raised); border:1px solid var(--line2); border-radius:9px; }
+[data-connections-components] .conn-login-command .conn-label { flex-basis:100%; }
+[data-connections-components] code { font:12px/1.5 var(--mono); overflow-wrap:anywhere; }
+[data-connections-components] .conn-login-command code { flex:1; min-width:80px; }
+[data-connections-components] .conn-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0 0; }
+[data-connections-components] .btn { cursor:pointer; font-family:var(--font); white-space:normal; height:auto; min-height:32px; text-align:center; }
+[data-connections-components] .btn small { font:10px var(--mono); opacity:.85; }
+[data-connections-components] .btn:disabled { opacity:.5; cursor:not-allowed; }
+[data-connections-components] .conn-models { list-style:none; padding:0; margin:14px 0; }
+[data-connections-components] .conn-models li { display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); font:12px/1.5 var(--font); }
+[data-connections-components] .conn-models b { font-weight:400; }
+[data-connections-components] .conn-models small { display:block; color:var(--ink3); font-size:11px; }
+[data-connections-components] .conn-models li > span { text-align:right; color:var(--ink2); font:10px/1.6 var(--mono); }
+[data-connections-components] summary { cursor:pointer; }
+html[data-page="conn"] .conn-trial-dialog { width:min(480px,calc(100vw - 40px)); box-sizing:border-box; max-height:85vh; overflow:auto; padding:22px; border:1px solid var(--line2); border-radius:14px; background:var(--panel); color:var(--ink); font:13px/1.6 var(--font); }
+html[data-page="conn"] .conn-trial-dialog::backdrop { background:rgba(6,6,8,.7); }
+[data-connections-components] :is(button,input,summary):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+@media(max-width:760px){ [data-connections-components] .conn-spec-grid { grid-template-columns:minmax(0,1fr); } [data-connections-components] .conn-program { padding:14px; } [data-connections-components] .conn-facts > div { grid-template-columns:100px minmax(0,1fr); } }
+
+
+html[data-page="conn"] .conn-trial-dialog .conn-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}html[data-page="conn"] [data-program-model]{max-width:100%;margin:8px 0}html[data-page="conn"] .cbody>div[data-connections-components]{margin-bottom:14px}
