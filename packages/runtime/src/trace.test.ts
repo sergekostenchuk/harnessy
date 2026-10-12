@@ -55,3 +55,23 @@ test('365: only an exact registered top-level route bypasses diagnostic redactio
  assert.equal(data.route,path);assert.notEqual(data.action,path);assert.notEqual(data.status.route,path);assert.notEqual(rows[0]!.reason.text,path);assert.doesNotMatch(JSON.stringify(rows),/sk-forged/);
  assert.notEqual((traceData({route:path},s.project).data as any).route,path,'without the engine table text remains untrusted');
 });
+
+test('365: model/route ID schema preserves namespaces and long IDs but not secret markers or malformed values',async t=>{
+ const s=store(t),model='namespace/'+ 'a'.repeat(190),route='local_openai_compatible_for_models';
+ s.record('llm.request',{data:{model,vendor:route,route,reason:model,status:{model}}});
+ for(const marker of ['prefix_sk-fixture','github_pat_fixture','AIzaFixture','credential=Tiny!','Bearer tiny'])s.record('llm.response',{data:{model:marker,vendor:marker,route:marker}});
+ s.record('llm.request',{data:{model:'/private/fixture.txt',vendor:'/private/fixture.txt',route:'/private/fixture.txt'}});
+ s.record('llm.request',{data:{model:null}});s.record('llm.request');
+ const rows=await s.read(),data=rows[0]!.data as any;assert.equal(data.model,model);assert.equal(data.vendor,route);assert.equal(data.route,route);assert.notEqual(data.reason,model);assert.notEqual(data.status.model,model);
+ for(const row of rows.slice(1,7)){const text=JSON.stringify(row.data);assert.doesNotMatch(text,/sk-fixture|github_pat_fixture|AIzaFixture|Tiny!|tiny|private/)}
+ assert.equal((rows[7]!.data as any).model,null);assert.deepEqual(rows[8]!.data,{});
+ const restarted=new TraceStore(s.project);t.after(()=>restarted.close());assert.equal(((await restarted.read())[0]!.data as any).model,model);
+});
+
+test('365: public usage counter names survive writes and reads while credential fields and forged counter values are scrubbed',async t=>{
+ const s=store(t),usage={input:10,output:4,cacheRead:2,cacheWrite:0,totalTokens:16};
+ s.record('llm.response',{data:{...usage,usage}});for(const bad of ['credential=Tiny!',{password:'Tiny!'},['Tiny!'],NaN,Infinity,-1])s.record('llm.response',{data:{totalTokens:bad,access_token:'Tiny!'}});
+ const rows=await s.read(),data=rows[0]!.data as any;assert.deepEqual(data,{...usage,usage});assert.equal(Object.hasOwn(data,'[секрет]'),false);
+ assert.doesNotMatch(readFileSync(s.path,'utf8'),/Tiny!|access_token/);for(const row of rows.slice(1))assert.equal(Object.hasOwn(row.data as object,'totalTokens'),false);
+ const restored=new TraceStore(s.project);t.after(()=>restored.close());assert.deepEqual((await restored.read())[0]!.data,{...usage,usage});
+});
