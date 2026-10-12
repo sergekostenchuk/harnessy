@@ -3,6 +3,7 @@ import {RuntimeError,type Runtime} from '@harnessy/runtime';
 import type {Route} from './routes.ts';
 import {OWNER,string} from './routes.ts';
 import {json,slice,text} from './responses.ts';
+import {providerOwner} from './routes-providers.ts';
 const roles={role_taken:409,seat_exists:409};
 export function ownerRoutes(r:Runtime):Route[]{return [
  {method:'POST',path:'/api/project',handle:async({body})=>json(await r.projectSet(string(body.path),{reload:pyTruthy(body.reload)},OWNER))},
@@ -30,7 +31,7 @@ export function ownerRoutes(r:Runtime):Route[]{return [
  {method:'POST',path:'/api/handoff',handle:async({body})=>json(await r.handoff(body,OWNER))},
  {method:'POST',path:'/api/chat',style:'E',handle:({body})=>json(r.chat(body,OWNER))},
  {method:'POST',path:'/api/steer',style:'E',handle:async({body})=>json(await r.steer(string(body.pane),string(body.message),OWNER))},
- {method:'POST',path:'/api/approve',style:'E',handle:({body})=>{if(body.project!==undefined&&body.project!==r.project.dir)throw new RuntimeError('project_changed','проект сменился',409);return json(r.approve(string(body.pane),string(body.id),body.decision==='allow'?'allow':'deny',OWNER))}},
+ {method:'POST',path:'/api/approve',style:'E',handle:({body,request})=>{const probe=string(body.id).startsWith('provider-probe:');if(probe){providerOwner(request);if(body.pane!=='owner'||!['allow','deny'].includes(string(body.decision))||typeof body.project!=='string')return json({ok:false,code:'approval_invalid',error:'Ожидаются pane:owner, id, decision:allow|deny и project'},400)}if(body.project!==undefined&&body.project!==r.project.dir)throw new RuntimeError('project_changed','проект сменился',409);return json(r.approve(string(body.pane),string(body.id),body.decision==='allow'?'allow':'deny',OWNER))}},
  {method:'POST',path:'/api/interrupt',style:'E',handle:({body})=>json(r.interrupt(string(body.pane),OWNER))},
  {method:'GET',path:'/api/sessions',style:'E',handle:async({query})=>{const id=query.get('pane')??'';if(!r.registry.get(id))throw new RuntimeError('pane_unknown','нет окна',400);try{return json({sessions:await r.listSessions(id)})}catch(e){return json({sessions:[],error:slice(text(e),300)})}}},
  {method:'POST',path:'/api/sessions/open',style:'E',statuses:{pane_unknown:400},handle:async({body})=>{try{return json(await r.openSession(string(body.pane),string(body.id),OWNER))}catch(e){if(e instanceof RuntimeError)throw e;return json({error:slice(text(e),300)},404)}}}

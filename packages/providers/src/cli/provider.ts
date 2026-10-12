@@ -1,0 +1,127 @@
+import {mkdtemp,writeFile,rm,readFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join,isAbsolute} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {randomBytes} from 'node:crypto';
+import {ProviderError,record,type ProviderLimits,type Usage} from '../types.ts';
+import {waitWithSignal} from '../cancellation.ts';
+import {executeCli} from './process.ts';
+import type {CliAuth,CliCommand,CliContext,CliDependencies,CliDescriptor,CliEvent,CliMcpServer,CliProbe,CliProcessResult,CliSeat,CliTurnInput} from './types.ts';
+
+const protocol=(text:string)=>new ProviderError('protocol','CLI: '+text);
+const text=(v:unknown):v is string=>typeof v==='string'&&!v.includes('\0');
+const strings=(v:unknown):v is string[]=>Array.isArray(v)&&v.every(text);
+function command(c:CliCommand):CliCommand{if(!record(c)||!strings(c.args)||c.input!==undefined&&!text(c.input))throw protocol('неверная команда');return {args:[...c.args],...(c.input!==undefined?{input:c.input}:{})}}
+function probe<T>(p:CliProbe<T>):CliProbe<T>{if(!p||typeof p.parse!=='function'||p.exitCodes!==undefined&&(!Array.isArray(p.exitCodes)||!p.exitCodes.length||p.exitCodes.some(c=>!Number.isInteger(c)||c<0||c>255)))throw protocol('неверный описатель чтения');return {command:command(p.command),exitCodes:[...(p.exitCodes??[0])],parse:p.parse}}
+function descriptor(d:CliDescriptor):CliDescriptor{
+ if(!d||!text(d.id)||!/^[a-z][a-z0-9-]*$/.test(d.id)||['claude','codex'].includes(d.id)||!text(d.name)||!d.name||!text(d.binary)||!d.binary||!record(d.modes)||!strings(d.forbiddenEnv)||!d.turn||!['json','stream-json','text'].includes(d.turn.format)||typeof d.turn.command!=='function'||d.turn.format!=='text'&&typeof d.turn.decode!=='function'||!d.mcp||typeof d.mcp.args!=='function'||typeof d.mcp.serialize!=='function'||d.resume!==undefined&&typeof d.resume!=='function')throw protocol('неверный описатель провайдера');
+ for(const mode of ['read','edit','all'])if(typeof d.modes[mode as 'read']!=='function')throw protocol('нет явного соответствия режима '+mode);
+ if(!d.auth||!('file'in d.auth)&&!('command'in d.auth))throw protocol('нет проверки входа');
+ return {...d,login:command(d.login),version:probe(d.version),auth:'file'in d.auth?{...d.auth}:probe(d.auth),models:probe(d.models),modes:{...d.modes},forbiddenEnv:[...d.forbiddenEnv],turn:{...d.turn},mcp:{...d.mcp},...(d.limits?{limits:probe(d.limits)}:{}),...(d.sessions?{sessions:{...d.sessions}}:{})};
+}
+function inputSnapshot(seat:CliSeat,message:string,ctx:CliContext,vendor:string):CliTurnInput{
+ if(!seat||seat.vendor!==vendor||!text(seat.id)||!/^[A-Za-z0-9_-]{1,80}$/.test(seat.id)||!text(seat.label)||!text(seat.cwd)||!isAbsolute(seat.cwd)||!text(seat.model)||!seat.model||!strings(seat.writePaths)||!(seat.worktree===null||text(seat.worktree))||!(seat.sessionId===null||text(seat.sessionId)&&!!seat.sessionId)||!['chat','read','check','web','ask','edit','all'].includes(seat.mode)||!text(message))throw protocol('неверное место или сообщение');
+ if(!ctx||!ctx.signal||typeof ctx.signal.addEventListener!=='function'||!record(ctx.env)||!record(ctx.tools)||!strings(ctx.writableRoots)||!text(ctx.roleNote)||!text(ctx.appUrl)||!Array.isArray(ctx.peers)||ctx.peers.some(p=>!p||!text(p.id)||!/^[A-Za-z0-9_-]{1,80}$/.test(p.id)||!text(p.label)||!text(p.vendor))||['publish','session','setHandle','registerProcessToken','revokeProcessToken'].some(k=>typeof (ctx as unknown as Record<string,unknown>)[k]!=='function'))throw protocol('неверный контекст');
+ const value={seat:{...seat,writePaths:[...seat.writePaths]},message,roleNote:ctx.roleNote,peers:ctx.peers.map(p=>({...p})),writableRoots:[...ctx.writableRoots]};
+ Object.freeze(value.seat.writePaths);Object.freeze(value.seat);value.peers.forEach(Object.freeze);Object.freeze(value.peers);Object.freeze(value.writableRoots);return Object.freeze(value);
+}
+function usage(value:unknown):Usage{
+ if(value===undefined)return {input:null,output:null,cacheRead:null};
+ if(!record(value)||['input','output','cacheRead'].some(k=>value[k]!==null&&(typeof value[k]!=='number'||!Number.isFinite(value[k])||value[k]<0)))throw protocol('неверный учёт токенов');
+ return value as unknown as Usage;
+}
+
+export class CliProvider {
+ readonly vendor:string;private d:CliDescriptor;private deps:CliDependencies;
+ private active=new Map<string,{abort:AbortController;done:Promise<void>}>();private closed=false;
+ constructor(description:CliDescriptor,deps:Partial<CliDependencies>={}){
+  this.d=descriptor(description);this.vendor=this.d.id;this.deps={execute:executeCli,env:{...process.env},cwd:process.cwd(),temporaryDirectory:tmpdir(),probeTimeoutMs:15000,turnTimeoutMs:3600000,maxBytes:16*1024*1024,...deps};
+  this.deps.env={...this.deps.env};for(const k of ['probeTimeoutMs','turnTimeoutMs','maxBytes'] as const)if(!Number.isSafeInteger(this.deps[k])||this.deps[k]<=0)throw protocol('неверный предел '+k);
+ }
+ private environment(route:CliContext['env']={}){const env:NodeJS.ProcessEnv={...this.deps.env,...route};for(const key of [...this.d.forbiddenEnv,'PANE_TOKEN','PANE_ID','APP_URL','SEATS'])delete env[key];return env}
+ private async query<T>(p:CliProbe<T>,signal:AbortSignal=AbortSignal.timeout(this.deps.probeTimeoutMs),cwd=this.deps.cwd):Promise<T>{
+  const cmd=command(p.command),r=await waitWithSignal(()=>this.deps.execute({...cmd,binary:this.d.binary,cwd,env:this.environment(),timeoutMs:this.deps.probeTimeoutMs,maxBytes:1024*1024},signal),signal);
+  if(r.signal)throw new ProviderError('transport_lost','CLI: чтение прервано');if(r.code===null||!(p.exitCodes??[0]).includes(r.code))throw protocol('команда чтения завершилась с ошибкой');
+  try{return p.parse(r)}catch(e){if(e instanceof ProviderError)throw e;throw protocol('неверный ответ чтения')}
+ }
+ async version(){const v=await this.query(this.d.version);if(!text(v)||!v.trim()||v.length>128)throw protocol('версия не получена');return v.trim()}
+ async auth(signal?:AbortSignal):Promise<CliAuth>{
+  const stop=signal??AbortSignal.timeout(this.deps.probeTimeoutMs);let value:unknown;
+  if('file'in this.d.auth){const p=this.d.auth;let raw:string|null=null;try{const path=p.file({...this.deps.env});if(!text(path)||!isAbsolute(path))throw protocol('неверный путь входа');raw=new TextDecoder('utf-8',{fatal:true}).decode(await readFile(path,{signal:stop}))}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw protocol('статус входа не прочитан')}
+   try{value=p.parse(raw)}catch{throw protocol('неверный статус входа')}
+  }else value=await this.query(this.d.auth,stop);
+  if(!record(value)||typeof value.loggedIn!=='boolean'||['email','plan'].some(k=>value[k]!==undefined&&value[k]!==null&&!text(value[k])))throw protocol('неверный статус входа');
+  return {loggedIn:value.loggedIn,...(value.email!==undefined?{email:value.email as string|null}:{}),...(value.plan!==undefined?{plan:value.plan as string|null}:{})};
+ }
+ async models(signal?:AbortSignal){const values=await this.query(this.d.models,signal);if(!Array.isArray(values)||values.some(v=>!v||!text(v.id)||!v.id||!text(v.label))||new Set(values.map(v=>v.id)).size!==values.length)throw new ProviderError('models_unavailable','CLI: список моделей не прочитан');return values.map(v=>({id:v.id,label:v.label}))}
+ async inspect(){try{return {id:this.vendor,name:this.d.name,binary:this.d.binary,login:command(this.d.login),installed:true,version:await this.version(),auth:await this.auth()}}catch(e){if(e instanceof ProviderError&&e.code==='no_binary')return {id:this.vendor,name:this.d.name,binary:this.d.binary,login:command(this.d.login),installed:false,version:null,auth:null};throw e}}
+ async limits(signal?:AbortSignal):Promise<ProviderLimits>{
+  if(!this.d.limits)return {ok:false,code:'limits_unsupported',reason:this.d.name+': CLI не отдаёт лимиты'};
+  try{const r=await this.query(this.d.limits,signal);if(!r||typeof r.ok!=='boolean')throw protocol('неверные лимиты');
+   if(!r.ok){if(!['limits_unsupported','limits_not_applicable','limits_auth','limits_rate_limited','limits_unavailable','limits_invalid','limits_timeout','limits_storage'].includes(r.code)||!text(r.reason))throw protocol('неверные лимиты');return r}
+   if(!(r.plan===null||text(r.plan))||!text(r.source)||!Number.isFinite(r.fetchedAt)||!Array.isArray(r.windows)||r.windows.some(w=>!w||!text(w.label)||!Number.isFinite(w.percentUsed)||w.percentUsed<0||w.percentUsed>100||!Number.isFinite(w.windowMinutes)||w.windowMinutes<=0||!(w.resetsAt===null||Number.isFinite(w.resetsAt)&&w.resetsAt>0)))throw protocol('неверные лимиты');return r;
+  }catch(e){return {ok:false,code:signal?.aborted||e instanceof ProviderError&&e.code==='cancelled'?'limits_timeout':'limits_invalid',reason:this.d.name+': лимиты не прочитаны'}}
+ }
+ async listSessions(cwd:string){if(!this.d.sessions)throw new ProviderError('capability_unsupported','CLI не предоставляет список сессий');return this.query(this.d.sessions.list(cwd),undefined,cwd)}
+ async sessionMessages(cwd:string,id:string){if(!this.d.sessions)throw new ProviderError('capability_unsupported','CLI не предоставляет историю сессии');return this.query(this.d.sessions.messages(cwd,id),undefined,cwd)}
+ async runTurn(seat:CliSeat,message:string,original:CliContext){
+  const input=inputSnapshot(seat,message,original,this.vendor);seat=input.seat;
+  if(this.closed)throw new ProviderError('cancelled','провайдер закрыт');if(this.active.has(seat.id))throw new ProviderError('busy','место занято',seat.sessionId);
+  const abort=new AbortController(),signal=AbortSignal.any([original.signal,abort.signal]),ctx={...original,peers:input.peers,env:{...original.env},signal};let release!:()=>void;
+  const active={abort,done:new Promise<void>(r=>{release=r})};this.active.set(seat.id,active);
+  let sessionId=seat.sessionId,answer='',pending='',pendingText='',directory='',token='',registered=false,terminal=false,result:Extract<CliEvent,{type:'done'}>|null=null;
+  const started=Date.now(),calls=new Map<string,string>(),secrets=this.d.forbiddenEnv.map(k=>this.deps.env[k]).filter((v):v is string=>!!v);
+  const clean=(s:string)=>[...secrets,token].filter(Boolean).reduce((out,secret)=>out.replaceAll(secret,'[redacted]'),s);
+  // Keep a short suffix so credentials split across process chunks cannot leak through deltas.
+  const delta=(chunk:string,flush=false)=>{pendingText+=chunk;const keys=[...secrets,token].filter(Boolean),width=Math.max(1,...keys.map(s=>s.length));let end=flush?pendingText.length:Math.max(0,pendingText.length-width+1);
+   for(const key of keys){let at=pendingText.indexOf(key);while(at>=0){if(at<end&&at+key.length>end)end=at;at=pendingText.indexOf(key,at+1)}}
+   const out=clean(pendingText.slice(0,end));pendingText=pendingText.slice(end);if(out){answer+=out;ctx.publish({type:'delta',text:out})}};
+  const safe=(v:unknown):unknown=>typeof v==='string'?clean(v):Array.isArray(v)?v.map(safe):record(v)?Object.fromEntries(Object.entries(v).map(([k,value])=>[clean(k),safe(value)])):v;
+  const dispose=async()=>{try{if(registered){ctx.revokeProcessToken(token);registered=false}}finally{if(directory){await rm(directory,{recursive:true,force:true});directory=''}}};
+  const session=(id:string)=>{if(!text(id)||!id||clean(id)!==id||sessionId!==null&&sessionId!==id)throw protocol('несовпадение сессии');if(sessionId===null){sessionId=id;ctx.session(id)}};
+  const consume=(events:CliEvent[])=>{
+   if(!Array.isArray(events))throw protocol('неверный поток событий');
+   for(const e of events){if(!e||typeof e.type!=='string'||result)throw protocol('событие после результата');
+    if(e.type==='session')session(e.id);
+    else if(e.type==='delta'){if(!text(e.text))throw protocol('неверный текст');delta(e.text)}
+    else if(e.type==='tool.call'){if(!text(e.id)||!e.id||!text(e.name)||!e.name||calls.has(e.id))throw protocol('неверный вызов инструмента');calls.set(e.id,e.name);ctx.publish({type:'tool',name:clean(e.name),detail:clean(JSON.stringify(e.input??{})).slice(0,300)});ctx.traceEvent?.({id:clean(e.id),name:clean(e.name),phase:'call',data:safe(e.input)})}
+    else if(e.type==='tool.result'){const name=calls.get(e.id);if(!name||!['ok','failed','rejected','timeout','cancelled'].includes(e.outcome))throw protocol('неверный результат инструмента');ctx.traceEvent?.({id:clean(e.id),name:clean(name),phase:'result',data:safe(e.output),outcome:e.outcome,...(e.reason?{reason:clean(e.reason)}:{})});calls.delete(e.id);if(e.outcome!=='ok')ctx.publish({type:'toolError',text:clean(e.reason||'инструмент завершился: '+e.outcome)})}
+    else if(e.type==='error'){if(!text(e.text)||!['not_logged_in','session_missing','model_unsupported','protocol','transport_lost','cancelled','busy','cwd_changed','turn_failed','unknown_request','models_unavailable','mode_unsupported','permission_denied','capability_unsupported'].includes(e.code))throw protocol('неверная ошибка провайдера');throw new ProviderError(e.code,clean(e.text),sessionId)}
+    else if(e.type==='done'){if(e.sessionId!==undefined&&e.sessionId!==null)session(e.sessionId);if(e.text!==undefined&&!text(e.text))throw protocol('неверный ответ');usage(e.usage);result=e}
+    else throw protocol('неизвестное событие');
+   }
+  };
+  const decode=(value:unknown)=>{try{consume(this.d.turn.decode!(value))}catch(e){if(e instanceof ProviderError)throw e;throw protocol('неверный вывод провайдера')}};
+  const stream=(chunk:string)=>{if(this.d.turn.format==='text'){delta(chunk);return}if(this.d.turn.format!=='stream-json')return;pending+=chunk;let i:number;while((i=pending.indexOf('\n'))>=0){const line=pending.slice(0,i).trim();pending=pending.slice(i+1);if(line)parse(line)}if(pending.length>1024*1024)throw protocol('строка потока слишком велика')};
+  const parse=(raw:string)=>{let v:unknown;try{v=JSON.parse(raw)}catch{throw protocol('неверный JSON потока')}decode(v)};
+  try{
+   ctx.setHandle({interrupt:async()=>{abort.abort();await active.done},steer:async()=>{throw new ProviderError('capability_unsupported','CLI не поддерживает вмешательство в активный ход',sessionId)}});
+   if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
+   const mode=this.d.modes[seat.mode];if(!mode)throw new ProviderError('mode_unsupported','CLI: режим '+seat.mode+' не поддерживается',sessionId);
+   const permissions=mode(input);if(!strings(permissions)||!permissions.length)throw protocol('нет флагов разрешений');
+   if(seat.sessionId&&!this.d.resume)throw new ProviderError('capability_unsupported','CLI не поддерживает возобновление',sessionId);
+   const resume=seat.sessionId?this.d.resume!(seat.sessionId):[];if(!strings(resume))throw protocol('неверное возобновление');
+   const auth=await waitWithSignal(()=>this.auth(signal),signal);if(!auth.loggedIn)throw new ProviderError('not_logged_in',this.d.name+': выполните вход через программу',sessionId);
+   const models=await waitWithSignal(()=>this.models(signal),signal);if(!models.some(m=>m.id===seat.model))throw new ProviderError('model_unsupported','CLI: модель отсутствует в каталоге',sessionId);
+   if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
+   token=randomBytes(32).toString('hex');ctx.registerProcessToken(token);registered=true;
+   directory=await mkdtemp(join(this.deps.temporaryDirectory,'harnessy-cli-'));const path=join(directory,'mcp.json');
+   const server:CliMcpServer={command:process.execPath,args:[fileURLToPath(new URL('../../bin/pane-mcp.mjs',import.meta.url))],env:{PANE_ID:seat.id,APP_URL:ctx.appUrl,PANE_TOKEN:token,SEATS:input.peers.map(p=>p.id+':'+p.label.replace(/[;\r\n]/g,' ')).join(';')}};
+   const config=this.d.mcp.serialize(server),mcpArgs=this.d.mcp.args(path);if(!text(config)||!config||!strings(mcpArgs)||!mcpArgs.length)throw protocol('нет конфигурации MCP');
+   await writeFile(path,config,{encoding:'utf8',mode:0o600,flag:'wx'});
+   const c=command(this.d.turn.command(input));
+   const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...mcpArgs],cwd:seat.cwd,env:this.environment(ctx.env),timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:stream,started:()=>ctx.modelStarted?.()});
+   if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
+   if(exit.code!==0||exit.signal){const failure=this.d.failure?.(exit);throw new ProviderError(failure?.code??'transport_lost',clean(failure?.text??'CLI: процесс завершился без успешного ответа'),sessionId)}
+   if(this.d.turn.format==='json')parse(exit.stdout);else if(this.d.turn.format==='stream-json'&&pending.trim())parse(pending.trim());else if(this.d.turn.format==='text')result={type:'done'};
+   const done=result as Extract<CliEvent,{type:'done'}>|null;if(!done)throw new ProviderError('transport_lost','CLI: поток завершился без результата',sessionId);
+   if(calls.size)throw protocol('нет результата вызванного инструмента');
+   delta('',true);
+   if(!answer&&done.text){answer=clean(done.text);ctx.publish({type:'delta',text:answer})}
+   await dispose();terminal=true;ctx.publish({type:'done',sessionId,model:seat.model,durationMs:Date.now()-started,usage:usage(done.usage)});return {text:answer,sessionId};
+  }catch(e){const error=signal.aborted?new ProviderError('cancelled','ход отменён',sessionId):e instanceof ProviderError?new ProviderError(e.code,clean(e.vendorText),sessionId):protocol('ход не выполнен');if(!terminal){terminal=true;ctx.publish({type:'error',text:error.vendorText})}throw error}
+  finally{abort.abort();try{await dispose()}finally{this.active.delete(seat.id);try{ctx.setHandle(null)}finally{release()}}}
+ }
+ async reset(){const turns=[...this.active.values()];for(const a of turns)a.abort.abort();await Promise.all(turns.map(a=>a.done))}
+ async close(){this.closed=true;await this.reset()}
+}
