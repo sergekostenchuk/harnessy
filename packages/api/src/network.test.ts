@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,renameSync,mkdirSync,rmdirSync} from 'node:fs';
+import fs,{readFileSync,writeFileSync,renameSync,mkdirSync,rmdirSync,symlinkSync,unlinkSync} from 'node:fs';
+import os from 'node:os';
+import {syncBuiltinESMExports} from 'node:module';
 import {join} from 'node:path';
 import {homedir} from 'node:os';
 import {ProviderCatalog,builtinEntries} from '@harnessy/providers';
@@ -12,8 +14,10 @@ const limits={timeout:15000},root='/api/network',proxy={id:'proxy-a',type:'proxy
 async function setup(t:Parameters<typeof fixture>[0]){const keys=new MemoryKeys(),entries=builtinEntries({claude:new FakeProvider(),codex:new FakeProvider('codex')},{},{execute:async()=>({code:0,signal:null,stdout:'1.0.0',stderr:''})}),providerCatalog=new ProviderCatalog([...entries,...['ollama','gemini','custom-cli'].map(id=>({...entries[0]!,id,title:id}))]),h=await fixture(t,{deps:{networkKeys:keys,providerCatalog,llmKeys:new MemoryKeys()}});return {...h,keys,file:join(h.dir,'owner-settings.json')}}
 const save=(api:Awaited<ReturnType<typeof fixture>>['api'],config:unknown,revision:unknown=null,password?:string|null)=>call(api,root+'/exits/'+(config as any).id+'/save',{body:{config,revision,...(password!==undefined?{password}:{})}});
 
+function sshHome(t:Parameters<typeof fixture>[0],dir:string){const home=join(dir,'mock-home');mkdirSync(join(home,'.ssh'),{recursive:true});writeFileSync(join(home,'.ssh/id_ed25519'),'FAKE KEY');const original=os.homedir;os.homedir=()=>home;syncBuiltinESMExports();t.after(()=>{os.homedir=original;syncBuiltinESMExports()});return home}
+
 test('22a: owner exits and ordered chains cover programs, API routes and Ollama; no implicit direct after configuration',limits,async t=>{
- const h=await setup(t);let r=await call(h.api,root+'/providers/claude');assert.equal(r.status,200);assert.deepEqual(r.body,{ok:true,provider:'claude',configured:false,exits:[],revision:null});
+ const h=await setup(t);sshHome(t,h.dir);let r=await call(h.api,root+'/providers/claude');assert.equal(r.status,200);assert.deepEqual(r.body,{ok:true,provider:'claude',configured:false,exits:[],revision:null});
  const a=await save(h.api,proxy,null,'p'),d=await save(h.api,direct);assert.equal(a.status,200);assert.equal(d.status,200);assert.equal(a.body.password.mask,'••••••••');assert.equal(await h.keys.resolveKey(keySlot(proxy.id,a.body.config.passwordGeneration)),'p');
  assert.equal((await save(h.api,{id:'ssh',type:'ssh',label:'VPS',host:'vps.example.test',port:22,user:'owner',keyPath:'~/.ssh/id_ed25519'})).status,200);
  await h.runtime.settings.changeLlmProvider('custom',apiConfig('https://model.example.test'),null);
@@ -86,4 +90,56 @@ test('22a: deletion and chain creation cannot race into a dangling reference; ca
  const state=h.runtime.settings.network();if(state.chains.claude?.includes('direct'))assert.ok(state.exits.direct);else assert.equal(state.exits.direct,undefined);
  const changed={...a.config,passwordGeneration:'00000000-0000-4000-8000-000000000001'};assert.equal((await save(h.api,changed,a.revision)).body.code,'network_invalid');assert.equal(h.keys.rows.size,1);assert.equal(await h.runtime.network.resolvePassword(a.config),'fixture-key');
  assert.equal((await call(h.api,root+'/exits/constructor/delete',{body:{revision:null}})).body.code,'network_invalid');
+});
+
+test('22a r2: API deletion atomically removes its chain; failed publication preserves both and the key',limits,async t=>{
+ const h=await setup(t),exit=(await save(h.api,proxy)).body;
+ const route=await call(h.api,'/api/llm/providers/linked/save',{body:{config:apiConfig('https://model.example.test'),revision:null,secret:'FakeRouteKey'}});assert.equal(route.status,200,route.text);
+ const chain=await call(h.api,root+'/providers/api:linked',{body:{exits:[proxy.id],revision:null}});assert.equal(chain.status,200);
+ const bytes=readFileSync(h.file,'utf8'),rename=fs.renameSync;let publications=0,fail=true;
+ fs.renameSync=((from,to)=>{if(String(to)===h.file){publications++;assert.equal(readFileSync(h.file,'utf8'),bytes);if(fail)throw Error('fixture write failure')}return rename(from,to)}) as typeof rename;
+ syncBuiltinESMExports();t.after(()=>{fs.renameSync=rename;syncBuiltinESMExports()});
+ const failed=await call(h.api,'/api/llm/providers/linked/delete',{body:{revision:route.body.revision}});assert.equal(failed.body.code,'write_failed');assert.equal(readFileSync(h.file,'utf8'),bytes);assert.equal(h.runtime.llmKeys instanceof MemoryKeys&&h.runtime.llmKeys.rows.size,1);
+ let notified=false;h.runtime.settings.onLlmRoutesChanged(()=>{notified=true;assert.equal(h.runtime.settings.llmProviders().linked,undefined);assert.equal(h.runtime.settings.network().chains['api:linked'],undefined)});
+ fail=false;const removed=await call(h.api,'/api/llm/providers/linked/delete',{body:{revision:route.body.revision}});assert.equal(removed.status,200,removed.text);assert.equal(publications,2);assert.equal(notified,true);fs.renameSync=rename;syncBuiltinESMExports();
+ assert.equal((await call(h.api,root+'/exits/'+proxy.id+'/delete',{body:{revision:exit.revision}})).status,200);assert.equal(h.runtime.llmKeys instanceof MemoryKeys&&h.runtime.llmKeys.rows.size,0);
+});
+
+test('22a r2: old orphan chains are readable and clearable only with their revision; arbitrary providers remain rejected',limits,async t=>{
+ const h=await setup(t),exit=(await save(h.api,proxy)).body;
+ await h.runtime.settings.changeNetwork(async config=>{config.chains['api:lost']=[proxy.id];return {result:undefined}});
+ const read=await call(h.api,root+'/providers/api:lost');assert.equal(read.status,200);assert.equal(read.body.orphaned,true);assert.deepEqual(read.body.exits,[proxy.id]);
+ const bytes=readFileSync(h.file,'utf8');
+ for(const revision of [undefined,null,'stale']){const response=await call(h.api,root+'/providers/api:lost',{body:{exits:[],...(revision!==undefined?{revision}:{})}});assert.equal(response.body.code,'network_conflict');assert.equal(readFileSync(h.file,'utf8'),bytes)}
+ assert.equal((await call(h.api,root+'/providers/api:lost',{body:{exits:[proxy.id],revision:read.body.revision}})).body.code,'provider_unknown');
+ assert.equal((await call(h.api,root+'/providers/api:lost',{body:{exits:[],revision:read.body.revision},headers:{'x-pane-token':'forged'}})).status,403);
+ const cleared=await call(h.api,root+'/providers/api:lost',{body:{exits:[],revision:read.body.revision}});assert.equal(cleared.status,200);assert.equal(cleared.body.configured,false);assert.equal(cleared.body.revision,null);assert.equal(h.runtime.settings.network().chains['api:lost'],undefined);
+ assert.equal((await call(h.api,root+'/providers/api:lost',{body:{exits:[],revision:null}})).body.code,'provider_unknown');
+ assert.equal((await call(h.api,root+'/exits/'+proxy.id+'/delete',{body:{revision:exit.revision}})).status,200);
+});
+
+test('22a r2: queued chain update cannot resurrect a deleted route; malformed network refuses deletion without changes',limits,async t=>{
+ const h=await setup(t);await save(h.api,direct);const config=apiConfig('https://model.example.test');
+ const route=await h.runtime.settings.changeLlmProvider('race',config,null);await h.runtime.network.saveChain('api:race',['direct'],null);
+ const entered=deferred(),release=deferred();t.after(()=>release.resolve());
+ const deletion=h.runtime.settings.changeLlmProvider('race',undefined,route.revision,async()=>{entered.resolve();await release.promise});await entered.promise;
+ const update=h.runtime.network.saveChain('api:race',['direct'],(await h.runtime.network.chain('api:race')).revision);
+ const rejected=assert.rejects(update,{code:'provider_unknown'});release.resolve();await deletion;await rejected;assert.equal(h.runtime.settings.network().chains['api:race'],undefined);
+ await h.runtime.settings.changeLlmProvider('race',config,null);const state=JSON.parse(readFileSync(h.file,'utf8'));state.network.chains.claude=['missing-exit'];writeFileSync(h.file,JSON.stringify(state));const bytes=readFileSync(h.file,'utf8');
+ const failed=await call(h.api,'/api/llm/providers/race/delete',{body:{revision:route.revision}});assert.equal(failed.body.code,'network_unreadable');assert.equal(readFileSync(h.file,'utf8'),bytes);
+});
+
+test('22a r2: SSH save validates real file containment, including symlink ancestors, missing files and replacement',limits,async t=>{
+ const h=await setup(t),home=sshHome(t,h.dir),base=join(home,'.ssh'),outside=join(h.dir,'outside');mkdirSync(outside);writeFileSync(join(outside,'key'),'OUTSIDE FAKE KEY');
+ const ssh={id:'ssh',type:'ssh',label:'VPS',host:'vps.example.test',port:22,user:'owner',keyPath:'~/.ssh/id_ed25519'};
+ symlinkSync(join(outside,'key'),join(base,'escape'));symlinkSync(outside,join(base,'escape-dir'));symlinkSync(join(base,'id_ed25519'),join(base,'inside'));
+ const accepted=await save(h.api,ssh);assert.equal(accepted.status,200,accepted.text);assert.equal((await save(h.api,{...ssh,keyPath:'~/.ssh/inside'},accepted.body.revision)).status,200);
+ const current=(await call(h.api,root+'/exits')).body.exits[0],bytes=readFileSync(h.file,'utf8');
+ for(const keyPath of ['~/.ssh/escape','~/.ssh/escape-dir/key','~/.ssh/missing',join(base,'escape'),base+'/escape-dir']){
+  const r=await save(h.api,{...ssh,keyPath},current.revision);assert.equal(r.status,400,keyPath);assert.equal(r.body.code,'ssh_key_invalid');assert.equal(readFileSync(h.file,'utf8'),bytes);
+ }
+ unlinkSync(join(base,'id_ed25519'));symlinkSync(join(outside,'key'),join(base,'id_ed25519'));assert.equal((await save(h.api,current.config,current.revision)).body.code,'ssh_key_invalid');
+ // Broken/moved keys affect save and tunnel startup, never the owner's read/delete recovery doors.
+ assert.equal((await call(h.api,root+'/exits')).status,200);assert.equal((await call(h.api,root+'/exits/ssh/delete',{body:{revision:current.revision}})).status,200);
+ renameSync(base,base+'-old');symlinkSync(base+'-old',base);assert.equal((await save(h.api,ssh)).body.code,'ssh_key_invalid');
 });

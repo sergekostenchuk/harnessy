@@ -1,5 +1,6 @@
 import {hasPublicSecret} from '@harnessy/providers';
 import {createHash} from 'node:crypto';
+import {realpathSync,statSync} from 'node:fs';
 import {isIP} from 'node:net';
 import {homedir} from 'node:os';
 import {resolve,relative,isAbsolute,join} from 'node:path';
@@ -15,6 +16,16 @@ export function networkInvalid(message='Некорректные настрой�
 export function networkFields(raw:unknown,keys:string[]):asserts raw is Record<string,unknown>{if(!object(raw)||Object.keys(raw).some(k=>!keys.includes(k)))networkInvalid()}
 const text=(v:unknown,max:number)=>typeof v==='string'&&v.length>0&&v.length<=max&&!/[\p{C}]/u.test(v);
 export function validProviderId(id:unknown):id is string{return typeof id==='string'&&(id.startsWith('api:')?validRoute(id.slice(4)):validRoute(id))}
+// Save-time check only: missing/moved keys must not make existing settings unreadable.
+// The tunnel must repeat this check before opening a key (TS-22b).
+export function validateSshKey(exit:NetworkExit){
+ if(exit.type!=='ssh')return;
+ try{
+  const home=homedir(),base=realpathSync(join(home,'.ssh')),expected=join(realpathSync(home),'.ssh');
+  const path=realpathSync(exit.keyPath.startsWith('~/.ssh/')?join(home,exit.keyPath.slice(2)):exit.keyPath),rel=relative(base,path);
+  if(base!==expected||!rel||rel==='..'||rel.startsWith('../')||isAbsolute(rel)||!statSync(path).isFile())throw Error();
+ }catch{throw new ProjectError('ssh_key_invalid','SSH: нужен существующий файл ключа внутри ~/.ssh; ссылка наружу недопустима')}
+}
 export function validateExit(raw:unknown):NetworkExit {
  if(!object(raw))networkInvalid();if(raw.type==='iface')throw new ProjectError('iface_unsupported','Интерфейс не маршрутизирует трафик, выберите прокси или SSH',409);
  if(!validRoute(raw.id)||!text(raw.label,120)||hasPublicSecret(String(raw.label))||raw.expectedIp!==undefined&&(typeof raw.expectedIp!=='string'||!isIP(raw.expectedIp)))networkInvalid();
