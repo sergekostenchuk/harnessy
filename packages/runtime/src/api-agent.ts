@@ -44,9 +44,9 @@ export class ApiAgent implements Provider {
   const start=performance.now(),maxSteps=this.options.maxSteps??32,maxCalls=this.options.maxToolCalls??128;
   const receipt=()=>ctx.publish({type:'done',sessionId:null,model:seat.model,durationMs:Math.round(performance.now()-start),usage:measured?{...usage}:usageEmpty(),...(unknownUsage||pendingRequest?{usageIncomplete:true as const}:{})});
   try{
+   if(this.options.prepareModel)await untilAbort(signal,()=>this.options.prepareModel!(seat.model,signal));
    const service=await untilAbort(signal,async()=>this.options.service(signal)),model=service.models(this.route).find(m=>m.id===seat.model);
    if(!model)throw new ProviderError('model_unsupported','Модель отсутствует в маршруте');
-   if(this.options.prepareModel)await untilAbort(signal,()=>this.options.prepareModel!(seat.model,signal));
    const route=JSON.stringify(service.routes()[this.route]);
    unsubscribe=service.onRoutesChanged(()=>{let current:string|undefined;try{current=JSON.stringify(service.routes()[this.route])}catch{}if(current!==route){changed=true;controller.abort()}});
    stopped(signal);if(!Number.isSafeInteger(maxSteps)||maxSteps<1||maxSteps>256||!Number.isSafeInteger(maxCalls)||maxCalls<1||maxCalls>1024)throw new ProviderError('protocol','Неверные пределы агентного цикла');

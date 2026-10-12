@@ -1,3 +1,4 @@
+import {isOllamaCloudRoute} from './presets.ts';
 import {randomUUID} from 'node:crypto';
 import {SecretRedactor} from './redaction.ts';
 import {routeModels,modelInfo,validateResolvedRoutes,catalogProviders,validateDiscoveryDraft} from './catalog.ts';
@@ -17,7 +18,7 @@ export function createLlmService(deps:LlmDependencies):LlmService {
  const protection=new SecretRedactor();
  const routes=()=>validateResolvedRoutes(deps.routes());
  const route=(id:string)=>{const all=routes();if(!validRoute(id)||!Object.hasOwn(all,id))throw new LlmError('provider_unknown');return all[id]!};
- const resolveKey=async(r:ProviderConfig,signal:AbortSignal)=>{if(!r.keyRef)return null;let key;try{key=await abortable(deps.resolveKey(r.keyRef,r.keyGeneration),signal)}catch(e){if(signal.aborted)throw new LlmError('cancelled');throw new LlmError('credential_unavailable')}if(!key)throw new LlmError('missing_credential');if(!/^[\x21-\x7e]{1,4096}$/.test(key))throw new LlmError('credential_unavailable');protection.add(key);return key};
+ const resolveKey=async(r:ProviderConfig,signal:AbortSignal)=>{if(!r.keyRef){if(isOllamaCloudRoute(r))throw new LlmError('missing_credential');return null;}let key;try{key=await abortable(deps.resolveKey(r.keyRef,r.keyGeneration),signal)}catch(e){if(signal.aborted)throw new LlmError('cancelled');throw new LlmError('credential_unavailable')}if(!key)throw new LlmError('missing_credential');if(!/^[\x21-\x7e]{1,4096}$/.test(key))throw new LlmError('credential_unavailable');protection.add(key);return key};
  const service:LlmService={
  redact:protection.redact,textRedactor:protection.textRedactor,
  routes,models:id=>routeModels(id,route(id)).map(modelInfo),retryPolicy:id=>structuredClone(route(id).retryPolicy??{mode:'normal',maxRetries:5,initialDelayMs:1000,maxDelayMs:30000,jitterRatio:.2}),

@@ -283,7 +283,7 @@ test('317: cold catalog and card show checking until the program is read; confir
 test('334: actual Ollama catalogue renders daemon, cloud/local labels, signin and owner-only probe with unknown cloud login',async t=>{
  const f=await ollamaFixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}});await call(h.api,'/api/providers/ollama/check',{body:{}});
  const handler=async(path:string,body:any)=>(await call(h.api,path,{...(body?{body}:{})})).body,v=ui(handler,undefined,undefined,h.dir);await v.settle();await v.find('[data-pv="ollama"]').emit('click');await v.settle();
- assert.match(v.body.textContent,/Ollama.*облако и локально/);assert.match(v.body.textContent,/Демон.*доступен · 0.40.2/);assert.match(v.body.textContent,/glm-5.3:cloud · облако/);assert.match(v.body.textContent,/gemma4:latest · локально/);assert.match(v.body.textContent,/signin/);assert.match(v.body.textContent,/Неизвестно/);const button=v.find('[data-program-probe="ollama"]');assert.equal(button.disabled,false);await button.emit('click');await v.settle();assert.equal(v.find('[data-program-confirm]').disabled,false);assert.equal(f.capture().length,0);
+ assert.match(v.body.textContent,/Ollama.*локально/);assert.match(v.body.textContent,/Демон.*доступен · 0.40.2/);assert.doesNotMatch(v.body.textContent,/glm-5.3:cloud/);assert.match(v.body.textContent,/gemma4:latest · локально/);assert.match(v.body.textContent,/serve/);assert.match(v.body.textContent,/Неизвестно/);const button=v.find('[data-program-probe="ollama"]');assert.equal(button.disabled,false);await button.emit('click');await v.settle();assert.equal(v.find('[data-program-confirm]').disabled,false);assert.equal(f.capture().length,0);
  f.setOffline(true);await call(h.api,'/api/providers/ollama/check',{body:{}});await refreshPrograms(v);assert.match(v.body.textContent,/демон не запущен/);assert.match(v.body.textContent,/ollama serve/);assert.equal(v.find('[data-program-probe="ollama"]').disabled,true);assert.equal(f.capture().length,0);
 });
 
@@ -294,10 +294,10 @@ for(const program of [{id:'devin',title:'Devin',fixture:devinFixture},{id:'kimi'
  const probe=v.find('[data-program-probe="'+program.id+'"]');assert.equal(probe.disabled,false);await probe.emit('click');await v.settle();assert.equal(v.find('[data-program-confirm]').disabled,false);assert.match(v.body.textContent,/полный доступ, без инструментов Harnessy/);
  assert.equal(f.capture().filter(c=>c.args.includes('--print')||c.args.includes('--prompt')||c.args[0]==='run').length,0);
 });
-test('344: HTTP catalog keeps local models and renders cloud failure on the actual program card', {timeout:8000},async t=>{
- const f=await ollamaFixture(t);f.setCloudStatus(503);const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}});await call(h.api,'/api/providers/ollama/check',{body:{}});
+test('21g: local catalogue offers API connection instead of cloud daemon models', {timeout:8000},async t=>{
+ const f=await ollamaFixture(t);const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}});await call(h.api,'/api/providers/ollama/check',{body:{}});
  const v=ui(async(path:string,body:any)=>(await call(h.api,path,{...(body?{body}:{})})).body,undefined,undefined,h.dir);await v.settle();await v.find('[data-pv="ollama"]').emit('click');await v.settle();
- assert.match(v.find('.cbody').textContent,/glm-5.3:cloud · облако/);assert.match(v.find('.cbody').textContent,/Не удалось обновить облачный каталог.*HTTP 503/);assert.equal(v.find('[data-program-probe="ollama"]').disabled,false);
+ assert.doesNotMatch(v.find('.cbody').textContent,/glm-5.3:cloud/);assert.match(v.find('.cbody').textContent,/облачные модели — через Ollama Cloud по API/);assert.ok(v.find('[data-llm-ollama-cloud]'));assert.equal(f.cloudReads,0);assert.equal(v.find('[data-program-probe="ollama"]').disabled,false);
 });
 
 test('350: provider card exposes failed probe code, safe excerpt and measured duration as text',async()=>{
