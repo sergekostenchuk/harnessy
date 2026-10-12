@@ -1,7 +1,7 @@
 import {lstatSync,readFileSync,realpathSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {join,dirname} from 'node:path';
-import {record,type Provider,type ProviderLimits,type LimitsCode,type Vendor} from '@harnessy/providers';
+import {record,type Provider,type ProviderLimits,type LimitsCode,type BuiltinVendor as Vendor} from '@harnessy/providers';
 import type {Clock} from './types.ts';
 import {SharedLimitsCache,saved,limitAccount,atomicJSON,reasons,nextAttempt,type SharedSnapshot,type Saved} from './limits-cache.ts';
 

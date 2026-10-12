@@ -1,7 +1,7 @@
 import {readFileSync,existsSync} from 'node:fs';
 import {join,isAbsolute} from 'node:path';
 import {TeamError,message} from './errors.ts';
-import {MODE_IDS,ROLE_CATALOG,type Mode,type Vendor} from './catalog.ts';
+import {MODE_IDS,ROLE_CATALOG,providerId,type Mode,type Vendor} from './catalog.ts';
 import {SEATS_REQUIRED} from './strings.ts';
 import {parseYaml,mapping,pyDefault,pyString,pyTruthy,type YMap} from './yaml-compat.ts';
 import type {Seat,Team} from './types.ts';
@@ -19,7 +19,7 @@ export function teamFrom(data:YMap,harnessDir:string):Team {
  if(sid==='room')throw new TeamError('team_invalid','team.yaml: имя room зарезервировано для разговора без роли');
  if(!mapping(raw))throw new TeamError('team_invalid','team.yaml: место '+sid+' должно быть таблицей');
  const role=pyString(pyDefault(raw.get('role'),sid)),vendor=pyString(pyDefault(raw.get('vendor'),''));
- if(vendor!=='claude'&&vendor!=='codex'){warnings.push('место '+sid+': вендор «'+(vendor||'не задан')+'» здесь не ведётся (допустимы claude, codex) — место пропущено');continue}
+ if(!providerId(vendor)){warnings.push('место '+sid+': вендор «'+(vendor||'не задан')+'» здесь не ведётся (нужен id программы каталога) — место пропущено');continue}
  const mode=pyString(pyDefault(raw.get('mode'),'chat'));if(!MODE_IDS.includes(mode as Mode))throw new TeamError('team_invalid','team.yaml: у места '+sid+' режим «'+mode+'», допустимы '+MODE_IDS.join(', '));
  const wp=pyDefault(raw.get('write_paths'),[]),wt=raw.get('worktree');
  if(!Array.isArray(wp)||!wp.every(x=>typeof x==='string'&&x&&!x.startsWith('/')&&!x.includes('..')))throw new TeamError('team_invalid','team.yaml: write_paths у места '+sid+' — список относительных путей без ..');

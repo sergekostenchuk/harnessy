@@ -2,13 +2,15 @@ import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {parseCompat} from '@harnessy/journal';
 import type {ModelPrice} from '@harnessy/projects';
+import {providerId} from '@harnessy/providers';
 import {RuntimeError,type Runtime} from '@harnessy/runtime';
 import {text} from './responses.ts';
 
 type Outcome='ok'|'interrupted'|'error'|'unknown';
 type Period='7'|'30'|'90'|'all';
 type Row=Record<string,unknown>;
-type Vendor='claude'|'codex'|null;
+type Vendor=string|null;
+const knownVendor=(r:Runtime,v:unknown):v is string=>providerId(v)&&(v==='claude'||v==='codex'||r.providerOperations.catalog.ids().includes(v));
 interface Candidate {message:Row;pane:string;chat:string;title:string}
 interface Turn {turnInstanceId:string;pane:string;chat:string;title:string;ts:number|null;vendor:Vendor;model:string|null;usage:{input:number|null;output:number|null;cacheRead:number|null};durationMs:number|null;outcome:Outcome;cost:number|null;currency:string|null;costReason:string|null}
 function object(value:unknown):value is Row {return !!value&&typeof value==='object'&&!Array.isArray(value)}
@@ -53,7 +55,7 @@ async function readSpend(runtime:Runtime,query:URLSearchParams){
  for(const [turnInstanceId,{message,pane,chat,title}] of local){
   if(!inPeriod(message))continue;const u=object(message.usage)?message.usage:{};
   const row:Omit<Turn,'cost'|'currency'|'costReason'>={turnInstanceId,pane,chat,title,ts:number(message.ts)&&message.ts>0?message.ts:null,
-   vendor:message.vendor==='claude'||message.vendor==='codex'?message.vendor:null,model:typeof message.model==='string'&&message.model?message.model:null,
+   vendor:knownVendor(runtime,message.vendor)?message.vendor:null,model:typeof message.model==='string'&&message.model?message.model:null,
    usage:{input:measured(u.input),output:measured(u.output),cacheRead:measured(u.cacheRead)},durationMs:measured(message.durationMs),
    outcome:message.outcome==='ok'||message.outcome==='interrupted'||message.outcome==='error'?message.outcome:'unknown'};
   turns.push({...row,...price(row,prices)});
@@ -103,7 +105,7 @@ export async function spendTurns(runtime:Runtime,query:URLSearchParams){
  const invalid=(key:string,reason:string):never=>{throw new RuntimeError(key+'_invalid',key+': '+reason,400)};
  for(const key of ['vendor','model','before','limit'])if(query.getAll(key).length>1)invalid(key,'повтор параметра');
  const vendor=query.get('vendor'),model=query.get('model'),rawLimit=query.get('limit')??'50',limit=Number(rawLimit),before=query.get('before');
- if(vendor!==null&&!['claude','codex','null'].includes(vendor))invalid('vendor','ожидается claude, codex или null');
+ if(vendor!==null&&vendor!=='null'&&!knownVendor(runtime,vendor))invalid('vendor','ожидается id программы или null');
  if(model!==null&&!model.trim())invalid('model','ожидается непустая модель или null');
  if(!/^\d+$/.test(rawLimit)||!Number.isSafeInteger(limit)||limit<1||limit>200)invalid('limit','ожидается целое число от 1 до 200');
  let boundary:Cursor|null=null;

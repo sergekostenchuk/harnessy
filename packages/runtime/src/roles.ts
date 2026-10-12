@@ -1,6 +1,6 @@
 import {readFileSync,existsSync,lstatSync} from 'node:fs';
 import {join} from 'node:path';
-import {withPathLock,addSeatLocked,ensureSeatFileLocked,loadTeam,readManifest,mapping,pyDefault,pyString,ROLE_CATALOG,MODE_IDS,MODES,instructionsFor,seatKind,TeamError,type Seat,type Mode,type Vendor,type PathLock,type AddSeatArgs} from '@harnessy/team';
+import {providerId,withPathLock,addSeatLocked,ensureSeatFileLocked,loadTeam,readManifest,mapping,pyDefault,pyString,ROLE_CATALOG,MODE_IDS,MODES,instructionsFor,seatKind,TeamError,type Seat,type Mode,type Vendor,type PathLock,type AddSeatArgs} from '@harnessy/team';
 import {onboarding,transcriptText} from '@harnessy/context';
 import {pythonTrim,type Initiator} from '@harnessy/journal';
 import {object,RuntimeError,deepFreeze,message} from './errors.ts';
@@ -31,12 +31,12 @@ function valid(raw:unknown):Assignment {
  if(!object(raw)||typeof raw.operationId!=='string'||!/^c[0-9a-f]{5,}$/.test(raw.operationId)||typeof raw.sid!=='string'||!/^[a-z][a-z0-9_-]{0,30}$/.test(raw.sid)||['owner','harness','all','room'].includes(raw.sid)||typeof raw.by!=='string'||!raw.by||typeof raw.how!=='string'||!object(raw.input)||!object(raw.files)||!object(raw.source)||!object(raw.stages))invalid();
  if(raw.error!==undefined&&(typeof raw.error!=='string'||!raw.error||raw.error.length>600))invalid();
  const i=raw.input,st=raw.stages;if(!Object.hasOwn(i,'kind'))i.kind=seatKind(undefined,i.role);else seatKind(i.kind);
- if(typeof i.role!=='string'||!i.role||!['claude','codex'].includes(String(i.vendor))||typeof i.model!=='string'||!i.model||!MODE_IDS.includes(i.mode as Mode)||!object(i.instructions)||(i.instructions.path!==null&&typeof i.instructions.path!=='string')||typeof i.instructions.content!=='string'||typeof i.label!=='string'||!Array.isArray(i.writePaths)||!i.writePaths.every(x=>typeof x==='string')||(i.worktree!==null&&typeof i.worktree!=='string')||typeof raw.source.carry!=='string'||!['team','seatFile','chat','status','onboarding'].every(k=>typeof st[k]==='boolean'))invalid();
+ if(typeof i.role!=='string'||!i.role||!providerId(i.vendor)||typeof i.model!=='string'||!i.model||!MODE_IDS.includes(i.mode as Mode)||!object(i.instructions)||(i.instructions.path!==null&&typeof i.instructions.path!=='string')||typeof i.instructions.content!=='string'||typeof i.label!=='string'||!Array.isArray(i.writePaths)||!i.writePaths.every(x=>typeof x==='string')||(i.worktree!==null&&typeof i.worktree!=='string')||typeof raw.source.carry!=='string'||!['team','seatFile','chat','status','onboarding'].every(k=>typeof st[k]==='boolean'))invalid();
  if(i.specialization!==undefined)specialization(i.specialization);
  if(i.mandate!==undefined&&(!Number.isSafeInteger(i.mandate)||Number(i.mandate)<1))invalid();
  if(raw.files.seat!==null&&(!object(raw.files.seat)||raw.files.seat.path!=='roles/seats/'+raw.sid+'.md'||typeof raw.files.seat.content!=='string'))invalid();
  const c=raw.source.chat;
- if(c!==null&&(!object(c)||typeof c.id!=='string'||typeof c.pane!=='string'||c.model!==null&&typeof c.model!=='string'||!['claude','codex'].includes(String(c.vendor))||typeof c.carry!=='string'||typeof c.cwd!=='string'||!Array.isArray(c.transcript)||!c.transcript.every(m=>object(m)&&typeof m.role==='string'&&typeof m.text==='string'&&typeof m.ts==='number')))invalid();
+ if(c!==null&&(!object(c)||typeof c.id!=='string'||typeof c.pane!=='string'||c.model!==null&&typeof c.model!=='string'||!providerId(c.vendor)||typeof c.carry!=='string'||typeof c.cwd!=='string'||!Array.isArray(c.transcript)||!c.transcript.every(m=>object(m)&&typeof m.role==='string'&&typeof m.text==='string'&&typeof m.ts==='number')))invalid();
  const op=raw as unknown as Assignment;deepFreeze(op.input);deepFreeze(op.source);deepFreeze(op.files);return op;
 }
 function operations(p:ProjectState):Map<string,Assignment> {
@@ -78,7 +78,7 @@ function input(runtime:Runtime,p:ProjectState,args:CreateSeatInput,existing?:Sea
  if(!existing&&noProject(runtime,p))throw new RuntimeError('no_project','папка по умолчанию — не проект: создай проект или назначь оркестратора разговору без проекта',400);
  if(!existing&&role!=='orchestrator'&&!hasOrchestrator(p))throw new TeamError('role_unknown','сначала оркестратор — он разворачивает проект и вводит остальные роли');
  const model=existing?.model||pythonTrim(String(args.model||''))||p.registry.get('room')?.model||p.registry.models.claude?.find(x=>x.id)?.id||'';
- const vendor=existing?.vendor??(['claude','codex'] as const).find(v=>p.registry.providers.has(v)&&p.registry.models[v]?.some(x=>x.id===model));
+ const vendor=existing?.vendor??[...p.registry.providers].find(v=>p.registry.models[v]?.some(x=>x.id===model));
  if(!vendor)throw new RuntimeError('model_unknown','модель не из каталога',400);
  const rawMode=existing?.mode??String(args.mode||runtime.settings.effective().defaultMode||'read'),mode=MODE_IDS.includes(rawMode as Mode)?rawMode as Mode:'read';
  const path=existing?.instructions??(existsSync(join(p.team.harnessDir,'roles',role+'.md'))?'roles/'+role+'.md':null);

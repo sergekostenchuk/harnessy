@@ -1,9 +1,9 @@
 import {access} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {homedir} from 'node:os';
-import {FORBIDDEN_ENV,type RouteEnv,type Vendor} from './types.ts';
+import {FORBIDDEN_ENV,type RouteEnv,type BuiltinVendor} from './types.ts';
 const PROXIES=['HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','https_proxy','http_proxy','all_proxy'] as const;
-export function childEnv(vendor:Vendor,route:RouteEnv={},base:NodeJS.ProcessEnv=process.env):NodeJS.ProcessEnv{
+export function childEnv(vendor:BuiltinVendor,route:RouteEnv={},base:NodeJS.ProcessEnv=process.env):NodeJS.ProcessEnv{
  const env={...base};
  for(const key of PROXIES)if(typeof route[key]==='string')env[key]=route[key];
  for(const key of FORBIDDEN_ENV[vendor])delete env[key];

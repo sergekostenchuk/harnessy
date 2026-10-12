@@ -71,7 +71,7 @@ export class Runtime {
  private cliQuota(p:ProjectState){let store=this.cliQuotas.get(p);if(!store){store=new ProviderLimitsStore(this.providerOperations.catalog,this.clock,()=>{if(!p.closed&&this.current===p)p.bus.publish('owner',{type:'limits',...this.limitsSnapshot()})},this.deps.limitsCacheDir);this.cliQuotas.set(p,store)}return store}
  limitsSnapshot(){const p=this.project,base=this.quota(p).snapshot(),cli=this.cliQuota(p).snapshot(),providers=[...base.providers.map(v=>({...v,ok:v.status==='ok'})),...cli.providers],error=cli.errors[0],available=providers.some(v=>v.ok||v.windows.length>0);return {...base,...(error&&!available?{ok:false as const,code:error.code,reason:error.reason}:{}),revision:base.revision+cli.revision,providers,updatedAt:Math.max(base.updatedAt??0,...cli.providers.map(v=>v.fetchedAt??0))||null,...(cli.errors.length?{errors:cli.errors}:{})}}
  async limits(){const p=this.project;await Promise.all([this.quota(p).refresh(),this.cliQuota(p).refresh()]);this.same(p);return this.limitsSnapshot()}
- private provider(vendor:Vendor|'human'){const provider=vendor==='human'?null:this.deps.providers[vendor];if(!provider)throw new RuntimeError('no_provider','нет провайдера: '+vendor,503);return provider}
+ private provider(vendor:Vendor|'human'){const provider=vendor==='human'?null:this.deps.providers[vendor]??(this.providerOperations.catalog.ids().includes(vendor)?this.providerOperations.catalog.provider(vendor):null);if(!provider)throw new RuntimeError('no_provider','нет провайдера: '+vendor,503);return provider}
  private requireOwner(initiator:Initiator):void {if(initiator?.seat!=='owner'||initiator.trust!=='owner')throw new RuntimeError('policy_denied','действие доступно только владельцу',403)}
  private same(p:ProjectState):void{if(this.current!==p||p.closed)throw new RuntimeError('project_changed','проект сменился',409)}
  private pane(id:string,p=this.project):Pane{const pane=p.registry.get(id);if(!pane)throw new RuntimeError('pane_unknown','нет окна',404);return pane}
@@ -100,7 +100,8 @@ export class Runtime {
  let registry!:Registry,owner!:Pane;
  const bus=new EventBus(()=>{const panes=[owner,...registry.panes.values()];return [...panes.flatMap(p=>[...p.approvals.values()].map(a=>({pane:p.id,event:a.event()}))),...panes.filter(p=>p.uncertainNote).map(p=>({pane:p.id,replay:true,event:{type:'note',text:p.uncertainNote,warning:this.warningId(this.project,p,'uncertain')}})),...panes.filter(p=>p.recoveryNote).map(p=>({pane:p.id,replay:true,event:{type:'note',text:p.recoveryNote,warning:this.warningId(this.project,p,'recovery')}})),...panes.filter(p=>p.recoveryError).map(p=>({pane:p.id,replay:true,event:p.recoveryError!}))]});
  const models=this.deps.models??{};if(!this.deps.models){const entries=Object.entries(this.deps.providers) as [Vendor,import('@harnessy/providers').Provider][];const results=await Promise.allSettled(entries.map(([,provider])=>provider.models()));for(let i=0;i<entries.length;i++){const result=results[i]!;if(result.status==='fulfilled')models[entries[i]![0]]=result.value;else lineErrors.push(message(result.reason))}}
- registry=new Registry(path,models,Object.values(team?.seats??{}),bus,this.clock,new Set(Object.keys(this.deps.providers) as Vendor[]));registry.policy=policy;
+ const registered=new Set([...Object.keys(this.deps.providers),...this.providerOperations.catalog.ids()]);const seats=Object.values(team?.seats??{}).filter(seat=>{if(seat.vendor==='claude'||seat.vendor==='codex'||registered.has(seat.vendor))return true;lineErrors.push('место '+seat.id+': неизвестная программа '+seat.vendor);return false});
+ registry=new Registry(path,models,seats,bus,this.clock,registered);registry.policy=policy;
  owner=new Pane({id:'owner',vendor:'human',label:'владелец',model:'',cwd:path,role:'owner'},bus,this.clock);
  const journal=new Journal(path,{now:()=>new Date(this.clock.now()),...this.deps.journalOptions});
  registry.policyChanged=policy=>{journal.append({sender:'harness',to:['*'],kind:'policy',text:'политика связи перечитана: версия '+policy.version,policy:policy.version})};
@@ -108,7 +109,7 @@ export class Runtime {
  for(const pane of registry.panes.values()){pane.cwd=git.cwdBySeat[pane.id]??path;pane.worktree=git.worktreeBySeat[pane.id]??null;pane.branch=git.branchBySeat[pane.id]??null}
  const gitFact=(args:string[]):string|null=>{if(!git.repoRoot)return null;try{return execFileSync('git',['-C',git.repoRoot,...args],{encoding:'utf8',timeout:5000,stdio:['ignore','pipe','pipe']}).trim()||null}catch{return null}};
  const channel=new Channel({journal,policy,projectDir:path,liveSeats:()=>registry.ids,roleOf:id=>registry.roleOf(id),labelOf:id=>id==='owner'?'владелец':id==='harness'?'харнесс':registry.get(id)?.label??id,hasRepo:()=>!!git.repoRoot,resolveSha:sha=>gitFact(['rev-parse','--verify','--end-of-options',sha+'^{commit}']),mergeCommitFor:sha=>{if(!git.repoRoot)return null;const branch=team?.integrationBranch??'main';try{execFileSync('git',['-C',git.repoRoot,'merge-base','--is-ancestor',sha,branch],{stdio:'ignore',timeout:5000})}catch{return null}return gitFact(['rev-list','--merges','--ancestry-path','--reverse',sha+'..'+branch])?.split(/\s+/)[0]??sha}});
- const saved=journal.loadPanes();if(object(saved.room)&&(typeof saved.room.model==='string'||saved.room.model===null)&&typeof saved.room.mode==='string')makeRoomIn({registry,dir:path,bus},this,saved.room.model,saved.room.mode,saved.room.vendor==='claude'||saved.room.vendor==='codex'?saved.room.vendor:undefined);for(const pane of registry.panes.values()){const st=saved[pane.id];if(!object(st))continue;if(st.vendor==='claude'||st.vendor==='codex')pane.vendor=st.vendor;registry.update(pane,{model:st.model,mode:st.mode,sessionId:st.sessionId??null,digest:st.digest??false})}
+ const saved=journal.loadPanes();if(object(saved.room)&&(typeof saved.room.model==='string'||saved.room.model===null)&&typeof saved.room.mode==='string')makeRoomIn({registry,dir:path,bus},this,saved.room.model,saved.room.mode,typeof saved.room.vendor==='string'&&(saved.room.vendor==='claude'||saved.room.vendor==='codex'||registered.has(saved.room.vendor))?saved.room.vendor:undefined);for(const pane of registry.panes.values()){const st=saved[pane.id];if(!object(st))continue;if(typeof st.vendor==='string'&&(st.vendor==='claude'||st.vendor==='codex'||registered.has(st.vendor)))pane.vendor=st.vendor;registry.update(pane,{model:st.model,mode:st.mode,sessionId:st.sessionId??null,digest:st.digest??false})}
  const freshRoom=saved.room===undefined&&!registry.get('room')&&team!==null&&!Object.keys(team.seats).length;if(freshRoom)makeRoomIn({registry,dir:path,bus},this,roomModel||'',path===this.defaultDir?'chat':'read');
  const state=new StateStore(path,this.deps.stateIO??diskIO,this.clock,this.deps.id);const halted=state.load(registry,lineErrors);
  if(saved.room===undefined&&roomModel&&!registry.get('room')&&makeRoomIn({registry,dir:path,bus},this,roomModel,path===this.defaultDir?'chat':'read'))state.savePanes(registry,journal);
@@ -162,7 +163,7 @@ export class Runtime {
  private async closeProjectLocked():Promise<void>{const p=this.current;if(!p||p.closed)return;if(p.state.undurable.size){try{p.state.saveChats(p.registry);p.state.undurable.clear()}catch(e){throw new RuntimeError('write_failed','ответ модели не сохранён: '+p.state.chatsPath+': '+message(e),409,{cause:e,fields:{path:p.state.chatsPath}})}}p.closed=true;this.actions.closeProject?.(p);const turns=[...p.active.values()];
  this.quotas.get(p)?.close();this.cliQuotas.get(p)?.close();for(const turn of turns)this.cancelTurn(turn.pane.id,'project_closed',p);
  p.owner.denyApprovals();p.bus.close();this.tokens.clear();this.scopes.clear();await this.providerOperations.cancel(p);
- let failure:unknown;try{await Promise.all(Object.values(this.deps.providers).map(provider=>provider.close()))}catch(e){failure=e}
+ let failure:unknown;try{await Promise.all(Object.values(this.deps.providers).map(provider=>provider?.close()))}catch(e){failure=e}
  for(const turn of turns)turn.releaseReset();await Promise.all(turns.map(t=>t.finished));if(failure)throw failure
  }
  private onChannel(p:ProjectState,event:ChannelEvent):void {
@@ -310,7 +311,7 @@ export class Runtime {
  return p.trace.run(span,async()=>{try{const text=await this.runTurnCore(id,messageText,options),result=p.registry.get(id)?.transcript.find(m=>object(m.runtime)&&m.runtime.turnInstanceId===turnInstanceId);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:result?.outcome==='interrupted'?'cancelled':result?.outcome==='error'?'failed':'ok',reason:result?.outcome==='error'?traceReason(result.errorCode,'Ошибка провайдера'):{code:'none',text:''},durationMs:this.clock.now()-started,data:{model:result?.model,usage:result?.usage}});return text}catch(e){const reason=traceReason((e as {code?:string}).code,message(e));p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:reason.code==='cancelled'?'cancelled':reason.code==='timeout'?'timeout':'failed',reason,durationMs:this.clock.now()-started});throw e}finally{this.finishTraceTools(p,turnInstanceId)}});
  }
  private async runTurnCore(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol}={}):Promise<string> {
- const p=options.project??this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);this.same(p);
+ const p=options.project??this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);this.same(p);this.validateTurn(pane.vendor,pane.mode);
  if(p.starting)throw new RuntimeError('project_opening','проект открывается',409);
  if(firstOpenPending(p,pane))throw new RuntimeError('role_not_opened','Откройте чат роли, чтобы она получила вводную',409);
  if(p.halted)throw new RuntimeError('halted','остановлено владельцем: ходы не идут, сообщения ждут в очереди');
@@ -397,7 +398,7 @@ export class Runtime {
  }finally{
  this.scopes.revoke(scope);if(!turn.stopRequested)this.actions.cancelAsks(scope,'turn_ended');this.clock.clearTimeout(turn.timer);
  if(p.active.get(id)===turn){p.active.delete(id);pane.busy=false;pane.handle=null;this.stateEvent(p,pane)}
- if(!p.closed&&turn.started&&turn.vendor!=='human')void this.quota(p).refresh(turn.vendor,true);
+ if(!p.closed&&turn.started&&(turn.vendor==='claude'||turn.vendor==='codex'))void this.quota(p).refresh(turn.vendor,true);
  if(success&&!p.closed&&!options.entries&&pane.status==='idle')void this.kick(id);turn.finish()
  }
  }
@@ -415,7 +416,12 @@ export class Runtime {
  for(const pane of p.registry.panes.values()){if(on&&this.cancelTurn(pane.id,'halt',p))interrupted.push(pane.id);pane.publish({type:'note',text:on?'остановлено владельцем: ходы не идут, сообщения ждут в очереди':'работа возобновлена владельцем'});this.stateEvent(p,pane);if(!on&&pane.status==='idle')void this.kick(pane.id)}
  if(failure)throw failure;return {ok:true,halted:on,interrupted,pending:Object.fromEntries([...p.registry.panes.values()].map(pane=>[pane.id,p.journal.pendingFor(pane.id).length]).filter(([,n])=>n))}
  }
+ validateTurn(vendor:string,mode:string){if(vendor==='claude'||vendor==='codex')return;const catalog=this.providerOperations.catalog;if(!catalog.ids().includes(vendor))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);
+ const supported=catalog.get(vendor).capabilities.turn?.[mode as 'read'|'edit'|'all'];if(supported?.ok!==true){const reason=supported?.reason??'Программа не гарантирует режим '+mode;throw new RuntimeError('capability_unsupported',reason,409,{fields:{reason}})}
+ }
  paneSet(id:string,body:Record<string,unknown>,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);if(p.restoreFailed.has(id))free(p,pane);if(pane.status==='recovering')throw waitingError(p,pane);if(p.editing.has(id)||p.materializing.has(id))throw new RuntimeError('busy','место сейчас отвечает — дождитесь ответа');const {cwd:_,...safe}=body;
+ if(body.vendor!==undefined){if(typeof body.vendor!=='string'||!p.registry.providers.has(body.vendor))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);this.validateTurn(body.vendor,pane.busy?pane.mode:typeof body.mode==='string'?body.mode:pane.mode);if(typeof body.model!=='string'||!p.registry.models[body.vendor]?.some(m=>m.id===body.model))throw new RuntimeError('model_unsupported','Модель отсутствует в снимке каталога',400)}
+ const target=p.registry.modelVendor(pane,safe)??pane.vendor;this.validateTurn(target,pane.busy?pane.mode:typeof body.mode==='string'?body.mode:pane.mode);
  const updated=p.registry.update(pane,safe);if(updated){p.state.savePanes(p.registry,p.journal);this.stateEvent(p,pane);if(pane.status==='idle')void this.kick(id)}const info=waiting(p,pane);return {ok:true,pane:pane.settings(),...(updated&&pane.busy?{appliesFrom:'next' as const}:{}),...(info?{waiting:info}:{})}}
  async steer(id:string,text:string,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);text=pythonTrim(text);if(!text)throw new RuntimeError('text_empty','пустое сообщение',400);
  const turn=p.active.get(id),record=p.channel.postCore({to:[id],kind:'note',text,origin:'steer'},OWNER);
@@ -446,7 +452,7 @@ export class Runtime {
  async ensureSeatMaterialized(id:string,initiator:Initiator,operationId?:string){this.requireOwner(initiator);if(this.project.restoreFailed.has(id))free(this.project,this.pane(id));return ensureSeatMaterialized(this,id,initiator,operationId)}
  async onboard(id:string,initiator:Initiator,binding:{project?:unknown;chat?:unknown}={}){this.requireOwner(initiator);if(this.project.restoreFailed.has(id))free(this.project,this.pane(id));return onboard(this,id,initiator,binding)}
  makeRoom(model:string,mode:string,initiator:Initiator){return makeRoom(this,model,mode,initiator)}
- roomSet(input:{model?:unknown;folder?:unknown},initiator:Initiator){return roomSet(this,input,initiator)}
+ roomSet(input:{model?:unknown;folder?:unknown;vendor?:unknown},initiator:Initiator){return roomSet(this,input,initiator)}
  roomMove(input:{path?:unknown;create?:unknown;git?:unknown},initiator:Initiator){return roomMove(this,input,initiator)}
  assignRoomRole(input:CreateSeatInput & PromotionInput & {chat?:unknown},initiator:Initiator){return assignRoomRole(this,input,initiator)}
  chatMeta(id:string){const p=this.current;if(!p||p.closed)return null;const c=p.state.chats.chats[id];return c?meta(p,c):null}

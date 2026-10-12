@@ -25,9 +25,14 @@ export interface CliDescriptor {
  id:string;name:string;binary:string;
  /** Metadata remains available when a safe model execution is not implemented. */
  turnUnavailableReason?:string;
+ turnNotes?:Partial<Record<Mode,string>>;
+ turnReasons?:Partial<Record<Mode,string>>;
+ /** Owner-approved full-access program without a Harnessy bridge. */
+ noHarnessMcp?:true;
  /** Display only: the driver never starts an interactive login. */
  login:CliCommand;
- version:CliProbe<string>;auth:CliAuthProbe;models:CliProbe<CliModel[]>;
+ version:CliProbe<string>;auth:CliAuthProbe;models:CliProbe<CliModel[]>|{list:readonly CliModel[];reason:string};
+ allowUnverifiedLogin?:boolean;
  /** Explicit flags, with no permissive fallback for a missing mode. */
  modes:Partial<Record<Mode,(input:CliTurnInput)=>string[]>>;
  forbiddenEnv:readonly string[];
@@ -36,7 +41,7 @@ export interface CliDescriptor {
  state?:{namespace:string;args(directory:string):string[]};
  resume?:((sessionId:string)=>string[]);
  /** A private per-turn file; serialize receives only Harnessy's MCP server. */
- mcp:{serialize(server:CliMcpServer):string;args(configPath:string):string[]};
+ mcp?:{serialize(server:CliMcpServer,input:CliTurnInput):string;args(configPath:string):string[];env?(configPath:string):NodeJS.ProcessEnv};
  limits?:CliProbe<ProviderLimits>;
  sessions?:{list(cwd:string):CliProbe<{id:string;title:string;updated:number}[]>;messages(cwd:string,id:string):CliProbe<{role:'me'|'ai';text:string}[]>};
  /** Provider-specific exit status classification; stdout is never assumed to be a successful answer. */

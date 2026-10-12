@@ -12,7 +12,7 @@ import type {Runtime} from './runtime.ts';
 import type {ProjectState} from './types.ts';
 
 export function vendorOf(p:Pick<ProjectState,'registry'>,model:string):Vendor|null {
- return (['claude','codex'] as const).find(v=>p.registry.providers.has(v)&&p.registry.models[v]?.some(m=>m.id===model))??null;
+ return [...p.registry.providers].find(v=>p.registry.models[v]?.some(m=>m.id===model))??null;
 }
 export function makeRoomIn(p:Pick<ProjectState,'registry'|'dir'|'bus'>,runtime:Runtime,model:string|null,mode:string,vendor?:Vendor):Pane|null {
  const selected=vendor??(model?vendorOf(p,model):p.registry.providers.has('claude')?'claude':p.registry.providers.has('codex')?'codex':'claude');if(!selected||!MODE_IDS.includes(mode as Mode))return null;
@@ -20,14 +20,14 @@ export function makeRoomIn(p:Pick<ProjectState,'registry'|'dir'|'bus'>,runtime:R
  if(old){room.transcript=old.transcript;room.carry=old.carry;if(old.vendor===selected&&old.model===model)room.sessionId=old.sessionId;room.revision=old.revision+1}
  p.registry.panes.set('room',room);return room;
 }
-export function makeRoom(runtime:Runtime,model:string,mode:string,initiator:Initiator) {
+export function makeRoom(runtime:Runtime,model:string,mode:string,initiator:Initiator,vendor?:Vendor) {
  const p=owner(runtime,initiator),old=p.registry.get('room');if(old)free(p,old,'разговор без роли сейчас отвечает');
- const room=makeRoomIn(p,runtime,model,mode);if(!room)throw new RuntimeError('model_unknown','не удалось создать разговор без роли',400);
+ const room=makeRoomIn(p,runtime,model,mode,vendor);if(!room)throw new RuntimeError('model_unknown','не удалось создать разговор без роли',400);
  p.state.savePanes(p.registry,p.journal);void runtime.kick('room');return room.settings();
 }
-export function roomSet(runtime:Runtime,input:{model?:unknown;folder?:unknown},initiator:Initiator) {
- const p=owner(runtime,initiator),model=pythonTrim(String(input.model||''));if(!model||!vendorOf(p,model))throw new RuntimeError('model_unknown','модель не из каталога',400);
- return {ok:true as const,pane:makeRoom(runtime,model,input.folder===undefined||pyTruthy(input.folder)?'read':'chat',initiator)};
+export function roomSet(runtime:Runtime,input:{model?:unknown;folder?:unknown;vendor?:unknown},initiator:Initiator) {
+ const p=owner(runtime,initiator),model=pythonTrim(String(input.model||'')),mode=input.folder===undefined||pyTruthy(input.folder)?'read':'chat';if(input.vendor!==undefined&&(typeof input.vendor!=='string'||!p.registry.providers.has(input.vendor)))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);const vendor=typeof input.vendor==='string'?input.vendor:vendorOf(p,model);if(vendor)runtime.validateTurn(vendor,mode);if(!model||!vendor||!p.registry.models[vendor]?.some(m=>m.id===model))throw new RuntimeError('model_unknown','модель не из каталога',400);
+ return {ok:true as const,pane:makeRoom(runtime,model,mode,initiator,vendor)};
 }
 function moveInput(p:ProjectState,source:Chat):Chat {
  const text=transcriptText(source.transcript),carry=text&&!source.carry.endsWith(text)?(source.carry?source.carry+'\n\n':'')+text:source.carry;

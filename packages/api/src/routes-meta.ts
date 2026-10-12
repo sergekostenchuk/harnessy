@@ -31,8 +31,8 @@ export function metaRoutes(r:Runtime):Route[]{return [
  {method:'GET',path:'/api/spend',style:'J',handle:async({query})=>json(await spend(r,query))},
  {method:'GET',path:'/api/spend/turns',style:'J',handle:async({query})=>json(await spendTurns(r,query))},
  {method:'GET',path:'/api/status',handle:async()=>{
- const {p,claude,codex,models}=await metadata(r);
- return json({project:p.dir,trace:{instanceId:p.trace.instanceId,...p.trace.status},defaultDir:r.defaultDir,limits:r.limitsSnapshot(),models:{claude:CLAUDE_MODELS,codex:models},modes:MODES,kinds:KINDS,
+ const {p,claude,codex,models}=await metadata(r),programs=r.providerOperations.modelSnapshot();
+ return json({project:p.dir,trace:{instanceId:p.trace.instanceId,...p.trace.status},defaultDir:r.defaultDir,limits:r.limitsSnapshot(),models:{...programs.models,claude:CLAUDE_MODELS,codex:models},turnModes:{...programs.turnModes,claude:{read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true},check:{ok:true},web:{ok:true},ask:{ok:true}},codex:{read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true},check:{ok:true},web:{ok:true},ask:{ok:true}}},modes:MODES,kinds:KINDS,
  ownerKinds:['task','question','note','stop','resume','decision'],lineErrors:[...p.lineErrors],policy:{version:p.policy?.version??null,path:p.policy?.path??null},
  team:{path:p.team?join(p.team.harnessDir,'team.yaml'):null,integrationBranch:p.team?.integrationBranch??null,mergeRoles:p.team?.mergeRoles??[]},repo:p.repoRoot,
  panes:[...p.registry.panes.values()].map(pane=>({...pane.settings(),pending:p.journal.pendingFor(pane.id).length,status:pane.status,waiting:r.waiting(pane.id)})),

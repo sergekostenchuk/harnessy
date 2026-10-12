@@ -1,5 +1,9 @@
 export type Mode = 'chat'|'read'|'check'|'web'|'ask'|'edit'|'all';
-export type Vendor = 'claude'|'codex';
+export type Vendor = string;
+export type BuiltinVendor = 'claude'|'codex';
+export interface TurnModeSupport {ok:boolean;reason?:string;note?:string}
+export type TurnModes=Record<'read'|'edit'|'all',TurnModeSupport>&Partial<Record<Mode,TurnModeSupport>>;
+export const providerId=(v:unknown):v is string=>typeof v==='string'&&/^[a-z][a-z0-9-]*$/.test(v)&&!['human','owner','harness'].includes(v);
 export interface Seat { id:string; vendor:Vendor; label:string; model:string; mode:Mode; cwd:string; sessionId:string|null; writePaths:string[]; worktree:string|null }
 /** input is fresh input only; cacheRead is disjoint. Missing/invalid measurements stay null. */
 export interface Usage {input:number|null;output:number|null;cacheRead:number|null}
@@ -67,7 +71,7 @@ export function snapshot(seat:Seat,ctx:TurnContext):Seat {
  !(seat.sessionId===null||typeof seat.sessionId==='string')||!(seat.worktree===null||typeof seat.worktree==='string'))
  throw new ProviderError('protocol','invalid Seat');
  if(!record(ctx)||!ctx.signal||typeof ctx.signal.addEventListener!=='function'||typeof ctx.signal.aborted!=='boolean'||
- (ctx.modelStarted!==undefined&&typeof ctx.modelStarted!=='function')||!record(ctx.env)||!record(ctx.tools)||!Array.isArray(ctx.peers)||!ctx.peers.every(p=>record(p)&&typeof p.id==='string'&&typeof p.label==='string'&&['claude','codex'].includes(p.vendor as string))||
+ (ctx.modelStarted!==undefined&&typeof ctx.modelStarted!=='function')||!record(ctx.env)||!record(ctx.tools)||!Array.isArray(ctx.peers)||!ctx.peers.every(p=>record(p)&&typeof p.id==='string'&&typeof p.label==='string'&&providerId(p.vendor))||
  !Array.isArray(ctx.writableRoots)||!ctx.writableRoots.every(p=>typeof p==='string')||typeof ctx.roleNote!=='string'||typeof ctx.relayDepth!=='number'||
  !(ctx.projectDir===null||typeof ctx.projectDir==='string')||typeof ctx.appUrl!=='string'||
  ['publish','askApproval','session','setHandle','registerProcessToken','revokeProcessToken'].some(k=>typeof (ctx as unknown as Record<string,unknown>)[k]!=='function')||
