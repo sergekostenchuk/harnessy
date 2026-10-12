@@ -73,7 +73,6 @@ export class CliProvider {
  async listSessions(cwd:string){if(!this.d.sessions)throw new ProviderError('capability_unsupported','CLI не предоставляет список сессий');return this.query(this.d.sessions.list(cwd),undefined,cwd)}
  async sessionMessages(cwd:string,id:string){if(!this.d.sessions)throw new ProviderError('capability_unsupported','CLI не предоставляет историю сессии');return this.query(this.d.sessions.messages(cwd,id),undefined,cwd)}
  /** Optional preparation runs inside the active turn; final binding checks still follow all its awaits. */
- protected prepareModel?(input:CliTurnInput,ctx:CliContext):Promise<void>;
  async runTurn(seat:CliSeat,message:string,original:CliContext){
   if(this.d.turnUnavailableReason)throw new ProviderError('capability_unsupported',this.d.turnUnavailableReason,seat?.sessionId??null);
   const input=inputSnapshot(seat,message,original,this.vendor);seat=input.seat;
@@ -96,7 +95,6 @@ export class CliProvider {
    for(const e of events){if(!e||typeof e.type!=='string'||result)throw protocol('событие после результата');
     if(e.type==='session')session(e.id);
     else if(e.type==='delta'){if(!text(e.text))throw protocol('неверный текст');delta(e.text)}
-    else if(e.type==='warning'){if(!text(e.id)||!e.id||!text(e.code)||!e.code||!text(e.text))throw protocol('неверное предупреждение');ctx.traceEvent?.({id:clean(e.id),name:'provider',phase:'warning',reason:clean(e.code),error:clean(e.text)})}
     else if(e.type==='tool.call'){if(!text(e.id)||!e.id||!text(e.name)||!e.name||calls.has(e.id))throw protocol('неверный вызов инструмента');calls.set(e.id,e.name);ctx.publish({type:'tool',name:clean(e.name),detail:clean(JSON.stringify(e.input??{})).slice(0,300)});ctx.traceEvent?.({id:clean(e.id),name:clean(e.name),phase:'call',data:safe(e.input)})}
     else if(e.type==='tool.result'){const name=calls.get(e.id);if(!name||!['ok','failed','rejected','timeout','cancelled'].includes(e.outcome))throw protocol('неверный результат инструмента');ctx.traceEvent?.({id:clean(e.id),name:clean(name),phase:'result',data:safe(e.output),outcome:e.outcome,...(e.reason?{reason:clean(e.reason)}:{})});calls.delete(e.id);if(e.outcome!=='ok')ctx.publish({type:'toolError',text:clean(e.reason||'инструмент завершился: '+e.outcome)})}
     else if(e.type==='error'){if(!text(e.text)||!['not_logged_in','session_missing','model_unsupported','protocol','transport_lost','cancelled','busy','cwd_changed','turn_failed','unknown_request','models_unavailable','mode_unsupported','permission_denied','capability_unsupported'].includes(e.code))throw protocol('неверная ошибка провайдера');throw new ProviderError(e.code,clean(e.text),sessionId)}
@@ -117,7 +115,6 @@ export class CliProvider {
    const resume=seat.sessionId?this.d.resume!(seat.sessionId):[];if(!strings(resume))throw protocol('неверное возобновление');
    const auth=await waitWithSignal(()=>this.auth(signal),signal);if(!auth.loggedIn&&!(this.d.allowUnverifiedLogin&&auth.state==='unknown'))throw new ProviderError('not_logged_in',this.d.name+': выполните вход через программу',sessionId);
    const models=await waitWithSignal(()=>this.models(signal),signal);if(!models.some(m=>m.id===seat.model))throw new ProviderError('model_unsupported','CLI: модель отсутствует в каталоге',sessionId);
-   if(this.prepareModel)await waitWithSignal(()=>this.prepareModel!(input,ctx),signal);
    const state=this.d.state;if(state){const project=ctx.stateProjectDir??ctx.projectDir;if(!project)throw protocol('нет привязки проекта для состояния CLI');lease=new CliStateStore(state.namespace,this.deps.stateRoot).acquire(project,seat.id)}
    const stateArgs=lease?state!.args(lease.path):[];if(!strings(stateArgs))throw protocol('неверные флаги состояния');
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);

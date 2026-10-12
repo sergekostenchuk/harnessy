@@ -64,3 +64,9 @@ test('21b secrets: cancellation drops a buffered credential prefix and a partial
  const run=new ApiAgent('local',{service:()=>model.service}).runTurn(h.seat,'task',h.ctx),rejected=assert.rejects(run,{code:'cancelled'});await entered.promise;h.controller.abort();await rejected;release.resolve();assert.equal(h.events.filter(e=>e.type==='delta').length,0);
  const h2=agentFixture(t),failed=modelDouble(()=>[{type:'text-delta',index:0,text:secret.slice(0,9)},{type:'finish',reason:'error',failure:{code:'transport',reason:'fixture failure',retryable:true},usage:null}],{mode:'always'});failed.protection.add(secret);await assert.rejects(new ApiAgent('local',{service:()=>failed.service}).runTurn(h2.seat,'task',h2.ctx),{code:'turn_failed'});assert.equal(failed.requests.length,1);
 });
+
+for(const action of ['cancel','reset'])test('21d: '+action+' during asynchronous model discovery prevents a late inference',async t=>{
+ const h=agentFixture(t),entered=deferred(),release=deferred(),model=modelDouble(()=>[end()]);let signal:AbortSignal|undefined;
+ const agent=new ApiAgent('local',{service:async s=>{signal=s;entered.resolve();await release.promise;return model.service}}),run=agent.runTurn(h.seat,'pending discovery',h.ctx),stopped=assert.rejects(run,{code:'cancelled'});await entered.promise;
+ if(action==='cancel')h.controller.abort();else await agent.reset();await stopped;assert.equal(signal!.aborted,true);release.resolve();await Promise.resolve();assert.equal(model.requests.length,0);assert.equal(h.events.filter(e=>e.type==='delta').length,0);
+});

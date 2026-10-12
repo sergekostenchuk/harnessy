@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {realpathSync} from 'node:fs';
 import {OllamaModels,OLLAMA_URL,OLLAMA_CLOUD_URL} from './ollama-models.ts';
 import {OllamaProvider} from './ollama.ts';
 import {cliFixture} from './cli/test-support.ts';
+import {ollamaTurnProvider} from './ollama-test-helpers.ts';
 const budget={timeout:8000};
 const deferred=<T=void>()=>{let resolve!:(value:T)=>void;const promise=new Promise<T>(r=>resolve=r);return {promise,resolve}};
 interface Pull {model:string;signal:AbortSignal;complete(ok?:boolean):void;aborted:boolean}
@@ -24,8 +26,8 @@ function daemon(){
 
 test('348: two provider turns share one missing-model operation and start twice after one pull',budget,async t=>{
  const d=daemon(),f=await cliFixture(t,'probe');let turns=0;
- const p=new OllamaProvider({temporaryDirectory:f.dir,env:{},fetch:d.fetcher,execute:async(_r,_s,h)=>{turns++;const stdout=[{type:'thread.started',thread_id:'session-'+turns},{type:'turn.started'},{type:'item.completed',item:{id:'message',type:'agent_message',text:'ready'}},{type:'turn.completed',usage:{input_tokens:1,output_tokens:1,cached_input_tokens:0}}].map(e=>JSON.stringify(e)).join('\n')+'\n';h?.started?.();h?.stdout?.(stdout);return {stdout,stderr:'',code:0,signal:null}}});t.after(()=>{d.finish();return p.close()});
- const seat={...f.seat,vendor:'ollama',model:'alpha:cloud',cwd:f.dir};const a=p.runTurn({...seat,id:'first'},'one',f.ctx),b=p.runTurn({...seat,id:'second'},'two',f.ctx);const both=Promise.all([a,b]);await d.count(1);assert.equal(turns,0);d.pulls[0]!.complete();await both;assert.equal(d.pulls.length,1);assert.equal(turns,2);
+ const p=ollamaTurnProvider(new OllamaProvider({temporaryDirectory:f.dir,env:{},fetch:d.fetcher}),async(url)=>{assert.equal(String(url),OLLAMA_URL+'/v1/chat/completions');turns++;const body={id:'fixture',object:'chat.completion.chunk',model:'alpha:cloud',created:1,choices:[{index:0,delta:{role:'assistant',content:'ready'},finish_reason:'stop'}],usage:{prompt_tokens:1,completion_tokens:1,total_tokens:2}};return new Response('data: '+JSON.stringify(body)+'\n\ndata: [DONE]\n\n',{headers:{'Content-Type':'text/event-stream'}})});t.after(()=>{d.finish();return p.close()});
+ const seat={...f.seat,vendor:'ollama',model:'alpha:cloud',cwd:realpathSync(f.dir)};const a=p.runTurn({...seat,id:'first'},'one',f.ctx),b=p.runTurn({...seat,id:'second'},'two',f.ctx);const both=Promise.all([a,b]);await d.count(1);assert.equal(turns,0);d.pulls[0]!.complete();await both;assert.equal(d.pulls.length,1);assert.equal(turns,2);
 });
 
 for(const cancelled of [0,1])test('348: cancelling subscriber '+cancelled+' keeps the shared request for the other subscriber',budget,async t=>{

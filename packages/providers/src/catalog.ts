@@ -28,7 +28,8 @@ export interface CatalogEntry {
  id:string;title:string;kind?:CatalogRow['kind'];subtitle?:string;service?():Promise<CatalogService>;binary:string;login:CliCommand;forbiddenEnv:readonly string[];capabilities:CatalogRow['capabilities'];routes?:string;
  allowUnverifiedLogin?:boolean;allowUnverifiedProbe?:boolean;probeMode?:'read'|'all';unavailableReason?:string;modelsReason?:string;staticModels?:readonly CliModel[];
  modelsWithoutLogin?:true;modelsWarning?():string|undefined;
- version(signal?:AbortSignal):Promise<string>;auth(signal?:AbortSignal):Promise<CliAuth>;models(signal?:AbortSignal):Promise<CliModel[]>;
+ version(signal?:AbortSignal):Promise<string>;auth(signal?:AbortSignal):Promise<CliAuth>;models(signal?:AbortSignal,refresh?:boolean):Promise<CliModel[]>;
+ prepareModel?(model:string,signal:AbortSignal):Promise<void>;
  limits?(signal?:AbortSignal):Promise<ProviderLimits>;
  runTurn(seat:CliSeat,message:string,ctx:CliContext):Promise<{text:string;sessionId:string|null;interrupted?:boolean}>;
  reset?():Promise<void>;listSessions?:Provider['listSessions'];sessionMessages?:Provider['sessionMessages'];
