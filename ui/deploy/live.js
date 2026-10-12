@@ -101,7 +101,8 @@
     const project=H.project,changing=!!body&&/^\/api\/(?:project(?:\/create)?|room\/move|assign|chats\/[^/]+\/orchestrator)$/.test(p);
     if(changing){H.projectRequestGeneration=(H.projectRequestGeneration||0)+1;H.projectLinkChange=true}
     const captured=Object.assign(operation||{},captureProjectOperation(p,body)),trace=typeof traceRequest==='function'?traceRequest(operation):null;let response=null;
-    return fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json',...(trace?trace.headers:{})},body:JSON.stringify(body)}:trace?{headers:trace.headers}:undefined).then(r=>{response=r;if(operation)operation.httpStatus=r.status;return r.json()}).then(r=>{
+    const init=body?{method:'POST',headers:{'Content-Type':'application/json',...(trace?trace.headers:{})},body:JSON.stringify(body)}:trace?{headers:trace.headers}:undefined;
+    return fetch(p,operation?.signal?{...init,signal:operation.signal}:init).then(r=>{response=r;if(operation)operation.httpStatus=r.status;return r.json()}).then(r=>{
       if(!projectOperationCurrent(captured,r)){if(trace)traceReply(trace,r,true,response);return {ok:false,code:'binding_changed',error:'Привязка изменилась; ответ относится к прежнему выбору'}}if(trace)traceReply(trace,r,false,response);
       if(changing&&(!r.ok||r.project===project))H.projectLinkChange=false;
       if(changing&&r.ok&&typeof r.project==='string'&&window.HARNESS_BOOT)window.HARNESS_BOOT.select(r.project);
