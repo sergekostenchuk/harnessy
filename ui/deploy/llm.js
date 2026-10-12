@@ -51,7 +51,7 @@
  async function action(kind){const d=draft;if(!active(d)||d.busy)return;
   if(kind==='manual'){const id=field('manual').value.trim();if(!id)return;if(!d.models.some(m=>m.id===id))d.models.push({id,name:id});d.selected.add(id);d.edit++;field('manual').value='';modelList(d);return}
   if(kind==='reload'){await load();if(active(d))await open(d.id);return}
-  if((kind==='delete'||kind==='delete-key')&&!confirm(kind==='delete'?'Удалить подключение и его ключ?':'Удалить сохранённый ключ? Новые вызовы этого маршрута потребуют ключ.'))return;
+  if((kind==='delete'||kind==='delete-key')&&!confirm(kind==='delete'?'Удалить подключение и его ключ?':'Удалить сохранённый ключ? Новые вызовы этого подключения потребуют ключ.'))return;
   let data;try{data=kind==='save'||kind==='discover'?config(d,kind==='save'):{id:d.id}}catch(e){status(d,(kind==='save'?'Подключение не сохранено. ':'')+e.message,true);return}
   const edit=d.edit,secret=field('secret').value;d.busy=true;d.saving=kind!=='discover';controls(d);status(d,kind==='discover'?'Ищу модели…':'Сохраняю…');
   const body=kind==='discover'?{...data,...(secret?{secret}:{})}:kind==='save'?{config:data.config,revision:d.revision,...(secret?{secret}:{})}:{revision:d.revision};

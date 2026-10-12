@@ -22,7 +22,7 @@ const data=(project='/a',extra:any={})=>({ok:true,project,routes:['direct','prox
 // The former write/editor tests move to the revisioned exit-chain component (TS-22c).
 // Billing and account-generation regressions below retain their existing coverage.
 test('22c: without the exits module, the old editor is absent and the read-only snapshot remains',{timeout:20000},async()=>{
- const v=ui(async path=>path==='/api/connections'?data():{ok:false});await v.settle();await v.find('[data-pv="claude"]').emit('click');assert.equal(v.document.querySelector('[data-rapply]'),null);assert.equal(v.document.querySelector('[data-rv]'),null);assert.match(v.find('.cbody').textContent,/Редактор выходов не загружен/);assert.equal(v.requests.some(r=>r.body),false);
+ const v=ui(async path=>path==='/api/connections'?data():{ok:false});await v.settle();await v.find('[data-pv="claude"]').emit('click');assert.equal(v.document.querySelector('[data-rapply]'),null);assert.equal(v.document.querySelector('[data-rv]'),null);assert.equal(v.document.querySelector('[data-rcheck]'),null);assert.match(v.find('.cbody').textContent,/Подключение не прочитано/);assert.equal(v.requests.some(r=>r.body),false);
 });
 
 test('211a: refreshing route data does not discard an unsaved subscription date in the same card',async()=>{

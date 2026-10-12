@@ -146,7 +146,7 @@ test('268/ОТСУТСТВИЕ: a real catalog HTTP 404 shows disabled design-co
  const h=await fixture(t);let connected=false,status=0;
  const v=ui(undefined,undefined,async(path,init)=>{if(path==='/api/providers/catalog'&&connected)return Response.json(catalog(provider()));const r=await fetch(h.api.url+(path==='/api/providers/catalog'?'/api/catalog-not-connected':path),init);if(path==='/api/providers/catalog')status=r.status;return r});
  v.H.project=h.dir;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();await v.find('#addbtn').emit('click');await v.settle();assert.equal(status,404);
- assert.match(v.find('.cbody').textContent,/макет.*маршрут каталога ещё не подключён/);assert.equal(v.document.querySelectorAll('.cbody [data-program-mock]').length,3);assert.match(v.find('.cbody').textContent,/Antigravity/);assert.match(v.find('.cbody').textContent,/GitHub Copilot/);
+ assert.match(v.find('.cbody').textContent,/макет.*каталог ещё не подключён/);assert.equal(v.document.querySelectorAll('.cbody [data-program-mock]').length,3);assert.match(v.find('.cbody').textContent,/Antigravity/);assert.match(v.find('.cbody').textContent,/GitHub Copilot/);
  for(const button of v.document.querySelectorAll('.cbody .conn-program button')){assert.equal(button.disabled,true);await button.emit('click')}
  assert.equal(v.posts().length,0);assert.equal(h.provider.calls.length,0);connected=true;await v.find('[data-program-refresh]').emit('click');await v.settle();assert.equal(v.document.querySelector('[data-program-mock]'),null);assert.equal(v.find('[data-program-open="antigravity"]').disabled,false);
 });
@@ -306,7 +306,7 @@ test('350: provider card exposes failed probe code, safe excerpt and measured du
 });
 
 for(const verification of ['verified','unverified'])test('22c: provider card shows observed relay status '+verification,{timeout:15000},async()=>{
- const v=ui(undefined,catalog(provider({network:{configured:true,verification}})));await open(v);assert.equal(v.find('[data-program-network]').textContent,'Программа ходит через выход: '+(verification==='verified'?'проверено':'не проверено'));assert.equal(v.posts().length,0);
+ const v=ui(undefined,catalog(provider({network:{configured:true,verification}})));await open(v);assert.equal(v.find('[data-program-network]').textContent,'Подключение программы: '+(verification==='verified'?'проверено':'не проверено'));assert.equal(v.posts().length,0);
 });
 
 for(const failure of ['region','blocked','offline','unresponsive'])test('TS-23e: provider recovery '+failure+' remains in the card and rechecks only after save-and-use',async()=>{
