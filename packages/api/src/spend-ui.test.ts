@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,writeFileSync} from 'node:fs';
 import {request} from 'node:http';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
-import {ProviderCatalog,ProviderError,type CatalogEntry,type ProviderLimits} from '@harnessy/providers';
+import {record,ProviderCatalog,ProviderError,type CatalogEntry,type ProviderLimits} from '@harnessy/providers';
 import {copilotFixture} from '../../providers/src/copilot-test-helpers.ts';
 import {fixture,call,deferred,until,sse,FakeProvider,FakeClock} from './test-helpers.ts';
 const read=(path:string)=>readFileSync(new URL('../../../'+path,import.meta.url),'utf8'),live=read('ui/deploy/live.js'),raw=read('ui/sketches/disarto/05-spend.html');
@@ -346,4 +346,20 @@ test('319: Copilot process → HTTP → widget renders measured billing periods,
  // Another provider may have a known duration and loaded turns; Copilot still cannot infer its own period start.
  v.context.PAGE='spend';const quota={...r.body,revision:r.body.revision+1,providers:[...r.body.providers.filter((p:any)=>p.vendor!=='claude'),{vendor:'claude',ok:true,sourceConnected:true,fetchedAt:Date.now()/1000,windows:[{label:'неделя',percentUsed:31,windowMinutes:10080,resetsAt:Date.now()/1000+3600}]}]};v.functions.limitEvent(quota);await v.functions.windows();
  const unknown={label:'месяц · премиум-запросы',percentUsed:25,resetsAt:Date.now()/1000+3600,windowMinutes:null};const usage=v.context.spWindowUsage(unknown,'copilot',false);assert.doesNotMatch(usage,/Наш проект за окно|Оценка к сбросу ≈|NaN|Infinity/);assert.match(usage,/недостаточно данных/);assert.equal(cli.capture().some(c=>c.turn),false);
+});
+
+for(const delivery of ['HTTP','SSE'])test('325: Copilot process → HTTP → '+delivery+' clears old percentages on confirmed unlimited, including the open detail card',async t=>{
+ const clock=new FakeClock(),cli=await copilotFixture(t),h=await fixture(t,{deps:{clock,providerCatalog:new ProviderCatalog([cli.entry])}});
+ const v=ui(async path=>(await call(h.api,path)).body);v.H.project=h.dir;v.context.PAGE='new';await v.functions.limits();await v.find('[data-spend-limits]').emit('click');
+ assert.equal(v.find('[data-limit-vendor="copilot"] [role="meter"]').getAttribute('aria-valuenow'),'25');
+ writeFileSync(cli.quotaFile,JSON.stringify({quotaSnapshots:{chat:{entitlementRequests:0},completions:{entitlementRequests:100,unlimited:true},premium_interactions:{entitlementRequests:0}}}));clock.advance(300000);
+ const changed=(await call(h.api,'/api/limits')).body,cp=changed.providers.find((p:any)=>p.vendor==='copilot');assert.equal(changed.ok,true);assert.equal(cp.ok,true);assert.equal(cp.code,'limits_unlimited');assert.equal(cp.reason,'все квоты Copilot безлимитны');assert.equal(cp.unlimited,true);assert.deepEqual(cp.windows,[]);assert.equal(cp.stale,false);
+ const trace=(await h.runtime.project.trace.read()).filter(e=>e.kind==='provider.limits'&&record(e.data)&&e.data.code==='limits_unlimited');assert.equal(trace.length,1);assert.equal(trace[0]!.outcome,'ok');assert.ok(record(trace[0]!.data));assert.equal(trace[0]!.data.reason,cp.reason);assert.doesNotMatch(JSON.stringify(trace),/alice|quotaSnapshots|entitlementRequests|FAKE-SECRET/);
+ if(delivery==='HTTP')await v.functions.limits();else v.functions.limitEvent(changed);
+ const check=()=>{const widget=v.find('[data-limit-vendor="copilot"]'),card=v.find('.limits-dialog').querySelectorAll('.sp-limit').find(n=>n.textContent.includes('Copilot'))!;for(const node of [widget,card]){assert.match(node.textContent,/безлимит/);assert.doesNotMatch(node.textContent,/25 %|нет данных|макет/);assert.equal(node.querySelector('[role="meter"]'),null)}};check();
+ // The same renderer is used by program cards on Connections and the Spend overview.
+ assert.match(v.context.spLimitHTML({id:'copilot'},true),/безлимит/);assert.match(v.context.spProvider({id:'copilot',name:'Copilot'}),/безлимит/);
+ writeFileSync(cli.quotaFile,JSON.stringify({quotaSnapshots:{premium_interactions:{entitlementRequests:300,remainingPercentage:75}}}));clock.advance(300000);
+ const failed=(await call(h.api,'/api/limits')).body;assert.equal(failed.providers.find((p:any)=>p.vendor==='copilot').code,'limits_unavailable');v.functions.limitEvent(failed);check();assert.match(v.find('[data-limit-vendor="copilot"]').textContent,/Copilot не передал дату сброса квоты/);assert.match(v.find('.limits-dialog').textContent,/устаревшие данные/);
+ writeFileSync(cli.quotaFile,JSON.stringify({quotaSnapshots:{premium_interactions:{entitlementRequests:300,usedRequests:120,resetDate:'2027-02-15T17:12:00+03:00'}}}));clock.advance(300000);await v.functions.limits();assert.equal(v.find('[data-limit-vendor="copilot"] [role="meter"]').getAttribute('aria-valuenow'),'40');assert.doesNotMatch(v.find('[data-limit-vendor="copilot"]').textContent,/безлимит/);assert.equal(cli.capture().some(c=>c.turn),false);
 });

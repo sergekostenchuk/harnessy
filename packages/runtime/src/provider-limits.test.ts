@@ -100,3 +100,24 @@ test('319: unknown window duration survives cache restart without manufacturing 
  const h=setup(t),s=h.create();h.result(async()=>{const v=live(h.clock);if(v.ok)v.windows[0]!.windowMinutes=null;return v});await s.refresh();assert.equal(s.snapshot().providers[0]!.ok,true);assert.equal(h.disk().value.windows[0].windowMinutes,null);
  const restart=h.create();await restart.refresh();const row=restart.snapshot().providers[0]!;assert.equal(row.ok,true);assert.equal(row.windows[0]!.percentUsed,25);assert.equal(row.windows[0]!.windowMinutes,null);assert.equal(h.reads,1);
 });
+
+const unlimited=():ProviderLimits=>({ok:false,code:'limits_unlimited',reason:'все квоты Copilot безлимитны'});
+test('325: confirmed unlimited replaces finite quota, survives TTL/restart and later accepts a finite measurement',async t=>{
+ const h=setup(t),s=h.create();await s.refresh();assert.equal(s.snapshot().providers[0]!.windows[0]!.percentUsed,25);
+ h.clock.advance(300000);h.result(async()=>unlimited());await s.refresh();
+ const check=(store:ProviderLimitsStore)=>{const row=store.snapshot().providers[0]!;assert.equal(row.ok,true);assert.equal(row.code,'limits_unlimited');assert.equal(row.reason,'все квоты Copilot безлимитны');assert.equal(row.unlimited,true);assert.deepEqual(row.windows,[]);assert.equal(row.stale,false);assert.deepEqual(store.snapshot().errors,[])};
+ check(s);assert.equal(h.disk().value.unlimited,true);assert.deepEqual(h.disk().value.windows,[]);assert.equal(h.disk().backoff,0);assert.equal(h.disk().nextAttemptAt,h.clock.now()+300000);
+ assert.deepEqual(h.diagnostics.at(-1),{vendor:'copilot',ok:true,code:'limits_unlimited',reason:'все квоты Copilot безлимитны',durationMs:0});
+ const restarted=h.create();await restarted.refresh();check(restarted);assert.equal(h.reads,2);assert.equal(h.diagnostics.length,2);
+ h.clock.advance(300000);h.result(async()=>({ok:false,code:'limits_rate_limited',reason:'private',retryAfterSeconds:720}));await s.refresh();const stale=s.snapshot().providers[0]!;assert.equal(stale.ok,false);assert.equal(stale.unlimited,true);assert.equal(stale.stale,true);assert.equal(stale.code,'limits_unavailable');assert.deepEqual(stale.windows,[]);assert.equal(stale.fetchedAt,h.disk().value.fetchedAt);
+ h.clock.advance(720000);h.result(async()=>live(h.clock));await s.refresh();const finite=s.snapshot().providers[0]!;assert.equal(finite.ok,true);assert.equal(finite.unlimited,undefined);assert.equal(finite.code,undefined);assert.equal(finite.windows[0]!.percentUsed,25);assert.equal(h.disk().value.unlimited,undefined);
+});
+test('325: unlimited is accepted only for the account verified before and after quota reading',async t=>{
+ const h=setup(t),s=h.create();await s.refresh();h.clock.advance(300000);h.result(async()=>{h.identity('b@github.com');return unlimited()});await s.refresh();const rejected=s.snapshot().providers[0]!;assert.equal(rejected.code,'login_changed');assert.equal(rejected.unlimited,undefined);assert.deepEqual(rejected.windows,[]);assert.equal(h.disk().value,null);
+ await s.refresh();assert.equal(s.snapshot().providers[0]!.account,'b@github.com');assert.equal(s.snapshot().providers[0]!.code,'limits_unlimited');
+ h.identity('c@github.com');h.result(async()=>({ok:false,code:'limits_unavailable',reason:'private'}));await s.refresh();assert.equal(s.snapshot().providers[0]!.unlimited,undefined);assert.equal(h.disk().value,null);
+});
+for(const tamper of ['missing-flag','finite-windows','missing-value'])test('325: invalid unlimited cache cannot masquerade as success: '+tamper,async t=>{
+ const h=setup(t),s=h.create();h.result(async()=>unlimited());await s.refresh();const raw=h.disk();if(tamper==='missing-flag')delete raw.value.unlimited;else if(tamper==='missing-value')raw.value=null;else {const finite=live(h.clock);if(finite.ok)raw.value.windows=finite.windows}
+ const file=join(h.dir,'copilot.json'),bytes=JSON.stringify(raw);writeFileSync(file,bytes);const restarted=h.create();await restarted.refresh();const row=restarted.snapshot().providers[0]!;assert.equal(row.ok,false);assert.equal(row.code,'limits_unavailable');assert.equal(row.unlimited,undefined);assert.equal(readFileSync(file,'utf8'),bytes);assert.equal(h.reads,1);
+});

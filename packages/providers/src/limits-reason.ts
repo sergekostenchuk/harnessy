@@ -3,6 +3,7 @@ import type {LimitsCode} from './types.ts';
 // Only engine-authored diagnostics cross the CLI/cache boundary. Never copy stderr,
 // account data or arbitrary provider error text, even if it looks like a reason.
 const reasons:Record<LimitsCode,string>={
+ limits_unlimited:'все квоты Copilot безлимитны',
  limits_unsupported:'Программа не предоставляет лимиты',limits_not_applicable:'У входа нет окон подписки',
  limits_auth:'Не удалось подтвердить вход для чтения лимитов',limits_rate_limited:'Программа просит повторить чтение лимитов позже',
  limits_unavailable:'Лимиты программы временно недоступны',limits_invalid:'Программа вернула неверный ответ лимитов',

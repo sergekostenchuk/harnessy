@@ -21,6 +21,7 @@ if(args.includes('--headless')){
  const account=readFileSync(process.env.CP_ACCOUNT,'utf8').trim(),login=scenario==='state-account'&&config.startsWith(process.env.CP_STATE)?'different':account;
  let result=req.method==='auth.getStatus'?{isAuthenticated:scenario!=='logged-out',authType:'user',login,host:'https://github.com'}:{models:[{id:'cp-model',name:'Copilot Model',capabilities:{}},{id:'disabled-model',name:'Disabled',capabilities:{},policy:{state:'disabled'}}]};
  if(req.method==='account.getQuota')result={quotaSnapshots:{premium_interactions:{entitlementRequests:300,remainingPercentage:75,resetDate:'2026-11-01T00:00:00Z'}}};
+ if(req.method==='account.getQuota'&&existsSync(process.env.CP_QUOTA))result=JSON.parse(readFileSync(process.env.CP_QUOTA,'utf8'));
  if(scenario==='missing-reset'&&req.method==='account.getQuota')delete result.quotaSnapshots.premium_interactions.resetDate;
  if(scenario==='live-quota-shape'&&req.method==='account.getQuota')result={quotaSnapshots:Object.fromEntries(['chat','completions','premium_interactions'].map(key=>[key,{entitlementRequests:key==='premium_interactions'?0:100,usedRequests:0,remainingPercentage:100,overage:0,overageAllowedWithExhaustedQuota:false,resetDate:'2026-10-11T23:00:14.764-07:00'}]))};
  if(scenario==='billing-period'&&req.method==='account.getQuota')result={quotaSnapshots:{chat:{entitlementRequests:0},premium_interactions:{entitlementRequests:300,usedRequests:75,remainingPercentage:99,overage:0,overageAllowedWithExhaustedQuota:false,resetDate:'2026-10-11T23:00:14.764-07:00'},completions:{entitlementRequests:100,remainingPercentage:90,resetDate:'2026-10-11T23:00:14.764-07:00'}}};
@@ -55,9 +56,9 @@ if(args.includes('--headless')){
 }
 `;
 export async function copilotFixture(t:TestContext,scenario='ok'){
- const h=await cliFixture(t,'probe'),binary=join(h.dir,'copilot fixture.mjs'),log=join(h.dir,'copilot.ndjson'),account=join(h.dir,'account.txt'),stateRoot=join(h.dir,'private-providers');
+ const h=await cliFixture(t,'probe'),binary=join(h.dir,'copilot fixture.mjs'),log=join(h.dir,'copilot.ndjson'),account=join(h.dir,'account.txt'),quotaFile=join(h.dir,'quota.json'),stateRoot=join(h.dir,'private-providers');
  writeFileSync(binary,'#!'+process.execPath+'\n'+program,{mode:0o700});writeFileSync(account,'alice');mkdirSync(stateRoot);
- const env={...process.env,CP_LOG:log,CP_CASE:scenario,CP_ACCOUNT:account,CP_STATE:realpathSync(stateRoot),COPILOT_GITHUB_TOKEN:'FAKE-SECRET',COPILOT_HOME:'/foreign',COPILOT_ALLOW_ALL:'true',COPILOT_PROVIDER_API_KEY:'FAKE-KEY',GITHUB_TOKEN:'FAKE-TOKEN',PANE_TOKEN:'foreign-token'};
+ const env={...process.env,CP_LOG:log,CP_CASE:scenario,CP_ACCOUNT:account,CP_QUOTA:quotaFile,CP_STATE:realpathSync(stateRoot),COPILOT_GITHUB_TOKEN:'FAKE-SECRET',COPILOT_HOME:'/foreign',COPILOT_ALLOW_ALL:'true',COPILOT_PROVIDER_API_KEY:'FAKE-KEY',GITHUB_TOKEN:'FAKE-TOKEN',PANE_TOKEN:'foreign-token'};
  const description={...COPILOT,binary},deps={env,cwd:h.dir,temporaryDirectory:h.dir,stateRoot,probeTimeoutMs:5000,turnTimeoutMs:5000},provider=new CliProvider(description,deps);t.after(()=>provider.close());
- return {...h,provider,description,deps,stateRoot,account,seat:{...h.seat,vendor:'copilot',model:'cp-model'},entry:cliEntry(description,deps),capture:():any[]=>existsSync(log)?readFileSync(log,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[]};
+ return {...h,provider,description,deps,stateRoot,account,quotaFile,seat:{...h.seat,vendor:'copilot',model:'cp-model'},entry:cliEntry(description,deps),capture:():any[]=>existsSync(log)?readFileSync(log,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[]};
 }

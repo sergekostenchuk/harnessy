@@ -63,7 +63,7 @@ export class CliProvider {
  async limits(signal?:AbortSignal):Promise<ProviderLimits>{
   if(!this.d.limits)return {ok:false,code:'limits_unsupported',reason:this.d.name+': CLI не отдаёт лимиты'};
   try{const r=await this.query(this.d.limits,signal);if(!r||typeof r.ok!=='boolean')throw protocol('неверные лимиты');
-   if(!r.ok){if(!['limits_unsupported','limits_not_applicable','limits_auth','limits_rate_limited','limits_unavailable','limits_invalid','limits_timeout','limits_storage'].includes(r.code)||!text(r.reason))throw protocol('неверные лимиты');return {...r,reason:limitsReason(r.code,r.reason)}}
+   if(!r.ok){if(!['limits_unlimited','limits_unsupported','limits_not_applicable','limits_auth','limits_rate_limited','limits_unavailable','limits_invalid','limits_timeout','limits_storage'].includes(r.code)||!text(r.reason))throw protocol('неверные лимиты');return {...r,reason:limitsReason(r.code,r.reason)}}
    if(!(r.plan===null||text(r.plan))||!text(r.source)||!Number.isFinite(r.fetchedAt)||!Array.isArray(r.windows)||r.windows.some(w=>!w||!text(w.label)||!Number.isFinite(w.percentUsed)||w.percentUsed<0||w.percentUsed>100||!(w.windowMinutes===null||Number.isFinite(w.windowMinutes)&&w.windowMinutes>0)||!(w.resetsAt===null||Number.isFinite(w.resetsAt)&&w.resetsAt>0)))throw protocol('неверные лимиты');return r;
   }catch(e){const code=signal?.aborted||e instanceof ProviderError&&e.code==='cancelled'?'limits_timeout':'limits_invalid';return {ok:false,code,reason:limitsReason(code,e instanceof ProviderError?e.message:undefined)}}
  }

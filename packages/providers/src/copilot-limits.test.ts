@@ -17,12 +17,13 @@ test('319: counts win over rounded remaining percent; percentage-only snapshots 
 });
 test('319: unlimited or zero-entitlement snapshots are excluded without requiring their unused counters or reset',()=>{
  const v=read({chat:{entitlementRequests:0},completions:{entitlementRequests:100,unlimited:true},premium_interactions:row});assert.equal(v.ok,true);if(v.ok)assert.deepEqual(v.windows.map(w=>w.label),['месяц · премиум-запросы']);
- assert.deepEqual(read({chat:{entitlementRequests:0}}),{ok:false,code:'limits_unavailable',reason:reason.empty});
+ // 325 cancels the old unavailable outcome: an observed unlimited quota replaces finite windows.
+ for(const quota of [{entitlementRequests:0},{entitlementRequests:100,unlimited:true}])assert.deepEqual(read({chat:quota}),{ok:false,code:'limits_unlimited',reason:'все квоты Copilot безлимитны'});
 });
 test('319: absent or invalid quota fields refuse rather than masquerading as a measured zero',()=>{
  assert.deepEqual(read({}),{ok:false,code:'limits_unavailable',reason:reason.empty});
  assert.deepEqual(read({premium_interactions:{...row,resetDate:undefined}}),{ok:false,code:'limits_unavailable',reason:reason.resetMissing});
  for(const resetDate of ['bad','0','2026-11-15',null,123])assert.deepEqual(read({premium_interactions:{...row,resetDate}}),{ok:false,code:'limits_invalid',reason:reason.resetInvalid});
  for(const patch of [{entitlementRequests:undefined},{entitlementRequests:'300'},{entitlementRequests:-1},{usedRequests:null},{usedRequests:'75'},{usedRequests:-1},{usedRequests:301},{usedRequests:undefined,remainingPercentage:undefined},{remainingPercentage:101},{unlimited:'yes'}])assert.throws(()=>read({premium_interactions:{...row,...patch}}),{code:'protocol'});
- for(const snapshot of [null,{x:null}])assert.throws(()=>read(snapshot),{code:'protocol'});
+ for(const snapshot of [null,{x:null},{chat:{entitlementRequests:0},x:null}])assert.throws(()=>read(snapshot),{code:'protocol'});
 });
