@@ -1,5 +1,6 @@
 import {ProviderError} from './types.ts';
-import type {CliAuth,CliModel,CliProbe,CliUnavailableDescriptor} from './cli/types.ts';
+import type {CliAuth,CliModel,CliProbe,CliDescriptor} from './cli/types.ts';
+import {opencodeStream} from './opencode-stream.ts';
 
 // OpenCode 1.18.4 --help; https://docs.opencode.ai/docs/config/:
 // OPENCODE_CONFIG and OPENCODE_CONFIG_CONTENT merge with global/project MCP.
@@ -33,8 +34,13 @@ export const opencodeModels:CliProbe<CliModel[]>={command:{args:['models','--pur
  const text=r.stdout.trim();if(!text)return [];const ids=text.split(/\r?\n/),seen=new Set<string>();
  return ids.map(id=>{if(id.length>512||!/^[A-Za-z0-9._-]+\/[A-Za-z0-9@~._:+/-]+$/.test(id)||seen.has(id))throw invalid('моделей');seen.add(id);return {id,label:id}});
 }};
-export const OPENCODE:CliUnavailableDescriptor={
+export const OPENCODE:CliDescriptor={
  id:'opencode',name:'OpenCode',binary:'opencode',login:{args:['auth','login']},version:opencodeVersion,auth:opencodeAuth,models:opencodeModels,modelsWithoutLogin:true,
  forbiddenEnv:['PANE_TOKEN','APP_URL','PANE_ID','SEATS'],
- capabilities:{headless:true,resume:false,mcp:false,limits:false},unavailableReason:OPENCODE_UNAVAILABLE,
+ allowUnverifiedLogin:true,allowUnverifiedProbe:true,
+ noHarnessMcp:true,turnNotes:{all:'без инструментов Harnessy'},turnReasons:{read:OPENCODE_UNAVAILABLE,edit:OPENCODE_UNAVAILABLE},
+ modes:{all:()=>['--auto']},
+ turn:{format:'stream-json',command:i=>({args:['run','--format','json','--model',i.seat.model,i.roleNote+'\n\n'+i.message]}),decoder:opencodeStream},
+ resume:id=>{if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(id))throw new ProviderError('session_missing','OpenCode: неверная сессия');return ['--session',id]},
+ failure:()=>({code:'turn_failed',text:'OpenCode: ход не выполнен; проверьте вход в программе'}),
 };

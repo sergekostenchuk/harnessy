@@ -1,5 +1,6 @@
 import {limitsReason} from '../limits-reason.ts';
-import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,writeFile,rm,open} from 'node:fs/promises';
+import {constants} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -20,6 +21,7 @@ function descriptor(d:CliDescriptor):CliDescriptor{
  if(!d||!text(d.id)||!/^[a-z][a-z0-9-]*$/.test(d.id)||['claude','codex'].includes(d.id)||!text(d.name)||!d.name||!text(d.binary)||!d.binary||!record(d.modes)||!strings(d.forbiddenEnv)||!d.turn||!['json','stream-json','text'].includes(d.turn.format)||typeof d.turn.command!=='function'||d.turn.format!=='text'&&typeof d.turn.decode!=='function'&&typeof d.turn.decoder!=='function'||(!d.mcp&&!d.noHarnessMcp)||(d.mcp&&(typeof d.mcp.args!=='function'||typeof d.mcp.serialize!=='function'))||d.resume!==undefined&&typeof d.resume!=='function')throw protocol('неверный описатель провайдера');
  for(const [mode,value] of Object.entries(d.modes))if(!['chat','read','check','web','ask','edit','all'].includes(mode)||typeof value!=='function')throw protocol('неверное соответствие режима '+mode);
  if(d.turnUnavailableReason!==undefined&&(!text(d.turnUnavailableReason)||!d.turnUnavailableReason.trim()))throw protocol('нет причины недоступности хода');
+ if(d.turn.sessionFile&&(typeof d.turn.sessionFile.args!=='function'||typeof d.turn.sessionFile.parse!=='function'))throw protocol('неверный описатель экспорта сессии');
  if(d.state&&(!/^[a-z][a-z0-9-]*$/.test(d.state.namespace)||typeof d.state.args!=='function'))throw protocol('неверный описатель состояния');
  if(!d.auth||!('file'in d.auth)&&!('command'in d.auth)&&!('unavailableReason'in d.auth))throw protocol('нет проверки входа');
  if('unavailableReason'in d.auth&&(!text(d.auth.unavailableReason)||!d.auth.unavailableReason.trim()||/[\x00-\x1f\x7f]/.test(d.auth.unavailableReason)))throw protocol('нет причины недоступности проверки входа');
@@ -124,14 +126,29 @@ export class CliProvider {
     if(!text(config)||!config||!strings(mcpArgs))throw protocol('нет конфигурации MCP');
     await writeFile(path,config,{encoding:'utf8',mode:0o600,flag:'wx'});
    }
+   let sessionFile='',sessionArgs:string[]=[];
+   if(this.d.turn.sessionFile){
+    directory||=await mkdtemp(join(this.deps.temporaryDirectory,'harnessy-cli-'));
+    sessionFile=join(directory,'turn.json');sessionArgs=this.d.turn.sessionFile.args(sessionFile);
+    if(!strings(sessionArgs)||!sessionArgs.length)throw protocol('неверные флаги экспорта сессии');
+   }
    const c=command(this.d.turn.command(input));
    if(lease){lease.validate();if(!('command'in this.d.auth))throw protocol('изолированный вход должен проверяться программой');const current=await this.query(this.d.auth,signal,seat.cwd,stateArgs);if(!current.loggedIn||!current.email||current.email!==auth.email)throw new ProviderError('login_changed','Вход приватного состояния отличается; подтвердите вход заново')}
    if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),signal);
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    lease?.validate(); // No await between the final path check and process creation.
-   const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...stateArgs,...mcpArgs],cwd:seat.cwd,env:{...this.environment(ctx.env),...configEnv},timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:stream,started:()=>ctx.modelStarted?.()});
+   const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...stateArgs,...mcpArgs,...sessionArgs],cwd:seat.cwd,env:{...this.environment(ctx.env),...configEnv},timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:stream,started:()=>ctx.modelStarted?.()});
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    if(exit.code!==0||exit.signal){const failure=this.d.failure?.(exit);throw new ProviderError(failure?.code??'transport_lost',clean(failure?.text??'CLI: процесс завершился без успешного ответа'),sessionId)}
+   if(sessionFile){
+    let id:string;
+    try{const fd=await open(sessionFile,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);try{
+     const stat=await fd.stat();if(!stat.isFile()||stat.size>this.deps.maxBytes)throw Error();
+     const bytes=Buffer.alloc(this.deps.maxBytes+1),{bytesRead}=await fd.read(bytes,0,bytes.length,0);if(bytesRead>this.deps.maxBytes)throw Error();
+     id=this.d.turn.sessionFile!.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes.subarray(0,bytesRead)));
+    }finally{await fd.close()}}catch{throw protocol('сессия не получена из результата хода')}
+    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);session(id);
+   }
    if(this.d.turn.format==='json')parse(exit.stdout);else if(this.d.turn.format==='stream-json'&&pending.trim())parse(pending.trim());else if(this.d.turn.format==='text')result={type:'done'};
    const done=result as Extract<CliEvent,{type:'done'}>|null;if(!done)throw new ProviderError('transport_lost','CLI: поток завершился без результата',sessionId);
    if(calls.size)throw protocol('нет результата вызванного инструмента');

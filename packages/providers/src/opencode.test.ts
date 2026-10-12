@@ -10,13 +10,12 @@ test('333 OpenCode: process metadata lists models without claiming a verified OA
  const f=opencodeFixture(t),catalog=new ProviderCatalog([f.entry]);const {row,identity}=await catalog.read('opencode');
  assert.ok(CLI_DESCRIPTORS.includes(OPENCODE));assert.equal(row.installed,true);assert.equal(row.version,'1.18.4');assert.equal(row.login.state,'unknown');assert.equal(row.login.reason,OPENCODE_LOGIN_UNKNOWN);assert.equal(row.login.account,undefined);assert.equal(identity,null);
  assert.deepEqual(row.models,[{id:'opencode/free-model',label:'opencode/free-model'},{id:'fixture/~account/models/model:variant',label:'fixture/~account/models/model:variant'}]);
- assert.deepEqual(row.capabilities.probe,{ok:false,reason:OPENCODE_UNAVAILABLE});for(const mode of ['read','edit','all'] as const)assert.deepEqual(row.capabilities.turn![mode],{ok:false,reason:OPENCODE_UNAVAILABLE});assert.equal(row.capabilities.limits,false);assert.equal(row.capabilities.resume,false);assert.equal(row.capabilities.mcp,false);assert.deepEqual(catalog.limitsEntries(),[]);
+ assert.deepEqual(row.capabilities.probe,{ok:true,note:'полный доступ, без инструментов Harnessy'});for(const mode of ['read','edit'] as const)assert.deepEqual(row.capabilities.turn![mode],{ok:false,reason:OPENCODE_UNAVAILABLE});assert.equal(row.capabilities.limits,false);assert.equal(row.capabilities.resume,true);assert.deepEqual(row.capabilities.turn!.all,{ok:true,note:'без инструментов Harnessy'});assert.equal(row.capabilities.mcp,false);assert.deepEqual(catalog.limitsEntries(),[]);
  assert.doesNotMatch(JSON.stringify(row),/auth\.json|fixture-secret|fixture-token|FIXTURE_API_KEY|Fixture OAuth|Fixture API/);
  assert.deepEqual(f.capture().map(c=>c.args),[['--version'],['auth','list','--pure'],['models','--pure']]);for(const call of f.capture()){assert.equal(call.home,process.env.HOME);assert.deepEqual(call.bridgeKeys,[])}
- const before=f.capture().length;for(const run of [f.entry.runTurn,catalog.provider('opencode').runTurn])await assert.rejects(run(undefined as never,'no model',undefined as never),{code:'capability_unsupported'});assert.equal(f.capture().length,before);
  f.update({version:'1.19.0'});assert.equal((await catalog.read('opencode')).row.version,'1.19.0');
  // The opt-in is metadata-only; other descriptors retain their login requirement.
- const otherEntry={...f.entry};delete otherEntry.modelsWithoutLogin;const other=new ProviderCatalog([{...otherEntry,id:'other',models:async()=>{assert.fail('must not read models')}}]);assert.deepEqual((await other.read('other')).row.models,[]);
+ const otherEntry={...f.entry};delete otherEntry.modelsWithoutLogin;delete otherEntry.allowUnverifiedLogin;delete otherEntry.allowUnverifiedProbe;const other=new ProviderCatalog([{...otherEntry,id:'other',models:async()=>{assert.fail('must not read models')}}]);assert.deepEqual((await other.read('other')).row.models,[]);
 });
 
 test('333 OpenCode: no saved connections, metadata errors and missing program remain distinct', {timeout},async t=>{

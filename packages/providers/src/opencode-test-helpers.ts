@@ -17,11 +17,12 @@ export function opencodeFixture(t:TestContext){
  const update=(patch:Record<string,unknown>)=>writeFileSync(state,JSON.stringify({version:'1.18.4',auth:opencodeAuthText,models:opencodeModelText,...patch}));update({});
  writeFileSync(binary,'#!'+process.execPath+'\n'+String.raw`
  const fs=require('node:fs'),args=process.argv.slice(2),state=JSON.parse(fs.readFileSync(process.env.OPENCODE_FIXTURE_STATE,'utf8'));
- fs.appendFileSync(process.env.OPENCODE_FIXTURE_LOG,JSON.stringify({args,home:process.env.HOME,bridgeKeys:['PANE_TOKEN','APP_URL','PANE_ID','SEATS'].filter(k=>process.env[k])})+'\n');
+ fs.appendFileSync(process.env.OPENCODE_FIXTURE_LOG,JSON.stringify({args,cwd:process.cwd(),files:fs.readdirSync(process.cwd()),home:process.env.HOME,bridgeKeys:['PANE_TOKEN','APP_URL','PANE_ID','SEATS'].filter(k=>process.env[k])})+'\n');
  if(JSON.stringify(args)==='["--version"]'){console.log(state.version);process.exit(0)}
  if(JSON.stringify(args)==='["auth","list","--pure"]'){console.log(state.auth);process.exit(state.authCode||0)}
  if(JSON.stringify(args)==='["models","--pure"]'){if(state.modelsCode){console.error('fixture-secret');process.exit(state.modelsCode)}console.log(state.models);process.exit(0)}
- console.error('unexpected command');process.exit(99);
+ if(args[0]==='run'&&args.includes('--auto')){const sessionID=args.includes('--session')?args[args.indexOf('--session')+1]:'opencode-session';const out=(type,part)=>console.log(JSON.stringify({type,sessionID,part:{...part,sessionID}}));if(state.turnError){console.log(JSON.stringify({type:'error',sessionID,error:{message:'fixture-secret'}}));process.exit(0)}out('step_start',{type:'step-start'});out('text',{type:'text',text:'готов'});if(!state.truncated)out('step_finish',{type:'step-finish',reason:'stop'});process.exit(0)}
+console.error('unexpected command');process.exit(99);
  `,{mode:0o700});
  const env={...process.env,OPENCODE_FIXTURE_LOG:log,OPENCODE_FIXTURE_STATE:state,PANE_TOKEN:'fixture-token',APP_URL:'fixture-url',PANE_ID:'fixture-pane',SEATS:'fixture-seats'},description={...OPENCODE,binary},deps={env,cwd:dir},entry=cliEntry(description,deps);
  t.after(()=>rmSync(dir,{recursive:true,force:true}));
