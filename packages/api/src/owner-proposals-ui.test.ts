@@ -41,6 +41,12 @@ for(const page of ['chat','new'])test('240/241/242 DOM+HTTP '+page+': free label
  await v.find('[data-team-confirm]').emit('click');assert.equal((await h.runtime.teamProposals(OWNER)).proposals[0]!.confirmed,true);if(page==='new'){await v.find('[data-team-close]').emit('click');assert.equal(v.document.querySelector('#live-team-proposals'),null);assert.ok(v.document.querySelector('[data-cx="role"]'))}
 });
 
+test('TS-09b7 DOM+HTTP: a new single-seat proposal is shown as +1 место к составу after the previous team is confirmed',async t=>{
+ const h=await setup(t),first=(await call(h.api,'/api/seats/proposals')).body.proposals[0],v=ui(h);await v.find('[data-cx="role"]').emit('click');await v.settle();assert.doesNotMatch(v.find('.cx-pop').textContent,/к составу/);assert.equal((await call(h.api,'/api/seats/confirm',{body:{project:h.dir,proposalId:first.proposalId,version:first.version}})).status,200);
+ const result=await h.provider.calls[0]!.ctx.tools.proposeSeats({seats:[{kind:'researcher',label:'Налоговый юрист',vendor:'claude',model:'w1',mode:'read',intro:'Проверь налоговые последствия.'}]});assert.equal(result.ok,true);await v.L.proposalsFetch();await v.settle();assert.match(v.find('.cx-pop').textContent,/Предложено в разговоре.*\+1 место к составу.*Налоговый юрист/s);assert.equal(v.find('.cx-pop').querySelectorAll('.cx-proposal-role').length,1);assert.doesNotMatch(v.find('.cx-proposal-role').textContent,/Прокурор|Судья/);
+ await v.find('[data-cx-team-open]').emit('click');assert.match(v.find('[data-team-proposal]').textContent,/Налоговый юрист/);assert.equal(v.find('[data-team-proposal]').querySelectorAll('[data-team-row]').length,1);
+});
+
 test('243 DOM+HTTP: no registered proposal gives a precise prompt to the project orchestrator',async t=>{
  const h=await setup(t,false),v=ui(h);await v.find('[data-cx="role"]').emit('click');await v.settle();assert.match(v.find('.cx-pop').textContent,/Предложение не зарегистрировано/);
  await v.find('[data-cx-team-request]').emit('click');await v.settle();const sent=v.requests.filter(r=>r.path==='/api/chat');assert.equal(sent.length,1);assert.deepEqual(sent[0].body,{pane:'lead',message:'зарегистрируй предложение'});
