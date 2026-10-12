@@ -33,10 +33,13 @@ export interface CliDescriptor {
  login:CliCommand;
  version:CliProbe<string>;auth:CliAuthProbe;models:CliProbe<CliModel[]>|{list:readonly CliModel[];reason:string};
  allowUnverifiedLogin?:boolean;
+ /** Owner-approved probe may let the program verify an unknown login itself. */
+ allowUnverifiedProbe?:boolean;
+ modelsWithoutLogin?:true;
  /** Explicit flags, with no permissive fallback for a missing mode. */
  modes:Partial<Record<Mode,(input:CliTurnInput)=>string[]>>;
  forbiddenEnv:readonly string[];
- turn:{format:'json'|'stream-json'|'text';command(input:CliTurnInput):CliCommand;decode?(value:unknown):CliEvent[];decoder?():((value:unknown)=>CliEvent[])};
+ turn:{format:'json'|'stream-json'|'text';command(input:CliTurnInput):CliCommand;decode?(value:unknown):CliEvent[];decoder?():((value:unknown)=>CliEvent[]);sessionFile?:{args(path:string):string[];parse(text:string):string}};
  /** Private CLI-owned config/sessions; distinct from the disposable MCP file. */
  state?:{namespace:string;args(directory:string):string[]};
  resume?:((sessionId:string)=>string[]);

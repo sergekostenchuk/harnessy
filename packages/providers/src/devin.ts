@@ -1,5 +1,5 @@
 import {ProviderError,record} from './types.ts';
-import type {CliAuth,CliModel,CliProbe,CliUnavailableDescriptor} from './cli/types.ts';
+import type {CliAuth,CliModel,CliProbe,CliDescriptor} from './cli/types.ts';
 
 // Devin 3000.11.3 --help: --config replaces the user config, not the separate
 // user/project MCP files. No documented per-turn MCP isolation:
@@ -39,8 +39,15 @@ export const devinModels:CliProbe<CliModel[]>={command:{args:['models','list','-
  }
  return models;
 }};
-export const DEVIN:CliUnavailableDescriptor={
+export const DEVIN:CliDescriptor={
  id:'devin',name:'Devin',binary:'devin',login:{args:['auth','login']},version:devinVersion,auth:devinAuth,models:devinModels,
  forbiddenEnv:['DEVIN_API_KEY','WINDSURF_API_KEY','CODEIUM_API_KEY','PANE_TOKEN','APP_URL','PANE_ID','SEATS'],
- capabilities:{headless:true,resume:false,mcp:false,limits:false},unavailableReason:DEVIN_UNAVAILABLE,
+ noHarnessMcp:true,turnNotes:{all:'без инструментов Harnessy'},turnReasons:{read:DEVIN_UNAVAILABLE,edit:DEVIN_UNAVAILABLE},
+ // 3000.11.3 --help: print cannot prompt for workspace trust in the probe folder.
+ modes:{all:()=>['--permission-mode','dangerous','--respect-workspace-trust','false']},
+ turn:{format:'text',command:i=>({args:['--model',i.seat.model,'--print',i.roleNote+'\n\n'+i.message]}),
+  // --export writes ATIF. Retain only this turn's session id, never scan user history.
+  sessionFile:{args:path=>['--export',path],parse:raw=>{const v:unknown=JSON.parse(raw);if(!record(v)||typeof v.session_id!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(v.session_id))throw invalid('сессии');return v.session_id}}},
+ resume:id=>{if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(id))throw new ProviderError('session_missing','Devin: неверная сессия');return ['--resume',id]},
+ failure:()=>({code:'turn_failed',text:'Devin: ход не выполнен; проверьте вход в программе'}),
 };

@@ -7,6 +7,9 @@ import {deferred,fixture,sse,call} from './test-helpers.ts';
 import {ProviderCatalog,ProviderError,LoginTerminal,type CatalogEntry} from '@harnessy/providers';
 import {ollamaFixture} from '../../providers/src/ollama-test-helpers.ts';
 import {antigravityFixture} from '../../providers/src/antigravity-test-helpers.ts';
+import {devinFixture} from '../../providers/src/devin-test-helpers.ts';
+import {kimiFixture} from '../../providers/src/kimi-test-helpers.ts';
+import {opencodeFixture} from '../../providers/src/opencode-test-helpers.ts';
 import type {TestContext} from 'node:test';
 const read=(p:string)=>readFileSync(new URL('../../../'+p,import.meta.url),'utf8');
 const login=(state='ok')=>({state,account:'u•••@example.test',command:'agy',checkedAt:100,reason:''});
@@ -282,4 +285,12 @@ test('334: actual Ollama catalogue renders daemon, cloud/local labels, signin an
  const handler=async(path:string,body:any)=>(await call(h.api,path,{...(body?{body}:{})})).body,v=ui(handler,undefined,undefined,h.dir);await v.settle();await v.find('[data-pv="ollama"]').emit('click');await v.settle();
  assert.match(v.body.textContent,/Ollama.*облако и локально/);assert.match(v.body.textContent,/Демон.*доступен · 0.40.2/);assert.match(v.body.textContent,/glm-5.3:cloud · облако/);assert.match(v.body.textContent,/gemma4:latest · локально/);assert.match(v.body.textContent,/signin/);assert.match(v.body.textContent,/Неизвестно/);const button=v.find('[data-program-probe="ollama"]');assert.equal(button.disabled,false);await button.emit('click');await v.settle();assert.equal(v.find('[data-program-confirm]').disabled,false);assert.equal(f.capture().length,0);
  f.setOffline(true);await call(h.api,'/api/providers/ollama/check',{body:{}});await refreshPrograms(v);assert.match(v.body.textContent,/демон не запущен/);assert.match(v.body.textContent,/ollama serve/);assert.equal(v.find('[data-program-probe="ollama"]').disabled,true);assert.equal(f.capture().length,0);
+});
+
+for(const program of [{id:'devin',title:'Devin',fixture:devinFixture},{id:'kimi',title:'Kimi Code',fixture:kimiFixture},{id:'opencode',title:'OpenCode',fixture:opencodeFixture}])test('345: '+program.title+' actual catalogue opens a full-access permission card without starting the program',async t=>{
+ const f=program.fixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}});await call(h.api,'/api/providers/'+program.id+'/check',{body:{}});
+ const v=ui(async(path,body)=>(await call(h.api,path,{...(body?{body}:{})})).body,undefined,undefined,h.dir);await v.settle();await v.find('[data-pv="'+program.id+'"]').emit('click');await v.settle();
+ assert.match(v.body.textContent,new RegExp(program.title));if(program.id!=='devin')assert.match(v.body.textContent,/Неизвестно/);if(program.id==='kimi')assert.match(v.body.textContent,/по умолчанию программы/);
+ const probe=v.find('[data-program-probe="'+program.id+'"]');assert.equal(probe.disabled,false);await probe.emit('click');await v.settle();assert.equal(v.find('[data-program-confirm]').disabled,false);assert.match(v.body.textContent,/полный доступ, без инструментов Harnessy/);
+ assert.equal(f.capture().filter(c=>c.args.includes('--print')||c.args.includes('--prompt')||c.args[0]==='run').length,0);
 });

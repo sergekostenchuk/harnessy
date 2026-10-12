@@ -6,12 +6,11 @@ import {CLI_DESCRIPTORS,cliEntry,ProviderCatalog} from './catalog.ts';
 import {devinFixture,devinAuthText,devinModelPayload,DEVIN_TEST_TIMEOUT_MS as timeout} from './devin-test-helpers.ts';
 const result=(stdout:string,code=0)=>({stdout,stderr:'fixture-secret',code,signal:null});
 
-test('333 Devin: process metadata, safe fields and no turn/resume without isolated MCP', {timeout},async t=>{
+test('333 Devin: process metadata, safe fields and owner-approved full access without Harnessy MCP', {timeout},async t=>{
  const f=devinFixture(t),catalog=new ProviderCatalog([f.entry]);const {row}=await catalog.read('devin');
- assert.ok(CLI_DESCRIPTORS.includes(DEVIN));assert.equal(row.installed,true);assert.equal(row.version,'3000.11.3');assert.equal(row.login.state,'ok');assert.equal(row.login.account,'f•••@example.test');assert.deepEqual(row.models,[{id:'adaptive',label:'Adaptive'},{id:'fixture-model',label:'Fixture Model'}]);assert.deepEqual(row.capabilities.probe,{ok:false,reason:DEVIN_UNAVAILABLE});for(const mode of ['read','edit','all'] as const)assert.deepEqual(row.capabilities.turn![mode],{ok:false,reason:DEVIN_UNAVAILABLE});assert.equal(row.capabilities.limits,false);assert.equal(row.capabilities.resume,false);assert.deepEqual(catalog.limitsEntries(),[]);
+ assert.ok(CLI_DESCRIPTORS.includes(DEVIN));assert.equal(row.installed,true);assert.equal(row.version,'3000.11.3');assert.equal(row.login.state,'ok');assert.equal(row.login.account,'f•••@example.test');assert.deepEqual(row.models,[{id:'adaptive',label:'Adaptive'},{id:'fixture-model',label:'Fixture Model'}]);assert.deepEqual(row.capabilities.probe,{ok:true,note:'полный доступ, без инструментов Harnessy'});for(const mode of ['read','edit'] as const)assert.deepEqual(row.capabilities.turn![mode],{ok:false,reason:DEVIN_UNAVAILABLE});assert.equal(row.capabilities.limits,false);assert.equal(row.capabilities.resume,true);assert.deepEqual(row.capabilities.turn!.all,{ok:true,note:'без инструментов Harnessy'});assert.deepEqual(catalog.limitsEntries(),[]);
  const serialized=JSON.stringify(row);assert.doesNotMatch(serialized,/credentials|fixture-secret|fixture-token|fixture-user|fixture-team|fixture cost|cost_summary/);
  assert.deepEqual(f.capture().map(c=>c.args),[['--version'],['auth','status'],['models','list','--format','json']]);for(const call of f.capture()){assert.equal(call.home,process.env.HOME);assert.deepEqual(call.keys,[])}
- const before=f.capture().length;for(const run of [f.entry.runTurn,catalog.provider('devin').runTurn])await assert.rejects(run(undefined as never,'no model',undefined as never),{code:'capability_unsupported'});assert.equal(f.capture().length,before);
  f.update({version:'devin 3000.12.0 (abcdef123456)'});assert.equal((await catalog.read('devin')).row.version,'3000.12.0');
 });
 

@@ -16,11 +16,12 @@ export function devinFixture(t:TestContext){
  const update=(patch:Record<string,unknown>)=>writeFileSync(state,JSON.stringify({version:'devin 3000.11.3 (9c803229faa4)',auth:devinAuthText(),models:devinModelPayload,...patch}));update({});
  writeFileSync(binary,'#!'+process.execPath+'\n'+String.raw`
  const fs=require('node:fs'),args=process.argv.slice(2),state=JSON.parse(fs.readFileSync(process.env.DEVIN_FIXTURE_STATE,'utf8'));
- fs.appendFileSync(process.env.DEVIN_FIXTURE_LOG,JSON.stringify({args,home:process.env.HOME,keys:['DEVIN_API_KEY','WINDSURF_API_KEY','CODEIUM_API_KEY','PANE_TOKEN'].filter(k=>process.env[k])})+'\n');
+ fs.appendFileSync(process.env.DEVIN_FIXTURE_LOG,JSON.stringify({args,cwd:process.cwd(),files:fs.readdirSync(process.cwd()),home:process.env.HOME,keys:['DEVIN_API_KEY','WINDSURF_API_KEY','CODEIUM_API_KEY','PANE_TOKEN'].filter(k=>process.env[k])})+'\n');
  if(JSON.stringify(args)==='["--version"]'){console.log(state.version);process.exit(0)}
  if(JSON.stringify(args)==='["auth","status"]'){console.log(state.auth);process.exit(state.authCode||0)}
  if(JSON.stringify(args)==='["models","list","--format","json"]'){if(state.modelsCode){console.error('fixture-secret');process.exit(state.modelsCode)}console.log(JSON.stringify(state.models));process.exit(0)}
- console.error('unexpected command');process.exit(99);
+ if(args.includes('--print')&&args.includes('dangerous')){if(state.turnError){console.error('fixture-secret login expired');process.exit(1)}const id=args.includes('--resume')?args[args.indexOf('--resume')+1]:'devin-session';const file=args[args.indexOf('--export')+1];if(state.exportCase==='symlink')fs.symlinkSync(process.env.DEVIN_FIXTURE_STATE,file);else if(!state.noExport)fs.writeFileSync(file,state.exportCase==='malformed'?'{}':JSON.stringify({session_id:state.exportCase==='foreign'?'foreign-session':id,steps:[]}));console.log('готов');process.exit(0)}
+console.error('unexpected command');process.exit(99);
  `,{mode:0o700});
  const env={...process.env,DEVIN_FIXTURE_LOG:log,DEVIN_FIXTURE_STATE:state,DEVIN_API_KEY:'fixture-secret',WINDSURF_API_KEY:'fixture-secret',CODEIUM_API_KEY:'fixture-secret',PANE_TOKEN:'fixture-token'},description={...DEVIN,binary},deps={env,cwd:dir},entry=cliEntry(description,deps);
  t.after(()=>rmSync(dir,{recursive:true,force:true}));
