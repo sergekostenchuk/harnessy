@@ -19,3 +19,4 @@ export {KIMI,KIMI_UNAVAILABLE,KIMI_LOGIN_UNKNOWN,KIMI_MODELS_UNAVAILABLE} from '
 export {limitsReason} from './limits-reason.ts';
 export {QWEN,QWEN_LOGIN_UNKNOWN,QWEN_MODELS_UNAVAILABLE} from './qwen.ts';
 export {DEVIN,DEVIN_UNAVAILABLE} from './devin.ts';
+export {OPENCODE,OPENCODE_UNAVAILABLE,OPENCODE_LOGIN_UNKNOWN} from './opencode.ts';
