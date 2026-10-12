@@ -37,7 +37,7 @@ test('317: pending metadata refuses both selection doors while preserving the pa
  const before=[worker.settings(),room.settings()],bytes=['panes.json','chats.json'].map(file=>readFileSync(join(h.dir,'.harness','state',file)));
  assert.deepEqual((await call(h.api,'/api/status')).body.models.gemini,[]);
  for(const path of ['/api/panes/worker','/api/room']){
-  const r=await call(h.api,path,{body:{vendor:'gemini',model:'default',mode:'all',folder:true}});
+  const r=await call(h.api,path,{body:{vendor:'gemini',model:'default',mode:'all',binding:h.runtime.paneBinding('worker'),folder:true}});
   assert.equal(r.status,409);assert.equal(r.body.code,'provider_checking');assert.match(r.body.error,/Программа проверяется.*повторите/);
   assert.equal(p.registry.get('room'),room);assert.deepEqual([worker.settings(),room.settings()],before);
   for(const [i,file] of ['panes.json','chats.json'].entries())assert.deepEqual(readFileSync(join(h.dir,'.harness','state',file)),bytes[i]);
@@ -48,7 +48,7 @@ test('317: pending metadata refuses both selection doors while preserving the pa
 test('310: unknown Gemini login permits selection; actual CLI refusal is a turn error without changing selected settings or session',async t=>{
  const g=geminiFixture(t);writeFileSync(g.account,JSON.stringify({active:'alice@example.test'}));
  const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([g.entry])}});await call(h.api,'/api/providers/'+h.runtime.providerOperations.catalog.ids()[0]+'/check',{body:{}});
- const r=await call(h.api,'/api/panes/worker',{body:{vendor:'gemini',model:'default',mode:'all'}});assert.equal(r.status,200,r.text);
+ const r=await call(h.api,'/api/panes/worker',{body:{vendor:'gemini',model:'default',mode:'all',binding:h.runtime.paneBinding('worker')}});assert.equal(r.status,200,r.text);
  const pane=h.runtime.registry.get('worker')!;pane.sessionId='ab123456-1234-1234-1234-123456789abc';h.runtime.project.state.savePanes(h.runtime.registry,h.runtime.project.journal);
  const selected=()=>({vendor:pane.vendor,model:pane.model,mode:pane.mode,session:pane.sessionId}),before=selected();
  // The process double exits 99 on any turn, just like a saved but expired login.
