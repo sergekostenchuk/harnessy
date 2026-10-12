@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {networkUi} from './network-ui-test-helpers.ts';
+import {networkUi as networkUiBase} from './network-ui-test-helpers.ts';
 import {deferred} from './test-helpers.ts';
 const opts={timeout:15000};
+// The statistics reader is independent of the held chain response in these regressions.
+const networkUi=(fetcher:Parameters<typeof networkUiBase>[0])=>networkUiBase(async(path,body)=>path.startsWith('/api/network/stats')?{ok:true,source:'not_connected',period:'day',reason:'Источник статистики не подключён'}:fetcher(path,body));
 const exits={ok:true,exits:[{config:{id:'proxy',label:'Основной прокси',type:'proxy',url:'https://proxy.test'},revision:'exit-1',password:{present:false}}]};
 const chain=(id:string)=>({ok:true,provider:id,configured:false,exits:[],revision:null});
 function button(v:ReturnType<typeof networkUi>,id:string){const holder=v.document.createElement('div');holder.innerHTML=v.L.network.card(id);v.body.appendChild(holder);return '[data-net-chain="'+id+'"]'}

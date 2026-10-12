@@ -110,8 +110,10 @@ for(const moment of ['menu','post','status'] as const)test('211a r3 await audit:
  if(moment==='menu'){await move();await callback({id:'new'});assert.equal(v.requests.some(r=>r.body),false)}else{const choosing=callback({id:'new'});await seen.promise;await move();const toasts=v.toasts.length;gate.resolve({ok:true});await choosing;assert.equal(v.toasts.length,toasts);assert.equal(refreshes,moment==='post'?0:1)}assert.equal(v.find('[data-connections-status]').dataset.project,'/b');
 });
 
-test('302: real Connections markup uses router health and exact via metadata rather than model name patterns',async t=>{
- let available=true;const h=await fixture(t,{router:{models:()=>({ok:true,models:['gpt-routed']}),health:async()=>available?{ok:true,models:['nova3'],families:['nova']}:{ok:false,reason:'offline fixture'}}});h.codex.models=async()=>[{id:'gpt-routed',label:'Routed GPT'},{id:'qwen-unrelated',label:'Native custom model'}];
- const v=ui(async(path,body)=>(await call(h.api,path,{body})).body,h.dir);v.H.models=(await call(h.api,'/api/status')).body.models;await v.settle();assert.match(v.find('[data-pv="router"]').textContent,/provider-router.*локально · 127.0.0.1:11435 · nova/);
- await v.find('[data-pv="router"]').emit('click');assert.match(v.find('.cbody').textContent,/Routed GPT/);assert.doesNotMatch(v.find('.cbody').textContent,/Native custom model/);available=false;await v.find('[data-recheck]').emit('click');await v.settle();assert.match(v.find('[data-pv="router"]').textContent,/нет данных · offline fixture/);assert.doesNotMatch(v.find('[data-pv="router"]').textContent,/null|нет входа/);assert.equal(h.codex.calls.length,0);
+test('22h: retired provider-router and its key instructions stay absent from Connections after refresh',async t=>{
+ let available=true;const h=await fixture(t,{router:{models:()=>({ok:true,models:['gpt-routed']}),health:async()=>available?{ok:true,models:['nova3'],families:['nova']}:{ok:false,reason:'offline fixture'}}});
+ assert.ok((await call(h.api,'/api/connections')).body.providers.some((p:any)=>p.id==='router'),'legacy engine response still carries the retired row');
+ const v=ui(async(path,body)=>(await call(h.api,path,{body})).body,h.dir);await v.settle();
+ for(const connected of [true,false]){available=connected;await v.find('[data-connections-refresh]').emit('click');await v.settle();assert.equal(v.document.querySelector('[data-pv="router"]'),null);assert.doesNotMatch(v.find('#v-list').textContent,/provider-router|127\.0\.0\.1:11435/);assert.doesNotMatch(v.find('#v-keys').textContent,/Роутер провайдеров|настройках локального роутера/);assert.ok(v.find('[data-pv="claude"]'));assert.ok(v.find('[data-pv="codex"]'));}
+ assert.equal(h.codex.calls.length,0);
 });
