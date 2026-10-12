@@ -18,17 +18,21 @@ export const PROTO_ENTRY='/sketches/proto/10-new-chat.html';
 export interface ApiOptions {runtime:Runtime;siteDir:string;port?:number;host?:string;router?:RouterSource}
 export function createApi(options:ApiOptions){
  const r=options.runtime,routes=[...ownerRoutes(r),...metaRoutes(r,options.router),...bridgeRoutes(r),...traceRoutes(r),...providerRoutes(r),...llmRoutes(r)],streams=new Set<()=>void>();let closing=false,closeJob:Promise<void>|null=null;
+ const traceTemplates=[...new Set(routes.map(route=>route.path)), '/api/unknown'],traceStores=new WeakSet();
  const responseReasons=new WeakMap<ServerResponse,ReturnType<typeof traceReason>>();
  function match(route:Route,path:string){const a=route.path.split('/'),b=path.split('/');if(a.length!==b.length)return null;const params:Record<string,string>={};for(let i=0;i<a.length;i++){if(a[i]!.startsWith(':')){if(!b[i])return null;params[a[i]!.slice(1)]=b[i]!}else if(a[i]!==b[i])return null}return params}
  const server=createServer((request,res)=>{void traceDispatch(request,res).catch(e=>{if(res.headersSent)res.destroy();else writeReply(res,failure(e),request.method==='HEAD')})});
  async function traceDispatch(request:IncomingMessage,res:ServerResponse){
- const path=(request.url??'').split('?')[0]??'';if(!path.startsWith('/api/')||path==='/api/trace'||path.startsWith('/api/events/'))return dispatch(request,res);
- let project;try{project=r.project}catch{return dispatch(request,res)}const store=project.trace,start=r.clock.now(),id=request.headers['x-harness-trace-id'],parent=request.headers['x-harness-span-id'],binding=request.headers['x-harness-project'],instance=request.headers['x-harness-instance'];
+ const path=(request.url??'').split('?')[0]??'';if(!path.startsWith('/api/'))return dispatch(request,res);
+ let project;try{project=r.project}catch{return dispatch(request,res)}const store=project.trace;
+ if(!traceStores.has(store)){store.setRouteTemplates(traceTemplates);traceStores.add(store)}
+ if(path==='/api/trace'||path.startsWith('/api/events/'))return dispatch(request,res);
+ const matching=routes.filter(route=>match(route,path)),routeTemplate=(matching.find(route=>route.method===request.method||request.method==='HEAD'&&route.method==='GET')??matching[0])?.path??'/api/unknown',start=r.clock.now(),id=request.headers['x-harness-trace-id'],parent=request.headers['x-harness-span-id'],binding=request.headers['x-harness-project'],instance=request.headers['x-harness-instance'];
  if(id!==undefined||parent!==undefined||binding!==undefined||instance!==undefined){let decoded='';try{decoded=decodeURIComponent(String(binding))}catch{}if(!traceId(id)||!traceId(parent)||decoded!==project.dir||instance!==store.instanceId){writeReply(res,json({ok:false,code:'project_changed',error:'Привязка цепочки устарела'},409),request.method==='HEAD');return}}
  let source;const pane=request.headers['x-harness-pane'];if(typeof pane==='string'&&typeof request.headers['x-pane-token']==='string')try{const scope=r.validateBridge(pane,request.headers['x-pane-token']);source=store.forTurn(scope.turnInstanceId)}catch{}
- const span=store.record('http.request',{...(traceId(id)?{traceId:id}:{}),parentSpanId:traceId(parent)?parent:source?.spanId??null,actor:source?.pane?'model:'+source.pane:'window',data:{method:request.method,route:routes.find(route=>match(route,path))?.path??'/api/unknown'}},source);
+ const span=store.record('http.request',{...(traceId(id)?{traceId:id}:{}),parentSpanId:traceId(parent)?parent:source?.spanId??null,actor:source?.pane?'model:'+source.pane:'window',data:{method:request.method,route:routeTemplate}},source);
  res.setHeader('X-Harness-Trace-Id',span.traceId);res.setHeader('X-Harness-Span-Id',span.spanId);
- res.once('finish',()=>store.end(span,'http.response',{actor:'engine',outcome:res.statusCode<400?'ok':res.statusCode<500?'rejected':'failed',reason:res.statusCode<400?{code:'none',text:''}:responseReasons.get(res)??traceReason(res.getHeader('X-Harness-Reason')??(res.statusCode<500?'validation':'internal'),'HTTP '+res.statusCode),durationMs:r.clock.now()-start,data:{method:request.method,route:routes.find(route=>match(route,path))?.path??'/api/unknown',status:res.statusCode}}));
+ res.once('finish',()=>store.end(span,'http.response',{actor:'engine',outcome:res.statusCode<400?'ok':res.statusCode<500?'rejected':'failed',reason:res.statusCode<400?{code:'none',text:''}:responseReasons.get(res)??traceReason(res.getHeader('X-Harness-Reason')??(res.statusCode<500?'validation':'internal'),'HTTP '+res.statusCode),durationMs:r.clock.now()-start,data:{method:request.method,route:routeTemplate,status:res.statusCode}}));
  return store.run(span,async()=>{try{await dispatch(request,res)}catch(e){responseReasons.set(res,traceReason((e as {code?:string}).code,e instanceof Error?e.message:''));res.setHeader('X-Harness-Reason',responseReasons.get(res)!.code);throw e}});
  }
  async function dispatch(request:IncomingMessage,res:ServerResponse){

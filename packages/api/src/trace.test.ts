@@ -115,3 +115,22 @@ test('238 round 3: HTTP promotion creates a traceable orchestrator, the seventh 
  const rows=(await call(h.api,'/api/trace?traceId='+action.body.traceId)).body.records;assert.ok(rows.some((row:any)=>row.kind==='ui.action'&&row.pane===pane.id&&row.chat===chat));for(const kind of ['turn.start','turn.end'])assert.ok(rows.some((row:any)=>row.kind===kind&&row.pane===pane.id&&row.actor==='model:'+pane.id&&row.chat===chat));
  const disk=readFileSync(p.trace.path,'utf8').trim().split('\n').map(line=>JSON.parse(line));assert.ok(disk.some(row=>row.traceId===action.body.traceId&&row.kind==='turn.start'&&row.pane===pane.id&&row.actor==='model:'+pane.id));
 });
+
+test('365: engine route templates survive request/response, disk, reload and HTTP; supplied URLs and fields stay untrusted',{timeout:15000},async t=>{
+ const h=await fixture(t),marker='sk-SYNTHETIC-365-SECRET';
+ for(const path of ['/api/llm/providers/discover','/api/llm/providers/fixture/save','/api/llm/providers/'+marker+'/discover','/api/unknown/'+marker])await call(h.api,path+'?credential='+marker,{body:{credential:marker}});
+ // The static discover POST and the GET of a provider named discover choose different routes.
+ await call(h.api,'/api/llm/providers/discover');
+ const template='/api/llm/providers/discover',store=h.runtime.project.trace,rows=await store.read();
+ const http=rows.filter(row=>row.kind==='http.request'||row.kind==='http.response');
+ for(const kind of ['http.request','http.response']){
+  const records=http.filter(row=>row.kind===kind).map(row=>row.data as any);
+  assert.deepEqual(records.map(row=>row.route),[template,'/api/llm/providers/:id/save','/api/llm/providers/:id/discover','/api/unknown','/api/llm/providers/:id']);
+ }
+ const bytes=readFileSync(store.path,'utf8');assert.match(bytes,/\/api\/llm\/providers\/discover/);assert.doesNotMatch(bytes,new RegExp(marker));
+ // A forged persisted flag/name is not authority to bypass the shared sanitizer.
+ appendFileSync(store.path,JSON.stringify({...http[0],seq:rows.at(-1)!.seq+1,data:{route:'/api/'+marker,routeTemplate:'/api/'+marker,action:'credential=Tiny!'},reason:{code:'provider_error',text:'credential=Tiny!'}})+'\n');
+ await h.runtime.projectSet(h.dir,{reload:true},OWNER);
+ const response=await call(h.api,'/api/trace');assert.equal(response.status,200);assert.doesNotMatch(response.text,/SYNTHETIC-365-SECRET|Tiny!/);
+ for(const kind of ['http.request','http.response'])assert.ok(response.body.records.some((row:any)=>row.kind===kind&&row.data.route===template));
+});
