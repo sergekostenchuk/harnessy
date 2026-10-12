@@ -71,6 +71,27 @@ test('286: account substitution during a refresh discards the previous account c
  const h=setup(t),s=h.create();await s.refresh();h.clock.advance(300000);h.result(async()=>{await h.confirm('b@github.com');return live(h.clock)});await s.refresh();assert.equal(s.snapshot().providers[0]!.code,'login_changed');assert.deepEqual(s.snapshot().providers[0]!.windows,[]);assert.equal(h.disk().value,null);
 });
 
+for(const transition of ['b@github.com','','aba'])for(const failed of ['reject','timeout'])test('367/r2: '+failed+' after confirmed '+(transition||'logout')+' cannot retain a previous quota',async t=>{
+ const h=setup(t),s=h.create();await s.refresh();h.clock.advance(300000);const gate=deferred<ProviderLimits>();h.result(()=>gate.promise);const pending=s.refresh();await until(()=>h.reads===2);
+ await h.confirm(transition==='aba'?'b@github.com':transition);if(transition==='aba')await h.confirm('a@github.com');
+ if(failed==='reject')gate.reject(Error('private quota failure'));else h.clock.advance(15000);await pending;
+ const row=s.snapshot().providers[0]!;assert.deepEqual(row.windows,[]);assert.equal(row.account,null);assert.equal(row.code,'login_changed');assert.match(row.reason!,/Вход сменился/);assert.equal(h.disk().value,null);assert.equal(h.diagnostics.at(-1)?.code,'login_changed');
+ if(failed==='timeout'){gate.resolve(live(h.clock));await Promise.resolve();assert.deepEqual(s.snapshot().providers[0]!.windows,[])}
+});
+
+test('367/r2: corrupt cache preserves only the last measurement for the still-confirmed account, including direct snapshots',async t=>{
+ const h=setup(t),s=h.create();await s.refresh();const file=join(h.dir,'copilot.json'),broken='broken fixture';writeFileSync(file,broken);
+ await s.refresh();assert.equal(s.snapshot().providers[0]!.windows[0]!.percentUsed,25,'temporary storage failure with the same login retains the measured value');
+ await h.confirm('b@github.com');assert.deepEqual(s.snapshot().providers[0]!.windows,[],'an unrelated SSE snapshot cannot republish account A');assert.equal(s.snapshot().providers[0]!.code,'login_changed');
+ await s.refresh();assert.deepEqual(s.snapshot().providers[0]!.windows,[]);assert.equal(s.snapshot().providers[0]!.code,'login_changed');assert.equal(h.diagnostics.at(-1)?.code,'login_changed');assert.equal(readFileSync(file,'utf8'),broken);assert.equal(h.reads,1);
+});
+
+for(const aba of [false,true])test('367/r2: damaged cache during rejected quota cannot bypass the captured login generation'+(aba?' (ABA)':''),async t=>{
+ const h=setup(t),s=h.create();await s.refresh();h.clock.advance(300000);const gate=deferred<ProviderLimits>();h.result(()=>gate.promise);const pending=s.refresh();await until(()=>h.reads===2);
+ await h.confirm('b@github.com');if(aba)await h.confirm('a@github.com');const file=join(h.dir,'copilot.json');writeFileSync(file,'broken');gate.reject(Error('quota rejected'));await pending;
+ assert.deepEqual(s.snapshot().providers[0]!.windows,[]);assert.equal(s.snapshot().providers[0]!.code,'login_changed');assert.equal(readFileSync(file,'utf8'),'broken');
+});
+
 test('299: parser reason survives API snapshot, TTL/backoff, cache restart and stale windows; recovery clears it',async t=>{
  const h=setup(t),s=h.create();await s.refresh();const saved=h.disk().value;h.clock.advance(300000);
  const reason='Copilot не передал дату сброса квоты';h.result(async()=>({ok:false,code:'limits_unavailable',reason}));await s.refresh();
