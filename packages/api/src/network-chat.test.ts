@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import {readFileSync} from 'node:fs';
-import {fixture,call,sse,until,FakeProvider} from './test-helpers.ts';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {fixture,call,sse,until,FakeProvider,deferred,OWNER} from './test-helpers.ts';
 import {listen,proxy,through} from '../../runtime/src/network-test-helpers.ts';
 import {ProviderError} from '@harnessy/providers';
 
@@ -25,9 +26,9 @@ test('23d: owner direct once consumes only failed records; next message still us
  await until(()=>stream.frames.some(e=>e.type==='done'));assert.equal(stream.frames.find(e=>e.type==='done').network.directOnce,true);assert.ok(readFileSync(h.runtime.project.state.chatsPath,'utf8').includes('directOnce'));
 });
 
-for(const changed of ['missing','project','chat','revision','instance','action','token','aba'])test('23d: direct permission rejects '+changed+' binding without a model call',async t=>{
+for(const changed of ['missing','network','project','chat','revision','instance','action','token','aba'])test('23d: direct permission rejects '+changed+' binding without a model call',async t=>{
  const {h,input}=await blocked(t);let body:any=structuredClone(input);
- if(changed==='missing')delete body.binding;if(changed==='project')body.project='/other';if(changed==='chat')body.binding.chat='other';if(changed==='revision')body.binding.revision++;if(changed==='instance')body.binding.instanceId='other';if(changed==='action')body.action='skip';if(changed==='token'){await assert.rejects(h.runtime.attempt('worker',body,{seat:'worker',trust:'agent'}),{code:'policy_denied'});assert.equal((await call(h.api,'/api/peer/attempt',{body,headers:{'X-Pane-Token':'fake'}})).status,404);assert.equal(h.provider.calls.length,0);return}
+ if(changed==='missing')delete body.binding;if(changed==='network')delete body.binding.networkGeneration;if(changed==='project')body.project='/other';if(changed==='chat')body.binding.chat='other';if(changed==='revision')body.binding.revision++;if(changed==='instance')body.binding.instanceId='other';if(changed==='action')body.action='skip';if(changed==='token'){await assert.rejects(h.runtime.attempt('worker',body,{seat:'worker',trust:'agent'}),{code:'policy_denied'});assert.equal((await call(h.api,'/api/peer/attempt',{body,headers:{'X-Pane-Token':'fake'}})).status,404);assert.equal(h.provider.calls.length,0);return}
  if(changed==='aba'){await call(h.api,'/api/panes/worker',{body:{model:'w2'}});await call(h.api,'/api/panes/worker',{body:{model:'w1'}})}
  const result=await call(h.api,'/api/panes/worker/attempt',{body});assert.ok(result.status>=400,result.text);await h.runtime.idle();assert.equal(h.provider.calls.length,0);assert.ok(h.runtime.waiting('worker'));
 });
@@ -62,4 +63,55 @@ test('23d: direct owner retry also reaches API agent once, using only a local HT
  await h.runtime.settings.changeLlmProvider('test',config('https://127.0.0.2:'+port+'/v1'),null);await h.runtime.settings.changeNetwork(async c=>{c.migrated=true;c.exits.a={id:'a',label:'Failed proxy',type:'proxy',url:'http://127.0.0.1:1'};c.chains['api:test']=['a'];return {result:undefined}});
  assert.equal((await call(h.api,'/api/panes/worker',{body:{vendor:'api:test',model:'test-model'}})).status,200);await call(h.api,'/api/chat',{body:{pane:'worker',message:'API double'}});await h.runtime.idle();assert.equal(calls,0);const failure=h.runtime.waiting('worker');assert.ok(failure);
  const body={project:h.dir,turnInstanceId:failure.turnInstanceId,action:'retry',network:'direct_once',binding:h.runtime.paneBinding('worker')};const reply=await call(h.api,'/api/panes/worker/attempt',{body});assert.equal(reply.status,200,reply.text);await h.runtime.idle();assert.equal(calls,1);assert.equal(h.runtime.waiting('worker'),null);const message=h.runtime.registry.get('worker')!.transcript.find(m=>m.role==='ai')!;assert.equal(message.text,'hello world');assert.equal((message.network as any).directOnce,true);assert.deepEqual(h.runtime.settings.network().chains['api:test'],['a']);
+});
+
+
+async function networkChange(h:Awaited<ReturnType<typeof fixture>>,what:string){
+ const before=h.runtime.settings.network();await h.runtime.settings.changeNetwork(async c=>{if(what==='chain'){c.exits.other={id:'other',type:'proxy',label:'Другой',url:'http://127.0.0.1:2'};c.chains.claude=['other']}else if(what==='policy')(c.policies??={}).claude={mode:'fallback',silenceSeconds:72};else{const exit=c.exits.nl!;if(exit.type==='proxy')exit.url='http://127.0.0.1:3'}return {result:undefined}});
+ if(what==='aba')await h.runtime.settings.changeNetwork(async c=>{Object.assign(c,before);return {result:undefined}});
+}
+for(const what of ['chain','policy','address','aba'])test('23d r2: old direct approval rejects changed '+what+'; refreshed decision works',async t=>{
+ const {h,input}=await blocked(t),generation=input.binding.networkGeneration;await networkChange(h,what);assert.notEqual(h.runtime.paneBinding('worker').networkGeneration,generation);
+ const denied=await call(h.api,'/api/panes/worker/attempt',{body:input});assert.equal(denied.status,409);assert.equal(denied.body.code,'binding_changed');assert.match(denied.body.error,/Настройки изменились — решите заново/);await h.runtime.idle();assert.equal(h.provider.calls.length,0);assert.ok(h.runtime.waiting('worker'));
+ const binding=h.runtime.paneBinding('worker'),approved=await call(h.api,'/api/panes/worker/attempt',{body:{...input,binding}});assert.equal(approved.status,200,approved.text);await h.runtime.idle();assert.equal(h.provider.calls.length,1);
+});
+for(const what of ['chain','policy','address','aba'])test('23d r2: '+what+' during vendor wait restores a fresh decision card',async t=>{
+ const {h,input}=await blocked(t),gate=deferred(),p=h.runtime.project;p.routeJobs.set('claude',gate.promise);t.after(()=>{p.routeJobs.delete('claude');gate.resolve()});
+ const approved=await call(h.api,'/api/panes/worker/attempt',{body:input});assert.equal(approved.status,200,approved.text);await networkChange(h,what);p.routeJobs.delete('claude');gate.resolve();await h.runtime.idle();assert.equal(h.provider.calls.length,0);
+ const waiting=h.runtime.waiting('worker')!;assert.ok(waiting);assert.notEqual(waiting.turnInstanceId,input.turnInstanceId);assert.equal(waiting.failure?.code,'network_changed');assert.match(waiting.failure!.reason,/Настройки изменились — решите заново/);assert.ok(waiting.actions.includes('retry'));
+ const again=await call(h.api,'/api/panes/worker/attempt',{body:{...input,turnInstanceId:waiting.turnInstanceId,binding:h.runtime.paneBinding('worker')}});assert.equal(again.status,200,again.text);await h.runtime.idle();assert.equal(h.provider.calls.length,1);assert.match(h.provider.calls[0]!.message,/first failed message/);
+});
+test('23d r2: changes during final network preparation cancel direct permission before the provider starts',async t=>{
+ const {h,input}=await blocked(t),gate=deferred(),entered=deferred(),relay=h.runtime.networkRelay,prepare=relay.prepare.bind(relay);relay.prepare=async(...args)=>{if(args[2]?.directOnce){entered.resolve();await gate.promise}return prepare(...args)};t.after(()=>gate.resolve());
+ assert.equal((await call(h.api,'/api/panes/worker/attempt',{body:input})).status,200);await entered.promise;await networkChange(h,'address');gate.resolve();await h.runtime.idle();assert.equal(h.provider.calls.length,0);assert.equal(h.runtime.waiting('worker')?.failure?.code,'network_changed');
+});
+test('23d r2: edits to another provider preserve the permission; direct-only chain refuses it',async t=>{
+ const {h,input}=await blocked(t);await h.runtime.settings.changeNetwork(async c=>{c.exits.other={id:'other',type:'proxy',label:'Codex',url:'http://127.0.0.1:2'};c.chains.codex=['other'];return {result:undefined}});assert.equal(h.runtime.paneBinding('worker').networkGeneration,input.binding.networkGeneration);
+ assert.equal((await call(h.api,'/api/panes/worker/attempt',{body:input})).status,200);await h.runtime.idle();assert.equal(h.provider.calls.length,1);
+ const b=await blocked(t);await b.h.runtime.settings.changeNetwork(async c=>{c.exits.direct={id:'direct',type:'direct',label:'Напрямую'};c.chains.claude=['direct'];return {result:undefined}});const result=await call(b.h.api,'/api/panes/worker/attempt',{body:{...b.input,binding:b.h.runtime.paneBinding('worker')}});assert.equal(result.body.code,'attempt_invalid');assert.equal(b.h.provider.calls.length,0);
+});
+
+
+test('23d r2: API agent rechecks permission after preparation before sending any model request',async t=>{
+ const {config}=await import('../../llm/src/test-helpers.ts');let calls=0;const h=await fixture(t,{deps:{networkRelayOptions:{timeoutMs:100},llmFetch:async()=>{calls++;throw Error('unexpected model call')}}});await h.runtime.settings.changeLlmProvider('test',config('https://127.0.0.2:9999/v1'),null);
+ await h.runtime.settings.changeNetwork(async c=>{c.migrated=true;c.exits.p={id:'p',type:'proxy',label:'Proxy',url:'http://127.0.0.1:1'};c.chains['api:test']=['p'];return {result:undefined}});assert.equal((await call(h.api,'/api/panes/worker',{body:{vendor:'api:test',model:'test-model'}})).status,200);await call(h.api,'/api/chat',{body:{pane:'worker',message:'API payload'}});await h.runtime.idle();const waiting=h.runtime.waiting('worker')!;assert.ok(waiting);assert.equal(calls,0);
+ const gate=deferred(),entered=deferred(),relay=h.runtime.networkRelay,prepare=relay.prepare.bind(relay);relay.prepare=async(...args)=>{if(args[2]?.directOnce){entered.resolve();await gate.promise}return prepare(...args)};t.after(()=>gate.resolve());
+ const input={project:h.dir,turnInstanceId:waiting.turnInstanceId,action:'retry',network:'direct_once',binding:h.runtime.paneBinding('worker')};assert.equal((await call(h.api,'/api/panes/worker/attempt',{body:input})).status,200);await entered.promise;await h.runtime.settings.changeNetwork(async c=>{(c.policies??={})['api:test']={mode:'fallback',silenceSeconds:72};return {result:undefined}});gate.resolve();await h.runtime.idle();assert.equal(calls,0);assert.equal(h.runtime.waiting('worker')?.failure?.code,'network_changed');
+});
+
+
+test('23d r2: API transport rejects A-B-A after beforeModel, including the loopback shortcut',async t=>{
+ const {config}=await import('../../llm/src/test-helpers.ts');let calls=0;const h=await fixture(t,{deps:{networkRelayOptions:{timeoutMs:100},llmFetch:async()=>{calls++;throw Error('unexpected model call')}}});await h.runtime.settings.changeLlmProvider('test',config('https://127.0.0.2:9999/v1'),null);
+ await h.runtime.settings.changeNetwork(async c=>{c.migrated=true;c.exits.p={id:'p',type:'proxy',label:'Proxy',url:'http://127.0.0.1:1'};c.chains['api:test']=['p'];return {result:undefined}});assert.equal((await call(h.api,'/api/panes/worker',{body:{vendor:'api:test',model:'test-model'}})).status,200);await call(h.api,'/api/chat',{body:{pane:'worker',message:'API late transport'}});await h.runtime.idle();const waiting=h.runtime.waiting('worker')!;assert.ok(waiting);
+ const gate=deferred(),entered=deferred(),routed=h.runtime.routedFetch.bind(h.runtime);h.runtime.routedFetch=provider=>{const actual=routed(provider);return async(input,init)=>{if(h.runtime.networkRelay.scoped(provider)?.directOnce){entered.resolve();await gate.promise}return actual(input,init)}};t.after(()=>gate.resolve());
+ const input={project:h.dir,turnInstanceId:waiting.turnInstanceId,action:'retry',network:'direct_once',binding:h.runtime.paneBinding('worker')};assert.equal((await call(h.api,'/api/panes/worker/attempt',{body:input})).status,200);await entered.promise;
+ for(const port of [2,1])await h.runtime.settings.changeNetwork(async c=>{const exit=c.exits.p!;if(exit.type==='proxy')exit.url='http://127.0.0.1:'+port;return {result:undefined}});gate.resolve();await h.runtime.idle();assert.equal(calls,0);assert.equal(h.runtime.waiting('worker')?.failure?.code,'network_changed');
+});
+
+
+test('23d r2: a settings edit while finishing the decision cannot rebind the grant or reuse its old attempt',async t=>{
+ const {h,input}=await blocked(t),p=h.runtime.project,parent=p.trace.forTurn(input.turnInstanceId);assert.ok(parent);const clear=p.state.clearAttempt.bind(p.state);
+ p.state.clearAttempt=id=>{clear(id);p.state.clearAttempt=clear;const path=join(h.dir,'owner-settings.json'),owner=JSON.parse(readFileSync(path,'utf8'));owner.network.exits.nl.url='http://127.0.0.1:3';writeFileSync(path,JSON.stringify(owner))};
+ await p.trace.run(parent,()=>h.runtime.attempt('worker',input,OWNER));await h.runtime.idle();assert.equal(h.provider.calls.length,0);const waiting=h.runtime.waiting('worker')!;assert.ok(waiting);assert.notEqual(waiting.turnInstanceId,input.turnInstanceId);assert.equal(waiting.failure?.code,'network_changed');
+ const retry=await call(h.api,'/api/panes/worker/attempt',{body:{...input,turnInstanceId:waiting.turnInstanceId,binding:h.runtime.paneBinding('worker')}});assert.equal(retry.status,200,retry.text);await h.runtime.idle();assert.equal(h.provider.calls.length,1);
 });

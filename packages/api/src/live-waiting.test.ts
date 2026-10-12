@@ -225,7 +225,7 @@ for(const [code,title]of [['region_restricted','недоступен из ваш
 });
 
 test('23d: direct action carries the rendered binding, even after a different chat becomes active',async()=>{
- const v=ui(),binding={project:v.H.project,instanceId:'fixture',pane:'worker',chat:'chat-A',revision:9,mode:'read'};
+ const v=ui(),binding={project:v.H.project,instanceId:'fixture',pane:'worker',chat:'chat-A',revision:9,mode:'read',networkGeneration:'generation-A'};
  const p={...v.H.panes[0],vendor:'claude',settingsBinding:binding},info={...waiting,failure:{code:'network_no_reserve',reason:'no permitted exits',durationMs:10}};
  const html=v.functions.waitingControls(p,info,v.H.project);assert.match(html,/Остановились: ни один прокси не отвечает/);assert.match(html,/Пустить напрямую один раз/);assert.match(html,/Сервис увидит ваш адрес/);assert.match(html,/data-attempt-binding="\{&quot;project/);
  v.H.active={worker:'chat-B'} as any;await v.click({attemptProject:v.H.project,attemptPane:'worker',attemptId:'turn-a',attemptAction:'retry',attemptNetwork:'direct_once',attemptBinding:JSON.stringify(binding)});
@@ -238,4 +238,21 @@ test('23d: answer route ignores another chat and keeps response text with the ca
  v.H.active={worker:'chat-A'} as any;v.functions.hEvent({type:'delta',text:'Answer retained'});const c=v.H.cur;v.functions.hEvent({type:'networkRoute',pane:'worker',chat:'other',network});assert.equal((c as any).network,undefined);
  v.functions.hEvent({type:'networkRoute',pane:'worker',chat:'chat-A',network});v.functions.hEvent({type:'done',pane:'worker',chat:'chat-A',network,model:'w1',seq:4,usage:{input:1,output:1}});
  assert.equal(v.S.chat.length,1);assert.equal(v.S.chat[0]!.text,'Answer retained');assert.deepEqual(JSON.parse(JSON.stringify(v.S.chat[0]!.network)),network);
+});
+
+
+test('23d r2: direct connection and absent generation never offer a direct retry',()=>{
+ const v=ui(),p={...v.H.panes[0],vendor:'claude',settingsBinding:{networkGeneration:'current'}},info={...waiting,failure:{code:'network_unavailable',reason:'offline',durationMs:1}};
+ for(const via of [undefined,{id:'direct',type:'direct',label:'Напрямую'}]){(v.H as any).network={claude:via};const html=v.functions.waitingControls(p,info,v.H.project);assert.match(html,/<h3>Claude не отвечает из вашей сети<\/h3>/);assert.doesNotMatch(html,/Пустить напрямую|ни один прокси/)}
+ (v.H as any).network={claude:{id:'proxy',type:'proxy',label:'Нидерланды'}};assert.match(v.functions.waitingControls(p,info,v.H.project),/Пустить напрямую один раз/);assert.doesNotMatch(v.functions.waitingControls({...p,settingsBinding:{}},info,v.H.project),/Пустить напрямую/);
+ const changed=v.functions.waitingControls(p,{...info,failure:{...info.failure,code:'network_changed'}},v.H.project);assert.match(changed,/Настройки изменились — решите заново/);assert.match(changed,/Прямой повтор отменён/);
+});
+
+
+test('23d r2: rejected stale direct click refreshes the existing card with a new network generation',async t=>{
+ const h=await fixture(t,{deps:{networkRelayOptions:{timeoutMs:100}}});await h.runtime.settings.changeNetwork(async c=>{c.migrated=true;c.exits.p={id:'p',type:'proxy',label:'Proxy',url:'http://127.0.0.1:1'};c.chains.claude=['p'];return {result:undefined}});await call(h.api,'/api/chat',{body:{pane:'worker',message:'blocked'}});await h.runtime.idle();
+ const status=(await call(h.api,'/api/status')).body,v=ui(),paths:string[]=[];v.H.on=true;v.S.ui.pane='worker';(v.sandbox.window.CX as any).render=()=>{};Object.assign(v.sandbox,{hStatus(){}});runInContext(source.slice(source.indexOf('  async function refreshStatus('),source.indexOf('  // лента активного чата')),v.sandbox);v.functions.applyStatus(status);const pane=status.panes.find((p:any)=>p.id==='worker'),old=pane.settingsBinding;
+ await h.runtime.settings.changeNetwork(async c=>{const exit=c.exits.p!;if(exit.type==='proxy')exit.url='http://127.0.0.1:2';return {result:undefined}});
+ v.sandbox.fetch=async(path,options)=>{paths.push(path);return {json:async()=>(await call(h.api,path,options?.body?{body:JSON.parse(options.body)}:{})).body}};await v.click({attemptProject:h.dir,attemptPane:'worker',attemptId:pane.waiting.turnInstanceId,attemptAction:'retry',attemptNetwork:'direct_once',attemptBinding:JSON.stringify(old)});
+ const binding=h.runtime.paneBinding('worker');assert.notEqual(binding.networkGeneration,old.networkGeneration);assert.ok(paths.includes('/api/status'));assert.match(v.cards.get('live-waiting')!.innerHTML,new RegExp(binding.networkGeneration!));assert.equal(h.provider.calls.length,0);
 });
