@@ -51,7 +51,7 @@ export interface CliDependencies {execute:CliExecutor;env:NodeJS.ProcessEnv;cwd:
 
 /** Metadata remains usable when an isolated, permission-safe turn is unavailable. */
 export interface CliUnavailableDescriptor extends Pick<CliDescriptor,'id'|'name'|'binary'|'login'|'version'|'forbiddenEnv'> {
- auth:CliAuthProbe;
+ auth:CliAuthProbe|{unavailableReason:string};
  models:CliProbe<CliModel[]>|{list:readonly CliModel[];reason:string};
  capabilities:{headless:boolean;resume:boolean;mcp:false;limits:false};
  unavailableReason:string;
