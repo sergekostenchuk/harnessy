@@ -21,6 +21,8 @@ if(args.includes('--headless')){
  const account=readFileSync(process.env.CP_ACCOUNT,'utf8').trim(),login=scenario==='state-account'&&config.startsWith(process.env.CP_STATE)?'different':account;
  let result=req.method==='auth.getStatus'?{isAuthenticated:scenario!=='logged-out',authType:'user',login,host:'https://github.com'}:{models:[{id:'cp-model',name:'Copilot Model',capabilities:{}},{id:'disabled-model',name:'Disabled',capabilities:{},policy:{state:'disabled'}}]};
  if(req.method==='account.getQuota')result={quotaSnapshots:{premium_interactions:{entitlementRequests:300,remainingPercentage:75,resetDate:'2026-11-01T00:00:00Z'}}};
+ if(scenario==='missing-reset'&&req.method==='account.getQuota')delete result.quotaSnapshots.premium_interactions.resetDate;
+ if(scenario==='live-quota-shape'&&req.method==='account.getQuota')result={quotaSnapshots:Object.fromEntries(['chat','completions','premium_interactions'].map(key=>[key,{entitlementRequests:key==='premium_interactions'?0:100,usedRequests:0,remainingPercentage:100,overage:0,overageAllowedWithExhaustedQuota:false,resetDate:'2026-10-11T23:00:14.764-07:00'}]))};
  if(scenario==='bad-quota'&&req.method==='account.getQuota')result={quotaSnapshots:{premium_interactions:{remainingPercentage:75}}};
  if(scenario==='no-identity'&&req.method==='auth.getStatus')delete result.login;
  if(scenario==='bad-models'&&req.method==='models.list')result={models:[{id:'no-name'}]};

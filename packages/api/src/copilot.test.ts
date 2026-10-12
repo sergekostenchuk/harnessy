@@ -23,6 +23,7 @@ test('307: Copilot HTTP probe needs owner approval, preserves state, and keeps m
 test('283: limits HTTP reads account.getQuota via the process, returns a monthly measurement and never calls a model',async t=>{
  const cli=await copilotFixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([cli.entry])}});
  const first=await call(h.api,'/api/limits');assert.equal(first.status,200,first.text);const cp=first.body.providers.find((p:any)=>p.vendor==='copilot');assert.ok(cp,JSON.stringify(first.body));assert.equal(cp.windows[0].label,'month');assert.equal(cp.windows[0].percentUsed,25);assert.equal(cp.account,'alice@github.com');assert.equal(cp.checkedAt,h.clock.now());
+ const measured=(await h.runtime.project.trace.read()).filter(e=>e.kind==='provider.limits');assert.equal(measured.length,1);assert.equal(measured[0]!.outcome,'ok');assert.deepEqual(measured[0]!.data,{vendor:'copilot',code:null,reason:''});assert.equal(measured[0]!.durationMs,0);assert.doesNotMatch(JSON.stringify(measured),/alice|github.com|FAKE-/);
  await call(h.api,'/api/limits');assert.equal(cli.capture().filter(c=>c.rpc==='account.getQuota').length,1);assert.equal(cli.capture().some(c=>c.turn),false);
  writeFileSync(cli.account,'another');const changed=await call(h.api,'/api/limits');assert.equal(changed.body.providers.find((p:any)=>p.vendor==='copilot').account,'another@github.com');assert.equal(cli.capture().filter(c=>c.rpc==='account.getQuota').length,2);
 });
@@ -30,4 +31,14 @@ test('283: limits HTTP reads account.getQuota via the process, returns a monthly
 test('283: quota failure is typed over HTTP with no invented Copilot measurement or model call',async t=>{
  const cli=await copilotFixture(t,'bad-quota'),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([cli.entry])}}),r=await call(h.api,'/api/limits');
  assert.equal(r.body.ok,false);assert.equal(r.body.code,'limits_unavailable');assert.equal(typeof r.body.reason,'string');assert.equal(r.body.providers.find((p:any)=>p.vendor==='copilot').ok,false);assert.deepEqual(r.body.providers.find((p:any)=>p.vendor==='copilot').windows,[]);assert.equal(cli.capture().some(c=>c.turn),false);
+});
+
+for(const [scenario,reason] of [['missing-reset','Copilot не передал дату сброса квоты'],['live-quota-shape','Copilot: дата сброса не задаёт календарное месячное окно'],['bad-quota','Copilot: неверная квота']])test('299: '+scenario+' process → parser → HTTP/cache/trace keeps the precise reason without raw metadata',async t=>{
+ const cli=await copilotFixture(t,scenario),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([cli.entry])}});
+ const result=await call(h.api,'/api/limits'),row=result.body.providers.find((p:any)=>p.vendor==='copilot');assert.equal(row.reason,reason);assert.equal(row.ok,false);assert.deepEqual(row.windows,[]);
+ const cache=JSON.parse(readFileSync(join(h.deps.limitsCacheDir!,'copilot.json'),'utf8'));assert.equal(cache.reason,reason);
+ const events=(await h.runtime.project.trace.read()).filter(e=>e.kind==='provider.limits');assert.equal(events.length,1);const event=events[0]!;
+ assert.equal(event.outcome,'failed');assert.equal(event.reason.text,reason);assert.deepEqual(event.data,{vendor:'copilot',code:'limits_unavailable',reason});assert.ok(typeof event.durationMs==='number'&&event.durationMs>=0);
+ assert.doesNotMatch(JSON.stringify(events),/alice|github.com|FAKE-|quotaSnapshots|resetDate|entitlementRequests/);
+ await call(h.api,'/api/limits');assert.equal(cli.capture().filter(c=>c.rpc==='account.getQuota').length,1);assert.equal((await h.runtime.project.trace.read()).filter(e=>e.kind==='provider.limits').length,1);assert.equal(cli.capture().some(c=>c.turn),false);
 });
