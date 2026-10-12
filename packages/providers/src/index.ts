@@ -12,3 +12,5 @@ export type {CatalogEntry,CatalogRow,CatalogLogin} from './catalog.ts';
 export {LoginTerminal,type TerminalOptions} from './login-terminal.ts';
 export {ANTIGRAVITY,ANTIGRAVITY_UNAVAILABLE} from './antigravity.ts';
 export {AntigravityStream} from './antigravity-stream.ts';
+
+export {GEMINI,GEMINI_UNAVAILABLE,GEMINI_MODELS_UNAVAILABLE} from './gemini.ts';

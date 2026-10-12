@@ -4,7 +4,7 @@ import type {Seat,TurnContext,Mode,Usage,ToolTrace,ProviderLimits,ErrorCode} fro
 export type CliSeat=Omit<Seat,'vendor'>&{vendor:string};
 // Storage identity only; stateProjectDir never adds filesystem permissions to a turn.
 export type CliContext=Omit<TurnContext,'peers'>&{peers:{id:string;label:string;vendor:string}[];stateProjectDir?:string};
-export interface CliAuth {loggedIn:boolean;email?:string|null;plan?:string|null}
+export interface CliAuth {loggedIn:boolean;email?:string|null;plan?:string|null;state?:'unknown';reason?:string}
 export interface CliModel {id:string;label:string}
 export interface CliCommand {args:string[];input?:string;rpcMethod?:'auth.getStatus'|'models.list'|'account.getQuota'}
 export interface CliProcessRequest extends CliCommand {binary:string;cwd:string;env:NodeJS.ProcessEnv;timeoutMs:number;maxBytes:number}
@@ -45,8 +45,9 @@ export interface CliDescriptor {
 export interface CliDependencies {execute:CliExecutor;env:NodeJS.ProcessEnv;cwd:string;temporaryDirectory:string;probeTimeoutMs:number;turnTimeoutMs:number;maxBytes:number;stateRoot?:string}
 
 /** Metadata remains usable when an isolated, permission-safe turn is unavailable. */
-export interface CliUnavailableDescriptor extends Pick<CliDescriptor,'id'|'name'|'binary'|'login'|'version'|'models'|'forbiddenEnv'> {
- auth:CliProbe<CliAuth>;
+export interface CliUnavailableDescriptor extends Pick<CliDescriptor,'id'|'name'|'binary'|'login'|'version'|'forbiddenEnv'> {
+ auth:CliAuthProbe;
+ models:CliProbe<CliModel[]>|{list:readonly CliModel[];reason:string};
  capabilities:{headless:boolean;resume:boolean;mcp:false;limits:false};
  unavailableReason:string;
 }

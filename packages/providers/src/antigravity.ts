@@ -15,7 +15,7 @@ export const ANTIGRAVITY:CliUnavailableDescriptor={
  forbiddenEnv:['GEMINI_API_KEY','GOOGLE_API_KEY','GOOGLE_GEMINI_BASE_URL','GOOGLE_APPLICATION_CREDENTIALS','AGY_ADC_AUTH'],
  capabilities:{headless:true,resume:true,mcp:false,limits:false},unavailableReason:ANTIGRAVITY_UNAVAILABLE,
  version:{command:{args:['--version']},parse:r=>{const v=r.stdout.trim();if(!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(v))throw invalid();return v}},
- auth:{command:{args:['--output-format','json','-p','/usage']},exitCodes:[0,1],parse:r=>{
+ auth:{command:{args:['--output-format','json','-p','/usage']},exitCodes:[0,1],parse:(r:CliProcessResult)=>{
   if(r.code===1&&/^\s*(?:Error:\s*)?authentication required\b/i.test(r.stderr||r.stdout))return {loggedIn:false};
   const v=metadata(r,'usage');if(!Array.isArray(v.groups)||v.groups.some(g=>!record(g)||!label(g.name)||!Array.isArray(g.buckets)))throw invalid();
   // No account identifier is exposed by this command; do not infer one from a model or quota.
