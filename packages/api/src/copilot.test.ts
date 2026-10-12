@@ -2,27 +2,23 @@ import test from 'node:test';
 import {setTimeout as tick} from 'node:timers/promises';
 async function until(ready:()=>boolean){for(let n=0;n<800;n++){if(ready())return;await tick(10)}throw Error('Copilot SSE result timed out')}
 import assert from 'node:assert/strict';
-import {existsSync,readFileSync,writeFileSync} from 'node:fs';
-import {ProviderCatalog,LoginTerminal} from '@harnessy/providers';
+import {existsSync,readFileSync,writeFileSync,readdirSync} from 'node:fs';
+import {join} from 'node:path';
+import {CliStateStore} from '../../providers/src/cli/state.ts';
+import {ProviderCatalog,LoginTerminal,COPILOT_UNAVAILABLE} from '@harnessy/providers';
 import {copilotFixture} from '../../providers/src/copilot-test-helpers.ts';
-import {fixture,call,sse} from './test-helpers.ts';
-test('261/281: Copilot HTTP catalog → approval → process → providers SSE; login cannot inject a command',async t=>{
+import {fixture,call,sse,OWNER} from './test-helpers.ts';
+// 293: probe no longer creates an approval or a model turn; metadata doors stay live.
+test('293: Copilot HTTP and runtime bridge refuse probe, preserve state, and keep catalog/check/login available',async t=>{
  const cli=await copilotFixture(t),scripts:string[]=[],h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([cli.entry]),loginTerminal:new LoginTerminal({platform:'darwin',temporaryDirectory:cli.dir,open:async path=>{scripts.push(readFileSync(path,'utf8'))}})}}),stream=await sse(h.api);t.after(()=>stream.close());
- const catalog=await call(h.api,'/api/providers/catalog');assert.equal(catalog.body.providers[0].id,'copilot');assert.equal(catalog.body.providers[0].login.state,'ok');
- const p=await call(h.api,'/api/providers/copilot/probe',{body:{model:'cp-model'}});assert.equal(p.body.status,'awaiting_approval');assert.equal(cli.capture().some(c=>c.turn),false);
+ const store=new CliStateStore('copilot',cli.stateRoot),state=store.acquire(h.dir,'provider-probe');writeFileSync(join(state.path,'session'),'keep');state.release();
+ const catalog=await call(h.api,'/api/providers/catalog'),row=catalog.body.providers[0];assert.equal(row.login.state,'ok');assert.equal(row.reason,COPILOT_UNAVAILABLE);assert.equal(row.capabilities.resume,false);assert.equal(row.capabilities.mcp,false);assert.equal(row.capabilities.limits,true);assert.equal(row.models[0].id,'cp-model');
+ assert.equal((await call(h.api,'/api/providers/copilot/check',{body:{}})).body.login.state,'ok');await until(()=>stream.frames.some(e=>e.type==='providers'&&e.event==='check'));const before=cli.capture().length;
+ for(let n=0;n<2;n++){const r=await call(h.api,'/api/providers/copilot/probe',{body:{model:'cp-model'}});assert.equal(r.status,409);assert.equal(r.body.code,'capability_unsupported');assert.equal(r.body.reason,COPILOT_UNAVAILABLE)}
+ await assert.rejects(h.runtime.providerOperations.probe('copilot','cp-model',OWNER),{code:'capability_unsupported'});assert.equal(h.runtime.owner.approvals.size,0);assert.equal(cli.capture().length,before);assert.equal(stream.frames.some(e=>e.type==='providers'&&e.event==='probe'&&e.status==='done'),false);
  assert.equal((await call(h.api,'/api/providers/copilot/probe',{body:{model:'cp-model',confirmed:true}})).body.code,'probe_invalid');
- await call(h.api,'/api/approve',{body:{project:h.dir,pane:'owner',id:p.body.approvalId,decision:'allow'}});
- await until(()=>stream.frames.some(e=>e.type==='providers'&&e.approvalId===p.body.approvalId&&['done','error'].includes(e.status)));
- const done=stream.frames.find(e=>e.type==='providers'&&e.approvalId===p.body.approvalId&&e.status==='done');assert.ok(done,JSON.stringify(stream.frames.filter(e=>e.type==='providers')));assert.equal(done.turn.text,'готов');assert.deepEqual(done.turn.usage,{input:null,output:null,cacheRead:null});
- assert.equal(cli.capture().filter(c=>c.turn).length,1);const state=cli.capture().find(c=>c.turn).config;assert.ok(existsSync(state));const turnArgs=cli.capture().find(c=>c.args?.includes('--prompt')).args;assert.equal(turnArgs.includes(h.dir),false,'storage binding does not grant access to the project');assert.equal(turnArgs.includes('--add-dir'),false);for(const c of cli.capture().filter(c=>c.mcp))assert.equal(existsSync(c.mcp),false);
  const login=await call(h.api,'/api/providers/copilot/login-terminal',{body:{command:'touch /OWNER',model:'ignored'}});assert.equal(login.body.ok,true);assert.match(scripts[0]!,/'login'/);assert.doesNotMatch(scripts[0]!,/OWNER|FAKE-SECRET/);
- const forbidden=await call(h.api,'/api/providers/copilot/check',{body:{},headers:{'X-Pane-Token':'forged'}});assert.equal(forbidden.body.code,'owner_only');
- await h.runtime.close();assert.ok(existsSync(state),'engine close preserves the private conversation');
-});
-test('261: changed GitHub identity after approval request rejects the real Copilot process',async t=>{
- const cli=await copilotFixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([cli.entry])}}),stream=await sse(h.api);t.after(()=>stream.close());
- const p=await call(h.api,'/api/providers/copilot/probe',{body:{model:'cp-model'}});writeFileSync(cli.account,'another');await call(h.api,'/api/approve',{body:{project:h.dir,pane:'owner',id:p.body.approvalId,decision:'allow'}});
- await until(()=>stream.frames.some(e=>e.type==='providers'&&e.approvalId===p.body.approvalId&&e.status==='error'));assert.equal(stream.frames.find(e=>e.type==='providers'&&e.status==='error').error.code,'login_changed');assert.equal(cli.capture().some(c=>c.turn),false);
+ const forbidden=await call(h.api,'/api/providers/copilot/probe',{body:{model:'cp-model'},headers:{'X-Pane-Token':'forged','X-Harness-Pane':'owner'}});assert.equal(forbidden.body.code,'owner_only');assert.equal(cli.capture().some(c=>c.turn),false);assert.deepEqual(readdirSync(state.path),['session']);assert.equal(readFileSync(join(state.path,'session'),'utf8'),'keep');await h.runtime.close();assert.ok(existsSync(state.path));
 });
 test('283: limits HTTP reads account.getQuota via the process, returns a monthly measurement and never calls a model',async t=>{
  const cli=await copilotFixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([cli.entry])}});

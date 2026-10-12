@@ -17,6 +17,7 @@ function probe<T>(p:CliProbe<T>):CliProbe<T>{if(!p||typeof p.parse!=='function'|
 function descriptor(d:CliDescriptor):CliDescriptor{
  if(!d||!text(d.id)||!/^[a-z][a-z0-9-]*$/.test(d.id)||['claude','codex'].includes(d.id)||!text(d.name)||!d.name||!text(d.binary)||!d.binary||!record(d.modes)||!strings(d.forbiddenEnv)||!d.turn||!['json','stream-json','text'].includes(d.turn.format)||typeof d.turn.command!=='function'||d.turn.format!=='text'&&typeof d.turn.decode!=='function'&&typeof d.turn.decoder!=='function'||!d.mcp||typeof d.mcp.args!=='function'||typeof d.mcp.serialize!=='function'||d.resume!==undefined&&typeof d.resume!=='function')throw protocol('неверный описатель провайдера');
  for(const mode of ['read','edit','all'])if(typeof d.modes[mode as 'read']!=='function')throw protocol('нет явного соответствия режима '+mode);
+ if(d.turnUnavailableReason!==undefined&&(!text(d.turnUnavailableReason)||!d.turnUnavailableReason.trim()))throw protocol('нет причины недоступности хода');
  if(d.state&&(!/^[a-z][a-z0-9-]*$/.test(d.state.namespace)||typeof d.state.args!=='function'))throw protocol('неверный описатель состояния');
  if(!d.auth||!('file'in d.auth)&&!('command'in d.auth))throw protocol('нет проверки входа');
  return {...d,login:command(d.login),version:probe(d.version),auth:'file'in d.auth?{...d.auth}:probe(d.auth),models:probe(d.models),modes:{...d.modes},forbiddenEnv:[...d.forbiddenEnv],turn:{...d.turn},mcp:{...d.mcp},...(d.state?{state:{...d.state}}:{}),...(d.limits?{limits:probe(d.limits)}:{}),...(d.sessions?{sessions:{...d.sessions}}:{})};
@@ -69,6 +70,7 @@ export class CliProvider {
  async listSessions(cwd:string){if(!this.d.sessions)throw new ProviderError('capability_unsupported','CLI не предоставляет список сессий');return this.query(this.d.sessions.list(cwd),undefined,cwd)}
  async sessionMessages(cwd:string,id:string){if(!this.d.sessions)throw new ProviderError('capability_unsupported','CLI не предоставляет историю сессии');return this.query(this.d.sessions.messages(cwd,id),undefined,cwd)}
  async runTurn(seat:CliSeat,message:string,original:CliContext){
+  if(this.d.turnUnavailableReason)throw new ProviderError('capability_unsupported',this.d.turnUnavailableReason,seat?.sessionId??null);
   const input=inputSnapshot(seat,message,original,this.vendor);seat=input.seat;
   if(this.closed)throw new ProviderError('cancelled','провайдер закрыт');if(this.active.has(seat.id))throw new ProviderError('busy','место занято',seat.sessionId);
   const abort=new AbortController(),signal=AbortSignal.any([original.signal,abort.signal]),ctx={...original,peers:input.peers,env:{...original.env},signal};let release!:()=>void;

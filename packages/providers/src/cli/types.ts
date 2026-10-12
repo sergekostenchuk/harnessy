@@ -23,6 +23,8 @@ export type CliEvent=
  | {type:'error';code:ErrorCode;text:string};
 export interface CliDescriptor {
  id:string;name:string;binary:string;
+ /** Metadata remains available when a safe model execution is not implemented. */
+ turnUnavailableReason?:string;
  /** Display only: the driver never starts an interactive login. */
  login:CliCommand;
  version:CliProbe<string>;auth:CliAuthProbe;models:CliProbe<CliModel[]>;

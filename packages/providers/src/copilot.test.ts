@@ -1,18 +1,17 @@
 import test from 'node:test';
-import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
-import {setTimeout as delay} from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync,writeFileSync,mkdirSync,statSync,readdirSync,symlinkSync,renameSync,realpathSync} from 'node:fs';
 import {join} from 'node:path';
 import {copilotFixture} from './copilot-test-helpers.ts';
-import {CliProvider} from './cli/provider.ts';
 import {CliStateStore} from './cli/state.ts';
 import {ProviderCatalog,cliEntry} from './catalog.ts';
+import {COPILOT_UNAVAILABLE} from './copilot.ts';
+import {bridge} from './bridge-test-support.ts';
 
 test('261/281: process metadata uses only RPC reads, masks account, keeps HOME and excludes environment overrides',async t=>{
  const h=await copilotFixture(t),{row}=await new ProviderCatalog([h.entry]).read('copilot');
- assert.equal(row.version,'1.0.12');assert.equal(row.login.state,'ok');assert.equal(row.login.account,'a•••@github.com');assert.deepEqual(row.models,[{id:'cp-model',label:'Copilot Model'}]);assert.deepEqual(row.capabilities,{headless:true,resume:true,mcp:true,limits:true});
+ assert.equal(row.version,'1.0.12');assert.equal(row.login.state,'ok');assert.equal(row.login.account,'a•••@github.com');assert.deepEqual(row.models,[{id:'cp-model',label:'Copilot Model'}]);assert.deepEqual(row.capabilities,{headless:true,resume:false,mcp:false,limits:true});
  for(const c of h.capture().filter(c=>c.args)){assert.equal(c.home,process.env.HOME);assert.deepEqual(c.forbidden,[]);assert.ok(!c.args.includes('--prompt'))}
  assert.deepEqual(h.capture().filter(c=>c.rpc).map(c=>c.rpc),['auth.getStatus','models.list']);for(const c of h.capture().filter(c=>c.rpc))assert.equal(existsSync(c.config),false);
  assert.equal(readdirSync(h.stateRoot).length,0);
@@ -22,30 +21,20 @@ for(const scenario of ['logged-out','no-identity','bad-models','wrong-id','broke
  await assert.rejects(h.provider.runTurn(h.seat,'do not run',h.ctx));assert.equal(h.capture().some(c=>c.turn),false);assert.equal(h.registered.length,0);
 });
 test('261: missing Copilot is installed:false, not an empty ready catalog',async t=>{const h=await copilotFixture(t),entry=cliEntry({...h.description,binary:join(h.dir,'missing')},h.deps);assert.equal((await new ProviderCatalog([entry]).read('copilot')).row.installed,false)});
-test('261/281: read/edit/all use documented permissions, isolated MCP and process tool traces',async t=>{
- const h=await copilotFixture(t,'bridge');
- for(const mode of ['read','edit','all'] as const){const r=await h.provider.runTurn({...h.seat,id:mode,mode},'a literal $(touch /never)',h.ctx);assert.equal(r.text,'готов');const c=h.capture().filter(c=>c.turn).at(-1)!,args=h.capture().filter(c=>c.args?.includes('--prompt')).at(-1)!.args;
-  assert.equal(c.mode,0o700);assert.ok(c.config.startsWith(realpathSync(h.stateRoot)));assert.ok(args.includes('--disable-builtin-mcps'));assert.ok(args.includes('--no-bash-env'));assert.ok(args.includes('--no-custom-instructions'));
-  if(mode==='all'){assert.ok(args.includes('--allow-all-tools'));assert.ok(args.includes('--allow-all-paths'))}else{assert.ok(args.includes('--deny-tool=shell'));assert.ok(args.includes(mode==='read'?'--deny-tool=write':'--allow-tool=write'));assert.equal(args.includes('--allow-all-paths'),false)}
- }
- assert.equal(h.requests.length,3);assert.deepEqual(h.traces.map(t=>t.phase),['call','result','call','result','call','result']);assert.equal(h.traces.every(e=>e.phase==='call'||e.outcome==='ok'),true);
- for(const c of h.capture().filter(c=>c.mcp)){assert.equal(c.mcpMode,0o600);assert.equal(existsSync(c.mcp),false)}assert.deepEqual(h.registered,h.revoked);
- for(const e of h.events)if(e.type==='done')assert.deepEqual(e.usage,{input:null,output:null,cacheRead:null});
+// 293 cancels the old successful Copilot turn/resume invariant. Stream parsing and
+// generic CLI execution remain covered separately; this adapter must refuse every mode.
+for(const mode of ['chat','read','edit','all'] as const)for(const sessionId of [null,'ab123456-1234-1234-1234-123456789abc'])test('293: direct '+mode+' / '+(sessionId?'resume':'new')+' refuses before any await, token or state mutation',async t=>{
+ const h=await copilotFixture(t),store=new CliStateStore('copilot',h.stateRoot),lease=store.acquire(h.dir,h.seat.id);writeFileSync(join(lease.path,'session'),'keep existing history');lease.release();const contents=readdirSync(lease.path),root=readdirSync(h.stateRoot);let callbacks=0;
+ await assert.rejects(h.provider.runTurn({...h.seat,mode,sessionId},'no turn',{...h.ctx,beforeModel:async()=>{callbacks++},modelStarted:()=>{callbacks++}}),{code:'capability_unsupported',vendorText:COPILOT_UNAVAILABLE});
+ assert.equal(callbacks,0);assert.deepEqual(h.capture(),[]);assert.deepEqual(h.registered,[]);assert.deepEqual(h.revoked,[]);assert.deepEqual(h.events,[]);assert.deepEqual(readdirSync(lease.path),contents);assert.deepEqual(readdirSync(h.stateRoot),root);assert.equal(readFileSync(join(lease.path,'session'),'utf8'),'keep existing history');await h.provider.close();assert.ok(existsSync(lease.path));
 });
-test('281: new instance resumes only its own project/seat; close preserves history',async t=>{
- const h=await copilotFixture(t),first=await h.provider.runTurn(h.seat,'first',h.ctx),state=h.capture().find(c=>c.turn).config;await h.provider.close();
- const restarted=new CliProvider(h.description,h.deps);t.after(()=>restarted.close());await restarted.runTurn({...h.seat,sessionId:first.sessionId},'second',h.ctx);assert.equal(h.capture().filter(c=>c.turn).at(-1)!.config,state);assert.ok(existsSync(join(state,'session-state',first.sessionId!)));
- const other=join(h.dir,'other-project');mkdirSync(other);await assert.rejects(restarted.runTurn({...h.seat,sessionId:first.sessionId},'foreign',{...h.ctx,projectDir:other}),{code:'session_missing'});
- await assert.rejects(restarted.runTurn({...h.seat,id:'other-seat',sessionId:first.sessionId},'foreign',h.ctx),{code:'session_missing'});
- assert.equal(readFileSync(join(state,'session-state',first.sessionId!),'utf8'),'own conversation');
+test('293: catalog entry cannot launch Copilot even with a supplied model and no state input',async t=>{
+ const h=await copilotFixture(t),row=(await new ProviderCatalog([h.entry]).read('copilot')).row;assert.equal(row.reason,COPILOT_UNAVAILABLE);assert.equal(row.capabilities.resume,false);assert.equal(row.capabilities.mcp,false);assert.equal(row.capabilities.limits,true);assert.equal(row.login.state,'ok');assert.equal(row.models[0]!.id,'cp-model');const before=h.capture().length;
+ await assert.rejects(h.entry.runTurn(undefined as never,'no turn',undefined as never),{code:'capability_unsupported',vendorText:COPILOT_UNAVAILABLE});assert.equal(h.capture().length,before);assert.deepEqual(readdirSync(h.stateRoot),[]);
 });
-test('281: private login mismatch, unsupported mode and missing project fail before model',async t=>{
- const h=await copilotFixture(t,'state-account');await assert.rejects(h.provider.runTurn(h.seat,'x',h.ctx),{code:'login_changed'});
- await assert.rejects(h.provider.runTurn({...h.seat,mode:'web'},'x',h.ctx),{code:'capability_unsupported'});
- await assert.rejects(h.provider.runTurn(h.seat,'x',{...h.ctx,projectDir:null}),{code:'protocol'});assert.equal(h.capture().some(c=>c.turn),false);assert.deepEqual(h.registered,h.revoked);
-});
-for(const scenario of ['denied','crash','truncated'])test('261: process '+scenario+' is an explicit failure and releases MCP',async t=>{
- const h=await copilotFixture(t,scenario);await assert.rejects(h.provider.runTurn(h.seat,'x',h.ctx),{code:scenario==='denied'?'permission_denied':'transport_lost'});assert.deepEqual(h.registered,h.revoked);assert.equal(h.events.some(e=>e.type==='done'),false);
+test('293: the MCP bridge has no probe/resume escape hatch',async()=>{
+ const r=await bridge(['probe','provider_probe','resume'].map((name,i)=>({jsonrpc:'2.0',id:i+1,method:'tools/call',params:{name,arguments:{provider:'copilot',model:'cp-model',from:'owner'}}})));
+ assert.deepEqual(r.requests,[]);for(const row of r.replies){const result=row.result as any;assert.equal(result.isError,true);assert.match(JSON.stringify(result),/unknown_request/)}
 });
 test('281/282: state cleanup is journaled, preserves neighbours, refuses traversal, symlinks and a running seat',async t=>{
  const h=await copilotFixture(t),store=new CliStateStore('copilot',h.stateRoot),a=store.acquire(h.dir,'worker'),b=store.acquire(h.dir,'reviewer');writeFileSync(join(a.path,'session'),'worker');writeFileSync(join(b.path,'session'),'reviewer');
@@ -60,12 +49,6 @@ test('282: cleanup holds exclusion across the journal await',async t=>{
  assert.throws(()=>store.acquire(h.dir,'worker'),{code:'busy'});resume();await job;const next=store.acquire(h.dir,'worker');next.release();
 });
 
-test('281: cancellation kills the process, revokes MCP and releases the persistent seat for another instance',async t=>{
- const h=await copilotFixture(t,'hang'),job=h.provider.runTurn(h.seat,'wait',h.ctx),rejected=assert.rejects(job,{code:'cancelled'});
- for(let n=0;n<800&&!h.capture().some(c=>c.mcp);n++)await delay(10);assert.ok(h.capture().some(c=>c.mcp));h.controller.abort();await rejected;
- assert.deepEqual(h.registered,h.revoked);for(const c of h.capture().filter(c=>c.mcp))assert.equal(existsSync(c.mcp),false);
- const store=new CliStateStore('copilot',h.stateRoot),lease=store.acquire(h.dir,h.seat.id);lease.release();assert.equal(h.events.some(e=>e.type==='done'),false);
-});
 test('281/282: process-owned lease excludes a second engine and recovers after a crashed engine',async t=>{
  const h=await copilotFixture(t),module=new URL('./cli/state.ts',import.meta.url).href;
  const script='import {CliStateStore} from '+JSON.stringify(module)+'; new CliStateStore("copilot",process.argv[1]).acquire(process.argv[2],"worker"); console.log("locked"); setInterval(()=>{},1000)';
@@ -76,10 +59,9 @@ test('281/282: process-owned lease excludes a second engine and recovers after a
  const recovered=store.acquire(h.dir,'worker');recovered.release();let journal=0;await store.remove(h.dir,undefined,()=>{journal++});assert.equal(journal,1);assert.equal(existsSync(recovered.path),false);
 });
 
-for(const target of ['seat','project','root','replacement'])test('286: state '+target+' substitution during the final async check cannot start Copilot',async t=>{
- const h=await copilotFixture(t),root=join(realpathSync(h.stateRoot),'copilot'),hash=createHash('sha256').update(realpathSync(h.dir)).digest('hex'),state=join(root,hash,h.seat.id),outside=join(h.dir,'outside-state');mkdirSync(outside);writeFileSync(join(outside,'untouched'),'keep');let starts=0;
- await assert.rejects(h.provider.runTurn(h.seat,'must not run',{...h.ctx,modelStarted:()=>{starts++},beforeModel:async()=>{
-  const path=target==='root'?root:target==='project'?join(root,hash):state;renameSync(path,path+'-saved');if(target==='replacement')mkdirSync(path);else symlinkSync(outside,path);
- }}),{code:'state_dir_tampered'});
- assert.equal(starts,0);assert.equal(h.capture().some(c=>c.turn),false);assert.equal(h.events.some(e=>e.type==='done'),false);assert.deepEqual(h.registered,h.revoked);assert.deepEqual(readdirSync(outside),['untouched']);assert.equal(readFileSync(join(outside,'untouched'),'utf8'),'keep');
+test('293: an executor-boundary directory replacement is unreachable; outside files and saved state remain intact',async t=>{
+ const h=await copilotFixture(t),store=new CliStateStore('copilot',h.stateRoot),lease=store.acquire(h.dir,h.seat.id),outside=join(h.dir,'outside');writeFileSync(join(lease.path,'session'),'safe state');lease.release();mkdirSync(outside);writeFileSync(join(outside,'keep'),'safe neighbour');
+ // This is the reviewer's replacement boundary. No metadata or model executor may reach it.
+ const {CliProvider}=await import('./cli/provider.ts');let calls=0;const provider=new CliProvider(h.description,{...h.deps,execute:async()=>{calls++;renameSync(lease.path,lease.path+'-saved');symlinkSync(outside,lease.path);throw Error('unsafe executor reached')}});t.after(()=>provider.close());
+ await assert.rejects(provider.runTurn(h.seat,'no turn',h.ctx),{code:'capability_unsupported'});assert.equal(calls,0);assert.equal(readFileSync(join(lease.path,'session'),'utf8'),'safe state');assert.equal(readFileSync(join(outside,'keep'),'utf8'),'safe neighbour');assert.deepEqual(readdirSync(outside),['keep']);assert.equal(existsSync(lease.path+'-saved'),false);
 });
