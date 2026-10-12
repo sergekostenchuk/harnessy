@@ -29,7 +29,7 @@ test('22e: old reads and checks cannot overwrite saved exits or a new project',o
  const done=deferred<any>(),w=ui(async(path)=>path.endsWith('/check')?done.promise:response(path));await w.flush();const checking=w.click('[data-net-check="proxy"]');await w.change();done.resolve({ok:true,check:{revision:'one',ok:true,state:'checked',ip:'OLD',durationMs:1}});await checking;await w.flush();assert.doesNotMatch(w.find('[data-net-list]').textContent,/OLD/);
 });
 test('22e: complete connection page exposes chains for programs and API providers without old route editor',opts,async()=>{
- const v=ui(async path=>path==='/api/connections'?{ok:true,project:'/one',routes:['direct','proxy','iface'],providers:[{id:'claude',name:'Claude',kind:'подписка',auth:{loggedIn:true},models:1,seats:[],routable:true,route:{route:'direct',proxy:'',iface:'',label:'',expect:'',lastCheck:null}}]}:path==='/api/llm/providers'?{ok:true,providers:[{id:'custom',config:{displayName:'Custom',api:'openai-completions'},models:[],revision:'one'}],catalog:[]}:response(path),true);await v.flush();assert.match(v.find('[data-pv="claude"]').textContent,/Не настроен/);assert.ok(v.find('[data-net-chain="api:custom"]'));await v.click('[data-pv="claude"]');assert.ok(v.find('.cbody [data-net-chain="claude"]'));assert.equal(v.document.querySelector('.cbody [data-rapply]'),null);assert.equal(v.requests.some(r=>r.body),false);
+ const v=ui(async path=>path==='/api/connections'?{ok:true,project:'/one',routes:['direct','proxy','iface'],providers:[{id:'claude',name:'Claude',kind:'подписка',auth:{loggedIn:true},models:1,seats:[],routable:true,route:{route:'direct',proxy:'',iface:'',label:'',expect:'',lastCheck:null}}]}:path==='/api/llm/providers'?{ok:true,providers:[{id:'custom',config:{displayName:'Custom',api:'openai-completions'},models:[],revision:'one'}],catalog:[]}:response(path),true);await v.flush();assert.match(v.find('[data-pv="claude"]').textContent,/напрямую · прежний маршрут/);assert.ok(v.find('[data-net-chain="api:custom"]'));await v.click('[data-pv="claude"]');assert.ok(v.find('.cbody [data-net-chain="claude"]'));assert.equal(v.document.querySelector('.cbody [data-rapply]'),null);assert.equal(v.requests.some(r=>r.body),false);
 });
 
 test('22e: opening a chain shares an in-flight read; snapshot errors retain last exits with retry',opts,async()=>{
@@ -51,12 +51,12 @@ test('22i: price editor persists both tariffs through real HTTP, retains draft o
  await v.click('[data-net-action="reload"]');await v.input('monthlyUsd','');await v.input('perGbUsd','');await v.click('[data-net-action="save"]');assert.equal(h.runtime.settings.network().exits.priced?.price,undefined);
  for(const value of ['-1','oops','Infinity']){await v.input('monthlyUsd',value);const before=v.requests.length;await v.click('[data-net-action="save"]');assert.match(v.find('[data-net-message]').textContent,/цена должна/);assert.equal(v.requests.length,before)}
 });
-test('22i: each exit and program/API provider has five sample metrics and an explicit missing-source label',opts,async()=>{
+test('22e.1: statistics stay in exit/provider cards; route table has one compact summary',opts,async()=>{
  const v=ui(async path=>path==='/api/connections'?{ok:true,project:'/one',routes:['direct','proxy','iface'],providers:[{id:'claude',name:'Claude',kind:'подписка',auth:{loggedIn:true},models:1,seats:[],routable:true,route:{route:'direct',proxy:'',iface:'',label:'',expect:'',lastCheck:null}}]}:path==='/api/llm/providers'?{ok:true,providers:[{id:'custom',config:{displayName:'Custom',api:'openai-completions'},models:[],revision:'one'}],catalog:[]}:response(path),true);await v.flush();
- for(const n of v.document.querySelectorAll('.network-exit')){assert.equal(n.querySelectorAll('.net-metrics span').length,5);assert.match(n.textContent,/макет.*Источник статистики/)}
- assert.match(v.find('[data-pv="claude"] [data-net-summary]').textContent,/Мбит\/с.*ГБ.*%.*падения.*за день.*макет/);
+ for(const n of v.document.querySelectorAll('[data-net-list] .network-exit')){assert.equal(n.querySelectorAll('.net-metrics span').length,5);assert.match(n.textContent,/макет.*Источник статистики/)}
+ assert.equal(v.find('[data-pv="claude"] [data-net-summary]').textContent,'напрямую · прежний маршрут');assert.ok(v.find('[data-pv="claude"] .network-route-dot'));
  assert.match(v.find('[data-net-card="api:custom"]').textContent,/макет.*источник статистики/);
- await v.click('[data-pv="claude"]');assert.match(v.find('.cbody [data-net-card]').textContent,/макет/);await v.L.network.refresh();assert.match(v.find('[data-net-summary]').textContent,/макет/);
+ await v.click('[data-pv="claude"]');assert.match(v.find('.cbody [data-net-card]').textContent,/макет/);await v.L.network.refresh();assert.doesNotMatch(v.find('[data-net-summary]').textContent,/макет|Мбит|ГБ|падения/);
  assert.equal(v.requests.some(r=>/stats|\/check/.test(r.path)),false,'step 1 performs no statistics or network probes');
 });
 for(const reopen of ['claude','codex','closed'])test('22c: saved chain after Escape updates only its row and the matching pristine dialog: '+reopen,opts,async()=>{
