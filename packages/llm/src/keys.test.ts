@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MacKeyStore} from './keys.ts';
+import {MacKeyStore,keySlot} from './keys.ts';
+import {randomUUID} from 'node:crypto';
 import {KEYCHAIN_SCRIPT} from './keychain-script.ts';
 import {runInNewContext} from 'node:vm';
 const options={timeout:10000};
@@ -11,14 +12,17 @@ test('21c.2: live macOS Keychain put/get/delete uses only the isolated dummy acc
  skip:process.env.HARNESS_KEYCHAIN_LIVE==='1'?false:'HARNESS_KEYCHAIN_LIVE=1 required',timeout:60000,
 },async()=>{
  assert.equal(process.platform,'darwin','live Keychain test requires macOS');
- const store=new MacKeyStore(),account='harnessy-selftest',secret='probe-not-a-real-key-0001',startedAt=Date.now();
+ const store=new MacKeyStore(),account=keySlot('harnessy-selftest',randomUUID()),secret='probe-not-a-real-key-0001',startedAt=Date.now();
+ assert.equal(await store.resolveKey(account),null,'self-test generation must be absent before creation');
+ let created=false;
  try{
   await store.put(account,secret);
+  created=true;
   assert.equal(await store.resolveKey(account),secret);
   const description=await store.describe(account);
   assert.equal(description.present,true);assert.equal(description.mask,'••••••••0001');
   assert.ok(description.updatedAt!==null&&description.updatedAt>=startedAt&&description.updatedAt<=Date.now());
- }finally{await store.delete(account)}
+ }finally{if(created)await store.delete(account)}
  assert.equal(await store.resolveKey(account),null);
 });
 test('arbitrary route Keychain references use stdin only; descriptions expose only presence mask and date',options,async()=>{
