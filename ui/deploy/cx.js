@@ -60,7 +60,7 @@
     let left=l; if(l+pw>mw-12) left=l+w-pw; left=Math.max(12,Math.min(left,mw-pw-12));
     let top=t-8-ph; if(top<12) top=t+h+8; if(top+ph>mh-12) top=Math.max(12,mh-ph-12);   // вверх от строки; не влезло — вниз; и никогда за пределы кадра
     pop.style.left=left+'px'; pop.style.top=top+'px'; }
-  function open(anchor,k){ close(); const m=anchor.closest('.main')||document.body; pop=document.createElement('div'); pop.className='cx-pop'; m.appendChild(pop); pop.__anchor=anchor; pop.__box=anchor.closest('.box')||(anchor.parentElement&&anchor.parentElement.nextElementSibling); pop.__key=anchor.dataset.cx; pop.__binding=L.sendBinding(); stack=[k]; draw(); if(k==='model')void loadModels(pop); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); }
+  function open(anchor,k){ close(); const m=anchor.closest('.main')||document.body; pop=document.createElement('div'); pop.className='cx-pop'; m.appendChild(pop); pop.__anchor=anchor; pop.__box=anchor.closest('.box')||(anchor.parentElement&&anchor.parentElement.nextElementSibling); pop.__key=anchor.dataset.cx; pop.__binding=L.sendBinding(); pop.__settingsBinding=seat()&&seat().settingsBinding&&{...seat().settingsBinding}; stack=[k]; draw(); if(k==='model')void loadModels(pop); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); }
   function nav(k){ stack.push(k); draw(); if(k==='model')void loadModels(pop); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); } function back(){ stack.pop(); draw(); }
   function draw(){ if(!pop) return; const k=stack[stack.length-1]; pop.innerHTML=(stack.length>1?'<div class="cx-hd back" data-cx-back>'+svg('back')+'<span>'+esc(TITLES[k]||'')+'</span></div>':'')+VIEWS[k](); place();
     const f=pop.querySelector('input.cx-find'); if(f){ f.addEventListener('input',()=>filter(f)); if(f.classList.contains('cx-path'))f.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();return submitProjectMenu(!!pop.querySelector('[data-cx-mkdir]'))}}); setTimeout(()=>f.focus(),0); } }
@@ -106,10 +106,10 @@
   function accessStamp(groupId){const p=seat(),group=modelGroups().find(g=>g.id===groupId);return JSON.stringify([p&&[p.id,p.vendor,p.model,p.mode,p.kind,p.role,p.cwd,p.writePaths,p.worktree,!!p.busy],group&&[group.id,group.vendor,group.availability,group.models.map(m=>m.id),H.turnModes&&H.turnModes[group.vendor]]])}
   function accessCurrent(panel,ticket){const state=panel&&panel.__models,group=modelGroups(panel).find(g=>g.id===ticket.group);return modelsCurrent(panel)&&state&&state.access===ticket&&accessStamp(ticket.group)===ticket.stamp&&group&&groupAccess(group).canSwitch}
   function requestFullAccess(groupId){const panel=pop,state=panel&&panel.__models,group=modelGroups(panel).find(g=>g.id===groupId);if(!state||state.saving||!modelsCurrent(panel)||!group||!groupAccess(group).canSwitch)return;
-    state.failure='';state.access={group:groupId,stamp:accessStamp(groupId)};state.accessGroup=groupId;redrawModels(panel);const confirm=panel.querySelector('[data-cx-access-confirm]');if(confirm)confirm.focus();
+    state.failure='';state.access={group:groupId,stamp:accessStamp(groupId),binding:seat().settingsBinding&&{...seat().settingsBinding}};state.accessGroup=groupId;redrawModels(panel);const confirm=panel.querySelector('[data-cx-access-confirm]');if(confirm)confirm.focus();
   }
   async function confirmFullAccess(){const panel=pop,state=panel&&panel.__models,ticket=state&&state.access;if(!ticket||state.saving||!accessCurrent(panel,ticket))return;state.saving=true;redrawModels(panel);
-    try{const ok=await setSeat({mode:'all'},'Права места',{valid:()=>accessCurrent(panel,ticket),pendingValid:()=>accessCurrent(panel,ticket),accepted:r=>r.pane&&r.pane.mode==='all',failed:r=>{if(modelsCurrent(panel)){state.failure='Настройка не применена · '+(typeof (r&&r.reason)==='string'?r.reason:typeof (r&&r.error)==='string'?r.error:'нет связи')}}});
+    try{const ok=await setSeat({mode:'all',binding:ticket.binding},'Права места',{valid:()=>accessCurrent(panel,ticket),pendingValid:()=>accessCurrent(panel,ticket),accepted:r=>r.pane&&r.pane.mode==='all',failed:r=>{if(modelsCurrent(panel)){state.failure='Настройка не применена · '+(typeof (r&&r.reason)==='string'?r.reason:typeof (r&&r.error)==='string'?r.error:'нет связи')}}});
       if(ok&&modelsCurrent(panel)){state.failure='';state.accessNotice='Полный доступ включён. Выберите модель.'}
     }finally{if(state.access===ticket)state.access=null;state.saving=false;modelsStatus();redrawModels(panel)}
   }
@@ -255,7 +255,7 @@
       if(rm&&rm.model){let r=null;try{r=await L.api('/api/room',{model:rm.model,folder:false})}catch(x){}if(H.project!==project)return;if(!r||!r.ok){delete c.noFolderPending;c.noFolder=!!H.noProject;L.save();renderAll();L.toast('Харнесс не принял: '+esc(r&&r.error||'нет связи'));return}}
       await L.refreshStatus();if(H.project!==project)return;close();renderAll();L.toast('Без проекта: модель ничего не читает');return; }
     if(e.target.closest('[data-cx-mkdir]')||e.target.closest('[data-cx-opendir]')){ await submitProjectMenu(!!e.target.closest('[data-cx-mkdir]'));return; }
-    const md=e.target.closest('[data-cx-mode]'); if(md){ await setSeat({mode:md.dataset.cxMode},'Права места'); return; }
+    const md=e.target.closest('[data-cx-mode]'); if(md){ if(!L.bindingCurrent(pop.__binding)){close();return} await setSeat({mode:md.dataset.cxMode,binding:pop.__settingsBinding},'Права места'); return; }
     const full=e.target.closest('[data-cx-full-access]');if(full){requestFullAccess(full.dataset.cxFullAccess);return}
     if(e.target.closest('[data-cx-access-cancel]')){if(pop.__models&&!pop.__models.saving){pop.__models.access=null;redrawModels(pop)}return}
     if(e.target.closest('[data-cx-access-confirm]')){await confirmFullAccess();return}

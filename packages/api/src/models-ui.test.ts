@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,existsSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {setImmediate as immediate} from 'node:timers/promises';
 import {dom} from './ui-dom-test-helpers.ts';
@@ -27,8 +27,9 @@ const modes=()=>Object.fromEntries(catalogue().providers.map(p=>[p.id,Object.fro
 function ui(options:{page?:string;room?:boolean;statusFetch?:()=>Promise<Data>;fetch?:(path:string,body:Data|undefined)=>Promise<Data>}={}){
  const d=dom('<div class="frame cur"><div class="main"><div class="feed"></div><div class="box"><input class="in live-in"><div class="bar2"></div></div></div></div>');
  d.html.setAttribute('data-proto','');d.html.setAttribute('data-page',options.page??'chat');Object.assign(d.document,{documentElement:d.html,body:d.body});
- const pane={id:options.room?'room':'worker',label:options.room?'без роли':'воркер',vendor:'claude',model:'shared',mode:'read',busy:false};
+ const pane:Data={id:options.room?'room':'worker',label:options.room?'без роли':'воркер',vendor:'claude',model:'shared',mode:'read',busy:false};
  const H:Data={on:true,project:'/project-a',pane,panes:[pane],active:{[pane.id]:'chat-a'},models:Object.fromEntries(catalogue().providers.map(p=>[p.id,p.id==='gemini'?[{id:'default',label:'по умолчанию программы'}]:p.models])),turnModes:modes(),modes:[{id:'read',label:'Чтение'},{id:'edit',label:'Правка'},{id:'all',label:'Полный доступ'},{id:'chat',label:'Без проекта'}],chatList:[]};
+ pane.settingsBinding={project:H.project,instanceId:'project-instance',pane:pane.id,chat:H.active[pane.id],revision:0,mode:pane.mode};
  const S:Data={ui:{pane:pane.id},cx:{folder:'',noFolder:false,modes:{},att:[],conn:{}},chat:[]},requests:{path:string;body?:Data}[]=[],toasts:string[]=[],waiting:Data[]=[],listeners=new Set<Data>();
  let snapshot:Data=catalogue(),lastPane:Data|null=null,serverModels:Data|null=null;
  const ctx:Data={document:d.document,H,S,PAGE:options.page??'chat',esc,toast:(s:string)=>toasts.push(s),setTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),
@@ -67,7 +68,7 @@ for(const page of ['chat','new','first'])test('305/306: '+page+' lists every cat
 for(const page of ['chat','new'])for(const room of [false,true])test('351: '+page+' '+(room?'room':'seat')+' requires explicit full-access confirmation, then selects the program separately',async()=>{
  const v=ui({page,room});v.H.pane.kind=room?'room':'orchestrator';await v.open();const group=v.find('[data-cx-program="agy"]');assert.equal(group.querySelectorAll('[data-cx-group-reason]').length,1);assert.equal(v.select('agy','agy-model').textContent,'Antigravity model');assert.match(group.textContent,/Работает только в режиме «Полный доступ» · без инструментов Harnessy/);if(!room)assert.match(group.textContent,/оркестратор не сможет назначать роли/);
  await v.find('[data-cx-full-access="agy"]').emit('click');assert.match(v.find('[role="alertdialog"]').textContent,/Модель сможет менять файлы проекта и запускать команды/);assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(v.H.pane.mode,'read');await v.find('[data-cx-access-cancel]').emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
- await v.find('[data-cx-full-access="agy"]').emit('click');await v.find('[data-cx-access-confirm]').emit('click');assert.equal(v.H.pane.mode,'all');assert.equal(v.H.pane.vendor,'claude');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/'+v.H.pane.id,body:{mode:'all'}}]);assert.equal(v.select('agy','agy-model').disabled,false);await v.select('agy','agy-model').emit('click');assert.equal(v.H.pane.vendor,'agy');assert.equal(v.H.pane.mode,'all');assert.deepEqual(v.requests.filter(r=>r.body).at(-1),{path:'/api/panes/'+v.H.pane.id,body:{vendor:'agy',model:'agy-model'}});assert.equal(v.requests.some(r=>r.path==='/api/chat'||r.path.endsWith('/probe')),false);
+ await v.find('[data-cx-full-access="agy"]').emit('click');await v.find('[data-cx-access-confirm]').emit('click');assert.equal(v.H.pane.mode,'all');assert.equal(v.H.pane.vendor,'claude');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/'+v.H.pane.id,body:{mode:'all',binding:{project:'/project-a',instanceId:'project-instance',pane:v.H.pane.id,chat:'chat-a',revision:0,mode:'read'}}}]);assert.equal(v.select('agy','agy-model').disabled,false);await v.select('agy','agy-model').emit('click');assert.equal(v.H.pane.vendor,'agy');assert.equal(v.H.pane.mode,'all');assert.deepEqual(v.requests.filter(r=>r.body).at(-1),{path:'/api/panes/'+v.H.pane.id,body:{vendor:'agy',model:'agy-model'}});assert.equal(v.requests.some(r=>r.path==='/api/chat'||r.path.endsWith('/probe')),false);
 });
 
 for(const vendor of ['agy','gemini','qwen','ollama','devin','kimi','opencode'])test('351: one group explanation covers every unavailable '+vendor+' model',async()=>{
@@ -104,6 +105,43 @@ for(const room of [false,true])test('351: real HTTP permission change and model 
  if(room){const r=await call(h.api,'/api/room',{body:{vendor:'claude',model:h.runtime.registry.models.claude![0]!.id,folder:true}});assert.equal(r.status,200,r.text)}
  const initial=(await call(h.api,'/api/status')).body,v=ui({room,fetch:async(path,body)=>(await call(h.api,path,body?{body}:{})).body,statusFetch:async()=>(await call(h.api,'/api/status')).body});v.H.project=initial.project;v.ctx.binding.applyStatus(initial,null);await v.status();await v.open();const id=room?'room':'worker',chat=h.runtime.project.state.chats.active[id];
  await v.find('[data-cx-full-access="test-cli"]').emit('click');assert.equal(h.runtime.registry.get(id)!.mode,'read');await v.find('[data-cx-access-confirm]').emit('click');assert.equal(h.runtime.registry.get(id)!.mode,'all');await v.select('test-cli','test-model').emit('click');assert.equal(h.runtime.registry.get(id)!.vendor,'test-cli',JSON.stringify({requests:v.requests,pane:v.H.pane,menu:v.find('.cx-pop').textContent}));assert.equal(h.runtime.registry.get(id)!.mode,'all');assert.equal(h.runtime.project.state.chats.active[id],chat);assert.equal(cli.capture().filter(r=>r.action==='turn').length,0);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+});
+
+for(const change of ['project','chat','project A-B-A','chat A-B-A','mode A-B-A'])test('358: delayed permission POST cannot elevate after '+change,{timeout:12000},async t=>{
+ const h=await fixture(t),other=change.startsWith('project')?await fixture(t):null,entered=deferred(),release=deferred();t.after(()=>release.resolve());let receipt:Awaited<ReturnType<typeof call>>|undefined;
+ await call(h.api,'/api/chats/new',{body:{pane:'worker',carry:'none'}});
+ const initial=(await call(h.api,'/api/status')).body,v=ui({fetch:async(path,body)=>{if(path==='/api/providers/catalog')return catalogue();entered.resolve();await release.promise;receipt=await call(h.api,path,{body});return receipt.body}});
+ const bind=(status:Data)=>{v.H.project=status.project;v.H.panes=plain(status.panes);v.H.pane=v.H.panes.find((p:Data)=>p.id==='worker');v.H.active=plain(status.activeChats);v.S.ui.pane='worker'};
+ bind(initial);await v.status();await v.open();await v.find('[data-cx-full-access="agy"]').emit('click');const click=v.find('[data-cx-access-confirm]').emit('click');await entered.promise;
+ const expected=initial.panes.find((p:Data)=>p.id==='worker').settingsBinding;assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{mode:'all',binding:expected}}]);
+ if(change.startsWith('chat')){assert.equal((await call(h.api,'/api/chats/new',{body:{pane:'worker',carry:'none'}})).status,200);if(change.endsWith('A-B-A'))assert.equal((await call(h.api,'/api/chats/open',{body:{chat:expected.chat,carry:'none'}})).status,200)}
+ else if(change.startsWith('project')){assert.equal((await call(h.api,'/api/project',{body:{path:other!.dir}})).status,200);if(change.endsWith('A-B-A'))assert.equal((await call(h.api,'/api/project',{body:{path:h.dir}})).status,200)}
+ else{for(const mode of ['edit','read'])assert.equal((await call(h.api,'/api/panes/worker',{body:{mode}})).status,200)}
+ bind((await call(h.api,'/api/status')).body);await v.status();const before=h.runtime.registry.get('worker')!.settings(),file=h.runtime.project.dir+'/.harness/state/panes.json',bytes=()=>existsSync(file)?readFileSync(file):null,saved=bytes();release.resolve();await click;
+ assert.equal(receipt?.status,409,receipt?.text);assert.equal(receipt?.body.code,'binding_changed');assert.deepEqual(h.runtime.registry.get('worker')!.settings(),before);assert.deepEqual(bytes(),saved);assert.equal(v.H.pane.mode,'read');assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+});
+
+test('358: missing or forged confirmation fields refuse without changing settings; an intact confirmation is consumed once',async t=>{
+ const h=await fixture(t),status=(await call(h.api,'/api/status')).body,expected=status.panes.find((p:Data)=>p.id==='worker').settingsBinding,before=h.runtime.registry.get('worker')!.settings();
+ const cases:any[]=[undefined,null,[],{}, {...expected,extra:true}];
+ for(const key of Object.keys(expected)){const absent={...expected};delete absent[key];cases.push(absent,{...expected,[key]:key==='revision'?expected.revision+1:'forged'})}
+ for(const binding of cases){const r=await call(h.api,'/api/panes/worker',{body:{mode:'all',binding}});assert.equal(r.status,409,r.text);assert.equal(r.body.code,'binding_changed');assert.deepEqual(h.runtime.registry.get('worker')!.settings(),before)}
+ const accepted=await call(h.api,'/api/panes/worker',{body:{mode:'all',binding:expected}});assert.equal(accepted.status,200,accepted.text);assert.equal(accepted.body.pane.mode,'all');assert.ok(accepted.body.pane.settingsBinding.revision>expected.revision);
+ const duplicate=await call(h.api,'/api/panes/worker',{body:{mode:'all',binding:expected}});assert.equal(duplicate.status,409);assert.equal(duplicate.body.code,'binding_changed');assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+});
+
+test('358: the ordinary rights menu sends the original server binding too',async()=>{
+ const v=ui();await v.find('[data-cx="rights"]').emit('click');const expected=plain(v.H.pane.settingsBinding);await v.find('[data-cx-mode="all"]').emit('click');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{mode:'all',binding:expected}}]);
+});
+
+test('358: an already open rights menu cannot adopt a fresh binding after an unseen project A-B-A',async t=>{
+ const h=await fixture(t),other=await fixture(t);let receipt:Awaited<ReturnType<typeof call>>|undefined;
+ const v=ui({fetch:async(path,body)=>{receipt=await call(h.api,path,{body});return receipt.body}}),initial=(await call(h.api,'/api/status')).body;
+ const bind=(status:Data)=>{v.H.project=status.project;v.H.panes=plain(status.panes);v.H.pane=v.H.panes.find((p:Data)=>p.id==='worker');v.H.active=plain(status.activeChats)};
+ bind(initial);await v.find('[data-cx="rights"]').emit('click');const expected=plain(v.H.pane.settingsBinding);
+ for(const path of [other.dir,h.dir])assert.equal((await call(h.api,'/api/project',{body:{path}})).status,200);
+ bind((await call(h.api,'/api/status')).body);await v.status();await v.find('[data-cx-mode="all"]').emit('click');
+ assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{mode:'all',binding:expected}}]);assert.equal(receipt?.status,409,receipt?.text);assert.equal(h.runtime.registry.get('worker')!.mode,'read');
 });
 
 for(const page of ['chat','new','first'])test('306: '+page+' room passes vendor and the program default without launching a turn',async()=>{

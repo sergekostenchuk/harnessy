@@ -84,6 +84,15 @@ test('111: repeated rights cards replace their handler rather than retaining an 
  assert.deepEqual(v.requests.filter(r=>r.path.startsWith('/api/panes/')).map(r=>r.path),['/api/panes/second']);assert.equal(v.logs.length,1);
 });
 
+test('358: the settings rights card sends the captured binding and a delayed POST is rejected in another project',async t=>{
+ const h=await fixture(t),other=await fixture(t),entered=deferred(),release=deferred();t.after(()=>release.resolve());let receipt:any;
+ const v=settingsUi(async(path,body)=>{if(path==='/api/panes/worker'){entered.resolve();await release.promise;receipt=await call(h.api,path,{body});return receipt.body}return (await call(h.api,path,body?{body}:{})).body},h.dir);
+ await v.ready();const status=(await call(h.api,'/api/status')).body;v.H.panes=status.panes;v.H.modes=status.modes;await v.go('rights');
+ const expected=v.H.panes.find((p:any)=>p.id==='worker').settingsBinding;await v.find('[data-seat-rights="worker"]').emit('click');await v.find('[data-mode-seg] [data-m="all"]').emit('click');const send=v.find('[data-rights-apply]').emit('click');await entered.promise;
+ assert.equal((await call(h.api,'/api/project',{body:{path:other.dir}})).status,200);release.resolve();await send;
+ assert.equal(receipt.status,409);assert.equal(receipt.body.code,'binding_changed');assert.equal(h.runtime.registry.get('worker')!.mode,'read');assert.deepEqual(JSON.parse(JSON.stringify(v.requests.filter(r=>r.path==='/api/panes/worker'))),[{path:'/api/panes/worker',body:{mode:'all',binding:expected}}]);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+});
+
 test('111: real halt confirmation has one HTTP effect; raw HX steps do not save a fake stop',async t=>{
  const h=await fixture(t),v=settingsUi(async(path,body)=>(await call(h.api,path,{...(body?{body}:{})})).body);v.H.project=h.dir;await v.ready();await v.go('budget');
  await v.find('[data-halt="on"]').emit('click');await v.find('[data-go="2"]').emit('click');await v.find('[data-halt-go="on"]').emit('click');assert.equal(h.runtime.project.halted,true);assert.equal(v.H.halted,true);

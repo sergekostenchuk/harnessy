@@ -435,7 +435,14 @@ export class Runtime {
   this.validateTurn(vendor,mode);
   return row.models.map(m=>({...m}));
  }
- paneSet(id:string,body:Record<string,unknown>,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);if(p.restoreFailed.has(id))free(p,pane);if(pane.status==='recovering')throw waitingError(p,pane);if(p.editing.has(id)||p.materializing.has(id))throw new RuntimeError('busy','место сейчас отвечает — дождитесь ответа');const {cwd:_,...safe}=body;
+ paneBinding(id:string,p=this.project){const pane=this.pane(id,p);return {project:p.dir,instanceId:p.trace.instanceId,pane:id,chat:p.state.chats.active[id]??null,revision:pane.revision,mode:pane.mode}}
+ paneSet(id:string,body:Record<string,unknown>,initiator:Initiator){this.requireOwner(initiator);const p=this.project;
+ // No await between checking the owner's snapshot and applying the change. The
+ // project instance and pane revision also invalidate confirmations after A→B→A.
+ if(body.mode==='all'||body.binding!==undefined){const binding=body.binding,expected=p.registry.get(id)?this.paneBinding(id,p):null;
+  if(!expected||!object(binding)||Object.keys(binding).length!==Object.keys(expected).length||!Object.entries(expected).every(([key,value])=>binding[key]===value))throw new RuntimeError('binding_changed','Проект, разговор или права места изменились; обновите статус и подтвердите заново',409);
+ }
+ const pane=this.pane(id,p);if(p.restoreFailed.has(id))free(p,pane);if(pane.status==='recovering')throw waitingError(p,pane);if(p.editing.has(id)||p.materializing.has(id))throw new RuntimeError('busy','место сейчас отвечает — дождитесь ответа');const {cwd:_,binding:__,...safe}=body;
  if(body.vendor!==undefined&&(typeof body.vendor!=='string'||!p.registry.providers.has(body.vendor)))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);
  const target=typeof body.vendor==='string'?body.vendor:p.registry.modelVendor(pane,safe)??pane.vendor,mode=pane.busy?pane.mode:typeof body.mode==='string'?body.mode:pane.mode;
  if(body.vendor!==undefined||target!=='claude'&&target!=='codex'){
@@ -443,7 +450,7 @@ export class Runtime {
   if(models)p.registry.models[target]=models;
   if(typeof model!=='string'||!p.registry.models[target]?.some(m=>m.id===model))throw new RuntimeError('model_unsupported','Модель отсутствует в снимке каталога',409);
  }else this.validateTurn(target,mode);
- const updated=p.registry.update(pane,safe);if(updated){p.state.savePanes(p.registry,p.journal);this.stateEvent(p,pane);if(pane.status==='idle')void this.kick(id)}const info=waiting(p,pane);return {ok:true,pane:pane.settings(),...(updated&&pane.busy?{appliesFrom:'next' as const}:{}),...(info?{waiting:info}:{})}}
+ const updated=p.registry.update(pane,safe);if(updated){p.state.savePanes(p.registry,p.journal);this.stateEvent(p,pane);if(pane.status==='idle')void this.kick(id)}const info=waiting(p,pane);return {ok:true,pane:{...pane.settings(),settingsBinding:this.paneBinding(id,p)},...(updated&&pane.busy?{appliesFrom:'next' as const}:{}),...(info?{waiting:info}:{})}}
  async steer(id:string,text:string,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);text=pythonTrim(text);if(!text)throw new RuntimeError('text_empty','пустое сообщение',400);
  const turn=p.active.get(id),record=p.channel.postCore({to:[id],kind:'note',text,origin:'steer'},OWNER);
  try{if(!turn||turn.stopRequested||!turn.handle)throw new RuntimeError('turn_ended','ход не активен');this.scopes.assert(turn.scope);await turn.handle.steer(text);this.same(p);this.scopes.assert(turn.scope);pane.record('me',text);pane.publish({type:'steered',record});return {ok:true,seq:record.seq,steered:true}}

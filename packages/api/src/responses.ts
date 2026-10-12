@@ -11,7 +11,7 @@ export class HttpError extends Error {readonly reply:Reply;constructor(reply:Rep
 export const text=(error:unknown)=>error instanceof Error?error.message:String(error);
 export const slice=(value:string,n:number)=>[...value].slice(0,n).join('');
 export function pythonJson(value:unknown,ascii=true):string {const raw=compatJson(value);return ascii?raw.replace(/[\u0080-\uffff]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0')):raw}
-const lifecycle=new Set(['recovering','uncertain','merge_uncertain','stale_session','project_changed','steer_failed','ack_closed','actions_invalid','project_closed','restore_failed','stale_attempt','not_waiting','decision_exists','decision_invalid']);
+const lifecycle=new Set(['recovering','uncertain','merge_uncertain','stale_session','project_changed','binding_changed','steer_failed','ack_closed','actions_invalid','project_closed','restore_failed','stale_attempt','not_waiting','decision_exists','decision_invalid']);
 export function failure(error:unknown,style:'E'|'F'|'J'='F',statuses:Record<string,number>={}):Reply {
  if(error instanceof HttpError)return error.reply;
  const code=error instanceof RuntimeError||error instanceof ProjectError||error instanceof JournalError||error instanceof ProviderError||error instanceof TeamError?error.code:'internal_error';
