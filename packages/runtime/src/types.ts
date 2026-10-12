@@ -36,6 +36,7 @@ export interface RuntimeActions {
 export interface RuntimeDeps {
  networkCheckOptions?:{execute?:typeof import('@harnessy/providers').executeCli;sshDir?:string};
  networkKeys?:import('@harnessy/llm').KeyStore;
+ sshTunnels?:import('./ssh-tunnels.ts').SshTunnels;
  llmKeys?:import('@harnessy/llm').KeyStore;llmFetch?:typeof fetch;
  catalogCacheDir?:string;providerCatalog?:import('@harnessy/providers').ProviderCatalog;loginTerminal?:import('@harnessy/providers').LoginTerminal;
  projectDir:string;providers:Partial<Record<Vendor,Provider>>;appUrl:string;models?:ModelCatalog;clock?:Clock;limitsCacheDir?:string;
