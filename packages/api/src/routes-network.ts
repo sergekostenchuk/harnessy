@@ -16,7 +16,8 @@ export function networkRoutes(r:Runtime):Route[]{return [
  {method:'POST',path:'/api/network/exits/:id/check',style:'J',handle:async ctx=>{owner(ctx);networkFields(ctx.body,['revision']);return r.networkChecks.check(ctx.params.id!,ctx.body.revision).then(check=>json({ok:true,check}))}},
  {method:'GET',path:'/api/network/exits',style:'J',handle:async ctx=>{owner(ctx);return json({ok:true,exits:(await r.network.list()).map(row=>({...row,lastCheck:r.networkChecks.snapshot(row.config.id,row.revision!)}))})}},
  {method:'POST',path:'/api/network/exits/:id/save',style:'J',handle:async ctx=>{owner(ctx);networkFields(ctx.body,['config','revision','password']);return json({ok:true,...await r.network.save(ctx.params.id!,ctx.body.config,ctx.body.revision,ctx.body.password)})}},
- {method:'POST',path:'/api/network/exits/:id/delete',style:'J',handle:async ctx=>{owner(ctx);networkFields(ctx.body,['revision']);await r.network.delete(ctx.params.id!,ctx.body.revision);return json({ok:true})}},
+ {method:'GET',path:'/api/network/exits/:id/removal',style:'J',handle:async ctx=>{owner(ctx);return json({ok:true,...await r.network.removal(ctx.params.id!)})}},
+ {method:'POST',path:'/api/network/exits/:id/delete',style:'J',handle:async ctx=>{owner(ctx);networkFields(ctx.body,['revision','confirmation']);await r.network.delete(ctx.params.id!,ctx.body.revision,ctx.body.confirmation);return json({ok:true})}},
  {method:'GET',path:'/api/network/providers/:id',style:'J',handle:async ctx=>{owner(ctx);return json({ok:true,...await r.network.chain(ctx.params.id!)})}},
  {method:'POST',path:'/api/network/providers/:id',style:'J',handle:async ctx=>{owner(ctx);networkFields(ctx.body,['exits','revision','policy']);return json({ok:true,...await r.network.saveChain(ctx.params.id!,ctx.body.exits,ctx.body.revision,ctx.body.policy)})}},
  ]}

@@ -48,3 +48,9 @@ test('22h: optional reserve snapshots persist deltas once, include the current i
  stats.relay([{provider:'codex',exit:'b',switches:1}]);assert.equal(stats.read().providers.find(p=>p.provider==='codex')!.metrics.reserveMs.value,null);
  stats.close();const reopened=new NetworkStats(h.settings,h.path,()=>now);t.after(()=>reopened.close());m=reopened.read().exits[0]!.metrics;assert.equal(m.reserveMs.value,120000);assert.equal(m.switches.value,3);assert.doesNotMatch(readFileSync(h.path).toString(),/private-destination-marker/);
 });
+
+test('23a: today begins at engine local midnight and excludes yesterday, while day stays rolling',opts,async t=>{
+ const h=await setup(t),midnight=new Date(end).setHours(0,0,0,0);
+ for(const [at,bytes]of [[midnight-120000,100],[midnight+120000,200]] as const)h.stats.connection({provider:'claude',exit:'a',from:at,to:at+1000,bytesUp:bytes,bytesDown:0,connectMs:1,failed:false});
+ const today=h.stats.read('today');assert.equal(today.from,midnight);assert.equal(today.exits[0]!.metrics.bytes.value,200);assert.equal(h.stats.read('day').exits[0]!.metrics.bytes.value,300);assert.ok(today.exits[0]!.series.every(s=>s.from>=midnight));
+});
