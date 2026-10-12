@@ -94,3 +94,9 @@ test('299: timeout and account replacement diagnostics retain duration and canno
  h.clock.advance(300000);h.result(async()=>{h.identity('b@github.com');return {ok:false,code:'limits_unavailable',reason:'Copilot не передал дату сброса квоты'}});await s.refresh();
  assert.equal(h.disk().reason,'Вход сменился во время чтения лимитов');assert.equal(h.diagnostics.at(-1).code,'login_changed');assert.equal(h.disk().value,null);
 });
+
+
+test('319: unknown window duration survives cache restart without manufacturing a start or rejecting measured quota',async t=>{
+ const h=setup(t),s=h.create();h.result(async()=>{const v=live(h.clock);if(v.ok)v.windows[0]!.windowMinutes=null;return v});await s.refresh();assert.equal(s.snapshot().providers[0]!.ok,true);assert.equal(h.disk().value.windows[0].windowMinutes,null);
+ const restart=h.create();await restart.refresh();const row=restart.snapshot().providers[0]!;assert.equal(row.ok,true);assert.equal(row.windows[0]!.percentUsed,25);assert.equal(row.windows[0]!.windowMinutes,null);assert.equal(h.reads,1);
+});

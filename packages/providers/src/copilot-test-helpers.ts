@@ -23,6 +23,7 @@ if(args.includes('--headless')){
  if(req.method==='account.getQuota')result={quotaSnapshots:{premium_interactions:{entitlementRequests:300,remainingPercentage:75,resetDate:'2026-11-01T00:00:00Z'}}};
  if(scenario==='missing-reset'&&req.method==='account.getQuota')delete result.quotaSnapshots.premium_interactions.resetDate;
  if(scenario==='live-quota-shape'&&req.method==='account.getQuota')result={quotaSnapshots:Object.fromEntries(['chat','completions','premium_interactions'].map(key=>[key,{entitlementRequests:key==='premium_interactions'?0:100,usedRequests:0,remainingPercentage:100,overage:0,overageAllowedWithExhaustedQuota:false,resetDate:'2026-10-11T23:00:14.764-07:00'}]))};
+ if(scenario==='billing-period'&&req.method==='account.getQuota')result={quotaSnapshots:{chat:{entitlementRequests:0},premium_interactions:{entitlementRequests:300,usedRequests:75,remainingPercentage:99,overage:0,overageAllowedWithExhaustedQuota:false,resetDate:'2026-10-11T23:00:14.764-07:00'},completions:{entitlementRequests:100,remainingPercentage:90,resetDate:'2026-10-11T23:00:14.764-07:00'}}};
  if(scenario==='bad-quota'&&req.method==='account.getQuota')result={quotaSnapshots:{premium_interactions:{remainingPercentage:75}}};
  if(scenario==='no-identity'&&req.method==='auth.getStatus')delete result.login;
  if(scenario==='bad-models'&&req.method==='models.list')result={models:[{id:'no-name'}]};

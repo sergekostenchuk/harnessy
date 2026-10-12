@@ -10,7 +10,7 @@ const reasons:Record<LimitsCode,string>={
 };
 export const COPILOT_LIMIT_REASONS={
  response:'Copilot: неверный ответ квоты',quota:'Copilot: неверная квота',
- resetMissing:'Copilot не передал дату сброса квоты',window:'Copilot: дата сброса не задаёт календарное месячное окно',
+ resetMissing:'Copilot не передал дату сброса квоты',resetInvalid:'Copilot: неверная дата сброса квоты',
  empty:'Copilot не передал измеряемые квоты',
 } as const;
 const known=new Set<string>([...Object.values(reasons),...Object.values(COPILOT_LIMIT_REASONS)]);

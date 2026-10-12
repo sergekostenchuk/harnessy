@@ -5,6 +5,7 @@ import {request} from 'node:http';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
 import {ProviderCatalog,ProviderError,type CatalogEntry,type ProviderLimits} from '@harnessy/providers';
+import {copilotFixture} from '../../providers/src/copilot-test-helpers.ts';
 import {fixture,call,deferred,until,sse,FakeProvider,FakeClock} from './test-helpers.ts';
 const read=(path:string)=>readFileSync(new URL('../../../'+path,import.meta.url),'utf8'),live=read('ui/deploy/live.js'),raw=read('ui/sketches/disarto/05-spend.html');
 const part=(source:string,start:string,end:string)=>{const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return source.slice(a,b)};
@@ -334,4 +335,15 @@ for(const failure of ['missing','logged-out','quota-error','parser-reason'])test
  // The same envelope must work through SSE, including when all actual sources fail.
  const failed={...r.body,ok:false,revision:r.body.revision+100,providers:r.body.providers.map((p:any)=>({...p,ok:false,status:'unavailable',sourceConnected:true,windows:[],fetchedAt:null,code:'limits_unavailable',reason:'временно недоступно'}))};v.functions.limitEvent(failed);assert.match(v.find('.limits [data-limit-vendor="claude"]').textContent,/нет данных/);assert.equal(v.find('.limits [data-limit-vendor="claude"]').querySelector('[role="meter"]'),null);
  v.functions.limitEvent({...r.body,revision:failed.revision+1});assert.equal(v.find('.limits [data-limit-vendor="claude"] [role="meter"]').getAttribute('aria-valuenow'),'31');
+});
+
+
+test('319: Copilot process → HTTP → widget renders measured billing periods, excludes unlimited chat and invents no pace',async t=>{
+ const cli=await copilotFixture(t,'billing-period'),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([cli.entry])}}),r=await call(h.api,'/api/limits');
+ const cp=r.body.providers.find((p:any)=>p.vendor==='copilot');assert.equal(cp.ok,true);assert.deepEqual(cp.windows.map((w:any)=>w.label),['месяц · премиум-запросы','месяц · дополнения']);assert.equal(cp.windows[0].percentUsed,25);
+ const v=ui(async path=>(await call(h.api,path)).body);v.H.project=h.dir;v.context.PAGE='new';await v.functions.limits();const widget=v.find('.limits [data-limit-vendor="copilot"]');assert.equal(widget.querySelector('[role="meter"]')!.getAttribute('aria-valuenow'),'25');assert.doesNotMatch(widget.textContent,/нет данных|макет/);
+ await v.find('[data-spend-limits]').emit('click');const card=v.find('.limits-dialog').querySelectorAll('.sp-limit').find(n=>n.textContent.includes('Copilot'))!;assert.ok(card);assert.match(card.textContent,/месяц · премиум-запросы/);assert.match(card.textContent,/месяц · дополнения/);assert.match(card.textContent,/сброс/);assert.doesNotMatch(card.textContent,/месяц · чат|нет данных|макет/);assert.equal(card.querySelectorAll('[role="meter"]').length,2);
+ // Another provider may have a known duration and loaded turns; Copilot still cannot infer its own period start.
+ v.context.PAGE='spend';const quota={...r.body,revision:r.body.revision+1,providers:[...r.body.providers.filter((p:any)=>p.vendor!=='claude'),{vendor:'claude',ok:true,sourceConnected:true,fetchedAt:Date.now()/1000,windows:[{label:'неделя',percentUsed:31,windowMinutes:10080,resetsAt:Date.now()/1000+3600}]}]};v.functions.limitEvent(quota);await v.functions.windows();
+ const unknown={label:'месяц · премиум-запросы',percentUsed:25,resetsAt:Date.now()/1000+3600,windowMinutes:null};const usage=v.context.spWindowUsage(unknown,'copilot',false);assert.doesNotMatch(usage,/Наш проект за окно|Оценка к сбросу ≈|NaN|Infinity/);assert.match(usage,/недостаточно данных/);assert.equal(cli.capture().some(c=>c.turn),false);
 });
