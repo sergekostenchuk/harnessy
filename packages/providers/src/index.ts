@@ -14,3 +14,5 @@ export {ANTIGRAVITY,ANTIGRAVITY_UNAVAILABLE} from './antigravity.ts';
 export {AntigravityStream} from './antigravity-stream.ts';
 
 export {GEMINI,GEMINI_UNAVAILABLE,GEMINI_MODELS_UNAVAILABLE} from './gemini.ts';
+
+export {KIMI,KIMI_UNAVAILABLE,KIMI_LOGIN_UNKNOWN,KIMI_MODELS_UNAVAILABLE} from './kimi.ts';

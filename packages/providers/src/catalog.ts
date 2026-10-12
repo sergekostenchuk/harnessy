@@ -3,13 +3,14 @@ import {readCliMetadata,readCliFileMetadata} from './cli/query.ts';
 import {ANTIGRAVITY} from './antigravity.ts';
 import {COPILOT} from './copilot.ts';
 import {GEMINI} from './gemini.ts';
+import {KIMI} from './kimi.ts';
 import {executeCli} from './cli/process.ts';
 import {createHmac,randomBytes} from 'node:crypto';
 import {ProviderError,record,providerId,type Provider,type Vendor,type TurnContext,type ProviderLimits,type TurnModes,type TurnModeSupport} from './types.ts';
 import type {CliDescriptor,CliUnavailableDescriptor,CliDependencies,CliSeat,CliContext,CliAuth,CliModel,CliCommand} from './cli/types.ts';
 
 /** Subscription descriptors are added here by TS-20b/c; credentials are never stored here. */
-export const CLI_DESCRIPTORS:readonly (CliDescriptor|CliUnavailableDescriptor)[]=[ANTIGRAVITY,COPILOT,GEMINI];
+export const CLI_DESCRIPTORS:readonly (CliDescriptor|CliUnavailableDescriptor)[]=[ANTIGRAVITY,COPILOT,GEMINI,KIMI];
 export interface CatalogLogin {state:'ok'|'none'|'unknown'|'error';account?:string;command:string;checkedAt?:number;reason?:string}
 // Public checkedAt and SSE at are epoch milliseconds (durationMs is elapsed milliseconds).
 export interface CatalogRow {id:string;title:string;kind:'subscription'|'apikey'|'local';binary:string;installed:boolean|null;checking:boolean;version:string|null;login:CatalogLogin;models:CliModel[];modelsReason?:string;capabilities:{headless:boolean;resume:boolean;mcp:boolean;limits:boolean;turn?:TurnModes;probe?:TurnModeSupport};limits?:{ref:string};routes?:string;reason?:string}
@@ -33,9 +34,9 @@ const maskAccount=(value:unknown)=>typeof value==='string'&&value.trim()?value.t
 export function cliEntry(description:CliDescriptor|CliUnavailableDescriptor,deps:Partial<CliDependencies>={}):CatalogEntry{
  if('unavailableReason'in description){
   const d=description,options={...deps,env:{...(deps.env??process.env)}},reason=d.unavailableReason;
-  if(!safeText(reason)||'list'in d.models&&!safeText(d.models.reason))throw new ProviderError('protocol','Нет причины недоступности хода');
+  if(!safeText(reason)||'unavailableReason'in d.auth&&!safeText(d.auth.unavailableReason)||'list'in d.models&&!safeText(d.models.reason))throw new ProviderError('protocol','Нет причины недоступности хода');
   return {id:d.id,title:d.name,binary:d.binary,login:{args:[...d.login.args]},forbiddenEnv:[...d.forbiddenEnv],capabilities:{...d.capabilities,turn:unsupportedTurns(reason),probe:{ok:false,reason}},unavailableReason:reason,...('list'in d.models?{modelsReason:d.models.reason,staticModels:d.models.list}:{}),
-   version:()=>readCliMetadata(d.binary,d.forbiddenEnv,d.version,options),auth:()=> 'file'in d.auth?readCliFileMetadata(d.auth,options.env):readCliMetadata(d.binary,d.forbiddenEnv,d.auth,options),models:()=> 'list'in d.models?Promise.resolve(d.models.list.map(m=>({...m}))):readCliMetadata(d.binary,d.forbiddenEnv,d.models,options),
+   version:()=>readCliMetadata(d.binary,d.forbiddenEnv,d.version,options),auth:()=> 'unavailableReason'in d.auth?Promise.resolve({loggedIn:false,state:'unknown' as const,reason:d.auth.unavailableReason}):'file'in d.auth?readCliFileMetadata(d.auth,options.env):readCliMetadata(d.binary,d.forbiddenEnv,d.auth,options),models:()=> 'list'in d.models?Promise.resolve(d.models.list.map(m=>({...m}))):readCliMetadata(d.binary,d.forbiddenEnv,d.models,options),
    runTurn:async()=>{throw new ProviderError('capability_unsupported',reason)}};
  }
  const p=new CliProvider(description,deps),turn=cliTurns(description),probeMode=turn.read.ok?'read':'all',probe:TurnModeSupport=turn[probeMode].ok?{ok:true,...(probeMode==='all'?{note:description.noHarnessMcp?'полный доступ, без инструментов Harnessy':'полный доступ'}:{})}:{ok:false,reason:turn[probeMode].reason??'Нет режима пробного хода'};return {id:p.vendor,probeMode,...(description.allowUnverifiedLogin?{allowUnverifiedLogin:true}:{}),title:description.name,binary:description.binary,login:{args:[...description.login.args]},forbiddenEnv:[...description.forbiddenEnv],capabilities:{headless:true,resume:!!description.resume&&!description.turnUnavailableReason,mcp:!!description.mcp&&!description.turnUnavailableReason,limits:!!description.limits,turn,probe},...(description.turnUnavailableReason?{unavailableReason:description.turnUnavailableReason}:{}),...('list'in description.models?{staticModels:description.models.list,modelsReason:description.models.reason}:{}),version:()=>p.version(),auth:()=>p.auth(),models:()=>p.models(),...(description.limits?{limits:(signal?:AbortSignal)=>p.limits(signal)}:{}),runTurn:(s,m,c)=>p.runTurn(s,m,c),reset:()=>p.reset(),listSessions:cwd=>p.listSessions(cwd),sessionMessages:(cwd,id)=>p.sessionMessages(cwd,id),close:()=>p.close()};
