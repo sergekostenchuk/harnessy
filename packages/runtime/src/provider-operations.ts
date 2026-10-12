@@ -29,7 +29,9 @@ export class ProviderOperations {
  if(!p.closed)p.channel.postCore({to:['owner'],kind:'note',origin:'provider.login_terminal',text:'Команда входа '+id+' открыта в Терминале.'},{seat:'harness',trust:'harness'});return {ok:true as const,command:row.login.command};
  }
  private receipt(job:Probe,model:string){if(model!==job.model)throw new RuntimeError('probe_conflict','Уже ожидается подтверждение '+job.model,409,{fields:{pending:{approvalId:job.approval.id,model:job.model}}});return {ok:true as const,provider:job.id,model:job.model,approvalId:job.approval.id,status:job.status,price:{...subscriptionPrice}}}
- async probe(id:string,model:unknown,who:Initiator){this.owner(who);if(typeof model!=='string'||!model.trim()||model.length>200)throw new RuntimeError('model_required','Выберите модель',400);const p=this.runtime.project;this.catalog.get(id);const previous=this.probes.get(id);if(previous&&previous.project===p)return this.receipt(previous,model);
+ async probe(id:string,model:unknown,who:Initiator){this.owner(who);if(typeof model!=='string'||!model.trim()||model.length>200)throw new RuntimeError('model_required','Выберите модель',400);const p=this.runtime.project,entry=this.catalog.get(id);
+ if(entry.unavailableReason)throw new RuntimeError('capability_unsupported',entry.unavailableReason,409,{fields:{reason:entry.unavailableReason}});
+ const previous=this.probes.get(id);if(previous&&previous.project===p)return this.receipt(previous,model);
  const {row,identity}=await this.catalog.read(id);this.same(p);if(!row.installed)throw new RuntimeError('not_installed','Программа не установлена',409);if(!row.capabilities.headless)throw new RuntimeError('capability_unsupported','У программы нет безголового режима',409);if(row.login.state!=='ok')throw new RuntimeError('not_logged_in','Сначала войдите в программу',409);if(!row.models.some(m=>m.id===model))throw new RuntimeError('model_unsupported','Модель отсутствует в каталоге',400);
  // Recheck after metadata await: concurrent clicks share one owner decision and one model call.
  const pending=this.probes.get(id);if(pending&&pending.project===p)return this.receipt(pending,model);
