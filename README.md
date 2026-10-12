@@ -2,7 +2,7 @@
 
 The owner's window over a team of AI agents: roles (seats) with their own instructions, a shared exchange journal with delivery cursors, an exchange policy, context hand-off between agents, and the owner's veto on everything that has consequences. One repository, two parts:
 
-- **`packages/`** — the running TypeScript core (Node 22, strict TS, tests next to the code): `providers`, `journal`, `team`, `projects`, `context`, `runtime`, `api`. See `packages/README.md` for the rules and the module map.
+- **`packages/`** — the running TypeScript core (Node 22, strict TS, tests next to the code): `providers`, `llm`, `journal`, `team`, `projects`, `context`, `runtime`, `api`. See `packages/README.md` for the rules and the module map.
 - **`ui/`** — the window: design code and screen sketches (`ui/sketches/disarto`), the prototype with the live layer (`ui/deploy`), and the Electron shell (`ui/desktop`). The window is kept as is; the core must serve the same HTTP/SSE contract.
 
 The Python engine is preserved in Git history under the `mvp-python` tag. Running the engine requires Node.js, not Python; the separate UI build still uses Python.
@@ -18,7 +18,10 @@ flowchart TB
   end
   W <-->|"HTTP + SSE · 127.0.0.1:3777"| API["api · HTTP/SSE · TypeScript"]
   API --> RT["runtime · queues, turns, recovery, scope"]
-  RT --> PV["providers · Claude · Codex"]
+  RT --> PV["providers · ten programs: Claude · Codex · Antigravity · Copilot · Gemini · Kimi · Qwen · Devin · OpenCode · Ollama"]
+  RT --> LL["llm · own model service (pi-ai) · API routes with keys from the Keychain"]
+  RT --> AG["agent loop · tools by seat mode · Seatbelt shell"]
+  RT --> NR["network · local relay with token · proxy / SSH tunnels · statistics"]
   RT --> J["journal · exchange log, policy, evidence"]
   RT --> T["team · seats and roles"]
   RT --> PJ["projects · git, worktrees, routes"]
@@ -26,6 +29,8 @@ flowchart TB
   J & T & PJ & RT --> F[("project/.harness/ — the single source of truth")]
   PV --> CL["Claude Code (Agent SDK)"]
   PV --> CO["Codex app-server (JSON-RPC)"]
+  LL --> AI["any API model: DeepSeek, GLM, Kimi, OpenRouter, Ollama Cloud, own address…"]
+  NR --> EX["owner's proxy / VPS exits"]
 ```
 
 ## Run (today)
@@ -54,7 +59,7 @@ Status marks: **[code]** — merged into `main` and covered by tests; **[contrac
 | `state/halt.json`, `state/attempts.json`, `state/seat-materialization.json`, `state/ack-events.json` | the owner's stop switch and the durable receipts of unfinished operations (see 2) |
 | `MEMORY.md`, `evidence/` | project memory read into role briefings; review and test reports |
 
-Process memory is a cache of these files: the runtime rebuilds panes, chats, cursors, pending owner confirmations and unfinished operations from them on every open. Models remember through their own provider sessions; the core stores only the session identifiers. Owner-level preferences (settings, pins, known projects, connection routes) live in `~/.harness-*.json`, outside any project. There is no database.
+Process memory is a cache of these files: the runtime rebuilds panes, chats, cursors, pending owner confirmations and unfinished operations from them on every open. Models remember through their own provider sessions; the core stores only the session identifiers. Owner-level preferences (settings, pins, known projects, connection routes, API routes, proxy and VPS exits) live in `~/.harness-*.json`, outside any project; API keys and proxy passwords live in the macOS Keychain, never in files. There is no database for project state; exit statistics are kept as minute aggregates in the engine's own SQLite file.
 
 ### 2. How are unfinished operations saved and restored?
 
@@ -87,17 +92,22 @@ The model produces text and events; it does not touch the world directly.
 
 ### 5. Can a provider be replaced without changing the runtime?
 
-**Yes.** The runtime depends on one interface, `Provider` in `@harnessy/providers`: `runTurn(seat, message, ctx)`, `listSessions`, `sessionMessages`, `auth`, `models`, `reset`, `close`, with a `TurnContext` the runtime supplies (abort signal, event publisher, approval callback, session and handle callbacks, proxy environment, role note, peers, tools, process-token registry, writable roots, `modelStarted`). Two implementations exist — Claude through the Agent SDK and Codex through its app-server JSON-RPC — and the runtime's own tests run on a fake provider through the same interface. Providers are injected as `RuntimeDeps.providers[vendor]` **[code]**. Other models (Qwen, DeepSeek, GLM, Kimi, Ollama) already reach seats through Codex's local provider router without any core change. Adding a third first-class vendor means implementing the interface, registering it in the dependencies and extending the `Vendor` union and model catalog; the turn, queue and recovery logic stay untouched. A fallback Codex transport over `@openai/codex-sdk` is planned for 0.2 behind the same interface.
+**Yes, and there are now two kinds.** The runtime depends on one interface, `Provider` in `@harnessy/providers`: `runTurn(seat, message, ctx)`, `listSessions`, `sessionMessages`, `auth`, `models`, `reset`, `close`, with a `TurnContext` the runtime supplies (abort signal, event publisher, approval callback, session and handle callbacks, proxy environment, role note, peers, tools, process-token registry, writable roots, `modelStarted`). Providers are injected as `RuntimeDeps.providers[vendor]` **[code]**.
+
+- **Programs** (their own login, their own tools): Claude (Agent SDK), Codex (app-server JSON-RPC), Antigravity, GitHub Copilot, Gemini CLI, Kimi Code, Qwen Code, Devin, OpenCode and local Ollama. The provider catalog (`/api/providers/catalog`) reports installation, login, models and which seat modes each program honestly supports; nothing is guessed **[code]**.
+- **API models** (TS-21): `@harnessy/llm` is Harnessy's own streaming model service on `@earendil-works/pi-ai`. The owner connects any provider from the catalog or an own address (“Connect via API”), the key goes to the macOS Keychain and never into settings, models are discovered on request. The turn runs in Harnessy's own agent loop (`runtime/api-agent`): tools by seat mode (chat / read / edit / all / ask / check / web), paths only inside the project, shell under a macOS Seatbelt profile, reflected keys redacted before they reach the chat **[code]**. No Codex or other program stands in between.
+
+Adding another first-class program means implementing the interface and registering it; the turn, queue and recovery logic stay untouched. A fallback Codex transport over `@openai/codex-sdk` remains planned behind the same interface.
 
 ### 6. How is the desktop shell connected to the backend and the packages?
 
 - **Electron is a thin shell** (`ui/desktop`): `main.js` opens `http://localhost:3777/sketches/proto/10-new-chat.html`, checks `/api/status`, and if the port is silent starts the engine itself (`run.sh`) and waits. The renderer runs with context isolation and no Node; the only native bridge is `window.harnessy.pickFolder` (preload) for the Finder folder picker **[code]**.
-- **The window is a web app** served by the engine itself from `ui/deploy/out/site` under `/sketches`: the live layer (`live.js`, `cx.js`, `ctx.js`, `set.js`, `conn.js`) talks to the engine over HTTP and SSE (`/api/events`) on `127.0.0.1:3777`. Requests are protected by Host/Origin/`Sec-Fetch-Site`/Content-Type checks so a foreign page in the browser cannot drive the engine **[code]**.
+- **The window is a web app** served by the engine itself from `ui/deploy/out/site` under `/sketches`: the live layer (`live.js`, `cx.js`, `ctx.js`, `set.js`, `conn.js`, `llm.js`, `network.js`, `network-add.js`, `network-recovery.js`, `network-stats.js`) talks to the engine over HTTP and SSE (`/api/events`) on `127.0.0.1:3777`. Requests are protected by Host/Origin/`Sec-Fetch-Site`/Content-Type checks so a foreign page in the browser cannot drive the engine **[code]**.
 - **Backend = packages.** Since 09.10.2026 the live engine is TypeScript (`packages/api/bin/harnessy.ts`). The launcher `ui/desktop/run.sh` starts Node. The `api` package serves the existing HTTP/SSE contract; the root `/` redirects to the prototype entry `/sketches/proto/10-new-chat.html`. The former Python engine is available in Git history (`mvp-python`).
 
 ## Roadmap: publishing, connecting models, payments and learning **[plan]**
 
-Two infrastructure services inside Harnessy, under the same rules as the core: intent before effect, operation state in files, paid actions only after explicit confirmation. In the module map these are `network` (0.2: network routes, proxy/VPN, mandatory routing, egress diagnostics) and `infra` (0.6: partners, VPS, deployment).
+Two infrastructure services inside Harnessy, under the same rules as the core: intent before effect, operation state in files, paid actions only after explicit confirmation. In the module map these are `network` (built into `projects`, `runtime` and `api`: exits, relay, tunnels, statistics; partner reseller still planned) and `infra` (0.6: partners, VPS, deployment).
 
 ### Publishing projects
 
@@ -126,11 +136,19 @@ flowchart LR
   H -.->|"re-publish = update, not a new server"| C
 ```
 
-### Proxy traffic for models
+### Proxy and VPS for models
 
-**What the owner sees:** on the "Connections" screen, per provider — a proxy switch, the exit country, a spending limit and the egress check state.
+**Built (TS-22, TS-23 · [code]).** On “Connections” the owner has a **Proxy and VPS** tab and, in each provider's card, a block “Through what we connect”:
 
-**What Harnessy does:** routes only the chosen provider's connections (the `claude`/`codex` processes of its seats) and leaves all other traffic alone; before enabling, checks the exit IP, country and health; on failure it stops and reports — there is no silent fallback to a direct connection. The groundwork is already in the code: per-provider routes, the expected exit and its verification in the `projects` package and on the "Connections" screen **[code]**.
+- **Add** in two steps: a proxy by address (URL or login and password) or an own VPS over SSH (server address, a key picked from `~/.ssh`); one “Check” brings up the tunnel or connection and answers “Works · country · address · ms”.
+- **Per provider** — direct (the service sees your address) or through an added proxy/VPS, with a reserve **in the same country only**, rotation every N minutes, and “stop the turn and ask me” instead of ever falling back to a direct connection silently.
+- **Under the hood:** a local relay on `127.0.0.1` per provider with a per-launch 256-bit token (HTTP and CONNECT), SSH tunnels supervised by the engine (key copied to a private 0600 file, tunnel killed when the engine dies), a turn pinned to one exit, automatic retry on the reserve only before the model answered or ran a tool.
+- **Statistics** per proxy and per provider × proxy — traffic, speed, latency p50/p95, availability, drops, 429/blocks, IP and country changes, time on the reserve, price — as a light card summary and a **Proxy** tab in “Spend and limits”; no destination addresses or contents are stored.
+- **Check through the exits** — an owner-confirmed table “provider × exit” with the price shown before anything is called.
+
+Contract: `packages/projects/NETWORK.md`; plan: `packages/tasks/TS-22.md`, `TS-23.md`; screens: sketch 25.
+
+**Still a plan.** Issuing separate accesses from a partner Reseller API — DataImpulse, NSTData [3][4]: a separate access per user, a traffic cap, usage statistics; accounting of proxy traffic apart from model access and infrastructure. Master partner keys stay on the backend.
 
 | layer | with | role |
 |---|---|---|
@@ -138,18 +156,6 @@ flowchart LR
 | exit type | ISP/static, residential sticky; mobile when needed | the primary options for testing |
 | keys | master partner keys stay on the backend; the user gets a limited access | secrets never leave the server |
 | accounting | model access, proxy traffic and infrastructure — separately | no mixed bills |
-
-```mermaid
-flowchart LR
-  O["Owner"] -->|"provider · country · limit → Enable"| H["Harnessy · network"]
-  H -->|"sub-access · limit · statistics"| R["Partner Reseller API"]
-  H -->|"check: IP · country · health"| X{"exit OK?"}
-  X -->|"yes"| P["the provider's processes at the seats"]
-  P -->|"only their connections"| E["Exit in the chosen country"]
-  E --> AI["AI provider"]
-  X -->|"no"| O
-  P -.->|"failure: stop and report, never a direct connection"| O
-```
 
 ### Paying for subscriptions and APIs, turnkey accounts
 
@@ -191,6 +197,7 @@ Sources: [1] Coolify Docs, List resources — https://coolify.io/docs/api/endpoi
 ## Where to look
 
 - `packages/README.md` — rules of the new core, storage principle, module map, the main acceptance scenario (our own team's work reproduced inside Harnessy).
-- `packages/tasks/TS-0N.md` — the outcome tables and contracts each package was built against.
+- `packages/tasks/TS-NN.md` — the outcome tables and contracts each package was built against (TS-20 program catalog, TS-21 API models, TS-22/TS-23 proxy and VPS).
+- `packages/projects/NETWORK.md`, `packages/llm/README.md` — contracts of exits/relay/statistics and of the model service.
 - `packages/api/src/bootstrap.ts` — engine startup and the root window.
 - `mvp-python` — the historical Python engine and its behaviour tests.
