@@ -127,6 +127,7 @@ export class CodexProvider implements Provider {
  }catch(e){settled=true;reject(asError(e,sessionId))}
  };
  unsubscribe=client.onNotification(receive);unfailure=client.onFailure(e=>reject(e));
+ if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),startupContext.signal);
  if(startupContext.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
  ctx.modelStarted?.();
  const start=requireRecord(await client.request('turn/start',{threadId:sessionId,input:[{type:'text',text:message}],sandboxPolicy:mode.sandboxPolicy,approvalPolicy:mode.approvalPolicy},startupContext.signal),'turn start');
