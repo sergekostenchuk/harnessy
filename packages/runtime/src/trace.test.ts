@@ -47,3 +47,11 @@ test('238 round 2: the entire envelope and inherited context are scrubbed before
 test('238 round 2: oversize or invalid metadata is removed and cannot enter the returned context',async t=>{
  const s=store(t),huge='x'.repeat(1000),ctx=s.record('ui.'+huge,{actor:'model:'+huge,chat:huge,pane:'worker\nprivate',turnInstanceId:huge});await s.flush();const row=(await s.read())[0]!;assert.equal(row.kind,'error.internal');assert.equal(row.actor,'engine');assert.equal(row.chat,null);assert.equal(row.pane,null);assert.equal(row.turnInstanceId,null);assert.equal(ctx.chat,null);assert.equal(row.truncated,true);assert.ok(!readFileSync(s.path,'utf8').includes(huge));
 });
+
+test('365: only an exact registered top-level route bypasses diagnostic redaction',async t=>{
+ const s=store(t),path='/api/llm/providers/discover',paths=[path];s.setRouteTemplates(paths);paths.push('/api/sk-forged');
+ s.record('http.request',{data:{route:path,action:path,status:{route:path}},reason:{code:'provider_error',text:path}});
+ s.record('http.request',{data:{route:'/api/sk-forged'}});await s.flush();const rows=await s.read(),data=rows[0]!.data as any;
+ assert.equal(data.route,path);assert.notEqual(data.action,path);assert.notEqual(data.status.route,path);assert.notEqual(rows[0]!.reason.text,path);assert.doesNotMatch(JSON.stringify(rows),/sk-forged/);
+ assert.notEqual((traceData({route:path},s.project).data as any).route,path,'without the engine table text remains untrusted');
+});
