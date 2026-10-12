@@ -4,16 +4,15 @@ import {homedir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {record,providerId} from './types.ts';
 import type {CatalogRow} from './catalog.ts';
+import {publicCatalogText} from './catalog-public.ts';
 
 export const catalogCacheDirectory=()=>process.env.HARNESS_SETTINGS_FILE?join(dirname(resolve(process.env.HARNESS_SETTINGS_FILE)),'provider-catalog'):join(homedir(),'.harnessy','catalog');
 
 type Saved=Pick<CatalogRow,'installed'|'version'|'models'> & {login:Pick<CatalogRow['login'],'state'|'account'|'checkedAt'>};
-const text=(v:unknown,max=512):v is string=>typeof v==='string'&&!!v&&v.length<=max&&!/[\x00-\x1f\x7f]/.test(v);
-const mask=(v:unknown):v is string=>text(v,254)&&/^[\p{L}\p{N}]•••(?:@[A-Za-z0-9.-]+)?$/u.test(v);
-const credential=/(?:\bsk[-_]|\bgh[pousr]_|\bgithub_pat_|\bAIza|\bBearer |PRIVATE KEY|api[ _-]?key)/i;
-const modelId=(v:unknown):v is string=>text(v,180)&&/^[A-Za-z0-9][A-Za-z0-9._:/~+@-]*$/.test(v)&&!credential.test(v);
-const modelLabel=(v:unknown):v is string=>text(v,200)&&/^[\p{L}\p{N}][\p{L}\p{N} ._:/~+()\[\]·×,@%-]*$/u.test(v)&&!credential.test(v);
-const version=(v:unknown):v is string=>text(v,128)&&/^[A-Za-z0-9][A-Za-z0-9._+ ()/-]*$/.test(v)&&!credential.test(v);
+const mask=(v:unknown)=>publicCatalogText(v,'account');
+const modelId=(v:unknown)=>publicCatalogText(v,'modelId');
+const modelLabel=(v:unknown)=>publicCatalogText(v,'label');
+const version=(v:unknown)=>publicCatalogText(v,'version');
 export class CatalogCacheError extends Error {readonly code:string;constructor(code:string){super('Сохранённый каталог отклонён');this.code=code}}
 const MAX_BYTES=2*1024*1024;
 /** Public observations only. Commands, permissions, raw identities and credentials never enter this cache. */
@@ -32,7 +31,7 @@ export class CatalogCache {
  }
  save(row:CatalogRow){
   if(row.installed===null||row.login.checkedAt===undefined)return;
-  if(row.models.some(m=>!modelId(m.id)||!modelLabel(m.label))||row.version!==null&&!version(row.version))throw new CatalogCacheError('cache_fields');
+  if(row.models.some(m=>!modelId(m.id)||!modelLabel(m.label))||row.version!==null&&!version(row.version)||row.login.account!==undefined&&!mask(row.login.account))throw new CatalogCacheError('cache_fields');
   const value={schema:1,id:row.id,binary:row.binary,installed:row.installed,version:row.installed?row.version:null,login:{state:row.login.state,checkedAt:row.login.checkedAt,...(row.login.account&&mask(row.login.account)?{account:row.login.account}:{})},models:row.models.map(({id,label})=>({id,label}))};
   const bytes=JSON.stringify(value)+'\n';if(Buffer.byteLength(bytes)>MAX_BYTES)throw Error('cache too large');this.directory();const file=this.path(row.id),temporary=file+'.'+randomUUID()+'.tmp';
   try{writeFileSync(temporary,bytes,{flag:'wx',mode:0o600});renameSync(temporary,file)}finally{try{unlinkSync(temporary)}catch{}}
