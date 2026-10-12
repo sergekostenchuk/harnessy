@@ -4,13 +4,14 @@ import {ANTIGRAVITY} from './antigravity.ts';
 import {COPILOT} from './copilot.ts';
 import {GEMINI} from './gemini.ts';
 import {KIMI} from './kimi.ts';
+import {QWEN} from './qwen.ts';
 import {executeCli} from './cli/process.ts';
 import {createHmac,randomBytes} from 'node:crypto';
 import {ProviderError,record,providerId,type Provider,type Vendor,type TurnContext,type ProviderLimits,type TurnModes,type TurnModeSupport} from './types.ts';
 import type {CliDescriptor,CliUnavailableDescriptor,CliDependencies,CliSeat,CliContext,CliAuth,CliModel,CliCommand} from './cli/types.ts';
 
 /** Subscription descriptors are added here by TS-20b/c; credentials are never stored here. */
-export const CLI_DESCRIPTORS:readonly (CliDescriptor|CliUnavailableDescriptor)[]=[ANTIGRAVITY,COPILOT,GEMINI,KIMI];
+export const CLI_DESCRIPTORS:readonly (CliDescriptor|CliUnavailableDescriptor)[]=[ANTIGRAVITY,COPILOT,GEMINI,KIMI,QWEN];
 export interface CatalogLogin {state:'ok'|'none'|'unknown'|'error';account?:string;command:string;checkedAt?:number;reason?:string}
 // Public checkedAt and SSE at are epoch milliseconds (durationMs is elapsed milliseconds).
 export interface CatalogRow {id:string;title:string;kind:'subscription'|'apikey'|'local';binary:string;installed:boolean|null;checking:boolean;version:string|null;login:CatalogLogin;models:CliModel[];modelsReason?:string;capabilities:{headless:boolean;resume:boolean;mcp:boolean;limits:boolean;turn?:TurnModes;probe?:TurnModeSupport};limits?:{ref:string};routes?:string;reason?:string}

@@ -21,8 +21,9 @@ function descriptor(d:CliDescriptor):CliDescriptor{
  for(const [mode,value] of Object.entries(d.modes))if(!['chat','read','check','web','ask','edit','all'].includes(mode)||typeof value!=='function')throw protocol('неверное соответствие режима '+mode);
  if(d.turnUnavailableReason!==undefined&&(!text(d.turnUnavailableReason)||!d.turnUnavailableReason.trim()))throw protocol('нет причины недоступности хода');
  if(d.state&&(!/^[a-z][a-z0-9-]*$/.test(d.state.namespace)||typeof d.state.args!=='function'))throw protocol('неверный описатель состояния');
- if(!d.auth||!('file'in d.auth)&&!('command'in d.auth))throw protocol('нет проверки входа');
- return {...d,login:command(d.login),version:probe(d.version),auth:'file'in d.auth?{...d.auth}:probe(d.auth),models:'list'in d.models?{list:d.models.list.map(m=>({...m})),reason:d.models.reason}:probe(d.models),modes:{...d.modes},forbiddenEnv:[...d.forbiddenEnv],turn:{...d.turn},...(d.mcp?{mcp:{...d.mcp}}:{}),...(d.state?{state:{...d.state}}:{}),...(d.limits?{limits:probe(d.limits)}:{}),...(d.sessions?{sessions:{...d.sessions}}:{})};
+ if(!d.auth||!('file'in d.auth)&&!('command'in d.auth)&&!('unavailableReason'in d.auth))throw protocol('нет проверки входа');
+ if('unavailableReason'in d.auth&&(!text(d.auth.unavailableReason)||!d.auth.unavailableReason.trim()||/[\x00-\x1f\x7f]/.test(d.auth.unavailableReason)))throw protocol('нет причины недоступности проверки входа');
+ return {...d,login:command(d.login),version:probe(d.version),auth:'file'in d.auth||'unavailableReason'in d.auth?{...d.auth}:probe(d.auth),models:'list'in d.models?{list:d.models.list.map(m=>({...m})),reason:d.models.reason}:probe(d.models),modes:{...d.modes},forbiddenEnv:[...d.forbiddenEnv],turn:{...d.turn},...(d.mcp?{mcp:{...d.mcp}}:{}),...(d.state?{state:{...d.state}}:{}),...(d.limits?{limits:probe(d.limits)}:{}),...(d.sessions?{sessions:{...d.sessions}}:{})};
 }
 function inputSnapshot(seat:CliSeat,message:string,ctx:CliContext,vendor:string):CliTurnInput{
  if(!seat||seat.vendor!==vendor||!text(seat.id)||!/^[A-Za-z0-9_-]{1,80}$/.test(seat.id)||!text(seat.label)||!text(seat.cwd)||!isAbsolute(seat.cwd)||!text(seat.model)||!seat.model||!strings(seat.writePaths)||!(seat.worktree===null||text(seat.worktree))||!(seat.sessionId===null||text(seat.sessionId)&&!!seat.sessionId)||!['chat','read','check','web','ask','edit','all'].includes(seat.mode)||!text(message))throw protocol('неверное место или сообщение');
@@ -54,7 +55,7 @@ export class CliProvider {
  async version(){const v=await this.query(this.d.version);if(!text(v)||!v.trim()||v.length>128)throw protocol('версия не получена');return v.trim()}
  async auth(signal?:AbortSignal):Promise<CliAuth>{
   const stop=signal??AbortSignal.timeout(this.deps.probeTimeoutMs);let value:unknown;
-  if('file'in this.d.auth){value=await readCliFileMetadata(this.d.auth,this.deps.env)}else value=await this.query(this.d.auth,stop);
+  if('unavailableReason'in this.d.auth){value={loggedIn:false,state:'unknown',reason:this.d.auth.unavailableReason}}else if('file'in this.d.auth){value=await readCliFileMetadata(this.d.auth,this.deps.env)}else value=await this.query(this.d.auth,stop);
   if(!record(value)||typeof value.loggedIn!=='boolean'||['email','plan'].some(k=>value[k]!==undefined&&value[k]!==null&&!text(value[k])))throw protocol('неверный статус входа');
   return {loggedIn:value.loggedIn,...(value.state==='unknown'?{state:'unknown' as const,reason:String(value.reason??'вход не проверен')}:{}),...(value.email!==undefined?{email:value.email as string|null}:{}),...(value.plan!==undefined?{plan:value.plan as string|null}:{})};
  }
@@ -124,7 +125,7 @@ export class CliProvider {
     await writeFile(path,config,{encoding:'utf8',mode:0o600,flag:'wx'});
    }
    const c=command(this.d.turn.command(input));
-   if(lease){lease.validate();if('file'in this.d.auth)throw protocol('изолированный вход должен проверяться программой');const current=await this.query(this.d.auth,signal,seat.cwd,stateArgs);if(!current.loggedIn||!current.email||current.email!==auth.email)throw new ProviderError('login_changed','Вход приватного состояния отличается; подтвердите вход заново')}
+   if(lease){lease.validate();if(!('command'in this.d.auth))throw protocol('изолированный вход должен проверяться программой');const current=await this.query(this.d.auth,signal,seat.cwd,stateArgs);if(!current.loggedIn||!current.email||current.email!==auth.email)throw new ProviderError('login_changed','Вход приватного состояния отличается; подтвердите вход заново')}
    if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),signal);
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    lease?.validate(); // No await between the final path check and process creation.
