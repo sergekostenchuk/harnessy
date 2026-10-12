@@ -120,7 +120,7 @@ export class CliProvider {
     token=randomBytes(32).toString('hex');ctx.registerProcessToken(token);registered=true;
     directory=await mkdtemp(join(this.deps.temporaryDirectory,'harnessy-cli-'));const path=join(directory,'mcp.json');
     const server:CliMcpServer={command:process.execPath,args:[fileURLToPath(new URL('../../bin/pane-mcp.mjs',import.meta.url))],env:{PANE_ID:seat.id,APP_URL:ctx.appUrl,PANE_TOKEN:token,SEATS:input.peers.map(p=>p.id+':'+p.label.replace(/[;\r\n]/g,' ')).join(';')}};
-    const config=this.d.mcp.serialize(server,input);mcpArgs=this.d.mcp.args(path);configEnv=this.d.mcp.env?.(path)??{};
+    const config=this.d.mcp.serialize(server,input);mcpArgs=this.d.mcp.args(path,server,input);configEnv=this.d.mcp.env?.(path)??{};
     if(!text(config)||!config||!strings(mcpArgs))throw protocol('нет конфигурации MCP');
     await writeFile(path,config,{encoding:'utf8',mode:0o600,flag:'wx'});
    }

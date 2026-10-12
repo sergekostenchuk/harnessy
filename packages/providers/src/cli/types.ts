@@ -41,7 +41,7 @@ export interface CliDescriptor {
  state?:{namespace:string;args(directory:string):string[]};
  resume?:((sessionId:string)=>string[]);
  /** A private per-turn file; serialize receives only Harnessy's MCP server. */
- mcp?:{serialize(server:CliMcpServer,input:CliTurnInput):string;args(configPath:string):string[];env?(configPath:string):NodeJS.ProcessEnv};
+ mcp?:{serialize(server:CliMcpServer,input:CliTurnInput):string;args(configPath:string,server:CliMcpServer,input:CliTurnInput):string[];env?(configPath:string):NodeJS.ProcessEnv};
  limits?:CliProbe<ProviderLimits>;
  sessions?:{list(cwd:string):CliProbe<{id:string;title:string;updated:number}[]>;messages(cwd:string,id:string):CliProbe<{role:'me'|'ai';text:string}[]>};
  /** Provider-specific exit status classification; stdout is never assumed to be a successful answer. */

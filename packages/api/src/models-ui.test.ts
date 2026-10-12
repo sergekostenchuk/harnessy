@@ -233,3 +233,11 @@ for(const page of ['chat','new'])test('328: '+page+' keeps offline router models
 for(const viaStatus of [undefined,{}, {ok:'true'}, {ok:false}])test('328: missing or malformed router availability cannot enable a routed model: '+JSON.stringify(viaStatus),async()=>{
  const v=ui();v.H.models.codex=[{id:'opaque',label:'Opaque',via:'provider-router',viaStatus}];await v.open();const button=v.select('codex','opaque');assert.equal(button.disabled,true);assert.match(button.textContent,/provider-router не отвечает/);await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
 });
+
+
+test('334: Ollama has its own cloud/local group; daemon refusal disables its models without touching Codex/router',async()=>{
+ const v=ui();await v.open();const next=catalogue();next.providers.push({id:'ollama',title:'Ollama',subtitle:'облако и локально',kind:'local',installed:true,checking:false,models:[{id:'glm-5.3:cloud',label:'glm-5.3:cloud · облако'},{id:'gemma4:latest',label:'gemma4:latest · локально'}]} as any);v.H.turnModes.ollama={read:{ok:true}};await v.providers(next);
+ assert.match(v.find('[data-cx-program="ollama"]').textContent,/Ollama.*облако и локально.*2 модели/);assert.match(v.select('ollama','glm-5.3:cloud').textContent,/облако/);assert.match(v.select('ollama','gemma4:latest').textContent,/локально/);assert.equal(v.select('ollama','glm-5.3:cloud').disabled,false);assert.doesNotMatch(v.find('[data-cx-program="codex"]').textContent,/glm-5.3/);assert.doesNotMatch(v.find('[data-cx-program="router"]').textContent,/glm-5.3/);
+ v.H.turnModes.ollama={read:{ok:false,reason:'демон не запущен; запустите ollama serve'}};await v.providers(next);assert.equal(v.select('ollama','glm-5.3:cloud').disabled,true);assert.match(v.select('ollama','glm-5.3:cloud').textContent,/демон не запущен/);await v.select('ollama','glm-5.3:cloud').emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+ v.H.turnModes.ollama={read:{ok:true}};await v.providers(next);await v.select('ollama','glm-5.3:cloud').emit('click');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{vendor:'ollama',model:'glm-5.3:cloud'}}]);
+});

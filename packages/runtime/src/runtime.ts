@@ -1,6 +1,6 @@
 import {TraceStore,currentTrace,traceReason,type TraceContext} from './trace.ts';
 import {ProviderOperations} from './provider-operations.ts';
-import {ProviderCatalog,LoginTerminal,builtinEntries,CLI_DESCRIPTORS,cliEntry} from '@harnessy/providers';
+import {ProviderCatalog,LoginTerminal,builtinEntries,CLI_DESCRIPTORS,cliEntry,ollamaEntry} from '@harnessy/providers';
 import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
 import {propose,proposals,confirm,create,createOwnerSeat,restoreProposals,type ProposalInput,type ProposalRef,type OwnerSeatInput} from './proposals.ts';
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
@@ -46,7 +46,7 @@ export class Runtime {
  const current=()=>this.current&&!this.current.closed?this.current.dir:null;
  this.settings=typeof deps.settings==='function'?deps.settings(current):deps.settings??new Settings(undefined,current);
  this.pins=typeof deps.pins==='function'?deps.pins(current,id=>this.chatMeta(id)):deps.pins??new Pins(undefined,current,id=>this.chatMeta(id));this.traceSettings();
- this.providerOperations=new ProviderOperations(this,deps.providerCatalog??new ProviderCatalog([...builtinEntries(deps.providers,deps.models??{}),...CLI_DESCRIPTORS.map(d=>cliEntry(d))]),deps.loginTerminal??new LoginTerminal())
+ this.providerOperations=new ProviderOperations(this,deps.providerCatalog??new ProviderCatalog([...builtinEntries(deps.providers,deps.models??{}),...CLI_DESCRIPTORS.map(d=>cliEntry(d)),ollamaEntry()]),deps.loginTerminal??new LoginTerminal())
  }
  private traceSettings(){try{const owner=this.settings.effective();this.traceConfig={enabled:owner.traceEnabled!==false,maxBytes:Number.isSafeInteger(owner.traceMaxMiB)&&Number(owner.traceMaxMiB)>=1&&Number(owner.traceMaxMiB)<=128?Number(owner.traceMaxMiB)*1024*1024:16*1024*1024}}catch{}}
  traceTool<T>(scope:TurnScope,name:string,args:unknown,run:()=>Promise<T>){this.scopes.assert(scope);const p=this.project;return p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId))}
@@ -426,6 +426,7 @@ export class Runtime {
   const row=catalog.peek(vendor),entry=catalog.get(vendor);
   if(row.installed===null)throw new RuntimeError('provider_checking','Программа проверяется, повторите через несколько секунд',409);
   if(row.installed!==true)throw new RuntimeError('provider_not_installed','Программа '+row.title+' не установлена',409);
+  if(row.service?.ok===false)throw new RuntimeError('provider_unavailable',row.service.reason??'Служба программы недоступна',409);
   if(row.login.state!=='ok'&&!(row.login.state==='unknown'&&entry.allowUnverifiedLogin===true)){
    const reason=row.login.reason??'Вход в '+row.title+' не выполнен';throw new RuntimeError('login_required',reason+' · Вход: '+row.login.command,409,{fields:{reason,command:row.login.command}});
   }

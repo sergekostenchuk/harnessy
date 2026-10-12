@@ -26,7 +26,7 @@ export async function sparkRouter():Promise<string[]|null>{
 // Имя таблицы в -c: голый ключ TOML без кавычек, если имя из [A-Za-z0-9_-]; иначе в кавычках. Codex 0.160.0 отвергает
 // `mcp_servers."node_repl".enabled=false` («invalid transport»: кавычки создают новую пустую запись) — найдено живой пробой 09.10.2026.
 export function tomlKey(name:string):string{return /^[A-Za-z0-9_-]+$/.test(name)?name:JSON.stringify(name)}
-export function overrides(seat:Seat,ctx:TurnContext,token:string,servers:string[],router:string[]|null=null):string[]{
+export function overrides(seat:Seat,ctx:Pick<TurnContext,'appUrl'|'peers'|'writableRoots'>,token:string,servers:string[],router:string[]|null=null):string[]{
  const bridge=fileURLToPath(new URL('../../bin/pane-mcp.mjs',import.meta.url));
  const env={PANE_ID:seat.id,APP_URL:ctx.appUrl,SEATS:ctx.peers.map(p=>p.id+':'+p.label).join(';').replaceAll('"',''),PANE_TOKEN:token};
  const out=[...BASE_OVERRIDES,...servers.filter(n=>n!=='panes'&&n!=='sol-spark-router').map(n=>'mcp_servers.'+tomlKey(n)+'.enabled=false'),
