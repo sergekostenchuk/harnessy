@@ -6,13 +6,14 @@ import {GEMINI} from './gemini.ts';
 import {KIMI} from './kimi.ts';
 import {QWEN} from './qwen.ts';
 import {DEVIN} from './devin.ts';
+import {OPENCODE} from './opencode.ts';
 import {executeCli} from './cli/process.ts';
 import {createHmac,randomBytes} from 'node:crypto';
 import {ProviderError,record,providerId,type Provider,type Vendor,type TurnContext,type ProviderLimits,type TurnModes,type TurnModeSupport} from './types.ts';
 import type {CliDescriptor,CliUnavailableDescriptor,CliDependencies,CliSeat,CliContext,CliAuth,CliModel,CliCommand} from './cli/types.ts';
 
 /** Subscription descriptors are added here by TS-20b/c; credentials are never stored here. */
-export const CLI_DESCRIPTORS:readonly (CliDescriptor|CliUnavailableDescriptor)[]=[ANTIGRAVITY,COPILOT,GEMINI,KIMI,QWEN,DEVIN];
+export const CLI_DESCRIPTORS:readonly (CliDescriptor|CliUnavailableDescriptor)[]=[ANTIGRAVITY,COPILOT,GEMINI,KIMI,QWEN,DEVIN,OPENCODE];
 export interface CatalogLogin {state:'ok'|'none'|'unknown'|'error';account?:string;command:string;checkedAt?:number;reason?:string}
 // Public checkedAt and SSE at are epoch milliseconds (durationMs is elapsed milliseconds).
 export interface CatalogRow {id:string;title:string;kind:'subscription'|'apikey'|'local';binary:string;installed:boolean|null;checking:boolean;version:string|null;login:CatalogLogin;models:CliModel[];modelsReason?:string;capabilities:{headless:boolean;resume:boolean;mcp:boolean;limits:boolean;turn?:TurnModes;probe?:TurnModeSupport};limits?:{ref:string};routes?:string;reason?:string}
@@ -21,6 +22,7 @@ export const CATALOG_TTL_MS=300_000;
 export interface CatalogEntry {
  id:string;title:string;binary:string;login:CliCommand;forbiddenEnv:readonly string[];capabilities:CatalogRow['capabilities'];routes?:string;
  allowUnverifiedLogin?:boolean;probeMode?:'read'|'all';unavailableReason?:string;modelsReason?:string;staticModels?:readonly CliModel[];
+ modelsWithoutLogin?:true;
  version():Promise<string>;auth():Promise<CliAuth>;models():Promise<CliModel[]>;
  limits?(signal?:AbortSignal):Promise<ProviderLimits>;
  runTurn(seat:CliSeat,message:string,ctx:CliContext):Promise<{text:string;sessionId:string|null;interrupted?:boolean}>;
@@ -37,7 +39,7 @@ export function cliEntry(description:CliDescriptor|CliUnavailableDescriptor,deps
  if('unavailableReason'in description){
   const d=description,options={...deps,env:{...(deps.env??process.env)}},reason=d.unavailableReason;
   if(!safeText(reason)||'unavailableReason'in d.auth&&!safeText(d.auth.unavailableReason)||'list'in d.models&&!safeText(d.models.reason))throw new ProviderError('protocol','Нет причины недоступности хода');
-  return {id:d.id,title:d.name,binary:d.binary,login:{args:[...d.login.args]},forbiddenEnv:[...d.forbiddenEnv],capabilities:{...d.capabilities,turn:unsupportedTurns(reason),probe:{ok:false,reason}},unavailableReason:reason,...('list'in d.models?{modelsReason:d.models.reason,staticModels:d.models.list}:{}),
+  return {id:d.id,title:d.name,binary:d.binary,login:{args:[...d.login.args]},forbiddenEnv:[...d.forbiddenEnv],capabilities:{...d.capabilities,turn:unsupportedTurns(reason),probe:{ok:false,reason}},unavailableReason:reason,...(d.modelsWithoutLogin?{modelsWithoutLogin:true}:{}),...('list'in d.models?{modelsReason:d.models.reason,staticModels:d.models.list}:{}),
    version:()=>readCliMetadata(d.binary,d.forbiddenEnv,d.version,options),auth:()=> 'unavailableReason'in d.auth?Promise.resolve({loggedIn:false,state:'unknown' as const,reason:d.auth.unavailableReason}):'file'in d.auth?readCliFileMetadata(d.auth,options.env):readCliMetadata(d.binary,d.forbiddenEnv,d.auth,options),models:()=> 'list'in d.models?Promise.resolve(d.models.list.map(m=>({...m}))):readCliMetadata(d.binary,d.forbiddenEnv,d.models,options),
    runTurn:async()=>{throw new ProviderError('capability_unsupported',reason)}};
  }
@@ -80,7 +82,7 @@ export class ProviderCatalog {
  row={id:e.id,title:e.title,kind:'subscription',binary:e.binary,installed:false,checking:false,version:null,login:{state:'unknown',command:loginCommand(e)},models:[],capabilities:{...e.capabilities,turn:e.capabilities.turn??unsupportedTurns('Программа не объявила гарантированные режимы')},...(e.capabilities.limits?{limits:{ref:'/api/limits#'+e.id}}:{}),...(e.routes?{routes:e.routes}:{}),...(e.unavailableReason?{reason:e.unavailableReason}:{}),...(e.modelsReason?{modelsReason:e.modelsReason}:{})};
  try{const version=await e.version();row.installed=true;if(!safeText(version)||version.length>128)throw new ProviderError('protocol','Версия программы не прочитана');row.version=version;row.models=e.staticModels?.map(m=>({...m}))??[];
  const auth=await e.auth();if(!record(auth)||typeof auth.loggedIn!=='boolean'||auth.state!==undefined&&(auth.state!=='unknown'||auth.loggedIn)||auth.reason!==undefined&&!safeText(auth.reason))throw new ProviderError('protocol','Состояние входа не прочитано');identity=this.accountIdentity(auth);authRead=true;const account=maskAccount(auth.email);row.login={...row.login,state:auth.state==='unknown'?'unknown':auth.loggedIn?'ok':'none',checkedAt:this.now(),...(account?{account}:{}),...(auth.reason?{reason:auth.reason}:{})};
- if(auth.loggedIn){const ms=await e.models();if(!Array.isArray(ms)||ms.some(m=>!m||!safeText(m.id)||!safeText(m.label))||new Set(ms.map(m=>m.id)).size!==ms.length)throw new ProviderError('models_unavailable','Модели не прочитаны');row.models=ms.map(m=>({id:m.id,label:m.label}))}
+ if(auth.loggedIn||e.modelsWithoutLogin){const ms=await e.models();if(!Array.isArray(ms)||ms.some(m=>!m||!safeText(m.id)||!safeText(m.label))||new Set(ms.map(m=>m.id)).size!==ms.length)throw new ProviderError('models_unavailable','Модели не прочитаны');row.models=ms.map(m=>({id:m.id,label:m.label}))}
  }catch(error){
   const code=error instanceof ProviderError?error.code:'protocol',missing=code==='no_binary',transient=['transport_lost','cancelled','busy'].includes(code);
   const reason=missing?'Программа не установлена':transient?'Временно не удалось обновить данные программы ('+code+')':'Не удалось прочитать программу, вход или список моделей';

@@ -53,6 +53,8 @@ export interface CliDependencies {execute:CliExecutor;env:NodeJS.ProcessEnv;cwd:
 export interface CliUnavailableDescriptor extends Pick<CliDescriptor,'id'|'name'|'binary'|'login'|'version'|'forbiddenEnv'> {
  auth:CliAuthProbe;
  models:CliProbe<CliModel[]>|{list:readonly CliModel[];reason:string};
+ /** Safe metadata command that lists configured models without validating login. */
+ modelsWithoutLogin?:true;
  capabilities:{headless:boolean;resume:boolean;mcp:false;limits:false};
  unavailableReason:string;
 }
