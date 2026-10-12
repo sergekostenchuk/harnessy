@@ -1,18 +1,19 @@
 import {createContext,runInContext} from 'node:vm';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {ProviderCatalog,builtinEntries} from '@harnessy/providers';
 import {fixture,call,deferred,FakeProvider} from './test-helpers.ts';
 import {MemoryKeys} from '../../llm/src/test-helpers.ts';
 import {networkUi as ui} from './network-ui-test-helpers.ts';
+import {sshDouble} from '../../runtime/src/ssh-test-helpers.ts';
 const opts={timeout:15000},root='/api/network';
 const proxy={id:'fixture-proxy',type:'proxy',label:'Прокси',url:'socks5h://proxy.test:1080',login:'alice'};
 const ssh={id:'fixture-vps',type:'ssh',label:'VPS',host:'vps.test',port:2222,user:'owner',keyPath:'~/.ssh/id_ed25519'};
 const measured={ok:true,revision:'check',checkedAt:100,ip:'192.0.2.5',country:'Нидерланды',durationMs:48,state:'checked'};
 const output=(input:string)=>({code:0,signal:null,stdout:input.includes('ipify')?'{"ip":"192.0.2.5"}\n0.048':'{"country_name":"Нидерланды"}\n0.05',stderr:''});
-function tunnels(){const calls:any[]=[],stopped:string[]=[];return {calls,stopped,async ensure(id:string,config:any){calls.push({id,config});return {id,state:'up',url:'socks5h://127.0.0.1:19080',generation:1,code:null,reason:null,retryAt:null} as any},async stop(id:string){stopped.push(id)},get(){return null},snapshots(){return []},subscribe(){return()=>true},async close(){}}}
+function tunnels(){const calls:any[]=[],stopped:string[]=[];return {calls,stopped,async ensure(id:string,config:any){assert.deepEqual(Object.keys(config).sort(),['host','keyPath','port','user']);calls.push({id,config});return {id,state:'up',url:'socks5h://127.0.0.1:19080',generation:1,code:null,reason:null,retryAt:null} as any},async stop(id:string){stopped.push(id)},get(){return null},snapshots(){return []},subscribe(){return()=>true},async close(){}}}
 const response=(path:string)=>path.endsWith('/exits')?{ok:true,exits:[]}:path.includes('/providers/')?{ok:true,provider:decodeURIComponent(path.split('/').at(-1)!),configured:false,exits:[],revision:null}:path.endsWith('/ssh-keys')?{ok:true,files:[{name:'id_ed25519',path:'~/.ssh/id_ed25519'}]}:{ok:false};
 async function step(v:ReturnType<typeof ui>,kind='proxy'){await v.click('[data-net-new]');if(kind==='ssh')await v.click('[data-proxy-kind="ssh"]');await v.click('[data-proxy-action="next"]')}
 
@@ -76,4 +77,40 @@ test('23b: shared API keeps ordinary GET unchanged and forwards the optional abo
  runInContext(source.slice(source.indexOf('  const api='),source.indexOf('  // TS-07: waiting controls'))+'globalThis.call=api;',createContext(context));
  await context.call('/api/status');assert.equal(seen[0].init,undefined);
  const abort=new AbortController();await context.call('/api/network/preview',{config:proxy},{signal:abort.signal});assert.equal(seen[1].init.signal,abort.signal);assert.equal(seen[1].init.method,'POST');assert.deepEqual(JSON.parse(seen[1].init.body),{config:proxy});
+});
+
+
+for(const path of ['preview','saved-check'])test('23b r2: '+path+' uses real SSH configuration validation and removes the temporary key and process',opts,async t=>{
+ const f=sshDouble(t),h=await fixture(t,{deps:{sshTunnels:f.tunnels,networkCheckOptions:{execute:async spec=>output(spec.input!)}}});
+ const config={...f.config,id:'vps',type:'ssh' as const,label:'VPS',keyPath:'~/.ssh/key'};
+ let r;if(path==='preview')r=await call(h.api,root+'/preview',{body:{config}});else{
+  await h.runtime.settings.changeNetwork(async n=>{n.migrated=true;n.legacyLabelsVersion=1;n.exits.vps=config;return {result:undefined}});
+  const revision=(await call(h.api,root+'/exits')).body.exits.find((x:any)=>x.config.id==='vps').revision;
+  r=await call(h.api,root+'/exits/vps/check',{body:{revision}});
+ }
+ assert.equal(r.status,200,r.text);assert.equal(r.body.check.ok,true);assert.equal(f.workers.length,1);assert.deepEqual(f.tunnels.snapshots(),[]);assert.equal(existsSync(f.workers[0]!.command.cwd),false);assert.equal(await f.workers[0]!.process.done.then(x=>x.code),0);
+});
+for(const fail of ['ssh','curl'])test('23b r2: real SSH manager is stopped and cleaned after '+fail+' failure',opts,async t=>{
+ const f=sshDouble(t);if(fail==='ssh')f.setExit({code:255,stderr:'Permission denied (publickey).'});
+ const h=await fixture(t,{deps:{sshTunnels:f.tunnels,networkCheckOptions:{execute:async()=>({code:7,signal:null,stdout:'',stderr:'Connection failed'})}}});
+ const r=await call(h.api,root+'/preview',{body:{config:{...f.config,id:'vps',type:'ssh',label:'VPS',keyPath:'~/.ssh/key'}}});
+ assert.equal(r.status,200,r.text);assert.equal(r.body.check.ok,false);assert.equal(r.body.check.code,fail==='ssh'?'ssh_auth_failed':'network_check_failed');assert.deepEqual(f.tunnels.snapshots(),[]);assert.equal(f.workers.length,1);assert.equal(existsSync(f.workers[0]!.command.cwd),false);f.clock.advance(60000);assert.equal(f.workers.length,1);
+});
+for(const phase of ['startup','curl'])test('23b r2: HTTP abort releases the real SSH manager during '+phase,opts,async t=>{
+ const f=sshDouble(t),started=deferred(),cleaned=deferred();if(phase==='startup')f.holdControl(true);
+ const stop=f.tunnels.stop.bind(f.tunnels);f.tunnels.stop=async id=>{await stop(id);cleaned.resolve()};
+ const h=await fixture(t,{deps:{sshTunnels:f.tunnels,networkCheckOptions:{execute:async(_spec,signal)=>{started.resolve();await new Promise<void>(resolve=>{if(signal.aborted)resolve();else signal.addEventListener('abort',()=>resolve(),{once:true})});return {code:1,signal:null,stdout:'',stderr:''}}}}});
+ const abort=new AbortController(),pending=call(h.api,root+'/preview',{body:{config:{...f.config,id:'vps',type:'ssh',label:'VPS',keyPath:'~/.ssh/key'}},signal:abort.signal}),rejected=assert.rejects(pending);
+ await (phase==='startup'?f.controlEntered.promise:started.promise);abort.abort();await rejected;await cleaned.promise;
+ assert.deepEqual(f.tunnels.snapshots(),[]);assert.equal(f.workers.length,1);assert.equal(existsSync(f.workers[0]!.command.cwd),false);f.clock.advance(60000);assert.equal(f.workers.length,1);
+});
+for(const suffix of ['proxy.invalid:8443','proxy.invalid/not-allowed','proxy.invalid:bad',''])test('23b r2 UI: pending response and Back/Next cannot serialize URL credentials: '+(suffix||'missing host'),opts,async()=>{
+ const gate=deferred<any>(),v=ui(async path=>path.includes('/providers/')?gate.promise:response(path));await v.flush();v.L.network.openAdd({provider:'claude',title:'Claude'});await v.click('[data-proxy-action="next"]');
+ const secret='SecretNotInHtml23b',address=v.find('[data-proxy-field="address"]');address.value='https://alice:'+secret+'@'+suffix;await address.emit('input');
+ const safe=()=>{assert.doesNotMatch(v.find('.proxy-add-dialog').innerHTML,new RegExp(secret));assert.doesNotMatch(v.find('[data-proxy-field="address"]').value,new RegExp(secret));assert.equal(v.find('[data-proxy-field="password"]').value,secret);assert.equal(v.find('[data-proxy-field="password"]').getAttribute('value'),'')};safe();
+ gate.resolve(response(root+'/providers/claude'));await v.flush();safe();await v.click('[data-proxy-action="back"]');assert.doesNotMatch(v.find('.proxy-add-dialog').innerHTML,new RegExp(secret));await v.click('[data-proxy-action="next"]');safe();
+ if(suffix!=='proxy.invalid:8443'){await v.click('[data-proxy-action="check"]');assert.equal(v.requests.some(r=>r.path.endsWith('/preview')),false);await v.proxyInput('address','proxy.invalid:8443');await v.click('[data-proxy-action="check"]');assert.equal(v.requests.filter(r=>r.path.endsWith('/preview')).length,1)}
+});
+test('23b r2 UI: malformed userinfo remains private and cannot silently become a valid address',opts,async()=>{
+ const v=ui(async path=>response(path));await v.flush();await step(v);await v.proxyInput('address','https://alice:SecretNotInHtml%GG@proxy.invalid:8443');await v.click('[data-proxy-action="back"]');await v.click('[data-proxy-action="next"]');assert.doesNotMatch(v.find('.proxy-add-dialog').innerHTML,/SecretNotInHtml/);await v.click('[data-proxy-action="check"]');assert.equal(v.requests.some(r=>r.path.endsWith('/preview')),false);assert.match(v.find('[data-proxy-result]').textContent,/Не удалось разобрать/);
 });
