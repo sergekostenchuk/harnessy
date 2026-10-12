@@ -5,7 +5,8 @@ import {DatabaseSync} from 'node:sqlite';
 import {record,limitPlan,limitCredits,type LimitCredits,type ProviderLimits,type LimitWindow,type LimitsCode,type BuiltinVendor as Vendor} from '@harnessy/providers';
 
 export const POLL_SECONDS=300,TURN_SECONDS=60;
-export const reasons:Record<LimitsCode,string>={limits_unsupported:'лимиты провайдер не отдаёт',limits_not_applicable:'ключ API не имеет окон подписки',limits_auth:'вход по подписке недоступен',limits_rate_limited:'сервис лимитов просит повторить позже',limits_unavailable:'сервис лимитов временно недоступен',limits_invalid:'ответ или сохранённый снимок лимитов повреждён',limits_timeout:'чтение лимитов отменено или превысило время ожидания',limits_storage:'не удалось сохранить снимок лимитов'};
+export const reasons:Record<LimitsCode,string>={
+ limits_unlimited:'все квоты безлимитны',limits_unsupported:'лимиты провайдер не отдаёт',limits_not_applicable:'ключ API не имеет окон подписки',limits_auth:'вход по подписке недоступен',limits_rate_limited:'сервис лимитов просит повторить позже',limits_unavailable:'сервис лимитов временно недоступен',limits_invalid:'ответ или сохранённый снимок лимитов повреждён',limits_timeout:'чтение лимитов отменено или превысило время ожидания',limits_storage:'не удалось сохранить снимок лимитов'};
 export type Saved={vendor:Vendor;account?:string|null;plan:string|null;planLevel?:'5x'|'20x'|null;extraUsageEnabled?:boolean|null;windows:LimitWindow[];fetchedAt:number;credits?:LimitCredits;resetCredits?:number};
 export function limitAccount(raw:unknown):string|null{return typeof raw==='string'&&/^[^\s@]+@[^\s@]+$/.test(raw.trim())?raw.trim().toLowerCase():null}
 export function saved(raw:unknown,vendor:Vendor,now:number):Saved|null{

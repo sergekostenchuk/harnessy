@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,realpathSync,rmSync,readFileSync,writeFileSync,symlinkSync,unlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {ProviderCatalog,type CatalogEntry,type ProviderLimits} from '@harnessy/providers';
+import {ProviderCatalog,limitsReason,type CatalogEntry,type ProviderLimits} from '@harnessy/providers';
 import {ProviderLimitsStore} from './provider-limits.ts';
 import {FakeClock,deferred,until,harness,collect} from './test-helpers.ts';
 const live=(clock:FakeClock):ProviderLimits=>({ok:true,plan:null,source:'not copied',fetchedAt:clock.now()/1000,windows:[{label:'month',percentUsed:25,resetsAt:clock.now()/1000+86400,windowMinutes:44640}]});
 function setup(t:any){const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-cli-limits-'))),clock=new FakeClock();let identity='a@github.com',authError=false,reads=0,result:()=>Promise<ProviderLimits>=async()=>live(clock),events=0;
  const entry:CatalogEntry={id:'copilot',title:'GitHub Copilot',binary:'fake',login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,resume:true,mcp:true,limits:true},version:async()=>'',auth:async()=>{if(authError)throw Error('no verified account');return {loggedIn:true,email:identity}},models:async()=>[],runTurn:async()=>{throw Error('no model allowed')},limits:async()=>{reads++;return result()}};
- const catalog=new ProviderCatalog([entry]),stores:ProviderLimitsStore[]=[];const create=()=>{const s=new ProviderLimitsStore(catalog,clock,()=>events++,dir);stores.push(s);return s};
- t.after(()=>{stores.forEach(s=>s.close());rmSync(dir,{recursive:true,force:true})});return {dir,clock,catalog,entry,create,get reads(){return reads},get events(){return events},identity:(s:string)=>{identity=s},authError:()=>{authError=true},result:(fn:()=>Promise<ProviderLimits>)=>{result=fn},disk:()=>JSON.parse(readFileSync(join(dir,'copilot.json'),'utf8'))};
+ const catalog=new ProviderCatalog([entry]),stores:ProviderLimitsStore[]=[],diagnostics:any[]=[];const create=()=>{const s=new ProviderLimitsStore(catalog,clock,()=>events++,dir,event=>diagnostics.push(event));stores.push(s);return s};
+ t.after(()=>{stores.forEach(s=>s.close());rmSync(dir,{recursive:true,force:true})});return {dir,clock,catalog,entry,create,diagnostics,get reads(){return reads},get events(){return events},identity:(s:string)=>{identity=s},authError:()=>{authError=true},result:(fn:()=>Promise<ProviderLimits>)=>{result=fn},disk:()=>JSON.parse(readFileSync(join(dir,'copilot.json'),'utf8'))};
 }
 test('283: two engines share one account-bound monthly measurement and five-minute TTL',async t=>{
  const h=setup(t),gate=deferred<ProviderLimits>();h.result(()=>gate.promise);const a=h.create(),b=h.create(),first=a.refresh(),second=b.refresh();await until(()=>h.reads===1);gate.resolve(live(h.clock));await Promise.all([first,second]);
@@ -64,4 +64,60 @@ test('286: loss of a verified account cannot display a previous account measurem
 
 test('286: account substitution during a refresh discards the previous account cache',async t=>{
  const h=setup(t),s=h.create();await s.refresh();h.clock.advance(300000);h.result(async()=>{h.identity('b@github.com');return live(h.clock)});await s.refresh();assert.equal(s.snapshot().providers[0]!.code,'login_changed');assert.deepEqual(s.snapshot().providers[0]!.windows,[]);assert.equal(h.disk().value,null);
+});
+
+test('299: parser reason survives API snapshot, TTL/backoff, cache restart and stale windows; recovery clears it',async t=>{
+ const h=setup(t),s=h.create();await s.refresh();const saved=h.disk().value;h.clock.advance(300000);
+ const reason='Copilot не передал дату сброса квоты';h.result(async()=>({ok:false,code:'limits_unavailable',reason}));await s.refresh();
+ assert.equal(s.snapshot().providers[0]!.reason,reason);assert.equal(h.disk().reason,reason);assert.deepEqual(h.disk().value,saved);
+ const restarted=h.create();await restarted.refresh();assert.equal(restarted.snapshot().providers[0]!.reason,reason);assert.equal(restarted.snapshot().errors[0]!.reason,reason);assert.equal(h.reads,2);
+ assert.equal(h.diagnostics.length,2,'a cached failure is not a new CLI read');assert.deepEqual(h.diagnostics[1],{vendor:'copilot',ok:false,code:'limits_unavailable',reason,durationMs:0});
+ h.clock.advance(300000);h.result(async()=>live(h.clock));await s.refresh();assert.equal(h.disk().reason,null);assert.equal(s.snapshot().providers[0]!.reason,undefined);assert.equal(h.diagnostics.at(-1).ok,true);
+});
+
+test('299: unknown reasons and thrown errors never expose secrets to cache, diagnostics or API',async t=>{
+ const h=setup(t),s=h.create(),secret='PRIVATE-RAW-ERROR Bearer small-secret account@example.test';h.result(async()=>({ok:false,code:'limits_rate_limited',reason:secret}));await s.refresh();
+ assert.equal(s.snapshot().providers[0]!.reason,limitsReason('limits_rate_limited'));assert.equal(h.disk().reason,limitsReason('limits_rate_limited'));
+ h.clock.advance(300000);h.result(async()=>{throw Error(secret)});await s.refresh();assert.equal(s.snapshot().providers[0]!.reason,limitsReason('limits_unavailable'));
+ assert.doesNotMatch(JSON.stringify([h.disk(),h.diagnostics,s.snapshot()]),/PRIVATE|small-secret|account@example/);
+});
+
+test('299: old caches without a reason remain readable; untrusted reason text cannot escape the cache',async t=>{
+ const h=setup(t),s=h.create();h.result(async()=>({ok:false,code:'limits_unavailable',reason:'Copilot не передал измеряемые квоты'}));await s.refresh();
+ const row=h.disk(),file=join(h.dir,'copilot.json');delete row.reason;writeFileSync(file,JSON.stringify(row));const legacy=h.create();await legacy.refresh();assert.equal(legacy.snapshot().providers[0]!.reason,limitsReason('limits_unavailable'));
+ row.reason='unmarked-private-value';writeFileSync(file,JSON.stringify(row));const forged=h.create();await forged.refresh();assert.equal(forged.snapshot().providers[0]!.reason,limitsReason('limits_unavailable'));assert.doesNotMatch(JSON.stringify(h.diagnostics),/unmarked-private/);assert.equal(h.reads,1);
+});
+
+test('299: timeout and account replacement diagnostics retain duration and cannot inherit parser reasons from the old account',async t=>{
+ const h=setup(t),gate=deferred<ProviderLimits>(),s=h.create();h.result(()=>gate.promise);const pending=s.refresh();await until(()=>h.reads===1);h.clock.advance(15000);await pending;
+ assert.equal(h.disk().reason,limitsReason('limits_timeout'));assert.equal(h.diagnostics[0].durationMs,15000);
+ h.clock.advance(300000);h.result(async()=>{h.identity('b@github.com');return {ok:false,code:'limits_unavailable',reason:'Copilot не передал дату сброса квоты'}});await s.refresh();
+ assert.equal(h.disk().reason,'Вход сменился во время чтения лимитов');assert.equal(h.diagnostics.at(-1).code,'login_changed');assert.equal(h.disk().value,null);
+});
+
+
+test('319: unknown window duration survives cache restart without manufacturing a start or rejecting measured quota',async t=>{
+ const h=setup(t),s=h.create();h.result(async()=>{const v=live(h.clock);if(v.ok)v.windows[0]!.windowMinutes=null;return v});await s.refresh();assert.equal(s.snapshot().providers[0]!.ok,true);assert.equal(h.disk().value.windows[0].windowMinutes,null);
+ const restart=h.create();await restart.refresh();const row=restart.snapshot().providers[0]!;assert.equal(row.ok,true);assert.equal(row.windows[0]!.percentUsed,25);assert.equal(row.windows[0]!.windowMinutes,null);assert.equal(h.reads,1);
+});
+
+const unlimited=():ProviderLimits=>({ok:false,code:'limits_unlimited',reason:'все квоты Copilot безлимитны'});
+test('325: confirmed unlimited replaces finite quota, survives TTL/restart and later accepts a finite measurement',async t=>{
+ const h=setup(t),s=h.create();await s.refresh();assert.equal(s.snapshot().providers[0]!.windows[0]!.percentUsed,25);
+ h.clock.advance(300000);h.result(async()=>unlimited());await s.refresh();
+ const check=(store:ProviderLimitsStore)=>{const row=store.snapshot().providers[0]!;assert.equal(row.ok,true);assert.equal(row.code,'limits_unlimited');assert.equal(row.reason,'все квоты Copilot безлимитны');assert.equal(row.unlimited,true);assert.deepEqual(row.windows,[]);assert.equal(row.stale,false);assert.deepEqual(store.snapshot().errors,[])};
+ check(s);assert.equal(h.disk().value.unlimited,true);assert.deepEqual(h.disk().value.windows,[]);assert.equal(h.disk().backoff,0);assert.equal(h.disk().nextAttemptAt,h.clock.now()+300000);
+ assert.deepEqual(h.diagnostics.at(-1),{vendor:'copilot',ok:true,code:'limits_unlimited',reason:'все квоты Copilot безлимитны',durationMs:0});
+ const restarted=h.create();await restarted.refresh();check(restarted);assert.equal(h.reads,2);assert.equal(h.diagnostics.length,2);
+ h.clock.advance(300000);h.result(async()=>({ok:false,code:'limits_rate_limited',reason:'private',retryAfterSeconds:720}));await s.refresh();const stale=s.snapshot().providers[0]!;assert.equal(stale.ok,false);assert.equal(stale.unlimited,true);assert.equal(stale.stale,true);assert.equal(stale.code,'limits_unavailable');assert.deepEqual(stale.windows,[]);assert.equal(stale.fetchedAt,h.disk().value.fetchedAt);
+ h.clock.advance(720000);h.result(async()=>live(h.clock));await s.refresh();const finite=s.snapshot().providers[0]!;assert.equal(finite.ok,true);assert.equal(finite.unlimited,undefined);assert.equal(finite.code,undefined);assert.equal(finite.windows[0]!.percentUsed,25);assert.equal(h.disk().value.unlimited,undefined);
+});
+test('325: unlimited is accepted only for the account verified before and after quota reading',async t=>{
+ const h=setup(t),s=h.create();await s.refresh();h.clock.advance(300000);h.result(async()=>{h.identity('b@github.com');return unlimited()});await s.refresh();const rejected=s.snapshot().providers[0]!;assert.equal(rejected.code,'login_changed');assert.equal(rejected.unlimited,undefined);assert.deepEqual(rejected.windows,[]);assert.equal(h.disk().value,null);
+ await s.refresh();assert.equal(s.snapshot().providers[0]!.account,'b@github.com');assert.equal(s.snapshot().providers[0]!.code,'limits_unlimited');
+ h.identity('c@github.com');h.result(async()=>({ok:false,code:'limits_unavailable',reason:'private'}));await s.refresh();assert.equal(s.snapshot().providers[0]!.unlimited,undefined);assert.equal(h.disk().value,null);
+});
+for(const tamper of ['missing-flag','finite-windows','missing-value'])test('325: invalid unlimited cache cannot masquerade as success: '+tamper,async t=>{
+ const h=setup(t),s=h.create();h.result(async()=>unlimited());await s.refresh();const raw=h.disk();if(tamper==='missing-flag')delete raw.value.unlimited;else if(tamper==='missing-value')raw.value=null;else {const finite=live(h.clock);if(finite.ok)raw.value.windows=finite.windows}
+ const file=join(h.dir,'copilot.json'),bytes=JSON.stringify(raw);writeFileSync(file,bytes);const restarted=h.create();await restarted.refresh();const row=restarted.snapshot().providers[0]!;assert.equal(row.ok,false);assert.equal(row.code,'limits_unavailable');assert.equal(row.unlimited,undefined);assert.equal(readFileSync(file,'utf8'),bytes);assert.equal(h.reads,1);
 });

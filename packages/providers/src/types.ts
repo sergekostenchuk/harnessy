@@ -7,8 +7,8 @@ export const providerId=(v:unknown):v is string=>typeof v==='string'&&/^[a-z][a-
 export interface Seat { id:string; vendor:Vendor; label:string; model:string; mode:Mode; cwd:string; sessionId:string|null; writePaths:string[]; worktree:string|null }
 /** input is fresh input only; cacheRead is disjoint. Missing/invalid measurements stay null. */
 export interface Usage {input:number|null;output:number|null;cacheRead:number|null}
-export interface LimitWindow {label:string;percentUsed:number;resetsAt:number|null;windowMinutes:number}
-export type LimitsCode='limits_unsupported'|'limits_not_applicable'|'limits_auth'|'limits_rate_limited'|'limits_unavailable'|'limits_invalid'|'limits_timeout'|'limits_storage';
+export interface LimitWindow {label:string;percentUsed:number;resetsAt:number|null;windowMinutes:number|null}
+export type LimitsCode='limits_unlimited'|'limits_unsupported'|'limits_not_applicable'|'limits_auth'|'limits_rate_limited'|'limits_unavailable'|'limits_invalid'|'limits_timeout'|'limits_storage';
 export interface LimitCredits {hasCredits:boolean;unlimited:boolean;balance:number|null}
 export function limitCredits(raw:unknown):LimitCredits|null {
  if(!record(raw)||typeof raw.hasCredits!=='boolean'||raw.unlimited!==undefined&&typeof raw.unlimited!=='boolean')return null;
