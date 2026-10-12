@@ -165,7 +165,7 @@
     const fn=document.querySelector('#v-list .foot-note'); if(fn) fn.innerHTML='<span>'+esc(PROGRAMS.error||'Вход хранит программа провайдера · проверка по вашей команде')+'</span><span>маршрут и лимиты — в карточке провайдера</span>';
     const rl=document.querySelector('#v-roles .rl'); if(rl) rl.innerHTML=rolesHTML(); const note=document.querySelector('#v-roles .note');if(note){note.setAttribute('data-spec-mock','');note.innerHTML='<span>Макет · автоматический возврат на запасную модель ещё не подключён</span>';}
     const vk=document.querySelector('#v-keys .wrap'); if(vk) vk.innerHTML='<p style="color:var(--ink2);font-size:13px;margin:4px 0 14px">Входы программ хранят сами программы. Ключи подключений по API — в связке ключей macOS.</p>'+keysHTML();
-    const add=document.getElementById('addbtn'); if(add)add.dataset.live='1'; }
+    const add=document.getElementById('addbtn'); if(add)add.dataset.live='1'; focusNetworkEntry(); }
   function refreshOpenProvider(){if(!cur||!ovl||!ovl.classList.contains('on'))return;const p=providerRows().find(x=>x.id===cur);if(!p)return;
     const focused=document.activeElement,field=focused&&ovl.contains(focused)&&(focused.hasAttribute('data-subscription-date')?'[data-subscription-date]':null),start=focused&&focused.selectionStart,end=focused&&focused.selectionEnd;
     ovl.querySelector('.cbody').innerHTML=cardHTML(p);
@@ -173,9 +173,15 @@
   async function load(){syncBinding();if(!alive||!L.H.on||L.H.snapshotOnly)return false;const generation=++loadGeneration,b=binding();render();let data,billing=null;
     try{data=await api('/api/connections');if(!validData(data,b))throw Error(data&&data.error||'некорректный ответ подключений');try{billing=await api('/api/billing')}catch{}if(generation!==loadGeneration||!current(b))return false;
 
-      DATA=data;acceptBilling(billing&&billing.ok&&billing.project===b.project&&billing.config?billing:null);readError='';render();refreshOpenProvider();return true}
+      DATA=data;acceptBilling(billing&&billing.ok&&billing.project===b.project&&billing.config?billing:null);readError='';render();refreshOpenProvider();focusNetworkEntry();return true}
     catch(error){if(generation===loadGeneration&&current(b)){readError='Подключения не прочитаны: '+error.message;render()}return false}}
   async function openProgramCatalog(el){cancelTrial();dialogGeneration++;cur='add';open(el,programCatalogHTML(),700);if(!PROGRAMS.rows)await loadPrograms()}
+  const connectionEntry=typeof URLSearchParams==='function'?new URLSearchParams(location.search||''):{get:()=>null},entryProvider=connectionEntry.get('focus')==='network'?connectionEntry.get('provider'):null;let entryOpened=false,entryProject=null;
+  function focusNetworkEntry(){if(!entryProvider||!L.H.on||L.H.snapshotOnly)return;if(entryProject===null)entryProject=L.H.project;const expected=connectionEntry.get('project');if(entryProject!==L.H.project||expected&&expected!==L.H.project)return;
+    if(!entryOpened){if(entryProvider.startsWith('api:')){if(!(L.apiRoutes||[]).some(p=>p.id===entryProvider))return}else{if(!providerRows().some(p=>p.id===entryProvider))return;openProvider(entryProvider,document.getElementById('addbtn'));if(cur!==entryProvider)return}entryOpened=true;}
+    const block=[...document.querySelectorAll('[data-net-card]')].find(n=>n.dataset.netCard===entryProvider&&(!ovl?.classList.contains('on')||ovl.contains(n)));if(!block||block.classList.contains('proxy-network-focus'))return;block.classList.add('proxy-network-focus');block.setAttribute('tabindex','-1');block.focus();block.scrollIntoView?.({block:'center'});
+  }
+  L.focusNetworkEntry=focusNetworkEntry;
   function openProvider(id,el){if(!current(binding())||PROGRAMS.error&&program(id))return;const p=providerRows().find(x=>x.id===id);if(!p)return;dialogGeneration++;cur=id;open(el,cardHTML(p),p.catalog?780:p.routable?700:460);routeAvailability();}
   async function routeAction(){syncBinding();const id=cur,p=DATA&&DATA.providers.find(x=>x.id===id);if(!p||!p.routable||readError||!current(binding()))return;
     const key=jobKey(id);if(routeJobs.has(key))return;const b=binding(),dialog=dialogGeneration;routeJobs.add(key);loadGeneration++;routeAvailability();

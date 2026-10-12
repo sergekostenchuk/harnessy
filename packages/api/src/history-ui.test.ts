@@ -12,7 +12,7 @@ function ui(project:string,active:Record<string,string>,fetch:(path:string)=>Pro
  const H:any={on:true,project,panes:[{id:'worker',label:'воркер',model:'configured-later'}],active,asks:{},cur:null};H.pane=H.panes[0];const S:any={chat:[{role:'me',text:'browser duplicate'},{role:'ai',src:'live',html:'browser duplicate'}],ui:{pane:'worker',demo:true},cx:{}},requests:string[]=[],storage=new Map<string,string>();
  const context:any={H,S,document:d.document,window:{},PAGE:'chat',LOADED:null,SEL:null,md:(s:string)=>s,knowledgeReset(){},knowledgeSet(){return true},knowledgeOpen:async()=>{},knowledgeFetch(){},KN:{data:null},hydrateArtifacts(){},mdMessageArtifacts(){return ""},esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),paneName:(p:any)=>p.label,now:()=>1,hhmm:(n:number)=>new Date(n).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),save(){storage.set('state',JSON.stringify(S))},
   api:async(path:string)=>{requests.push(path);return fetch(path)},setTimeout(){},showWaiting(){},showRestore(){},renderWaiting(){},loadAttemptNotes:async()=>{},renderAll(){},selBar(){},drawLive(){},onboardOnce:async()=>{},addEventListener:d.window.addEventListener.bind(d.window)};
- const vm=createContext(context);runInContext(part('  let bindingGeneration','  function md(')+part('  async function loadChat(','  // подключение к движку')+part('  const fmtN=',"  document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]');")+'\nglobalThis.testing={load:loadChat,render,cost:costLine,bubble,invalidate:invalidateBinding};',vm);
+ const vm=createContext(context);runInContext(part('  // TS-23d:','  // TS-07: waiting controls')+part('  let bindingGeneration','  function md(')+part('  async function loadChat(','  // подключение к движку')+part('  const fmtN=',"  document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]');")+'\nglobalThis.testing={load:loadChat,render,cost:costLine,bubble,invalidate:invalidateBinding};',vm);
  return {...d,H,S,context,requests,storage,functions:context.testing};
 }
 
@@ -39,4 +39,11 @@ test('120 ОКНА: an old history request cannot repopulate a new binding; an u
 test('121: zero timestamps and missing measurements remain unknown; legacy answers never borrow the current model',async()=>{
  const messages=[{role:'ai',text:'legacy',ts:0},{role:'ai',text:'partial',ts:1.25,usage:{input:0},durationMs:0},{role:'ai',text:'duration only',durationMs:1500}];const v=ui('/projects/a',{worker:'a'},async()=>({messages}));await v.functions.load();const replies=v.document.querySelectorAll('.frame.cur .live-msg.ai');
  assert.match(replies[0]!.textContent,/модель не сохранена · время не сохранено/);assert.match(replies[0]!.textContent,/расход недоступен/);assert.match(replies[1]!.textContent,/расход: неполные данные · вход 0 · выход — · кэш — · 0 с/);assert.equal(v.S.chat[1].t,1250);assert.match(replies[2]!.textContent,/время не сохранено/);assert.match(replies[2]!.textContent,/· 2 с/);assert.doesNotMatch(replies.map(n=>n.textContent).join(' '),/configured-later|1970|03:00/);
+});
+
+
+test('23d: reloaded response uses its captured connection, not the current provider route',async()=>{
+ const network={provider:'claude',via:{id:'nl',type:'ssh',label:'Нидерланды'},reserve:{from:{id:'first',type:'ssh',label:'Первый <сервер>'},reason:'connection'}};
+ const v=ui('/projects/a',{worker:'a'},async()=>({messages:[{role:'ai',text:'Сохранённый ответ',ts:1,network}]}));v.H.network={claude:{id:'other',type:'ssh',label:'Другой выход'}};await v.functions.load();
+ const reply=v.document.querySelector('.frame.cur .live-msg.ai')!;assert.match(reply.textContent,/через VPS «Нидерланды»/);assert.match(reply.textContent,/ход пошёл через запасной/);assert.doesNotMatch(reply.textContent,/Другой выход/);assert.match(reply.innerHTML,/&lt;сервер&gt;/);assert.match(reply.textContent,/Сохранённый ответ/);
 });

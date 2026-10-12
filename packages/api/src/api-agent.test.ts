@@ -67,7 +67,7 @@ test('21b HTTP: API room and persisted team use the same route; malformed owner 
  const server=await endpoint(t,(_b,_q,res)=>answer(res,'from API')),h=await fixture(t,{seats:'  worker: {role: executor, vendor: api:local, model: test-model, mode: read}',before(dir){writeFileSync(join(dir,'owner-settings.json'),JSON.stringify({llmProviders:{local:config(server.url)}}))},deps:{llmKeys:new MemoryKeys()}});
  assert.equal(h.runtime.registry.get('worker')!.vendor,'api:local');await h.runtime.runTurn('worker','persisted seat');assert.equal(h.provider.calls.length,0);
  const room=await call(h.api,'/api/room',{body:{vendor:'api:local',model:'test-model',folder:true}});assert.equal(room.status,200,room.text);assert.equal(h.runtime.registry.get('room')!.vendor,'api:local');await h.runtime.runTurn('room','room question');assert.equal(server.bodies.length,2);
- writeFileSync(join(h.dir,'owner-settings.json'),'{broken');const status=await call(h.api,'/api/status');assert.equal(status.status,200,status.text);assert.equal(status.body.apiError.code,'settings_unreadable');assert.ok(status.body.models.claude.length);assert.equal(readFileSync(join(h.dir,'owner-settings.json'),'utf8'),'{broken');
+ writeFileSync(join(h.dir,'owner-settings.json'),'{broken');const status=await call(h.api,'/api/status');assert.equal(status.status,200,status.text);assert.equal(status.body.apiError.code,'settings_unreadable');assert.equal(status.body.network,null);assert.equal(status.body.networkError.code,'network_unreadable');assert.ok(status.body.models.claude.length);assert.equal(readFileSync(join(h.dir,'owner-settings.json'),'utf8'),'{broken');
 });
 
 test('21b HTTP: all mode runs a bounded shell tool in the project through its owner binding',async t=>{

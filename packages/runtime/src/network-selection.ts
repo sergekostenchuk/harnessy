@@ -34,5 +34,6 @@ export class NetworkSelection {
   this.activeExit.set(s.provider,exit.id);return {reserve:index>0,reason:state.reason};
  }
  failed(s:RouteSnapshot,index:number,reason:SwitchReason){if(this.snapshot(s.provider).stamp!==s.stamp)return;const state=this.state(s),exit=s.exits[index]!;state.failed.set(exit.id,this.checked(exit)?.checkedAt??this.now());state.reason=reason;const row=this.row(s.provider,exit.id);if(reason==='rate_limited')row.rateLimits++;if(reason==='silence')row.silences++;}
+ selectedExit(provider:string){const s=this.snapshot(provider),state=this.states.get(provider);if(!s.configured)return null;return s.exits[state?.stamp===s.stamp?state.index:0]??null}
  stats(){const rows=new Map([...this.metrics].map(([k,v])=>[k,{...v}]));for(const [provider,state]of this.states){const id=this.activeExit.get(provider);if(id&&state.index>0){const key=provider+'\0'+id,row=rows.get(key)??{...this.row(provider,id)};row.reserveMs+=Math.max(0,this.now()-state.since);rows.set(key,row)}}return [...rows.values()]}
 }

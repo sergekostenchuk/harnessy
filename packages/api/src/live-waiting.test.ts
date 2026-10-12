@@ -188,7 +188,7 @@ for(const place of ['worker','room'])for(const state of ['uncertain','recovering
   v.sandbox.refreshStatus=async()=>{v.functions.applyStatus((await call(h.api,'/api/status')).body)};
   const row=v.sidebar(chats);assert.match(row,/ждёт решения/);assert.doesNotMatch(row,/data-attempt-action/);
   await v.sidebarClick(chat.id,place);
-  assert.equal(v.S.ui.pane,place,cold?'cold':'warm');assert.equal(v.H.pane.id,place);assert.equal(v.cards.get('live-waiting')!.dataset.pane,place);assert.match(v.cards.get('live-waiting')!.innerHTML,/Ход не завершён|восстановлен/);
+  assert.equal(v.S.ui.pane,place,cold?'cold':'warm');assert.equal(v.H.pane.id,place);assert.equal(v.cards.get('live-waiting')!.dataset.pane,place);assert.match(v.cards.get('live-waiting')!.innerHTML,/Claude не отвечает|восстановлен/);
   assert.ok(v.S.chat.some(m=>m.text==='saved answer'));assert.ok(v.requests.some(r=>r.path==='/api/chats/'+chat.id));assert.equal(v.requests.some(r=>r.path==='/api/chats/open'),false);
  }
  assert.equal(h.provider.calls.length,calls);assert.equal((await call(h.api,'/api/status')).body.panes.find((p:any)=>p.id===place).waiting.status,state);
@@ -213,7 +213,29 @@ test('350: failed CLI turn → status → chat card; queued message waits for th
  const queued=await call(h.api,'/api/chat',{body:{pane:'worker',message:'next'}});assert.equal(queued.body.queued,true);assert.ok(queued.body.waiting.queuedSeqs.includes(queued.body.seq));
  const status=await call(h.api,'/api/status');assert.equal(status.status,200,status.text);const row=status.body.panes.find((p:any)=>p.id==='worker');assert.equal(row.waiting.failure.code,'transport_lost');assert.doesNotMatch(status.text,/HIDDEN/);
  const v=ui();v.H.on=true;v.S.ui.pane='worker';v.functions.applyStatus(status.body);const html=v.cards.get('live-waiting')!.innerHTML;
- assert.match(html,/Ход не завершён/);assert.match(html,/transport_lost.*upstream &lt;offline&gt;/);assert.match(html,/ждёт решения по прошлому ходу/);assert.match(html,/data-attempt-action="retry"/);assert.match(html,/data-attempt-action="skip"/);
+ assert.match(html,/Claude не отвечает/);assert.match(html,/transport_lost.*upstream &lt;offline&gt;/);assert.match(html,/ждёт решения по прошлому ходу/);assert.match(html,/data-attempt-action="retry"/);assert.match(html,/data-attempt-action="skip"/);
  h.provider.onRun=null;v.sandbox.fetch=async(path,options)=>({json:async()=>(await call(h.api,path,options?.body?{body:JSON.parse(options.body)}:{})).body});
  await v.click({attemptProject:h.dir,attemptPane:'worker',attemptId:row.waiting.turnInstanceId,attemptAction:'skip'});await h.runtime.idle();assert.match(h.provider.calls.at(-1)!.message,/next/);assert.doesNotMatch(h.provider.calls.at(-1)!.message,/failing/);assert.equal(h.runtime.waiting('worker'),null);
+});
+
+for(const [code,title]of [['region_restricted','недоступен из вашего региона'],['network_blocked','заблокирован в вашей сети'],['network_unavailable','не отвечает из вашей сети'],['transport_lost','не отвечает']] as const)test('23d: chat cause '+code+' is typed; diagnostic remains only in details',()=>{
+ const v=ui(),p={...v.H.panes[0],vendor:'claude'},html=v.functions.waitingControls(p,{...waiting,failure:{code,reason:'region blocked <script> forged diagnostic',durationMs:12}},v.H.project);
+ assert.match(html,new RegExp('<h3>Claude '+title+'</h3>'));assert.match(html,/Подключить через прокси или VPS/);assert.match(html,/provider=claude&amp;focus=network/);assert.match(html,/<details><summary>подробнее<\/summary>.*&lt;script&gt;/);assert.doesNotMatch(html,/<script>/);
+ if(code==='transport_lost')assert.doesNotMatch(html.split('<details>')[0]!,/регион|блокиров/);
+});
+
+test('23d: direct action carries the rendered binding, even after a different chat becomes active',async()=>{
+ const v=ui(),binding={project:v.H.project,instanceId:'fixture',pane:'worker',chat:'chat-A',revision:9,mode:'read'};
+ const p={...v.H.panes[0],vendor:'claude',settingsBinding:binding},info={...waiting,failure:{code:'network_no_reserve',reason:'no permitted exits',durationMs:10}};
+ const html=v.functions.waitingControls(p,info,v.H.project);assert.match(html,/Остановились: ни один прокси не отвечает/);assert.match(html,/Пустить напрямую один раз/);assert.match(html,/Сервис увидит ваш адрес/);assert.match(html,/data-attempt-binding="\{&quot;project/);
+ v.H.active={worker:'chat-B'} as any;await v.click({attemptProject:v.H.project,attemptPane:'worker',attemptId:'turn-a',attemptAction:'retry',attemptNetwork:'direct_once',attemptBinding:JSON.stringify(binding)});
+ assert.deepEqual(v.requests[0]!.body,{project:v.H.project,turnInstanceId:'turn-a',action:'retry',network:'direct_once',binding});
+ assert.doesNotMatch(v.functions.waitingControls({...p,settingsBinding:undefined},info,v.H.project),/Пустить напрямую/);
+});
+
+test('23d: answer route ignores another chat and keeps response text with the captured route through completion',()=>{
+ const v=ui({realFinish:true}),network={provider:'claude',via:{id:'nl',type:'ssh',label:'Нидерланды'},reserve:{from:{id:'a',type:'ssh',label:'Основной'},reason:'connection'}};
+ v.H.active={worker:'chat-A'} as any;v.functions.hEvent({type:'delta',text:'Answer retained'});const c=v.H.cur;v.functions.hEvent({type:'networkRoute',pane:'worker',chat:'other',network});assert.equal((c as any).network,undefined);
+ v.functions.hEvent({type:'networkRoute',pane:'worker',chat:'chat-A',network});v.functions.hEvent({type:'done',pane:'worker',chat:'chat-A',network,model:'w1',seq:4,usage:{input:1,output:1}});
+ assert.equal(v.S.chat.length,1);assert.equal(v.S.chat[0]!.text,'Answer retained');assert.deepEqual(JSON.parse(JSON.stringify(v.S.chat[0]!.network)),network);
 });
