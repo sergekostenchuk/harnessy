@@ -33,5 +33,5 @@ test('283: limits HTTP reads account.getQuota via the process, returns a monthly
 
 test('283: quota failure is typed over HTTP with no invented Copilot measurement or model call',async t=>{
  const cli=await copilotFixture(t,'bad-quota'),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([cli.entry])}}),r=await call(h.api,'/api/limits');
- assert.equal(r.body.ok,false);assert.equal(r.body.code,'limits_unavailable');assert.equal(typeof r.body.reason,'string');assert.equal(r.body.providers.some((p:any)=>p.vendor==='copilot'),false);assert.equal(cli.capture().some(c=>c.turn),false);
+ assert.equal(r.body.ok,false);assert.equal(r.body.code,'limits_unavailable');assert.equal(typeof r.body.reason,'string');assert.equal(r.body.providers.find((p:any)=>p.vendor==='copilot').ok,false);assert.deepEqual(r.body.providers.find((p:any)=>p.vendor==='copilot').windows,[]);assert.equal(cli.capture().some(c=>c.turn),false);
 });

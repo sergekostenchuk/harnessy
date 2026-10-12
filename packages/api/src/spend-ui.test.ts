@@ -4,7 +4,8 @@ import {readFileSync} from 'node:fs';
 import {request} from 'node:http';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
-import {fixture,call,deferred,until,sse} from './test-helpers.ts';
+import {ProviderCatalog,ProviderError,type CatalogEntry,type ProviderLimits} from '@harnessy/providers';
+import {fixture,call,deferred,until,sse,FakeProvider,FakeClock} from './test-helpers.ts';
 const read=(path:string)=>readFileSync(new URL('../../../'+path,import.meta.url),'utf8'),live=read('ui/deploy/live.js'),raw=read('ui/sketches/disarto/05-spend.html');
 const part=(source:string,start:string,end:string)=>{const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return source.slice(a,b)};
 const metrics=(turns=1)=>({turns,input:2,output:3,cacheRead:0,durationMs:10,averageDurationMs:10,durationSamples:1,p50DurationMs:10,p95DurationMs:10,errorRate:0,outcomes:{ok:turns,interrupted:0,error:0,unknown:0},missingMeasurements:0,cost:null,costByCurrency:[],unpricedTurns:turns,pricedTurns:0,costReason:'нет цены'});
@@ -294,4 +295,15 @@ for(const delivery of ['HTTP','SSE'])test('219: quota '+delivery+' replaces the 
  if(delivery==='HTTP')await v.functions.limits();else v.functions.limitEvent(quota());assert.equal(oldButton.isConnected,false);assert.equal(v.find('.limits'),widget);assert.equal(v.find('.limits-dialog').hasAttribute('open'),true);assert.match(v.find('.limits-dialog').textContent,/40 %/);
  await v.window.emit('keydown',{key:'Escape'});assert.equal(v.find('.limits-dialog').hasAttribute('open'),false);assert.equal(v.document.activeElement,widget);assert.equal(widget.isConnected,true);
  await v.find('[data-spend-limits]').emit('click');revision++;v.functions.limitEvent(quota());await v.find('[data-spend-close]').emit('click');assert.equal(v.document.activeElement,widget);
+});
+
+for(const failure of ['missing','logged-out','quota-error'])test('286: HTTP → widget keeps measured Claude when Copilot fails: '+failure,async t=>{
+ const clock=new FakeClock(),claude=Object.assign(new FakeProvider(),{limits:async():Promise<ProviderLimits>=>({ok:true,plan:null,source:'fixture',fetchedAt:clock.now()/1000,windows:[{label:'неделя',percentUsed:31,windowMinutes:10080,resetsAt:clock.now()/1000+5000}]})});
+ const entry:CatalogEntry={id:'copilot',title:'GitHub Copilot',binary:'fake',login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,mcp:true,resume:true,limits:true},version:async()=>'',auth:async()=>{if(failure==='missing')throw new ProviderError('no_binary','missing');return {loggedIn:failure!=='logged-out',email:'a@github.com'}},models:async()=>[],limits:async()=>({ok:false,code:'limits_unavailable',reason:'private response'}),runTurn:async()=>{throw Error('no model allowed')}};
+ const h=await fixture(t,{deps:{clock,providers:{claude},providerCatalog:new ProviderCatalog([entry])}}),r=await call(h.api,'/api/limits');assert.equal(r.body.ok,true);assert.equal(r.body.providers.find((p:any)=>p.vendor==='claude').ok,true);const cp=r.body.providers.find((p:any)=>p.vendor==='copilot');assert.equal(cp.ok,false);assert.equal(cp.code,'limits_unavailable');assert.deepEqual(cp.windows,[]);
+ const v=ui(async path=>(await call(h.api,path)).body);v.H.project=h.dir;v.context.PAGE='new';await v.functions.limits();assert.equal(v.find('.limits [data-limit-vendor="claude"] [role="meter"]').getAttribute('aria-valuenow'),'31');assert.doesNotMatch(v.find('.limits [data-limit-vendor="claude"]').textContent,/макет/);assert.match(v.find('.limits [data-limit-vendor="copilot"]').textContent,/нет данных.*Лимиты программы временно недоступны/);assert.equal(v.find('.limits [data-limit-vendor="copilot"]').querySelector('[role="meter"]'),null);
+ await v.find('[data-spend-limits]').emit('click');assert.match(v.find('.limits-dialog').textContent,/GitHub Copilot.*нет данных · Лимиты программы временно недоступны/);
+ // The same envelope must work through SSE, including when all actual sources fail.
+ const failed={...r.body,ok:false,revision:r.body.revision+100,providers:r.body.providers.map((p:any)=>({...p,ok:false,status:'unavailable',sourceConnected:true,windows:[],fetchedAt:null,code:'limits_unavailable',reason:'временно недоступно'}))};v.functions.limitEvent(failed);assert.match(v.find('.limits [data-limit-vendor="claude"]').textContent,/нет данных/);assert.equal(v.find('.limits [data-limit-vendor="claude"]').querySelector('[role="meter"]'),null);
+ v.functions.limitEvent({...r.body,revision:failed.revision+1});assert.equal(v.find('.limits [data-limit-vendor="claude"] [role="meter"]').getAttribute('aria-valuenow'),'31');
 });

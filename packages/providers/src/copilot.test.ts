@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
 import assert from 'node:assert/strict';
@@ -73,4 +74,12 @@ test('281/282: process-owned lease excludes a second engine and recovers after a
  await Promise.race([new Promise<void>(resolve=>child.stdout.once('data',()=>resolve())),exited.then(()=>{throw Error(errors)})]);
  const store=new CliStateStore('copilot',h.stateRoot);assert.throws(()=>store.acquire(h.dir,'worker'),{code:'busy'});child.kill('SIGKILL');await exited;
  const recovered=store.acquire(h.dir,'worker');recovered.release();let journal=0;await store.remove(h.dir,undefined,()=>{journal++});assert.equal(journal,1);assert.equal(existsSync(recovered.path),false);
+});
+
+for(const target of ['seat','project','root','replacement'])test('286: state '+target+' substitution during the final async check cannot start Copilot',async t=>{
+ const h=await copilotFixture(t),root=join(realpathSync(h.stateRoot),'copilot'),hash=createHash('sha256').update(realpathSync(h.dir)).digest('hex'),state=join(root,hash,h.seat.id),outside=join(h.dir,'outside-state');mkdirSync(outside);writeFileSync(join(outside,'untouched'),'keep');let starts=0;
+ await assert.rejects(h.provider.runTurn(h.seat,'must not run',{...h.ctx,modelStarted:()=>{starts++},beforeModel:async()=>{
+  const path=target==='root'?root:target==='project'?join(root,hash):state;renameSync(path,path+'-saved');if(target==='replacement')mkdirSync(path);else symlinkSync(outside,path);
+ }}),{code:'state_dir_tampered'});
+ assert.equal(starts,0);assert.equal(h.capture().some(c=>c.turn),false);assert.equal(h.events.some(e=>e.type==='done'),false);assert.deepEqual(h.registered,h.revoked);assert.deepEqual(readdirSync(outside),['untouched']);assert.equal(readFileSync(join(outside,'untouched'),'utf8'),'keep');
 });

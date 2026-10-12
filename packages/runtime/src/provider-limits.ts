@@ -7,7 +7,7 @@ import {record,type ProviderCatalog,type CatalogEntry,type ProviderLimits,type L
 import {atomicJSON} from './limits-cache.ts';
 import type {Clock} from './types.ts';
 import type {LimitsStore} from './limits.ts';
-export type CliLimitsRow=Omit<ReturnType<LimitsStore['snapshot']>['providers'][number],'vendor'|'fetchedAt'> & {vendor:string;fetchedAt:number;checkedAt:number};
+export type CliLimitsRow=Omit<ReturnType<LimitsStore['snapshot']>['providers'][number],'vendor'|'fetchedAt'|'code'> & {vendor:string;fetchedAt:number|null;checkedAt:number;kind:'subscription';ok:boolean;code?:Failure['code']};
 interface Value {account:string;plan:string|null;windows:LimitWindow[];fetchedAt:number}
 interface Cache {version:1;vendor:string;account:string|null;checkedAt:number;nextAttemptAt:number;backoff:number;pending:string|null;value:Value|null;code:'limits_unavailable'|'login_changed'|null}
 export interface Failure {vendor:string;ok:false;code:'limits_unavailable'|'login_changed';reason:string;checkedAt:number}
@@ -34,9 +34,9 @@ export class ProviderLimitsStore {
   return {version:1,vendor:id,account:raw.account,checkedAt:raw.checkedAt,nextAttemptAt:raw.nextAttemptAt,backoff:Number(raw.backoff),pending:raw.pending,code:raw.code as Cache['code'],value};
  }
  private locked<T>(fn:()=>T):T{this.directory();const path=join(this.dir,'coordination.sqlite');try{if(!lstatSync(path).isFile())throw Error('unsafe lock')}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e}const db=new DatabaseSync(path);try{db.exec('PRAGMA busy_timeout=1000; BEGIN IMMEDIATE');const value=fn();db.exec('COMMIT');return value}finally{db.close()}}
- private adopt(id:string,row:Cache|null,error?:Failure){if(this.closed)return;const before=JSON.stringify([this.rows.get(id),this.errors.get(id)]);if(row)this.rows.set(id,row);if(error)this.errors.set(id,error);else this.errors.delete(id);if(before!==JSON.stringify([this.rows.get(id),this.errors.get(id)])){this.generation=++revision;this.publish()}}
- snapshot(){const providers:CliLimitsRow[]=[];for(const entry of this.catalog.limitsEntries()){const row=this.rows.get(entry.id);if(!row?.value||row.code||this.errors.has(entry.id))continue;const v=row.value;
-  providers.push({vendor:entry.id,account:v.account,plan:v.plan,planLevel:null,extraUsageEnabled:null,status:'ok',label:entry.title,source:entry.title+' CLI',sourceConnected:true,fetchedAt:v.fetchedAt,checkedAt:row.checkedAt,windows:v.windows.map(w=>({...w,resetsIn:w.resetsAt===null?null:Math.max(0,w.resetsAt-this.clock.now()/1000)})),nextAttemptAt:row.nextAttemptAt/1000,stale:this.clock.now()-row.checkedAt>300000});
+ private adopt(id:string,row:Cache|null,error?:Failure){if(this.closed)return;const before=JSON.stringify([this.rows.get(id),this.errors.get(id)]);if(row)this.rows.set(id,row);else if(error)this.rows.delete(id);if(error)this.errors.set(id,error);else this.errors.delete(id);if(before!==JSON.stringify([this.rows.get(id),this.errors.get(id)])){this.generation=++revision;this.publish()}}
+ snapshot(){const providers:CliLimitsRow[]=[];for(const entry of this.catalog.limitsEntries()){const row=this.rows.get(entry.id),error=this.errors.get(entry.id)??(row?.code?unavailable(entry.id,row.checkedAt,row.code):undefined);if(!row&&!error)continue;const v=row?.value;
+  providers.push({vendor:entry.id,kind:'subscription',ok:!!v&&!error,account:v?.account??null,plan:v?.plan??null,planLevel:null,extraUsageEnabled:null,status:error?'unavailable':'ok',label:entry.title,source:entry.title+' CLI',sourceConnected:true,fetchedAt:v?.fetchedAt??null,checkedAt:row?.checkedAt??error!.checkedAt,windows:v?.windows.map(w=>({...w,resetsIn:w.resetsAt===null?null:Math.max(0,w.resetsAt-this.clock.now()/1000)}))??[],nextAttemptAt:row?row.nextAttemptAt/1000:null,stale:!v||!!error||this.clock.now()/1000-v.fetchedAt>300,...(error?{code:error.code,reason:error.reason}:{})});
  }return {revision:this.generation,providers,errors:[...this.errors.values()]}}
  async refresh(){await Promise.all(this.catalog.limitsEntries().map(e=>this.refreshOne(e)))}
  private async refreshOne(entry:CatalogEntry){const key=this.path(entry.id),previous=shared.get(key);if(previous)await previous;if(this.closed)return;
@@ -45,7 +45,7 @@ export class ProviderLimitsStore {
  private complete(id:string,token:string,identity:string|null,result:ProviderLimits|null,code:Cache['code']):Cache|null{return this.locked(()=>{
   const row=this.load(id);if(!row||row.pending!==token||row.account!==identity)return null;
   const value=code===null&&result?.ok?measurement({...result,account:identity,fetchedAt:this.clock.now()/1000}):null;
-  row.pending=null;row.checkedAt=this.clock.now();row.code=value?null:code??'limits_unavailable';row.value=value;
+  row.pending=null;row.checkedAt=this.clock.now();row.code=value?null:code??'limits_unavailable';row.value=value??(code==='login_changed'?null:row.value);
   row.backoff=value?0:Math.min(1800000,Math.max(300000,row.backoff*2));
   const retry=result&&!result.ok&&typeof result.retryAfterSeconds==='number'&&Number.isFinite(result.retryAfterSeconds)?Math.max(0,result.retryAfterSeconds*1000):0;
   row.nextAttemptAt=row.checkedAt+Math.max(value?300000:row.backoff,retry);atomicJSON(this.path(id),row);return row;

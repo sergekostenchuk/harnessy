@@ -118,9 +118,10 @@ export class CliProvider {
    const config=this.d.mcp.serialize(server),mcpArgs=this.d.mcp.args(path);if(!text(config)||!config||!strings(mcpArgs)||!mcpArgs.length)throw protocol('нет конфигурации MCP');
    await writeFile(path,config,{encoding:'utf8',mode:0o600,flag:'wx'});
    const c=command(this.d.turn.command(input));
-   if(lease){if('file'in this.d.auth)throw protocol('изолированный вход должен проверяться программой');const current=await this.query(this.d.auth,signal,seat.cwd,stateArgs);if(!current.loggedIn||!current.email||current.email!==auth.email)throw new ProviderError('login_changed','Вход приватного состояния отличается; подтвердите вход заново')}
+   if(lease){lease.validate();if('file'in this.d.auth)throw protocol('изолированный вход должен проверяться программой');const current=await this.query(this.d.auth,signal,seat.cwd,stateArgs);if(!current.loggedIn||!current.email||current.email!==auth.email)throw new ProviderError('login_changed','Вход приватного состояния отличается; подтвердите вход заново')}
    if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),signal);
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
+   lease?.validate(); // No await between the final path check and process creation.
    const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...stateArgs,...mcpArgs],cwd:seat.cwd,env:this.environment(ctx.env),timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:stream,started:()=>ctx.modelStarted?.()});
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    if(exit.code!==0||exit.signal){const failure=this.d.failure?.(exit);throw new ProviderError(failure?.code??'transport_lost',clean(failure?.text??'CLI: процесс завершился без успешного ответа'),sessionId)}
