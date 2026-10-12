@@ -502,6 +502,35 @@ html[data-m][data-page="conn"] .row .pay{flex:1 1 100%;margin-left:44px;max-widt
 (function(){ const fill=(id,n,on)=>{ const e=document.getElementById(id); e.innerHTML=Array.from({length:n},(_,i)=>'<i'+(i<on?' class="on"':'')+'></i>').join(''); }; fill('t1',48,30); fill('t2',36,27); })();
 </script>
 <section class="box" id="model-answer"><h2>Ответ модели · Markdown и артефакты</h2><div class="md-body"><h2>Цель проекта</h2><p>Состав команды и результаты хода читаются в одной ленте.</p><div class="md-table" tabindex="0"><table><thead><tr><th>Роль</th><th>Задача</th></tr></thead><tbody><tr><td>Архитектор</td><td>Устройство системы</td></tr><tr><td>Ревьюер</td><td>Независимая критика</td></tr></tbody></table></div><div class="md-code"><div class="md-code-head"><span>typescript</span><button type="button" data-example-copy>копировать</button></div><pre><code><span class="md-keyword">const</span> ready = <span class="md-keyword">true</span>;</code></pre></div><span class="md-artifact"><a href="#model-answer"><b>Схема проекта.png</b><span>открыть ↗</span></a><small>artifacts/схема.png · 24 КБ · образец карточки</small><svg viewBox="0 0 420 120" role="img" aria-label="Образец превью: три блока схемы" style="display:block;max-height:140px;margin:16px auto"><g fill="var(--tile)" stroke="var(--line2)"><rect x="5" y="35" width="110" height="50" rx="8"/><rect x="155" y="35" width="110" height="50" rx="8"/><rect x="305" y="35" width="110" height="50" rx="8"/></g><path d="M115 60h40m110 0h40" stroke="var(--accent)"/><g fill="var(--ink2)" font-size="12" text-anchor="middle"><text x="60" y="65">Владелец</text><text x="210" y="65">Оркестратор</text><text x="360" y="65">Команда</text></g></svg></span><span class="md-artifact"><a href="#model-answer"><b>Обзор.mp4</b><span>открыть ↗</span></a><small>artifacts/обзор.mp4 · видео с управлением воспроизведением · образец</small></span><span class="md-artifact"><a href="#model-answer"><b>Отчёт.pdf</b><span>открыть ↗</span></a><small>docs/отчёт.pdf · 120 КБ · образец</small></span></div></section>
+<section class="spec" id="proxy-path-spec" data-proxy-path-design>
+<div class="from">Подключения · прокси и VPS · скетч 25</div><h2>Прокси и VPS · словарь и элементы</h2>
+<p class="conn-note">Слово владельца 12.10: пути человека с основных экранов, нативно понятно. Этот раздел задаёт слова и элементы для <a href="25-proxy-path.html">скетча 25</a>; три раздела ниже («Выходы», «Порядок выходов», «Аналитика выходов») описывают влитую механику и по словарю устарели — экраны перестраиваются по скетчу 25.</p>
+<div class="two">
+  <div class="box"><div class="cap2">так говорим</div><p style="margin:0;font-size:12.5px;color:var(--ink2)">Прокси · VPS · «через что подключаемся» · «напрямую — сервис видит ваш адрес» · «если не ответит — через …» · «менять каждые N минут» · «работает / не отвечает» · страна и адрес после проверки · «через него ходят: Claude, Codex».</p></div>
+  <div class="box"><div class="cap2">так не говорим</div><p style="margin:0;font-size:12.5px;color:var(--ink3)">выход · цепочка · маршрут провайдера · ретранслятор · привязка · revision · ожидаемый IP · ID выхода · коды вроде project_changed в заголовке. Технические причины — только под «подробнее».</p></div>
+</div>
+<div class="two" style="margin-top:12px">
+  <div class="box"><div class="cap2">блок в карточке провайдера · «через что подключаемся»</div>
+    <div class="conn-program"><b>Напрямую</b><p class="tm">сервис видит ваш адрес</p><button class="btn sm p" type="button" disabled>Изменить</button> <small style="color:var(--ink3)">действует на все чаты с Claude</small></div>
+    <div class="conn-program"><b>VPS «Нидерланды»</b><p class="tm">185.167.63.86 · работает · 48 мс · если не ответит — прокси «Амстердам»</p><button class="btn sm" type="button" disabled>Изменить</button></div>
+  </div>
+  <div class="box"><div class="cap2">строка выбора · радиокнопка с последствием</div>
+    <div class="conn-program"><b>● VPS «Нидерланды»</b><p class="tm">185.167.63.86 · проверено только что · <span style="color:var(--ok)">работает · 48 мс</span></p></div>
+    <div class="conn-program"><b>○ Перейти на VPS «Хельсинки»</b><p class="tm" style="color:var(--ink3)">другая страна — сервис заметит переезд, лучше не надо</p></div>
+    <div class="conn-program" style="border-style:dashed"><b style="color:var(--accent)">+ Добавить прокси или VPS</b></div>
+  </div>
+</div>
+<div class="two" style="margin-top:12px">
+  <div class="box"><div class="cap2">карточка в чате · сеть</div>
+    <article class="box live-attempt-controls" role="alert" style="border-left:3px solid var(--bad-fill,#a3304b)"><b>Claude не отвечает из вашей сети</b><p class="t3">Сервис ответил, что из вашего региона он недоступен. Запрос не отправлен, ничего не потрачено.</p><div class="act"><button class="btn sm p" type="button" disabled>Подключить через прокси или VPS</button> <button class="btn sm ghost" type="button" disabled>Повторить</button> <button class="btn sm ghost" type="button" disabled>Пропустить</button></div></article>
+    <article class="box" style="border-left:3px solid var(--accent);margin-top:8px"><b>VPS «Нидерланды» не ответил — ход пошёл через запасной прокси «Амстердам»</b><p class="t3">Ответ получен, делать ничего не нужно.</p></article>
+  </div>
+  <div class="box"><div class="cap2">карточка прокси или VPS · склад</div>
+    <div class="conn-program"><b>Нидерланды <span class="pill ok">работает</span></b><p class="tm">VPS по SSH · root@185.167.63.86</p><p style="font-size:12.5px;margin:6px 0 0">адрес видят — 185.167.63.86 · Нидерланды · 48 мс<br>через него ходят — Claude · Codex<br>сегодня — 1,2 ГБ · 24 Мбит/с · падений не было</p><p class="conn-note">до настоящих ходов вместо цифр — «ещё не использовался»; выдуманных чисел нет</p></div>
+  </div>
+</div>
+<div class="box" style="margin-top:12px"><div class="cap2">добавить · два шага</div><p style="margin:0;font-size:12.5px;color:var(--ink2)">1 — «Что добавляем»: прокси по адресу / свой VPS по SSH, объяснены тем, что у человека на руках. 2 — поля как в терминале (адрес сервера, ключ из ~/.ssh списком; для прокси — адрес и логин с паролем), «Проверить» делает всё сам и отвечает одной строкой «Работает · страна · адрес · мс»; название подставляется из страны. Главная кнопка — «Сохранить и использовать для <провайдер>», если пришли из карточки провайдера. Порт и цена — под «Больше настроек».</p></div>
+</section>
 <section class="spec" id="network-exits-spec" data-network-design>
 <div class="from">Подключения · сетевой выход</div><h2>Выходы</h2><p class="conn-note">Маршрут задаётся для всех мест провайдера. Образец компонентов.</p>
 <div class="seg"><button type="button">Провайдеры</button><button type="button" class="on">Выходы</button></div>
