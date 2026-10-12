@@ -1,3 +1,4 @@
+import {turnFailure} from './turn-failure.ts';
 import {ApiAgent,apiRoute,API_MODES} from './api-agent.ts';
 import {createLlmService,keySlot,MacKeyStore,routeModels,type KeyStore,type LlmDependencies,type ProviderConfig} from '@harnessy/llm';
 import {TraceStore,currentTrace,traceReason,type TraceContext} from './trace.ts';
@@ -195,7 +196,7 @@ export class Runtime {
  publishState(id:string):void {const p=this.project;this.stateEvent(p,this.pane(id,p))}
  private warningId(p:ProjectState,pane:Pane,kind:string):string {return pane.id+':'+(waiting(p,pane)?.turnInstanceId??p.active.get(pane.id)?.scope.turnInstanceId??'episode:'+p.generation)+':'+kind}
  postOwner(input:AgentPostInput,initiator:Initiator):Record_ {this.requireOwner(initiator);const p=this.project,targets=Array.isArray(input.to)?input.to:[input.to];if(input.kind!=='stop'&&[...p.registry.panes.keys()].some(id=>(targets.includes(id)||targets.includes('*'))&&(p.editing.has(id)||p.materializing.has(id)||p.restoreFailed.has(id))))throw new RuntimeError('busy','назначение или изменение разговора ещё не завершено',409);p.registry.refreshPolicy();return p.channel.postCore({...input,thread:input.thread??(input.kind==='task'?'T'+(p.journal.lastSeq+1):null)},OWNER)}
- private report(p:ProjectState,pane:Pane,error:unknown):void{if(!p.closed){const event={type:'error',message:slice(message(error),600),sessionId:pane.sessionId,code:error instanceof RuntimeError?error.code:'internal',warning:this.warningId(p,pane,'error')};if(pane.status==='recovering'||pane.status==='uncertain')pane.recoveryError=event;pane.publish(event)}}
+ private report(p:ProjectState,pane:Pane,error:unknown):void{if(!p.closed){const failure=turnFailure(error,p.dir,0),event={type:'error',message:failure.reason,sessionId:pane.sessionId,code:failure.code,warning:this.warningId(p,pane,'error')};if(pane.status==='recovering'||pane.status==='uncertain')pane.recoveryError=event;pane.publish(event)}}
  private stateEvent(p:ProjectState,pane:Pane){if(!p.closed)pane.publish({type:'state',...pane.settings(),settingsBinding:this.paneBinding(pane.id,p),pending:p.journal.pendingFor(pane.id).length,status:pane.status,waiting:this.waiting(pane.id)})}
  private attemptDecisions(p:ProjectState):{record:Record_;done:Record_|null}[] {
   const entries:{record:Record_;done:Record_|null}[]=[];
@@ -320,7 +321,7 @@ export class Runtime {
  private async waitVendor(p:ProjectState,vendor:Vendor|'human'):Promise<void>{if(vendor==='human')return;while(p.resets.has(vendor)||p.routeJobs.has(vendor)){await Promise.all([p.resets.get(vendor),p.routeJobs.get(vendor)]);this.same(p)}}
  async runTurn(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol}={}):Promise<string> {
  const p=options.project??this.project,parent=options.entries?.length?p.trace.parentForJournal(options.entries.map(e=>e.record.seq)):currentTrace(),turnInstanceId=randomUUID(),started=this.clock.now(),span=p.trace.record('turn.start',{actor:'model:'+id,pane:id,chat:p.state.chats.active[id]??null,turnInstanceId,refs:{attemptId:turnInstanceId}},parent);
- return p.trace.run(span,async()=>{try{const text=await this.runTurnCore(id,messageText,options),result=p.registry.get(id)?.transcript.find(m=>object(m.runtime)&&m.runtime.turnInstanceId===turnInstanceId);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:result?.outcome==='interrupted'?'cancelled':result?.outcome==='error'?'failed':'ok',reason:result?.outcome==='error'?traceReason(result.errorCode,'Ошибка провайдера'):{code:'none',text:''},durationMs:this.clock.now()-started,data:{model:result?.model,usage:result?.usage}});return text}catch(e){const reason=traceReason((e as {code?:string}).code,message(e));p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:reason.code==='cancelled'?'cancelled':reason.code==='timeout'?'timeout':'failed',reason,durationMs:this.clock.now()-started});throw e}finally{this.finishTraceTools(p,turnInstanceId)}});
+ return p.trace.run(span,async()=>{try{const text=await this.runTurnCore(id,messageText,options),result=p.registry.get(id)?.transcript.find(m=>object(m.runtime)&&m.runtime.turnInstanceId===turnInstanceId);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:result?.outcome==='interrupted'?'cancelled':result?.outcome==='error'?'failed':'ok',reason:result?.outcome==='error'?traceReason(result.errorCode,'Ошибка провайдера'):{code:'none',text:''},durationMs:this.clock.now()-started,data:{model:result?.model,usage:result?.usage}});return text}catch(e){const failure=turnFailure(e,p.dir,this.clock.now()-started),reason=traceReason(failure.code,failure.reason);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:reason.code==='cancelled'?'cancelled':reason.code==='timeout'?'timeout':'failed',reason,durationMs:this.clock.now()-started});throw e}finally{this.finishTraceTools(p,turnInstanceId)}});
  }
  private async runTurnCore(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol}={}):Promise<string> {
  const p=options.project??this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);this.same(p);this.validateTurn(pane.vendor,pane.mode);
@@ -337,7 +338,7 @@ export class Runtime {
  pane.busy=true;pane.touched=true;pane.revision++;const launchModel=pane.model,launchEpoch=pane.sessionEpoch;
  const scope=this.scopes.create(p.dir,id,currentTrace()?.turnInstanceId??randomUUID()),controller=new AbortController();let releaseReset!:()=>void,finish!:()=>void;
  const turn:ActiveTurn={scope,controller,pane,vendor:pane.vendor,records,deliverySeq:Math.max(0,...entries.map(e=>e.deliverySeq)),relayDepth,attemptNumber:0,handle:null,started:false,stopRequested:false,terminal:null,partial:'',finished:new Promise(r=>{finish=r}),finish:()=>finish(),timer:undefined,resetWait:new Promise(r=>{releaseReset=r}),releaseReset:()=>releaseReset(),result:null,injected};p.active.set(id,turn);this.stateEvent(p,pane);
- let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null,transferSaved=false;
+ let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null;
  try{
  if(!validDir(pane.cwd))throw new RuntimeError('cwd_changed','папки нет: '+pane.cwd);const provider=this.provider(turn.vendor),vendor=provider.vendor,epoch=p.processEpoch.get(vendor)??0,sessionEpoch=pane.sessionEpoch;
  launchVendor=vendor;
@@ -355,18 +356,16 @@ export class Runtime {
  let attempt=0,earlySession:string|null=null;
  const ctx:TurnContext={traceTool:(name,args,run)=>p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId)),traceEvent:event=>{if(current())this.traceProvider(p,id,scope.turnInstanceId,event)},signal:controller.signal,modelStarted:()=>{if(current()){
   const notices:TranscriptMessage[]=[];
-  const transferNotice=transfer&&!transferSaved?{...timestampMessage('peer','[от харнесс] '+transferLabel(transfer),this.clock.now()),contextTransfer:{...transfer,turnInstanceId:scope.turnInstanceId}}:null;
   const teamNotice=knowledge&&teamText&&!teamSaved?{...timestampMessage('peer','[от харнесс] '+teamText,this.clock.now()),teamKnowledge:{project:p.dir,chat:knowledge.chat,team:knowledge.team,turnInstanceId:scope.turnInstanceId}}:null;
-  if(transferNotice)notices.push(transferNotice);if(teamNotice)notices.push(teamNotice);
+  if(teamNotice)notices.push(teamNotice);
   if(notices.length){for(const notice of notices)pane.append(notice);try{p.state.saveChats(p.registry)}catch(e){pane.transcript=pane.transcript.filter(m=>!notices.includes(m));throw e}}
-  if(transferNotice){transferSaved=true;pane.publish({type:'contextTransfer',text:transferLabel(transfer!),transfer:transferNotice.contextTransfer,ts:transferNotice.ts})}
   if(teamNotice){teamSaved=true;pane.publish({type:'roleKnowledge',knowledge})}
   turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
  }},publish:event=>{
- if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:event.text,sessionId:pane.sessionId}:event;return}
- if(turn.stopRequested)return;if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
+ if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:turnFailure({message:event.text},p.dir,0).reason,sessionId:pane.sessionId}:event;return}
+ if(turn.stopRequested)return;if(event.type==='toolError')event={...event,text:turnFailure({message:event.text},p.dir,0).reason};if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
  },askApproval:(title,detail)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.askApproval(title,detail))},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;if(transfer&&!turn.started){earlySession=sid;return}pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
- if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(pane,handle)
+ if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(p,pane,handle)
  },env:this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[...p.registry.panes.values()].map(p=>({id:p.id,label:p.label,vendor:p.vendor as Vendor})),tools:this.toolsFor(scope),relayDepth:turn.relayDepth,projectDir:p.dir,appUrl:this.deps.appUrl,
  registerProcessToken:token=>{if(!p.closed&&(p.processEpoch.get(vendor)??0)===epoch)this.tokens.register(token,p.generation,id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,id,vendor),writableRoots:writableRoots(p.repoRoot,!!pane.worktree)};
  let result:{text:string;sessionId:string|null;interrupted?:boolean};const launchSeat=pane.providerSeat();
@@ -384,13 +383,17 @@ export class Runtime {
  catch(e){if(turn.stopRequested&&turn.started){result={text:turn.partial,sessionId:pane.sessionId,interrupted:true};break}
  if(e instanceof ProviderError&&e.code==='session_missing'&&attempt===1&&seat.sessionId&&!controller.signal.aborted){if(pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch)pane.sessionId=null;p.state.savePanes(p.registry,p.journal);pane.publish({type:'note',text:'сессия модели не найдена — начат новый разговор'});turn.partial='';turn.started=false;continue}throw e}finally{if(turn.attemptNumber===attemptNumber)turn.attemptNumber=0}}
  if(p.closed)throw new ProviderError('cancelled','ход отменён');
- const interrupted=turn.stopRequested&&turn.started||result.interrupted===true;pane.sessionId=pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch?result.sessionId:null;
+ const interrupted=turn.stopRequested&&turn.started||result.interrupted===true;
+ const heldError=(turn as ActiveTurn).terminal;if(heldError?.type==='error'&&!interrupted)throw new ProviderError('turn_failed',String(heldError.message||'Причина отказа не получена'));pane.sessionId=pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch?result.sessionId:null;
  for(const m of injected)pane.uncommitted.delete(m);
  const response=timestampMessage('ai',result.text,this.clock.now()) as ResultMessage;const held=(turn as ActiveTurn).terminal;
  if(held?.type==='done'){if(typeof held.model==='string'&&held.model)response.model=held.model;if(object(held.usage))response.usage=structuredClone(held.usage);if(held.usageIncomplete===true)response.usageIncomplete=true;if(typeof held.durationMs==='number'&&Number.isFinite(held.durationMs))response.durationMs=held.durationMs}
- response.vendor=launchVendor;response.outcome=interrupted?'interrupted':held?.type==='error'?'error':'ok';if(response.outcome==='error')response.errorCode=typeof held?.code==='string'?held.code:'internal';
+ response.vendor=launchVendor;response.outcome=interrupted?'interrupted':'ok';
  response.deliverySeq=turn.deliverySeq;response.runtime={turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),effectsPending:true,interrupted,nextSeen};turn.result=response;if(artifacts.size)response.artifacts={project:p.dir,chat:p.state.activeChat(pane)!.id,turnInstanceId:scope.turnInstanceId,paths:[...artifacts]};
- p.state.commitResult(pane,p.registry,response);
+ const transferNotice=transfer&&!interrupted?{...timestampMessage('peer','[от харнесс] '+transferLabel(transfer),this.clock.now()),contextTransfer:{...transfer,turnInstanceId:scope.turnInstanceId}}:null;
+ if(transferNotice)pane.append(transferNotice);
+ try{p.state.commitResult(pane,p.registry,response)}catch(e){if(transferNotice)pane.transcript=pane.transcript.filter(m=>m!==transferNotice);throw e}
+ if(transferNotice)pane.publish({type:'contextTransfer',text:transferLabel(transfer!),transfer:transferNotice.contextTransfer,ts:transferNotice.ts});
  const receipt=p.state.attempts[id];if(receipt?.turnInstanceId===scope.turnInstanceId)p.state.clearAttempt(id);
  await this.recover(p,pane,true);
  const terminal=held?.type==='done'?held:{type:'done',sessionId:pane.sessionId,durationMs:0,usage:{input:null,output:null,cacheRead:null}};
@@ -401,7 +404,7 @@ export class Runtime {
  if(!turn.result){pane.transcript=pane.transcript.filter(m=>!injected.includes(m));for(const m of injected)pane.uncommitted.delete(m);
  if(!turn.started){try{if(transfer&&pane.vendor===launchVendor&&pane.sessionEpoch===launchEpoch){pane.sessionId=null;p.state.savePanes(p.registry,p.journal)}p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
  else {   // модель уже могла действовать (modelStarted), результата нет: неопределённый исход не повторяется автоматически — долговечный uncertain до действия владельца (ревью №111 п.1)
-  try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:e instanceof ProviderError?e.code:'internal',...turnMeasurements(turn.terminal)})}catch(error){p.lineErrors.push(message(error))}
+  try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:turnFailure(e,p.dir,0).code,...turnMeasurements(turn.terminal),failure:turnFailure(e,p.dir,this.clock.now()-(p.state.attempts[id]?.startedAt??this.clock.now()))})}catch(error){p.lineErrors.push(message(error))}
   try{p.state.uncertain(id)}catch(error){p.lineErrors.push(message(error))}
   pane.status='uncertain';pane.uncertainNote=waitingError(p,pane).message;if(!p.closed)pane.publish({type:'note',text:pane.uncertainNote,warning:this.warningId(p,pane,'uncertain')})}
  }else {pane.status='recovering';pane.recoveryNote='ответ модели сохранён; завершается восстановление доставки';pane.publish({type:'note',text:pane.recoveryNote,warning:this.warningId(p,pane,'recovery')})}
@@ -414,12 +417,12 @@ export class Runtime {
  if(success&&!p.closed&&!options.entries&&pane.status==='idle')void this.kick(id);turn.finish()
  }
  }
- private interruptHandle(pane:Pane,handle:NonNullable<ActiveTurn['handle']>):void{try{void handle.interrupt().catch(e=>pane.publish({type:'toolError',text:slice(message(e),200)}))}catch(e){pane.publish({type:'toolError',text:slice(message(e),200)})}}
+ private interruptHandle(p:ProjectState,pane:Pane,handle:NonNullable<ActiveTurn['handle']>):void{try{void handle.interrupt().catch(e=>pane.publish({type:'toolError',text:turnFailure(e,p.dir,0).reason}))}catch(e){pane.publish({type:'toolError',text:turnFailure(e,p.dir,0).reason})}}
  cancelTurn(id:string,reason:string,p=this.project):boolean {
  const turn=p.active.get(id);if(!turn)return false;this.scopes.revoke(turn.scope);
  if(turn.stopRequested)return true;turn.stopRequested=true;turn.pane.denyApprovals();turn.controller.abort(reason);
- try{this.actions.cancelAsks(turn.scope,reason)}catch(e){turn.pane.publish({type:'toolError',text:message(e)})}
- if(turn.handle)this.interruptHandle(turn.pane,turn.handle);
+ try{this.actions.cancelAsks(turn.scope,reason)}catch(e){turn.pane.publish({type:'toolError',text:turnFailure(e,p.dir,0).reason})}
+ if(turn.handle)this.interruptHandle(p,turn.pane,turn.handle);
  turn.timer=this.clock.setTimeout(()=>{if(p.active.get(id)===turn)void this.resetVendor(turn.vendor as Vendor,p).catch(e=>this.report(p,turn.pane,e))},30_000);return true
  }
  interrupt(id:string,initiator:Initiator){this.requireOwner(initiator);const pane=this.pane(id);if(this.cancelTurn(id,'interrupt'))return {ok:true};pane.denyApprovals();return {ok:false,error:'нечего прерывать'}}
@@ -465,7 +468,7 @@ export class Runtime {
  async steer(id:string,text:string,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);text=pythonTrim(text);if(!text)throw new RuntimeError('text_empty','пустое сообщение',400);
  const turn=p.active.get(id),record=p.channel.postCore({to:[id],kind:'note',text,origin:'steer'},OWNER);
  try{if(!turn||turn.stopRequested||!turn.handle)throw new RuntimeError('turn_ended','ход не активен');this.scopes.assert(turn.scope);await turn.handle.steer(text);this.same(p);this.scopes.assert(turn.scope);pane.record('me',text);pane.publish({type:'steered',record});return {ok:true,seq:record.seq,steered:true}}
- catch(e){const reason='вмешательство не доставлено: '+slice(message(e),200);if(!p.closed)p.channel.postCore({to:['owner'],kind:'rejected',text:reason,reply_to:record.seq,origin:'steer'},HARNESS);throw new RuntimeError('steer_failed',reason,409,{cause:e})}
+ catch(e){const reason='вмешательство не доставлено: '+turnFailure(e,p.dir,0).reason;if(!p.closed)p.channel.postCore({to:['owner'],kind:'rejected',text:reason,reply_to:record.seq,origin:'steer'},HARNESS);throw new RuntimeError('steer_failed',reason,409,{cause:e})}
  }
  resetVendor(vendor:Vendor,p=this.project):Promise<void>{const existing=p.resets.get(vendor);if(existing)return existing;
  let resolve!:()=>void,reject!:(e:unknown)=>void;const reset=new Promise<void>((a,b)=>{resolve=a;reject=b});p.resets.set(vendor,reset);p.processEpoch.set(vendor,(p.processEpoch.get(vendor)??0)+1);this.tokens.revokeVendor(p.generation,vendor);

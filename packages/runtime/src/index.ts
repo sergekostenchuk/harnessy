@@ -12,3 +12,5 @@ export type {ChatMeta} from './chats.ts';
 export {promotionIdentity,type PromotionIdentity} from './chats.ts';
 
 export {TraceStore,currentTrace,traceId,traceBindingId,traceReason,TRACE_REASONS,type TraceRecord,type TraceContext,type TraceOutcome,type TraceReason} from './trace.ts';
+
+export type {TurnFailure} from './turn-failure.ts';

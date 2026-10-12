@@ -1,3 +1,4 @@
+import {safeDiagnostic} from '../diagnostic.ts';
 import {limitsReason} from '../limits-reason.ts';
 import {mkdtemp,writeFile,rm,open} from 'node:fs/promises';
 import {constants} from 'node:fs';
@@ -140,7 +141,7 @@ export class CliProvider {
    lease?.validate(); // No await between the final path check and process creation.
    const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...stateArgs,...mcpArgs,...sessionArgs],cwd:seat.cwd,env:{...this.environment(ctx.env),...configEnv},timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:stream,started:()=>ctx.modelStarted?.()});
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
-   if(exit.code!==0||exit.signal){const failure=this.d.failure?.(exit);throw new ProviderError(failure?.code??'transport_lost',clean(failure?.text??'CLI: процесс завершился без успешного ответа'),sessionId)}
+   if(exit.code!==0||exit.signal){const failure=this.d.failure?.(exit);throw new ProviderError(failure?.code??'transport_lost',clean(failure?.text??('CLI: процесс завершился '+(exit.signal?'по сигналу '+exit.signal:'с кодом '+exit.code)+(exit.stderr.trim()?': '+safeDiagnostic(clean(exit.stderr)):' · stderr пуст'))),sessionId)}
    if(sessionFile){
     let id:string;
     try{const fd=await open(sessionFile,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);try{
@@ -156,7 +157,7 @@ export class CliProvider {
    delta('',true);
    if(!answer&&done.text){answer=clean(done.text);ctx.publish({type:'delta',text:answer})}
    await dispose();terminal=true;ctx.publish({type:'done',sessionId,model:seat.model,durationMs:Date.now()-started,usage:usage(done.usage)});return {text:answer,sessionId};
-  }catch(e){const error=signal.aborted?new ProviderError('cancelled','ход отменён',sessionId):e instanceof ProviderError?new ProviderError(e.code,clean(e.vendorText),sessionId):protocol('ход не выполнен');if(!terminal){terminal=true;ctx.publish({type:'error',text:error.vendorText})}throw error}
+  }catch(e){const error=signal.aborted?new ProviderError('cancelled','ход отменён',sessionId):e instanceof ProviderError?new ProviderError(e.code,safeDiagnostic(clean(e.vendorText)),sessionId):protocol('ход не выполнен');if(!terminal){terminal=true;ctx.publish({type:'error',text:error.vendorText})}throw error}
   finally{abort.abort();try{await dispose()}finally{try{lease?.release()}finally{this.active.delete(seat.id);try{ctx.setHandle(null)}finally{release()}}}}
  }
  async reset(){const turns=[...this.active.values()];for(const a of turns)a.abort.abort();await Promise.all(turns.map(a=>a.done))}

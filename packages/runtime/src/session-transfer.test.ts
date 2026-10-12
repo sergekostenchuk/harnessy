@@ -97,3 +97,21 @@ for(const vendor of ['claude','codex'] as const)for(const lost of [false,true])t
  await until(()=>events.events.some(e=>e.type==='contextTransfer'));assert.equal((events.events.find(e=>e.type==='contextTransfer')!.transfer as any).enabled,false);events.sub.close();
  const id=p.state.chats.active.worker!;p.state.chats.active.worker='wrong';assert.throws(()=>transferSnapshot(p,pane,[],false),(e:any)=>e.code==='context_binding_invalid');p.state.chats.active.worker=id;
 });
+
+test('350: failed transfer never publishes success; saved failure survives reopening and retry transfers once', {timeout:15000}, async t=>{
+ const h=await harness(t),pane=seed(h.runtime);pane.sessionId=null;const gate=deferred(),started=deferred(),events=collect(h.runtime);t.after(()=>{gate.resolve();events.sub.close()});
+ h.provider.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();started.resolve();await gate.promise;throw new ProviderError('transport_lost','upstream unavailable; api_key=HIDDEN-CREDENTIAL')};
+ const failed=assert.rejects(h.runtime.runTurn('worker','REQUEST'),{code:'transport_lost'});await started.promise;
+ assert.equal(events.events.some(e=>e.type==='contextTransfer'),false);assert.equal(pane.transcript.some(m=>m.contextTransfer),false);gate.resolve();await failed;
+ assert.equal(pane.transcript.some(m=>m.contextTransfer),false);const waiting=h.runtime.waiting('worker')!;assert.equal(waiting.failure?.code,'transport_lost');assert.match(waiting.failure!.reason,/upstream unavailable/);assert.doesNotMatch(JSON.stringify(waiting),/HIDDEN-CREDENTIAL/);
+ await h.runtime.close();const r=await createRuntime(h.deps,h.runtime.actions);t.after(()=>r.close());assert.deepEqual(r.waiting('worker')?.failure,waiting.failure);
+ h.provider.onRun=async(s,_m,ctx)=>done(ctx,s.model);await r.attempt('worker',{project:h.dir,turnInstanceId:waiting.turnInstanceId,action:'retry'},OWNER);await r.idle();await r.runTurn('worker','RETRY');assert.equal(r.registry.get('worker')!.transcript.filter(m=>m.contextTransfer).length,1);
+});
+
+for(const interrupted of [false,true])test('350: terminal error without rejection cannot announce transfer; interruption stays interrupted='+interrupted,{timeout:15000},async t=>{
+ const h=await harness(t),pane=seed(h.runtime);pane.sessionId=null;
+ h.provider.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();ctx.publish({type:'error',text:'stream refused'});return {text:'partial',sessionId:'partial-session',interrupted}};
+ if(interrupted){await h.runtime.runTurn('worker','request');assert.equal(pane.transcript.at(-1)!.outcome,'interrupted');assert.equal(h.runtime.waiting('worker'),null)}
+ else {await assert.rejects(h.runtime.runTurn('worker','request'),{code:'turn_failed'});assert.equal(h.runtime.waiting('worker')?.failure?.reason,'stream refused')}
+ assert.equal(pane.transcript.some(m=>m.contextTransfer),false);
+});

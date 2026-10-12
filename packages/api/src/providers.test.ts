@@ -100,3 +100,11 @@ test('269: closing a project during terminal launch records the actual launch, n
  const opening=call(h.api,'/api/providers/fixture/login-terminal',{body:{}});await seen.promise;await h.runtime.closeProject();gate.resolve();const response=await opening;assert.equal(response.body.ok,true);assert.equal(h.opened.length,1);
  const outcomes=(await old.trace.read()).filter(e=>e.kind==='provider.login_terminal'&&e.outcome);assert.equal(outcomes.filter(e=>e.outcome==='ok').length,1);assert.equal(outcomes.some(e=>e.outcome==='failed'),false);
 });
+
+for(const kind of ['throw','event'])test('350: probe '+kind+' preserves safe cause and duration in SSE and trace', {timeout:15000}, async t=>{
+ const h=await setup(t);h.run=async(s,ctx)=>{ctx.modelStarted?.();h.clock.advance(10000);const message='upstream unavailable; token=HIDDEN-CREDENTIAL <script>';
+ if(kind==='throw')throw new ProviderError('transport_lost',message);ctx.publish({type:'error',text:message});return {text:'',sessionId:null}};
+ const probe=await call(h.api,'/api/providers/fixture/probe',{body:{model:'m1'}});await call(h.api,'/api/approve',{body:{pane:'owner',id:probe.body.approvalId,decision:'allow',project:h.dir}});const failed=await result(h,'error');
+ assert.equal(failed.error.code,kind==='throw'?'transport_lost':'turn_failed');assert.match(failed.error.reason,/upstream unavailable/);assert.equal(failed.error.durationMs,10000);assert.doesNotMatch(JSON.stringify(failed),/HIDDEN-CREDENTIAL/);
+ const rows=await h.runtime.project.trace.read(),trace=rows.find(r=>r.kind==='turn.failed')!;assert.equal(trace.durationMs,10000);assert.match(trace.reason.text,/upstream unavailable/);assert.equal((trace.data as any).code,failed.error.code);assert.doesNotMatch(JSON.stringify(rows),/HIDDEN-CREDENTIAL/);
+});

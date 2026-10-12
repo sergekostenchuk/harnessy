@@ -35,7 +35,7 @@ test('38: missing provider is typed, leaves queue and releases pane',async t=>{
 
 for(const [name,error,code] of [
  ['ordinary Error',new Error('сбой записи'),'internal'],
- ['provider error',new ProviderError('transport_lost','транспорт потерян'),'internal'],
+ ['provider error',new ProviderError('transport_lost','транспорт потерян'),'transport_lost'],
  ['RuntimeError',new RuntimeError('recovering','местные действия не завершены'),'recovering']
 ] as const)test('75: report keeps a string code for '+name,async t=>{
  const {runtime:r,provider:f}=await harness(t),{events}=collect(r);f.onRun=async()=>{throw error};

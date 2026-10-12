@@ -17,7 +17,7 @@ const decision=(r:Awaited<ReturnType<typeof harness>>['runtime'],action='skip',i
 
 test('73/93/97: queued owner message, settings and unhalt preserve the exact attempt; openSession reads nothing',async t=>{
  const h=await harness(t,{before:seed}),r=h.runtime,p=r.registry.get('worker')!,saved=readFileSync(r.project.state.attemptsPath,'utf8'),{events}=collect(r);
- const reply=r.chat({pane:'worker',message:'более позднее задание'},OWNER);assert.equal(reply.queued,true);assert.deepEqual(reply.waiting,{status:'uncertain',recordSeqs:[1],startedAt:1,turnInstanceId:'old-turn',actions:['retry','skip']});
+ const reply=r.chat({pane:'worker',message:'более позднее задание'},OWNER);assert.equal(reply.queued,true);assert.deepEqual(reply.waiting,{queuedSeqs:[reply.seq],status:'uncertain',recordSeqs:[1],startedAt:1,turnInstanceId:'old-turn',actions:['retry','skip']});
  const settings=r.paneSet('worker',{model:'w2'},OWNER);assert.equal(settings.pane.model,'w2');assert.deepEqual(settings.waiting,reply.waiting);
  await r.halt(false,OWNER);await r.idle();assert.equal(h.provider.calls.length,0);assert.equal(p.status,'uncertain');assert.equal(readFileSync(r.project.state.attemptsPath,'utf8'),saved);
  await assert.rejects(r.openSession('worker','old',OWNER),error('uncertain'));assert.equal(h.provider.messageCalls,0);assert.equal(r.journal.pendingFor('worker').length,2);
