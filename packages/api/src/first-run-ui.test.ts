@@ -242,3 +242,28 @@ for(const change of ['project','aba','pagehide'])test('211b.1: a delayed missing
  if(change==='project')v.H.project='/other';else if(change==='aba')v.f.invalidate();else await v.window.emit('pagehide');gate.resolve();await work;
  assert.equal(v.document.querySelector('[data-first-restart]'),null);assert.equal(v.S.firstRoomCreations[h.dir].chat,'c-missing');assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.provider.calls.length,0);
 });
+
+
+function restoredLifecycle(v:Awaited<ReturnType<typeof ui>>){
+ Object.assign(v.c,{CustomEvent:class {type:string;constructor(type:string){this.type=type}},dispatchEvent:(event:any)=>v.window.emit(event.type,event),setTimeout:(fn:()=>void)=>queueMicrotask(fn),PS:{alive:true,generation:0},JR:{epoch:0},SP:{generation:0},sectionChanging(){},sectionDraw(){},liveFirstPaint(){},badges(){},renderWaiting(){},sideChats:async()=>{}});v.f.TP.project=v.H.project;
+ runInContext(part('  function applyStatus(','  // лента активного чата')+part('  // TS-09a.1: one lifecycle','  // End TS-09a.1 page lifecycle.'),v.vm);
+}
+
+test('320: persisted page restore rereads first-run models after project confirmation and renews one subscription',async t=>{
+ const h=await fixture(t),gate=deferred(),seen=deferred();t.after(()=>gate.resolve());let checking=true,hold=false;
+ const v=await ui(h,async path=>{if(hold&&path==='/api/status'){seen.resolve();await gate.promise}}, {},(path,response)=>{const catalog=programs(),row=catalog.providers.find(p=>p.id==='copilot')!;row.checking=checking;row.installed=checking?null:true;return programData(path,response,catalog)});restoredLifecycle(v);v.f.go(2);
+ const option=()=>v.find('[data-first-program="copilot"] option[value="shared"]');assert.equal(option().disabled,true);const reads=v.requests.filter(r=>r.path==='/api/providers/catalog').length;
+ await v.window.emit('pagehide',{persisted:true});assert.equal(v.streams.filter(s=>!s.closed).length,0);checking=false;hold=true;
+ const showing=v.window.emit('pageshow',{persisted:true});await seen.promise;assert.equal(v.H.snapshotOnly,true);assert.equal(v.requests.filter(r=>r.path==='/api/providers/catalog').length,reads);assert.equal(v.streams.filter(s=>!s.closed).length,0);
+ hold=false;gate.resolve();await showing;await v.settle();assert.equal(option().disabled,false);assert.equal(v.streams.filter(s=>!s.closed).length,1);
+ const refreshed=v.requests.filter(r=>r.path==='/api/providers/catalog').length;for(const stream of v.streams.filter(s=>!s.closed))stream.onmessage({data:JSON.stringify({type:'providers',project:h.dir})});await v.settle();assert.equal(v.requests.filter(r=>r.path==='/api/providers/catalog').length,refreshed+1);
+ await v.window.emit('pagehide',{persisted:true});await v.window.emit('pageshow',{persisted:true});await v.settle();assert.equal(v.streams.filter(s=>!s.closed).length,1);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+});
+
+test('320: an old catalogue response cannot replace ready models after persisted restore',async t=>{
+ const h=await fixture(t),gate=deferred(),seen=deferred();t.after(()=>gate.resolve());let checking=true;
+ const v=await ui(h,undefined,{},(path,response)=>{const catalog=programs(),row=catalog.providers.find(p=>p.id==='copilot')!;row.checking=checking;row.installed=checking?null:true;return programData(path,response,catalog)});restoredLifecycle(v);
+ const api=v.c.api;let hold=true;v.c.api=async(path:string,body:any)=>{const result=await api(path,body);if(hold&&path==='/api/providers/catalog'){hold=false;seen.resolve();await gate.promise}return result};
+ const old=v.f.catalog();await seen.promise;await v.window.emit('pagehide',{persisted:true});checking=false;await v.window.emit('pageshow',{persisted:true});await v.settle();
+ assert.equal(v.find('[data-first-program="copilot"] option[value="shared"]').disabled,false);gate.resolve();await old;assert.equal(v.find('[data-first-program="copilot"] option[value="shared"]').disabled,false);assert.equal(v.streams.filter(s=>!s.closed).length,1);
+});

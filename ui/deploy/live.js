@@ -1361,7 +1361,7 @@
     if(!FIRST_MODELS.alive||request!==FIRST_MODELS.request||!bindingCurrent(binding)||modes!==JSON.stringify([H.models,H.turnModes]))return;
     if(status&&status.project===binding.project&&Array.isArray(status.panes)&&status.models&&typeof status.models==='object'&&!Array.isArray(status.models)){H.models=status.models;H.turnModes=status.turnModes||{}}else FIRST_MODELS.error='Не удалось обновить статус моделей';firstDraw();
   }
-  function firstModelsSync(){if(!FIRST_MODELS.alive)return;
+  function firstModelsSync(){if(!FIRST_MODELS.alive)return;if(!H.on||H.snapshotOnly||leftPage){firstDraw();return}
     if(!FIRST_MODELS.events&&typeof subscribeLiveEvents==='function')FIRST_MODELS.events=subscribeLiveEvents(event=>{let value;try{value=JSON.parse(event.data)}catch{return}if(value.type==='providers'&&(!value.project||value.project===H.project))void firstCatalog()});
     if(H.on&&!H.snapshotOnly&&(!FIRST_MODELS.binding||!bindingCurrent(FIRST_MODELS.binding))){FIRST_MODELS.rows=null;void firstCatalog()}firstDraw();
   }
@@ -1471,7 +1471,7 @@
       }
       const place=target.closest('.st[data-s="1"] .pick');if(place){FIRST.folder=!!place.getAttribute('data-cx');firstDraw()}
     },true);
-    addEventListener('live:status',firstModelsSync);addEventListener('pagehide',()=>{FIRST_MODELS.alive=false;FIRST_MODELS.request++;FIRST_MODELS.events?.close();FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML=''});firstSelectPane();firstModelsSync();
+    addEventListener('live:status',firstModelsSync);addEventListener('pagehide',()=>{FIRST_MODELS.alive=false;FIRST_MODELS.request++;FIRST_MODELS.events?.close();FIRST_MODELS.events=null;FIRST_MODELS.binding=null;FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML=''});addEventListener('pageshow',event=>{if(event.persisted){FIRST_MODELS.alive=true;FIRST_MODELS.binding=null;FIRST_MODELS.request++}});firstSelectPane();firstModelsSync();
   }
   // End TS-15f first run.
 
