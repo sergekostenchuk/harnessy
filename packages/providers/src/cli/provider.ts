@@ -6,18 +6,20 @@ import {randomBytes} from 'node:crypto';
 import {ProviderError,record,type ProviderLimits,type Usage} from '../types.ts';
 import {waitWithSignal} from '../cancellation.ts';
 import {executeCli} from './process.ts';
+import {CliStateStore} from './state.ts';
 import type {CliAuth,CliCommand,CliContext,CliDependencies,CliDescriptor,CliEvent,CliMcpServer,CliProbe,CliProcessResult,CliSeat,CliTurnInput} from './types.ts';
 
 const protocol=(text:string)=>new ProviderError('protocol','CLI: '+text);
 const text=(v:unknown):v is string=>typeof v==='string'&&!v.includes('\0');
 const strings=(v:unknown):v is string[]=>Array.isArray(v)&&v.every(text);
-function command(c:CliCommand):CliCommand{if(!record(c)||!strings(c.args)||c.input!==undefined&&!text(c.input))throw protocol('неверная команда');return {args:[...c.args],...(c.input!==undefined?{input:c.input}:{})}}
-function probe<T>(p:CliProbe<T>):CliProbe<T>{if(!p||typeof p.parse!=='function'||p.exitCodes!==undefined&&(!Array.isArray(p.exitCodes)||!p.exitCodes.length||p.exitCodes.some(c=>!Number.isInteger(c)||c<0||c>255)))throw protocol('неверный описатель чтения');return {command:command(p.command),exitCodes:[...(p.exitCodes??[0])],parse:p.parse}}
+function command(c:CliCommand):CliCommand{if(!record(c)||!strings(c.args)||c.input!==undefined&&!text(c.input)||c.rpcMethod!==undefined&&(!['auth.getStatus','models.list','account.getQuota'].includes(c.rpcMethod)||c.input!==undefined))throw protocol('неверная команда');return {args:[...c.args],...(c.input!==undefined?{input:c.input}:{}),...(c.rpcMethod?{rpcMethod:c.rpcMethod}:{})}}
+function probe<T>(p:CliProbe<T>):CliProbe<T>{if(!p||typeof p.parse!=='function'||p.exitCodes!==undefined&&(!Array.isArray(p.exitCodes)||!p.exitCodes.length||p.exitCodes.some(c=>!Number.isInteger(c)||c<0||c>255)))throw protocol('неверный описатель чтения');return {command:command(p.command),...(p.privateConfig?{privateConfig:true}:{}),exitCodes:[...(p.exitCodes??[0])],parse:p.parse}}
 function descriptor(d:CliDescriptor):CliDescriptor{
- if(!d||!text(d.id)||!/^[a-z][a-z0-9-]*$/.test(d.id)||['claude','codex'].includes(d.id)||!text(d.name)||!d.name||!text(d.binary)||!d.binary||!record(d.modes)||!strings(d.forbiddenEnv)||!d.turn||!['json','stream-json','text'].includes(d.turn.format)||typeof d.turn.command!=='function'||d.turn.format!=='text'&&typeof d.turn.decode!=='function'||!d.mcp||typeof d.mcp.args!=='function'||typeof d.mcp.serialize!=='function'||d.resume!==undefined&&typeof d.resume!=='function')throw protocol('неверный описатель провайдера');
+ if(!d||!text(d.id)||!/^[a-z][a-z0-9-]*$/.test(d.id)||['claude','codex'].includes(d.id)||!text(d.name)||!d.name||!text(d.binary)||!d.binary||!record(d.modes)||!strings(d.forbiddenEnv)||!d.turn||!['json','stream-json','text'].includes(d.turn.format)||typeof d.turn.command!=='function'||d.turn.format!=='text'&&typeof d.turn.decode!=='function'&&typeof d.turn.decoder!=='function'||!d.mcp||typeof d.mcp.args!=='function'||typeof d.mcp.serialize!=='function'||d.resume!==undefined&&typeof d.resume!=='function')throw protocol('неверный описатель провайдера');
  for(const mode of ['read','edit','all'])if(typeof d.modes[mode as 'read']!=='function')throw protocol('нет явного соответствия режима '+mode);
+ if(d.state&&(!/^[a-z][a-z0-9-]*$/.test(d.state.namespace)||typeof d.state.args!=='function'))throw protocol('неверный описатель состояния');
  if(!d.auth||!('file'in d.auth)&&!('command'in d.auth))throw protocol('нет проверки входа');
- return {...d,login:command(d.login),version:probe(d.version),auth:'file'in d.auth?{...d.auth}:probe(d.auth),models:probe(d.models),modes:{...d.modes},forbiddenEnv:[...d.forbiddenEnv],turn:{...d.turn},mcp:{...d.mcp},...(d.limits?{limits:probe(d.limits)}:{}),...(d.sessions?{sessions:{...d.sessions}}:{})};
+ return {...d,login:command(d.login),version:probe(d.version),auth:'file'in d.auth?{...d.auth}:probe(d.auth),models:probe(d.models),modes:{...d.modes},forbiddenEnv:[...d.forbiddenEnv],turn:{...d.turn},mcp:{...d.mcp},...(d.state?{state:{...d.state}}:{}),...(d.limits?{limits:probe(d.limits)}:{}),...(d.sessions?{sessions:{...d.sessions}}:{})};
 }
 function inputSnapshot(seat:CliSeat,message:string,ctx:CliContext,vendor:string):CliTurnInput{
  if(!seat||seat.vendor!==vendor||!text(seat.id)||!/^[A-Za-z0-9_-]{1,80}$/.test(seat.id)||!text(seat.label)||!text(seat.cwd)||!isAbsolute(seat.cwd)||!text(seat.model)||!seat.model||!strings(seat.writePaths)||!(seat.worktree===null||text(seat.worktree))||!(seat.sessionId===null||text(seat.sessionId)&&!!seat.sessionId)||!['chat','read','check','web','ask','edit','all'].includes(seat.mode)||!text(message))throw protocol('неверное место или сообщение');
@@ -39,10 +41,12 @@ export class CliProvider {
   this.deps.env={...this.deps.env};for(const k of ['probeTimeoutMs','turnTimeoutMs','maxBytes'] as const)if(!Number.isSafeInteger(this.deps[k])||this.deps[k]<=0)throw protocol('неверный предел '+k);
  }
  private environment(route:CliContext['env']={}){const env:NodeJS.ProcessEnv={...this.deps.env,...route};for(const key of [...this.d.forbiddenEnv,'PANE_TOKEN','PANE_ID','APP_URL','SEATS'])delete env[key];return env}
- private async query<T>(p:CliProbe<T>,signal:AbortSignal=AbortSignal.timeout(this.deps.probeTimeoutMs),cwd=this.deps.cwd):Promise<T>{
-  const cmd=command(p.command),r=await waitWithSignal(()=>this.deps.execute({...cmd,binary:this.d.binary,cwd,env:this.environment(),timeoutMs:this.deps.probeTimeoutMs,maxBytes:1024*1024},signal),signal);
+ private async query<T>(p:CliProbe<T>,signal:AbortSignal=AbortSignal.timeout(this.deps.probeTimeoutMs),cwd=this.deps.cwd,stateArgs?:string[]):Promise<T>{
+  let temporary='';try{const args=stateArgs??(p.privateConfig?['--config-dir',temporary=await mkdtemp(join(this.deps.temporaryDirectory,'harnessy-cli-metadata-'))]:[]);
+  const cmd=command(p.command),r=await waitWithSignal(()=>this.deps.execute({...cmd,args:[...cmd.args,...args],binary:this.d.binary,cwd,env:this.environment(),timeoutMs:this.deps.probeTimeoutMs,maxBytes:1024*1024},signal),signal);
   if(r.signal)throw new ProviderError('transport_lost','CLI: чтение прервано');if(r.code===null||!(p.exitCodes??[0]).includes(r.code))throw protocol('команда чтения завершилась с ошибкой');
   try{return p.parse(r)}catch(e){if(e instanceof ProviderError)throw e;throw protocol('неверный ответ чтения')}
+  }finally{if(temporary)await rm(temporary,{recursive:true,force:true})}
  }
  async version(){const v=await this.query(this.d.version);if(!text(v)||!v.trim()||v.length>128)throw protocol('версия не получена');return v.trim()}
  async auth(signal?:AbortSignal):Promise<CliAuth>{
@@ -69,7 +73,8 @@ export class CliProvider {
   if(this.closed)throw new ProviderError('cancelled','провайдер закрыт');if(this.active.has(seat.id))throw new ProviderError('busy','место занято',seat.sessionId);
   const abort=new AbortController(),signal=AbortSignal.any([original.signal,abort.signal]),ctx={...original,peers:input.peers,env:{...original.env},signal};let release!:()=>void;
   const active={abort,done:new Promise<void>(r=>{release=r})};this.active.set(seat.id,active);
-  let sessionId=seat.sessionId,answer='',pending='',pendingText='',directory='',token='',registered=false,terminal=false,result:Extract<CliEvent,{type:'done'}>|null=null;
+  let sessionId=seat.sessionId,answer='',pending='',pendingText='',directory='',token='',registered=false,terminal=false,result:Extract<CliEvent,{type:'done'}>|null=null,lease:ReturnType<CliStateStore['acquire']>|undefined;
+  let decodeValue:(value:unknown)=>CliEvent[];
   const started=Date.now(),calls=new Map<string,string>(),secrets=this.d.forbiddenEnv.map(k=>this.deps.env[k]).filter((v):v is string=>!!v);
   const clean=(s:string)=>[...secrets,token].filter(Boolean).reduce((out,secret)=>out.replaceAll(secret,'[redacted]'),s);
   // Keep a short suffix so credentials split across process chunks cannot leak through deltas.
@@ -91,18 +96,21 @@ export class CliProvider {
     else throw protocol('неизвестное событие');
    }
   };
-  const decode=(value:unknown)=>{try{consume(this.d.turn.decode!(value))}catch(e){if(e instanceof ProviderError)throw e;throw protocol('неверный вывод провайдера')}};
+  const decode=(value:unknown)=>{try{consume(decodeValue(value))}catch(e){if(e instanceof ProviderError)throw e;throw protocol('неверный вывод провайдера')}};
   const stream=(chunk:string)=>{if(this.d.turn.format==='text'){delta(chunk);return}if(this.d.turn.format!=='stream-json')return;pending+=chunk;let i:number;while((i=pending.indexOf('\n'))>=0){const line=pending.slice(0,i).trim();pending=pending.slice(i+1);if(line)parse(line)}if(pending.length>1024*1024)throw protocol('строка потока слишком велика')};
   const parse=(raw:string)=>{let v:unknown;try{v=JSON.parse(raw)}catch{throw protocol('неверный JSON потока')}decode(v)};
   try{
+   decodeValue=this.d.turn.decoder?.()??this.d.turn.decode!;
    ctx.setHandle({interrupt:async()=>{abort.abort();await active.done},steer:async()=>{throw new ProviderError('capability_unsupported','CLI не поддерживает вмешательство в активный ход',sessionId)}});
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
-   const mode=this.d.modes[seat.mode];if(!mode)throw new ProviderError('mode_unsupported','CLI: режим '+seat.mode+' не поддерживается',sessionId);
+   const mode=this.d.modes[seat.mode];if(!mode)throw new ProviderError(this.d.state?'capability_unsupported':'mode_unsupported','CLI: режим '+seat.mode+' не поддерживается',sessionId);
    const permissions=mode(input);if(!strings(permissions)||!permissions.length)throw protocol('нет флагов разрешений');
    if(seat.sessionId&&!this.d.resume)throw new ProviderError('capability_unsupported','CLI не поддерживает возобновление',sessionId);
    const resume=seat.sessionId?this.d.resume!(seat.sessionId):[];if(!strings(resume))throw protocol('неверное возобновление');
    const auth=await waitWithSignal(()=>this.auth(signal),signal);if(!auth.loggedIn)throw new ProviderError('not_logged_in',this.d.name+': выполните вход через программу',sessionId);
    const models=await waitWithSignal(()=>this.models(signal),signal);if(!models.some(m=>m.id===seat.model))throw new ProviderError('model_unsupported','CLI: модель отсутствует в каталоге',sessionId);
+   const state=this.d.state;if(state){const project=ctx.stateProjectDir??ctx.projectDir;if(!project)throw protocol('нет привязки проекта для состояния CLI');lease=new CliStateStore(state.namespace,this.deps.stateRoot).acquire(project,seat.id)}
+   const stateArgs=lease?state!.args(lease.path):[];if(!strings(stateArgs))throw protocol('неверные флаги состояния');
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    token=randomBytes(32).toString('hex');ctx.registerProcessToken(token);registered=true;
    directory=await mkdtemp(join(this.deps.temporaryDirectory,'harnessy-cli-'));const path=join(directory,'mcp.json');
@@ -110,9 +118,10 @@ export class CliProvider {
    const config=this.d.mcp.serialize(server),mcpArgs=this.d.mcp.args(path);if(!text(config)||!config||!strings(mcpArgs)||!mcpArgs.length)throw protocol('нет конфигурации MCP');
    await writeFile(path,config,{encoding:'utf8',mode:0o600,flag:'wx'});
    const c=command(this.d.turn.command(input));
+   if(lease){if('file'in this.d.auth)throw protocol('изолированный вход должен проверяться программой');const current=await this.query(this.d.auth,signal,seat.cwd,stateArgs);if(!current.loggedIn||!current.email||current.email!==auth.email)throw new ProviderError('login_changed','Вход приватного состояния отличается; подтвердите вход заново')}
    if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),signal);
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
-   const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...mcpArgs],cwd:seat.cwd,env:this.environment(ctx.env),timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:stream,started:()=>ctx.modelStarted?.()});
+   const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...stateArgs,...mcpArgs],cwd:seat.cwd,env:this.environment(ctx.env),timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:stream,started:()=>ctx.modelStarted?.()});
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    if(exit.code!==0||exit.signal){const failure=this.d.failure?.(exit);throw new ProviderError(failure?.code??'transport_lost',clean(failure?.text??'CLI: процесс завершился без успешного ответа'),sessionId)}
    if(this.d.turn.format==='json')parse(exit.stdout);else if(this.d.turn.format==='stream-json'&&pending.trim())parse(pending.trim());else if(this.d.turn.format==='text')result={type:'done'};
@@ -122,7 +131,7 @@ export class CliProvider {
    if(!answer&&done.text){answer=clean(done.text);ctx.publish({type:'delta',text:answer})}
    await dispose();terminal=true;ctx.publish({type:'done',sessionId,model:seat.model,durationMs:Date.now()-started,usage:usage(done.usage)});return {text:answer,sessionId};
   }catch(e){const error=signal.aborted?new ProviderError('cancelled','ход отменён',sessionId):e instanceof ProviderError?new ProviderError(e.code,clean(e.vendorText),sessionId):protocol('ход не выполнен');if(!terminal){terminal=true;ctx.publish({type:'error',text:error.vendorText})}throw error}
-  finally{abort.abort();try{await dispose()}finally{this.active.delete(seat.id);try{ctx.setHandle(null)}finally{release()}}}
+  finally{abort.abort();try{await dispose()}finally{try{lease?.release()}finally{this.active.delete(seat.id);try{ctx.setHandle(null)}finally{release()}}}}
  }
  async reset(){const turns=[...this.active.values()];for(const a of turns)a.abort.abort();await Promise.all(turns.map(a=>a.done))}
  async close(){this.closed=true;await this.reset()}
