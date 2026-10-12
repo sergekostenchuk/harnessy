@@ -228,6 +228,7 @@
           <label class="conn-label" for="dc-probe-model">Модель пробного хода</label><select id="dc-probe-model" class="live-f" aria-label="Модель пробного хода"><option>Opus 5.5 · образец</option><option>Sonnet 5.5 · образец</option></select>
           <div class="conn-actions"><button type="button" class="btn p" data-example-trial>Пробный ход <small>цена неизвестна</small></button></div>
           <div class="conn-auth-state" data-state="trial-running" role="status" aria-busy="true"><span class="conn-spinner" aria-hidden="true"></span><div><b>Пробный ход…</b><small>Один ход уже запущен · образец.</small></div><button type="button" class="btn sm" disabled>Выполняется…</button></div>
+          <div class="conn-auth-state" data-state="trial-unavailable" role="status"><span class="conn-status-dot" aria-hidden="true"></span><div><b>Пробный ход недоступен</b><small>Нет изолированного MCP-конфига и политики read/edit/all на ход.</small></div><button type="button" class="btn sm" disabled>Недоступно</button></div>
         </article>
       </div>
 

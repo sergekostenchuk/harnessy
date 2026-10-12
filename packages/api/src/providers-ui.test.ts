@@ -3,15 +3,17 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
-import {deferred,fixture} from './test-helpers.ts';
+import {deferred,fixture,sse} from './test-helpers.ts';
+import {ProviderCatalog,LoginTerminal,type CatalogEntry} from '@harnessy/providers';
+import type {TestContext} from 'node:test';
 const read=(p:string)=>readFileSync(new URL('../../../'+p,import.meta.url),'utf8');
 const login=(state='ok')=>({state,account:'u•••@example.test',command:'agy',checkedAt:100,reason:''});
 const provider=(extra:any={})=>({id:'antigravity',title:'Antigravity',kind:'subscription',binary:'agy',installed:true,version:'1.2.17',login:login(),models:[{id:'model-a',label:'Model A',default:true},{id:'model-b',label:'Model B'}],capabilities:{headless:true,resume:true,mcp:true,limits:false},...extra});
 const catalog=(...providers:any[])=>({ok:true,providers});
-function ui(handler?:(path:string,body:any)=>Promise<any>,initial:any=catalog(provider()),transport?:(path:string,init?:RequestInit)=>Promise<Response>){
+function ui(handler?:(path:string,body:any)=>Promise<any>,initial:any=catalog(provider()),transport?:(path:string,init?:RequestInit)=>Promise<Response>,project='/a'){
  let httpApi:((path:string,body:any,operation:any)=>Promise<any>)|null=null;
  const raw=read('ui/sketches/disarto/11-connections.html'),d=dom(raw.slice(raw.indexOf('<body>'),raw.indexOf('<script>'))),requests:any[]=[],pending=new Set<Promise<any>>(),toasts:string[]=[],streams:any[]=[];
- Object.assign(d.document,{documentElement:d.html,body:d.body,visibilityState:'visible'});const H:any={on:true,project:'/a',confirmedProjectGeneration:0,panes:[{id:'worker',vendor:'antigravity',model:'model-a',label:'Воркер 1'}],models:{}};
+ Object.assign(d.document,{documentElement:d.html,body:d.body,visibilityState:'visible'});const H:any={on:true,project,confirmedProjectGeneration:0,panes:[{id:'worker',vendor:'antigravity',model:'model-a',label:'Воркер 1'}],models:{}};
  const defaults=(path:string,body:any)=>path==='/api/providers/catalog'?structuredClone(initial):path==='/api/connections'?{ok:true,project:H.project,providers:[],routes:['direct','proxy','iface']}:path==='/api/billing'?{ok:false}:path.endsWith('/probe')?{ok:true,provider:path.split('/')[3],model:body.model,approvalId:'probe-'+path.split('/')[3],status:'awaiting_approval',price:{kind:'subscription',label:'расходуется подписка'}}:path==='/api/approve'?{ok:true}:null;
  const context:any={document:d.document,location:{pathname:'/11-connections.html',hash:''},addEventListener:d.window.addEventListener.bind(d.window),setTimeout:(f:()=>void)=>f(),requestAnimationFrame:(f:()=>void)=>f(),LIVE:{H,esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),toast:(s:string)=>toasts.push(s),paneName:(p:any)=>p.label,log(){},subscribeLiveEvents(onmessage:any){const stream={onmessage,onopen:null,closed:false,close(){stream.closed=true}};streams.push(stream);return stream},providerLimitHTML:(_id:string,_name:string,_kind:string,supported:boolean)=>supported?'<p>Неделя · 42 % · остаток 58 %</p>':'<p>Провайдер лимиты не отдаёт.</p>',api:async(path:string,body?:any,operation?:any)=>{requests.push({path,body});const task=(async()=>{if(httpApi)return httpApi(path,body,operation);const result=await handler?.(path,body);return result===undefined?defaults(path,body):result})();pending.add(task);try{return await task}finally{pending.delete(task)}}}};context.window=context;
  const vm=createContext(context);if(transport){context.H=H;context.fetch=transport;const live=read('ui/deploy/live.js');httpApi=runInContext('(function(){'+live.slice(live.indexOf('  const api='),live.indexOf('  // TS-07: waiting controls'))+'return api})()',vm)}runInContext(read('ui/sketches/disarto/app.js'),vm);runInContext(raw.slice(raw.indexOf('<script>')+8,raw.indexOf('</script>',raw.indexOf('<script>'))),vm);runInContext(read('ui/deploy/conn.js'),vm);
@@ -108,7 +110,7 @@ test('263: HTTP limits arrival updates the open card without resetting the selec
 
 test('268/ОТСУТСТВИЕ: a real catalog HTTP 404 shows disabled design-code examples, then retry adopts a connected source',async t=>{
  const h=await fixture(t);let connected=false,status=0;
- const v=ui(undefined,undefined,async(path,init)=>{if(path==='/api/providers/catalog'&&connected)return Response.json(catalog(provider()));const r=await fetch(h.api.url+path,init);if(path==='/api/providers/catalog')status=r.status;return r});
+ const v=ui(undefined,undefined,async(path,init)=>{if(path==='/api/providers/catalog'&&connected)return Response.json(catalog(provider()));const r=await fetch(h.api.url+(path==='/api/providers/catalog'?'/api/catalog-not-connected':path),init);if(path==='/api/providers/catalog')status=r.status;return r});
  v.H.project=h.dir;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();await v.find('#addbtn').emit('click');await v.settle();assert.equal(status,404);
  assert.match(v.find('.cbody').textContent,/макет.*маршрут каталога ещё не подключён/);assert.equal(v.document.querySelectorAll('.cbody [data-program-mock]').length,3);assert.match(v.find('.cbody').textContent,/Antigravity/);assert.match(v.find('.cbody').textContent,/GitHub Copilot/);
  for(const button of v.document.querySelectorAll('.cbody .conn-program button')){assert.equal(button.disabled,true);await button.emit('click')}
@@ -126,4 +128,39 @@ for(const event of ['status','catalog','reconnect','check'])test('263/СОСЕД
  await v.settle();await v.find('[data-pv="claude"]').emit('click');const input=v.find('[data-subscription-date]');input.value='2027-12-25';await input.emit('input');input.focus();version='2.0';
  if(event==='status')await v.window.emit('live:status');else if(event==='catalog')await v.streams[0].onmessage({data:JSON.stringify({type:'providers'})});else if(event==='reconnect')await v.streams[0].onopen();else await v.find('[data-program-check]').emit('click');await v.settle();
  assert.equal(v.find('[data-subscription-date]').value,'2027-12-25');assert.equal(v.document.activeElement,v.find('[data-subscription-date]'));assert.equal(v.posts('/api/billing').length,0);if(event==='catalog'||event==='reconnect')assert.match(v.find('.conn-facts').textContent,/2\.0/);
+});
+
+
+async function connectedPrograms(t:TestContext){
+ const turns:string[]=[],opened:string[]=[],events:any[]=[],receipts:{path:string;body:any}[]=[];const entry:CatalogEntry={id:'fixture',title:'Fixture CLI',binary:'/fixture/cli',login:{args:['login']},forbiddenEnv:['SECRET_KEY'],capabilities:{headless:true,resume:true,mcp:true,limits:false},async version(){return '1.2.3'},async auth(){return {loggedIn:true,email:'alice@example.test'}},async models(){return [{id:'model-a',label:'Model A'}]},async runTurn(seat,_message,ctx){turns.push(seat.model);ctx.modelStarted?.();ctx.publish({type:'done',sessionId:'fixture',model:seat.model,durationMs:2,usage:{input:3,output:1,cacheRead:null}});return {text:'готов · дублёр',sessionId:'fixture'}}};
+ const source=new ProviderCatalog([entry]),terminal=new LoginTerminal({platform:'darwin',open:async file=>{opened.push(readFileSync(file,'utf8'))}}),h=await fixture(t,{deps:{providerCatalog:source,loginTerminal:terminal}}),stream=await sse(h.api,'owner');t.after(()=>stream.close());
+ const v=ui(undefined,undefined,async(path,init)=>{const r=await fetch(h.api.url+path,init);if(r.headers.get('content-type')?.includes('json'))receipts.push({path,body:await r.clone().json()});return r},h.dir);let offset=0;const done=deferred<any>(),declined=deferred();
+ const pump=()=>{let end;while((end=stream.raw.indexOf('\n\n',offset))>=0){const block=stream.raw.slice(offset,end);offset=end+2;if(!block.startsWith('data: '))continue;const data=block.slice(6),event=JSON.parse(data);if(event.type!=='providers')continue;events.push(event);for(const listener of v.streams)if(!listener.closed)listener.onmessage?.({data});if(event.event==='probe'&&['done','declined','error'].includes(event.status))done.resolve(event);if(event.event==='probe'&&event.status==='declined')declined.resolve()}};
+ stream.response.on('data',pump);pump();await v.settle();return {...h,v,source,turns,opened,events,receipts,done,declined};
+}
+
+test('268/269/271/277: actual catalog/check/login/probe routes reach conn.js with millisecond dates and one owner-approved fake turn',{timeout:10000},async t=>{
+ const h=await connectedPrograms(t),v=h.v;await v.find('#addbtn').emit('click');await v.find('[data-program-open="fixture"]').emit('click');const row=h.receipts.filter(r=>r.path==='/api/providers/catalog').at(-1)!.body.providers[0];assert.ok(row.login.checkedAt>1e12);assert.match(v.find('.conn-facts').textContent,new RegExp(new Date(row.login.checkedAt).toLocaleString('ru-RU').replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));assert.equal(h.turns.length,0);
+ await v.find('[data-program-check]').emit('click');await v.settle();const checked=h.receipts.filter(r=>r.path.endsWith('/check')).at(-1)!.body.login.checkedAt;assert.ok(checked>1e12);assert.ok(v.find('.conn-facts').textContent.includes(new Date(checked).toLocaleString('ru-RU')));assert.equal(h.turns.length,0);
+ await v.find('[data-program-terminal]').emit('click');await v.settle();assert.equal(h.opened.length,1);assert.match(h.opened[0]!,/fixture\/cli/);assert.equal(h.turns.length,0);await v.window.emit('blur');await v.window.emit('focus');await v.settle();assert.equal(v.posts('/check').length,2);
+ await v.find('[data-program-probe]').emit('click');await v.settle();assert.match(v.find('dialog').textContent,/расходуется подписка/);assert.equal(h.turns.length,0);assert.equal(h.runtime.owner.approvals.size,1);await v.find('[data-program-confirm]').emit('click');await v.settle();assert.equal(v.posts('/api/approve').at(-1)?.body.decision,'allow',JSON.stringify(v.toasts));const outcome=await h.done.promise;assert.equal(outcome.status,'done',JSON.stringify(outcome));await v.settle();assert.deepEqual(h.turns,['model-a']);assert.match(v.find('.cbody').textContent,/готов · дублёр/);assert.equal(v.posts('/api/approve').length,1);assert.ok(h.events.length>0);for(const event of h.events){assert.equal(event.at,h.clock.now());assert.ok(event.at>1e12)}
+});
+
+test('271: actual HTTP owner cancellation from conn.js never invokes the fake model',{timeout:10000},async t=>{
+ const h=await connectedPrograms(t),v=h.v;await v.find('[data-pv="fixture"]').emit('click');await v.find('[data-program-probe]').emit('click');await v.find('[data-program-cancel]').emit('click');await h.declined.promise;await v.settle();assert.equal(h.turns.length,0);assert.equal(h.runtime.owner.approvals.size,0);assert.match(v.find('.cbody').textContent,/отменён/);
+});
+
+test('276: actual capability_unsupported response disables repeated probes and displays the backend reason',{timeout:10000},async t=>{
+ const h=await connectedPrograms(t),v=h.v;await v.find('[data-pv="fixture"]').emit('click');h.source.get('fixture').capabilities.headless=false;await v.find('[data-program-probe]').emit('click');await v.settle();assert.equal(h.receipts.filter(r=>r.path.endsWith('/probe')).at(-1)!.body.code,'capability_unsupported');assert.match(v.find('.cbody').textContent,/У программы нет безголового режима/);assert.match(v.find('[data-program-probe]').textContent,/Недоступно/);assert.equal(v.find('[data-program-probe]').disabled,true);await v.find('[data-program-probe]').emit('click');assert.equal(v.posts('/probe').length,1);assert.equal(v.document.querySelector('dialog'),null);assert.equal(h.turns.length,0);assert.equal(h.runtime.owner.approvals.size,0);
+});
+
+for(const source of ['catalog','http','sse'])test('276: '+source+' capability refusal keeps login actions available and never retries the unavailable probe',async()=>{
+ const reason='нет изолированного MCP-конфига и политики read/edit/all на ход',v=ui(async path=>source==='http'&&path.endsWith('/probe')?{ok:false,code:'capability_unsupported',reason}:path.endsWith('/check')?{ok:true,login:login()}:undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:source!=='catalog',limits:false}})));await open(v);
+ if(source==='http')await v.find('[data-program-probe]').emit('click');if(source==='sse'){await v.find('[data-program-probe]').emit('click');await v.find('[data-program-confirm]').emit('click');await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'probe',provider:'antigravity',approvalId:'probe-antigravity',model:'model-a',status:'error',error:{code:'capability_unsupported',reason},at:Date.now()})})}
+ await v.settle();assert.equal(v.find('[data-program-probe]').disabled,true);assert.match(v.find('.cbody').textContent,/изолированного MCP-конфига/);assert.equal(v.find('[data-program-terminal]').disabled,false);assert.equal(v.find('[data-program-check]').disabled,false);const before=v.posts('/probe').length;await v.find('[data-program-probe]').emit('click');assert.equal(v.posts('/probe').length,before);await v.find('[data-program-check]').emit('click');await v.settle();assert.equal(v.find('[data-program-probe]').disabled,true);
+});
+
+
+test('277/ОКНА: refreshing only checkedAt cannot invalidate the server approval for unchanged provider and model',async()=>{
+ let checkedAt=1791800000000;const v=ui(async path=>path==='/api/providers/catalog'?catalog(provider({login:{...login(),checkedAt}})):undefined);await open(v);await v.find('[data-program-probe]').emit('click');checkedAt+=1000;await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'check',at:checkedAt})});await v.settle();await v.find('[data-program-confirm]').emit('click');await v.settle();assert.deepEqual(v.posts('/api/approve').map(r=>r.body.decision),['allow']);assert.equal(v.posts('/api/approve')[0].body.id,'probe-antigravity');
 });
