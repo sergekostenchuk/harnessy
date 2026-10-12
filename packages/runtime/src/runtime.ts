@@ -28,6 +28,7 @@ import {Pane,Registry,validDir} from './pane.ts';
 import {EventBus,type Selector} from './events.ts';
 import {StateStore,diskIO,timestampMessage,artifactPaths,type ResultMessage,type TranscriptMessage} from './state.ts';
 import {LimitsStore} from './limits.ts';
+import {ProviderLimitsStore} from './provider-limits.ts';
 import {Scopes,ProcessTokens} from './scope.ts';
 import {renderInbox,queueNote} from './inbox.ts';
 import {RuntimeError,message,slice,deepFreeze,object} from './errors.ts';
@@ -37,7 +38,7 @@ type AttemptDecision=NonNullable<Record_['attempt']>;
 export class Runtime {
  readonly providerOperations:ProviderOperations;
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
- private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();
+ private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();private cliQuotas=new WeakMap<ProjectState,ProviderLimitsStore>();
  readonly deps:RuntimeDeps;readonly actions:RuntimeActions;
  constructor(deps:RuntimeDeps,actions:RuntimeActions){this.deps=deps;this.actions=actions;
  if(!actions||['ask','merge','assignRole','afterTurn','restorePendingAcks','cancelAsks'].some(k=>typeof (actions as unknown as Record<string,unknown>)[k]!=='function'))throw new RuntimeError('actions_required','порт действий обязателен',500);
@@ -66,9 +67,10 @@ export class Runtime {
  }
  get project():ProjectState{if(!this.current||this.current.closed)throw new RuntimeError('project_closed','проект закрыт');return this.current}
  get registry(){return this.project.registry}get owner(){return this.project.owner}get journal(){return this.project.journal}get channel(){return this.project.channel}get lineErrors(){return [...this.project.lineErrors]}get halted(){return this.project.halted}
- private quota(p:ProjectState){let store=this.quotas.get(p);if(!store){store=new LimitsStore(p.dir,this.clock,this.deps.providers,()=>{if(!p.closed)p.bus.publish('owner',{type:'limits',...store!.snapshot()})},this.deps.limitsCacheDir,(vendor,result)=>{p.trace.record('limits.measurement',{outcome:result.ok?'ok':result.code==='limits_not_applicable'?'rejected':'failed',reason:result.ok?{code:'none',text:''}:traceReason(result.code,result.reason),data:{vendor,status:result.ok?'ok':result.code,...(result.ok?{windows:result.windows}:{})}})});this.quotas.set(p,store)}return store}
- limitsSnapshot(){return this.quota(this.project).snapshot()}
- async limits(){const p=this.project,store=this.quota(p);await store.refresh();this.same(p);return store.snapshot()}
+ private quota(p:ProjectState){let store=this.quotas.get(p);if(!store){store=new LimitsStore(p.dir,this.clock,this.deps.providers,()=>{if(!p.closed&&this.current===p)p.bus.publish('owner',{type:'limits',...this.limitsSnapshot()})},this.deps.limitsCacheDir,(vendor,result)=>{p.trace.record('limits.measurement',{outcome:result.ok?'ok':result.code==='limits_not_applicable'?'rejected':'failed',reason:result.ok?{code:'none',text:''}:traceReason(result.code,result.reason),data:{vendor,status:result.ok?'ok':result.code,...(result.ok?{windows:result.windows}:{})}})});this.quotas.set(p,store)}return store}
+ private cliQuota(p:ProjectState){let store=this.cliQuotas.get(p);if(!store){store=new ProviderLimitsStore(this.providerOperations.catalog,this.clock,()=>{if(!p.closed&&this.current===p)p.bus.publish('owner',{type:'limits',...this.limitsSnapshot()})},this.deps.limitsCacheDir);this.cliQuotas.set(p,store)}return store}
+ limitsSnapshot(){const p=this.project,base=this.quota(p).snapshot(),cli=this.cliQuota(p).snapshot(),providers=[...base.providers.map(v=>({...v,ok:v.status==='ok'})),...cli.providers],error=cli.errors[0],available=providers.some(v=>v.ok||v.windows.length>0);return {...base,...(error&&!available?{ok:false as const,code:error.code,reason:error.reason}:{}),revision:base.revision+cli.revision,providers,updatedAt:Math.max(base.updatedAt??0,...cli.providers.map(v=>v.fetchedAt??0))||null,...(cli.errors.length?{errors:cli.errors}:{})}}
+ async limits(){const p=this.project;await Promise.all([this.quota(p).refresh(),this.cliQuota(p).refresh()]);this.same(p);return this.limitsSnapshot()}
  private provider(vendor:Vendor|'human'){const provider=vendor==='human'?null:this.deps.providers[vendor];if(!provider)throw new RuntimeError('no_provider','нет провайдера: '+vendor,503);return provider}
  private requireOwner(initiator:Initiator):void {if(initiator?.seat!=='owner'||initiator.trust!=='owner')throw new RuntimeError('policy_denied','действие доступно только владельцу',403)}
  private same(p:ProjectState):void{if(this.current!==p||p.closed)throw new RuntimeError('project_changed','проект сменился',409)}
@@ -158,7 +160,7 @@ export class Runtime {
  }
  async closeProject():Promise<void>{return this.changeProject(()=>this.closeProjectLocked())}
  private async closeProjectLocked():Promise<void>{const p=this.current;if(!p||p.closed)return;if(p.state.undurable.size){try{p.state.saveChats(p.registry);p.state.undurable.clear()}catch(e){throw new RuntimeError('write_failed','ответ модели не сохранён: '+p.state.chatsPath+': '+message(e),409,{cause:e,fields:{path:p.state.chatsPath}})}}p.closed=true;this.actions.closeProject?.(p);const turns=[...p.active.values()];
- this.quotas.get(p)?.close();for(const turn of turns)this.cancelTurn(turn.pane.id,'project_closed',p);
+ this.quotas.get(p)?.close();this.cliQuotas.get(p)?.close();for(const turn of turns)this.cancelTurn(turn.pane.id,'project_closed',p);
  p.owner.denyApprovals();p.bus.close();this.tokens.clear();this.scopes.clear();await this.providerOperations.cancel(p);
  let failure:unknown;try{await Promise.all(Object.values(this.deps.providers).map(provider=>provider.close()))}catch(e){failure=e}
  for(const turn of turns)turn.releaseReset();await Promise.all(turns.map(t=>t.finished));if(failure)throw failure

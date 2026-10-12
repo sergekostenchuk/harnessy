@@ -1,13 +1,14 @@
 import {CliProvider} from './cli/provider.ts';
 import {readCliMetadata} from './cli/query.ts';
 import {ANTIGRAVITY} from './antigravity.ts';
+import {COPILOT} from './copilot.ts';
 import {executeCli} from './cli/process.ts';
 import {createHmac,randomBytes} from 'node:crypto';
-import {ProviderError,record,type Provider,type Vendor,type TurnContext} from './types.ts';
+import {ProviderError,record,type Provider,type Vendor,type TurnContext,type ProviderLimits} from './types.ts';
 import type {CliDescriptor,CliUnavailableDescriptor,CliDependencies,CliSeat,CliContext,CliAuth,CliModel,CliCommand} from './cli/types.ts';
 
 /** Subscription descriptors are added here by TS-20b/c; credentials are never stored here. */
-export const CLI_DESCRIPTORS:readonly (CliDescriptor|CliUnavailableDescriptor)[]=[ANTIGRAVITY];
+export const CLI_DESCRIPTORS:readonly (CliDescriptor|CliUnavailableDescriptor)[]=[ANTIGRAVITY,COPILOT];
 export interface CatalogLogin {state:'ok'|'none'|'unknown'|'error';account?:string;command:string;checkedAt?:number;reason?:string}
 // Public checkedAt and SSE at are epoch milliseconds (durationMs is elapsed milliseconds).
 export interface CatalogRow {id:string;title:string;kind:'subscription'|'apikey'|'local';binary:string;installed:boolean;version:string|null;login:CatalogLogin;models:CliModel[];capabilities:{headless:boolean;resume:boolean;mcp:boolean;limits:boolean};limits?:{ref:string};routes?:string;reason?:string}
@@ -15,6 +16,7 @@ export interface CatalogEntry {
  id:string;title:string;binary:string;login:CliCommand;forbiddenEnv:readonly string[];capabilities:CatalogRow['capabilities'];routes?:string;
  unavailableReason?:string;
  version():Promise<string>;auth():Promise<CliAuth>;models():Promise<CliModel[]>;
+ limits?(signal?:AbortSignal):Promise<ProviderLimits>;
  runTurn(seat:CliSeat,message:string,ctx:CliContext):Promise<{text:string;sessionId:string|null;interrupted?:boolean}>;
  close?():Promise<void>;
 }
@@ -30,7 +32,7 @@ export function cliEntry(description:CliDescriptor|CliUnavailableDescriptor,deps
    version:()=>readCliMetadata(d.binary,d.forbiddenEnv,d.version,options),auth:()=>readCliMetadata(d.binary,d.forbiddenEnv,d.auth,options),models:()=>readCliMetadata(d.binary,d.forbiddenEnv,d.models,options),
    runTurn:async()=>{throw new ProviderError('capability_unsupported',reason)}};
  }
- const p=new CliProvider(description,deps);return {id:p.vendor,title:description.name,binary:description.binary,login:{args:[...description.login.args]},forbiddenEnv:[...description.forbiddenEnv],capabilities:{headless:true,resume:!!description.resume,mcp:true,limits:!!description.limits},version:()=>p.version(),auth:()=>p.auth(),models:()=>p.models(),runTurn:(s,m,c)=>p.runTurn(s,m,c),close:()=>p.close()};
+ const p=new CliProvider(description,deps);return {id:p.vendor,title:description.name,binary:description.binary,login:{args:[...description.login.args]},forbiddenEnv:[...description.forbiddenEnv],capabilities:{headless:true,resume:!!description.resume&&!description.turnUnavailableReason,mcp:!description.turnUnavailableReason,limits:!!description.limits},...(description.turnUnavailableReason?{unavailableReason:description.turnUnavailableReason}:{}),version:()=>p.version(),auth:()=>p.auth(),models:()=>p.models(),...(description.limits?{limits:(signal?:AbortSignal)=>p.limits(signal)}:{}),runTurn:(s,m,c)=>p.runTurn(s,m,c),close:()=>p.close()};
 }
 export function builtinEntries(providers:Partial<Record<Vendor,Provider>>,models:Partial<Record<Vendor,{id:string;label?:string}[]>>,deps:Partial<CliDependencies>={}):CatalogEntry[]{
  return (['claude','codex'] as const).flatMap(id=>{const p=providers[id];if(!p)return [];const binary=deps.env?.[id==='claude'?'CLAUDE_BIN':'CODEX_BIN']||process.env[id==='claude'?'CLAUDE_BIN':'CODEX_BIN']||id;
@@ -47,6 +49,7 @@ export class ProviderCatalog {
  private identities=new Map<string,string|null>();private salt=randomBytes(32);
  constructor(entries:readonly CatalogEntry[]=[]){for(const e of entries){if(!e||!safeText(e.id)||!/^[a-z][a-z0-9-]*$/.test(e.id)||this.entries.has(e.id)||!safeText(e.title)||!safeText(e.binary)||!e.login||!Array.isArray(e.login.args)||!e.login.args.every(safeText)||e.login.input!==undefined||!Array.isArray(e.forbiddenEnv)||!e.forbiddenEnv.every(k=>/^[A-Za-z_][A-Za-z0-9_]*$/.test(k))||!['version','auth','models','runTurn'].every(k=>typeof (e as unknown as Record<string,unknown>)[k]==='function')||!e.capabilities||!['headless','resume','mcp','limits'].every(k=>typeof e.capabilities[k as 'headless']==='boolean'))throw new ProviderError('protocol','Неверный описатель каталога');this.entries.set(e.id,{...e,login:{args:[...e.login.args]},forbiddenEnv:[...e.forbiddenEnv],capabilities:{...e.capabilities}})}}
  get(id:string){const entry=this.entries.get(id);if(!entry)throw new ProviderError('provider_unknown','Программа отсутствует в каталоге');return entry}
+ limitsEntries(){return [...this.entries.values()].filter(e=>!['claude','codex'].includes(e.id)&&e.capabilities.limits&&typeof e.limits==='function')}
  accountIdentity(auth:CliAuth):string|null{return auth?.loggedIn===true&&typeof auth.email==='string'&&auth.email.trim()?createHmac('sha256',this.salt).update(auth.email.trim().toLowerCase()).digest('hex'):null}
  read(id:string):Promise<{row:CatalogRow;changed:boolean;identity:string|null}>{this.get(id);const previous=this.reading.get(id)??Promise.resolve(),work=previous.then(()=>this.readNow(id),()=>this.readNow(id));this.reading.set(id,work);void work.finally(()=>{if(this.reading.get(id)===work)this.reading.delete(id)}).catch(()=>{});return work}
  private async readNow(id:string):Promise<{row:CatalogRow;changed:boolean;identity:string|null}>{const e=this.get(id);let identity:string|null=null;
