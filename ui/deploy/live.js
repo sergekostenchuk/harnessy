@@ -1360,17 +1360,18 @@
   // TS-15f: the sketch's three steps share the bound conversation/team operations.
   const FIRST={project:null,confirmed:0,model:null,vendor:null,folder:true,busy:false,door:null,missing:null,sending:false};
   const firstRoot=()=>PAGE==='first'?document.querySelector('.fr'):null;
-  const FIRST_MODELS={rows:null,binding:null,request:0,error:'',events:null,alive:true};
+  const FIRST_MODELS={rows:null,binding:null,request:0,error:'',events:null,alive:true,checking:null,selection:0};
   const firstMode=()=>FIRST.folder&&!H.noProject?'read':'chat';
   function firstSupport(vendor){const row=(FIRST_MODELS.rows||[]).find(p=>p.id===vendor),cap=H.turnModes&&H.turnModes[vendor]&&H.turnModes[vendor][firstMode()];
     if(row&&(row.installed===null||row.checking))return {ok:false,reason:'проверяется…'};
     if(row&&row.installed===false)return {ok:false,reason:'программа не установлена'};
+    if(['region','blocked','offline','unresponsive'].includes(row?.login?.failure))return {ok:false,reason:'проверка входа не прошла'};
     return cap&&cap.ok===true?{ok:true,note:typeof cap.note==='string'?cap.note:''}:{ok:false,reason:cap&&typeof cap.reason==='string'&&cap.reason?cap.reason:'движок не сообщил поддержку режима'};
   }
   function firstModels(){return Object.entries(H.models||{}).flatMap(([vendor,models])=>Array.isArray(models)?models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({...m,vendor})):[])}
   const firstSelected=()=>firstModels().find(m=>m.id===FIRST.model&&m.vendor===FIRST.vendor);
   function firstPrograms(){return [...new Set([...Object.keys(H.models||{}),...(FIRST_MODELS.rows||[]).map(p=>p.id)])].map(id=>{
-    const row=(FIRST_MODELS.rows||[]).find(p=>p.id===id);return {id,title:row?row.title:id,kind:row?row.kind:null,reason:row&&row.modelsReason||'',models:firstModels().filter(m=>m.vendor===id)};
+    const row=(FIRST_MODELS.rows||[]).find(p=>p.id===id);return {...row,id,title:row?row.title:id,kind:row?row.kind:null,reason:row&&row.modelsReason||'',models:firstModels().filter(m=>m.vendor===id)};
   })}
   async function firstCatalog(){if(!FIRST_MODELS.alive||!H.on||H.snapshotOnly||leftPage)return;
     const binding=FIRST_MODELS.binding=sendBinding(),request=++FIRST_MODELS.request;FIRST_MODELS.error='';let response;
@@ -1378,7 +1379,7 @@
     if(!FIRST_MODELS.alive||request!==FIRST_MODELS.request||!bindingCurrent(binding))return;
     const rows=response&&response.ok!==false&&response.providers,ids=new Set(),safe=v=>typeof v==='string'&&v.trim()&&v.length<=256&&!/[\x00-\x1f\x7f]/.test(v);
     if(!Array.isArray(rows)||rows.some(p=>!p||!safe(p.id)||ids.has(p.id)||!safe(p.title)||!['subscription','apikey','local'].includes(p.kind)||p.installed!==null&&typeof p.installed!=='boolean'||typeof p.checking!=='boolean'||!ids.add(p.id))){FIRST_MODELS.error='Каталог программ не прочитан · '+(response&&response.error||'нет связи');firstDraw();return}
-    FIRST_MODELS.rows=rows.map(p=>({id:p.id,title:p.title,kind:p.kind,installed:p.installed,checking:p.checking,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''}));firstDraw();
+    FIRST_MODELS.rows=rows.map(p=>({id:p.id,title:p.title,kind:p.kind,installed:p.installed,checking:p.checking,login:p.login,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''}));firstDraw();
     const modes=JSON.stringify([H.models,H.turnModes]);let status;try{status=await api('/api/status')}catch{}
     if(!FIRST_MODELS.alive||request!==FIRST_MODELS.request||!bindingCurrent(binding)||modes!==JSON.stringify([H.models,H.turnModes]))return;
     if(status&&status.project===binding.project&&Array.isArray(status.panes)&&status.models&&typeof status.models==='object'&&!Array.isArray(status.models)){H.models=status.models;H.turnModes=status.turnModes||{}}else FIRST_MODELS.error='Не удалось обновить статус моделей';firstDraw();
@@ -1399,10 +1400,16 @@
       select.setAttribute('aria-label','Модель · '+title.textContent);select.value=row&&row.id===FIRST.vendor&&rows.some(m=>m.id===FIRST.model)?FIRST.model:'';select.disabled=!live||!rows.length||FIRST.busy||!!orch;select.hidden=false;card.classList.toggle('on',!!select.value);
       card.querySelector('small').textContent=!live?'макет · движок не подключён':!support.ok?support.reason:rows.length?(orch?'Оркестратор: '+modelName(orch.model):row.title+(row.subtitle?' · '+row.subtitle:'')+' · моделей: '+rows.length+(support.note?' · '+support.note:'')):'нет данных'+(row&&row.reason?' · '+row.reason:' · подключите модель в «Подключениях»');
     }
+    for(const card of [...original,...root.querySelectorAll('[data-first-extra]')]){let recovery=card.querySelector('[data-first-login]');if(!recovery){recovery=document.createElement('div');recovery.setAttribute('data-first-login','');card.appendChild(recovery)}const html=window.LIVE?.loginRecovery?.html(card.__program,{check:true,busy:!!FIRST_MODELS.checking})||'';if(recovery.innerHTML!==html)recovery.innerHTML=html;}
     const error=root.querySelector('[data-first-model-error]');error.hidden=!FIRST_MODELS.error;error.querySelector('span').textContent=FIRST_MODELS.error;
   }
+  async function firstCheckLogin(id){if(FIRST_MODELS.checking||!FIRST_MODELS.alive)return;const binding=sendBinding(),selection=FIRST_MODELS.selection;const job=FIRST_MODELS.checking={id};firstDraw();
+    try{const r=await api('/api/providers/'+encodeURIComponent(id)+'/check',{});if(!FIRST_MODELS.alive||!bindingCurrent(binding)||selection!==FIRST_MODELS.selection)return;if(!r?.ok){FIRST_MODELS.error='Не удалось проверить вход. '+(typeof r?.error==='string'?r.error:'Повторите проверку.');return}await firstCatalog()}
+    catch{if(FIRST_MODELS.alive&&bindingCurrent(binding))FIRST_MODELS.error='Не удалось проверить вход. Повторите проверку.'}
+    finally{if(FIRST_MODELS.checking===job)FIRST_MODELS.checking=null;firstDraw()}
+  }
   function firstSelectPane(){const p=(H.panes||[]).find(p=>p.kind==='orchestrator')||(H.panes||[]).find(p=>p.id==='room');const id=p?p.id:'room';if(S.ui.pane!==id){invalidateBinding();S.ui.pane=id;S.chat=[];H.cur=null;save();pickPane()}}
-  function firstGo(n){const root=firstRoot();if(!root||leftPage)return;root.scrollTop=0;firstDraw();root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s===String(n)));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i<n));operationsDraw()}
+  function firstGo(n){const root=firstRoot();if(!root||leftPage)return;FIRST_MODELS.selection++;root.scrollTop=0;firstDraw();root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s===String(n)));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i<n));operationsDraw()}
   function firstDraw(){const root=firstRoot();if(!root||leftPage)return;const live=H.on&&!H.snapshotOnly;
     if(FIRST.project!==H.project||FIRST.confirmed!==(H.confirmedProjectGeneration||0)){if(FIRST.project){root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s==='1'));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i===0));const draft=root.querySelector('.live-in');if(draft)draft.value='';}FIRST.project=H.project;FIRST.confirmed=H.confirmedProjectGeneration||0;FIRST.model=null;FIRST.vendor=null;FIRST.folder=!H.noProject;FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML='';}
     const models=firstModels(),orch=(H.panes||[]).find(p=>p.kind==='orchestrator');
@@ -1413,6 +1420,7 @@
     const kb=root.querySelectorAll('.st[data-s="3"] .kv b');if(live){kb[0].textContent=H.noProject?'комната без проекта':H.project;kb[1].textContent=modelName(orch&&orch.model||FIRST.model);kb[2].textContent='≈ 0,05 % недели · макет: прогноз первого хода не подключён';kb[3].textContent='ответ в чате; состав — только после вашего подтверждения'}
     const proposalNote=root.querySelector('[data-first-proposal-state]');proposalNote.textContent=!live?'макет · источник состава не подключён':TP.error?TP.error:TP.loading?'Читаю предложение состава…':!TP.data.length?'Предложение не зарегистрировано. Если оркестратор описал состав в разговоре, попросите его: «зарегистрируй предложение».':'';
     const message=root.querySelector('[data-first-state]');message.textContent=!live?'Макет · движок не подключён':!orch?'Сначала назначьте оркестратора на шаге «Чем отвечать».':H.pane&&H.pane.busy?'Оркестратор отвечает…':'Предложено в разговоре';
+    root.querySelector('.st[data-s="2"] [data-go="3"]').setAttribute('aria-disabled',String(FIRST.busy||live&&!orch&&(!firstSelected()||!firstSupport(FIRST.vendor).ok)));
     root.querySelector('[data-first-team-request]').disabled=!live||!orch||FIRST.sending;
     root.querySelector('.st[data-s="3"] .btn.p').setAttribute('aria-disabled',String(!live||!orch||FIRST.sending));
     root.querySelector('[data-first-open]').disabled=!live||!orch;
@@ -1472,6 +1480,7 @@
   if(PAGE==='first'){
     const root=firstRoot(),s2=root.querySelector('.st[data-s="2"]'),s3=root.querySelector('.st[data-s="3"]'),input=s3.querySelector('.in');delete S.first;if(S.pending){S.draft=S.pending.text;S.pending=null;save()}
     root.querySelector('.st[data-s="1"] .pick').setAttribute('data-cx','folder');
+    s2.querySelector('h2').textContent='Чем отвечаем';s2.querySelector('p').textContent='Одна модель для начала. Остальные подключите потом в «Подключениях».';
     s2.querySelectorAll('.pick').forEach((el,i)=>{el.setAttribute('data-first-vendor',String(i));el.__title=el.firstChild.textContent;el.firstChild.textContent='';const title=document.createElement('span');title.setAttribute('data-first-title','');title.textContent=el.__title;el.insertBefore(title,el.firstChild);const select=document.createElement('select');select.setAttribute('data-first-model','');el.appendChild(select)});
     s2.insertAdjacentHTML('beforeend','<p data-first-model-error role="status" hidden><span></span> <button type="button" class="btn sm ghost" data-first-model-retry>Повторить</button></p><p><a href="11-connections.html">Подключения →</a></p><div data-first-door></div>');
     input.innerHTML='<input class="live-in" aria-label="Первый вопрос" placeholder="Написать…" value="Посмотри проект и скажи, что мешает первому запуску"><span class="k">⏎</span>';
@@ -1480,8 +1489,15 @@
     s3.querySelector('p').textContent='Первый вопрос — в разговоре с оркестратором. Предложение состава подтвердите здесь.';
     root.querySelectorAll('[data-go], [data-skip], .pick').forEach(el=>{el.setAttribute('tabindex','0');el.setAttribute('role','button')});
     root.addEventListener('keydown',e=>{if(e.target.closest('[data-first-model]'))return;if(e.target===input.querySelector('input')&&e.key==='Enter'&&!e.isComposing){e.preventDefault();void firstSend();return}if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-go], [data-skip], .pick')){e.preventDefault();e.target.click()}});
-    root.addEventListener('change',e=>{const select=e.target.closest('[data-first-model]');if(!select||select.disabled)return;const card=select.closest('[data-first-program]');if(!card)return;const vendor=card.dataset.firstProgram,model=firstModels().find(m=>m.vendor===vendor&&m.id===select.value);if(!model||!firstSupport(vendor).ok){firstDraw();return}FIRST.model=model.id;FIRST.vendor=vendor;firstDraw()});
+    root.addEventListener('change',e=>{const select=e.target.closest('[data-first-model]');if(!select||select.disabled)return;const card=select.closest('[data-first-program]');if(!card)return;const vendor=card.dataset.firstProgram,model=firstModels().find(m=>m.vendor===vendor&&m.id===select.value);if(!model||!firstSupport(vendor).ok){firstDraw();return}FIRST_MODELS.selection++;FIRST.model=model.id;FIRST.vendor=vendor;firstDraw()});
     document.addEventListener('click',async e=>{const target=e.target;if(!root.contains(target))return;
+      const recovery=target.closest('[data-login-connect],[data-login-other],[data-login-check]');
+      if(recovery){e.preventDefault();e.stopImmediatePropagation();if(recovery.disabled||FIRST.busy)return;const id=recovery.dataset.loginConnect||recovery.dataset.loginOther||recovery.dataset.loginCheck,row=firstPrograms().find(p=>p.id===id);if(!row)return;
+        if(recovery.hasAttribute('data-login-check')){void firstCheckLogin(id);return}
+        if(recovery.hasAttribute('data-login-other')){FIRST_MODELS.selection++;FIRST.door=null;const alternative=[...root.querySelectorAll('[data-first-model]')].find(n=>n.closest('[data-first-program]')?.dataset.firstProgram!==id&&!n.disabled);if(alternative){alternative.focus();alternative.scrollIntoView?.({block:'nearest'})}else location.href='11-connections.html';return}
+        const b=sendBinding(),selection=FIRST_MODELS.selection,account=row.login?.account;
+        window.LIVE?.loginRecovery?.open(row,{current:()=>FIRST_MODELS.alive&&bindingCurrent(b)&&selection===FIRST_MODELS.selection&&firstPrograms().find(p=>p.id===id)?.login?.account===account&&!!root.querySelector('.st[data-s="2"].on'),recheck:()=>firstCheckLogin(id)});return;
+      }
       if(target.closest('[data-first-model-retry]')){e.preventDefault();e.stopImmediatePropagation();void firstCatalog();return}
       if(target.closest('[data-first-model]')){e.stopPropagation();return}
       const restart=target.closest('[data-first-restart]'),g=target.closest('[data-go]'),promote=target.closest('[data-first-promote]'),cancel=target.closest('[data-first-cancel]'),skip=target.closest('[data-skip]'),request=target.closest('[data-first-team-request]'),open=target.closest('[data-first-open]');
@@ -1809,7 +1825,7 @@
   }
   addEventListener('pageshow',event=>{if(event.persisted)return resumePage()});
   // End TS-09a.1 page lifecycle.
-  window.LIVE={subscribeLiveEvents,providerLimitHTML:(id,name,kind,supported)=>{if(!supported)return '<p class="conn-note">Провайдер лимиты не отдаёт.</p>';return spLimitHTML({id,name,kind},true)},stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,operationsDraw,operationAttention,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting,get teamProposals(){return TP;},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};   // для cx.js (поле ввода)
+  window.LIVE={firstModelsDraw:()=>{if(PAGE==='first')firstDraw()},subscribeLiveEvents,providerLimitHTML:(id,name,kind,supported)=>{if(!supported)return '<p class="conn-note">Провайдер лимиты не отдаёт.</p>';return spLimitHTML({id,name,kind},true)},stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,operationsDraw,operationAttention,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting,get teamProposals(){return TP;},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};   // для cx.js (поле ввода)
   // TS-09b3: proposal cards always confirm the exact displayed project and version.
   const TP={project:null,generation:0,data:[],loading:false,queued:false,sending:false,error:null,focus:null,kinds:{}};
   const KN={request:0,data:null,binding:null,error:null};

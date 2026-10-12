@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
-import {ProviderCatalog,builtinEntries} from '@harnessy/providers';
+import {ProviderCatalog,ProviderError,builtinEntries} from '@harnessy/providers';
 import {fixture,call,deferred,FakeProvider} from './test-helpers.ts';
 import {MemoryKeys} from '../../llm/src/test-helpers.ts';
 import {networkUi as ui} from './network-ui-test-helpers.ts';
@@ -126,4 +126,16 @@ test('23a/23b: save and use refreshes the inventory provider names after its old
  const catalog=new ProviderCatalog(builtinEntries({claude:new FakeProvider()},{},{execute:async()=>({code:0,signal:null,stdout:'1.0',stderr:''})})),h=await fixture(t,{deps:{providerCatalog:catalog,networkKeys:new MemoryKeys(),networkCheckOptions:{execute:async spec=>output(spec.input!)}}}),v=ui(async(path,body)=>(await call(h.api,path,body===undefined?{}:{body})).body);
  await v.flush();v.L.network.setProviders('programs',[{id:'claude',title:'Claude Code'}]);await v.flush();v.L.network.openAdd({provider:'claude',title:'Claude Code'});await v.flush();await v.click('[data-proxy-action="next"]');await v.proxyInput('address','socks5://proxy.test:1080');await v.click('[data-proxy-action="check"]');await v.click('[data-proxy-action="use"]');await v.flush();
  const card=v.find('[data-proxy-id]'),id=card.getAttribute('data-proxy-id');assert.deepEqual(h.runtime.settings.network().chains.claude,[id]);assert.match(card.textContent,/через него ходятClaude Code/);assert.equal(h.provider.calls.length,0);
+});
+
+for(const action of ['use','save'])test('23e HTTP + UI: recovery wizard '+action+' rechecks login only after provider assignment',opts,async t=>{
+ let h:Awaited<ReturnType<typeof fixture>>|undefined;let calls=0;
+ const catalog=new ProviderCatalog([{id:'claude',title:'Claude Code',binary:'claude',login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,mcp:true,resume:true,limits:false},version:async()=> '1',auth:async()=>{calls++;if(!h?.runtime.settings.network().chains.claude?.length)throw new ProviderError('network_unavailable','fixture unavailable');return {loggedIn:true}},models:async()=>[{id:'model',label:'Model'}],runTurn:async()=>{throw Error('no paid call')}}]);
+ h=await fixture(t,{deps:{providerCatalog:catalog,networkKeys:new MemoryKeys()}});await catalog.read('claude');
+ const v=ui(async(path,body)=>(await call(h!.api,path,body?{body}:{})).body,true,h.dir);await v.flush();await v.click('#addbtn');await v.click('[data-program-open="claude"]');assert.match(v.find('[data-login-recovery]').textContent,/нет связи/);
+ await v.click('[data-login-connect]');await v.flush();assert.match(v.find('.proxy-add-dialog').textContent,/Сохранить|Что добавляем/);await v.click('[data-proxy-action="next"]');await v.proxyInput('address','socks5h://proxy.test:1080');
+ const before=calls;await v.click('[data-proxy-action="'+action+'"]');await v.flush();assert.equal(v.requests.filter(r=>r.path==='/api/providers/claude/check'&&r.body).length,action==='use'?1:0);assert.equal(calls-before,action==='use'?1:0);
+ const n=h.runtime.settings.network();assert.equal(Object.keys(n.exits).length,1);assert.equal(n.chains.claude?.length||0,action==='use'?1:0);
+ if(action==='use'){assert.equal(v.document.querySelector('.proxy-add-dialog'),null);assert.equal(v.document.querySelector('[data-login-recovery]'),null)}else assert.match(v.find('[data-proxy-result]').textContent,/Сохранено/);
+ assert.equal(v.requests.filter(r=>/\/probe$|\/send$/.test(r.path)).length,0);
 });
