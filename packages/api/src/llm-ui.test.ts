@@ -1,4 +1,5 @@
 import {keySlot} from '@harnessy/llm';
+import {builtinProviders} from '@earendil-works/pi-ai/providers/all';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -18,6 +19,22 @@ function ui(fetch:(path:string,body?:Data)=>Promise<Data>){
  const click=(s:string)=>find(s).emit('click');const input=async(k:string,value:string)=>{const el=find('[data-llm-field="'+k+'"]');el.value=value;await el.emit('input')};
  return {...d,L,requests,find,click,input,flush:async()=>{await tick()},change:async()=>{generation++;H.project='/two';await d.window.emit('live:status')},event:()=>events.forEach(fn=>fn({data:JSON.stringify({type:'llm.routes'})}))};
 }
+test('API provider picker uses pi-ai names, sorts by name and keeps the catalog id for discovery',opts,async t=>{
+ const h=await fixture(t,{deps:{llmKeys:new MemoryKeys()}}),v=ui(async(path,body)=>(await call(h.api,path,body?{body}:{})).body);
+ await v.L.loadLlmRoutes();const response=(await call(h.api,'/api/llm/providers')).body,official=new Map(builtinProviders().map(p=>[p.id,p.name]));
+ await v.click('[data-llm-add]');const select=v.find('[data-llm-field="provider"]'),options=select.querySelectorAll('option');
+ assert.equal(options[0]!.textContent,'Свой адрес');assert.equal(options[0]!.getAttribute('value'),'');assert.equal(options.length,response.catalog.length+1);
+ const labels=options.slice(1).map(o=>o.textContent);assert.deepEqual(labels,[...labels].sort((a,b)=>a.localeCompare(b,'ru',{sensitivity:'base'})));
+ for(const o of options.slice(1)){const id=o.getAttribute('value')!;assert.equal(o.textContent,official.get(id)||id);assert.equal(o.title,id);assert.equal(response.catalogNames[id],o.textContent)}
+ for(const [id,name] of [['deepseek','DeepSeek'],['moonshotai','Moonshot AI'],['zai','Z.AI'],['qwen-token-plan','Qwen Token Plan']])assert.equal(select.querySelector('option[value="'+id+'"]')!.textContent,name);
+ assert.equal(v.requests.some(r=>r.path.endsWith('/discover')),false);select.value='moonshotai';await select.emit('change');assert.equal(select.title,'moonshotai');await v.click('[data-llm-action="discover"]');assert.equal(v.requests.at(-1)!.body.config.catalog,'moonshotai');
+});
+test('provider names fall back to id and remain text, including catalogs without name metadata',opts,async()=>{
+ const v=ui(async()=>({ok:true,providers:[],catalog:['z-last','no-name','a-first','markup'],catalogNames:{'z-last':'Alpha','a-first':'Zulu','no-name':'',markup:'<img src=x onerror=alert(1)>'}}));
+ await v.flush();await v.click('[data-llm-add]');const select=v.find('[data-llm-field="provider"]'),options=select.querySelectorAll('option');
+ assert.deepEqual(options.map(o=>o.textContent),['Свой адрес','<img src=x onerror=alert(1)>','Alpha','no-name','Zulu']);assert.equal(select.querySelector('img'),null);assert.equal(options.length,5);
+ const legacy=ui(async()=>({ok:true,providers:[],catalog:['zebra','alpha']}));await legacy.flush();await legacy.click('[data-llm-add]');assert.deepEqual(legacy.find('[data-llm-field="provider"]').querySelectorAll('option').map(o=>o.textContent),['Свой адрес','alpha','zebra']);
+});
 test('connections draft discovers only on click, saves key plus selected models and exposes safe metadata',opts,async t=>{
  let network=0;const server=await endpoint(t,(_b,_req,res)=>{network++;res.end(JSON.stringify({data:[{id:'model-one',name:'First model'},{id:'model-two'}]}))}),keys=new MemoryKeys(),h=await fixture(t,{deps:{llmKeys:keys}});
  const stored=async()=>{const config=h.runtime.settings.llmProviders()['my-api'];return config?.keyRef?keys.resolveKey(keySlot(config.keyRef,config.keyGeneration)):null};

@@ -2,14 +2,15 @@
 (()=>{
  'use strict';
  const L=window.LIVE;if(!L)return;const esc=L.esc,ROOT='/api/llm/providers';
- let rows=[],catalog=[],readError='',reading=0,dialog=null,draft=null,serial=0,alive=true,loaded=false;
+ let rows=[],catalog=[],catalogNames={},readError='',reading=0,dialog=null,draft=null,serial=0,alive=true,loaded=false;
+ const providerName=id=>Object.hasOwn(catalogNames,id)&&typeof catalogNames[id]==='string'&&catalogNames[id].trim()?catalogNames[id]:id;
  const isPage=document.documentElement.getAttribute('data-page')==='conn'||/^11-connections/.test(location.pathname.split('/').pop());
  const binding=()=>L.sendBinding(),current=b=>alive&&L.bindingCurrent(b);
  const error=r=>(r&&r.error||'Нет подтверждения от движка')+(r&&r.code?' · '+r.code:'');
  async function request(path,body){try{return await L.api(path,body)}catch{return {ok:false,error:'Нет связи с движком'}}}
  function publish(){L.apiRoutes=rows.map(r=>({id:'api:'+r.id,title:r.config.displayName||r.id,kind:'apikey',installed:true,checking:false,models:r.models.map(m=>({id:m.id,label:m.name||m.id}))}));}
  async function load(){const n=++reading,b=binding(),r=await request(ROOT);if(!current(b)||n!==reading)return false;
-  if(r&&r.ok&&Array.isArray(r.providers)&&Array.isArray(r.catalog)&&r.providers.every(p=>p&&typeof p.id==='string'&&p.config&&Array.isArray(p.models))){rows=r.providers;catalog=r.catalog;readError='';loaded=true;publish()}else readError=error(r);
+  if(r&&r.ok&&Array.isArray(r.providers)&&Array.isArray(r.catalog)&&r.providers.every(p=>p&&typeof p.id==='string'&&p.config&&Array.isArray(p.models))){rows=r.providers;catalog=r.catalog;catalogNames=r.catalogNames&&typeof r.catalogNames==='object'&&!Array.isArray(r.catalogNames)?r.catalogNames:{};readError='';loaded=true;publish()}else readError=error(r);
   L.apiRoutesError=readError;renderList();return !readError;
  }
  L.loadLlmRoutes=load;L.apiRoutes=[];
@@ -28,7 +29,7 @@
  async function open(id){close();const attempt=serial,b=binding();if(!loaded){if(!await load()){if(serial===attempt&&current(b))L.toast(esc(readError));return}if(serial!==attempt||!current(b))return}const row=rows.find(r=>r.id===id),d=draft={token:++serial,binding:binding(),existing:!!row,id:row?row.id:'',config:row?JSON.parse(JSON.stringify(row.config)):{},revision:row?row.revision:null,models:row?row.models:[],selected:new Set(row?row.models.map(m=>m.id):[]),key:row?null:{present:false,mask:null,updatedAt:null},busy:false,saving:false,edit:0};
   dialog=document.createElement('dialog');dialog.className='llm-dialog';dialog.setAttribute('aria-label',row?'Настройка API':'Подключить по API');
   dialog.innerHTML='<div class="llm-heading"><h2>'+(row?'Настройка подключения':'Подключить по API')+'</h2><button class="btn sm ghost" data-llm-close aria-label="Закрыть">×</button></div><div class="llm-grid">'+
-   '<div><label class="llm-field">Провайдер<select data-llm-field="provider"><option value="">Свой адрес</option>'+catalog.map(id=>'<option value="'+esc(id)+'">'+esc(id)+'</option>').join('')+'</select></label>'+
+   '<div><label class="llm-field">Провайдер<select data-llm-field="provider"><option value="">Свой адрес</option>'+[...catalog].sort((a,b)=>providerName(a).localeCompare(providerName(b),'ru',{sensitivity:'base'})||a.localeCompare(b)).map(id=>'<option value="'+esc(id)+'" title="'+esc(id)+'">'+esc(providerName(id))+'</option>').join('')+'</select></label>'+
    '<label class="llm-field">Название<input class="live-f" data-llm-field="name" placeholder="Мой сервер моделей"></label><label class="llm-field">Идентификатор<input class="live-f" data-llm-field="id" placeholder="my-provider"'+(row?' readonly':'')+'><small>Латинские строчные буквы, цифры, дефис или подчёркивание</small></label>'+
    '<div data-llm-custom><label class="llm-field">Протокол<select data-llm-field="api"><option value="openai-completions">OpenAI · Chat Completions</option><option value="openai-responses">OpenAI · Responses</option><option value="anthropic-messages">Anthropic · Messages</option></select></label><label class="llm-field">Базовый адрес<input class="live-f" data-llm-field="url" placeholder="https://example.com/v1"></label></div>'+
    '<label class="llm-field">'+(row?'Заменить ключ API':'Ключ API')+'<input class="live-f" type="password" autocomplete="new-password" data-llm-field="secret" placeholder="'+(row?'Оставьте пустым, чтобы сохранить ключ':'Вставьте ключ API')+'"></label><p class="rnote" data-llm-key-info></p><button class="btn sm ghost" data-llm-action="delete-key" hidden>Удалить ключ</button><p class="rnote">Ключ сохраняется в связке ключей macOS. В окне остаются только маска и дата.</p></div>'+
@@ -37,7 +38,7 @@
   document.body.appendChild(dialog);field('provider').value=d.config.catalog||'';field('name').value=d.config.displayName||'';field('id').value=d.id;field('api').value=d.config.api||'openai-completions';field('url').value=d.config.baseURL||'';details(d);credential(d);modelList(d);dialog.addEventListener('cancel',e=>{e.preventDefault();close()});dialog.showModal();field('name').focus();
   if(row){const r=await request(ROOT+'/'+encodeURIComponent(row.id)+'/key');if(!active(d))return;if(r.ok){d.key=r.key;credential(d)}else status(d,error(r));}
  }
- function details(d){dialog.querySelector('[data-llm-custom]').hidden=!!field('provider').value;dialog.querySelector('[data-llm-discovery-note]').textContent=field('provider').value?'Список из каталога · без сети. Поиск не проверяет действительность ключа.':'Список с вашего адреса · запрос отправится только по нажатию.';}
+ function details(d){field('provider').title=field('provider').value;dialog.querySelector('[data-llm-custom]').hidden=!!field('provider').value;dialog.querySelector('[data-llm-discovery-note]').textContent=field('provider').value?'Список из каталога · без сети. Поиск не проверяет действительность ключа.':'Список с вашего адреса · запрос отправится только по нажатию.';}
  function config(d,selected){const provider=field('provider').value,id=field('id').value.trim(),name=field('name').value.trim();
   if(!/^[a-z][a-z0-9_-]{0,63}$/.test(id))throw Error('Введите идентификатор: строчная латинская буква, затем буквы, цифры, дефис или подчёркивание');
   const c={...d.config};delete c.catalog;delete c.api;delete c.baseURL;delete c.models;delete c.modelOverrides;if(provider)c.catalog=provider;else{c.api=field('api').value;c.baseURL=field('url').value.trim();if(!c.baseURL)throw Error('Введите базовый адрес')}
