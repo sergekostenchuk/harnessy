@@ -22,7 +22,7 @@ export function validateNetworkPolicy(raw:unknown):NetworkPolicy {
  return structuredClone(raw) as NetworkPolicy;
 }
 export const chainRevision=(config:NetworkConfig,id:string)=>networkRevision(config.policies?.[id]?[config.chains[id],config.policies[id]]:config.chains[id]);
-export interface NetworkConfig {policies?:Record<string,NetworkPolicy>;exits:Record<string,NetworkExit>;chains:Record<string,string[]>;migrated:boolean}
+export interface NetworkConfig {legacyLabelsVersion?:1;policies?:Record<string,NetworkPolicy>;exits:Record<string,NetworkExit>;chains:Record<string,string[]>;migrated:boolean}
 export const networkRevision=(value:unknown)=>value===undefined?null:createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function networkInvalid(message='Некорректные настройки выхода'):never{throw new ProjectError('network_invalid',message)}
 export function networkFields(raw:unknown,keys:string[]):asserts raw is Record<string,unknown>{if(!object(raw)||Object.keys(raw).some(k=>!keys.includes(k)))networkInvalid()}
@@ -62,10 +62,10 @@ export function validateExit(raw:unknown):NetworkExit {
 }
 export function validateNetwork(raw:unknown):NetworkConfig {
  if(raw===undefined)return {exits:{},chains:{},migrated:false};
- networkFields(raw,['exits','chains','migrated','policies']);if(!object(raw.exits)||!object(raw.chains)||typeof raw.migrated!=='boolean'||Object.keys(raw.exits).length>256||Object.keys(raw.chains).length>512)networkInvalid();
+ networkFields(raw,['exits','chains','migrated','policies','legacyLabelsVersion']);if(raw.legacyLabelsVersion!==undefined&&raw.legacyLabelsVersion!==1)networkInvalid('Неизвестная версия переноса подписей выходов');if(!object(raw.exits)||!object(raw.chains)||typeof raw.migrated!=='boolean'||Object.keys(raw.exits).length>256||Object.keys(raw.chains).length>512)networkInvalid();
  const exits:Record<string,NetworkExit>={},chains:Record<string,string[]>={};
  for(const [id,value] of Object.entries(raw.exits)){const exit=validateExit(value);if(id!==exit.id)networkInvalid();exits[id]=exit}
  for(const [id,value] of Object.entries(raw.chains)){if(!validProviderId(id)||!Array.isArray(value)||value.length>32||value.some(x=>typeof x!=='string'||!Object.hasOwn(exits,x))||new Set(value).size!==value.length)networkInvalid('Цепочка содержит неизвестный или повторный выход');chains[id]=[...value]}
  const policies:Record<string,NetworkPolicy>={};if(raw.policies!==undefined){if(!object(raw.policies))networkInvalid();for(const [id,value]of Object.entries(raw.policies)){if(!Object.hasOwn(chains,id))networkInvalid();policies[id]=validateNetworkPolicy(value)}}
- return {exits,chains,migrated:raw.migrated,...(Object.keys(policies).length?{policies}:{})};
+ return {exits,chains,migrated:raw.migrated,...(raw.legacyLabelsVersion===1?{legacyLabelsVersion:1 as const}:{}),...(Object.keys(policies).length?{policies}:{})};
 }

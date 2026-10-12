@@ -161,3 +161,29 @@ test('22i: exit prices are optional, finite and revision-protected; malformed fi
  row=(await save(h.api,direct,row.revision)).body;assert.equal(row.config.price,undefined);assert.equal(new Settings(h.file).network().exits.direct?.price,undefined);
  const proxyRow=(await save(h.api,{...proxy,price:{perGbUsd:.15}},null,'price-fixture-password')).body;assert.deepEqual(proxyRow.config.price,{perGbUsd:.15});assert.equal(proxyRow.password.present,true);
 });
+
+
+test('22e.2: migrated direct exits use provider names without changing IDs or chains',limits,async t=>{
+ const h=await setup(t);writeFileSync(join(h.dir,'connections.json'),JSON.stringify({claude:{route:'direct'},codex:{route:'direct',label:'codex'}}));
+ const r=await call(h.api,root+'/exits');assert.equal(r.status,200);
+ assert.deepEqual(r.body.exits.map((r:any)=>r.config),[
+  {id:'legacy-claude',label:'Напрямую · прежний маршрут Claude',type:'direct'},
+  {id:'legacy-codex',label:'Напрямую · прежний маршрут Codex',type:'direct'},
+ ]);
+ assert.deepEqual(h.runtime.settings.network().chains,{claude:['legacy-claude'],codex:['legacy-codex']});
+});
+test('22e.2: existing fallback labels are repaired once under the settings lock; custom labels and other exit types survive',limits,async t=>{
+ const h=await setup(t),before={migrated:true,exits:{
+  'legacy-claude':{id:'legacy-claude',label:'claude',type:'direct' as const,price:{monthlyUsd:0}},
+  'legacy-codex-1':{id:'legacy-codex-1',label:'codex',type:'direct' as const},
+  'legacy-claude-1':{id:'legacy-claude-1',label:'Мой выход',type:'direct' as const},
+  'legacy-codex':{id:'legacy-codex',label:'codex',type:'proxy' as const,url:'http://proxy.test'},
+  manual:{id:'manual',label:'claude',type:'direct' as const},
+ },chains:{claude:['legacy-claude','legacy-claude-1'],codex:['legacy-codex-1','legacy-codex']}};
+ await h.runtime.settings.changeNetwork(async config=>{Object.assign(config,before);return {result:undefined}});
+ const [r,c]=await Promise.all([call(h.api,root+'/exits'),call(h.api,root+'/providers/claude')]);assert.equal(r.status,200);assert.equal(c.status,200);
+ const expected=structuredClone(before);expected.exits['legacy-claude'].label='Напрямую · прежний маршрут Claude';expected.exits['legacy-codex-1'].label='Напрямую · прежний маршрут Codex';
+ assert.deepEqual(h.runtime.settings.network(),{...expected,legacyLabelsVersion:1});assert.deepEqual(c.body.exits,before.chains.claude);
+ const bytes=readFileSync(h.file,'utf8');const restarted=new NetworkSettings(new Settings(h.file),h.keys,h.runtime.connections,()=>['claude','codex']);await restarted.list();assert.equal(readFileSync(h.file,'utf8'),bytes);
+ const entry=r.body.exits.find((r:any)=>r.config.id==='legacy-claude');const renamed=await save(h.api,{...entry.config,label:'Выход владельца'},entry.revision);assert.equal(renamed.status,200);await restarted.list();assert.equal(h.runtime.settings.network().exits['legacy-claude']!.label,'Выход владельца');
+});
