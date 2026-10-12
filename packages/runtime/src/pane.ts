@@ -7,7 +7,7 @@ import {RuntimeError} from './errors.ts';
 import {systemClock,type Clock,type ModelCatalog,type RuntimeEvent} from './types.ts';
 import type {Vendor,TurnHandle,Usage,Seat} from '@harnessy/providers';
 import type {EventBus} from './events.ts';
-import {timestampMessage,type TranscriptMessage} from './state.ts';
+import {numberTranscript,timestampMessage,type TranscriptMessage} from './state.ts';
 export const APPROVAL_TIMEOUT_MS=900_000;
 export type ApprovalDecision='allow'|'deny'|'timeout';
 export type DurableDecision=(decision:ApprovalDecision)=>{decision:ApprovalDecision;error?:Error};
@@ -28,12 +28,13 @@ export class Pane {
  id:string;vendor:Vendor|'human';label:string;model:string;mode:Mode;cwd:string;role:string;writePaths:string[];digest:boolean;
  readonly kind:SeatKind|null;
  worktree:string|null=null;branch:string|null=null;sessionId:string|null=null;sessionEpoch=0;busy=false;touched=false;revision=0;
- readonly uncommitted=new Set<TranscriptMessage>();transcript:TranscriptMessage[]=[];seen:Record<string,number>={};carry='';tokens:Usage|null=null;handle:TurnHandle|null=null;
+ readonly uncommitted=new Set<TranscriptMessage>();transcript:TranscriptMessage[]=[];transcriptSeq=0;seen:Record<string,number>={};carry='';tokens:Usage|null=null;handle:TurnHandle|null=null;
  recoveryNote:string|null=null;recoveryError:RuntimeEvent|null=null;uncertainNote:string|null=null;status:'idle'|'recovering'|'uncertain'='idle';readonly approvals=new Map<string,Approval>();
  private bus:EventBus;private clock:Clock;
  constructor(init:PaneInit,bus:EventBus,clock:Clock=systemClock){this.bus=bus;this.clock=clock;this.id=init.id;this.vendor=init.vendor;this.label=init.label;this.model=init.model;this.mode=init.mode??'chat';this.cwd=init.cwd;this.role=init.role??'';this.kind=init.kind===undefined?legacyKind(init.role):seatKind(init.kind);this.writePaths=[...(init.writePaths??[])];this.digest=init.digest??false}
  publish(event:RuntimeEvent):void{this.bus.publish(this.id,event)}
- record(role:string,text:string):void{if(pythonTrim(text))this.transcript.push(timestampMessage(role,text,this.clock.now()))}
+ append(message:TranscriptMessage):void {const next=numberTranscript(this)+1;if(!Number.isSafeInteger(next))throw new RuntimeError('chat_invalid','номера реплик исчерпаны',409);message.seq=next;this.transcriptSeq=next;this.transcript.push(message)}
+ record(role:string,text:string):void{if(pythonTrim(text))this.append(timestampMessage(role,text,this.clock.now()))}
  settings(){const last=[...this.transcript].reverse().find(m=>m.contextTransfer),transfer=last?.contextTransfer as (import('@harnessy/context').ConversationTransfer&{turnInstanceId:string})|undefined;
  return {id:this.id,vendor:this.vendor,label:this.label,role:this.role,model:this.model,mode:this.mode,cwd:this.cwd,sessionId:this.sessionId,digest:this.digest,busy:this.busy,writePaths:[...this.writePaths],worktree:this.worktree,branch:this.branch,touched:this.touched,pendingApprovals:this.approvals.size,kind:this.kind,...(transfer?{contextTransfer:{project:transfer.project,chat:transfer.chat,turnInstanceId:transfer.turnInstanceId,messages:transfer.messages,verbatim:transfer.verbatim,tokens:transfer.tokens,compressed:transfer.compressed,enabled:transfer.enabled,...(transfer.failure?{failure:{...transfer.failure}}:{})}}:{})}}
  persist(){return {model:this.model||null,mode:this.mode,sessionId:this.sessionId,digest:this.digest,vendor:this.vendor}}

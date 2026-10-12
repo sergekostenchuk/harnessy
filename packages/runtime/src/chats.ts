@@ -118,7 +118,7 @@ export async function chatsNew(runtime:Runtime,input:{pane?:unknown;carry?:unkno
   return await locked(runtime,p,()=>{
    if(p.registry.get(pane.id)!==pane||pane.busy||p.state.chats.active[pane.id]!==oldId||carry!=='summary'&&pane.revision!==revision)throw new RuntimeError('stale_chat','чат изменился во время создания');
    if(pane.status!=='idle')throw new RuntimeError('recovering','ответ модели сохранён; завершается восстановление доставки');
-   const snapshot=jsonClone(p.state.chats),saved={sessionId:pane.sessionId,transcript:pane.transcript,carry:pane.carry,seen:pane.seen};
+   const snapshot=jsonClone(p.state.chats),saved={sessionId:pane.sessionId,transcript:pane.transcript,transcriptSeq:pane.transcriptSeq,carry:pane.carry,seen:pane.seen};
    try {
     if(old)p.state.sync(p.registry);
     if(pane.id!=='room'){if(carry==='summary'&&old?.transcript.length)old.closed=Math.floor(runtime.clock.now()/1000);else carryText=closeChat(p,pane,carry)}
@@ -132,10 +132,10 @@ export async function chatsOpen(runtime:Runtime,input:{chat?:unknown;carry?:unkn
  if(p.state.chats.active[pane.id]===c.id)return {ok:true as const,chat:meta(p,c),pane:pane.settings(),already:true as const};
  const hold=reserve(p,[pane]);let done=false;
  try{return await locked(runtime,p,()=>{
-  const snapshot=jsonClone(p.state.chats),saved={sessionId:pane.sessionId,transcript:pane.transcript,carry:pane.carry,seen:pane.seen,vendor:pane.vendor,model:pane.model};
+  const snapshot=jsonClone(p.state.chats),saved={sessionId:pane.sessionId,transcript:pane.transcript,transcriptSeq:pane.transcriptSeq,carry:pane.carry,seen:pane.seen,vendor:pane.vendor,model:pane.model};
   try {
    const carried=pane.id==='room'?'':closeChat(p,pane,String(input.carry||'text'));
-   c.closed=null;p.state.chats.active[pane.id]=c.id;pane.sessionId=c.sessionId;pane.transcript=c.transcript;pane.carry=pythonTrim((c.carry||'')+(carried?'\n\n'+carried:''));pane.seen={};pane.revision++;
+   c.closed=null;p.state.chats.active[pane.id]=c.id;pane.sessionId=c.sessionId;pane.transcript=c.transcript;pane.transcriptSeq=c.transcriptSeq??0;pane.carry=pythonTrim((c.carry||'')+(carried?'\n\n'+carried:''));pane.seen={};pane.revision++;
    if(p.registry.providers.has(c.vendor))pane.vendor=c.vendor;
    if(c.model===null)pane.model='';else if(c.model)pane.model=c.model;
    p.state.savePanes(p.registry,p.journal);done=true;return {ok:true as const,chat:meta(p,c),pane:pane.settings(),carried:!!carried};

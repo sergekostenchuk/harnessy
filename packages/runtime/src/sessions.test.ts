@@ -23,7 +23,7 @@ for(const change of ['revision','vendor','cwd','seat','busy','project'])test('23
 });
 
 test('49: opening a session installs ts=0 transcript and clears seen',async t=>{
- const {runtime:r}=await harness(t),p=r.registry.get('worker')!;p.seen={peer:10};const result=await r.openSession('worker','old',OWNER);assert.equal(result.id,'old');assert.equal(p.sessionId,'old');assert.equal(p.touched,true);assert.deepEqual(p.seen,{});assert.deepEqual(p.transcript,[{role:'ai',text:'прежний ответ',ts:0}])
+ const {runtime:r}=await harness(t),p=r.registry.get('worker')!;p.seen={peer:10};const result=await r.openSession('worker','old',OWNER);assert.equal(result.id,'old');assert.equal(p.sessionId,'old');assert.equal(p.touched,true);assert.deepEqual(p.seen,{});assert.deepEqual(p.transcript,[{role:'ai',text:'прежний ответ',ts:0,seq:1}])
 });
 
 test('49: route restart blocks launch until reset; ctx gets new proxy; label/expect do not reset',async t=>{

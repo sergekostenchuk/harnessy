@@ -17,7 +17,7 @@ export function vendorOf(p:Pick<ProjectState,'registry'>,model:string):Vendor|nu
 export function makeRoomIn(p:Pick<ProjectState,'registry'|'dir'|'bus'>,runtime:Runtime,model:string|null,mode:string,vendor?:Vendor):Pane|null {
  const selected=vendor??(model?vendorOf(p,model):p.registry.providers.has('claude')?'claude':p.registry.providers.has('codex')?'codex':'claude');if(!selected||!MODE_IDS.includes(mode as Mode))return null;
  const old=p.registry.get('room'),room=new Pane({id:'room',vendor:selected,label:'без роли',role:'room',model:model||'',mode:mode as Mode,cwd:p.dir},p.bus,runtime.clock);
- if(old){room.transcript=old.transcript;room.carry=old.carry;if(old.vendor===selected&&old.model===model)room.sessionId=old.sessionId;room.revision=old.revision+1}
+ if(old){room.transcript=old.transcript;room.transcriptSeq=old.transcriptSeq;room.carry=old.carry;if(old.vendor===selected&&old.model===model)room.sessionId=old.sessionId;room.revision=old.revision+1}
  p.registry.panes.set('room',room);return room;
 }
 export function makeRoom(runtime:Runtime,model:string,mode:string,initiator:Initiator,vendor?:Vendor) {

@@ -129,7 +129,7 @@ function materializeSteps(runtime:Runtime,p:ProjectState,lock:PathLock,original:
    }
   }else if(c.pane!==op.sid)invalid();
   // A persisted chat is the receipt for this step. Never overwrite its later model replies on replay.
-  p.state.chats.active[pane.id]=c.id;pane.transcript=c.transcript;pane.carry=c.carry;pane.sessionId=c.sessionId;pane.model=c.model||'';pane.vendor=c.vendor as Vendor;pane.seen={};
+  p.state.chats.active[pane.id]=c.id;pane.transcript=c.transcript;pane.transcriptSeq=c.transcriptSeq??0;pane.carry=c.carry;pane.sessionId=c.sessionId;pane.model=c.model||'';pane.vendor=c.vendor as Vendor;pane.seen={};
   const source=op.source.chat,room=source?.pane==='room'?p.registry.get('room'):null;
   if(room&&creating){p.state.newChat(room);room.revision++}
   p.state.savePanes(p.registry,p.journal);op=stage(p,op,'chat');
