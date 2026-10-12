@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {setImmediate as immediate} from 'node:timers/promises';
 import {dom} from './ui-dom-test-helpers.ts';
-import {deferred,fixture,call} from './test-helpers.ts';
+import {deferred,fixture,call,sse} from './test-helpers.ts';
 import {ProviderCatalog,cliEntry} from '../../providers/src/index.ts';
 import {cliFixture} from '../../providers/src/cli/test-support.ts';
 
@@ -168,8 +168,9 @@ test('311: real catalogue discovery refreshes HTTP status and exposes the CLI mo
  entry.version=async()=>{await ready.promise;return '1.0'};t.after(()=>ready.resolve());
  const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([entry])}}),initial=(await call(h.api,'/api/status')).body;
  assert.deepEqual(initial.models['test-cli'],[]);
- const v=ui({fetch:async(path,body)=>{const response=await call(h.api,path,body?{body}:{});if(path==='/api/providers/catalog')discovered.resolve();return response.body},statusFetch:async()=>{const response=await call(h.api,'/api/status');statusReady.resolve();return response.body}});
+ const v=ui({fetch:async(path,body)=>{const response=await call(h.api,path,body?{body}:{});if(path==='/api/providers/catalog')discovered.resolve();return response.body},statusFetch:async()=>{const response=await call(h.api,'/api/status');if(response.body.models['test-cli']?.length)statusReady.resolve();return response.body}});
  v.H.project=initial.project;v.ctx.binding.applyStatus(initial,null);await v.status();await v.open();assert.equal(v.document.querySelector('[data-cx-vendor="test-cli"]'),null);
+ const stream=await sse(h.api,'owner');t.after(()=>stream.close());stream.response.on('data',()=>{for(const event of stream.frames.splice(0))if(event.type==='providers')for(const listener of v.listeners)listener.onmessage({data:JSON.stringify(event)})});
  ready.resolve();await discovered.promise;
  // Wait for the actual status response, not a duration or an assumption about HTTP latency.
  await statusReady.promise;await v.flush();

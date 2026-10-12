@@ -130,7 +130,7 @@ export class Runtime {
  else {await this.recover(p,pane)}
  }
  if(!lineErrors.some(text=>text.startsWith('chats.json не читается'))){if(freshRoom)state.savePanes(registry,journal);else state.saveChats(registry)}
- p.starting=false;this.quota(p).start();if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if(pane.status==='idle'&&!p.materializing.has(pane.id)&&!p.restoreFailed.has(pane.id))await this.resumeQueue(pane.id,p);
+ p.starting=false;this.quota(p).start();this.providerOperations.start(p);if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if(pane.status==='idle'&&!p.materializing.has(pane.id)&&!p.restoreFailed.has(pane.id))await this.resumeQueue(pane.id,p);
  }
  async projectSet(path:string,options:{reload?:boolean},initiator:Initiator){
  this.requireOwner(initiator);const p=this.project;

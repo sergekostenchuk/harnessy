@@ -27,7 +27,7 @@ async function setup(t:TestContext,extra:CatalogEntry[]=[]){
 for(const source of ['catalog','check'] as const)for(const change of ['account','login','models'] as const)for(const first of ['allow','deny'] as const){
  test('295: '+source+' detects '+change+' A→B→A before '+first+'; approval cannot start a model',async t=>{
   const h=await setup(t),card=await h.probe();assert.ok(Number.isSafeInteger(card.bindingGen)&&card.bindingGen>0);
-  const read=async()=>source==='check'?h.check():call(h.api,'/api/providers/catalog');
+  const read=async()=>{if(source==='check')return h.check();await h.runtime.providerOperations.catalog.list();return call(h.api,'/api/providers/catalog')};
   if(change==='account')h.state.email='amy@example.test'; // Same public mask: account identity must still change.
   if(change==='login')h.state.loggedIn=false;
   if(change==='models')h.state.models=[...h.state.models,{id:'m2',label:'Model 2'}];
