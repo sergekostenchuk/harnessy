@@ -7,7 +7,8 @@ import {resolve,relative,isAbsolute,join} from 'node:path';
 import {validRoute,validGeneration} from '@harnessy/llm';
 import {object} from './files.ts';
 import {ProjectError} from './errors.ts';
-export type NetworkExit={id:string;label:string;expectedIp?:string}&(
+export interface NetworkPrice {monthlyUsd?:number;perGbUsd?:number}
+export type NetworkExit={id:string;label:string;expectedIp?:string;price?:NetworkPrice}&(
  {type:'direct'}|{type:'proxy';url:string;login?:string;passwordRef?:string;passwordGeneration?:string}|
  {type:'ssh';host:string;port:number;user:string;keyPath:string});
 export interface NetworkConfig {exits:Record<string,NetworkExit>;chains:Record<string,string[]>;migrated:boolean}
@@ -29,7 +30,9 @@ export function validateSshKey(exit:NetworkExit){
 export function validateExit(raw:unknown):NetworkExit {
  if(!object(raw))networkInvalid();if(raw.type==='iface')throw new ProjectError('iface_unsupported','Интерфейс не маршрутизирует трафик, выберите прокси или SSH',409);
  if(!validRoute(raw.id)||!text(raw.label,120)||hasPublicSecret(String(raw.label))||raw.expectedIp!==undefined&&(typeof raw.expectedIp!=='string'||!isIP(raw.expectedIp)))networkInvalid();
- const common=['id','label','expectedIp'];
+ const common=['id','label','expectedIp','price'];
+ if(raw.price!==undefined){networkFields(raw.price,['monthlyUsd','perGbUsd']);if(!Object.keys(raw.price).length||Object.values(raw.price).some(n=>typeof n!=='number'||!Number.isFinite(n)||n<0||n>Number.MAX_SAFE_INTEGER))networkInvalid('Цена выхода: неотрицательное число в долларах; пустое поле — цена не задана')}
+
  if(raw.type==='direct')networkFields(raw,[...common,'type']);
  else if(raw.type==='proxy'){
   networkFields(raw,[...common,'type','url','login','passwordRef','passwordGeneration']);
