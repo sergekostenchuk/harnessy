@@ -729,3 +729,6 @@ html[data-page="conn"] .conn-trial-dialog::backdrop { background:rgba(6,6,8,.7);
 
 
 html[data-page="conn"] .conn-trial-dialog .conn-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}html[data-page="conn"] [data-program-model]{max-width:100%;margin:8px 0}html[data-page="conn"] .cbody>div[data-connections-components]{margin-bottom:14px}
+
+/* First-run program cards keep the sketch layout within the desktop frame. */
+html[data-proto]:not([data-m]) .fr{max-height:calc(100vh - 48px);overflow-y:auto;padding-right:8px}

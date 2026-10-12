@@ -10,22 +10,85 @@ import {dom} from './ui-dom-test-helpers.ts';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');
 const sketch=readFileSync(new URL('../../../ui/sketches/disarto/19-first-run.html',import.meta.url),'utf8');
 const part=(a:string,b:string)=>{const start=live.indexOf(a),end=live.indexOf(b,start+a.length);assert.ok(start>=0&&end>start,a);return live.slice(start,end)};
-async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body:any)=>Promise<void>,saved:Record<string,any>={}){
+async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body:any)=>Promise<void>,saved:Record<string,any>={},transform?:(path:string,response:any)=>any){
  const d=dom(sketch.slice(sketch.indexOf('<div class="frame"'),sketch.indexOf('<script>')));Object.assign(d.document,{documentElement:d.html,body:d.body});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page','first');d.document.querySelector('.frame')!.classList.add('cur');
- const H:any={on:true,panes:[],active:{},project:h.dir},S:any={ui:{pane:'room'},chat:[],cx:{noFolder:false},...saved},requests:any[]=[],toasts:string[]=[],pending=new Set<Promise<any>>();
+ const H:any={on:true,panes:[],active:{},project:h.dir},S:any={ui:{pane:'room'},chat:[],cx:{noFolder:false},...saved},requests:any[]=[],toasts:string[]=[],pending=new Set<Promise<any>>(),streams:any[]=[];
  const c:any={H,S,PAGE:'first',document:d.document,window:null,location:{href:'',pathname:'/19-first-run.html'},save(){},log(){},now:Date.now,setTimeout(){},clearTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),removeEventListener:d.window.removeEventListener.bind(d.window),
   esc:(v:any)=>String(v??'').replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x]!)),toast:(v:string)=>toasts.push(v),paneName:(p:any)=>p.label,modelName:(id:string)=>id||'модель не выбрана',knowledgeReset(){},hStatus(){},render(){},drawLive(){},scrollEnd(){},cols:()=>d.document.querySelectorAll('.feed .col'),
   pickPane(){H.pane=H.panes.find((p:any)=>p.id===S.ui.pane)||null},async loadChat(){},
-  api(path:string,body?:any){requests.push({path,body});const job=(async()=>{await pause?.(path,body);return (await call(h.api,path,body?{body}:{})).body})();pending.add(job);job.then(()=>pending.delete(job),()=>pending.delete(job));return job},
-  async refreshStatus(){const status=await c.api('/api/status');if(H.project!==status.project)H.confirmedProjectGeneration=(H.confirmedProjectGeneration||0)+1;Object.assign(H,{project:status.project,panes:status.panes,models:status.models,active:status.activeChats,liveStatus:status,noProject:status.noProject});const list=h.runtime.chatsList(OWNER);H.chatList=list.chats;c.pickPane();return status},laMenu(){},KN:{data:null}
+  api(path:string,body?:any){requests.push({path,body});const job=(async()=>{await pause?.(path,body);const response=(await call(h.api,path,body?{body}:{})).body;return transform?transform(path,response):response})();pending.add(job);job.then(()=>pending.delete(job),()=>pending.delete(job));return job},
+  async refreshStatus(){const status=await c.api('/api/status');if(H.project!==status.project)H.confirmedProjectGeneration=(H.confirmedProjectGeneration||0)+1;Object.assign(H,{project:status.project,panes:status.panes,models:status.models,turnModes:status.turnModes,active:status.activeChats,liveStatus:status,noProject:status.noProject});const list=h.runtime.chatsList(OWNER);H.chatList=list.chats;c.pickPane();return status},laMenu(){},KN:{data:null}
+  ,subscribeLiveEvents(onmessage:any){const stream={onmessage,closed:false,close(){this.closed=true}};streams.push(stream);return stream}
  };
  c.window=c;await c.refreshStatus();const vm=createContext(c);
- runInContext(part('  function captureProjectOperation','  // TS-07: waiting controls')+part('  let bindingGeneration','  function md(')+part('  const isDirect=','  function rememberLive(')+part('  // TS-09b4: one progress view','  // TS-09b2:')+part('  // TS-09b2:','  // End TS-09b2 promotion.')+part('  function reply(','  function composer(')+part('  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+part('  // TS-15f:','  // End TS-15f first run.')+'globalThis.first={draw:firstDraw,next:firstNext,send:firstSend,state:FIRST,go:firstGo,binding:sendBinding,invalidate:invalidateBinding,proposals:proposalsFetch,proposalsReset,TP};',vm);
+ runInContext(part('  function captureProjectOperation','  // TS-07: waiting controls')+part('  let bindingGeneration','  function md(')+part('  const isDirect=','  function rememberLive(')+part('  // TS-09b4: one progress view','  // TS-09b2:')+part('  // TS-09b2:','  // End TS-09b2 promotion.')+part('  function reply(','  function composer(')+part('  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+part('  // TS-15f:','  // End TS-15f first run.')+'globalThis.first={draw:firstDraw,next:firstNext,send:firstSend,state:FIRST,go:firstGo,binding:sendBinding,invalidate:invalidateBinding,proposals:proposalsFetch,proposalsReset,TP,catalog:firstCatalog,models:FIRST_MODELS};',vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  const settle=async()=>{do{await Promise.all([...pending]);await immediate()}while(pending.size)};
- return {...d,H,S,c,vm,find,requests,toasts,settle,f:c.first};
+ await settle();return {...d,H,S,c,vm,find,requests,toasts,settle,streams,f:c.first};
 }
 async function promote(v:Awaited<ReturnType<typeof ui>>){await v.find('.st[data-s="1"] [data-go="2"]').emit('click');await v.find('.st[data-s="2"] [data-go="3"]').emit('click');await v.find('[data-first-promote]').emit('click');await v.settle();assert.ok(v.H.panes.some((p:any)=>p.kind==='orchestrator'),v.toasts.join(' | '))}
+
+const programs=()=>({ok:true,providers:[['claude','Claude Code'],['codex','Codex'],['antigravity','Antigravity'],['copilot','GitHub Copilot'],['gemini','Gemini CLI']].map(([id,title])=>({id,title,kind:'subscription',installed:true as boolean|null,checking:false,models:[]}))});
+function programData(path:string,response:any,catalog=programs()){
+ if(path==='/api/providers/catalog')return catalog;
+ if(path==='/api/status')return {...response,models:{...response.models,antigravity:[{id:'shared',label:'Gemini'}],copilot:[{id:'shared',label:'Copilot'}],gemini:[{id:'default',label:'по умолчанию программы'}]},turnModes:{...response.turnModes,antigravity:{read:{ok:false,reason:'нет изоляции инструментов'},chat:{ok:true,note:'без инструментов Harnessy'}},copilot:{read:{ok:true},chat:{ok:true}},gemini:{read:{ok:false,reason:'режим чтения не гарантирован'},chat:{ok:true}}}};
+ return response;
+}
+
+test('313: step two keeps all four sketch blocks and shows each catalogue program with supported modes',async t=>{
+ const h=await fixture(t),v=await ui(h,undefined,{},programData);v.f.go(2);
+ assert.equal(v.document.querySelectorAll('[data-first-vendor]').length,4);
+ for(const row of programs().providers)assert.equal(v.find('[data-first-program="'+row.id+'"] [data-first-title]').textContent,row.title);
+ const card=v.find('[data-first-program="antigravity"]'),option=v.find('[data-first-program="antigravity"] option[value="shared"]');assert.equal(option.disabled,true);assert.match(option.textContent,/нет изоляции инструментов/);
+ const select=card.querySelector('select')!;select.value='shared';await select.emit('change');assert.notEqual(v.f.state.vendor,'antigravity');
+ v.f.state.vendor='antigravity';v.f.state.model='shared';await v.f.next();assert.equal(v.document.querySelector('[data-first-promote]'),null);assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+});
+
+for(const state of ['missing-mode','not-installed','checking'])test('313: '+state+' stays visible and never sends promotion',async t=>{
+ const h=await fixture(t),catalog=programs();const row=catalog.providers.find(p=>p.id==='copilot')!;if(state==='not-installed')row.installed=false;if(state==='checking'){row.installed=null;row.checking=true}
+ const v=await ui(h,undefined,{},(path,result)=>{const out=programData(path,result,catalog);if(path==='/api/status'&&state==='missing-mode')delete out.turnModes.copilot.read;return out});
+ const option=v.find('[data-first-program="copilot"] option[value="shared"]');assert.equal(option.disabled,true);assert.match(option.textContent,state==='checking'?/проверяется/:state==='not-installed'?/не установлена/:/не сообщил поддержку/);
+ v.f.state.vendor='copilot';v.f.state.model='shared';await v.f.next();assert.equal(v.document.querySelector('[data-first-promote]'),null);assert.equal(v.requests.filter(r=>r.body).length,0);
+});
+
+test('313: exact vendor survives an identical model id through the existing owner promotion door',async t=>{
+ const h=await fixture(t,{deps:{models:{claude:[{id:'w1'}],codex:[{id:'w1'}]}}});h.codex.models=async()=>[{id:'w1',label:'Codex W1'}];const v=await ui(h);
+ const select=v.find('[data-first-program="codex"] select');select.value='w1';await select.emit('change');assert.equal(v.f.state.vendor,'codex');assert.equal(v.requests.filter(r=>r.body).length,0);
+ await v.f.next();await v.find('[data-first-promote]').emit('click');await v.settle();await h.runtime.idle();
+ assert.equal(v.requests.find(r=>r.path==='/api/room').body.vendor,'codex');assert.equal(h.runtime.registry.get('orchestrator')!.vendor,'codex');assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,1);
+});
+
+test('313: providers refreshes status, invalidates an unsupported owner door, and keeps one subscription',async t=>{
+ const h=await fixture(t);let revoked=false;const v=await ui(h,undefined,{},(path,result)=>{const out=programData(path,result);if(path==='/api/status'&&revoked)out.turnModes.claude.read={ok:false,reason:'режим отозван'};return out});
+ await v.f.next();const old=v.find('[data-first-promote]');revoked=true;v.streams[0].onmessage({data:JSON.stringify({type:'providers',project:h.dir})});await v.settle();assert.equal(v.document.querySelector('[data-first-promote]'),null);
+ const before=v.requests.filter(r=>r.body).length;await old.emit('click');assert.equal(v.requests.filter(r=>r.body).length,before);assert.equal(v.streams.length,1);await v.window.emit('pagehide');assert.equal(v.streams[0].closed,true);
+});
+
+for(const change of ['project','pane','pagehide'])test('313: late catalogue cannot replace models after '+change,async t=>{
+ const h=await fixture(t),v=await ui(h,undefined,{},programData),gate=deferred<any>(),entered=deferred();const api=v.c.api;
+ v.c.api=async(path:string,body:any)=>{if(path==='/api/providers/catalog'){entered.resolve();return gate.promise}return api(path,body)};const work=v.f.catalog();await entered.promise;
+ if(change==='project')v.H.project='/other';if(change==='pane')v.S.ui.pane='other';if(change==='pagehide')await v.window.emit('pagehide');const rows=v.f.models.rows;
+ gate.resolve({ok:true,providers:[{id:'foreign',title:'foreign',kind:'local',installed:true,checking:false}]});await work;assert.equal(v.f.models.rows,rows);assert.equal(v.document.querySelector('[data-first-program="foreign"]'),null);
+});
+
+test('313: catalogue text is escaped; failure keeps models from status and offers retry',async t=>{
+ const h=await fixture(t),catalog=programs();catalog.providers[0]!.title='<img src=x onerror=x>';let fail=false;const v=await ui(h,undefined,{},(path,result)=>path==='/api/providers/catalog'&&fail?{ok:false,error:'offline <img src=x>'}:programData(path,result,catalog));
+ assert.equal(v.find('[data-first-program="claude"] [data-first-title]').textContent,catalog.providers[0]!.title);assert.equal(v.document.querySelector('img'),null);
+ fail=true;await v.f.catalog();assert.match(v.find('[data-first-model-error]').textContent,/offline/);assert.ok(v.find('[data-first-program="codex"] option[value="gpt-test"]'));assert.equal(v.document.querySelector('img'),null);
+ fail=false;await v.find('[data-first-model-retry]').emit('click');await v.settle();assert.equal((v.find('[data-first-model-error]') as any).hidden,true);
+});
+
+test('313: cold catalogue discovery fills previously empty CLI models from fresh status',async t=>{
+ const h=await fixture(t);let reads=0;const v=await ui(h,undefined,{},(path,result)=>{const out=programData(path,result);if(path==='/api/status'&&++reads===1)out.models.copilot=[];return out});
+ assert.equal(reads,2);assert.equal(v.find('[data-first-program="copilot"] option[value="shared"]').disabled,false);assert.equal(v.requests.filter(r=>r.body).length,0);
+});
+
+for(const change of ['project','pane','pagehide'])test('313: late status after catalogue cannot cross '+change,async t=>{
+ const h=await fixture(t),v=await ui(h,undefined,{},programData),gate=deferred<any>(),entered=deferred(),api=v.c.api;
+ v.c.api=async(path:string,body:any)=>{if(path==='/api/status'){entered.resolve();return gate.promise}return api(path,body)};const work=v.f.catalog();await entered.promise;
+ const previous=v.H.models;if(change==='project')v.H.project='/other';if(change==='pane')v.S.ui.pane='other';if(change==='pagehide')await v.window.emit('pagehide');
+ gate.resolve({project:h.dir,panes:v.H.panes,models:{foreign:[{id:'late',label:'Late'}]},turnModes:{}});await work;assert.equal(v.H.models,previous);assert.equal(v.document.querySelector('[data-first-program="foreign"]'),null);
+});
 
 test('170/189: first run keeps sketch blocks; model selection and navigation never start a turn before the bound owner door',async t=>{
  const h=await fixture(t,{seats:'  {}'}),v=await ui(h);assert.equal(v.document.querySelectorAll('.fr .st[data-s]').length,3);assert.equal(v.document.querySelectorAll('.st[data-s="2"] .pick').length,4);assert.equal(v.document.querySelectorAll('.st[data-s="3"] .kv b').length,4);

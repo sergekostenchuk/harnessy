@@ -1336,21 +1336,58 @@
   // ══ НАСТРОЙКИ: элементы и подтверждения принадлежат set.js ══
   // ══ ПЕРВЫЙ ЗАПУСК: выбор запоминается, первый вопрос уходит в чат ══
   // TS-15f: the sketch's three steps share the bound conversation/team operations.
-  const FIRST={project:null,confirmed:0,model:null,folder:true,busy:false,door:null,missing:null,sending:false};
+  const FIRST={project:null,confirmed:0,model:null,vendor:null,folder:true,busy:false,door:null,missing:null,sending:false};
   const firstRoot=()=>PAGE==='first'?document.querySelector('.fr'):null;
-  function firstModels(){const rows=Object.entries(H.models||{}).flatMap(([vendor,models])=>Array.isArray(models)?models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({...m,vendor})):[]);for(const p of H.panes||[])if(p.model&&p.vendor&&!rows.some(m=>m.id===p.model))rows.push({id:p.model,label:p.model,vendor:p.vendor});return rows}
+  const FIRST_MODELS={rows:null,binding:null,request:0,error:'',events:null,alive:true};
+  const firstMode=()=>FIRST.folder&&!H.noProject?'read':'chat';
+  function firstSupport(vendor){const row=(FIRST_MODELS.rows||[]).find(p=>p.id===vendor),cap=H.turnModes&&H.turnModes[vendor]&&H.turnModes[vendor][firstMode()];
+    if(row&&(row.installed===null||row.checking))return {ok:false,reason:'проверяется…'};
+    if(row&&row.installed===false)return {ok:false,reason:'программа не установлена'};
+    return cap&&cap.ok===true?{ok:true,note:typeof cap.note==='string'?cap.note:''}:{ok:false,reason:cap&&typeof cap.reason==='string'&&cap.reason?cap.reason:'движок не сообщил поддержку режима'};
+  }
+  function firstModels(){return Object.entries(H.models||{}).flatMap(([vendor,models])=>Array.isArray(models)?models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({...m,vendor})):[])}
+  const firstSelected=()=>firstModels().find(m=>m.id===FIRST.model&&m.vendor===FIRST.vendor);
+  function firstPrograms(){return [...new Set([...Object.keys(H.models||{}),...(FIRST_MODELS.rows||[]).map(p=>p.id)])].map(id=>{
+    const row=(FIRST_MODELS.rows||[]).find(p=>p.id===id);return {id,title:row?row.title:id,kind:row?row.kind:null,reason:row&&row.modelsReason||'',models:firstModels().filter(m=>m.vendor===id)};
+  })}
+  async function firstCatalog(){if(!FIRST_MODELS.alive||!H.on||H.snapshotOnly||leftPage)return;
+    const binding=FIRST_MODELS.binding=sendBinding(),request=++FIRST_MODELS.request;FIRST_MODELS.error='';let response;
+    try{response=await api('/api/providers/catalog')}catch{}
+    if(!FIRST_MODELS.alive||request!==FIRST_MODELS.request||!bindingCurrent(binding))return;
+    const rows=response&&response.ok!==false&&response.providers,ids=new Set(),safe=v=>typeof v==='string'&&v.trim()&&v.length<=256&&!/[\x00-\x1f\x7f]/.test(v);
+    if(!Array.isArray(rows)||rows.some(p=>!p||!safe(p.id)||ids.has(p.id)||!safe(p.title)||!['subscription','apikey','local'].includes(p.kind)||p.installed!==null&&typeof p.installed!=='boolean'||typeof p.checking!=='boolean'||!ids.add(p.id))){FIRST_MODELS.error='Каталог программ не прочитан · '+(response&&response.error||'нет связи');firstDraw();return}
+    FIRST_MODELS.rows=rows.map(p=>({id:p.id,title:p.title,kind:p.kind,installed:p.installed,checking:p.checking,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''}));firstDraw();
+    const modes=JSON.stringify([H.models,H.turnModes]);let status;try{status=await api('/api/status')}catch{}
+    if(!FIRST_MODELS.alive||request!==FIRST_MODELS.request||!bindingCurrent(binding)||modes!==JSON.stringify([H.models,H.turnModes]))return;
+    if(status&&status.project===binding.project&&Array.isArray(status.panes)&&status.models&&typeof status.models==='object'&&!Array.isArray(status.models)){H.models=status.models;H.turnModes=status.turnModes||{}}else FIRST_MODELS.error='Не удалось обновить статус моделей';firstDraw();
+  }
+  function firstModelsSync(){if(!FIRST_MODELS.alive)return;
+    if(!FIRST_MODELS.events&&typeof subscribeLiveEvents==='function')FIRST_MODELS.events=subscribeLiveEvents(event=>{let value;try{value=JSON.parse(event.data)}catch{return}if(value.type==='providers'&&(!value.project||value.project===H.project))void firstCatalog()});
+    if(H.on&&!H.snapshotOnly&&(!FIRST_MODELS.binding||!bindingCurrent(FIRST_MODELS.binding))){FIRST_MODELS.rows=null;void firstCatalog()}firstDraw();
+  }
+  function firstModelCards(models,live,orch){const root=firstRoot(),original=[...root.querySelectorAll('[data-first-vendor]')],programs=firstPrograms(),used=new Set();
+    original.forEach((card,index)=>{const row=programs.find(p=>!used.has(p.id)&&(index===0?p.id==='claude':index===1?p.id==='codex':index===2?p.kind==='apikey':p.kind==='local'));if(row)used.add(row.id);card.__program=row||null});
+    const extras=programs.filter(p=>!used.has(p.id)),container=original[0].parentElement;
+    root.querySelectorAll('[data-first-extra]').forEach(card=>{if(!extras.some(p=>p.id===card.dataset.firstProgram))card.remove()});
+    for(const row of extras){let card=[...root.querySelectorAll('[data-first-extra]')].find(card=>card.dataset.firstProgram===row.id);if(!card){card=document.createElement('label');card.className='pick';card.setAttribute('data-first-extra','');card.setAttribute('role','button');card.setAttribute('tabindex','0');card.innerHTML='<span data-first-title></span><small></small><select data-first-model></select>';container.insertBefore(card,container.querySelector('.ft'))}card.__program=row}
+    for(const card of [...original,...root.querySelectorAll('[data-first-extra]')]){const row=card.__program,select=card.querySelector('select'),title=card.querySelector('[data-first-title]');
+      card.setAttribute('data-first-program',row?row.id:'');if(row)title.textContent=row.title;else title.textContent=card.__title;
+      const support=row?firstSupport(row.id):{ok:false,reason:'нет данных · подключите модель в «Подключениях»'},rows=row?models.filter(m=>m.vendor===row.id):[];
+      const html='<option value="">Выберите модель</option>'+rows.map(m=>'<option value="'+esc(m.id)+'"'+(!support.ok?' disabled':'')+'>'+esc(m.label||m.id)+(support.reason||support.note?' · '+esc(support.reason||support.note):'')+'</option>').join('');if(select.innerHTML!==html)select.innerHTML=html;
+      select.setAttribute('aria-label','Модель · '+title.textContent);select.value=row&&row.id===FIRST.vendor&&rows.some(m=>m.id===FIRST.model)?FIRST.model:'';select.disabled=!live||!rows.length||FIRST.busy||!!orch;select.hidden=false;card.classList.toggle('on',!!select.value);
+      card.querySelector('small').textContent=!live?'макет · движок не подключён':!support.ok?support.reason:rows.length?(orch?'Оркестратор: '+modelName(orch.model):row.title+' · моделей: '+rows.length+(support.note?' · '+support.note:'')):'нет данных'+(row&&row.reason?' · '+row.reason:' · подключите модель в «Подключениях»');
+    }
+    const error=root.querySelector('[data-first-model-error]');error.hidden=!FIRST_MODELS.error;error.querySelector('span').textContent=FIRST_MODELS.error;
+  }
   function firstSelectPane(){const p=(H.panes||[]).find(p=>p.kind==='orchestrator')||(H.panes||[]).find(p=>p.id==='room');const id=p?p.id:'room';if(S.ui.pane!==id){invalidateBinding();S.ui.pane=id;S.chat=[];H.cur=null;save();pickPane()}}
-  function firstGo(n){const root=firstRoot();if(!root||leftPage)return;firstDraw();root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s===String(n)));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i<n));operationsDraw()}
+  function firstGo(n){const root=firstRoot();if(!root||leftPage)return;root.scrollTop=0;firstDraw();root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s===String(n)));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i<n));operationsDraw()}
   function firstDraw(){const root=firstRoot();if(!root||leftPage)return;const live=H.on&&!H.snapshotOnly;
-    if(FIRST.project!==H.project||FIRST.confirmed!==(H.confirmedProjectGeneration||0)){if(FIRST.project){root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s==='1'));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i===0));const draft=root.querySelector('.live-in');if(draft)draft.value='';}FIRST.project=H.project;FIRST.confirmed=H.confirmedProjectGeneration||0;FIRST.model=null;FIRST.folder=!H.noProject;FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML='';}
+    if(FIRST.project!==H.project||FIRST.confirmed!==(H.confirmedProjectGeneration||0)){if(FIRST.project){root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s==='1'));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i===0));const draft=root.querySelector('.live-in');if(draft)draft.value='';}FIRST.project=H.project;FIRST.confirmed=H.confirmedProjectGeneration||0;FIRST.model=null;FIRST.vendor=null;FIRST.folder=!H.noProject;FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML='';}
     const models=firstModels(),orch=(H.panes||[]).find(p=>p.kind==='orchestrator');
-    if(!models.some(m=>m.id===FIRST.model))FIRST.model=orch&&orch.model||H.pane&&H.pane.model||models[0]?.id||null;
+    if(!firstSelected()){const preferred=orch||H.pane,chosen=models.find(m=>m.id===preferred?.model&&m.vendor===preferred?.vendor)||models.find(m=>firstSupport(m.vendor).ok);FIRST.model=chosen?.id||null;FIRST.vendor=chosen?.vendor||null;}
     const places=root.querySelectorAll('.st[data-s="1"] .pick');places.forEach((el,i)=>el.classList.toggle('on',i===0?FIRST.folder:!FIRST.folder));
     if(places[0])places[0].querySelector('small').textContent=live?(H.noProject?'Выберите или создайте папку проекта':H.project):'макет · движок не подключён';
-    root.querySelectorAll('[data-first-vendor]').forEach((el,i)=>{const rows=models.filter(m=>i===0?m.vendor==='claude':i===1?m.vendor==='codex'&&/^gpt-/.test(m.id):i===3?m.vendor==='ollama':m.vendor!=='claude'&&m.vendor!=='ollama'&&!(m.vendor==='codex'&&/^gpt-/.test(m.id))),select=el.querySelector('select');
-      const options='<option value="">Выберите модель</option>'+rows.map(m=>'<option value="'+esc(m.id)+'">'+esc(m.label||m.id)+'</option>').join('');if(select.innerHTML!==options)select.innerHTML=options;select.value=rows.some(m=>m.id===FIRST.model)?FIRST.model:'';select.disabled=!live||!rows.length||FIRST.busy||!!orch;select.hidden=!rows.length;el.classList.toggle('on',!!select.value);
-      el.querySelector('small').textContent=!live?'макет · движок не подключён':rows.length?(orch?'Оркестратор: '+modelName(orch.model):'Модели из подключений · '+rows.length):'нет данных · подключите модель в «Подключениях»';
-    });
+    firstModelCards(models,live,orch);
     const kb=root.querySelectorAll('.st[data-s="3"] .kv b');if(live){kb[0].textContent=H.noProject?'комната без проекта':H.project;kb[1].textContent=modelName(orch&&orch.model||FIRST.model);kb[2].textContent='≈ 0,05 % недели · макет: прогноз первого хода не подключён';kb[3].textContent='ответ в чате; состав — только после вашего подтверждения'}
     const proposalNote=root.querySelector('[data-first-proposal-state]');proposalNote.textContent=!live?'макет · источник состава не подключён':TP.error?TP.error:TP.loading?'Читаю предложение состава…':!TP.data.length?'Предложение не зарегистрировано. Если оркестратор описал состав в разговоре, попросите его: «зарегистрируй предложение».':'';
     const message=root.querySelector('[data-first-state]');message.textContent=!live?'Макет · движок не подключён':!orch?'Сначала назначьте оркестратора на шаге «Чем отвечать».':H.pane&&H.pane.busy?'Оркестратор отвечает…':'Предложено в разговоре';
@@ -1358,7 +1395,7 @@
     root.querySelector('.st[data-s="3"] .btn.p').setAttribute('aria-disabled',String(!live||!orch||FIRST.sending));
     root.querySelector('[data-first-open]').disabled=!live||!orch;
     if(FIRST.missing&&!bindingCurrent(FIRST.missing.binding)){FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML=''}
-    if(FIRST.door&&(!bindingCurrent(FIRST.door.binding)||FIRST.door.model!==FIRST.model||FIRST.door.folder!==FIRST.folder)){FIRST.door=null;root.querySelector('[data-first-door]').innerHTML=''}
+    if(FIRST.door&&(!bindingCurrent(FIRST.door.binding)||FIRST.door.model!==FIRST.model||FIRST.door.vendor!==FIRST.vendor||FIRST.door.folder!==FIRST.folder||!firstSupport(FIRST.door.vendor).ok)){FIRST.door=null;root.querySelector('[data-first-door]').innerHTML=''}
   }
   async function firstChatMissing(binding,pending){
     const list=await api('/api/chats');if(leftPage||!bindingCurrent(binding)||S.firstRoomCreations?.[binding.project]!==pending)return false;
@@ -1375,13 +1412,13 @@
   }
   async function firstNext(){if(FIRST.busy||leftPage)return;firstSelectPane();firstDraw();const root=firstRoot();if(!H.on||H.snapshotOnly){firstGo(3);return}
     const orch=(H.panes||[]).find(p=>p.kind==='orchestrator');if(orch){const binding=sendBinding();await loadChat({onboard:false,visible:true});if(!leftPage&&bindingCurrent(binding))firstGo(3);return}
-    if(!firstModels().some(m=>m.id===FIRST.model)){toast('Сначала выберите модель разговора');return}
+    if(!firstSelected()||!firstSupport(FIRST.vendor).ok){toast(firstSelected()?firstSupport(FIRST.vendor).reason:'Сначала выберите модель разговора');return}
     let binding=sendBinding(),pending;
     try{const entries=S.firstRoomCreations;if(entries!==undefined&&(!entries||typeof entries!=='object'||Array.isArray(entries)))throw Error('Не удалось прочитать созданный разговор');const exists=entries&&Object.hasOwn(entries,binding.project);pending=exists?entries[binding.project]:null;
       if(exists&&(!pending||!pending.binding||pending.binding.project!==binding.project||pending.binding.pane!=='room'||pending.binding.chat!==null||typeof pending.chat!=='string'||!/^[a-zA-Z0-9_-]{1,128}$/.test(pending.chat)))throw Error('Не удалось прочитать созданный разговор');
     }catch(error){toast(esc(error.message));return}
     FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML='';
-    if(pending||!binding.chat){const model=FIRST.model,folder=FIRST.folder,navigation=bindingNavigation;FIRST.busy=true;
+    if(pending||!binding.chat){const model=FIRST.model,vendor=FIRST.vendor,folder=FIRST.folder,navigation=bindingNavigation;FIRST.busy=true;
       try{if(!pending){const r=await api('/api/chats/new',{pane:'room',carry:'none'});if(!r||!r.ok||typeof r.chat?.id!=='string'||!/^[a-zA-Z0-9_-]{1,128}$/.test(r.chat.id)||r.chat.pane!=='room')throw Error(r&&r.error||'Не удалось открыть разговор');
           pending={binding:{project:binding.project,pane:binding.pane,chat:binding.chat},chat:r.chat.id};S.firstRoomCreations=S.firstRoomCreations||{};S.firstRoomCreations[binding.project]=pending;save();
           if(leftPage||!bindingCurrent(binding))return;
@@ -1390,17 +1427,17 @@
         if(current.chat!==pending.chat){if(current.chat){delete S.firstRoomCreations[binding.project];save()}else if(await firstChatMissing(current,pending)){
             FIRST.missing={binding:current,pending};root.querySelector('[data-first-door]').innerHTML='<div class="done" role="status"><b>Разговор не найден</b><p>Сохранённого разговора больше нет в проекте. Начните заново, чтобы создать новый разговор.</p><button class="btn p" type="button" data-first-restart>Начать заново</button></div>';return;
           }toast('Разговор изменился; повторите выбор');return}
-        delete S.firstRoomCreations[binding.project];save();if(FIRST.model!==model||FIRST.folder!==folder){toast('Выбор модели изменился; повторите выбор');return}binding=current;
+        delete S.firstRoomCreations[binding.project];save();if(FIRST.model!==model||FIRST.vendor!==vendor||FIRST.folder!==folder||!firstSupport(vendor).ok){toast('Выбор модели изменился; повторите выбор');return}binding=current;
       }catch(error){if(!leftPage&&H.project===binding.project)toast(esc(error.message));return}finally{FIRST.busy=false;firstDraw()}
     }
-    FIRST.door={binding,model:FIRST.model,folder:FIRST.folder};root.querySelector('[data-first-door]').innerHTML='<div class="done"><b>Назначить оркестратора</b><p>'+esc(modelName(FIRST.model))+' · '+esc(FIRST.folder&&!H.noProject?H.project:'новый проект по разговору')+'</p><p>Разговор и документы сохранятся. Harnessy создаст роль и запустит её первое поручение. Состав команды вы подтвердите отдельно.</p><button class="btn p" type="button" data-first-promote>Назначить этому разговору оркестратора</button><button class="btn ghost" type="button" data-first-cancel>Отмена</button></div>';
+    FIRST.door={binding,model:FIRST.model,vendor:FIRST.vendor,folder:FIRST.folder};root.querySelector('[data-first-door]').innerHTML='<div class="done"><b>Назначить оркестратора</b><p>'+esc(modelName(FIRST.model))+' · '+esc(FIRST.folder&&!H.noProject?H.project:'новый проект по разговору')+'</p><p>Разговор и документы сохранятся. Harnessy создаст роль и запустит её первое поручение. Состав команды вы подтвердите отдельно.</p><button class="btn p" type="button" data-first-promote>Назначить этому разговору оркестратора</button><button class="btn ghost" type="button" data-first-cancel>Отмена</button></div>';
   }
   async function firstPromote(anchor){const choice=FIRST.door;if(FIRST.busy||!choice||leftPage||!H.on||H.snapshotOnly)return false;
-    if(!bindingCurrent(choice.binding)||choice.model!==FIRST.model||choice.folder!==FIRST.folder||!firstModels().some(m=>m.id===choice.model)){FIRST.door=null;firstDraw();toast('Проект или выбор модели изменились');return false}
+    if(!bindingCurrent(choice.binding)||choice.model!==FIRST.model||choice.vendor!==FIRST.vendor||choice.folder!==FIRST.folder||!firstSelected()||!firstSupport(choice.vendor).ok){FIRST.door=null;firstDraw();toast('Проект или выбор модели изменились');return false}
     FIRST.busy=true;anchor.disabled=true;
-    try{const r=await api('/api/room',{model:choice.model,folder:choice.folder});if(!bindingCurrent(choice.binding)||leftPage)return false;if(!r||!r.ok)throw Error(r&&r.error||'Модель не выбрана');
+    try{const r=await api('/api/room',{vendor:choice.vendor,model:choice.model,folder:choice.folder});if(!bindingCurrent(choice.binding)||leftPage)return false;if(!r||!r.ok)throw Error(r&&r.error||'Модель не выбрана');
       await refreshStatus();if(leftPage)return false;if(!bindingCurrent(choice.binding)){FIRST.door=null;firstRoot().querySelector('[data-first-door]').innerHTML='';toast('Разговор изменился; подтвердите назначение заново');return false}
-      if(choice.binding.pane!=='room'||!choice.binding.chat||H.pane?.model!==choice.model)throw Error('Разговор изменился; повторите выбор');
+      if(choice.binding.pane!=='room'||!choice.binding.chat||H.pane?.model!==choice.model||H.pane?.vendor!==choice.vendor||!firstSupport(choice.vendor).ok)throw Error('Разговор изменился; повторите выбор');
       const promoted=await promoteConversation(anchor,choice.binding);if(!promoted)return false;
       FIRST.door=null;firstRoot().querySelector('[data-first-door]').innerHTML='';const selected=sendBinding();await loadChat({onboard:false,visible:true});if(leftPage||!bindingCurrent(selected))return false;firstGo(3);await proposalsFetch();return true;
     }catch(error){if(!leftPage&&H.project===choice.binding.project)toast(esc(error.message));return false}
@@ -1413,16 +1450,17 @@
   if(PAGE==='first'){
     const root=firstRoot(),s2=root.querySelector('.st[data-s="2"]'),s3=root.querySelector('.st[data-s="3"]'),input=s3.querySelector('.in');delete S.first;if(S.pending){S.draft=S.pending.text;S.pending=null;save()}
     root.querySelector('.st[data-s="1"] .pick').setAttribute('data-cx','folder');
-    s2.querySelectorAll('.pick').forEach((el,i)=>{el.setAttribute('data-first-vendor',String(i));const select=document.createElement('select');select.setAttribute('aria-label','Модель · '+['Claude','Codex','Ключ API','Локально'][i]);select.setAttribute('data-first-model','');el.appendChild(select)});
-    s2.insertAdjacentHTML('beforeend','<p><a href="11-connections.html">Подключения →</a></p><div data-first-door></div>');
+    s2.querySelectorAll('.pick').forEach((el,i)=>{el.setAttribute('data-first-vendor',String(i));el.__title=el.firstChild.textContent;el.firstChild.textContent='';const title=document.createElement('span');title.setAttribute('data-first-title','');title.textContent=el.__title;el.insertBefore(title,el.firstChild);const select=document.createElement('select');select.setAttribute('data-first-model','');el.appendChild(select)});
+    s2.insertAdjacentHTML('beforeend','<p data-first-model-error role="status" hidden><span></span> <button type="button" class="btn sm ghost" data-first-model-retry>Повторить</button></p><p><a href="11-connections.html">Подключения →</a></p><div data-first-door></div>');
     input.innerHTML='<input class="live-in" aria-label="Первый вопрос" placeholder="Написать…" value="Посмотри проект и скажи, что мешает первому запуску"><span class="k">⏎</span>';
     s3.insertAdjacentHTML('beforeend','<p data-first-state role="status"></p><div class="first-team-actions"><button class="btn ghost" type="button" data-first-team-request>Попросить оркестратора</button><button class="btn ghost" type="button" data-first-open>Открыть чат</button></div><p data-first-proposal-state></p><div data-first-team></div><div class="feed"><div class="col"></div></div>');
     // The intro may read files or request approval; never claim that its role has read-only rights.
     s3.querySelector('p').textContent='Первый вопрос — в разговоре с оркестратором. Предложение состава подтвердите здесь.';
     root.querySelectorAll('[data-go], [data-skip], .pick').forEach(el=>{el.setAttribute('tabindex','0');el.setAttribute('role','button')});
     root.addEventListener('keydown',e=>{if(e.target.closest('[data-first-model]'))return;if(e.target===input.querySelector('input')&&e.key==='Enter'&&!e.isComposing){e.preventDefault();void firstSend();return}if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-go], [data-skip], .pick')){e.preventDefault();e.target.click()}});
-    root.addEventListener('change',e=>{const select=e.target.closest('[data-first-model]');if(!select||select.disabled)return;FIRST.model=select.value;firstDraw()});
+    root.addEventListener('change',e=>{const select=e.target.closest('[data-first-model]');if(!select||select.disabled)return;const card=select.closest('[data-first-program]');if(!card)return;const vendor=card.dataset.firstProgram,model=firstModels().find(m=>m.vendor===vendor&&m.id===select.value);if(!model||!firstSupport(vendor).ok){firstDraw();return}FIRST.model=model.id;FIRST.vendor=vendor;firstDraw()});
     document.addEventListener('click',async e=>{const target=e.target;if(!root.contains(target))return;
+      if(target.closest('[data-first-model-retry]')){e.preventDefault();e.stopImmediatePropagation();void firstCatalog();return}
       if(target.closest('[data-first-model]')){e.stopPropagation();return}
       const restart=target.closest('[data-first-restart]'),g=target.closest('[data-go]'),promote=target.closest('[data-first-promote]'),cancel=target.closest('[data-first-cancel]'),skip=target.closest('[data-skip]'),request=target.closest('[data-first-team-request]'),open=target.closest('[data-first-open]');
       if(restart||g||promote||cancel||skip||request||open){e.preventDefault();e.stopImmediatePropagation();if(FIRST.busy)return;
@@ -1433,7 +1471,7 @@
       }
       const place=target.closest('.st[data-s="1"] .pick');if(place){FIRST.folder=!!place.getAttribute('data-cx');firstDraw()}
     },true);
-    addEventListener('live:status',firstDraw);addEventListener('pagehide',()=>{FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML=''});firstSelectPane();firstDraw();
+    addEventListener('live:status',firstModelsSync);addEventListener('pagehide',()=>{FIRST_MODELS.alive=false;FIRST_MODELS.request++;FIRST_MODELS.events?.close();FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML=''});firstSelectPane();firstModelsSync();
   }
   // End TS-15f first run.
 
