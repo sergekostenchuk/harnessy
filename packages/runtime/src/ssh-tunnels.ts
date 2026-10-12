@@ -1,10 +1,11 @@
 import {createServer,isIP} from 'node:net';
-import {mkdtempSync,chmodSync,realpathSync,statSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,chmodSync,realpathSync,statSync,rmSync,existsSync,openSync,closeSync,fstatSync,constants,readSync,writeFileSync} from 'node:fs';
 import {homedir,tmpdir} from 'node:os';
 import {join,resolve,relative,isAbsolute,sep} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {systemClock,type Clock} from './types.ts';
 import {spawnSsh,type SshSpawn,type SshExit,type SshProcess} from './ssh-process.ts';
+import {engineOwner,recoverSshDirectories,saveOwnership,type SshOwnership} from './ssh-ownership.ts';
 
 export interface SshTunnelConfig {host:string;port:number;user:string;keyPath:string}
 const reasons={ssh_config_invalid:'Неверные настройки SSH-выхода',ssh_key_unavailable:'Ключ SSH недоступен: выберите файл в ~/.ssh',ssh_host_key_unknown:'Добавьте ключ хоста в known_hosts владельца',ssh_host_key_changed:'Ключ хоста изменился: проверьте known_hosts владельца',ssh_auth_failed:'Вход по ключу SSH не выполнен',ssh_unavailable:'Программа ssh недоступна',ssh_forward_failed:'SSH не смог открыть локальный SOCKS-порт',ssh_connect_failed:'SSH-соединение прервано или недоступно',ssh_timeout:'Истекло время запуска SSH-туннеля',ssh_stopped:'SSH-туннель остановлен',ssh_capacity:'Достигнут предел SSH-туннелей'} as const;
@@ -29,6 +30,16 @@ function paths(home:string,keyPath:string){
   return {key:file,known:join(home,'.ssh','known_hosts')};
  }catch{throw new SshTunnelError('ssh_key_unavailable')}
 }
+function copyKey(home:string,key:string,directory:string){let fd:number|undefined,bytes:Buffer|undefined;
+ try{
+  const root=realpathSync(join(home,'.ssh')),before=statSync(root);fd=openSync(key,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+  const file=fstatSync(fd),resolved=realpathSync(key),within=relative(root,resolved),after=statSync(resolved),rootAfter=statSync(realpathSync(join(home,'.ssh')));
+  if(!file.isFile()||file.uid!==process.getuid?.()||![0o400,0o600].includes(file.mode&0o7777)||file.size<1||file.size>1024*1024||before.dev!==rootAfter.dev||before.ino!==rootAfter.ino||file.dev!==after.dev||file.ino!==after.ino||!within||within==='..'||within.startsWith('..'+sep)||isAbsolute(within))throw Error();
+  bytes=Buffer.alloc(file.size+1);let size=0,n=0;while(size<bytes.length&&(n=readSync(fd,bytes,size,bytes.length-size,null))>0)size+=n;
+  if(size!==file.size||fstatSync(fd).mtimeMs!==file.mtimeMs)throw Error();
+  const target=join(directory,'identity');writeFileSync(target,bytes.subarray(0,size),{mode:0o600,flag:'wx'});return target;
+ }catch{throw new SshTunnelError('ssh_key_unavailable')}finally{bytes?.fill(0);if(fd!==undefined)closeSync(fd)}
+}
 function failure(result:SshExit):SshTunnelCode {
  if(result.error==='missing'||result.error==='spawn')return 'ssh_unavailable';
  const text=result.stderr;
@@ -45,10 +56,11 @@ const quoted=(value:string)=>'"'+value.replaceAll('\\','\\\\').replaceAll('"','\
 /** Lazily owned by Runtime. Settings/route application belong to TS-22c. */
 export class SshTunnels {
  private entries=new Map<string,Entry>();private listeners=new Set<(state:SshTunnelSnapshot)=>void>();private closed=false;private closing:Promise<void>|null=null;private generation=0;
- private options:SshTunnelOptions;private clock:Clock;private home:string;private spawn:SshSpawn;
+ private options:SshTunnelOptions;private clock:Clock;private home:string;private spawn:SshSpawn;private ownership:SshOwnership|null;
  constructor(options:SshTunnelOptions={}){this.options=options;this.clock=options.clock??systemClock;this.home=resolve(options.home??homedir());this.spawn=options.spawn??spawnSsh;
   if(/[\x00-\x1f\x7f%$]/.test(this.home))throw new SshTunnelError('ssh_config_invalid');
   for(const [name,value]of Object.entries(options))if(['startupTimeoutMs','retryBaseMs','retryMaxMs'].includes(name)&&(!Number.isSafeInteger(value)||Number(value)<1||Number(value)>120000))throw new SshTunnelError('ssh_config_invalid');
+  const engine=engineOwner();this.ownership=engine?{version:1,engine}:null;if(engine)recoverSshDirectories(options.temporaryDirectory??tmpdir());
  }
  get(id:string){const row=this.entries.get(id);return row?{...row.state}:null}
  snapshots(){return [...this.entries.values()].map(e=>({...e.state}))}
@@ -67,7 +79,7 @@ export class SshTunnels {
   if(entry.timer!==null)this.clock.clearTimeout(entry.timer);entry.timer=null;entry.controller=new AbortController();this.publish(entry,{state:'starting',url:null,code:null,reason:null,retryAt:null,generation:++this.generation});
   const job=this.launch(entry,previous);entry.job=job;void job.finally(()=>{if(entry.job===job)entry.job=null}).catch(()=>{});return job;
  }
- private command(entry:Entry,args:string[]){return {binary:this.options.binary??'/usr/bin/ssh',args,cwd:entry.directory!,env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:this.home,LC_ALL:'C',SSH_ASKPASS_REQUIRE:'never',...(process.env.SSH_AUTH_SOCK?{SSH_AUTH_SOCK:process.env.SSH_AUTH_SOCK}:{})},onEngineExit:()=>this.cleanup(entry)}}
+ private command(entry:Entry,args:string[]){return {binary:this.options.binary??'/usr/bin/ssh',args,cwd:entry.directory!,env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',HOME:this.home,LC_ALL:'C',SSH_ASKPASS_REQUIRE:'never',...(process.env.SSH_AUTH_SOCK?{SSH_AUTH_SOCK:process.env.SSH_AUTH_SOCK}:{})},...(args.includes('-N')?{cleanupDirectory:entry.directory!,ownership:this.ownership!}:{})}}
  private args(entry:Entry,port:number,control:string,key:string,known:string){
   const opts={BatchMode:'yes',ExitOnForwardFailure:'yes',ServerAliveInterval:'15',ServerAliveCountMax:'2',ConnectTimeout:'10',StrictHostKeyChecking:'yes',UserKnownHostsFile:quoted(known),GlobalKnownHostsFile:'/dev/null',CheckHostIP:'no',VerifyHostKeyDNS:'no',UpdateHostKeys:'no',KnownHostsCommand:'none',IdentitiesOnly:'yes',PreferredAuthentications:'publickey',PasswordAuthentication:'no',KbdInteractiveAuthentication:'no',ForwardAgent:'no',ForwardX11:'no',PermitLocalCommand:'no',ProxyCommand:'none',ProxyJump:'none',ControlPersist:'no',ForkAfterAuthentication:'no'};
   return ['-F','/dev/null','-N','-T','-M','-S',control,'-D','127.0.0.1:'+port,'-i',key,'-p',String(entry.config.port),'-l',entry.config.user,...Object.entries(opts).flatMap(([k,v])=>option(k,v)),'--',entry.config.host];
@@ -75,10 +87,10 @@ export class SshTunnels {
  private async launch(entry:Entry,previous:Promise<void>){
   let timeout:NodeJS.Timeout|undefined,expired=false,code:SshTunnelCode='ssh_connect_failed',worker:SshProcess|null=null;
   try{
-   await previous;this.assert(entry);const credentials=paths(this.home,entry.config.keyPath);
+   await previous;this.assert(entry);if(!this.ownership)throw new SshTunnelError('ssh_unavailable');const credentials=paths(this.home,entry.config.keyPath);
    try{if(!statSync(credentials.known).isFile())throw Error()}catch{throw new SshTunnelError('ssh_host_key_unknown')}
-   entry.directory=mkdtempSync(join(this.options.temporaryDirectory??tmpdir(),'hssh-'));chmodSync(entry.directory,0o700);const control=join(entry.directory,'s'),port=await freePort();this.assert(entry);
-   worker=this.spawn(this.command(entry,this.args(entry,port,control,credentials.key,credentials.known)));entry.worker=worker;
+   entry.directory=mkdtempSync(join(this.options.temporaryDirectory??tmpdir(),'hssh-'));chmodSync(entry.directory,0o700);saveOwnership(entry.directory,this.ownership);const key=copyKey(this.home,credentials.key,entry.directory),control=join(entry.directory,'s'),port=await freePort();this.assert(entry);
+   worker=this.spawn(this.command(entry,this.args(entry,port,control,key,credentials.known)));entry.worker=worker;
    let exit:SshExit|undefined;const ended=worker.done.then(result=>{exit=result;return result});
    timeout=setTimeout(()=>{expired=true;entry.controller.abort()},this.options.startupTimeoutMs??15000);timeout.unref();
    const abort=()=>{void worker!.stop();void entry.control?.stop()};entry.controller.signal.addEventListener('abort',abort,{once:true});
