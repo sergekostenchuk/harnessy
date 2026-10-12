@@ -9,7 +9,7 @@ import {antigravityFixture} from '../../providers/src/antigravity-test-helpers.t
 import type {TestContext} from 'node:test';
 const read=(p:string)=>readFileSync(new URL('../../../'+p,import.meta.url),'utf8');
 const login=(state='ok')=>({state,account:'u•••@example.test',command:'agy',checkedAt:100,reason:''});
-const provider=(extra:any={})=>({id:'antigravity',title:'Antigravity',kind:'subscription',binary:'agy',installed:true,version:'1.2.17',login:login(),models:[{id:'model-a',label:'Model A',default:true},{id:'model-b',label:'Model B'}],capabilities:{headless:true,resume:true,mcp:true,limits:false},...extra});
+const provider=(extra:any={})=>({id:'antigravity',title:'Antigravity',kind:'subscription',binary:'agy',installed:true,version:'1.2.17',login:login(),models:[{id:'model-a',label:'Model A',default:true},{id:'model-b',label:'Model B'}],capabilities:{headless:true,resume:true,mcp:true,limits:false,probe:{ok:true}},...extra});
 const catalog=(...providers:any[])=>({ok:true,providers});
 function ui(handler?:(path:string,body:any)=>Promise<any>,initial:any=catalog(provider()),transport?:(path:string,init?:RequestInit)=>Promise<Response>,project='/a'){
  let httpApi:((path:string,body:any,operation:any)=>Promise<any>)|null=null;
@@ -24,8 +24,24 @@ function ui(handler?:(path:string,body:any)=>Promise<any>,initial:any=catalog(pr
 async function open(v:ReturnType<typeof ui>){await v.settle();await v.find('[data-pv="antigravity"]').emit('click');}
 async function refreshPrograms(v:ReturnType<typeof ui>){await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'check'})});await v.settle()}
 
+test('309: explicit probe support enables Antigravity without MCP and shows its note before permission',async()=>{
+ const v=ui(undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:false,limits:false,probe:{ok:true,note:'без инструментов Harnessy <img src=x>'}}})));await open(v);
+ assert.equal(v.find('[data-program-probe]').disabled,false);assert.match(v.find('[data-program-probe-note]').textContent,/без инструментов Harnessy/);await v.find('[data-program-probe]').emit('click');
+ assert.equal(v.posts('/probe').length,1);assert.match(v.find('dialog').textContent,/без инструментов Harnessy <img src=x>/);assert.equal(v.document.querySelector('dialog img'),null);assert.equal(v.posts('/api/approve').length,0);
+});
+
+for(const probe of [undefined,{ok:false,reason:'пробный ход не поддерживается'}, {ok:'true'}])test('309: absent or denied probe capability refuses without deriving permission from MCP: '+JSON.stringify(probe),async()=>{
+ const v=ui(undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:true,limits:false,...(probe?{probe}:{})}})));await open(v);assert.equal(v.find('[data-program-probe]').disabled,true);assert.match(v.find('.cbody').textContent,probe?.ok===false?/пробный ход не поддерживается/:/доступность пробного хода/);
+ await v.find('[data-program-probe]').emit('click');assert.equal(v.posts('/probe').length,0);
+});
+
+test('309: a probe capability change revokes an open permission even after it changes back',async()=>{
+ let probe={ok:true,reason:''};const v=ui(async path=>path==='/api/providers/catalog'?catalog(provider({capabilities:{headless:true,resume:true,mcp:false,limits:false,probe}})):undefined);await open(v);await v.find('[data-program-probe]').emit('click');const confirm=v.find('[data-program-confirm]');
+ probe={ok:false,reason:'пробный ход отключён'};await refreshPrograms(v);assert.equal(v.document.querySelector('dialog'),null);assert.deepEqual(v.posts('/api/approve').map(r=>r.body.decision),['deny']);probe={ok:true,reason:''};await refreshPrograms(v);await confirm.emit('click');assert.equal(v.posts('/api/approve').filter(r=>r.body.decision==='allow').length,0);
+});
+
 test('263/268: the catalog preserves the three sketch views and opens descriptor cards with real models, occupants, version and limits; reads never call a model',async()=>{
- const v=ui(undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:true,limits:true},limits:{ref:'/api/limits#antigravity'}}),provider({id:'copilot',title:'GitHub Copilot',binary:'copilot',installed:false,version:null,models:[],login:login('none')})));await v.settle();
+ const v=ui(undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:true,limits:true,probe:{ok:true}},limits:{ref:'/api/limits#antigravity'}}),provider({id:'copilot',title:'GitHub Copilot',binary:'copilot',installed:false,version:null,models:[],login:login('none')})));await v.settle();
  for(const selector of ['#v-list .sum','#v-list .list','#v-roles .rl','#v-roles .note','#v-keys .wrap'])assert.ok(v.find(selector));assert.match(v.find('#v-list .list').textContent,/Antigravity|GitHub Copilot/);await v.find('#addbtn').emit('click');assert.match(v.find('.cbody').textContent,/Программы подписок/);assert.match(v.find('.cbody').textContent,/Программа не установлена/);await v.find('[data-program-open="antigravity"]').emit('click');assert.match(v.find('.cbody').textContent,/1\.2\.17/);assert.match(v.find('.conn-models').textContent,/Воркер 1/);assert.match(v.find('.cbody').textContent,/42 %/);assert.equal(v.find('[data-program-probe]').disabled,false);assert.equal(v.posts().length,0);
 });
 
@@ -85,7 +101,7 @@ test('268: one shared SSE subscription refreshes descriptors and is closed on pa
  await v.window.emit('pagehide');assert.equal(v.streams[0].closed,true);const before=v.requests.length;await v.streams[0].onmessage({data:JSON.stringify({type:'providers'})});await v.settle();assert.equal(v.requests.length,before);await v.window.emit('pageshow',{persisted:true});await v.settle();assert.equal(v.streams.length,2);assert.equal(v.posts().length,0);
 });
 
-for(const p of [provider({installed:false}),provider({login:login('none')}),provider({login:login('unknown')}),provider({login:login('error')}),provider({models:[]}),provider({capabilities:{headless:false,resume:false,mcp:false,limits:false}})])test('263: a missing program, login, model or headless capability keeps the probe disabled '+JSON.stringify([p.installed,p.login.state,p.models.length,p.capabilities.headless]),async()=>{
+for(const p of [provider({installed:false}),provider({login:login('none')}),provider({login:login('unknown')}),provider({login:login('error')}),provider({models:[]}),provider({capabilities:{headless:false,resume:false,mcp:false,limits:false}})])test('263: a missing program, login, model or probe capability keeps the probe disabled '+JSON.stringify([p.installed,p.login.state,p.models.length,p.capabilities.headless]),async()=>{
  const v=ui(undefined,catalog(p));await open(v);assert.equal(v.find('[data-program-probe]').disabled,true);await v.find('[data-program-probe]').emit('click');assert.equal(v.document.querySelector('dialog'),null);assert.equal(v.posts().length,0);
 });
 
@@ -118,7 +134,7 @@ test('272: result received before the probe HTTP reply is retained and cannot op
 });
 
 test('263: HTTP limits arrival updates the open card without resetting the selected model; another project cannot update it',async()=>{
- const v=ui(undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:true,limits:true}})));await open(v);const select=v.find('[data-program-model]');select.value='model-b';await select.emit('change');v.context.LIVE.providerLimitHTML=()=>'<p>Неделя · 91 %</p>';v.context.LIVE.onProviderLimits('/other');assert.doesNotMatch(v.find('[data-program-limits]').textContent,/91 %/);v.context.LIVE.onProviderLimits('/a');assert.match(v.find('[data-program-limits]').textContent,/91 %/);assert.equal(v.find('[data-program-model]'),select);assert.equal(select.value,'model-b');assert.equal(v.posts().length,0);
+ const v=ui(undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:true,limits:true,probe:{ok:true}}})));await open(v);const select=v.find('[data-program-model]');select.value='model-b';await select.emit('change');v.context.LIVE.providerLimitHTML=()=>'<p>Неделя · 91 %</p>';v.context.LIVE.onProviderLimits('/other');assert.doesNotMatch(v.find('[data-program-limits]').textContent,/91 %/);v.context.LIVE.onProviderLimits('/a');assert.match(v.find('[data-program-limits]').textContent,/91 %/);assert.equal(v.find('[data-program-model]'),select);assert.equal(select.value,'model-b');assert.equal(v.posts().length,0);
 });
 
 
@@ -146,7 +162,7 @@ for(const event of ['status','catalog','reconnect','check'])test('263/СОСЕД
 
 
 async function connectedPrograms(t:TestContext,intercept?:(path:string,init:RequestInit|undefined,send:()=>Promise<Response>)=>Promise<Response>){
- const turns:string[]=[],opened:string[]=[],events:any[]=[],receipts:{path:string;body:any}[]=[];const entry:CatalogEntry={id:'fixture',title:'Fixture CLI',binary:'/fixture/cli',login:{args:['login']},forbiddenEnv:['SECRET_KEY'],capabilities:{headless:true,resume:true,mcp:true,limits:false},async version(){return '1.2.3'},async auth(){return {loggedIn:true,email:'alice@example.test'}},async models(){return [{id:'model-a',label:'Model A'}]},async runTurn(seat,_message,ctx){turns.push(seat.model);ctx.modelStarted?.();ctx.publish({type:'done',sessionId:'fixture',model:seat.model,durationMs:2,usage:{input:3,output:1,cacheRead:null}});return {text:'готов · дублёр',sessionId:'fixture'}}};
+ const turns:string[]=[],opened:string[]=[],events:any[]=[],receipts:{path:string;body:any}[]=[];const capabilities={headless:true,resume:true,mcp:true,limits:false,probe:{ok:true}};const entry:CatalogEntry={id:'fixture',title:'Fixture CLI',binary:'/fixture/cli',login:{args:['login']},forbiddenEnv:['SECRET_KEY'],capabilities,async version(){return '1.2.3'},async auth(){return {loggedIn:true,email:'alice@example.test'}},async models(){return [{id:'model-a',label:'Model A'}]},async runTurn(seat,_message,ctx){turns.push(seat.model);ctx.modelStarted?.();ctx.publish({type:'done',sessionId:'fixture',model:seat.model,durationMs:2,usage:{input:3,output:1,cacheRead:null}});return {text:'готов · дублёр',sessionId:'fixture'}}};
  const source=new ProviderCatalog([entry]),terminal=new LoginTerminal({platform:'darwin',open:async file=>{opened.push(readFileSync(file,'utf8'))}}),h=await fixture(t,{deps:{providerCatalog:source,loginTerminal:terminal}}),stream=await sse(h.api,'owner');t.after(()=>stream.close());
  const v=ui(undefined,undefined,async(path,init)=>{const send=()=>fetch(h.api.url+path,init),r=await (intercept?intercept(path,init,send):send());if(r.headers.get('content-type')?.includes('json'))receipts.push({path,body:await r.clone().json()});return r},h.dir);let offset=0;const done=deferred<any>(),declined=deferred();
  const pump=()=>{let end;while((end=stream.raw.indexOf('\n\n',offset))>=0){const block=stream.raw.slice(offset,end);offset=end+2;if(!block.startsWith('data: '))continue;const data=block.slice(6),event=JSON.parse(data);if(event.type!=='providers')continue;events.push(event);for(const listener of v.streams)if(!listener.closed)listener.onmessage?.({data});if(event.event==='probe'&&['done','declined','error'].includes(event.status))done.resolve(event);if(event.event==='probe'&&event.status==='declined')declined.resolve()}};
@@ -169,7 +185,7 @@ test('276: actual capability_unsupported response disables repeated probes and d
 });
 
 for(const source of ['catalog','http','sse'])test('276: '+source+' capability refusal keeps login actions available and never retries the unavailable probe',async()=>{
- const reason='нет изолированного MCP-конфига и политики read/edit/all на ход',v=ui(async path=>source==='http'&&path.endsWith('/probe')?{ok:false,code:'capability_unsupported',reason}:path.endsWith('/check')?{ok:true,login:login()}:undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:source!=='catalog',limits:false}})));await open(v);
+ const reason='нет изолированного MCP-конфига и политики read/edit/all на ход',v=ui(async path=>source==='http'&&path.endsWith('/probe')?{ok:false,code:'capability_unsupported',reason}:path.endsWith('/check')?{ok:true,login:login()}:undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:source!=='catalog',limits:false,probe:source==='catalog'?{ok:false,reason}:{ok:true}}})));await open(v);
  if(source==='http')await v.find('[data-program-probe]').emit('click');if(source==='sse'){await v.find('[data-program-probe]').emit('click');await v.find('[data-program-confirm]').emit('click');await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'probe',provider:'antigravity',approvalId:'probe-antigravity',model:'model-a',status:'error',error:{code:'capability_unsupported',reason},at:Date.now()})})}
  await v.settle();assert.equal(v.find('[data-program-probe]').disabled,true);assert.match(v.find('.cbody').textContent,/изолированного MCP-конфига/);assert.equal(v.find('[data-program-terminal]').disabled,false);assert.equal(v.find('[data-program-check]').disabled,false);const before=v.posts('/probe').length;await v.find('[data-program-probe]').emit('click');assert.equal(v.posts('/probe').length,before);await v.find('[data-program-check]').emit('click');await v.settle();assert.equal(v.find('[data-program-probe]').disabled,true);
 });
@@ -205,9 +221,14 @@ test('271/ОКНА: opening the catalog closes the old approval before returning
  const v=ui();await open(v);await v.find('[data-program-probe]').emit('click');const confirm=v.find('[data-program-confirm]');await v.find('#addbtn').emit('click');await v.settle();assert.equal(v.document.querySelector('dialog'),null);await v.find('[data-program-open="antigravity"]').emit('click');await confirm.emit('click');await v.settle();assert.deepEqual(v.posts('/api/approve').map(r=>r.body.decision),['deny']);
 });
 
-test('307 integration: legacy window still needs TS-20h; server now creates an owner approval for Antigravity',{timeout:20000},async t=>{
- const f=antigravityFixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}}),v=ui(undefined,undefined,(path,init)=>fetch(h.api.url+path,init),h.dir);await open(v);assert.match(v.find('.conn-facts').textContent,/1\.2\.17/);assert.equal(v.find('[data-program-probe]').disabled,true);assert.equal(v.find('[data-program-probe]').textContent,'Недоступно');assert.match(v.find('.cbody').textContent,/Нет изолированного MCP-конфига/);
- await v.find('[data-program-check]').emit('click');await v.settle();assert.equal(v.find('[data-program-check]').disabled,false);assert.equal(v.find('[data-program-probe]').disabled,true);const before=f.capture().length;await v.find('[data-program-probe]').emit('click');assert.equal(v.posts('/probe').length,0);const r=await call(h.api,'/api/providers/antigravity/probe',{body:{model:'gemini-3.8-flash-high'}});assert.equal(r.status,200);assert.equal(r.body.status,'awaiting_approval');assert.ok(f.capture().length>before);assert.equal(h.runtime.owner.approvals.size,1);assert.equal(f.capture().some(c=>c.args.includes('stream-json')),false);assert.equal(v.document.querySelector('dialog'),null);
+test('307 integration: Antigravity with probe capability opens owner approval through the real window and HTTP routes',{timeout:20000},async t=>{
+ const f=antigravityFixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}}),v=ui(undefined,undefined,(path,init)=>fetch(h.api.url+path,init),h.dir);await open(v);assert.match(v.find('.conn-facts').textContent,/1\.2\.17/);assert.equal(v.find('[data-program-probe]').disabled,false);
+ await v.find('[data-program-check]').emit('click');await v.settle();assert.equal(v.find('[data-program-check]').disabled,false);assert.equal(v.find('[data-program-probe]').disabled,false);await v.find('[data-program-probe]').emit('click');await v.settle();assert.equal(v.posts('/probe').length,1);assert.equal(h.runtime.owner.approvals.size,1);assert.equal(f.capture().some(c=>c.args.includes('stream-json')),false);assert.ok(v.document.querySelector('dialog'));assert.equal(v.posts('/api/approve').length,0);
+});
+
+test('260/276 integration: an explicitly denied Antigravity descriptor reaches conn.js through actual routes and refuses a probe before any process or owner approval',{timeout:20000},async t=>{
+ const f=antigravityFixture(t),entry={...f.entry,capabilities:{...f.entry.capabilities,probe:{ok:false,reason:'Нет изолированного MCP-конфига'}}},h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([entry])}}),v=ui(undefined,undefined,(path,init)=>fetch(h.api.url+path,init),h.dir);await open(v);assert.match(v.find('.conn-facts').textContent,/1\.2\.17/);assert.equal(v.find('[data-program-probe]').disabled,true);assert.equal(v.find('[data-program-probe]').textContent,'Недоступно');assert.match(v.find('.cbody').textContent,/Нет изолированного MCP-конфига/);
+ await v.find('[data-program-check]').emit('click');await v.settle();assert.equal(v.find('[data-program-check]').disabled,false);assert.equal(v.find('[data-program-probe]').disabled,true);const before=f.capture().length;await v.find('[data-program-probe]').emit('click');assert.equal(v.posts('/probe').length,0);const r=await call(h.api,'/api/providers/antigravity/probe',{body:{model:'gemini-3.8-flash-high'}});assert.equal(r.status,409);assert.equal(r.body.code,'capability_unsupported');assert.equal(f.capture().length,before);assert.equal(h.runtime.owner.approvals.size,0);assert.equal(v.document.querySelector('dialog'),null);
 });
 
 for(const [change,order] of [...['checkedAt','account','models','account-ABA','models-ABA'].map(change=>[change,'deny-first']),['account-ABA','allow-first'],['models-ABA','allow-first']])test('271/295 ОКНА: revocation before delivery wins in '+order+' order: '+change,{timeout:12000},async t=>{

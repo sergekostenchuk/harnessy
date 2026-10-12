@@ -106,17 +106,24 @@ test('132: a refused or same-project request cannot mask a genuine reconnect; an
 });
 
 
+// TS-20g status/catalogue contract double; room/project mutations still use the real HTTP routes.
+async function modelMenuContract(h:Awaited<ReturnType<typeof fixture>>,path:string,body?:any){
+ if(path==='/api/providers/catalog')return {ok:true,providers:Object.entries(h.runtime.registry.models).map(([id,models])=>({id,title:id,kind:'subscription',models:(models??[]).map(m=>({...m,label:m.label||m.id}))}))};
+ const result=(await call(h.api,path,body?{body}:{})).body;
+ if(path==='/api/status')result.turnModes=Object.fromEntries(Object.keys(result.models).map(id=>[id,Object.fromEntries(result.modes.map((m:any)=>[m.id,{ok:true}]))]));
+ return result;
+}
 for(const alreadyConfigured of [false,true])test('TS-07.2 r2/2: no-project choice survives rerender and model selection via real HTTP, configured='+alreadyConfigured,async t=>{
  const h=await fixture(t);if(alreadyConfigured)await call(h.api,'/api/room',{body:{model:'w1',folder:true}});
- const v=menus(async(path,body)=>(await call(h.api,path,body?{body}:{})).body);await v.functions.refreshStatus();
+ const v=menus((path,body)=>modelMenuContract(h,path,body));await v.functions.refreshStatus();
  const box=v.document.createElement('div');box.className='box';box.innerHTML='<div class="in"></div><div class="bar2"></div>';const ta=v.document.createElement('textarea');(box as any).__cx={ta};v.document.querySelector('.main')!.appendChild(box);v.context.CX.render();
  runInContext('LIVE.configureSetting=configureSetting;',v.context);
  await v.find('[data-cx="folder"]').emit('click');await v.settle();await v.find('[data-cx-nofolder]').emit('click');
  assert.equal(v.S.cx.noFolder,true);assert.match(v.find('.cx-top [data-cx="folder"]').textContent,/Без проекта/);
  if(!alreadyConfigured){assert.equal(v.H.noProject,false);assert.equal(v.S.cx.noFolderPending,v.H.project);assert.equal(v.requests.some(r=>r.path==='/api/room'),false)}
  await v.functions.refreshStatus();v.context.CX.render();assert.equal(v.S.cx.noFolder,true,'old confirmed status must not erase a pending choice');
- await v.find('.cx-bot [data-cx="model"]').emit('click');await v.find('[data-cx-model="gpt-test"]').emit('click');
- const selected=v.requests.filter(r=>r.path==='/api/room').at(-1)!;assert.equal(selected.body.folder,false);assert.equal(selected.body.model,'gpt-test');
+ await v.find('.cx-bot [data-cx="model"]').emit('click');await v.settle();await v.find('[data-cx-model="gpt-test"]').emit('click');
+ const selected=v.requests.filter(r=>r.path==='/api/room').at(-1)!;assert.equal(selected.body.folder,false);assert.equal(selected.body.model,'gpt-test');assert.equal(selected.body.vendor,'codex');
  const status=(await call(h.api,'/api/status')).body;assert.equal(status.noProject,true);assert.equal(status.panes.find((p:any)=>p.id==='room').mode,'chat');assert.equal(v.S.cx.noFolderPending,undefined);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
 });
 
@@ -130,11 +137,11 @@ test('TS-07.2 r2/2: denied no-project change never claims success and restores t
 
 
 test('TS-07.2 r2/2: pending no-project choice belongs to its project and expires on a project switch',async t=>{
- const h=await fixture(t),v=menus(async(path,body)=>(await call(h.api,path,body?{body}:{})).body);await v.functions.refreshStatus();
+ const h=await fixture(t),v=menus((path,body)=>modelMenuContract(h,path,body));await v.functions.refreshStatus();
  const box=v.document.createElement('div');box.className='box';box.innerHTML='<div class="in"></div><div class="bar2"></div>';const ta=v.document.createElement('textarea');(box as any).__cx={ta};v.document.querySelector('.main')!.appendChild(box);v.context.CX.render();runInContext('LIVE.configureSetting=configureSetting;',v.context);
  await v.find('[data-cx="folder"]').emit('click');await v.settle();await v.find('[data-cx-nofolder]').emit('click');assert.equal(v.S.cx.noFolderPending,h.dir);
  const other=join(h.dir,'other');mkdirSync(other);assert.equal((await call(h.api,'/api/project',{body:{path:other}})).status,200);await v.functions.refreshStatus();v.context.CX.render();assert.equal(v.S.cx.noFolder,false);assert.equal(v.S.cx.noFolderPending,undefined);assert.match(v.find('.cx-top [data-cx="folder"]').textContent,/other/);
- await v.find('.cx-bot [data-cx="model"]').emit('click');await v.find('[data-cx-model="gpt-test"]').emit('click');assert.equal(v.requests.filter(r=>r.path==='/api/room').at(-1)!.body.folder,true);assert.equal((await call(h.api,'/api/status')).body.noProject,false);
+ await v.find('.cx-bot [data-cx="model"]').emit('click');await v.settle();await v.find('[data-cx-model="gpt-test"]').emit('click');assert.equal(v.requests.filter(r=>r.path==='/api/room').at(-1)!.body.folder,true);assert.equal((await call(h.api,'/api/status')).body.noProject,false);
 });
 
 test('83: sidebar lists every saved role chat, including empty and closed chats, and only real participants before the first reply',async t=>{
