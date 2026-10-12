@@ -16,7 +16,7 @@ async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body
  const c:any={H,S,PAGE:'first',document:d.document,window:null,location:{href:'',pathname:'/19-first-run.html'},save(){},log(){},now:Date.now,setTimeout(){},clearTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),removeEventListener:d.window.removeEventListener.bind(d.window),
   esc:(v:any)=>String(v??'').replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x]!)),toast:(v:string)=>toasts.push(v),paneName:(p:any)=>p.label,modelName:(id:string)=>id||'модель не выбрана',knowledgeReset(){},hStatus(){},render(){},drawLive(){},scrollEnd(){},cols:()=>d.document.querySelectorAll('.feed .col'),
   pickPane(){H.pane=H.panes.find((p:any)=>p.id===S.ui.pane)||null},async loadChat(){},
-  api(path:string,body?:any){requests.push({path,body});const job=(async()=>{await pause?.(path,body);return (await call(h.api,path,body?{body}:{})).body})();pending.add(job);job.finally(()=>pending.delete(job));return job},
+  api(path:string,body?:any){requests.push({path,body});const job=(async()=>{await pause?.(path,body);return (await call(h.api,path,body?{body}:{})).body})();pending.add(job);job.then(()=>pending.delete(job),()=>pending.delete(job));return job},
   async refreshStatus(){const status=await c.api('/api/status');if(H.project!==status.project)H.confirmedProjectGeneration=(H.confirmedProjectGeneration||0)+1;Object.assign(H,{project:status.project,panes:status.panes,models:status.models,active:status.activeChats,liveStatus:status,noProject:status.noProject});const list=h.runtime.chatsList(OWNER);H.chatList=list.chats;c.pickPane();return status},laMenu(){},KN:{data:null}
  };
  c.window=c;await c.refreshStatus();const vm=createContext(c);
@@ -127,4 +127,55 @@ test('170: a saved failed promotion is retried for the same conversation without
  r.journal.append=(record)=>{const out=append(record);if(once&&record.origin==='onboarding'){once=false;throw Error('interrupted after intro')}return out};await assert.rejects(r.promoteChat(row.id,{project:h.dir,revision:row.revision,documents:[]},OWNER),/interrupted after intro/);
  const v=await ui(h);await v.window.emit('live:status');assert.match(v.find('[data-live-operations]').textContent,/interrupted after intro/);assert.equal(h.provider.calls.length,0);await v.find('[data-operation-retry]').emit('click');await v.settle();await r.idle();assert.equal(r.chatsList(OWNER).active.orchestrator,row.id);assert.equal(h.provider.calls.length,1);
  await v.f.next();await v.f.next();await v.settle();assert.equal(h.provider.calls.length,1);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,1);
+});
+
+for(const cold of [false,true])test('211b: a created room survives failed status and '+(cold?'cold opening':'retry')+' without a second creation',async t=>{
+ const h=await fixture(t);let fail=false;const v=await ui(h,async path=>{if(path==='/api/chats/new')fail=true;if(path==='/api/status'&&fail)throw Error('fixture status unavailable')});await v.f.next();const created=h.runtime.chatsList(OWNER).active.room;assert.ok(created);assert.equal(v.S.firstRoomCreations[h.dir].chat,created);assert.equal(v.S.firstRoomCreations[h.dir].binding.project,h.dir);assert.equal(v.f.state.door,null);assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length,1);
+ fail=false;const next=cold?await ui(h,undefined,JSON.parse(JSON.stringify(v.S))):v;await next.f.next();assert.equal(next.f.state.door.binding.chat,created);assert.equal(next.S.firstRoomCreations[h.dir],undefined);assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length+(cold?next.requests.filter(r=>r.path==='/api/chats/new').length:0),1);assert.equal(h.runtime.chatsList(OWNER).chats.filter(c=>c.pane==='room').length,1);assert.equal(h.provider.calls.length,0);
+ await next.find('[data-first-cancel]').emit('click');await next.f.next();assert.equal(h.runtime.chatsList(OWNER).chats.filter(c=>c.pane==='room').length,1);assert.equal(h.provider.calls.length,0);
+});
+
+test('211b: a recovered creation does not substitute a different active chat or repeat creation',async t=>{
+ const h=await fixture(t);let fail=false;const v=await ui(h,async path=>{if(path==='/api/chats/new')fail=true;if(path==='/api/status'&&fail)throw Error('fixture status unavailable')});await v.f.next();const created=v.S.firstRoomCreations[h.dir].chat,newer=await call(h.api,'/api/chats/new',{body:{pane:'room',carry:'none'}});assert.notEqual(newer.body.chat.id,created);fail=false;
+ await v.f.next();assert.equal(v.f.state.door,null);assert.equal(v.S.firstRoomCreations[h.dir],undefined);assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length,1);assert.equal(h.provider.calls.length,0);await v.f.next();assert.equal(v.f.state.door.binding.chat,newer.body.chat.id);assert.equal(h.provider.calls.length,0);
+});
+
+for(const bad of [null,[],{binding:{project:'/wrong',pane:'room',chat:null},chat:'known'},{binding:{project:'self',pane:'worker',chat:null},chat:'known'},{binding:{project:'self',pane:'room',chat:null},chat:'<script>'}])test('211b: a malformed persisted creation cannot cause another creation '+JSON.stringify(bad),async t=>{
+ const h=await fixture(t),entry=JSON.parse(JSON.stringify(bad).replace('self',h.dir)),v=await ui(h,undefined,{firstRoomCreations:Array.isArray(bad)?bad:{[h.dir]:entry}});await v.f.next();assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(v.f.state.door,null);assert.match(v.toasts.at(-1)!,/Не удалось прочитать созданный разговор/);assert.equal(h.provider.calls.length,0);
+});
+
+test('211b: a successful creation received after pagehide is retained for the next cold opening',async t=>{
+ const h=await fixture(t),gate=deferred(),seen=deferred(),v=await ui(h,async path=>{if(path==='/api/chats/new'){seen.resolve();await gate.promise}});const work=v.f.next();await seen.promise;await v.window.emit('pagehide');gate.resolve();await work;const created=v.S.firstRoomCreations[h.dir].chat;assert.ok(created);const cold=await ui(h,undefined,JSON.parse(JSON.stringify(v.S)));await cold.f.next();assert.equal(cold.f.state.door.binding.chat,created);assert.equal(cold.requests.filter(r=>r.path==='/api/chats/new').length,0);assert.equal(h.provider.calls.length,0);
+});
+
+const missingCreation=(project:string,chat='c-missing')=>({firstRoomCreations:{[project]:{binding:{project,pane:'room',chat:null},chat}}});
+test('211b.1: a cold opening with a confirmed missing chat offers an explicit restart that creates one conversation',async t=>{
+ const h=await fixture(t),saved=missingCreation(h.dir),v=await ui(h,undefined,saved);assert.equal((await call(h.api,'/api/chats/c-missing')).status,404);
+ for(let i=0;i<3;i++){await v.f.next();assert.match(v.find('[data-first-door]').textContent,/Разговор не найден/);assert.equal(v.S.firstRoomCreations[h.dir].chat,'c-missing');assert.equal(v.f.state.door,null)}
+ assert.equal(v.requests.filter(r=>r.body).length,0);const button=v.find('[data-first-restart]');await Promise.all([button.emit('click'),button.emit('click')]);await v.settle();
+ const created=h.runtime.chatsList(OWNER).active.room;assert.ok(created);assert.equal(v.f.state.door.binding.chat,created);assert.equal(v.S.firstRoomCreations[h.dir],undefined);assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length,1);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+});
+
+test('211b.1: two failed status reads retain the one created chat and never offer a restart',async t=>{
+ const h=await fixture(t);let fail=false;const v=await ui(h,async path=>{if(path==='/api/chats/new')fail=true;if(path==='/api/status'&&fail)throw Error('fixture status unavailable')});
+ await v.f.next();const created=v.S.firstRoomCreations[h.dir].chat;await v.f.next();assert.equal(v.S.firstRoomCreations[h.dir].chat,created);assert.equal(v.document.querySelector('[data-first-restart]'),null);assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length,1);
+ fail=false;await v.f.next();assert.equal(v.f.state.door.binding.chat,created);assert.equal(h.runtime.chatsList(OWNER).chats.filter(c=>c.pane==='room').length,1);assert.equal(h.provider.calls.length,0);
+});
+
+for(const fault of ['status-null','list-error','list-malformed','list-throw'])test('211b.1: '+fault+' is not proof that the saved chat is missing',async t=>{
+ const h=await fixture(t),v=await ui(h,undefined,missingCreation(h.dir)),original=v.c.api;
+ if(fault==='status-null')v.c.refreshStatus=async()=>null;else v.c.api=async(path:string,body:any)=>path==='/api/chats'?(fault==='list-throw'?Promise.reject(Error('offline')):fault==='list-error'?{error:'unavailable'}:{chats:[{}],active:{}}):original(path,body);
+ await v.f.next();assert.equal(v.S.firstRoomCreations[h.dir].chat,'c-missing');assert.equal(v.document.querySelector('[data-first-restart]'),null);assert.equal(v.requests.filter(r=>r.body).length,0);assert.match(v.toasts.at(-1)!,/Не удалось|offline/);assert.equal(h.provider.calls.length,0);
+});
+
+for(const change of ['project','aba','pagehide','active-chat','restored-chat','read-error'])test('211b.1: restart cannot discard a creation after '+change,async t=>{
+ const h=await fixture(t),saved=missingCreation(h.dir),v=await ui(h,undefined,saved);await v.f.next();const button=v.find('[data-first-restart]'),original=v.c.api;
+ if(change==='project')v.H.project='/other';else if(change==='aba')v.f.invalidate();else if(change==='pagehide')await v.window.emit('pagehide');else if(change==='active-chat')await call(h.api,'/api/chats/new',{body:{pane:'room',carry:'none'}});else v.c.api=async(path:string,body:any)=>path==='/api/chats'?(change==='restored-chat'?{chats:[{id:'c-missing',pane:'room'}],active:{}}:Promise.reject(Error('offline'))):original(path,body);
+ await button.emit('click');await v.settle();assert.equal(v.S.firstRoomCreations[h.dir].chat,'c-missing');assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length,0);assert.equal(v.f.state.door,null);assert.equal(h.provider.calls.length,0);
+});
+
+for(const change of ['project','aba','pagehide'])test('211b.1: a delayed missing-chat response cannot install recovery in another '+change,async t=>{
+ const h=await fixture(t),entered=deferred(),gate=deferred(),v=await ui(h,async path=>{if(path==='/api/chats'){entered.resolve();await gate.promise}},missingCreation(h.dir));const work=v.f.next();await entered.promise;
+ if(change==='project')v.H.project='/other';else if(change==='aba')v.f.invalidate();else await v.window.emit('pagehide');gate.resolve();await work;
+ assert.equal(v.document.querySelector('[data-first-restart]'),null);assert.equal(v.S.firstRoomCreations[h.dir].chat,'c-missing');assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.provider.calls.length,0);
 });

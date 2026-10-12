@@ -1326,13 +1326,13 @@
   // ══ НАСТРОЙКИ: элементы и подтверждения принадлежат set.js ══
   // ══ ПЕРВЫЙ ЗАПУСК: выбор запоминается, первый вопрос уходит в чат ══
   // TS-15f: the sketch's three steps share the bound conversation/team operations.
-  const FIRST={project:null,confirmed:0,model:null,folder:true,busy:false,door:null,sending:false};
+  const FIRST={project:null,confirmed:0,model:null,folder:true,busy:false,door:null,missing:null,sending:false};
   const firstRoot=()=>PAGE==='first'?document.querySelector('.fr'):null;
   function firstModels(){const rows=Object.entries(H.models||{}).flatMap(([vendor,models])=>Array.isArray(models)?models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({...m,vendor})):[]);for(const p of H.panes||[])if(p.model&&p.vendor&&!rows.some(m=>m.id===p.model))rows.push({id:p.model,label:p.model,vendor:p.vendor});return rows}
   function firstSelectPane(){const p=(H.panes||[]).find(p=>p.kind==='orchestrator')||(H.panes||[]).find(p=>p.id==='room');const id=p?p.id:'room';if(S.ui.pane!==id){invalidateBinding();S.ui.pane=id;S.chat=[];H.cur=null;save();pickPane()}}
   function firstGo(n){const root=firstRoot();if(!root||leftPage)return;firstDraw();root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s===String(n)));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i<n));operationsDraw()}
   function firstDraw(){const root=firstRoot();if(!root||leftPage)return;const live=H.on&&!H.snapshotOnly;
-    if(FIRST.project!==H.project||FIRST.confirmed!==(H.confirmedProjectGeneration||0)){if(FIRST.project){root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s==='1'));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i===0));const draft=root.querySelector('.live-in');if(draft)draft.value='';}FIRST.project=H.project;FIRST.confirmed=H.confirmedProjectGeneration||0;FIRST.model=null;FIRST.folder=!H.noProject;FIRST.door=null;root.querySelector('[data-first-door]').innerHTML='';}
+    if(FIRST.project!==H.project||FIRST.confirmed!==(H.confirmedProjectGeneration||0)){if(FIRST.project){root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s==='1'));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i===0));const draft=root.querySelector('.live-in');if(draft)draft.value='';}FIRST.project=H.project;FIRST.confirmed=H.confirmedProjectGeneration||0;FIRST.model=null;FIRST.folder=!H.noProject;FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML='';}
     const models=firstModels(),orch=(H.panes||[]).find(p=>p.kind==='orchestrator');
     if(!models.some(m=>m.id===FIRST.model))FIRST.model=orch&&orch.model||H.pane&&H.pane.model||models[0]?.id||null;
     const places=root.querySelectorAll('.st[data-s="1"] .pick');places.forEach((el,i)=>el.classList.toggle('on',i===0?FIRST.folder:!FIRST.folder));
@@ -1347,15 +1347,40 @@
     root.querySelector('[data-first-team-request]').disabled=!live||!orch||FIRST.sending;
     root.querySelector('.st[data-s="3"] .btn.p').setAttribute('aria-disabled',String(!live||!orch||FIRST.sending));
     root.querySelector('[data-first-open]').disabled=!live||!orch;
+    if(FIRST.missing&&!bindingCurrent(FIRST.missing.binding)){FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML=''}
     if(FIRST.door&&(!bindingCurrent(FIRST.door.binding)||FIRST.door.model!==FIRST.model||FIRST.door.folder!==FIRST.folder)){FIRST.door=null;root.querySelector('[data-first-door]').innerHTML=''}
+  }
+  async function firstChatMissing(binding,pending){
+    const list=await api('/api/chats');if(leftPage||!bindingCurrent(binding)||S.firstRoomCreations?.[binding.project]!==pending)return false;
+    if(!list||list.ok===false||!Array.isArray(list.chats)||!list.active||typeof list.active!=='object'||Array.isArray(list.active)||list.chats.some(c=>!c||typeof c.id!=='string'||typeof c.pane!=='string'))throw Error('Не удалось прочитать созданный разговор');
+    if((list.active.room||null)!==binding.chat)throw Error('Разговор изменился; повторите выбор');
+    return !list.chats.some(c=>c.id===pending.chat);
+  }
+  async function firstRestart(){const missing=FIRST.missing;if(FIRST.busy||!missing||leftPage||!H.on||H.snapshotOnly||!bindingCurrent(missing.binding)||S.firstRoomCreations?.[missing.binding.project]!==missing.pending)return;FIRST.busy=true;let restart=false;
+    try{if(!await refreshStatus())throw Error('Не удалось прочитать состояние проекта');if(!bindingCurrent(missing.binding)||leftPage)return;
+      if(!await firstChatMissing(missing.binding,missing.pending)){toast('Разговор изменился; повторите выбор');return}
+      delete S.firstRoomCreations[missing.binding.project];save();FIRST.missing=null;firstRoot().querySelector('[data-first-door]').innerHTML='';restart=true;
+    }catch(error){if(!leftPage&&H.project===missing.binding.project)toast(esc(error.message))}finally{FIRST.busy=false;firstDraw()}
+    if(restart)await firstNext();
   }
   async function firstNext(){if(FIRST.busy||leftPage)return;firstSelectPane();firstDraw();const root=firstRoot();if(!H.on||H.snapshotOnly){firstGo(3);return}
     const orch=(H.panes||[]).find(p=>p.kind==='orchestrator');if(orch){const binding=sendBinding();await loadChat({onboard:false,visible:true});if(!leftPage&&bindingCurrent(binding))firstGo(3);return}
     if(!firstModels().some(m=>m.id===FIRST.model)){toast('Сначала выберите модель разговора');return}
-    let binding=sendBinding();
-    if(!binding.chat){const model=FIRST.model,folder=FIRST.folder,navigation=bindingNavigation;FIRST.busy=true;
-      try{const r=await api('/api/chats/new',{pane:'room',carry:'none'});if(leftPage||!bindingCurrent(binding))return;if(!r||!r.ok||!r.chat?.id)throw Error(r&&r.error||'Не удалось открыть разговор');
-        await refreshStatus();const current=sendBinding();if(leftPage||bindingNavigation!==navigation||current.project!==binding.project||current.pane!==binding.pane||current.chat!==r.chat.id||FIRST.model!==model||FIRST.folder!==folder){toast('Разговор изменился; повторите выбор');return}binding=current;
+    let binding=sendBinding(),pending;
+    try{const entries=S.firstRoomCreations;if(entries!==undefined&&(!entries||typeof entries!=='object'||Array.isArray(entries)))throw Error('Не удалось прочитать созданный разговор');const exists=entries&&Object.hasOwn(entries,binding.project);pending=exists?entries[binding.project]:null;
+      if(exists&&(!pending||!pending.binding||pending.binding.project!==binding.project||pending.binding.pane!=='room'||pending.binding.chat!==null||typeof pending.chat!=='string'||!/^[a-zA-Z0-9_-]{1,128}$/.test(pending.chat)))throw Error('Не удалось прочитать созданный разговор');
+    }catch(error){toast(esc(error.message));return}
+    FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML='';
+    if(pending||!binding.chat){const model=FIRST.model,folder=FIRST.folder,navigation=bindingNavigation;FIRST.busy=true;
+      try{if(!pending){const r=await api('/api/chats/new',{pane:'room',carry:'none'});if(!r||!r.ok||typeof r.chat?.id!=='string'||!/^[a-zA-Z0-9_-]{1,128}$/.test(r.chat.id)||r.chat.pane!=='room')throw Error(r&&r.error||'Не удалось открыть разговор');
+          pending={binding:{project:binding.project,pane:binding.pane,chat:binding.chat},chat:r.chat.id};S.firstRoomCreations=S.firstRoomCreations||{};S.firstRoomCreations[binding.project]=pending;save();
+          if(leftPage||!bindingCurrent(binding))return;
+        }
+        if(!await refreshStatus())throw Error('Не удалось прочитать состояние проекта');const current=sendBinding();if(leftPage||bindingNavigation!==navigation||current.project!==binding.project||current.pane!==binding.pane)return;
+        if(current.chat!==pending.chat){if(current.chat){delete S.firstRoomCreations[binding.project];save()}else if(await firstChatMissing(current,pending)){
+            FIRST.missing={binding:current,pending};root.querySelector('[data-first-door]').innerHTML='<div class="done" role="status"><b>Разговор не найден</b><p>Сохранённого разговора больше нет в проекте. Начните заново, чтобы создать новый разговор.</p><button class="btn p" type="button" data-first-restart>Начать заново</button></div>';return;
+          }toast('Разговор изменился; повторите выбор');return}
+        delete S.firstRoomCreations[binding.project];save();if(FIRST.model!==model||FIRST.folder!==folder){toast('Выбор модели изменился; повторите выбор');return}binding=current;
       }catch(error){if(!leftPage&&H.project===binding.project)toast(esc(error.message));return}finally{FIRST.busy=false;firstDraw()}
     }
     FIRST.door={binding,model:FIRST.model,folder:FIRST.folder};root.querySelector('[data-first-door]').innerHTML='<div class="done"><b>Назначить оркестратора</b><p>'+esc(modelName(FIRST.model))+' · '+esc(FIRST.folder&&!H.noProject?H.project:'новый проект по разговору')+'</p><p>Разговор и документы сохранятся. Harnessy создаст роль и запустит её первое поручение. Состав команды вы подтвердите отдельно.</p><button class="btn p" type="button" data-first-promote>Назначить этому разговору оркестратора</button><button class="btn ghost" type="button" data-first-cancel>Отмена</button></div>';
@@ -1389,16 +1414,16 @@
     root.addEventListener('change',e=>{const select=e.target.closest('[data-first-model]');if(!select||select.disabled)return;FIRST.model=select.value;firstDraw()});
     document.addEventListener('click',async e=>{const target=e.target;if(!root.contains(target))return;
       if(target.closest('[data-first-model]')){e.stopPropagation();return}
-      const g=target.closest('[data-go]'),promote=target.closest('[data-first-promote]'),cancel=target.closest('[data-first-cancel]'),skip=target.closest('[data-skip]'),request=target.closest('[data-first-team-request]'),open=target.closest('[data-first-open]');
-      if(g||promote||cancel||skip||request||open){e.preventDefault();e.stopImmediatePropagation();if(FIRST.busy)return;
-        if(promote){await firstPromote(promote);return}if(cancel){FIRST.door=null;root.querySelector('[data-first-door]').innerHTML='';return}
+      const restart=target.closest('[data-first-restart]'),g=target.closest('[data-go]'),promote=target.closest('[data-first-promote]'),cancel=target.closest('[data-first-cancel]'),skip=target.closest('[data-skip]'),request=target.closest('[data-first-team-request]'),open=target.closest('[data-first-open]');
+      if(restart||g||promote||cancel||skip||request||open){e.preventDefault();e.stopImmediatePropagation();if(FIRST.busy)return;
+        if(restart){await firstRestart();return}if(promote){await firstPromote(promote);return}if(cancel){FIRST.door=null;root.querySelector('[data-first-door]').innerHTML='';return}
         if(request){await firstSend(true);return}if(open){const p=H.pane;if(p&&p.kind==='orchestrator')await openTeamChat(p.id,(H.active||{})[p.id],sendBinding());return}
         if(skip){if(skip.closest('.st[data-s="3"]'))await firstSend();else location.href='10-new-chat.html';return}
         if(g.dataset.go==='3'){await firstNext();return}if(g.dataset.go==='2')firstSelectPane();firstGo(Number(g.dataset.go));return;
       }
       const place=target.closest('.st[data-s="1"] .pick');if(place){FIRST.folder=!!place.getAttribute('data-cx');firstDraw()}
     },true);
-    addEventListener('live:status',firstDraw);addEventListener('pagehide',()=>{FIRST.door=null;root.querySelector('[data-first-door]').innerHTML=''});firstSelectPane();firstDraw();
+    addEventListener('live:status',firstDraw);addEventListener('pagehide',()=>{FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML=''});firstSelectPane();firstDraw();
   }
   // End TS-15f first run.
 
