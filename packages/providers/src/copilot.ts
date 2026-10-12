@@ -21,7 +21,7 @@ const base=['--disable-builtin-mcps','--no-custom-instructions','--no-ask-user',
 // No executor currently binds Copilot's config path to an opened directory object.
 export const COPILOT_UNAVAILABLE='нет безопасной привязки каталога состояния к объекту; появится с учётной записью движка (SEC1)';
 export const COPILOT:CliDescriptor={
- turnUnavailableReason:COPILOT_UNAVAILABLE,
+ // TS-20/307: owner accepted residual pathname race; final object checks remain.
  id:'copilot',name:'GitHub Copilot',binary:'copilot',login:{args:['login']},
  forbiddenEnv:['COPILOT_GITHUB_TOKEN','GH_TOKEN','GITHUB_TOKEN','COPILOT_ALLOW_ALL','COPILOT_HOME','COPILOT_MODEL','COPILOT_PROVIDER_BASE_URL','COPILOT_PROVIDER_TYPE','COPILOT_PROVIDER_API_KEY','COPILOT_PROVIDER_BEARER_TOKEN','COPILOT_OFFLINE','COPILOT_CUSTOM_INSTRUCTIONS_DIRS','GH_HOST','BASH_ENV','ENV'],
  version:{command:{args:['--version']},parse:r=>{const m=/^GitHub Copilot CLI (\d+\.\d+\.\d+(?:[-+][\w.-]+)?)\.?$/m.exec(r.stdout);if(!m)throw invalid();return m[1]!}},auth:copilotAuth,models:copilotModels,limits:copilotLimits,

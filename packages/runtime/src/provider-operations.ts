@@ -21,19 +21,27 @@ export class ProviderOperations {
  private bindings=new Map<string,Map<string,ProviderBinding>>();
  // Keep the small receipt after completion: a late deny is idempotent and cannot target a newer probe.
  private cards=new WeakMap<ProjectState,Map<string,ProbeCard>>();
+ private refreshing=new WeakMap<ProjectState,Map<string,Promise<void>>>();
  private runtime:Runtime;readonly catalog:ProviderCatalog;private terminal:LoginTerminal;
  constructor(runtime:Runtime,catalog:ProviderCatalog,terminal:LoginTerminal){this.runtime=runtime;this.catalog=catalog;this.terminal=terminal}
  private owner(who:Initiator){if(!who||who.seat!=='owner'||who.trust!=='owner')throw new RuntimeError('owner_only','Действие доступно только владельцу',403)}
  private same(p:ProjectState){if(p.closed||this.runtime.project!==p)throw new RuntimeError('project_changed','Проект сменился',409)}
  private event(p:ProjectState,value:ProviderEvent){const card=value.approvalId?this.cards.get(p)?.get(value.approvalId):undefined;if(!p.closed)p.owner.publish({type:'providers',...value,bindingGen:card?.bindingGen??this.generation(p,value.provider),at:this.runtime.clock.now()})}
  private generation(p:ProjectState,id:string){return this.bindings.get(p.dir)?.get(id)?.generation??0}
- private observe(p:ProjectState,{row,identity}:CatalogRead){if(p.closed||this.runtime.project!==p)return;const bindings=this.bindings.get(p.dir)??new Map<string,ProviderBinding>(),previous=bindings.get(row.id),signature=JSON.stringify([identity,row.login.state,[...row.models].sort((a,b)=>a.id.localeCompare(b.id))]);if(!previous||signature!==previous.signature)bindings.set(row.id,{signature,generation:(previous?.generation??0)+1});this.bindings.set(p.dir,bindings)}
+ private observe(p:ProjectState,{row,identity}:CatalogRead){if(p.closed||this.runtime.project!==p)return;if(row.id!=='claude'&&row.id!=='codex')p.registry.models[row.id]=row.models.map(m=>({...m}));const bindings=this.bindings.get(p.dir)??new Map<string,ProviderBinding>(),previous=bindings.get(row.id),signature=JSON.stringify([identity,row.login.state,[...row.models].sort((a,b)=>a.id.localeCompare(b.id))]);if(!previous||signature!==previous.signature)bindings.set(row.id,{signature,generation:(previous?.generation??0)+1});this.bindings.set(p.dir,bindings)}
  private async read(p:ProjectState,id:string){const value=await this.catalog.read(id);this.same(p);this.observe(p,value);return value}
  private assertBinding(job:Probe){if(this.generation(job.project,job.id)!==job.bindingGen)throw new RuntimeError('binding_changed',bindingReason,409)}
  approve(p:ProjectState,approvalId:string,decision:'allow'|'deny'){
   const card=this.cards.get(p)?.get(approvalId);if(!card)return {ok:false,error:'вопрос уже закрыт'};
   if(decision==='allow'&&card.bindingGen!==this.generation(p,card.provider)){p.owner.resolveApproval(approvalId,false);return {ok:false,code:'binding_changed',error:bindingReason}}
   const ok=p.owner.resolveApproval(approvalId,decision==='allow');return {ok:ok||decision==='deny',error:ok||decision==='deny'?null:'вопрос уже закрыт'};
+ }
+ modelSnapshot(){const p=this.runtime.project,now=Date.now(),jobs=this.refreshing.get(p)??new Map<string,Promise<void>>();this.refreshing.set(p,jobs);
+  const rows=this.catalog.ids().map(id=>this.catalog.peek(id));
+  for(const row of rows){if(row.id!=='claude'&&row.id!=='codex')p.registry.models[row.id]=row.models.map(m=>({...m}));if((row.login.checkedAt===undefined||now-row.login.checkedAt>=300_000)&&!jobs.has(row.id)){
+   const job=this.read(p,row.id).then(()=>this.checked(p,row.id)).catch(()=>{}).finally(()=>{if(jobs.get(row.id)===job)jobs.delete(row.id)});jobs.set(row.id,job);
+  }}
+  return {models:Object.fromEntries(rows.map(row=>[row.id,row.models])),turnModes:Object.fromEntries(rows.map(row=>[row.id,row.capabilities.turn]))};
  }
  private checked(p:ProjectState,id:string){this.event(p,{provider:id,event:'check',status:'done'})}
  async list(who:Initiator){this.owner(who);const p=this.runtime.project,values=await this.catalog.list(value=>this.observe(p,value));this.same(p);const seen=this.reads.get(p)??new Set<string>();for(const v of values){if(v.changed||!seen.has(v.row.id))this.checked(p,v.row.id);seen.add(v.row.id)}this.reads.set(p,seen);return {ok:true as const,providers:values.map(v=>v.row)}}
@@ -46,12 +54,13 @@ export class ProviderOperations {
  }
  private receipt(job:Probe,model:string){if(model!==job.model)throw new RuntimeError('probe_conflict','Уже ожидается подтверждение '+job.model,409,{fields:{pending:{approvalId:job.approval.id,model:job.model}}});return {ok:true as const,provider:job.id,model:job.model,approvalId:job.approval.id,bindingGen:job.bindingGen,status:job.status,price:{...subscriptionPrice}}}
  async probe(id:string,model:unknown,who:Initiator){this.owner(who);if(typeof model!=='string'||!model.trim()||model.length>200)throw new RuntimeError('model_required','Выберите модель',400);const p=this.runtime.project,entry=this.catalog.get(id);
+ if(entry.capabilities.probe?.ok===false)throw new RuntimeError('capability_unsupported',entry.capabilities.probe.reason??'Пробный ход недоступен',409,{fields:{reason:entry.capabilities.probe.reason??'Пробный ход недоступен'}});
  if(entry.unavailableReason)throw new RuntimeError('capability_unsupported',entry.unavailableReason,409,{fields:{reason:entry.unavailableReason}});
  const previous=this.probes.get(id);if(previous&&previous.project===p)return this.receipt(previous,model);
  const {row,identity}=await this.read(p,id);if(!row.installed)throw new RuntimeError('not_installed','Программа не установлена',409);if(!row.capabilities.headless)throw new RuntimeError('capability_unsupported','У программы нет безголового режима',409);if(row.login.state!=='ok')throw new RuntimeError('not_logged_in','Сначала войдите в программу',409);if(!row.models.some(m=>m.id===model))throw new RuntimeError('model_unsupported','Модель отсутствует в каталоге',400);
  // Recheck after metadata await: concurrent clicks share one owner decision and one model call.
  const pending=this.probes.get(id);if(pending&&pending.project===p)return this.receipt(pending,model);
- const approval=new Approval('provider-probe:'+randomUUID(),p.owner,'Один пробный ход · '+row.title+'/'+model,'Цена: расходуется подписка. Один запрос модели; результат появится в карточке подключения.',APPROVAL_TIMEOUT_MS,this.runtime.clock),job:Probe={project:p,id,model,bindingGen:this.generation(p,id),approval,controller:new AbortController(),status:'awaiting_approval',done:Promise.resolve()};
+ const approval=new Approval('provider-probe:'+randomUUID(),p.owner,'Один пробный ход · '+row.title+'/'+model,'Цена: расходуется подписка. Один запрос модели; результат появится в карточке подключения.'+(row.capabilities.probe?.note?' Режим: '+row.capabilities.probe.note+'.':''),APPROVAL_TIMEOUT_MS,this.runtime.clock),job:Probe={project:p,id,model,bindingGen:this.generation(p,id),approval,controller:new AbortController(),status:'awaiting_approval',done:Promise.resolve()};
  const cards=this.cards.get(p)??new Map<string,ProbeCard>();cards.set(approval.id,{provider:id,bindingGen:job.bindingGen});this.cards.set(p,cards);
  this.probes.set(id,job);p.owner.approvals.set(approval.id,approval);p.owner.publish(approval.event());this.event(p,{provider:id,model,approvalId:approval.id,event:'probe',status:job.status});job.done=this.finishProbe(job,identity);return this.receipt(job,model);
  }
@@ -67,10 +76,10 @@ export class ProviderOperations {
  traceEvent:(event:ToolTrace)=>{if(event.phase==='call')toolSpans.set(event.id,p.trace.record('tool.call',{data:{name:event.name,args:event.data}},span));else{const call=toolSpans.get(event.id);if(call)p.trace.end(call,'tool.result',{outcome:event.outcome??'ok',data:{name:event.name,result:event.data}});toolSpans.delete(event.id)}},modelStarted:()=>p.trace.record('provider.start',{data:{vendor:id,model}},span)};
  const binding=Object.freeze({project:p,provider:id,model,account:identity,approvalId:approval.id});
  const bound=(run:{provider:string;model:string})=>{this.same(binding.project);this.assertBinding(job);if(controller.signal.aborted||this.probes.get(binding.provider)!==job||job.approval.id!==binding.approvalId||job.status!=='running')throw new ProviderError('cancelled','Пробный ход отменён');if(run.provider!==binding.provider||run.model!==binding.model)throw new ProviderError('login_changed','Привязка пробного хода изменилась')};
- ctx.beforeModel=async run=>{bound(run);const auth=await this.catalog.get(binding.provider).auth();bound(run);if(binding.account===null||this.catalog.accountIdentity(auth)!==binding.account)throw new ProviderError('login_changed','Вход изменился; подтвердите новый пробный ход')};
+ ctx.beforeModel=async run=>{bound(run);const auth=await this.catalog.get(binding.provider).auth();bound(run);if(!auth.loggedIn||binding.account===null&&binding.provider!=='antigravity'||binding.account!==null&&this.catalog.accountIdentity(auth)!==binding.account)throw new ProviderError('login_changed','Вход изменился; подтвердите новый пробный ход')};
  // Covers custom entries; process providers repeat the same binding check after their own awaits.
  await ctx.beforeModel({provider:id,model});
- const started=this.runtime.clock.now(),result=await this.catalog.get(id).runTurn({id:'provider-probe',vendor:id,label:'Проверка подключения',model,mode:'read',cwd:directory,writePaths:[],worktree:null,sessionId:null},'Ответь одним словом: готов.',ctx);this.same(p);if(controller.signal.aborted||result.interrupted)throw new ProviderError('cancelled','Пробный ход отменён');
+ const started=this.runtime.clock.now(),result=await this.catalog.get(id).runTurn({id:'provider-probe',vendor:id,label:'Проверка подключения',model,mode:this.catalog.get(id).probeMode??'read',cwd:directory,writePaths:[],worktree:null,sessionId:null},'Ответь одним словом: готов.',ctx);this.same(p);if(controller.signal.aborted||result.interrupted)throw new ProviderError('cancelled','Пробный ход отменён');
  if(providerFailed)throw new ProviderError('turn_failed','Пробный ход завершился с ошибкой');const done=terminal as Extract<TurnEvent,{type:'done'}>|null;if(!done||done.model!==model)throw new ProviderError('protocol','Программа не подтвердила результат хода');const usage:Usage=done.usage;
  if(!usage||[usage.input,usage.output,usage.cacheRead].some(v=>v!==null&&(typeof v!=='number'||!Number.isFinite(v)||v<0)))throw new ProviderError('protocol','Программа не подтвердила расход');
  const turn={model,usage,durationMs:Math.max(0,this.runtime.clock.now()-started),text:result.text.slice(0,2000)};p.trace.end(span,'turn.done',{outcome:'ok',durationMs:turn.durationMs,data:{vendor:id,model,usage}});span=undefined;outcome={provider:id,model,approvalId:approval.id,event:'probe',status:'done',turn};

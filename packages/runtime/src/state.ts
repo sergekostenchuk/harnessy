@@ -19,7 +19,7 @@ export function artifactPaths(event:{name?:unknown;detail?:unknown},project:stri
  if(typeof event.name!=='string'||!/^(?:Write|Edit|MultiEdit|apply_patch|.*[._](?:write_file|edit_file))$/i.test(event.name)||typeof event.detail!=='string')return [];
  return [...new Set(event.detail.split(', ').map(path=>path.startsWith(project+'/')?path.slice(project.length+1):path.startsWith('./')?path.slice(2):path).filter(path=>path.length<=4096&&!/[\x00-\x1f\x7f\\]/.test(path)&&/^(artifacts|docs)\//.test(path)&&!path.split('/').some(x=>!x||x==='.'||x==='..')&&/\.[a-z\d]{1,12}$/i.test(path)))].slice(0,50);
 }
-export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;vendor?:'claude'|'codex'|null;outcome:'error';errorCode:string}
+export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;vendor?:string|null;outcome:'error';errorCode:string}
 export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}
 export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;deliverySeq?:number;status?:'uncertain'}
 export interface DocumentRef {project:string;path:string}
@@ -55,7 +55,7 @@ export class StateStore {
  this.chats={chats,active};for(const [pid,cid] of Object.entries(active)){const pane=registry.get(pid),c=chats[cid];if(!pane||!c||c.pane!==pid){delete active[pid];continue}
  pane.revision=typeof c.revision==='number'?c.revision:0;
  pane.sessionId=typeof c.sessionId==='string'&&c.sessionId?c.sessionId:null;pane.transcript=c.transcript;pane.carry=typeof c.carry==='string'?c.carry:'';
- if(c.vendor==='claude'||c.vendor==='codex')pane.vendor=c.vendor;if(c.model===null)pane.model='';else if(typeof c.model==='string'&&c.model)pane.model=c.model;
+ if(c.vendor==='claude'||c.vendor==='codex'||registry.providers.has(c.vendor))pane.vendor=c.vendor;if(c.model===null)pane.model='';else if(typeof c.model==='string'&&c.model)pane.model=c.model;
  const last=[...this.recoverable(c)].reverse().find(m=>object(m.runtime)&&object(m.runtime.nextSeen));if(last&&object(last.runtime)&&object(last.runtime.nextSeen))pane.seen={...last.runtime.nextSeen} as Record<string,number>
  }
  }catch(e){this.chats={chats:{},active:{}};if((e as NodeJS.ErrnoException).code!=='ENOENT')lineErrors.push('chats.json не читается: '+message(e))}

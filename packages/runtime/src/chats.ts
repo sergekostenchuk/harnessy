@@ -136,7 +136,7 @@ export async function chatsOpen(runtime:Runtime,input:{chat?:unknown;carry?:unkn
   try {
    const carried=pane.id==='room'?'':closeChat(p,pane,String(input.carry||'text'));
    c.closed=null;p.state.chats.active[pane.id]=c.id;pane.sessionId=c.sessionId;pane.transcript=c.transcript;pane.carry=pythonTrim((c.carry||'')+(carried?'\n\n'+carried:''));pane.seen={};pane.revision++;
-   if((c.vendor==='claude'||c.vendor==='codex')&&p.registry.providers.has(c.vendor))pane.vendor=c.vendor;
+   if(p.registry.providers.has(c.vendor))pane.vendor=c.vendor;
    if(c.model===null)pane.model='';else if(c.model)pane.model=c.model;
    p.state.savePanes(p.registry,p.journal);done=true;return {ok:true as const,chat:meta(p,c),pane:pane.settings(),carried:!!carried};
   }catch(e){p.state.chats=snapshot;Object.assign(pane,saved);throw e}

@@ -8,7 +8,7 @@ import {cliEntry} from './catalog.ts';
 const program=String.raw`
 import {appendFileSync} from 'node:fs';
 const args=process.argv.slice(2),scenario=process.env.AGY_FIXTURE_CASE;
-appendFileSync(process.env.AGY_FIXTURE_LOG,JSON.stringify({args,home:process.env.HOME,apiKey:!!process.env.GEMINI_API_KEY,endpoint:!!process.env.GOOGLE_GEMINI_BASE_URL,paneToken:!!process.env.PANE_TOKEN})+'\n');
+appendFileSync(process.env.AGY_FIXTURE_LOG,JSON.stringify({args,cwd:process.cwd(),home:process.env.HOME,apiKey:!!process.env.GEMINI_API_KEY,endpoint:!!process.env.GOOGLE_GEMINI_BASE_URL,paneToken:!!process.env.PANE_TOKEN})+'\n');
 const out=(name,data)=>console.log(JSON.stringify({conversation_id:'',status:'SUCCESS',num_turns:scenario==='spent-turn'?1:0,command:{name:scenario==='forged-command'?'model-result':name,data}}));
 if(args.join(' ')==='--version'){console.log('1.2.17');process.exit(0)}
 if(scenario==='malformed'){console.log('{incomplete');process.exit(0)}
@@ -19,6 +19,7 @@ if(args.join(' ')==='--output-format json -p /usage'){
 }else if(args.join(' ')==='--output-format json models'){
  const model={id:'gemini-3.8-flash-high',label:'Gemini 3.8 Flash (High)'};
  out('models',{models:scenario==='duplicate-model'?[model,model]:[model]});
+}else if(args.includes('stream-json')&&args.includes('--dangerously-skip-permissions')){console.log(JSON.stringify({event:'init',conversation_id:'agy-session',init:{}}));console.log(JSON.stringify({event:'result',result:{conversation_id:'agy-session',status:'SUCCESS',response:'готов'}}));
 }else {console.error('Unexpected inference or login invocation');process.exit(91)}
 `;
 export function antigravityFixture(t:TestContext,scenario='ok'){

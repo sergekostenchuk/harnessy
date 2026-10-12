@@ -1,5 +1,6 @@
+import {AntigravityStream} from './antigravity-stream.ts';
 import {ProviderError,record} from './types.ts';
-import type {CliUnavailableDescriptor,CliProcessResult} from './cli/types.ts';
+import type {CliDescriptor,CliProcessResult} from './cli/types.ts';
 
 export const ANTIGRAVITY_UNAVAILABLE='нет изолированного MCP-конфига и политики read/edit/all на ход';
 const invalid=()=>new ProviderError('protocol','Antigravity: неверный ответ метаданных');
@@ -10,10 +11,13 @@ function metadata(r:CliProcessResult,name:string){
  if(r.code!==0||!record(v)||v.status!=='SUCCESS'||v.num_turns!==0||v.conversation_id!==''||!record(v.command)||v.command.name!==name||!record(v.command.data))throw invalid();
  return v.command.data;
 }
-export const ANTIGRAVITY:CliUnavailableDescriptor={
+export const ANTIGRAVITY:CliDescriptor={
  id:'antigravity',name:'Antigravity',binary:'agy',login:{args:[]},
  forbiddenEnv:['GEMINI_API_KEY','GOOGLE_API_KEY','GOOGLE_GEMINI_BASE_URL','GOOGLE_APPLICATION_CREDENTIALS','AGY_ADC_AUTH'],
- capabilities:{headless:true,resume:true,mcp:false,limits:false},unavailableReason:ANTIGRAVITY_UNAVAILABLE,
+ noHarnessMcp:true,turnReasons:{read:ANTIGRAVITY_UNAVAILABLE,edit:ANTIGRAVITY_UNAVAILABLE},turnNotes:{all:'без инструментов Harnessy'},
+ modes:{all:()=>['--dangerously-skip-permissions']},
+ turn:{format:'stream-json',command:i=>({args:['--output-format','stream-json','--model',i.seat.model,'-p',i.roleNote+'\n\n'+i.message]}),decoder:()=>{const stream=new AntigravityStream();return v=>stream.push(v)}},
+ resume:id=>{if(!/^[A-Za-z0-9_-]{1,128}$/.test(id))throw new ProviderError('session_missing','Antigravity: неверная сессия');return ['--conversation',id]},
  version:{command:{args:['--version']},parse:r=>{const v=r.stdout.trim();if(!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(v))throw invalid();return v}},
  auth:{command:{args:['--output-format','json','-p','/usage']},exitCodes:[0,1],parse:(r:CliProcessResult)=>{
   if(r.code===1&&/^\s*(?:Error:\s*)?authentication required\b/i.test(r.stderr||r.stdout))return {loggedIn:false};

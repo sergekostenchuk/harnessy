@@ -5,7 +5,7 @@ const fail=()=>new ProviderError('protocol','Antigravity: неверный по�
 const nonempty=(v:unknown):v is string=>typeof v==='string'&&!!v&&!/[\x00-\x1f\x7f]/.test(v);
 interface Step {kind:string;done:boolean;name?:string}
 /** One instance per process. Protocol: https://www.antigravity.google/docs/cli/headless/ .
- * Decoding does not authorize a run: TS-20b keeps process turns unavailable.
+ * Decoding does not authorize a run: the descriptor declares the supported modes.
  */
 export class AntigravityStream {
  private session:string|null=null;private terminal=false;private steps=new Map<number,Step>();

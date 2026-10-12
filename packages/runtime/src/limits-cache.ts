@@ -2,7 +2,7 @@ import {lstatSync,mkdirSync,openSync,closeSync,fstatSync,readFileSync,writeFileS
 import {join,dirname,resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
-import {record,limitPlan,limitCredits,type LimitCredits,type ProviderLimits,type LimitWindow,type LimitsCode,type Vendor} from '@harnessy/providers';
+import {record,limitPlan,limitCredits,type LimitCredits,type ProviderLimits,type LimitWindow,type LimitsCode,type BuiltinVendor as Vendor} from '@harnessy/providers';
 
 export const POLL_SECONDS=300,TURN_SECONDS=60;
 export const reasons:Record<LimitsCode,string>={limits_unsupported:'лимиты провайдер не отдаёт',limits_not_applicable:'ключ API не имеет окон подписки',limits_auth:'вход по подписке недоступен',limits_rate_limited:'сервис лимитов просит повторить позже',limits_unavailable:'сервис лимитов временно недоступен',limits_invalid:'ответ или сохранённый снимок лимитов повреждён',limits_timeout:'чтение лимитов отменено или превысило время ожидания',limits_storage:'не удалось сохранить снимок лимитов'};

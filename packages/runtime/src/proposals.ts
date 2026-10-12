@@ -2,7 +2,7 @@ import {randomBytes,createHash} from 'node:crypto';
 import {realpathSync} from 'node:fs';
 import {join,relative,isAbsolute,sep} from 'node:path';
 import {roleKnowledgeText,type RoleKnowledge,type TeamMemberKnowledge} from '@harnessy/context';
-import {withPathLock,SEAT_KINDS,MODE_IDS,loadTeam,readManifest,type PathLock,type SeatKind,type Vendor,type Mode} from '@harnessy/team';
+import {providerId,withPathLock,SEAT_KINDS,MODE_IDS,loadTeam,readManifest,type PathLock,type SeatKind,type Vendor,type Mode} from '@harnessy/team';
 import type {Initiator} from '@harnessy/journal';
 import {RuntimeError,object,deepFreeze} from './errors.ts';
 import {jsonClone,chatMetadata,diskIO,type Chat} from './state.ts';
@@ -22,7 +22,7 @@ function fail(code:string,text:string,status=409):never {throw new RuntimeError(
 function invalid(text='предложение команды не читается'):never {return fail('proposal_invalid',text)}
 const token=(value:unknown,prefix:string)=>typeof value==='string'&&new RegExp('^'+prefix+'[0-9a-f]{24}$').test(value);
 function seatInput(raw:unknown):Omit<ProposalSeat,'sid'|'operationId'> {
- if(!object(raw)||Object.keys(raw).some(k=>!['kind','label','vendor','model','mode','intro'].includes(k))||!SEAT_KINDS.includes(raw.kind as SeatKind)||raw.kind==='orchestrator'||typeof raw.label!=='string'||!raw.label.trim()||[...raw.label].length>60||!['claude','codex'].includes(String(raw.vendor))||typeof raw.model!=='string'||!raw.model.trim()||!MODE_IDS.includes(raw.mode as Mode)||typeof raw.intro!=='string'||!raw.intro.trim()||Buffer.byteLength(raw.intro,'utf8')>8192)invalid('место: kind участника, label до 60 знаков, vendor, model, mode и intro до 8 КиБ обязательны');
+ if(!object(raw)||Object.keys(raw).some(k=>!['kind','label','vendor','model','mode','intro'].includes(k))||!SEAT_KINDS.includes(raw.kind as SeatKind)||raw.kind==='orchestrator'||typeof raw.label!=='string'||!raw.label.trim()||[...raw.label].length>60||!providerId(raw.vendor)||typeof raw.model!=='string'||!raw.model.trim()||!MODE_IDS.includes(raw.mode as Mode)||typeof raw.intro!=='string'||!raw.intro.trim()||Buffer.byteLength(raw.intro,'utf8')>8192)invalid('место: kind участника, label до 60 знаков, vendor, model, mode и intro до 8 КиБ обязательны');
  return {kind:raw.kind as SeatKind,label:raw.label,vendor:raw.vendor as Vendor,model:raw.model,mode:raw.mode as Mode,intro:raw.intro};
 }
 function read(p:ProjectState):Store {
@@ -82,7 +82,7 @@ export function roleKnowledge(p:ProjectState,chat:Chat):RoleKnowledge|null {
 export async function propose(runtime:Runtime,ctx:ActionContext,input:ProposalInput){
  const p=runtime.project;authority(ctx,p);if(!Array.isArray(input.seats)||input.seats.length<1||input.seats.length>12)invalid('состав должен содержать от 1 до 12 мест');
  const seats=deepFreeze(input.seats.map(seatInput)),update=input.proposalId!==undefined||input.version!==undefined?ref(input):null;
- for(const s of seats)if(!p.registry.providers.has(s.vendor)||!p.registry.models[s.vendor]?.some(m=>m.id===s.model))invalid('модель не из каталога указанного провайдера');
+ for(const s of seats){runtime.validateTurn(s.vendor,s.mode);if(!p.registry.providers.has(s.vendor)||!p.registry.models[s.vendor]?.some(m=>m.id===s.model))invalid('модель не из каталога указанного провайдера')}
  return withPathLock(p.dir,()=>{authority(ctx,p);same(runtime,p);const store=read(p),key=proposalKey(ctx.scope.seatId,seats,update,ctx.scope.turnInstanceId),retry=store.proposals.find(q=>!q.confirmed&&q.turnInstanceId===ctx.scope.turnInstanceId&&q.from===ctx.scope.seatId&&(q.requestKey??savedRequestKey(q))===key);
   // Only this turn's unconfirmed intent can be retried. A confirmed composition or a new turn is a new proposal.
   if(retry){question(p,retry);p.state.saveProposals(store);publish(p);return receipt(p,retry)}

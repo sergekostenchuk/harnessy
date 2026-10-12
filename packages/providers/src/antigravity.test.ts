@@ -8,7 +8,7 @@ test('260/276: installed agy metadata comes from literal readonly process comman
  const f=antigravityFixture(t),catalog=new ProviderCatalog([f.entry]),{row}=await catalog.read('antigravity');
  assert.equal(row.installed,true);assert.equal(row.version,'1.2.17');assert.equal(row.login.state,'ok');assert.equal(row.login.account,undefined);
  assert.deepEqual(row.models,[{id:'gemini-3.8-flash-high',label:'Gemini 3.8 Flash (High)'}]);
- assert.deepEqual(row.capabilities,{headless:true,resume:true,mcp:false,limits:false});assert.equal(row.reason,ANTIGRAVITY_UNAVAILABLE);assert.equal(row.limits,undefined);
+ assert.equal(row.capabilities.mcp,false);assert.deepEqual(row.capabilities.turn?.all,{ok:true,note:'без инструментов Harnessy'});assert.equal(row.capabilities.turn?.read.ok,false);assert.equal(row.reason,undefined);assert.equal(row.limits,undefined);
  assert.ok(CLI_DESCRIPTORS.includes(ANTIGRAVITY));assert.equal(row.login.command,"'"+f.description.binary+"'");assert.deepEqual(ANTIGRAVITY.login.args,[]);
  assert.deepEqual(f.capture().map(x=>x.args),[['--version'],['--output-format','json','-p','/usage'],['--output-format','json','models']]);
  for(const call of f.capture()){assert.equal(call.home,process.env.HOME);assert.equal(call.apiKey,false);assert.equal(call.endpoint,false);assert.equal(call.paneToken,false)}
@@ -24,8 +24,6 @@ for(const scenario of ['malformed','error','spent-turn','forged-command','missin
  const f=antigravityFixture(t,scenario),row=(await new ProviderCatalog([f.entry]).read('antigravity')).row;
  assert.equal(row.installed,true);assert.equal(row.login.state,'error');assert.deepEqual(row.models,[]);assert.doesNotMatch(JSON.stringify(row),/FIXTURE-SECRET/);
 });
-test('276: direct turn calls cannot bypass the unavailable capability or start a process',async t=>{
- const f=antigravityFixture(t);
- await assert.rejects(f.entry.runTurn(undefined as never,'unsafe',undefined as never),{code:'capability_unsupported',vendorText:ANTIGRAVITY_UNAVAILABLE});
- assert.equal(f.capture().length,0);
+test('307: descriptor exposes full access without Harnessy MCP and no read/edit fallback',()=>{
+ assert.equal(ANTIGRAVITY.mcp,undefined);assert.equal(ANTIGRAVITY.noHarnessMcp,true);assert.equal(ANTIGRAVITY.modes.read,undefined);assert.equal(ANTIGRAVITY.modes.edit,undefined);
 });

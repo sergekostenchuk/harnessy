@@ -5,4 +5,5 @@ export const ROLE_CATALOG=[
  {role:'orchestrator',label:'оркестратор',multi:false},{role:'assistant',label:'ассистент',multi:false},{role:'architect',label:'архитектор',multi:false},
  {role:'executor',label:'воркер',multi:true},{role:'reviewer',label:'ревьюер',multi:true},{role:'tester',label:'тестер',multi:false},{role:'researcher',label:'ресёрчер',multi:false}
 ] as const;
-export type Vendor='claude'|'codex';
+export type Vendor=string;
+export const providerId=(v:unknown):v is string=>typeof v==='string'&&/^[a-z][a-z0-9-]*$/.test(v)&&!['human','owner','harness'].includes(v);

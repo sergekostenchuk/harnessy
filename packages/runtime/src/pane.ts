@@ -55,9 +55,13 @@ export class Registry {
  roleOf(id:string){return id==='owner'?'owner':id==='room'&&this.get(id)?'room':this.get(id)?.kind??null}
  refreshPolicy():boolean {if(!this.policy)return false;try{if(this.policy.maybeReload())this.policyChanged?.(this.policy)}catch{return false}return !this.policy.broken}
  canObserve(viewer:string,target:string):boolean {if(viewer==='owner')return true;const from=this.roleOf(viewer),to=this.roleOf(target);return from!==null&&to!==null&&this.refreshPolicy()&&this.policy!.canObserve(from,to)}
+ modelVendor(pane:Pane,body:Record<string,unknown>){const model=typeof body.model==='string'?body.model:'',known=pane.vendor==='human'?[]:this.models[pane.vendor]??[];
+ const requested=typeof body.vendor==='string'&&this.providers.has(body.vendor)?body.vendor:null;
+ return model?(requested?(this.models[requested]?.some(m=>m.id===model)?requested:null):known.some(m=>m.id===model)?pane.vendor:[...this.providers].find(v=>this.models[v]?.some(m=>m.id===model))??(pane.vendor==='codex'&&known.length<=1?'codex':null)):null;
+
+ }
  update(pane:Pane,body:Record<string,unknown>):boolean {
- const busy=pane.busy,model=typeof body.model==='string'?body.model:'',known=pane.vendor==='human'?[]:this.models[pane.vendor]??[];
- const vendor=model?(known.some(m=>m.id===model)?pane.vendor:(['claude','codex'] as const).find(v=>this.providers.has(v)&&this.models[v]?.some(m=>m.id===model))??(pane.vendor==='codex'&&known.length<=1?'codex':null)):null;
+ const busy=pane.busy,model=typeof body.model==='string'?body.model:'',vendor=this.modelVendor(pane,body);
  if(busy&&!vendor)return false;pane.touched=true;pane.revision++;
  if(vendor){if(vendor!==pane.vendor){pane.vendor=vendor;pane.sessionId=null;pane.sessionEpoch++;if(!busy)pane.handle=null}pane.model=model}
  if(busy)return true;

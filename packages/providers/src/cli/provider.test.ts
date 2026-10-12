@@ -18,7 +18,8 @@ test('259: metadata capabilities and optional source of limits are explicit',asy
 test('259: unsupported mode/model/resume and invalid descriptor do not fall back to broader permissions',async t=>{
  const f=await cliFixture(t);f.seat.mode='ask';await assert.rejects(f.provider.runTurn(f.seat,'hello',f.ctx),{code:'mode_unsupported'});f.seat.mode='read';f.seat.model='not-listed';await assert.rejects(f.provider.runTurn(f.seat,'hello',f.ctx),{code:'model_unsupported'});
  const d={...f.description};delete d.resume;const p=new CliProvider(d,{env:f.env,cwd:f.dir,temporaryDirectory:f.dir});t.after(()=>p.close());f.seat.sessionId='session-1';await assert.rejects(p.runTurn(f.seat,'hello',f.ctx),{code:'capability_unsupported'});assert.equal(f.starts,0);assert.equal(f.registered.length,0);
- assert.throws(()=>new CliProvider({...d,modes:{read:()=>[]}}),{code:'protocol'});
+ // 303 permits partial mode support, while invalid/absent flag mappings still refuse execution.
+ const partial=new CliProvider({...d,modes:{read:()=>[]}},{env:f.env,cwd:f.dir});t.after(()=>partial.close());await assert.rejects(partial.runTurn({...f.seat,sessionId:null},'no',f.ctx),{code:'protocol'});await assert.rejects(partial.runTurn({...f.seat,mode:'all',sessionId:null},'no',f.ctx),{code:'mode_unsupported'});
 });
 test('259: absent executable is distinguishable from absent login',async t=>{
  const f=await cliFixture(t),p=new CliProvider({...f.description,binary:join(f.dir,'absent')},{env:f.env,cwd:f.dir});t.after(()=>p.close());assert.equal((await p.inspect()).installed,false);await assert.rejects(p.runTurn(f.seat,'hello',f.ctx),{code:'no_binary'});assert.equal(f.starts,0);
