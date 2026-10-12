@@ -429,7 +429,7 @@ export class Runtime {
   const catalog=this.providerOperations.catalog,builtin=vendor==='claude'||vendor==='codex';
   if(!catalog.ids().includes(vendor)){if(!builtin)throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);this.validateTurn(vendor,mode);return}
   const row=catalog.peek(vendor),entry=catalog.get(vendor);
-  if(row.installed===null)throw new RuntimeError('provider_checking','Программа проверяется, повторите через несколько секунд',409);
+  if(row.installed===null||row.checking)throw new RuntimeError('provider_checking','Программа проверяется, повторите через несколько секунд',409);
   if(row.installed!==true)throw new RuntimeError('provider_not_installed','Программа '+row.title+' не установлена',409);
   if(row.service?.ok===false)throw new RuntimeError('provider_unavailable',row.service.reason??'Служба программы недоступна',409);
   if(row.login.state!=='ok'&&!(row.login.state==='unknown'&&entry.allowUnverifiedLogin===true)){
