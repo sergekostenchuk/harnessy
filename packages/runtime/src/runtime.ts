@@ -1,3 +1,4 @@
+import {createLlmService,MacKeyStore,type KeyStore} from '@harnessy/llm';
 import {TraceStore,currentTrace,traceReason,type TraceContext} from './trace.ts';
 import {ProviderOperations} from './provider-operations.ts';
 import {ProviderCatalog,LoginTerminal,builtinEntries,CLI_DESCRIPTORS,cliEntry,ollamaEntry} from '@harnessy/providers';
@@ -37,14 +38,17 @@ const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Ini
 type AttemptDecision=NonNullable<Record_['attempt']>;
 export class Runtime {
  readonly providerOperations:ProviderOperations;
+ readonly llmKeys:KeyStore;private unsubscribeLlm:()=>void;
+ get llm(){const p=this.project;return createLlmService({routes:()=>this.settings.llmProviders(),resolveKey:ref=>this.llmKeys.resolveKey(ref),subscribeRoutes:listener=>this.settings.onLlmRoutesChanged(listener),...(this.deps.llmFetch?{fetch:this.deps.llmFetch}:{}),trace:event=>{p.trace.record(event.kind,{outcome:event.outcome,reason:traceReason(event.code??'none'),durationMs:event.durationMs,data:{id:event.requestId,vendor:event.provider,model:event.model,code:event.code,...event.usage}})}})}
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
  private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();private cliQuotas=new WeakMap<ProjectState,ProviderLimitsStore>();
  readonly deps:RuntimeDeps;readonly actions:RuntimeActions;
- constructor(deps:RuntimeDeps,actions:RuntimeActions){this.deps=deps;this.actions=actions;
+ constructor(deps:RuntimeDeps,actions:RuntimeActions){this.deps=deps;this.actions=actions;this.llmKeys=deps.llmKeys??new MacKeyStore();
  if(!actions||['ask','merge','assignRole','afterTurn','restorePendingAcks','cancelAsks'].some(k=>typeof (actions as unknown as Record<string,unknown>)[k]!=='function'))throw new RuntimeError('actions_required','порт действий обязателен',500);
  this.clock=deps.clock??systemClock;this.connections=deps.connections??new Connections();this.projectRegistry=deps.projectRegistry??new ProjectRegistry();this.defaultDir=canonicalPath(deps.defaultDir??process.env.CHAT_WORK_DIR??'/Users/Shared/simple-claude-chat');
  const current=()=>this.current&&!this.current.closed?this.current.dir:null;
  this.settings=typeof deps.settings==='function'?deps.settings(current):deps.settings??new Settings(undefined,current);
+ this.unsubscribeLlm=this.settings.onLlmRoutesChanged(()=>{const p=this.current;if(p&&!p.closed)p.bus.publish('owner',{type:'llm.routes',providers:Object.keys(this.settings.llmProviders())})});
  this.pins=typeof deps.pins==='function'?deps.pins(current,id=>this.chatMeta(id)):deps.pins??new Pins(undefined,current,id=>this.chatMeta(id));this.traceSettings();
  this.providerOperations=new ProviderOperations(this,deps.providerCatalog??new ProviderCatalog([...builtinEntries(deps.providers,deps.models??{}),...CLI_DESCRIPTORS.map(d=>cliEntry(d)),ollamaEntry()]),deps.loginTerminal??new LoginTerminal())
  }
@@ -489,6 +493,6 @@ export class Runtime {
  async settingsPatch(scope:unknown,patch:unknown,initiator:Initiator){this.requireOwner(initiator);
  if(object(patch)&&Object.keys(TRANSFER_DEFAULTS).some(key=>Object.hasOwn(patch,key))){if(scope&&scope!=='owner')throw new RuntimeError('context_settings_invalid','настройки переноса: только область owner',400);try{transferSettings(patch)}catch(e){throw new RuntimeError('context_settings_invalid',message(e),400)}}
  const result=await this.settings.patch(scope,patch);this.traceSettings();return result}
- async close(){try{await this.closeProject()}finally{await this.providerOperations.close();await Promise.all([...this.traces].map(t=>t.close()))}}
+ async close(){this.unsubscribeLlm();try{await this.closeProject()}finally{await this.providerOperations.close();await Promise.all([...this.traces].map(t=>t.close()))}}
 }
 export async function createRuntime(deps:RuntimeDeps,actions:RuntimeActions):Promise<Runtime>{const runtime=new Runtime(deps,actions);await runtime.openProject(deps.projectDir);return runtime}

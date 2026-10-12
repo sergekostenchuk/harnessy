@@ -34,6 +34,7 @@ export interface RuntimeActions {
  cancelAsks(scope:TurnScope,reason:string):void;
 }
 export interface RuntimeDeps {
+ llmKeys?:import('@harnessy/llm').KeyStore;llmFetch?:typeof fetch;
  providerCatalog?:import('@harnessy/providers').ProviderCatalog;loginTerminal?:import('@harnessy/providers').LoginTerminal;
  projectDir:string;providers:Partial<Record<Vendor,Provider>>;appUrl:string;models?:ModelCatalog;clock?:Clock;limitsCacheDir?:string;
  connections?:Connections;projectRegistry?:ProjectRegistry;gitops?:GitOps;stateIO?:StateIO;journalOptions?:JournalOptions;
