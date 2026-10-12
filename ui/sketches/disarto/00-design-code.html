@@ -146,6 +146,58 @@
 
 #network-stats-spec{max-width:1200px;margin:36px auto;padding:28px;font:14px/1.5 var(--font);color:var(--ink)}
 #network-stats-spec .network-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}#network-stats-spec label{display:grid;gap:6px}#network-stats-spec .live-f{padding:10px;background:var(--raised);color:var(--ink);border:1px solid var(--line2);border-radius:8px;font:inherit}
+/* TS-22e.1 · graphite cards, compact route, recoverable chain editor. */
+.network-route-line{display:flex;align-items:center;gap:8px;min-width:0}
+.network-route-summary{display:inline-flex;align-items:center;gap:7px;min-width:0;max-width:100%;font:11px var(--mono);color:var(--ink2)}
+.network-route-summary>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.network-route-line>.network-route-summary{flex:1}
+.network-route-line>.btn{flex:none}
+.network-route-dot{display:block;width:6px;height:6px;border-radius:50%;flex:none;background:var(--ink3)}
+.network-route-dot.checked{background:var(--ok)}
+.network-route-dot.failed{background:var(--bad)}
+.network-route-dot.reading{background:var(--accent)}
+.network-eyebrow{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px}
+.network-dialog{font-family:var(--font);border-color:var(--line2);background:var(--bg);padding:24px}
+.network-dialog h2{font-size:20px;font-weight:500;letter-spacing:-.02em;margin:0}
+.network-section{padding:18px;border:1px solid var(--line2);border-radius:12px;background:var(--panel);margin:16px 0}
+.network-section .rnote{font-size:12px;line-height:1.6;color:var(--ink2);margin:12px 0 0}
+.network-chain{list-style:none;padding:0;margin:14px 0;display:grid;gap:8px}
+.network-chain li{padding:12px;border:1px solid var(--line2);border-radius:9px;background:var(--raised);align-items:center;flex-wrap:wrap}
+.network-chain-label{display:flex;align-items:center;gap:10px;flex:1;min-width:160px;flex-wrap:wrap;font-size:13px}
+.network-chain-label b{font-weight:500}
+.network-chain-label small{width:100%;font-size:11px}
+.network-order{font:11px var(--mono);color:var(--accent)}
+.network-add{display:flex;align-items:flex-end;gap:10px;margin-top:16px}
+.network-add label{display:grid;gap:8px;flex:1;font-size:12px;color:var(--ink2);min-width:0}
+.network-add .live-f{width:100%}
+.network-empty{border:1px dashed var(--line2);border-radius:9px;padding:16px;margin:14px 0;color:var(--ink2);font-size:13px;line-height:1.6}
+.network-empty p{font-size:12px;color:var(--ink3);margin:8px 0 0}
+.network-provider{padding:16px;background:var(--raised);border:1px solid var(--line2);border-radius:10px;margin:12px 0 0}
+.network-provider p{font-size:13px;line-height:1.5;margin:8px 0 12px;overflow-wrap:anywhere}
+.llm-routes{padding:0;border:0;background:transparent;margin:26px 0}
+.llm-routes>.llm-heading h3{font-size:15px;font-weight:500;margin:0}
+.llm-provider-grid{grid-template-columns:repeat(auto-fit,minmax(310px,1fr))}
+.llm-provider-card .llm-route{padding:0 0 4px;border:0;gap:12px;font:inherit}
+.llm-provider-mark{display:grid;place-items:center;width:38px;height:38px;flex:none!important;border-radius:10px;border:1px solid var(--line2);background:var(--raised);font:11px var(--mono);color:var(--accent)!important}
+.llm-provider-heading{min-width:0;flex:1}
+.llm-provider-heading b{display:block;font-size:14px;font-weight:500;color:var(--ink);overflow-wrap:anywhere}
+.llm-provider-heading small{display:block;font:10px var(--mono);color:var(--ink3);margin-top:6px;overflow-wrap:anywhere}
+.llm-route-action{flex:none!important;font-size:11px;color:var(--ink2)}
+.network-dialog .conn-actions{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:650px){.network-fields{grid-template-columns:1fr}.network-add{flex-wrap:wrap}.llm-provider-grid{grid-template-columns:1fr}.llm-route-action{display:none}}
+
+
+html[data-page="conn"] .wrap{max-width:1080px}
+html[data-page="conn"] .list .row{grid-template-columns:34px minmax(130px,1.1fr) minmax(125px,1fr) 75px minmax(285px,1.65fr) 14px}
+html[data-m][data-page="conn"] .row .pay{flex:1 1 100%;margin-left:44px;max-width:calc(100% - 44px)}
+
+[data-network-chain-design] .network-exit{padding:20px;border:1px solid var(--line2);border-radius:14px;background:var(--panel);min-width:0}
+[data-network-chain-design] .network-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+[data-network-chain-design] .network-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+[data-network-chain-design] .network-fields label{display:grid;gap:7px;color:var(--ink2);font-size:13px}
+[data-network-chain-design] .llm-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+[data-network-chain-design] .llm-route{display:flex;align-items:center;width:100%;border:0;background:transparent;text-align:left;color:var(--ink)}
+[data-network-chain-design] .network-route-line{padding:12px;border:1px solid var(--line2);border-radius:9px;margin-bottom:8px;max-width:360px}
 </style></head>
 <body><div class="sheet">
   <h1>Harnessy · лист 00 · дизайн-код</h1>
@@ -453,6 +505,20 @@
 <div class="conn-spec-grid"><article class="conn-program"><h3>Прокси по адресу</h3><p>https://proxy.example:8443</p><p class="pill ok">Совпадает с ожидаемым</p><p>192.0.2.1 · страна · 25 мс — макет</p><button class="btn">Изменить</button> <button class="btn">Проверить</button></article><article class="conn-program"><h3>VPS по SSH</h3><p>owner@vps.example:22</p><p>Проверка после подключения туннеля</p><button class="btn">Выбрать файл из ~/.ssh</button></article><article class="conn-program"><h3>Напрямую</h3><p class="network-warning">Провайдер увидит ваш IP</p><button class="btn">Добавить в цепочку</button></article></div>
 <article class="conn-program"><h3>Редактор выхода</h3><label>Название <input class="live-f" value="Основной прокси"></label><label>Тип <select class="live-f"><option>Прокси по адресу</option><option>VPS по SSH</option><option>Напрямую</option></select></label><label>Адрес прокси <input class="live-f" placeholder="socks5h://proxy.example:1080"></label><label>Логин <input class="live-f" autocomplete="off"></label><label>Пароль <input class="live-f" type="password" autocomplete="new-password" placeholder="Новый пароль в связку ключей"></label><p>Сохранён: •••••••• · дата сохранения</p><button class="btn">Удалить пароль</button><label>Ожидаемый IP <input class="live-f" placeholder="необязательно"></label><p role="alert" class="network-error">Не сохранено: настройки изменились. Перечитайте их; черновик остаётся.</p><button class="btn p">Сохранить выход</button> <button class="btn">Перечитать</button></article>
 <article class="conn-program"><h3>Маршрут провайдера</h3><ol><li>Основной прокси <button class="btn sm">Ниже</button> <button class="btn sm">Убрать</button></li><li>VPS <button class="btn sm">Выше</button> <button class="btn sm">Убрать</button></li></ol><button class="btn">Добавить выход</button><p class="network-warning">Напрямую · провайдер увидит ваш IP</p><button class="btn p">Сохранить маршрут</button><p role="status">Сохранено</p></article>
+</section>
+
+
+<section class="spec" id="network-chain-editor-spec" data-network-chain-design>
+<div class="from">Подключения · маршрут провайдера · TS-22e.1</div><h2>Порядок выходов</h2>
+<p class="conn-note">Одна строка в таблице; подробности и действия — в карточке. Состояния чтения, отказа и пустой цепочки остаются внутри редактора.</p>
+<div class="network-route-line"><span class="network-route-summary"><i class="network-route-dot checked"></i><span>Основной прокси</span></span><button class="btn sm ghost">Настроить</button></div>
+<div class="network-route-line"><span class="network-route-summary"><i class="network-route-dot"></i><span>напрямую · прежний маршрут</span></span><button class="btn sm ghost">Настроить</button></div>
+<article class="network-exit network-chain-editor"><div class="llm-heading"><div><div class="network-eyebrow">Маршрут провайдера</div><h3>Claude</h3></div><button class="btn sm">×</button></div>
+<div class="network-section"><div class="network-fields"><label>Режим цепочки<select class="live-f"><option>Основной + резервы</option></select></label><label>Молчание, секунд<input class="live-f" value="60"></label></div><p class="rnote">Резерв и ротация — только в той же проверенной стране. Внутри хода выход не меняется.</p></div>
+<div class="network-section"><div class="network-eyebrow">Порядок выходов</div><p class="rnote">Первый в списке используется первым.</p><ol class="network-chain"><li><span class="network-chain-label"><span class="network-order">01</span><b>Основной прокси</b></span><div><button class="btn sm">Ниже</button> <button class="btn sm">Убрать</button></div></li></ol><div class="network-add"><label>Добавить выход<select class="live-f"><option>Выберите выход</option></select></label><button class="btn">Добавить</button></div><p class="rnote">Напрямую — только явным пунктом списка.</p></div>
+<div class="conn-actions"><button class="btn p">Сохранить маршрут</button><button class="btn">Перечитать</button></div></article>
+<div class="network-grid"><article class="network-exit"><div class="network-eyebrow">Чтение</div><p role="status">Читаю маршрут…</p><button class="btn">Закрыть</button></article><article class="network-exit"><p role="alert" class="network-error">Маршрут не прочитан: нет связи с движком</p><button class="btn">Повторить</button></article><article class="network-exit"><div class="network-empty">Цепочка ещё не настроена. Сейчас действует прежний маршрут. Добавьте выходы и сохраните порядок.</div></article></div>
+<h2>Подключения по API</h2><div class="network-grid"><article class="network-exit llm-provider-card"><button class="llm-route"><span class="llm-provider-mark">API</span><span class="llm-provider-heading"><b>Мой API</b><small>OpenAI-совместимый · 2 модели</small></span><span class="llm-route-action">Настроить →</span></button><section class="network-provider"><div class="network-eyebrow">Маршрут</div><p>Основной прокси</p><button class="btn sm">Настроить порядок выходов</button></section></article></div>
 </section>
 
 <section class="spec" id="network-stats-spec" data-network-stats-design>
