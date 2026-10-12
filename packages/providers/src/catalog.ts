@@ -61,6 +61,7 @@ export class ProviderCatalog {
  }catch(error){const missing=error instanceof ProviderError&&error.code==='no_binary';row.installed=!missing;row.login={state:missing?'unknown':'error',command:row.login.command,checkedAt:Date.now(),reason:missing?'Программа не установлена':'Не удалось прочитать программу, вход или список моделей'};row.models=[]}
  const previous=this.snapshots.get(id),signature=(v:CatalogRow)=>JSON.stringify({...v,login:{...v.login,checkedAt:0}}),changed=!previous||signature(previous)!==signature(row)||this.identities.get(id)!==identity;this.snapshots.set(id,row);this.identities.set(id,identity);return {row:structuredClone(row),changed,identity};
  }
- async list(){return Promise.all([...this.entries.keys()].map(id=>this.read(id)))}
+ // Notify each completed read immediately; another slow CLI must not delay binding revocation.
+ async list(observe?:(value:Awaited<ReturnType<ProviderCatalog['read']>>)=>void){return Promise.all([...this.entries.keys()].map(async id=>{const value=await this.read(id);observe?.(value);return value}))}
  async close(){await Promise.all([...this.entries.values()].map(e=>e.close?.()))}
 }
