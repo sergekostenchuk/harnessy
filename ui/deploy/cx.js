@@ -76,7 +76,7 @@
   const connectionKind=kind=>({subscription:'подписка',apikey:'ключ API',local:'локально'}[kind]||'вид подключения не указан');
   const modelsN=n=>n+' '+(n%10===1&&n%100!==11?'модель':n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'модели':'моделей');
   const modelMode=()=>{const p=seat();return p&&(!isRoom(p)||p.busy)?p.mode:cx().noFolder?'chat':'read'};
-  const modeStamp=()=>JSON.stringify([modelMode(),H.turnModes||{}]);
+  const modeStamp=()=>JSON.stringify([modelMode(),H.turnModes||{},H.models||{}]);
   function modelSupport(vendor){const mode=modelMode(),cap=H.turnModes&&H.turnModes[vendor]&&H.turnModes[vendor][mode];
     return cap&&cap.ok===true?{ok:true,note:typeof cap.note==='string'?cap.note:''}:{ok:false,reason:'Ходы в режиме «'+modeLabel(mode)+'» недоступны: '+(cap&&typeof cap.reason==='string'&&cap.reason.trim()?cap.reason:'движок не сообщил поддержку режима')};}
   function modelRows(response){
@@ -88,6 +88,9 @@
       rows.push({id:p.id,title:p.title,kind:p.kind,models,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''});
     }return rows;
   }
+  function modelGroups(panel=pop){const metadata=panel&&panel.__models&&panel.__models.rows||[];
+    return Object.entries(H.models||{}).filter(([,models])=>Array.isArray(models)).map(([id,models])=>{const detail=metadata.find(p=>p.id===id);
+      return {id,title:detail?detail.title:id,kind:detail?detail.kind:null,modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id}))};});}
   function modelsCurrent(panel){return panel===pop&&L.bindingCurrent(panel.__binding)}
   function redrawModels(panel){if(!modelsCurrent(panel)||stack[stack.length-1]!=='model')return;
     const input=panel.querySelector('.cx-find'),value=input&&input.value,focused=document.activeElement===input,groups=Array.from(panel.querySelectorAll('[data-cx-program]')).map(g=>[g.dataset.cxProgram,g.classList.contains('open')]);
@@ -99,17 +102,17 @@
     const request=++state.request;state.loading=true;state.error='';redrawModels(panel);let r=null;
     try{if(H.on)r=await L.api('/api/providers/catalog')}catch{}
     if(!modelsCurrent(panel)||request!==state.request)return;state.loading=false;const rows=modelRows(r);
-    if(rows){if(JSON.stringify(rows)!==JSON.stringify(state.rows))state.revision++;state.rows=rows}
-    else {state.revision++;state.error=typeof (r&&r.error)==='string'?r.error:H.on?'ответ каталога недоступен или неполон':'движок не подключён'}
+    if(rows)state.rows=rows;
+    else state.error=typeof (r&&r.error)==='string'?r.error:H.on?'ответ каталога недоступен или неполон':'движок не подключён';
     redrawModels(panel);
   }
   function modelsStatus(){if(!pop||!pop.__models)return;if(!modelsCurrent(pop)){close();return}const state=pop.__models,stamp=modeStamp();if(stamp!==state.modes){state.modes=stamp;state.revision++}redrawModels(pop)}
   addEventListener('live:status',modelsStatus);addEventListener('pagehide',close);
-  async function chooseModel(button){const panel=pop,state=panel&&panel.__models;if(!state||state.saving||state.loading||state.error||!modelsCurrent(panel))return;
-    const program=(state.rows||[]).find(p=>p.id===button.dataset.cxVendor),model=program&&(program.models.length?program.models:[{id:'default',label:'по умолчанию программы'}]).find(m=>m.id===button.dataset.cxModel);
+  async function chooseModel(button){const panel=pop,state=panel&&panel.__models;if(!state||state.saving||!modelsCurrent(panel))return;
+    const program=modelGroups(panel).find(p=>p.id===button.dataset.cxVendor),model=program&&(program.models.length?program.models:[{id:'default',label:'по умолчанию программы'}]).find(m=>m.id===button.dataset.cxModel);
     if(!model||!modelSupport(program.id).ok)return;const revision=state.revision,modes=modeStamp();state.saving=true;state.failure='';redrawModels(panel);
     try{await setSeat({vendor:program.id,model:model.id},'Модель места',{
-      valid:()=>modelsCurrent(panel)&&state.revision===revision&&!state.loading&&!state.error&&modeStamp()===modes&&modelSupport(program.id).ok,
+      valid:()=>modelsCurrent(panel)&&state.revision===revision&&modeStamp()===modes&&modelSupport(program.id).ok,
       failed:r=>{if(modelsCurrent(panel)){state.failure='Настройка не применена · '+(typeof (r&&r.reason)==='string'?r.reason:typeof (r&&r.error)==='string'?r.error:'нет связи');redrawModels(panel)}}
     })}finally{state.saving=false;redrawModels(panel)}
   }
@@ -151,14 +154,14 @@
     newchat(){ const p=seat(), act=p?(H.chatList||[]).find(c=>c.id===(H.active||{})[p.id]):null; return hd('Новый чат',p?esc(isRoom(p)?'без роли':L.paneName(p)):'')+row('<b>Передать текст</b>',{a:' data-cx-carry="text"',r:'вся переписка · бесплатно'})+row('<b>Передать выжимку</b>',{a:' data-cx-carry="summary"',r:'один ход модели'})+row('<b>Без контекста</b>',{a:' data-cx-carry="none"',r:'чистый лист'})+note('Прежний чат «'+esc(act&&act.title||'без названия')+'» будет закрыт; контекст уйдёт в новый первой записью — для сведения.'); },
     switch(){ const p=pop.__target, cur=seat(); if(!p) return note('Собеседник не выбран'); return hd('Переключиться на',esc(isRoom(p)?'без роли':L.paneName(p)))+row(svg('role')+'<b>Без контекста</b>',{a:' data-cx-sw="plain"',r:'новый разговор'})+row(svg('src')+'<b>С контекстом — выбрать сообщения…</b>',{a:' data-cx-sw="ctx"',r:'чекбоксы у реплик'})+note('С контекстом: отмеченные реплики уйдут новой роли текстом с промптом «прочитай контекст и жди команду». Между моделями и вендорами переносится только текст — память прежней модели остаётся у '+esc(cur?(isRoom(cur)?'разговора без роли':L.paneName(cur)):'прежнего места')+'.'); },
     rights(){ const p=seat(), c=cx(), cur=p?p.mode:c.rights; return hd('Права',p?'применяются к месту «'+esc(L.paneName(p))+'»':'к первому сообщению')+(H.modes||[]).map(m=>row(svg('lock')+'<b>'+esc(m.label)+'</b>',{on:m.id===cur,a:' data-cx-mode="'+m.id+'"',r:m.id})).join('')+(H.on?'':note('Список прав появится, когда харнесс подключён.')); },
-    model(){const p=seat(),c=cx(),cur=p?p.model:c.model,sv=p?p.vendor:c.vendor,state=pop.__models,rows=state&&state.rows;
+    model(){const p=seat(),c=cx(),cur=p?p.model:c.model,sv=p?p.vendor:c.vendor,state=pop.__models,rows=modelGroups();
       return hd('Модель',p?(isRoom(p)?'разговор без роли':'место «'+esc(L.paneName(p))+'»'):'разговор без роли')+'<input class="cx-find" aria-label="Найти модель" placeholder="Найти модель…">'+
         (!state||state.loading?note('Читаю каталог моделей…'):'')+(state&&state.error?'<div class="cx-note" role="status">Каталог моделей не прочитан · '+esc(state.error)+'. <button type="button" class="btn sm ghost" data-cx-model-retry>Повторить</button></div>':'')+
         (state&&state.failure?'<div class="cx-note" data-cx-model-error role="status">'+esc(state.failure)+'</div>':'')+
-        (rows||[]).map((g,i)=>{const support=modelSupport(g.id),models=g.models.length?g.models:[{id:'default',label:'по умолчанию программы'}],disabled=!support.ok||state.loading||state.saving||!!state.error;
-          return '<div class="cx-grp'+(g.id===sv||!sv&&i===0?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+connectionKind(g.kind)+' · '+modelsN(g.models.length)+'</small></div><div class="cx-sub">'+
+        rows.map((g,i)=>{const support=modelSupport(g.id),models=g.models.length?g.models:[{id:'default',label:'по умолчанию программы'}],disabled=!support.ok||!!(state&&state.saving);
+          return '<div class="cx-grp'+(g.id===sv||!sv&&i===0?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+(g.kind?connectionKind(g.kind)+' · ':'')+modelsN(g.models.length)+'</small></div><div class="cx-sub">'+
             (g.modelsReason?note(esc(g.modelsReason)):'')+models.map(m=>'<button type="button" class="cx-row cx-model'+(m.id===cur&&g.id===sv?' on':'')+(disabled?' dis':'')+'" data-cx-model="'+esc(m.id)+'" data-cx-vendor="'+esc(g.id)+'" data-q="'+esc(g.title+' '+m.label+' '+m.id)+'"'+(disabled?' disabled':'')+'><span class="cx-model-text"><b>'+esc(m.label)+'</b>'+(!support.ok||support.note?'<small>'+esc(support.reason||support.note)+'</small>':'')+'</span>'+(m.id===cur&&g.id===sv?'<span class="ck">✓</span>':'')+'</button>').join('')+'</div></div>';
-        }).join('')+(rows&&!rows.length?note('Программы не найдены в каталоге.'):'' )+
+        }).join('')+(!rows.length?note('В статусе пока нет списка моделей.'):'' )+
         note('Смена модели сохраняет разговор. Контекст можно перенести.')+hd('Размышления','для выбранной модели')+'<div class="cx-seg dis"><span>выкл</span><span class="on">адаптивно</span><span>вкл</span></div>'+note('Усилие и размышления пока недоступны: харнесс не передаёт их месту.');},
     effort(){ return hd('Усилие')+['низкое','среднее','высокое','очень высокое','максимум'].map(x=>row(x,{dis:true})).join('')+note('Пока недоступно: харнесс не передаёт усилие месту. Варианты — для выбранной модели.'); },
     plus(){ return '<input class="cx-find" placeholder="Найти действие или источник…">'+hd('добавить контекст')+['Файлы и папки…','Снимок экрана…','Другие источники…'].map(t=>row(svg('file')+t,{dis:true,r:'вложения пока не передаются модели',title:'вложения пока не передаются модели',q:t})).join('')+

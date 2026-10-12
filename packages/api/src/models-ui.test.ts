@@ -46,7 +46,7 @@ function ui(options:{page?:string;room?:boolean;fetch?:(path:string,body:Data|un
  const flush=async()=>{await immediate()};
  const open=async()=>{await find('[data-cx="model"]').emit('click');await flush()};
  const select=(vendor:string,model:string)=>find('[data-cx-vendor="'+vendor+'"][data-cx-model="'+model+'"]');
- const providers=async(next:Data)=>{snapshot=next;for(const l of [...listeners])l.onmessage({data:JSON.stringify({type:'providers',project:H.project})});await flush()};
+ const providers=async(next:Data)=>{snapshot=next;if(next.ok&&Array.isArray(next.providers))H.models=Object.fromEntries(next.providers.map((p:Data)=>[p.id,p.models]));for(const l of [...listeners])l.onmessage({data:JSON.stringify({type:'providers',project:H.project})});await flush()};
  return {...d,H,S,ctx,requests,toasts,waiting,listeners,find,open,select,flush,providers,
   status:()=>d.window.emit('live:status'),hide:()=>d.window.emit('pagehide')};
 }
@@ -77,7 +77,7 @@ test('305: + → model uses the same catalogue and vendor selection',async()=>{
 test('305: a stale catalogue response cannot restore a removed model',async()=>{
  const pending:ReturnType<typeof deferred<Data>>[]=[];const v=ui({fetch:async()=>{const gate=deferred<Data>();pending.push(gate);return gate.promise}});
  await v.find('[data-cx="model"]').emit('click');await v.providers(catalogue());assert.equal(pending.length,2);
- const next=catalogue();next.providers[1]!.models=[{id:'new-model',label:'New Codex'}];pending[1]!.resolve(next);await v.flush();pending[0]!.resolve(catalogue());await v.flush();
+ const next=catalogue();next.providers[1]!.models=[{id:'new-model',label:'New Codex'}];v.H.models.codex=next.providers[1]!.models;await v.status();pending[1]!.resolve(next);await v.flush();pending[0]!.resolve(catalogue());await v.flush();
  assert.ok(v.select('codex','new-model'));assert.equal(v.document.querySelector('[data-cx-vendor="codex"][data-cx-model="shared"]'),null);
 });
 
@@ -123,14 +123,20 @@ test('305: queued model selection is cancelled when capability changes and retur
  assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(v.H.pane.vendor,'claude');
 });
 
-test('305: read failure preserves last groups, disables choices, and retry recovers',async()=>{
+test('305/309: read failure preserves status groups and choices; retry restores metadata',async()=>{
  let result:Data=catalogue();const v=ui({fetch:async()=>result});await v.open();result={ok:false,error:'каталог временно недоступен'};await v.providers(result);
- assert.equal(v.document.querySelectorAll('[data-cx-program]').length,6);assert.equal(v.select('codex','shared').disabled,true);assert.match(v.find('.cx-pop').textContent,/каталог временно недоступен/);
+ assert.equal(v.document.querySelectorAll('[data-cx-program]').length,6);assert.equal(v.select('codex','shared').disabled,false);assert.match(v.find('.cx-pop').textContent,/каталог временно недоступен/);
  result=catalogue();await v.find('[data-cx-model-retry]').emit('click');assert.equal(v.select('codex','shared').disabled,false);
 });
 
-for(const response of [{ok:true}, {ok:true,providers:[{id:'claude',title:'Claude Code',kind:'subscription'}]}, {ok:true,providers:[...catalogue().providers,catalogue().providers[0]]}])test('305: incomplete or duplicate catalogue is refused with a retry, without invented programs',async()=>{
- const v=ui({fetch:async()=>response});await v.open();assert.equal(v.document.querySelectorAll('[data-cx-model]').length,0);assert.match(v.find('.cx-pop').textContent,/Каталог моделей не прочитан/);assert.ok(v.find('[data-cx-model-retry]'));
+for(const response of [{ok:true}, {ok:true,providers:[{id:'claude',title:'Claude Code',kind:'subscription'}]}, {ok:true,providers:[...catalogue().providers,catalogue().providers[0]]}])test('305/309: invalid catalogue metadata leaves the real status models visible',async()=>{
+ const v=ui({fetch:async()=>response});await v.open();assert.equal(v.document.querySelectorAll('[data-cx-model]').length,7);assert.match(v.find('.cx-pop').textContent,/Каталог моделей не прочитан/);assert.ok(v.find('[data-cx-model-retry]'));assert.equal(v.select('codex','shared').disabled,false);
+});
+
+for(const page of ['chat','new','first'])for(const failure of ['slow','404','network'])test('309: '+page+' selects from status while catalogue is '+failure,async()=>{
+ const gate=deferred<Data>();const v=ui({page,fetch:async(path,body)=>{if(path!=='/api/providers/catalog')return {ok:true,pane:{id:'worker',label:'воркер',mode:'read',...body}};if(failure==='slow')return gate.promise;if(failure==='network')throw Error('offline');return {ok:false,code:'not_found',error:'маршрут каталога недоступен'}}});
+ await v.open();assert.equal(v.document.querySelectorAll('[data-cx-program]').length,6);assert.equal(v.select('codex','shared').disabled,false);assert.equal(v.select('agy','agy-model').disabled,true);if(failure!=='slow')assert.ok(v.find('[data-cx-model-retry]'));
+ await v.select('codex','shared').emit('click');assert.equal(v.H.pane.vendor,'codex');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{vendor:'codex',model:'shared'}}]);gate.resolve(catalogue());await v.flush();
 });
 
 test('305: catalogue titles, model IDs and capability reasons are text, not executable markup',async()=>{
