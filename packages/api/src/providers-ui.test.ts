@@ -294,3 +294,8 @@ for(const program of [{id:'devin',title:'Devin',fixture:devinFixture},{id:'kimi'
  const probe=v.find('[data-program-probe="'+program.id+'"]');assert.equal(probe.disabled,false);await probe.emit('click');await v.settle();assert.equal(v.find('[data-program-confirm]').disabled,false);assert.match(v.body.textContent,/полный доступ, без инструментов Harnessy/);
  assert.equal(f.capture().filter(c=>c.args.includes('--print')||c.args.includes('--prompt')||c.args[0]==='run').length,0);
 });
+test('344: HTTP catalog keeps local models and renders cloud failure on the actual program card', {timeout:8000},async t=>{
+ const f=await ollamaFixture(t);f.setCloudStatus(503);const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}});await call(h.api,'/api/providers/ollama/check',{body:{}});
+ const v=ui(async(path:string,body:any)=>(await call(h.api,path,{...(body?{body}:{})})).body,undefined,undefined,h.dir);await v.settle();await v.find('[data-pv="ollama"]').emit('click');await v.settle();
+ assert.match(v.find('.cbody').textContent,/glm-5.3:cloud · облако/);assert.match(v.find('.cbody').textContent,/Не удалось обновить облачный каталог.*HTTP 503/);assert.equal(v.find('[data-program-probe="ollama"]').disabled,false);
+});

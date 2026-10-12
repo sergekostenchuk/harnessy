@@ -31,3 +31,10 @@ test('334: daemon disappears after probe approval; no Codex call and no stale su
  const f=await ollamaFixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}}),stream=await sse(h.api,'owner');t.after(()=>stream.close());const probe=await call(h.api,'/api/providers/ollama/probe',{body:{model:'glm-5.3:cloud'}});assert.equal(probe.status,200);f.setOffline(true);
  await call(h.api,'/api/approve',{body:{pane:'owner',id:probe.body.approvalId,decision:'allow',project:h.dir}});assert.equal((await result(stream)).status,'error');assert.equal(f.capture().length,0);
 });
+
+test('344: HTTP-selected uninstalled cloud model pulls only after probe approval; failed pull preserves a seat/session', {timeout:8000},async t=>{
+ const f=await ollamaFixture(t);f.setCloud({models:[{name:'gpt-oss:20b'}]});const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}}),stream=await sse(h.api,'owner');t.after(()=>stream.close());await call(h.api,'/api/providers/ollama/check',{body:{}});
+ const select=await call(h.api,'/api/panes/worker',{body:{vendor:'ollama',model:'gpt-oss:20b-cloud'}});assert.equal(select.status,200,select.text);assert.equal(f.pulls.length,0);const pane=h.runtime.registry.get('worker')!;pane.sessionId='previous-session';const before=pane.settings();f.setPullStatus(503);await assert.rejects(h.runtime.runTurn('worker','do not execute'));assert.deepEqual(pane.settings(),before);assert.equal(f.capture().length,0);
+ const probe=await call(h.api,'/api/providers/ollama/probe',{body:{model:'gpt-oss:20b-cloud'}});assert.equal(probe.status,200,probe.text);assert.equal(f.pulls.length,1);assert.equal(f.capture().length,0);f.setPullStatus(200);
+ await call(h.api,'/api/approve',{body:{pane:'owner',id:probe.body.approvalId,decision:'allow',project:h.dir}});assert.equal((await result(stream)).status,'done');assert.equal(f.pulls.length,2);assert.equal(f.capture().length,1);assert.deepEqual(pane.settings(),before);
+});
