@@ -89,6 +89,7 @@ export class ClaudeProvider implements Provider {
  const keepOpen=new Promise<void>(resolve=>{release=resolve});
  const first:SDKUserMessage={type:'user',message:{role:'user',content:message},parent_tool_use_id:null};
  const options={...claudeOptions(seat,turnContext,binary,this.deps.env),abortController:abort};
+ if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),turnContext.signal);
  if(turnContext.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
  ctx.modelStarted?.();
  active.query=this.deps.queryFn({prompt:(async function*(){yield first;await keepOpen})(),options});

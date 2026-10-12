@@ -39,13 +39,15 @@ export const FORBIDDEN_ENV={claude:['ANTHROPIC_API_KEY','CLAUDECODE','CLAUDE_COD
 export interface TurnHandle {interrupt():Promise<void>;steer(text:string):Promise<void>}
 export interface ToolTrace {id:string;name:string;phase:'call'|'result';data?:unknown;outcome?:'ok'|'failed'|'rejected'|'timeout'|'cancelled';reason?:string;error?:string}
 export interface TurnContext {
+ /** Optional owner-probe binding check, after preparation and immediately before inference. */
+ beforeModel?(run:{provider:string;model:string}):Promise<void>;
  traceTool?<T>(name:string,args:unknown,run:()=>Promise<T>):Promise<T>;traceEvent?(event:ToolTrace):void;
  modelStarted?():void;signal:AbortSignal;publish(ev:TurnEvent):void;askApproval(title:string,detail:string):Promise<boolean>;
  session(id:string):void;setHandle(h:TurnHandle|null):void;env:RouteEnv;roleNote:string;
  peers:{id:string;label:string;vendor:Vendor}[];tools:PeerTools;relayDepth:number;projectDir:string|null;appUrl:string;
  registerProcessToken(token:string):void;revokeProcessToken(token:string):void;writableRoots:string[]
 }
-export type ErrorCode='no_binary'|'not_logged_in'|'session_missing'|'model_unsupported'|'protocol'|'transport_lost'|'cancelled'|'busy'|'cwd_changed'|'turn_failed'|'unknown_request'|'models_unavailable';
+export type ErrorCode='no_binary'|'not_logged_in'|'session_missing'|'model_unsupported'|'protocol'|'transport_lost'|'cancelled'|'busy'|'cwd_changed'|'turn_failed'|'unknown_request'|'models_unavailable'|'mode_unsupported'|'capability_unsupported'|'permission_denied'|'provider_unknown'|'not_installed'|'platform_unsupported'|'login_terminal_failed'|'login_changed';
 export class ProviderError extends Error {
  code:ErrorCode;vendorText:string;sessionId:string|null;
  constructor(code:ErrorCode,vendorText:string,sessionId:string|null=null){super(vendorText);this.name='ProviderError';this.code=code;this.vendorText=vendorText;this.sessionId=sessionId}

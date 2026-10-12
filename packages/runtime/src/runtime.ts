@@ -1,4 +1,6 @@
 import {TraceStore,currentTrace,traceReason,type TraceContext} from './trace.ts';
+import {ProviderOperations} from './provider-operations.ts';
+import {ProviderCatalog,LoginTerminal,builtinEntries,CLI_DESCRIPTORS,cliEntry} from '@harnessy/providers';
 import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
 import {propose,proposals,confirm,create,createOwnerSeat,restoreProposals,type ProposalInput,type ProposalRef,type OwnerSeatInput} from './proposals.ts';
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
@@ -33,6 +35,7 @@ import {systemClock,type RuntimeDeps,type RuntimeActions,type ProjectState,type 
 const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Initiator & {trust:'harness'}={seat:'harness',trust:'harness'};
 type AttemptDecision=NonNullable<Record_['attempt']>;
 export class Runtime {
+ readonly providerOperations:ProviderOperations;
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
  private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();
  readonly deps:RuntimeDeps;readonly actions:RuntimeActions;
@@ -41,7 +44,8 @@ export class Runtime {
  this.clock=deps.clock??systemClock;this.connections=deps.connections??new Connections();this.projectRegistry=deps.projectRegistry??new ProjectRegistry();this.defaultDir=canonicalPath(deps.defaultDir??process.env.CHAT_WORK_DIR??'/Users/Shared/simple-claude-chat');
  const current=()=>this.current&&!this.current.closed?this.current.dir:null;
  this.settings=typeof deps.settings==='function'?deps.settings(current):deps.settings??new Settings(undefined,current);
- this.pins=typeof deps.pins==='function'?deps.pins(current,id=>this.chatMeta(id)):deps.pins??new Pins(undefined,current,id=>this.chatMeta(id));this.traceSettings()
+ this.pins=typeof deps.pins==='function'?deps.pins(current,id=>this.chatMeta(id)):deps.pins??new Pins(undefined,current,id=>this.chatMeta(id));this.traceSettings();
+ this.providerOperations=new ProviderOperations(this,deps.providerCatalog??new ProviderCatalog([...builtinEntries(deps.providers,deps.models??{}),...CLI_DESCRIPTORS.map(d=>cliEntry(d))]),deps.loginTerminal??new LoginTerminal())
  }
  private traceSettings(){try{const owner=this.settings.effective();this.traceConfig={enabled:owner.traceEnabled!==false,maxBytes:Number.isSafeInteger(owner.traceMaxMiB)&&Number(owner.traceMaxMiB)>=1&&Number(owner.traceMaxMiB)<=128?Number(owner.traceMaxMiB)*1024*1024:16*1024*1024}}catch{}}
  traceTool<T>(scope:TurnScope,name:string,args:unknown,run:()=>Promise<T>){this.scopes.assert(scope);const p=this.project;return p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId))}
@@ -155,7 +159,7 @@ export class Runtime {
  async closeProject():Promise<void>{return this.changeProject(()=>this.closeProjectLocked())}
  private async closeProjectLocked():Promise<void>{const p=this.current;if(!p||p.closed)return;if(p.state.undurable.size){try{p.state.saveChats(p.registry);p.state.undurable.clear()}catch(e){throw new RuntimeError('write_failed','ответ модели не сохранён: '+p.state.chatsPath+': '+message(e),409,{cause:e,fields:{path:p.state.chatsPath}})}}p.closed=true;this.actions.closeProject?.(p);const turns=[...p.active.values()];
  this.quotas.get(p)?.close();for(const turn of turns)this.cancelTurn(turn.pane.id,'project_closed',p);
- p.owner.denyApprovals();p.bus.close();this.tokens.clear();this.scopes.clear();
+ p.owner.denyApprovals();p.bus.close();this.tokens.clear();this.scopes.clear();await this.providerOperations.cancel(p);
  let failure:unknown;try{await Promise.all(Object.values(this.deps.providers).map(provider=>provider.close()))}catch(e){failure=e}
  for(const turn of turns)turn.releaseReset();await Promise.all(turns.map(t=>t.finished));if(failure)throw failure
  }
@@ -456,6 +460,6 @@ export class Runtime {
  async settingsPatch(scope:unknown,patch:unknown,initiator:Initiator){this.requireOwner(initiator);
  if(object(patch)&&Object.keys(TRANSFER_DEFAULTS).some(key=>Object.hasOwn(patch,key))){if(scope&&scope!=='owner')throw new RuntimeError('context_settings_invalid','настройки переноса: только область owner',400);try{transferSettings(patch)}catch(e){throw new RuntimeError('context_settings_invalid',message(e),400)}}
  const result=await this.settings.patch(scope,patch);this.traceSettings();return result}
- async close(){try{await this.closeProject()}finally{await Promise.all([...this.traces].map(t=>t.close()))}}
+ async close(){try{await this.closeProject()}finally{await this.providerOperations.close();await Promise.all([...this.traces].map(t=>t.close()))}}
 }
 export async function createRuntime(deps:RuntimeDeps,actions:RuntimeActions):Promise<Runtime>{const runtime=new Runtime(deps,actions);await runtime.openProject(deps.projectDir);return runtime}
