@@ -58,10 +58,52 @@ for(const page of ['chat','new','first'])test('305/306: '+page+' lists every cat
  assert.deepEqual(v.document.querySelectorAll('[data-cx-program] .grp b').map(n=>n.textContent),catalogue().providers.map(p=>p.title));
  assert.match(v.find('[data-cx-program="claude"]').textContent,/подписка · 2 модели/);assert.match(v.find('[data-cx-program="router"]').textContent,/локально · 1 модель/);
  assert.equal(v.select('claude','shared').classList.contains('on'),true);assert.equal(v.select('codex','shared').classList.contains('on'),false);
- const button=v.select('agy','agy-model');assert.equal(button.disabled,true);assert.match(button.textContent,/Ходы в режиме «Чтение» недоступны: нет изоляции/);await button.emit('click');assert.equal(v.select('copilot','copilot-model').disabled,false);
+ const button=v.select('agy','agy-model');assert.equal(button.disabled,true);assert.match(v.find('[data-cx-program="agy"] [data-cx-group-reason]').textContent,/Работает только в режиме «Полный доступ»/);await button.emit('click');assert.equal(v.select('copilot','copilot-model').disabled,false);
  assert.equal(v.requests.filter(r=>r.body).length,0);await v.select('codex','shared').emit('click');
  assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{vendor:'codex',model:'shared'}}]);assert.equal(v.H.pane.vendor,'codex');assert.equal(v.find('[data-cx="model"] b').textContent,'Codex model');
  assert.equal(v.requests.some(r=>r.path==='/api/chat'),false);
+});
+
+for(const page of ['chat','new'])for(const room of [false,true])test('351: '+page+' '+(room?'room':'seat')+' requires explicit full-access confirmation, then selects the program separately',async()=>{
+ const v=ui({page,room});v.H.pane.kind=room?'room':'orchestrator';await v.open();const group=v.find('[data-cx-program="agy"]');assert.equal(group.querySelectorAll('[data-cx-group-reason]').length,1);assert.equal(v.select('agy','agy-model').textContent,'Antigravity model');assert.match(group.textContent,/Работает только в режиме «Полный доступ» · без инструментов Harnessy/);if(!room)assert.match(group.textContent,/оркестратор не сможет назначать роли/);
+ await v.find('[data-cx-full-access="agy"]').emit('click');assert.match(v.find('[role="alertdialog"]').textContent,/Модель сможет менять файлы проекта и запускать команды/);assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(v.H.pane.mode,'read');await v.find('[data-cx-access-cancel]').emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+ await v.find('[data-cx-full-access="agy"]').emit('click');await v.find('[data-cx-access-confirm]').emit('click');assert.equal(v.H.pane.mode,'all');assert.equal(v.H.pane.vendor,'claude');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/'+v.H.pane.id,body:{mode:'all'}}]);assert.equal(v.select('agy','agy-model').disabled,false);await v.select('agy','agy-model').emit('click');assert.equal(v.H.pane.vendor,'agy');assert.equal(v.H.pane.mode,'all');assert.deepEqual(v.requests.filter(r=>r.body).at(-1),{path:'/api/panes/'+v.H.pane.id,body:{vendor:'agy',model:'agy-model'}});assert.equal(v.requests.some(r=>r.path==='/api/chat'||r.path.endsWith('/probe')),false);
+});
+
+for(const vendor of ['agy','gemini','qwen','ollama','devin','kimi','opencode'])test('351: one group explanation covers every unavailable '+vendor+' model',async()=>{
+ const next=catalogue(),entry={id:vendor,title:vendor,kind:'subscription',models:[{id:'one',label:'one'},{id:'two',label:'two'}],installed:true,checking:false};next.providers=next.providers.filter(p=>p.id!==vendor);next.providers.push(entry);const v=ui({fetch:async()=>next});v.H.models[vendor]=entry.models;v.H.turnModes[vendor]={read:{ok:false,reason:'MCP technical implementation'},all:{ok:true,note:'без инструментов Harnessy'}};await v.open();const group=v.find('[data-cx-program="'+vendor+'"]');assert.equal(group.querySelectorAll('[data-cx-group-reason]').length,1);assert.equal((group.textContent.match(/Работает только/g)||[]).length,1);assert.doesNotMatch(group.textContent,/MCP technical/);assert.equal(v.select(vendor,'one').disabled,true);assert.equal(v.select(vendor,'two').disabled,true);assert.ok(v.find('[data-cx-full-access="'+vendor+'"]'));
+});
+
+for(const change of ['project','pane','chat','mode','model','capability','program','pagehide','close'])test('351: '+change+' invalidates full-access consent, including A → B → A',async()=>{
+ const v=ui();await v.open();await v.find('[data-cx-full-access="agy"]').emit('click');const old=v.find('[data-cx-access-confirm]');
+ if(change==='pagehide')await v.hide();else if(change==='close')await v.find('[data-cx="model"]').emit('click');else if(change==='program'){const missing=catalogue();missing.providers.find(p=>p.id==='agy')!.installed=false;await v.providers(missing);await v.providers(catalogue())}
+ else {const before=plain({project:v.H.project,pane:v.H.pane,active:v.H.active,turnModes:v.H.turnModes});if(change==='project')v.H.project='/b';if(change==='pane'){v.H.pane={...v.H.pane,id:'other'};v.S.ui.pane='other'}if(change==='chat')v.H.active.worker='chat-b';if(change==='mode')v.H.pane.mode='edit';if(change==='model')v.H.pane.model='other';if(change==='capability')v.H.turnModes.agy.all.ok=false;await v.status();v.H.project=before.project;v.H.pane=before.pane;v.S.ui.pane=before.pane.id;v.H.panes=[before.pane];v.H.active=before.active;v.H.turnModes=before.turnModes;await v.status()}
+ await old.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(v.H.pane.mode,'read');assert.equal(v.document.querySelector('[data-cx-access-confirm]'),null);
+});
+
+test('351: queued consent is rechecked before mutation, double click sends once, and 409 preserves the mode',async()=>{
+ const gate=deferred(),v=ui();await v.open();v.ctx.binding.configureSetting(()=>gate.promise);await v.find('[data-cx-full-access="agy"]').emit('click');const pending=v.find('[data-cx-access-confirm]').emit('click');v.H.pane.model='other';await v.status();gate.resolve();await pending;assert.equal(v.requests.filter(r=>r.body).length,0);
+ const entered=deferred(),receipt=deferred<Data>(),w=ui({fetch:async(path)=>{if(path==='/api/providers/catalog')return catalogue();entered.resolve();return receipt.promise}});await w.open();await w.find('[data-cx-full-access="agy"]').emit('click');const button=w.find('[data-cx-access-confirm]'),first=button.emit('click');await entered.promise;await button.emit('click');receipt.resolve({ok:false,code:'capability_unsupported',error:'полный доступ больше не поддерживается'});await first;assert.equal(w.requests.filter(r=>r.body).length,1);assert.equal(w.H.pane.mode,'read');assert.match(w.find('[data-cx-model-error]').textContent,/больше не поддерживается/);
+});
+
+for(const change of ['project','pane','chat','capability'])test('351: delayed permission receipt cannot change a replaced '+change,async()=>{
+ const entered=deferred(),receipt=deferred<Data>(),v=ui({fetch:async(path)=>{if(path==='/api/providers/catalog')return catalogue();entered.resolve();return receipt.promise}});await v.open();await v.find('[data-cx-full-access="agy"]').emit('click');const request=v.find('[data-cx-access-confirm]').emit('click');await entered.promise;
+ if(change==='project')v.H.project='/b';if(change==='pane'){v.H.pane={...v.H.pane,id:'other'};v.S.ui.pane='other'}if(change==='chat')v.H.active.worker='chat-b';if(change==='capability')v.H.turnModes.agy.all.ok=false;await v.status();receipt.resolve({ok:true,pane:{id:'worker',mode:'all'}});await request;assert.equal(v.H.pane.mode,'read');
+});
+
+for(const receipt of [{ok:true},{ok:true,pane:{mode:'read'}}])test('351: an incomplete or unapplied mode receipt never claims successful elevation '+JSON.stringify(receipt),async()=>{
+ const v=ui({fetch:async path=>path==='/api/providers/catalog'?catalogue():receipt});await v.open();await v.find('[data-cx-full-access="agy"]').emit('click');await v.find('[data-cx-access-confirm]').emit('click');assert.equal(v.H.pane.mode,'read');assert.equal(v.select('agy','agy-model').disabled,true);assert.match(v.find('[data-cx-model-error]').textContent,/не подтвердил полный доступ/);assert.doesNotMatch(v.find('.cx-pop').textContent,/Полный доступ включён/);
+});
+
+for(const absent of ['capability','busy','binding','checking'])test('351: '+absent+' cannot offer elevation for an unconfirmed target',async()=>{
+ const next=catalogue(),v=ui({fetch:async()=>next});if(absent==='capability')delete v.H.turnModes.agy.all;if(absent==='busy')v.H.pane.busy=true;if(absent==='binding')v.S.ui.pane='different';if(absent==='checking')next.providers.find(p=>p.id==='agy')!.checking=true;await v.open();assert.equal(v.document.querySelector('[data-cx-full-access="agy"]'),null);assert.equal(v.requests.filter(r=>r.body).length,0);
+});
+
+for(const room of [false,true])test('351: real HTTP permission change and model selection preserve '+(room?'room':'seat')+' context without launching a model',async t=>{
+ const cli=await cliFixture(t,'probe'),description={...cli.description,modes:{all:cli.description.modes.all!}},entry=cliEntry(description,{env:cli.env,cwd:cli.dir,temporaryDirectory:cli.dir}),catalog=new ProviderCatalog([entry]),h=await fixture(t,{deps:{providerCatalog:catalog}});await catalog.read('test-cli');
+ if(room){const r=await call(h.api,'/api/room',{body:{vendor:'claude',model:h.runtime.registry.models.claude![0]!.id,folder:true}});assert.equal(r.status,200,r.text)}
+ const initial=(await call(h.api,'/api/status')).body,v=ui({room,fetch:async(path,body)=>(await call(h.api,path,body?{body}:{})).body,statusFetch:async()=>(await call(h.api,'/api/status')).body});v.H.project=initial.project;v.ctx.binding.applyStatus(initial,null);await v.status();await v.open();const id=room?'room':'worker',chat=h.runtime.project.state.chats.active[id];
+ await v.find('[data-cx-full-access="test-cli"]').emit('click');assert.equal(h.runtime.registry.get(id)!.mode,'read');await v.find('[data-cx-access-confirm]').emit('click');assert.equal(h.runtime.registry.get(id)!.mode,'all');await v.select('test-cli','test-model').emit('click');assert.equal(h.runtime.registry.get(id)!.vendor,'test-cli',JSON.stringify({requests:v.requests,pane:v.H.pane,menu:v.find('.cx-pop').textContent}));assert.equal(h.runtime.registry.get(id)!.mode,'all');assert.equal(h.runtime.project.state.chats.active[id],chat);assert.equal(cli.capture().filter(r=>r.action==='turn').length,0);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
 });
 
 for(const page of ['chat','new','first'])test('306: '+page+' room passes vendor and the program default without launching a turn',async()=>{
@@ -92,7 +134,7 @@ for(const change of ['project','pane','chat'])test('305: delayed selection recei
 
 for(const missing of ['all','provider','mode','reason'])test('305: missing '+missing+' support is visible and cannot change the pane',async()=>{
  const v=ui();if(missing==='all')delete v.H.turnModes;else if(missing==='provider')delete v.H.turnModes.gemini;else if(missing==='mode')delete v.H.turnModes.gemini.read;else v.H.turnModes.gemini.read={ok:false};
- await v.open();const b=v.select('gemini','default');assert.equal(b.disabled,true);assert.match(b.textContent,/движок не сообщил поддержку режима/);await b.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+ await v.open();const b=v.select('gemini','default');assert.equal(b.disabled,true);assert.match(v.find('[data-cx-program="gemini"] [data-cx-group-reason]').textContent,missing==='reason'?/В режиме «Чтение» недоступно/:/движок не сообщил поддержку режима/);await b.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
 });
 
 for(const room of [false,true])test('305/306: 409 stays in '+(room?'room':'pane')+' menu and leaves configuration intact',async()=>{
@@ -143,16 +185,16 @@ for(const page of ['chat','new','first'])for(const failure of ['slow','404','net
 
 test('305: catalogue titles, model IDs and capability reasons are text, not executable markup',async()=>{
  const response=catalogue();response.providers[0]!.title='<img src=x onerror=alert(1)>';response.providers[0]!.models=[{id:'"><script>bad()</script>',label:'<img src=x>'}];
- const v=ui({fetch:async()=>response});v.H.turnModes.claude.read={ok:false,reason:'<script>bad()</script>'};await v.open();assert.equal(v.document.querySelector('script'),null);assert.equal(v.document.querySelector('img'),null);assert.match(v.find('[data-cx-program="claude"]').textContent,/<script>bad\(\)<\/script>/);
+ const v=ui({fetch:async()=>response});v.H.turnModes.claude.read={ok:false,reason:'<script>bad()</script>'};v.H.turnModes.claude.all={ok:false};await v.open();assert.equal(v.document.querySelector('script'),null);assert.equal(v.document.querySelector('img'),null);assert.match(v.find('[data-cx-program="claude"]').textContent,/<script>bad\(\)<\/script>/);
  assert.equal(v.requests.filter(r=>r.body).length,0);
 });
 
 test('305/308: status enables the supported mode with its note; omitted capabilities disable it again',async()=>{
  const v=ui();await v.open();assert.equal(v.select('agy','agy-model').disabled,true);
  const status={project:v.H.project,panes:[{...v.H.pane,mode:'all'}],activeChats:v.H.active,models:v.H.models,modes:v.H.modes};
- v.ctx.binding.applyStatus({...status,turnModes:modes()},null);await v.status();const button=v.select('agy','agy-model');assert.equal(button.disabled,false);assert.match(button.textContent,/без инструментов Harnessy/);
+ v.ctx.binding.applyStatus({...status,turnModes:modes()},null);await v.status();const button=v.select('agy','agy-model');assert.equal(button.disabled,false);assert.match(v.find('[data-cx-program="agy"] [data-cx-group-reason]').textContent,/без инструментов Harnessy/);
  await button.emit('click');assert.equal(v.H.pane.vendor,'agy');assert.equal(v.requests.filter(r=>r.body).length,1);
- v.ctx.binding.applyStatus(status,null);await v.status();assert.equal(v.select('agy','agy-model').disabled,true);assert.match(v.select('agy','agy-model').textContent,/движок не сообщил поддержку режима/);
+ v.ctx.binding.applyStatus(status,null);await v.status();assert.equal(v.select('agy','agy-model').disabled,true);assert.match(v.find('[data-cx-program="agy"] [data-cx-group-reason]').textContent,/движок не сообщил поддержку режима/);
 });
 
 for(const page of ['chat','new','first'])test('311: '+page+' refreshes cold status after catalogue discovery without inventing default',async()=>{
@@ -215,7 +257,7 @@ for(const room of [false,true])test('316: explicit via groups routed models, whi
 });
 
 test('316: router models inherit Codex capability refusals and vanish from the group when metadata is absent',async()=>{
- const v=ui();v.H.models.codex=[{id:'opaque',label:'Opaque',via:'provider-router',viaStatus:{ok:true}}];v.H.turnModes.codex.read={ok:false,reason:'provider disabled'};await v.open();const button=v.select('codex','opaque');assert.equal(button.disabled,true);assert.match(button.textContent,/provider disabled/);await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+ const v=ui();v.H.models.codex=[{id:'opaque',label:'Opaque',via:'provider-router',viaStatus:{ok:true}}];v.H.turnModes.codex.read={ok:false,reason:'provider disabled'};await v.open();const button=v.select('codex','opaque');assert.equal(button.disabled,true);assert.match(v.find('[data-cx-program="provider-router"] [data-cx-group-reason]').textContent,/provider disabled/);await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
  v.H.models.codex=[{id:'opaque',label:'Opaque'}];await v.status();assert.equal(v.document.querySelector('[data-cx-program="provider-router"]'),null);assert.ok(v.find('[data-cx-program="codex"] [data-cx-model="opaque"]'));
 });
 
@@ -224,20 +266,20 @@ for(const page of ['chat','new'])test('328: '+page+' keeps offline router models
  const pending=new Set<Promise<Data>>(),get=(path:string,body?:Data)=>{const p=call(h.api,path,body?{body}:{}).then(r=>r.body);pending.add(p);void p.finally(()=>pending.delete(p));return p},settle=async()=>{do{await Promise.all([...pending]);await immediate()}while(pending.size)};
  const initial=await get('/api/status'),v=ui({page,room:page==='new',fetch:get,statusFetch:()=>get('/api/status')});v.H.project=initial.project;v.ctx.binding.applyStatus(initial,null);await v.open();await settle();assert.equal(v.select('codex','gpt-routed').disabled,false);
  offline=true;await v.providers(catalogue());await settle();
- assert.ok(v.find('[data-cx-program="provider-router"]'));const unavailable=v.select('codex','gpt-routed');assert.equal(unavailable.disabled,true);assert.match(unavailable.textContent,/provider-router не отвечает: \/health: HTTP 503/);assert.equal(v.select('codex','qwen-native').disabled,false);
+ assert.ok(v.find('[data-cx-program="provider-router"]'));const unavailable=v.select('codex','gpt-routed');assert.equal(unavailable.disabled,true);assert.match(v.find('[data-cx-program="provider-router"] [data-cx-group-reason]').textContent,/provider-router не отвечает: \/health: HTTP 503/);assert.equal(v.select('codex','qwen-native').disabled,false);
  unavailable.disabled=false;await unavailable.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0,'forged enabled DOM cannot bypass engine availability');
  offline=false;await v.providers(catalogue());await settle();assert.equal(v.select('codex','gpt-routed').disabled,false);await v.select('codex','gpt-routed').emit('click');await settle();
  assert.deepEqual(v.requests.filter(r=>r.body),[{path:page==='new'?'/api/room':'/api/panes/worker',body:page==='new'?{model:'gpt-routed',vendor:'codex',folder:true}:{vendor:'codex',model:'gpt-routed'}}]);assert.equal(h.codex.calls.length+h.provider.calls.length,0);
 });
 
 for(const viaStatus of [undefined,{}, {ok:'true'}, {ok:false}])test('328: missing or malformed router availability cannot enable a routed model: '+JSON.stringify(viaStatus),async()=>{
- const v=ui();v.H.models.codex=[{id:'opaque',label:'Opaque',via:'provider-router',viaStatus}];await v.open();const button=v.select('codex','opaque');assert.equal(button.disabled,true);assert.match(button.textContent,/provider-router не отвечает/);await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+ const v=ui();v.H.models.codex=[{id:'opaque',label:'Opaque',via:'provider-router',viaStatus}];await v.open();const button=v.select('codex','opaque');assert.equal(button.disabled,true);assert.match(v.find('[data-cx-program="provider-router"] [data-cx-group-reason]').textContent,/provider-router не отвечает/);await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
 });
 
 
 test('334: Ollama has its own cloud/local group; daemon refusal disables its models without touching Codex/router',async()=>{
  const v=ui();await v.open();const next=catalogue();next.providers.push({id:'ollama',title:'Ollama',subtitle:'облако и локально',kind:'local',installed:true,checking:false,models:[{id:'glm-5.3:cloud',label:'glm-5.3:cloud · облако'},{id:'gemma4:latest',label:'gemma4:latest · локально'}]} as any);v.H.turnModes.ollama={read:{ok:true}};await v.providers(next);
  assert.match(v.find('[data-cx-program="ollama"]').textContent,/Ollama.*облако и локально.*2 модели/);assert.match(v.select('ollama','glm-5.3:cloud').textContent,/облако/);assert.match(v.select('ollama','gemma4:latest').textContent,/локально/);assert.equal(v.select('ollama','glm-5.3:cloud').disabled,false);assert.doesNotMatch(v.find('[data-cx-program="codex"]').textContent,/glm-5.3/);assert.doesNotMatch(v.find('[data-cx-program="router"]').textContent,/glm-5.3/);
- v.H.turnModes.ollama={read:{ok:false,reason:'демон не запущен; запустите ollama serve'}};await v.providers(next);assert.equal(v.select('ollama','glm-5.3:cloud').disabled,true);assert.match(v.select('ollama','glm-5.3:cloud').textContent,/демон не запущен/);await v.select('ollama','glm-5.3:cloud').emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+ v.H.turnModes.ollama={read:{ok:false,reason:'демон не запущен; запустите ollama serve'}};await v.providers(next);assert.equal(v.select('ollama','glm-5.3:cloud').disabled,true);assert.match(v.find('[data-cx-program="ollama"] [data-cx-group-reason]').textContent,/демон не запущен/);await v.select('ollama','glm-5.3:cloud').emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
  v.H.turnModes.ollama={read:{ok:true}};await v.providers(next);await v.select('ollama','glm-5.3:cloud').emit('click');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{vendor:'ollama',model:'glm-5.3:cloud'}}]);
 });

@@ -75,8 +75,8 @@
   // TS-20h: program identity comes from the catalogue; mode support comes from status.
   const connectionKind=kind=>({subscription:'подписка',apikey:'ключ API',local:'локально'}[kind]||'вид подключения не указан');
   const modelsN=n=>n+' '+(n%10===1&&n%100!==11?'модель':n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'модели':'моделей');
-  const modelMode=()=>{const p=seat();return p&&(!isRoom(p)||p.busy)?p.mode:cx().noFolder?'chat':'read'};
-  const modeStamp=()=>JSON.stringify([modelMode(),H.turnModes||{},H.models||{}]);
+  const modelMode=()=>{const p=seat();return p?p.mode:cx().noFolder?'chat':'read'};
+  const modeStamp=()=>{const p=seat(),rows=pop&&pop.__models&&pop.__models.rows||[];return JSON.stringify([modelMode(),p&&[p.vendor,p.model,p.kind,p.role,!!p.busy],H.turnModes||{},H.models||{},rows.map(r=>[r.id,r.installed,r.checking])])};
   function modelSupport(vendor,model){if(model&&model.via==='provider-router'&&(!model.viaStatus||model.viaStatus.ok!==true))return {ok:false,reason:model.viaStatus&&typeof model.viaStatus.reason==='string'&&model.viaStatus.reason.trim()?model.viaStatus.reason:'provider-router не отвечает: движок не сообщил доступность'};const p=pop&&pop.__models&&pop.__models.rows&&pop.__models.rows.find(p=>p.id===vendor);
     if(p&&(p.installed===null||p.checking))return {ok:false,reason:'Программа проверяется, повторите через несколько секунд'};
     if(p&&p.installed===false)return {ok:false,reason:'Программа не установлена'};
@@ -97,6 +97,26 @@
     const codex=groups.find(g=>g.id==='codex'),routed=codex?codex.models.filter(m=>m.via==='provider-router'):[];
     if(routed.length){codex.models=codex.models.filter(m=>m.via!=='provider-router');groups.splice(groups.indexOf(codex)+1,0,{id:'provider-router',vendor:'codex',title:'provider-router',kind:'local',subtitle:'локально · через Codex',availability:codex.availability,modelsReason:'',models:routed})}return groups;
   }
+  function groupAccess(group){const p=seat(),caps=H.turnModes&&H.turnModes[group.vendor]||{},current=caps[modelMode()],full=caps.all,supports=group.models.map(m=>modelSupport(group.vendor,m));
+    const allOnly=full&&full.ok===true&&Object.entries(caps).every(([mode,cap])=>mode==='all'||!cap||cap.ok!==true),limited=!group.availability&&current&&current.ok===false&&full&&full.ok===true&&group.id!=='provider-router';
+    const withoutTools=full&&typeof full.note==='string'&&/без инструментов Harnessy/i.test(full.note),warning=p&&(p.kind==='orchestrator'||p.role==='orchestrator')&&withoutTools?'Без инструментов Harnessy оркестратор не сможет назначать роли и писать другим местам.':'';
+    const reason=limited?(allOnly?'Работает только в режиме «Полный доступ»':'В режиме «'+modeLabel(modelMode())+'» недоступно; можно выбрать «Полный доступ»')+(withoutTools?' · без инструментов Harnessy':''):[...new Set(supports.map(s=>s.reason||s.note).filter(Boolean))].join(' · ');
+    return {reason,warning,canSwitch:!!(limited&&p&&pop&&p.id===pop.__binding.pane&&!p.busy&&!cx().noFolder&&group.models.length)};
+  }
+  function accessStamp(groupId){const p=seat(),group=modelGroups().find(g=>g.id===groupId);return JSON.stringify([p&&[p.id,p.vendor,p.model,p.mode,p.kind,p.role,p.cwd,p.writePaths,p.worktree,!!p.busy],group&&[group.id,group.vendor,group.availability,group.models.map(m=>m.id),H.turnModes&&H.turnModes[group.vendor]]])}
+  function accessCurrent(panel,ticket){const state=panel&&panel.__models,group=modelGroups(panel).find(g=>g.id===ticket.group);return modelsCurrent(panel)&&state&&state.access===ticket&&accessStamp(ticket.group)===ticket.stamp&&group&&groupAccess(group).canSwitch}
+  function requestFullAccess(groupId){const panel=pop,state=panel&&panel.__models,group=modelGroups(panel).find(g=>g.id===groupId);if(!state||state.saving||!modelsCurrent(panel)||!group||!groupAccess(group).canSwitch)return;
+    state.failure='';state.access={group:groupId,stamp:accessStamp(groupId)};state.accessGroup=groupId;redrawModels(panel);const confirm=panel.querySelector('[data-cx-access-confirm]');if(confirm)confirm.focus();
+  }
+  async function confirmFullAccess(){const panel=pop,state=panel&&panel.__models,ticket=state&&state.access;if(!ticket||state.saving||!accessCurrent(panel,ticket))return;state.saving=true;redrawModels(panel);
+    try{const ok=await setSeat({mode:'all'},'Права места',{valid:()=>accessCurrent(panel,ticket),pendingValid:()=>accessCurrent(panel,ticket),accepted:r=>r.pane&&r.pane.mode==='all',failed:r=>{if(modelsCurrent(panel)){state.failure='Настройка не применена · '+(typeof (r&&r.reason)==='string'?r.reason:typeof (r&&r.error)==='string'?r.error:'нет связи')}}});
+      if(ok&&modelsCurrent(panel)){state.failure='';state.accessNotice='Полный доступ включён. Выберите модель.'}
+    }finally{if(state.access===ticket)state.access=null;state.saving=false;modelsStatus();redrawModels(panel)}
+  }
+  function groupAccessHTML(group,state){const access=groupAccess(group),ticket=state&&state.access,confirm=ticket&&ticket.group===group.id;
+    return (access.reason?'<div class="cx-note" data-cx-group-reason>'+esc(access.reason)+'</div>':'')+(access.warning?'<div class="cx-note cx-access-warning" data-cx-access-warning>'+esc(access.warning)+'</div>':'')+
+      (confirm?'<div class="cx-access-confirm" role="alertdialog" aria-label="Подтверждение полного доступа"><b>Полный доступ для места «'+esc(L.paneName(seat()))+'»</b><p>Модель сможет менять файлы проекта и запускать команды.</p><p>После смены прав выберите модель '+esc(group.title)+'.</p><button type="button" class="btn sm" data-cx-access-confirm'+(state.saving?' disabled':'')+'>Подтвердить полный доступ</button> <button type="button" class="btn sm ghost" data-cx-access-cancel'+(state.saving?' disabled':'')+'>Отмена</button></div>':access.canSwitch?'<div class="cx-note"><button type="button" class="btn sm ghost cx-mode-action" data-cx-full-access="'+esc(group.id)+'"'+(state&&state.saving?' disabled':'')+'>Переключить место на «Полный доступ»</button></div>':'');
+  }
   function modelsCurrent(panel){return panel===pop&&L.bindingCurrent(panel.__binding)}
   function redrawModels(panel){if(!modelsCurrent(panel)||stack[stack.length-1]!=='model')return;
     const input=panel.querySelector('.cx-find'),value=input&&input.value,focused=document.activeElement===input,groups=Array.from(panel.querySelectorAll('[data-cx-program]')).map(g=>[g.dataset.cxProgram,g.classList.contains('open')]);
@@ -108,7 +128,7 @@
     const request=++state.request;state.loading=true;state.error='';redrawModels(panel);let r=null;
     try{if(H.on)r=await L.api('/api/providers/catalog')}catch{}
     if(!modelsCurrent(panel)||request!==state.request)return;state.loading=false;const rows=modelRows(r);
-    if(rows){state.rows=rows;redrawModels(panel);const stamp=modeStamp();let status=null;
+    if(rows){state.rows=rows;modelsStatus();const stamp=modeStamp();let status=null;
       try{status=await L.api('/api/status')}catch{}
       if(!modelsCurrent(panel)||request!==state.request||stamp!==modeStamp())return;
       if(status&&status.project===panel.__binding.project&&Array.isArray(status.panes)&&status.models&&typeof status.models==='object'&&!Array.isArray(status.models)){
@@ -118,7 +138,7 @@
     else state.error=typeof (r&&r.error)==='string'?r.error:H.on?'ответ каталога недоступен или неполон':'движок не подключён';
     redrawModels(panel);
   }
-  function modelsStatus(){if(!pop||!pop.__models)return;if(!modelsCurrent(pop)){close();return}const state=pop.__models,stamp=modeStamp();if(stamp!==state.modes){state.modes=stamp;state.revision++}redrawModels(pop)}
+  function modelsStatus(){if(!pop||!pop.__models)return;if(!modelsCurrent(pop)){close();return}const state=pop.__models,stamp=modeStamp();if(stamp!==state.modes){state.modes=stamp;state.revision++}if(state.access&&accessStamp(state.access.group)!==state.access.stamp){state.access=null;state.failure='Настройки места изменились. Подтвердите полный доступ заново.'}redrawModels(pop)}
   addEventListener('live:status',modelsStatus);addEventListener('pagehide',close);
   async function chooseModel(button){const panel=pop,state=panel&&panel.__models;if(!state||state.saving||!modelsCurrent(panel))return;
     const program=modelGroups(panel).find(p=>p.id===(button.dataset.cxGroup||button.dataset.cxVendor)),model=program&&program.models.find(m=>m.id===button.dataset.cxModel);
@@ -169,10 +189,10 @@
     model(){const p=seat(),c=cx(),cur=p?p.model:c.model,sv=p?p.vendor:c.vendor,state=pop.__models,rows=modelGroups();
       return hd('Модель',p?(isRoom(p)?'разговор без роли':'место «'+esc(L.paneName(p))+'»'):'разговор без роли')+'<input class="cx-find" aria-label="Найти модель" placeholder="Найти модель…">'+
         (!state||state.loading?note('Читаю каталог моделей…'):'')+(state&&state.error?'<div class="cx-note" role="status">Каталог моделей не прочитан · '+esc(state.error)+'. <button type="button" class="btn sm ghost" data-cx-model-retry>Повторить</button></div>':'')+
-        (state&&state.failure?'<div class="cx-note" data-cx-model-error role="status">'+esc(state.failure)+(state.loginRequired?' · <a href="11-connections.html">Открыть «Подключения»</a>':'')+'</div>':'')+
+        (state&&state.failure?'<div class="cx-note" data-cx-model-error role="status">'+esc(state.failure)+(state.loginRequired?' · <a href="11-connections.html">Открыть «Подключения»</a>':'')+'</div>':'')+(state&&state.accessNotice?note(esc(state.accessNotice)):'')+
         rows.map((g,i)=>{const models=g.models;
-          return '<div class="cx-grp'+(g.vendor===sv&&g.models.some(m=>m.id===cur)||!sv&&i===0?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+(g.subtitle?esc(g.subtitle)+' · ':g.kind?connectionKind(g.kind)+' · ':'')+(g.availability?esc(g.availability):modelsN(g.models.length))+'</small></div><div class="cx-sub">'+
-            (g.modelsReason?note(esc(g.modelsReason)):'')+models.map(m=>{const support=modelSupport(g.vendor,m),disabled=!support.ok||!!(state&&state.saving);return '<button type="button" class="cx-row cx-model'+(m.id===cur&&g.vendor===sv?' on':'')+(disabled?' dis':'')+'" data-cx-model="'+esc(m.id)+'" data-cx-vendor="'+esc(g.vendor)+'" data-cx-group="'+esc(g.id)+'" data-q="'+esc(g.title+' '+m.label+' '+m.id)+'"'+(disabled?' disabled':'')+'><span class="cx-model-text"><b>'+esc(m.label)+'</b>'+(!support.ok||support.note?'<small>'+esc(support.reason||support.note)+'</small>':'')+'</span>'+(m.id===cur&&g.vendor===sv?'<span class="ck">✓</span>':'')+'</button>'}).join('')+'</div></div>';
+          return '<div class="cx-grp'+(g.vendor===sv&&g.models.some(m=>m.id===cur)||!sv&&i===0||state&&state.accessGroup===g.id?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+(g.subtitle?esc(g.subtitle)+' · ':g.kind?connectionKind(g.kind)+' · ':'')+(g.availability?esc(g.availability):modelsN(g.models.length))+'</small></div>'+groupAccessHTML(g,state)+'<div class="cx-sub">'+
+            (g.modelsReason?note(esc(g.modelsReason)):'')+models.map(m=>{const support=modelSupport(g.vendor,m),disabled=!support.ok||!!(state&&state.saving);return '<button type="button" class="cx-row cx-model'+(m.id===cur&&g.vendor===sv?' on':'')+(disabled?' dis':'')+'" data-cx-model="'+esc(m.id)+'" data-cx-vendor="'+esc(g.vendor)+'" data-cx-group="'+esc(g.id)+'" data-q="'+esc(g.title+' '+m.label+' '+m.id)+'"'+(disabled?' disabled':'')+'><span class="cx-model-text"><b>'+esc(m.label)+'</b></span>'+(m.id===cur&&g.vendor===sv?'<span class="ck">✓</span>':'')+'</button>'}).join('')+'</div></div>';
         }).join('')+(!rows.length?note('В статусе пока нет списка моделей.'):'' )+
         note('Смена модели сохраняет разговор. Контекст можно перенести.')+hd('Размышления','для выбранной модели')+'<div class="cx-seg dis"><span>выкл</span><span class="on">адаптивно</span><span>вкл</span></div>'+note('Усилие и размышления пока недоступны: харнесс не передаёт их месту.');},
     effort(){ return hd('Усилие')+['низкое','среднее','высокое','очень высокое','максимум'].map(x=>row(x,{dis:true})).join('')+note('Пока недоступно: харнесс не передаёт усилие месту. Варианты — для выбранной модели.'); },
@@ -236,6 +256,9 @@
       await L.refreshStatus();if(H.project!==project)return;close();renderAll();L.toast('Без проекта: модель ничего не читает');return; }
     if(e.target.closest('[data-cx-mkdir]')||e.target.closest('[data-cx-opendir]')){ await submitProjectMenu(!!e.target.closest('[data-cx-mkdir]'));return; }
     const md=e.target.closest('[data-cx-mode]'); if(md){ await setSeat({mode:md.dataset.cxMode},'Права места'); return; }
+    const full=e.target.closest('[data-cx-full-access]');if(full){requestFullAccess(full.dataset.cxFullAccess);return}
+    if(e.target.closest('[data-cx-access-cancel]')){if(pop.__models&&!pop.__models.saving){pop.__models.access=null;redrawModels(pop)}return}
+    if(e.target.closest('[data-cx-access-confirm]')){await confirmFullAccess();return}
     if(e.target.closest('[data-cx-model-retry]')){await loadModels(pop);return}
     const mo=e.target.closest('[data-cx-model]'); if(mo){ await chooseModel(mo); return; }
     const pk=e.target.closest('[data-cx-pick]'); if(pk){ pick(pk.dataset.cxPick); return; }
@@ -260,10 +283,10 @@
   async function switchProject(path){ const c=cx();L.invalidateBinding();let r=null; try{ r=await L.api('/api/project',{path}); }catch(x){} if(!r||!r.ok){ L.toast('Проект не открылся: '+esc((r&&r.error)||'нет связи')); return; }
     c.noFolder=false;delete c.noFolderPending; L.save(); S().ui.pane=ROOM; L.save(); H.projects=null; const status=await L.refreshStatus(); close(); renderAll(); L.log('настройка','Проект: '+base(path)); L.toast('Проект: '+esc(base(r.project||path))+rolesNotice(projectRoleCount(r,status))); }
   function setSeat(patch,what,choice){ return L.configureSetting(async binding=>{ if(choice&&!choice.valid())return false;const p=seat(),c=cx(),failed=r=>{if(choice)choice.failed(r);else L.toast('Харнесс не принял: '+esc((r&&r.error)||'нет связи'));return false};
-    if((!p||isRoom(p))&&patch.model&&H.on&&!(p&&p.busy)){ let r=null; try{ r=await L.api('/api/room',{model:patch.model,...(patch.vendor?{vendor:patch.vendor}:{}),folder:!c.noFolder},{trace:binding.trace}); }catch(x){} if(!L.bindingCurrent(binding)) return false;if(!r||!r.ok)return failed(r);
+    if((!p||isRoom(p))&&patch.model&&H.on&&!(p&&p.busy)&&modelMode()!=='all'){ let r=null; try{ r=await L.api('/api/room',{model:patch.model,...(patch.vendor?{vendor:patch.vendor}:{}),folder:!c.noFolder},{trace:binding.trace}); }catch(x){} if(!L.bindingCurrent(binding)) return false;if(!r||!r.ok)return failed(r);
       S().ui.pane=ROOM; L.save(); await L.refreshStatus();if(!L.bindingCurrent(binding)) return false;L.log('настройка','Разговор без роли: '+modelLabel(patch.model,patch.vendor)); L.toast('Без роли · '+esc(modelLabel(patch.model,patch.vendor))+(c.noFolder?' · без проекта':'')); close(); renderAll(); return true; }
     if(!p){ if(patch.mode) c.rights=patch.mode; if(patch.model) c.model=patch.model; L.save(); draw(); renderAll(); return true; }
-    let r=null; try{ r=await L.api('/api/panes/'+encodeURIComponent(p.id),patch,{trace:binding.trace}); }catch(e){} if(!L.bindingCurrent(binding)) return false;if(!r||!r.ok)return failed(r);
+    let r=null; try{ r=await L.api('/api/panes/'+encodeURIComponent(p.id),patch,{trace:binding.trace}); }catch(e){} if(!L.bindingCurrent(binding)||choice&&choice.pendingValid&&!choice.pendingValid()) return false;if(!r||!r.ok)return failed(r);if(choice&&choice.accepted&&!choice.accepted(r))return failed({error:'Харнесс не подтвердил полный доступ; обновите статус и повторите подтверждение'});
     Object.assign(p,r.pane); const i=(H.panes||[]).findIndex(x=>x.id===p.id); if(i>=0) H.panes[i]=p;
     const val=patch.mode?modeLabel(patch.mode):modelLabel(patch.model,patch.vendor),next=r.appliesFrom==='next'?' · применится со следующего хода':''; L.log('настройка',what+' «'+L.paneName(p)+'»: '+val+next); L.toast(what+' «'+esc(L.paneName(p))+'»: '+esc(val)+next); L.hStatus(); draw(); renderAll(); return true; }); }
   function pick(kind){ L.toast('вложения пока не передаются модели'); }
