@@ -9,6 +9,12 @@ export function codexExecStream(){
   if(value.type==='thread.started'){if(started||typeof value.thread_id!=='string'||!/^[-a-zA-Z0-9_]{1,100}$/.test(value.thread_id))throw invalid();started=true;return [{type:'session',id:value.thread_id}]}
   if(value.type==='turn.started'){if(!started||turn)throw invalid();turn=true;return []}
   if(value.type==='error'||value.type==='turn.failed'){finished=true;const e=record(value.error)?value.error:value;const message=typeof e.message==='string'?e.message:'Ход Codex завершился с ошибкой';return [{type:'error',code:/401|sign.?in|unauthoriz/i.test(message)?'not_logged_in':'turn_failed',text:message}]}
+  // Metadata fallback ErrorItem before turn.started is a nonterminal notice.
+  // Once the turn starts, the existing failure handling remains unchanged.
+  if(started&&!turn&&value.type==='item.completed'&&record(value.item)&&value.item.type==='error'){
+   const item=value.item;if(typeof item.id!=='string'||!/^[-a-zA-Z0-9_]{1,100}$/.test(item.id)||typeof item.message!=='string'||!item.message)throw invalid();
+   return [{type:'warning',id:item.id,code:'codex_notice',text:item.message}];
+  }
   if(!turn)throw invalid();
   if(value.type==='turn.completed'){if(tools.size||!record(value.usage))throw invalid();const u=value.usage,keys=['input_tokens','output_tokens','cached_input_tokens'];if(keys.some(k=>typeof u[k]!=='number'||!Number.isSafeInteger(u[k])||Number(u[k])<0)||Number(u.cached_input_tokens)>Number(u.input_tokens))throw invalid();finished=true;return [{type:'done',usage:{input:Number(u.input_tokens)-Number(u.cached_input_tokens),output:Number(u.output_tokens),cacheRead:Number(u.cached_input_tokens)}}]}
   if(!['item.started','item.updated','item.completed'].includes(value.type)||!record(value.item))throw invalid();const item=value.item;if(typeof item.id!=='string'||!/^[-a-zA-Z0-9_]{1,100}$/.test(item.id)||typeof item.type!=='string')throw invalid();

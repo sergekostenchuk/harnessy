@@ -41,7 +41,7 @@ export interface PeerTools {
 export type RouteEnv=Partial<Record<'HTTPS_PROXY'|'HTTP_PROXY'|'ALL_PROXY'|'https_proxy'|'http_proxy'|'all_proxy',string>>;
 export const FORBIDDEN_ENV={claude:['ANTHROPIC_API_KEY','CLAUDECODE','CLAUDE_CODE_SIMPLE'],codex:['OPENAI_API_KEY']} as const;
 export interface TurnHandle {interrupt():Promise<void>;steer(text:string):Promise<void>}
-export interface ToolTrace {id:string;name:string;phase:'call'|'result';data?:unknown;outcome?:'ok'|'failed'|'rejected'|'timeout'|'cancelled';reason?:string;error?:string}
+export interface ToolTrace {id:string;name:string;phase:'call'|'result'|'warning';data?:unknown;outcome?:'ok'|'failed'|'rejected'|'timeout'|'cancelled';reason?:string;error?:string}
 export interface TurnContext {
  /** Optional owner-probe binding check, after preparation and immediately before inference. */
  beforeModel?(run:{provider:string;model:string}):Promise<void>;
