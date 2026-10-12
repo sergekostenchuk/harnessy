@@ -337,7 +337,7 @@ export class Runtime {
  let prompt=messageText;if(pane.carry){prompt='Прежний разговор (был без папки, продолжается здесь):\n'+pane.carry+'\n\n---\nНовое сообщение:\n'+prompt;pane.publish({type:'note',text:'в сообщение добавлен прежний разговор'})}
  if(summary.text){prompt=summary.text+'\n\n---\nСообщение тебе:\n'+prompt;pane.publish({type:'note',text:'в сообщение добавлена сводка соседей ('+[...summary.text].length+' символов)'})}
  if(teamText)prompt=teamText+'\n\n---\n'+prompt;
- for(const r of records){const m=timestampMessage(r.from==='owner'?'me':'peer',r.from==='owner'?r.text:'[от '+this.labelOf(r.from,p)+'] '+r.text,this.clock.now());if(pythonTrim(m.text)){pane.transcript.push(m);pane.uncommitted.add(m);injected.push(m)}}
+ for(const r of records){const m=timestampMessage(r.from==='owner'?'me':'peer',r.from==='owner'?r.text:'[от '+this.labelOf(r.from,p)+'] '+r.text,this.clock.now());if(pythonTrim(m.text)){pane.append(m);pane.uncommitted.add(m);injected.push(m)}}
  p.state.startAttempt(pane,{turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),startedAt:this.clock.now(),deliverySeq:turn.deliverySeq});
  const current=()=>!p.closed&&p.active.get(id)===turn;
  let attempt=0,earlySession:string|null=null;
@@ -346,7 +346,7 @@ export class Runtime {
   const transferNotice=transfer&&!transferSaved?{...timestampMessage('peer','[от харнесс] '+transferLabel(transfer),this.clock.now()),contextTransfer:{...transfer,turnInstanceId:scope.turnInstanceId}}:null;
   const teamNotice=knowledge&&teamText&&!teamSaved?{...timestampMessage('peer','[от харнесс] '+teamText,this.clock.now()),teamKnowledge:{project:p.dir,chat:knowledge.chat,team:knowledge.team,turnInstanceId:scope.turnInstanceId}}:null;
   if(transferNotice)notices.push(transferNotice);if(teamNotice)notices.push(teamNotice);
-  if(notices.length){pane.transcript.push(...notices);try{p.state.saveChats(p.registry)}catch(e){pane.transcript=pane.transcript.filter(m=>!notices.includes(m));throw e}}
+  if(notices.length){for(const notice of notices)pane.append(notice);try{p.state.saveChats(p.registry)}catch(e){pane.transcript=pane.transcript.filter(m=>!notices.includes(m));throw e}}
   if(transferNotice){transferSaved=true;pane.publish({type:'contextTransfer',text:transferLabel(transfer!),transfer:transferNotice.contextTransfer,ts:transferNotice.ts})}
   if(teamNotice){teamSaved=true;pane.publish({type:'roleKnowledge',knowledge})}
   turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
@@ -383,7 +383,7 @@ export class Runtime {
  await this.recover(p,pane,true);
  const terminal=held?.type==='done'?held:{type:'done',sessionId:pane.sessionId,durationMs:0,usage:{input:null,output:null,cacheRead:null}};
  if(terminal.type==='done'&&object(terminal.usage))pane.tokens=terminal.usage as unknown as import('@harnessy/providers').Usage;
- pane.publish({...terminal,...(response.artifacts?{artifacts:structuredClone(response.artifacts),turnInstanceId:scope.turnInstanceId}:{}),...(interrupted?{interrupted:true}:{})});terminalSent=true;
+ pane.publish({...terminal,seq:response.seq,chat:p.state.activeChat(pane)!.id,messages:injected.map(({seq,role,text,ts})=>({seq,role,text,ts})),...(response.artifacts?{artifacts:structuredClone(response.artifacts),turnInstanceId:scope.turnInstanceId}:{}),...(interrupted?{interrupted:true}:{})});terminalSent=true;
  success=true;return result.text
  }catch(e){
  if(!turn.result){pane.transcript=pane.transcript.filter(m=>!injected.includes(m));for(const m of injected)pane.uncommitted.delete(m);
@@ -479,7 +479,7 @@ export class Runtime {
  chatGet(id:string,initiator:Initiator){return chatGet(this,id,initiator)}
  chatsNew(input:{pane?:unknown;carry?:unknown},initiator:Initiator){return chatsNew(this,input,initiator)}
  chatsOpen(input:{chat?:unknown;carry?:unknown},initiator:Initiator){return chatsOpen(this,input,initiator)}
- handoff(input:{to?:unknown;from?:unknown;kind?:unknown;text?:unknown},initiator:Initiator){return handoff(this,input,initiator)}
+ handoff(input:{to?:unknown;from?:unknown;kind?:unknown;chat?:unknown;seqs?:unknown;prompt?:unknown;text?:unknown},initiator:Initiator){return handoff(this,input,initiator)}
  chat(input:Record<string,unknown>,initiator:Initiator){return chat(this,input,initiator)}
  pinsGet(initiator:Initiator){this.requireOwner(initiator);return this.pins.get()}
  async pinSet(input:Parameters<Pins['set']>[0],initiator:Initiator){this.requireOwner(initiator);return this.pins.set(input)}

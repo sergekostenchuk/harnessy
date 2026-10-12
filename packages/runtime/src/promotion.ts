@@ -84,13 +84,13 @@ function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,op:Promotion){
  if(seat.vendor!==op.vendor||seat.model!==op.model||seat.mode!==op.mode)invalid('настройки сохранённого места изменились');
  p.team=loadTeam(p.team.harnessDir);const pane=p.registry.add(seat);
  if(c.pane!==op.sid){
-  const moved=op.source.cwd!==p.dir,history=moved?conversationHistory(op.source.chat.transcript):jsonClone(op.source.chat.transcript).map(m=>({...m,provenance:{project:op.input.project,pane:op.source.pane,chat:c!.id}}));
+  const moved=op.source.cwd!==p.dir,history=moved?conversationHistory(op.source.chat.transcript).map((m,i)=>{const seq=op.source.chat.transcript[i]!.seq;return seq===undefined?m:{...m,seq}}):jsonClone(op.source.chat.transcript).map(m=>({...m,provenance:{project:op.input.project,pane:op.source.pane,chat:c!.id}}));
   const sourcePane=p.registry.get(op.source.pane);if(sourcePane&&p.state.chats.active[sourcePane.id]===c.id)p.state.newChat(sourcePane);
-  c.pane=op.sid;c.transcript=history;c.documents=jsonClone(op.input.documents);c.sessionId=!moved?op.source.chat.sessionId:null;c.carry=op.source.chat.carry;
+  c.pane=op.sid;c.transcript=history;c.transcriptSeq=op.source.chat.transcriptSeq??0;c.documents=jsonClone(op.input.documents);c.sessionId=!moved?op.source.chat.sessionId:null;c.carry=op.source.chat.carry;
   if(moved){const carry=transcriptText(conversationHistory(op.source.chat.transcript));if(carry&&!c.carry.endsWith(carry))c.carry=(c.carry?c.carry+'\n\n':'')+carry}
   c.model=op.model;c.vendor=op.vendor;c.closed=null;
  }
- p.state.chats.active[pane.id]=c.id;pane.transcript=c.transcript;pane.sessionId=c.sessionId;pane.carry=c.carry;pane.seen={};pane.revision++;
+ p.state.chats.active[pane.id]=c.id;pane.transcript=c.transcript;pane.transcriptSeq=c.transcriptSeq??0;pane.sessionId=c.sessionId;pane.carry=c.carry;pane.seen={};pane.revision++;
  save(p,c,op);
  const thread='promotion:'+op.id;
  for(const [suffix,kind,text,origin] of [['intro','note',op.intro,'onboarding'],['task','task',op.input.task,'promotion']] as const){

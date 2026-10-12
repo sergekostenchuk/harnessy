@@ -56,7 +56,8 @@ export function promotionInput(runtime:Runtime){const list=runtime.chatsList(OWN
 
 // 154 extends stored chats with a persisted revision; all pre-extension bytes still match the historical goldens.
 export function legacyChatBytes(text:string){
- const data=parseCompat(text) as {chats:Record<string,{revision?:number;revisionHash?:string}>};
- for(const chat of Object.values(data.chats)){if(chat.revision!==undefined){assert.ok(Number.isSafeInteger(chat.revision)&&chat.revision>0);assert.match(chat.revisionHash??'',/^[0-9a-f]{64}$/);delete chat.revision;delete chat.revisionHash}}
+ const data=parseCompat(text) as {chats:Record<string,{revision?:number;revisionHash?:string;transcriptSeq?:number;transcript:{seq?:number}[]}>};
+ // TS-19.2 adds stable ids; the historical payload/float bytes remain identical.
+ for(const chat of Object.values(data.chats)){assert.equal(chat.transcriptSeq,chat.transcript.length);chat.transcript.forEach((m,i)=>{assert.equal(m.seq,i+1);delete m.seq});delete chat.transcriptSeq;if(chat.revision!==undefined){assert.ok(Number.isSafeInteger(chat.revision)&&chat.revision>0);assert.match(chat.revisionHash??'',/^[0-9a-f]{64}$/);delete chat.revision;delete chat.revisionHash}}
  return compatJson(data,2);
 }
