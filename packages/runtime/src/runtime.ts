@@ -1,4 +1,5 @@
 import {turnFailure} from './turn-failure.ts';
+import {SshTunnels} from './ssh-tunnels.ts';
 import {ApiAgent,apiRoute,API_MODES} from './api-agent.ts';
 import {createLlmService,keySlot,MacKeyStore,routeModels,type KeyStore,type LlmDependencies,type ProviderConfig} from '@harnessy/llm';
 import {TraceStore,currentTrace,traceReason,type TraceContext} from './trace.ts';
@@ -40,6 +41,7 @@ const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Ini
 type AttemptDecision=NonNullable<Record_['attempt']>;
 function turnMeasurements(event:Record<string,unknown>|null){if(event?.type!=='done')return {};const raw=object(event.usage)?event.usage:{},value=(key:string)=>typeof raw[key]==='number'&&Number.isSafeInteger(raw[key])&&raw[key]>=0?raw[key] as number:null;return {usage:{input:value('input'),output:value('output'),cacheRead:value('cacheRead')},...(event.usageIncomplete===true?{usageIncomplete:true as const}:{}),...(typeof event.durationMs==='number'?{durationMs:event.durationMs}:{})}}
 export class Runtime {
+ readonly sshTunnels:SshTunnels;
  readonly providerOperations:ProviderOperations;readonly network:NetworkSettings;readonly networkChecks:NetworkChecks;
  private apiAgents=new Map<string,ApiAgent>();readonly llmKeys:KeyStore;private unsubscribeLlm:()=>void;
  get llm(){return this.modelService(()=>this.settings.llmProviders(),listener=>this.settings.onLlmRoutesChanged(listener))}
@@ -47,7 +49,7 @@ export class Runtime {
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
  private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();private cliQuotas=new WeakMap<ProjectState,ProviderLimitsStore>();
  readonly deps:RuntimeDeps;readonly actions:RuntimeActions;
- constructor(deps:RuntimeDeps,actions:RuntimeActions){this.deps=deps;this.actions=actions;this.llmKeys=deps.llmKeys??new MacKeyStore();
+ constructor(deps:RuntimeDeps,actions:RuntimeActions){this.deps=deps;this.actions=actions;this.llmKeys=deps.llmKeys??new MacKeyStore();this.sshTunnels=deps.sshTunnels??new SshTunnels();
  if(!actions||['ask','merge','assignRole','afterTurn','restorePendingAcks','cancelAsks'].some(k=>typeof (actions as unknown as Record<string,unknown>)[k]!=='function'))throw new RuntimeError('actions_required','порт действий обязателен',500);
  this.clock=deps.clock??systemClock;this.connections=deps.connections??new Connections();this.projectRegistry=deps.projectRegistry??new ProjectRegistry();this.defaultDir=canonicalPath(deps.defaultDir??process.env.CHAT_WORK_DIR??'/Users/Shared/simple-claude-chat');
  const current=()=>this.current&&!this.current.closed?this.current.dir:null;
@@ -512,6 +514,6 @@ export class Runtime {
  async settingsPatch(scope:unknown,patch:unknown,initiator:Initiator){this.requireOwner(initiator);
  if(object(patch)&&Object.keys(TRANSFER_DEFAULTS).some(key=>Object.hasOwn(patch,key))){if(scope&&scope!=='owner')throw new RuntimeError('context_settings_invalid','настройки переноса: только область owner',400);try{transferSettings(patch)}catch(e){throw new RuntimeError('context_settings_invalid',message(e),400)}}
  const result=await this.settings.patch(scope,patch);this.traceSettings();return result}
- async close(){this.unsubscribeLlm();try{await this.closeProject()}finally{await this.providerOperations.close();await Promise.all([...this.traces].map(t=>t.close()))}}
+ async close(){this.unsubscribeLlm();const tunnels=this.sshTunnels.close();try{await this.closeProject()}finally{await tunnels;await this.providerOperations.close();await Promise.all([...this.traces].map(t=>t.close()))}}
 }
 export async function createRuntime(deps:RuntimeDeps,actions:RuntimeActions):Promise<Runtime>{const runtime=new Runtime(deps,actions);await runtime.openProject(deps.projectDir);return runtime}

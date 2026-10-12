@@ -1,4 +1,5 @@
 export {Runtime,createRuntime} from './runtime.ts';
+export {SshTunnels,SshTunnelError,type SshTunnelConfig,type SshTunnelSnapshot,type SshTunnelCode,type SshTunnelOptions} from './ssh-tunnels.ts';
 export {Pane,Registry,Approval,APPROVAL_TIMEOUT_MS} from './pane.ts';
 export {EventBus,type Selector,type Subscription} from './events.ts';
 export {RuntimeError} from './errors.ts';
