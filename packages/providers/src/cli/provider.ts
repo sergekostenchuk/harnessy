@@ -1,3 +1,4 @@
+import {safeDiagnostic} from '../diagnostic.ts';
 import {limitsReason} from '../limits-reason.ts';
 import {mkdtemp,writeFile,rm,open} from 'node:fs/promises';
 import {constants} from 'node:fs';
@@ -140,7 +141,7 @@ export class CliProvider {
    lease?.validate(); // No await between the final path check and process creation.
    const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...stateArgs,...mcpArgs,...sessionArgs],cwd:seat.cwd,env:{...this.environment(ctx.env),...configEnv},timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:stream,started:()=>ctx.modelStarted?.()});
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
-   if(exit.code!==0||exit.signal){const failure=this.d.failure?.(exit);throw new ProviderError(failure?.code??'transport_lost',clean(failure?.text??'CLI: процесс завершился без успешного ответа'),sessionId)}
+   if(exit.code!==0||exit.signal){const failure=this.d.failure?.(exit);throw new ProviderError(failure?.code??'transport_lost',clean(failure?.text??('CLI: процесс завершился '+(exit.signal?'по сигналу '+exit.signal:'с кодом '+exit.code)+(exit.stderr.trim()?': '+safeDiagnostic(clean(exit.stderr)):' · stderr пуст'))),sessionId)}
    if(sessionFile){
     let id:string;
     try{const fd=await open(sessionFile,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);try{

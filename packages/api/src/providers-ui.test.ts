@@ -299,3 +299,8 @@ test('344: HTTP catalog keeps local models and renders cloud failure on the actu
  const v=ui(async(path:string,body:any)=>(await call(h.api,path,{...(body?{body}:{})})).body,undefined,undefined,h.dir);await v.settle();await v.find('[data-pv="ollama"]').emit('click');await v.settle();
  assert.match(v.find('.cbody').textContent,/glm-5.3:cloud · облако/);assert.match(v.find('.cbody').textContent,/Не удалось обновить облачный каталог.*HTTP 503/);assert.equal(v.find('[data-program-probe="ollama"]').disabled,false);
 });
+
+test('350: provider card exposes failed probe code, safe excerpt and measured duration as text',async()=>{
+ const v=ui();await open(v);await v.find('[data-program-probe]').emit('click');await v.find('[data-program-confirm]').emit('click');await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'probe',provider:'antigravity',model:'model-a',approvalId:'probe-antigravity',status:'error',error:{code:'transport_lost',reason:'upstream <offline>',durationMs:10000}})});
+ const card=v.find('[role="alert"]');assert.match(card.textContent,/upstream <offline>.*transport_lost.*10000 мс/);assert.equal(card.querySelector('offline'),null);
+});

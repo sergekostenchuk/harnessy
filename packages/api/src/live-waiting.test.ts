@@ -188,20 +188,32 @@ for(const place of ['worker','room'])for(const state of ['uncertain','recovering
   v.sandbox.refreshStatus=async()=>{v.functions.applyStatus((await call(h.api,'/api/status')).body)};
   const row=v.sidebar(chats);assert.match(row,/ждёт решения/);assert.doesNotMatch(row,/data-attempt-action/);
   await v.sidebarClick(chat.id,place);
-  assert.equal(v.S.ui.pane,place,cold?'cold':'warm');assert.equal(v.H.pane.id,place);assert.equal(v.cards.get('live-waiting')!.dataset.pane,place);assert.match(v.cards.get('live-waiting')!.innerHTML,/Итог хода|восстановлен/);
+  assert.equal(v.S.ui.pane,place,cold?'cold':'warm');assert.equal(v.H.pane.id,place);assert.equal(v.cards.get('live-waiting')!.dataset.pane,place);assert.match(v.cards.get('live-waiting')!.innerHTML,/Ход не завершён|восстановлен/);
   assert.ok(v.S.chat.some(m=>m.text==='saved answer'));assert.ok(v.requests.some(r=>r.path==='/api/chats/'+chat.id));assert.equal(v.requests.some(r=>r.path==='/api/chats/open'),false);
  }
  assert.equal(h.provider.calls.length,calls);assert.equal((await call(h.api,'/api/status')).body.panes.find((p:any)=>p.id===place).waiting.status,state);
 });
 
-test('247/249: EventBus → HTTP SSE → window shows expandable transfer without ending reply; history restores it',async t=>{
+test('247/249: EventBus → HTTP SSE → window shows expandable transfer only after success; history restores it',async t=>{
  const h=await fixture(t),pane=h.runtime.registry.get('worker')!,p=h.runtime.project;pane.transcript=[{role:'me',text:'<script>historical</script>',ts:1},{role:'ai',text:'saved answer',ts:2}];pane.sessionId=null;p.state.saveChats(p.registry);const cid=p.state.chats.active.worker!;
  const stream=await sse(h.api);t.after(()=>stream.close());const view=ui({realFinish:true});Object.assign(view.H,{on:true,project:h.dir,active:{worker:cid}});view.S.ui.pane='worker';view.H.cur={text:'',tools:[]};const active=view.H.cur;
  const gate=deferred();t.after(()=>gate.resolve());h.provider.onRun=async(s,_text,ctx)=>{ctx.modelStarted?.();await gate.promise;ctx.publish({type:'delta',text:'NEW REPLY'});ctx.publish({type:'done',sessionId:'new',model:s.model,usage:{input:33,output:2,cacheRead:0},durationMs:1});return {text:'NEW REPLY',sessionId:'new'}};
- const sent=await call(h.api,'/api/chat',{body:{pane:'worker',message:'continue',kind:'question'}});assert.equal(sent.status,200);await until(()=>stream.frames.some(e=>e.type==='contextTransfer'));
+ const sent=await call(h.api,'/api/chat',{body:{pane:'worker',message:'continue',kind:'question'}});assert.equal(sent.status,200);await until(()=>h.provider.calls.length===1);assert.equal(stream.frames.some(e=>e.type==='contextTransfer'),false);assert.equal(pane.transcript.some(m=>m.contextTransfer),false);gate.resolve();await h.runtime.idle();await until(()=>stream.frames.some(e=>e.type==='contextTransfer'));
  const event=stream.frames.find(e=>e.type==='contextTransfer');view.functions.hEvent(event);view.functions.hEvent(event);assert.equal(view.finishes,0);assert.strictEqual(view.H.cur,active);assert.equal(view.S.chat.length,1);assert.match(view.S.chat[0]!.html,/<details.*<summary>контекст передан новой модели/);assert.match(view.S.chat[0]!.html,/&lt;script&gt;/);assert.doesNotMatch(view.S.chat[0]!.html,/<script>/);
  const status=(await call(h.api,'/api/status')).body;assert.equal(status.panes.find((x:any)=>x.id==='worker').contextTransfer.chat,cid);
  view.functions.hEvent({...event,transfer:{...event.transfer,project:'/other'}});assert.equal(view.S.chat.length,1);
  gate.resolve();await h.runtime.idle();await until(()=>stream.frames.some(e=>e.type==='done'));for(const e of stream.frames.filter(e=>['delta','done'].includes(e.type)))view.functions.hEvent(e);assert.equal(view.finishes,1);assert.equal(view.S.chat.at(-1)!.text,'NEW REPLY');
  view.sandbox.fetch=async(path:string)=>({json:async()=>(await call(h.api,path)).body});await view.functions.loadChat();const note=view.S.chat.find(m=>m.transferId===event.transfer.turnInstanceId)!;assert.ok(note);assert.match(note.html,/<details/);assert.equal(view.S.chat.filter(m=>m.transferId).length,1);
+});
+
+test('350: failed CLI turn → status → chat card; queued message waits for the same retry/skip decision', {timeout:15000}, async t=>{
+ const h=await fixture(t);await call(h.api,'/api/chat',{body:{pane:'worker',message:'history'}});await h.runtime.idle();
+ h.provider.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();throw new ProviderError('transport_lost','upstream <offline>; token=HIDDEN')};
+ await call(h.api,'/api/chat',{body:{pane:'worker',message:'failing'}});await h.runtime.idle();
+ const queued=await call(h.api,'/api/chat',{body:{pane:'worker',message:'next'}});assert.equal(queued.body.queued,true);assert.ok(queued.body.waiting.queuedSeqs.includes(queued.body.seq));
+ const status=await call(h.api,'/api/status');assert.equal(status.status,200,status.text);const row=status.body.panes.find((p:any)=>p.id==='worker');assert.equal(row.waiting.failure.code,'transport_lost');assert.doesNotMatch(status.text,/HIDDEN/);
+ const v=ui();v.H.on=true;v.S.ui.pane='worker';v.functions.applyStatus(status.body);const html=v.cards.get('live-waiting')!.innerHTML;
+ assert.match(html,/Ход не завершён/);assert.match(html,/transport_lost.*upstream &lt;offline&gt;/);assert.match(html,/ждёт решения по прошлому ходу/);assert.match(html,/data-attempt-action="retry"/);assert.match(html,/data-attempt-action="skip"/);
+ h.provider.onRun=null;v.sandbox.fetch=async(path,options)=>({json:async()=>(await call(h.api,path,options?.body?{body:JSON.parse(options.body)}:{})).body});
+ await v.click({attemptProject:h.dir,attemptPane:'worker',attemptId:row.waiting.turnInstanceId,attemptAction:'skip'});await h.runtime.idle();assert.match(h.provider.calls.at(-1)!.message,/next/);assert.doesNotMatch(h.provider.calls.at(-1)!.message,/failing/);assert.equal(h.runtime.waiting('worker'),null);
 });

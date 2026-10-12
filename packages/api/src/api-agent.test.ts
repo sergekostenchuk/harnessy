@@ -73,3 +73,11 @@ test('21b HTTP: API orchestrator proposes and creates another API seat only afte
  const proposals=(await call(h.api,'/api/seats/proposals')).body.proposals;assert.equal(proposals.length,1);assert.equal(proposals[0].seats[0].vendor,'api:local');ref={proposalId:proposals[0].proposalId,version:proposals[0].version};const confirmed=await call(h.api,'/api/seats/confirm',{body:{...ref,project:h.dir}});assert.equal(confirmed.status,200,confirmed.text);
  await h.runtime.idle();phase='create';await h.runtime.runTurn('worker','CREATE_CONFIRMED');await h.runtime.idle();const added=[...h.runtime.registry.panes.values()].find(p=>p.id!=='worker');assert.ok(added);assert.equal(phase,'done');assert.equal(added.vendor,'api:local');assert.equal(added.model,'test-model');assert.equal(h.provider.calls.length,0);assert.equal(h.codex.calls.length,0);
 });
+
+test('350: failed API stream creates the same durable waiting card without a transfer-success receipt', {timeout:15000}, async t=>{
+ const server=await endpoint(t,(_b,_req,res)=>{res.writeHead(503,{'Content-Type':'application/json'});res.end(JSON.stringify({error:{message:'upstream offline',type:'server_error'}}))});
+ const h=await fixture(t,{deps:{llmKeys:new MemoryKeys()}});await connect(h,server.url,'chat');const pane=h.runtime.registry.get('worker')!;pane.transcript=[{role:'me',text:'saved context',ts:1}];h.runtime.project.state.saveChats(h.runtime.registry);
+ await call(h.api,'/api/chat',{body:{pane:'worker',message:'fail'}});await h.runtime.idle();const status=await call(h.api,'/api/status');assert.equal(status.status,200,status.text);const waiting=status.body.panes.find((p:any)=>p.id==='worker').waiting;
+ assert.equal(waiting.status,'uncertain');assert.deepEqual(waiting.actions,['retry','skip']);assert.equal(waiting.failure.code,'turn_failed');assert.match(waiting.failure.reason,/provider_error: Ошибка провайдера/);assert.equal(pane.transcript.some(m=>m.contextTransfer),false);
+ const queued=await call(h.api,'/api/chat',{body:{pane:'worker',message:'next'}});assert.ok(queued.body.waiting.queuedSeqs.includes(queued.body.seq));assert.equal(server.bodies.length,1);
+});

@@ -19,7 +19,7 @@ if(args.join(' ')==='--output-format json -p /usage'){
 }else if(args.join(' ')==='--output-format json models'){
  const model={id:'gemini-3.8-flash-high',label:'Gemini 3.8 Flash (High)'};
  out('models',{models:scenario==='duplicate-model'?[model,model]:[model]});
-}else if(args.includes('stream-json')&&args.includes('--dangerously-skip-permissions')){console.log(JSON.stringify({event:'init',conversation_id:'agy-session',init:{}}));console.log(JSON.stringify({event:'result',result:{conversation_id:'agy-session',status:'SUCCESS',response:'готов'}}));
+}else if(args.includes('stream-json')&&args.includes('--dangerously-skip-permissions')){if(scenario==='turn-crash'){console.error('service unavailable; api_key=FIXTURE-SECRET');process.exit(7)}console.log(JSON.stringify({event:'init',conversation_id:'agy-session',init:{}}));console.log(JSON.stringify({event:'result',result:{conversation_id:'agy-session',status:scenario==='turn-error'?'ERROR':'SUCCESS',response:'готов',error:'quota exceeded; api_key=FIXTURE-SECRET'}}));
 }else {console.error('Unexpected inference or login invocation');process.exit(91)}
 `;
 export function antigravityFixture(t:TestContext,scenario='ok'){

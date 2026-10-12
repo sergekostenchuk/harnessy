@@ -1,3 +1,4 @@
+import {fixture} from './test-support.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ProviderCatalog,CLI_DESCRIPTORS,cliEntry} from './catalog.ts';
@@ -26,4 +27,9 @@ for(const scenario of ['malformed','error','spent-turn','forged-command','missin
 });
 test('307: descriptor exposes full access without Harnessy MCP and no read/edit fallback',()=>{
  assert.equal(ANTIGRAVITY.mcp,undefined);assert.equal(ANTIGRAVITY.noHarnessMcp,true);assert.equal(ANTIGRAVITY.modes.read,undefined);assert.equal(ANTIGRAVITY.modes.edit,undefined);
+});
+
+for(const scenario of ['turn-error','turn-crash'])test('350: Antigravity '+scenario+' exposes the cause without credentials', {timeout:15000},async t=>{
+ const f=antigravityFixture(t,scenario),h=fixture();Object.assign(h.seat,{vendor:'antigravity',model:'gemini-3.8-flash-high',mode:'all',cwd:f.dir});Object.assign(h.ctx,{projectDir:f.dir,writableRoots:[]});
+ await assert.rejects(f.entry.runTurn(h.seat,'готов',h.ctx),(e:any)=>{assert.equal(e.code,scenario==='turn-error'?'turn_failed':'transport_lost');assert.match(e.message,scenario==='turn-error'?/quota exceeded/:/кодом 7.*service unavailable/);assert.doesNotMatch(e.message,/FIXTURE-SECRET/);return true});assert.doesNotMatch(JSON.stringify(h.events),/FIXTURE-SECRET/);
 });

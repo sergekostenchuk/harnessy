@@ -30,7 +30,7 @@ export function artifactPaths(event:{name?:unknown;detail?:unknown},project:stri
  if(typeof event.name!=='string'||!/^(?:Write|Edit|MultiEdit|apply_patch|.*[._](?:write_file|edit_file))$/i.test(event.name)||typeof event.detail!=='string')return [];
  return [...new Set(event.detail.split(', ').map(path=>path.startsWith(project+'/')?path.slice(project.length+1):path.startsWith('./')?path.slice(2):path).filter(path=>path.length<=4096&&!/[\x00-\x1f\x7f\\]/.test(path)&&/^(artifacts|docs)\//.test(path)&&!path.split('/').some(x=>!x||x==='.'||x==='..')&&/\.[a-z\d]{1,12}$/i.test(path)))].slice(0,50);
 }
-export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;vendor?:string|null;outcome:'error';errorCode:string;usage?:import('@harnessy/providers').Usage;usageIncomplete?:true;durationMs?:number}
+export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;vendor?:string|null;outcome:'error';errorCode:string;failure?:import('./turn-failure.ts').TurnFailure;usage?:import('@harnessy/providers').Usage;usageIncomplete?:true;durationMs?:number}
 export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}
 export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;deliverySeq?:number;status?:'uncertain'}
 export interface DocumentRef {project:string;path:string}

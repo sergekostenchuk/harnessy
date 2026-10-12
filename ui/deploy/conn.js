@@ -85,7 +85,7 @@
     if(data.status==='done'&&!validTurn(data.turn,ticket.model)||data.status==='error'&&(!data.error||!text(data.error.code,100)||!text(data.error.reason,1000)))return;
     if(data.status==='error'&&data.error.code==='capability_unsupported')PROGRAMS.unsupported.set(ticket.provider,{stamp:ticket.support,reason:data.error.reason});
     ticket.status=data.status;if(PROGRAMS.trial===ticket&&ticket.status!=='awaiting_approval')hideTrial();
-    const textResult=ticket.status==='done'?'Пробный ход завершён · '+ticket.model+' · '+data.turn.durationMs+' мс\n'+data.turn.text.slice(0,4000):ticket.status==='declined'?'Пробный ход отменён · approval_declined':ticket.status==='error'?data.error.reason+' · '+data.error.code:ticket.status==='running'?'Пробный ход…':'Ожидается ваше разрешение · '+ticket.price.label;
+    const textResult=ticket.status==='done'?'Пробный ход завершён · '+ticket.model+' · '+data.turn.durationMs+' мс\n'+data.turn.text.slice(0,4000):ticket.status==='declined'?'Пробный ход отменён · approval_declined':ticket.status==='error'?data.error.reason+' · '+data.error.code+(Number.isFinite(data.error.durationMs)&&data.error.durationMs>=0?' · '+data.error.durationMs+' мс':''):ticket.status==='running'?'Пробный ход…':'Ожидается ваше разрешение · '+ticket.price.label;
     PROGRAMS.results.set(ticket.provider,{text:textResult,error:ticket.status==='error'});programRender();
   }
   async function programAction(id,action){syncBinding();const p=program(id),b=binding(),key=jobKey(id);if(!p||p.checking||PROGRAMS.error||!current(b)||PROGRAMS.jobs.has(key))return false;if(!['check','terminal'].includes(action)||action==='terminal'&&(p.installed!==true||p.checking||!p.login.command))return false;

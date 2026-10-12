@@ -1,3 +1,4 @@
+import {turnFailure} from './turn-failure.ts';
 import {withPathLock} from '@harnessy/team';
 import type {Initiator} from '@harnessy/journal';
 import {RuntimeError} from './errors.ts';
@@ -17,7 +18,9 @@ export function place(p:ProjectState,id:string,text='нет такого мес�
  const pane=p.registry.get(id);if(!pane)throw new RuntimeError('pane_unknown',text,404);return pane;
 }
 export function waiting(p:ProjectState,pane:Pane):Waiting|null {
- const attempt=p.state.attempts[pane.id];if(pane.status==='uncertain'&&attempt)return {status:'uncertain',recordSeqs:[...attempt.recordSeqs],startedAt:attempt.startedAt,turnInstanceId:attempt.turnInstanceId,actions:p.state.deliveryBoundary(pane.id,p.journal,attempt)===null?['retry']:['retry','skip']};
+ const attempt=p.state.attempts[pane.id],turns=attempt?p.state.activeChat(pane,false)?.turns:undefined,failed=Array.isArray(turns)?turns.find(t=>t?.turnInstanceId===attempt?.turnInstanceId):undefined;
+ const failure=failed?turnFailure({code:failed.errorCode,message:failed.failure?.reason??'Причина отказа не была сохранена'},p.dir,failed.failure?.durationMs??failed.durationMs??0):undefined;
+ if(pane.status==='uncertain'&&attempt)return {...(failure?{failure}:{}),queuedSeqs:p.journal.pendingFor(pane.id).filter(r=>!attempt.recordSeqs.includes(r.record.seq)).map(r=>r.record.seq),status:'uncertain',recordSeqs:[...attempt.recordSeqs],startedAt:attempt.startedAt,turnInstanceId:attempt.turnInstanceId,actions:p.state.deliveryBoundary(pane.id,p.journal,attempt)===null?['retry']:['retry','skip']};
  if(pane.status==='recovering'){const result=p.state.results(pane).find(r=>r.runtime?.effectsPending||p.state.undurable.has(r.runtime?.turnInstanceId));if(result&&typeof result.runtime?.turnInstanceId==='string')return {status:'recovering',recordSeqs:Array.isArray(result.runtime.recordSeqs)?[...result.runtime.recordSeqs]:[],startedAt:null,turnInstanceId:result.runtime.turnInstanceId,actions:['finish']}}
  return null
 }
