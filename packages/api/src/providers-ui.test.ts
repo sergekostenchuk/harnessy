@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
-import {deferred,fixture,sse} from './test-helpers.ts';
+import {deferred,fixture,sse,call} from './test-helpers.ts';
 import {ProviderCatalog,LoginTerminal,type CatalogEntry} from '@harnessy/providers';
+import {antigravityFixture} from '../../providers/src/antigravity-test-helpers.ts';
 import type {TestContext} from 'node:test';
 const read=(p:string)=>readFileSync(new URL('../../../'+p,import.meta.url),'utf8');
 const login=(state='ok')=>({state,account:'u•••@example.test',command:'agy',checkedAt:100,reason:''});
@@ -21,6 +22,7 @@ function ui(handler?:(path:string,body:any)=>Promise<any>,initial:any=catalog(pr
  const posts=(suffix='')=>requests.filter(r=>r.body&&r.path.endsWith(suffix));return {...d,H,context,requests,toasts,find,settle,streams,posts};
 }
 async function open(v:ReturnType<typeof ui>){await v.settle();await v.find('[data-pv="antigravity"]').emit('click');}
+async function refreshPrograms(v:ReturnType<typeof ui>){await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'check'})});await v.settle()}
 
 test('263/268: the catalog preserves the three sketch views and opens descriptor cards with real models, occupants, version and limits; reads never call a model',async()=>{
  const v=ui(undefined,catalog(provider({capabilities:{headless:true,resume:true,mcp:true,limits:true},limits:{ref:'/api/limits#antigravity'}}),provider({id:'copilot',title:'GitHub Copilot',binary:'copilot',installed:false,version:null,models:[],login:login('none')})));await v.settle();
@@ -161,6 +163,37 @@ for(const source of ['catalog','http','sse'])test('276: '+source+' capability re
 });
 
 
-test('277/ОКНА: refreshing only checkedAt cannot invalidate the server approval for unchanged provider and model',async()=>{
- let checkedAt=1791800000000;const v=ui(async path=>path==='/api/providers/catalog'?catalog(provider({login:{...login(),checkedAt}})):undefined);await open(v);await v.find('[data-program-probe]').emit('click');checkedAt+=1000;await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'check',at:checkedAt})});await v.settle();await v.find('[data-program-confirm]').emit('click');await v.settle();assert.deepEqual(v.posts('/api/approve').map(r=>r.body.decision),['allow']);assert.equal(v.posts('/api/approve')[0].body.id,'probe-antigravity');
+for(const source of ['catalog','check'])test('277/ОКНА: '+source+' refreshing only checkedAt preserves the same approval and confirm button',async()=>{
+ let checkedAt=1791800000000;const v=ui(async path=>path==='/api/providers/catalog'?catalog(provider({login:{...login(),checkedAt}})):path.endsWith('/check')?{ok:true,login:{...login(),checkedAt}}:undefined);await open(v);await v.find('[data-program-probe]').emit('click');const dialog=v.find('dialog'),confirm=v.find('[data-program-confirm]');checkedAt+=1000;if(source==='catalog')await refreshPrograms(v);else await v.find('[data-program-check]').emit('click');await v.settle();assert.equal(v.find('dialog'),dialog);assert.equal(v.find('[data-program-confirm]'),confirm);await confirm.emit('click');await v.settle();assert.deepEqual(v.posts('/api/approve').map(r=>r.body.decision),['allow']);assert.equal(v.posts('/api/approve')[0].body.id,'probe-antigravity');
+});
+
+for(const change of ['account','models','provider','mcp','version','missing-account'])test('271/ОКНА: accepted '+change+' changes immediately revoke the approval, including A-B-A and retained buttons',async()=>{
+ const original=catalog(provider());let rows=original,probe=0;
+ const v=ui(async(path,body)=>path==='/api/providers/catalog'?structuredClone(rows):path.endsWith('/probe')?{ok:true,provider:'antigravity',model:body.model,approvalId:'approval-'+ ++probe,status:'awaiting_approval',price:{kind:'subscription',label:'расходуется подписка'}}:undefined);await open(v);await v.find('[data-program-probe]').emit('click');const oldConfirm=v.find('[data-program-confirm]');
+ rows=change==='account'?catalog(provider({login:{...login(),account:'z•••@other.test'}})):change==='models'?catalog(provider({models:[{id:'model-b',label:'Model B'}]})):change==='provider'?catalog(provider({id:'copilot',title:'GitHub Copilot'})):change==='mcp'?catalog(provider({capabilities:{headless:true,resume:true,mcp:false,limits:false}})):change==='version'?catalog(provider({version:'2.0'})):catalog(provider({login:{state:'ok',command:'agy',checkedAt:100}}));
+ await refreshPrograms(v);assert.equal(v.document.querySelector('dialog'),null,'changed binding must close without waiting for a click');assert.deepEqual(v.posts('/api/approve').map(r=>[r.body.id,r.body.decision]),[['approval-1','deny']]);
+ rows=original;await refreshPrograms(v);await oldConfirm.emit('click');await v.settle();assert.equal(v.document.querySelector('dialog'),null);assert.equal(v.posts('/api/approve').filter(r=>r.body.decision==='allow').length,0);
+ await v.find('[data-program-probe]').emit('click');await v.find('[data-program-confirm]').emit('click');await v.settle();assert.deepEqual(v.posts('/api/approve').filter(r=>r.body.decision==='allow').map(r=>r.body.id),['approval-2'],'only an explicit new approval may run');
+});
+
+for(const path of ['catalog','check'])test('271/ОТСУТСТВИЕ: '+path+' revocation survives a failed denial, replay and repeated receipt of the old approval',async()=>{
+ let account=login().account;const v=ui(async url=>url==='/api/providers/catalog'?catalog(provider({login:{...login(),account}})):url.endsWith('/check')?{ok:true,login:{...login(),account}}:url==='/api/approve'?{ok:false,error:'fixture offline'}:undefined);await open(v);await v.find('[data-program-probe]').emit('click');const confirm=v.find('[data-program-confirm]');
+ account='z•••@other.test';if(path==='check')await v.find('[data-program-check]').emit('click');else await refreshPrograms(v);await v.settle();assert.equal(v.document.querySelector('dialog'),null);assert.equal(v.posts('/api/approve')[0].body.decision,'deny');
+ account=login().account;await refreshPrograms(v);await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'probe',provider:'antigravity',model:'model-a',approvalId:'probe-antigravity',status:'awaiting_approval'})});await confirm.emit('click');await v.find('[data-program-probe]').emit('click');await v.settle();assert.equal(v.document.querySelector('dialog'),null);assert.equal(v.posts('/api/approve').filter(r=>r.body.decision==='allow').length,0);assert.equal(v.posts('/api/approve').length,2,'a failed denial may be retried without reviving permission');
+});
+
+for(const change of ['account','models','mcp','check'])test('271/ОКНА: real HTTP '+change+' replacement and return remove the server approval without a model call',{timeout:10000},async t=>{
+ const h=await connectedPrograms(t),v=h.v,entry=h.source.get('fixture'),auth=entry.auth,models=entry.models;await v.find('[data-pv="fixture"]').emit('click');await v.find('[data-program-probe]').emit('click');const confirm=v.find('[data-program-confirm]'),id=v.posts('/probe').length&&[...h.runtime.owner.approvals.keys()][0];assert.ok(id);
+ if(change==='account'||change==='check')entry.auth=async()=>({loggedIn:true,email:'zoe@other.test'});else if(change==='models')entry.models=async()=>[{id:'model-b',label:'Model B'}];else entry.capabilities.mcp=false;
+ if(change==='check'){entry.models=async()=>[{id:'model-b',label:'Model B'}];await v.find('[data-program-check]').emit('click')}else await refreshPrograms(v);await h.declined.promise;await v.settle();assert.equal(v.document.querySelector('dialog'),null);assert.equal(h.runtime.owner.approvals.size,0);assert.deepEqual(v.posts('/api/approve').map(r=>[r.body.id,r.body.decision]),[[id,'deny']]);if(change==='check')assert.match(v.find('.conn-models').textContent,/Model B/,'the catalog event queued behind check and denial must be applied');
+ entry.auth=auth;entry.models=models;entry.capabilities.mcp=true;await refreshPrograms(v);await confirm.emit('click');await v.settle();assert.deepEqual(h.turns,[]);assert.equal(v.posts('/api/approve').filter(r=>r.body.decision==='allow').length,0);
+});
+
+test('271/ОКНА: opening the catalog closes the old approval before returning to the same provider',async()=>{
+ const v=ui();await open(v);await v.find('[data-program-probe]').emit('click');const confirm=v.find('[data-program-confirm]');await v.find('#addbtn').emit('click');await v.settle();assert.equal(v.document.querySelector('dialog'),null);await v.find('[data-program-open="antigravity"]').emit('click');await confirm.emit('click');await v.settle();assert.deepEqual(v.posts('/api/approve').map(r=>r.body.decision),['deny']);
+});
+
+test('260/276 integration: the merged Antigravity descriptor reaches conn.js through actual routes and refuses a probe before any process or owner approval',{timeout:20000},async t=>{
+ const f=antigravityFixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}}),v=ui(undefined,undefined,(path,init)=>fetch(h.api.url+path,init),h.dir);await open(v);assert.match(v.find('.conn-facts').textContent,/1\.2\.17/);assert.equal(v.find('[data-program-probe]').disabled,true);assert.equal(v.find('[data-program-probe]').textContent,'Недоступно');assert.match(v.find('.cbody').textContent,/Нет изолированного MCP-конфига/);
+ await v.find('[data-program-check]').emit('click');await v.settle();assert.equal(v.find('[data-program-check]').disabled,false);assert.equal(v.find('[data-program-probe]').disabled,true);const before=f.capture().length;await v.find('[data-program-probe]').emit('click');assert.equal(v.posts('/probe').length,0);const r=await call(h.api,'/api/providers/antigravity/probe',{body:{model:'gemini-3.8-flash-high'}});assert.equal(r.status,409);assert.equal(r.body.code,'capability_unsupported');assert.equal(f.capture().length,before);assert.equal(h.runtime.owner.approvals.size,0);assert.equal(v.document.querySelector('dialog'),null);
 });
