@@ -149,3 +149,14 @@ test('218: subscription level and extra usage flag come from login/usage, never 
 test('234: successful and failed Claude tool results keep the call id; pane tools use their own bridge trace',async()=>{
  const f=fixture('claude'),traces:any[]=[];f.ctx.traceEvent=e=>traces.push(e);const h=harness([init,{type:'assistant',session_id:'session',message:{content:[{type:'tool_use',id:'a',name:'Read',input:{file_path:'x'}},{type:'tool_use',id:'b',name:'Write',input:{file_path:'y'}},{type:'tool_use',id:'c',name:'mcp__panes__send',input:{}}]}},{type:'user',session_id:'session',message:{content:[{type:'tool_result',tool_use_id:'a',content:'success'},{type:'tool_result',tool_use_id:'b',content:'failure',is_error:true},{type:'tool_result',tool_use_id:'c',content:'sent'}]}},done]);await new ClaudeProvider(h.deps).runTurn(f.seat,'fixture',f.ctx);assert.deepEqual(traces.map(t=>[t.id,t.phase,t.outcome??null]),[['a','call',null],['b','call',null],['a','result','ok'],['b','result','failed']]);
 });
+
+test('220: current Claude usage keys retain subscription windows alongside seven_day_breakdown metadata',async()=>{
+ const body={five_hour:{utilization:29,resets_at:'2026-10-12T12:00:00Z'},seven_day:{utilization:39,resets_at:'2026-10-18T00:00:00Z'},seven_day_opus:{utilization:0,resets_at:null},seven_day_sonnet:{utilization:12,resets_at:null},seven_day_cowork:null,seven_day_omelette:null,seven_day_breakdown:{as_of:'2026-10-12T06:12:00Z',window_started_at:'2026-10-11T00:00:00Z',rows:[]},weekly_scoped_shares:[],extra_usage:{is_enabled:false},limits:{},spend:{}};
+ const p=new ClaudeProvider({env:{},readOauthLogin:async()=>({token:'fixture-secret',plan:'Max'}),usageFetch:(async()=>new Response(JSON.stringify(body),{status:200})) as typeof fetch}),result=await p.limits();assert.equal(result.ok,true);if(!result.ok)return;
+ assert.deepEqual(result.windows.map(w=>[w.label,w.percentUsed,w.windowMinutes]),[['5 ч',29,300],['неделя',39,10080],['неделя · Opus',0,10080],['неделя · Sonnet',12,10080]]);assert.equal(result.extraUsageEnabled,false);assert.equal(result.windows[0]!.resetsAt,Date.parse(body.five_hour.resets_at)/1000);assert.doesNotMatch(JSON.stringify(result),/fixture-secret|breakdown|window_started_at/);
+});
+
+test('220: objects without utilization do not invalidate five-hour and weekly windows or invent model windows',()=>{
+ const base={five_hour:quotaUsage.five_hour,seven_day:quotaUsage.seven_day},expected=claudeUsage(base,123);
+ for(const key of ['seven_day_breakdown','seven_day_future_metadata','seven_day_'])for(const value of [{},{as_of:'2026-10-12T06:12:00Z',rows:[]},{rows:[{utilization:150,resets_at:'not-a-window'}]}])assert.deepEqual(claudeUsage({...base,[key]:value},123),expected);
+});

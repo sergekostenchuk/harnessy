@@ -29,6 +29,8 @@ export function claudeUsage(raw:unknown,now=Date.now()/1000,plan:string|null=nul
  if(!record(raw)||!('five_hour'in raw)||!('seven_day'in raw))return invalid;
  const windows:LimitWindow[]=[],specs:[string,string,number][]=[['five_hour','5 ч',300],['seven_day','неделя',10080]];
  for(const key of Object.keys(raw).filter(key=>key.startsWith('seven_day_'))){
+ // Breakdown metadata is not a window; a present utilization still requires strict validation below.
+ const value=raw[key];if(!record(value)||!('utilization'in value))continue;
  const model=key.slice('seven_day_'.length);if(model.length>48||!/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(model))return invalid;
  const name=model==='oauth_apps'?'приложения':model.split('_').map(part=>part[0]!.toUpperCase()+part.slice(1)).join(' ');
  specs.push([key,'неделя · '+name,10080]);
