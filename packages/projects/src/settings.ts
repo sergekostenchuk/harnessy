@@ -33,7 +33,7 @@ export class Settings {
    // Route and chain share this file and lock: publish their removal in one rename.
    if(value===undefined&&Object.hasOwn(owner,'network')){
     let network:NetworkConfig;try{network=validateNetwork(owner.network)}catch{throw new ProjectError('network_unreadable','Настройки выходов не читаются',409)}
-    delete network.chains['api:'+id];owner.network=network;
+    delete network.chains['api:'+id];if(network.policies)delete network.policies['api:'+id];owner.network=network;
    }
    const rollback=await beforeSave?.();if(value===undefined)delete rows[id];else rows[id]=value;
    try{writeJson(path,{...owner,llmProviders:rows})}catch{if(rollback)await rollback();throw new ProjectError('write_failed','Настройки маршрута не записаны; изменения отменены',500)}return {config:value??null,revision:this.llmRevision(value)};

@@ -60,7 +60,7 @@ export class ApiAgent implements Provider {
      if(!started){ctx.modelStarted?.();started=true}
      let emitted='',bytes=0,sawText=false;const filter=service.textRedactor(),publish=(value:string)=>{if(!value)return;if(!emitted&&text){text+='\n\n';ctx.publish({type:'delta',text:'\n\n'})}emitted+=value;text+=value;if(text.length>1024*1024)throw new ProviderError('protocol','Текст хода превысил предел');ctx.publish({type:'delta',text:value})};finish=undefined;pendingRequest=true;
      for await(const chunk of cancellable(service.stream({provider:this.route,model:seat.model,messages:structuredClone(messages),tools:tools.definitions,signal}),signal)){
-      stopped(signal);if(finish)throw new ProviderError('protocol','Событие после завершения ответа API');
+      stopped(signal);if(chunk.type!=='finish'&&chunk.type!=='usage')ctx.modelResponded?.();if(finish)throw new ProviderError('protocol','Событие после завершения ответа API');
       bytes+=Buffer.byteLength(JSON.stringify(chunk));if(bytes>4*1024*1024)throw new ProviderError('protocol','Ответ API превысил предел');
       if(chunk.type==='text-delta'){
        sawText||=chunk.text.length>0;publish(filter.push(chunk.text));
@@ -96,5 +96,5 @@ export class ApiAgent implements Provider {
    receipt();if(changed)throw new ProviderError('turn_failed','route_changed: маршрут API изменился');if(signal.aborted)throw new ProviderError('cancelled','Ход отменён');throw e;
   }finally{controller.abort();unsubscribe();ctx.setHandle(null);this.active.delete(controller);settle()}
  }
- private failed(failure:Failure){return new ProviderError(failure.code==='network_unavailable'?'network_unavailable':failure.code==='model_unsupported'?'model_unsupported':failure.code==='cancelled'?'cancelled':'turn_failed',failure.code+': '+failure.reason)}
+ private failed(failure:Failure){return new ProviderError(failure.code==='network_unavailable'||failure.code==='network_country_unverified'||failure.code==='network_no_reserve'||failure.code==='network_proxy_auth'?failure.code:failure.code==='model_unsupported'?'model_unsupported':failure.code==='cancelled'?'cancelled':'turn_failed',failure.code+': '+failure.reason)}
 }

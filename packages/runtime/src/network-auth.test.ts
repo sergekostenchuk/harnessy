@@ -34,6 +34,12 @@ test('22c r2: engine restart gets a new token; API dispatcher and HTTP client us
  assert.equal(await through(b.url.href,'http://origin.invalid/'),'private-proxy-access');assert.equal(await(await b.h.runtime.networkRelay.fetch('claude')('http://origin.invalid/')).text(),'private-proxy-access');assert.equal(b.up.connects.length,2);
  assert.ok(b.seen.every(q=>q.authorization===undefined&&q['proxy-authorization']===undefined));assert.ok(b.up.connects.every(q=>q.headers['proxy-authorization']!==b.auth));
 });
+test('22c r2/22d: turn listeners require authentication even after the turn closes',opts,async t=>{
+ const x=await setup(t),relay=x.h.runtime.networkRelay,turn=relay.begin('claude','fixture-seat',t.signal),env=await relay.environment('claude',t.signal,turn),url=new URL(env!.HTTP_PROXY!);assert.equal(url.password,x.url.password);
+ for(const method of ['GET','CONNECT'])assert.equal((await request(url,method)).status,407);assert.equal(x.up.connects.length,0);
+ assert.equal(await through(url.href,'http://origin.invalid/'),'private-proxy-access');await turn.close();const before=x.up.connects.length;
+ for(const method of ['GET','CONNECT']){assert.equal((await request(url,method)).status,407);assert.equal((await request(url,method,{'Proxy-Authorization':x.auth})).status,502)}assert.equal(x.up.connects.length,before);
+});
 test('22c r2: loopback redirect cannot escape a configured chain into direct traffic',opts,async t=>{
  let outside=0;const external=http.createServer((_q,r)=>{outside++;r.end('external-reached-directly')}),outsidePort=await listen(t,external),local=http.createServer((_q,r)=>{r.writeHead(302,{Location:'http://external-target.invalid:'+outsidePort+'/'});r.end()}),localPort=await listen(t,local),h=await fixture(t);
  await h.runtime.settings.changeNetwork(async c=>{c.migrated=true;c.chains.claude=[];return {result:undefined}});

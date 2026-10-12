@@ -17,6 +17,7 @@ export interface CliTurnInput {seat:CliSeat;message:string;roleNote:string;peers
 export type CliEvent=
  | {type:'session';id:string}
  | {type:'delta';text:string}
+ | {type:'response'} // Non-text model output (reasoning); never publish its contents.
  | {type:'tool.call';id:string;name:string;input?:unknown}
  | {type:'tool.result';id:string;output?:unknown;outcome:NonNullable<ToolTrace['outcome']>;reason?:string}
  | {type:'done';text?:string;sessionId?:string|null;usage?:Usage;durationMs?:number}

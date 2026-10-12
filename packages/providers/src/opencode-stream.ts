@@ -23,7 +23,7 @@ export function opencodeStream(){
    if(part.type!=='tool'||typeof part.callID!=='string'||typeof part.tool!=='string'||!record(part.state)||!['completed','error'].includes(String(part.state.status)))throw bad();
    events.push({type:'tool.call',id:part.callID,name:part.tool,input:part.state.input},{type:'tool.result',id:part.callID,outcome:part.state.status==='completed'?'ok':'failed',output:part.state.status==='completed'?part.state.output:undefined,...(part.state.status==='error'?{reason:'OpenCode: инструмент завершился с ошибкой'}:{})});
   }else if(value.type==='step_start'){if(part.type!=='step-start')throw bad()}
-  else if(value.type==='reasoning'){if(part.type!=='reasoning')throw bad()}
+  else if(value.type==='reasoning'){if(part.type!=='reasoning')throw bad();events.push({type:'response'})}
   else throw bad();
   return events;
  };

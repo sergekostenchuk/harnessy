@@ -39,7 +39,7 @@ export function createLlmService(deps:LlmDependencies):LlmService {
     const key=await resolveKey(config,signal);if(signal.aborted)throw new LlmError('cancelled');
     const fetcher:typeof fetch=async(url,init)=>{const headers=new Headers(init?.headers??(url instanceof Request?url.headers:undefined));if(!key){headers.delete('authorization');headers.delete('x-api-key');headers.delete('x-goog-api-key')}
      let current;try{current=route(request.provider)}catch{boundaryFailure='route_changed';throw new LlmError('route_changed')}if(JSON.stringify(current)!==JSON.stringify(config)){boundaryFailure='route_changed';throw new LlmError('route_changed')};
-     let result:Response;try{result=await (deps.providerFetch?.(request.provider)??deps.fetch??fetch)(url,{...init,headers,signal,redirect:'error',credentials:'omit'})}catch(e){if(e instanceof LlmError&&e.code==='network_unavailable')boundaryFailure=e.code;throw e}status=result.status;return result};
+     let result:Response;try{result=await (deps.providerFetch?.(request.provider)??deps.fetch??fetch)(url,{...init,headers,signal,redirect:'error',credentials:'omit'})}catch(e){if(e instanceof LlmError&&['network_unavailable','network_country_unverified','network_no_reserve','network_proxy_auth'].includes(e.code))boundaryFailure=e.code;throw e}status=result.status;return result};
     const events=piStream(model,request,key,signal,config.timeoutMs??300000,fetcher)[Symbol.asyncIterator]();
     for(;;){const next=await abortable(events.next(),signal);if(next.done)break;const e=next.value;
      if(e.type==='text_start'||e.type==='thinking_start'||e.type==='toolcall_start')yield {type:'block-start',index:e.contentIndex,blockType:e.type==='text_start'?'text':e.type==='thinking_start'?'reasoning':'tool-call'};

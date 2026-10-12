@@ -1,7 +1,8 @@
 import net,{type Socket} from 'node:net';
 import tls from 'node:tls';
 import {ProviderError} from '@harnessy/providers';
-export class NetworkError extends ProviderError {constructor(){super('network_unavailable','Нет готового сетевого выхода; проверьте цепочку провайдера')}}
+export type NetworkCode='network_unavailable'|'network_country_unverified'|'network_no_reserve'|'network_proxy_auth';
+export class NetworkError extends ProviderError {constructor(code:NetworkCode='network_unavailable',reason='Нет готового сетевого выхода; проверьте цепочку провайдера'){super(code,reason)}}
 export interface Destination {host:string;port:number}
 export interface Hop {id:string;type:'direct'|'proxy';url?:string;login?:string;password?:string}
 export const loopback=(host:string)=>host==='localhost'||host==='::1'||host==='[::1]'||/^127\.(?:\d+\.){2}\d+$/.test(host);
@@ -35,13 +36,13 @@ export async function connectHop(hop:Hop,target:Destination|null,signal:AbortSig
   if(!['http:','https:','socks5h:'].includes(url.protocol)||url.username||url.password)throw new NetworkError();
   socket=await dial(proxy,url.protocol==='https:',signal,ca);reader=new Reader(socket);
   if(url.protocol==='socks5h:'){
-   const auth=hop.login!==undefined||hop.password!==undefined;socket.write(Buffer.from([5,1,auth?2:0]));const hello=await reader.read(2);if(hello[0]!==5||hello[1]!== (auth?2:0))throw new NetworkError();
-   if(auth){const user=Buffer.from(hop.login??''),pass=Buffer.from(hop.password??'');if(user.length>255||pass.length>255)throw new NetworkError();socket.write(Buffer.concat([Buffer.from([1,user.length]),user,Buffer.from([pass.length]),pass]));const reply=await reader.read(2);if(reply[0]!==1||reply[1]!==0)throw new NetworkError()}
+   const auth=hop.login!==undefined||hop.password!==undefined;socket.write(Buffer.from([5,1,auth?2:0]));const hello=await reader.read(2);if(hello[0]!==5||hello[1]!== (auth?2:0))throw new NetworkError('network_proxy_auth','Прокси отклонил способ входа');
+   if(auth){const user=Buffer.from(hop.login??''),pass=Buffer.from(hop.password??'');if(user.length>255||pass.length>255)throw new NetworkError();socket.write(Buffer.concat([Buffer.from([1,user.length]),user,Buffer.from([pass.length]),pass]));const reply=await reader.read(2);if(reply[0]!==1||reply[1]!==0)throw new NetworkError('network_proxy_auth','Прокси отклонил вход')}
    if(target){const host=Buffer.from(target.host),port=Buffer.alloc(2);if(host.length>255)throw new NetworkError();port.writeUInt16BE(target.port);socket.write(Buffer.concat([Buffer.from([5,1,0,3,host.length]),host,port]));const head=await reader.read(4);if(head[0]!==5||head[1]!==0||head[2]!==0)throw new NetworkError();const length=head[3]===1?4:head[3]===4?16:head[3]===3?(await reader.read(1))[0]!:0;if(!length)throw new NetworkError();await reader.read(length+2)}
   }else if(target){
    const dest=authority(target),auth=hop.login!==undefined||hop.password!==undefined?'Proxy-Authorization: Basic '+Buffer.from((hop.login??'')+':'+(hop.password??'')).toString('base64')+'\r\n':'';
-   socket.write('CONNECT '+dest+' HTTP/1.1\r\nHost: '+dest+'\r\n'+auth+'\r\n');const head=await reader.headers();if(!/^HTTP\/1\.[01] 200(?: |\r)/.test(head))throw new NetworkError();
+   socket.write('CONNECT '+dest+' HTTP/1.1\r\nHost: '+dest+'\r\n'+auth+'\r\n');const head=await reader.headers();if(/^HTTP\/1\.[01] 407(?: |\r)/.test(head))throw new NetworkError('network_proxy_auth','Прокси отклонил вход');if(!/^HTTP\/1\.[01] 200(?: |\r)/.test(head))throw new NetworkError();
   }
   reader.release();disarm(socket);return socket;
- }catch{socket?.destroy();throw new NetworkError()}
+ }catch(e){socket?.destroy();throw e instanceof NetworkError?e:new NetworkError()}
 }

@@ -17,7 +17,7 @@ const save=(api:Awaited<ReturnType<typeof fixture>>['api'],config:unknown,revisi
 function sshHome(t:Parameters<typeof fixture>[0],dir:string){const home=join(dir,'mock-home');mkdirSync(join(home,'.ssh'),{recursive:true});writeFileSync(join(home,'.ssh/id_ed25519'),'FAKE KEY');const original=os.homedir;os.homedir=()=>home;syncBuiltinESMExports();t.after(()=>{os.homedir=original;syncBuiltinESMExports()});return home}
 
 test('22a: owner exits and ordered chains cover programs, API routes and Ollama; no implicit direct after configuration',limits,async t=>{
- const h=await setup(t);sshHome(t,h.dir);let r=await call(h.api,root+'/providers/claude');assert.equal(r.status,200);assert.deepEqual(r.body,{ok:true,provider:'claude',configured:false,exits:[],revision:null});
+ const h=await setup(t);sshHome(t,h.dir);let r=await call(h.api,root+'/providers/claude');assert.equal(r.status,200);assert.deepEqual(r.body,{ok:true,provider:'claude',configured:false,exits:[],policy:{mode:'fallback',silenceSeconds:60},revision:null});
  const a=await save(h.api,proxy,null,'p'),d=await save(h.api,direct);assert.equal(a.status,200);assert.equal(d.status,200);assert.equal(a.body.password.mask,'••••••••');assert.equal(await h.keys.resolveKey(keySlot(proxy.id,a.body.config.passwordGeneration)),'p');
  assert.equal((await save(h.api,{id:'ssh',type:'ssh',label:'VPS',host:'vps.example.test',port:22,user:'owner',keyPath:'~/.ssh/id_ed25519'})).status,200);
  await h.runtime.settings.changeLlmProvider('custom',apiConfig('https://model.example.test'),null);

@@ -85,7 +85,7 @@ export class CliProvider {
   const started=Date.now(),calls=new Map<string,string>(),secrets=this.d.forbiddenEnv.map(k=>this.deps.env[k]).filter((v):v is string=>!!v);
   const clean=(s:string)=>[...secrets,token].filter(Boolean).reduce((out,secret)=>out.replaceAll(secret,'[redacted]'),s);
   // Keep a short suffix so credentials split across process chunks cannot leak through deltas.
-  const delta=(chunk:string,flush=false)=>{pendingText+=chunk;const keys=[...secrets,token].filter(Boolean),width=Math.max(1,...keys.map(s=>s.length));let end=flush?pendingText.length:Math.max(0,pendingText.length-width+1);
+  const delta=(chunk:string,flush=false)=>{if(chunk)ctx.modelResponded?.();pendingText+=chunk;const keys=[...secrets,token].filter(Boolean),width=Math.max(1,...keys.map(s=>s.length));let end=flush?pendingText.length:Math.max(0,pendingText.length-width+1);
    for(const key of keys){let at=pendingText.indexOf(key);while(at>=0){if(at<end&&at+key.length>end)end=at;at=pendingText.indexOf(key,at+1)}}
    const out=clean(pendingText.slice(0,end));pendingText=pendingText.slice(end);if(out){answer+=out;ctx.publish({type:'delta',text:out})}};
   const safe=(v:unknown):unknown=>typeof v==='string'?clean(v):Array.isArray(v)?v.map(safe):record(v)?Object.fromEntries(Object.entries(v).map(([k,value])=>[clean(k),safe(value)])):v;
@@ -94,12 +94,13 @@ export class CliProvider {
   const consume=(events:CliEvent[])=>{
    if(!Array.isArray(events))throw protocol('неверный поток событий');
    for(const e of events){if(!e||typeof e.type!=='string'||result)throw protocol('событие после результата');
-    if(e.type==='session')session(e.id);
+    if(e.type==='response')ctx.modelResponded?.();
+    else if(e.type==='session')session(e.id);
     else if(e.type==='delta'){if(!text(e.text))throw protocol('неверный текст');delta(e.text)}
     else if(e.type==='tool.call'){if(!text(e.id)||!e.id||!text(e.name)||!e.name||calls.has(e.id))throw protocol('неверный вызов инструмента');calls.set(e.id,e.name);ctx.publish({type:'tool',name:clean(e.name),detail:clean(JSON.stringify(e.input??{})).slice(0,300)});ctx.traceEvent?.({id:clean(e.id),name:clean(e.name),phase:'call',data:safe(e.input)})}
     else if(e.type==='tool.result'){const name=calls.get(e.id);if(!name||!['ok','failed','rejected','timeout','cancelled'].includes(e.outcome))throw protocol('неверный результат инструмента');ctx.traceEvent?.({id:clean(e.id),name:clean(name),phase:'result',data:safe(e.output),outcome:e.outcome,...(e.reason?{reason:clean(e.reason)}:{})});calls.delete(e.id);if(e.outcome!=='ok')ctx.publish({type:'toolError',text:clean(e.reason||'инструмент завершился: '+e.outcome)})}
     else if(e.type==='error'){if(!text(e.text)||!['not_logged_in','session_missing','model_unsupported','protocol','transport_lost','cancelled','busy','cwd_changed','turn_failed','unknown_request','models_unavailable','mode_unsupported','permission_denied','capability_unsupported'].includes(e.code))throw protocol('неверная ошибка провайдера');throw new ProviderError(e.code,clean(e.text),sessionId)}
-    else if(e.type==='done'){if(e.sessionId!==undefined&&e.sessionId!==null)session(e.sessionId);if(e.text!==undefined&&!text(e.text))throw protocol('неверный ответ');usage(e.usage);result=e}
+    else if(e.type==='done'){if(e.sessionId!==undefined&&e.sessionId!==null)session(e.sessionId);if(e.text!==undefined&&!text(e.text))throw protocol('неверный ответ');usage(e.usage);if(e.text)ctx.modelResponded?.();result=e}
     else throw protocol('неизвестное событие');
    }
   };
