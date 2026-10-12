@@ -46,8 +46,8 @@ export class Pane {
 export function validDir(path:string):boolean{try{return statSync(path).isDirectory()}catch{return false}}
 export class Registry {
  readonly panes=new Map<string,Pane>();policy:Policy|null=null;policyChanged:((policy:Policy)=>void)|null=null;
- readonly defaultCwd:string;readonly models:ModelCatalog;private bus:EventBus;private clock:Clock;readonly providers:ReadonlySet<Vendor>;
- constructor(defaultCwd:string,models:ModelCatalog,seats:readonly TeamSeat[],bus:EventBus,clock:Clock,providers:ReadonlySet<Vendor>){this.defaultCwd=defaultCwd;this.models=models;this.bus=bus;this.clock=clock;this.providers=providers;for(const seat of seats)this.add(seat)}
+ readonly defaultCwd:string;readonly models:ModelCatalog;private bus:EventBus;private clock:Clock;readonly providers:Set<Vendor>;
+ constructor(defaultCwd:string,models:ModelCatalog,seats:readonly TeamSeat[],bus:EventBus,clock:Clock,providers:ReadonlySet<Vendor>){this.defaultCwd=defaultCwd;this.models=models;this.bus=bus;this.clock=clock;this.providers=new Set(providers);for(const seat of seats)this.add(seat)}
  add(seat:TeamSeat):Pane {const existing=this.panes.get(seat.id);if(existing)return existing;
  const pane=new Pane({id:seat.id,vendor:seat.vendor,label:seat.label,model:seat.model||this.models[seat.vendor]?.find(m=>m.id)?.id||'',mode:seat.mode,cwd:this.defaultCwd,role:seat.role,kind:seat.kind,writePaths:seat.writePaths,digest:seat.digest},this.bus,this.clock);this.panes.set(pane.id,pane);return pane}
  get ids(){return [...this.panes.keys()]}

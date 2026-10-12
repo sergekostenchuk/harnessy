@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {SecretRedactor} from './redaction.ts';
 import {routeModels,modelInfo,validateResolvedRoutes,catalogProviders,validateDiscoveryDraft} from './catalog.ts';
 import {discover} from './discovery.ts';
 import {piStream,assistant,terminalBlock,usage} from './pi-adapter.ts';
@@ -13,10 +14,12 @@ function validRequest(r:GenerateOptions){
  const names=new Set();if(r.tools!==undefined){if(!Array.isArray(r.tools)||r.tools.length>256)throw new LlmError('invalid_request');for(const t of r.tools){if(!isObject(t)||typeof t.name!=='string'||!/^[A-Za-z_][A-Za-z0-9_-]{0,63}$/.test(t.name)||typeof t.description!=='string'||!isObject(t.parameters)||t.parameters.type!=='object'||names.has(t.name))throw new LlmError('invalid_request');names.add(t.name)}}
 }
 export function createLlmService(deps:LlmDependencies):LlmService {
+ const protection=new SecretRedactor();
  const routes=()=>validateResolvedRoutes(deps.routes());
  const route=(id:string)=>{const all=routes();if(!validRoute(id)||!Object.hasOwn(all,id))throw new LlmError('provider_unknown');return all[id]!};
- const resolveKey=async(r:ProviderConfig,signal:AbortSignal)=>{if(!r.keyRef)return null;let key;try{key=await abortable(deps.resolveKey(r.keyRef,r.keyGeneration),signal)}catch(e){if(signal.aborted)throw new LlmError('cancelled');throw new LlmError('credential_unavailable')}if(!key)throw new LlmError('missing_credential');if(!/^[\x21-\x7e]{1,4096}$/.test(key))throw new LlmError('credential_unavailable');return key};
+ const resolveKey=async(r:ProviderConfig,signal:AbortSignal)=>{if(!r.keyRef)return null;let key;try{key=await abortable(deps.resolveKey(r.keyRef,r.keyGeneration),signal)}catch(e){if(signal.aborted)throw new LlmError('cancelled');throw new LlmError('credential_unavailable')}if(!key)throw new LlmError('missing_credential');if(!/^[\x21-\x7e]{1,4096}$/.test(key))throw new LlmError('credential_unavailable');protection.add(key);return key};
  const service:LlmService={
+ redact:protection.redact,textRedactor:protection.textRedactor,
  routes,models:id=>routeModels(id,route(id)).map(modelInfo),retryPolicy:id=>structuredClone(route(id).retryPolicy??{mode:'normal',maxRetries:5,initialDelayMs:1000,maxDelayMs:30000,jitterRatio:.2}),
  onRoutesChanged(listener){return deps.subscribeRoutes?.(()=>{try{listener({type:'llm.routes',providers:Object.keys(routes())})}catch{}})??(()=>{})},
  async discover(id,signal){const r=route(id);if(!r.baseURL&&catalogProviders().includes((r.catalog??id) as never))return routeModels(id,r).map(modelInfo);const timer=new AbortController(),combined=signal?AbortSignal.any([signal,timer.signal]):timer.signal,t=setTimeout(()=>timer.abort(),r.timeoutMs??15000);try{const key=await resolveKey(r,combined);let current;try{current=route(id)}catch{throw new LlmError('route_changed')}if(JSON.stringify(current)!==JSON.stringify(r))throw new LlmError('route_changed');return await abortable(discover(r,key,deps.fetch,combined),combined)}catch(e){if(timer.signal.aborted&&!signal?.aborted)throw new LlmError('timeout');throw e}finally{clearTimeout(t)}},

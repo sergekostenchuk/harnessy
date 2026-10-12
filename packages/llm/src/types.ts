@@ -20,8 +20,11 @@ export interface LlmTrace {kind:'llm.request'|'llm.response';requestId:string;pr
 export interface LlmDependencies {routes:()=>ProviderRoutes;resolveKey:(keyRef:string,generation?:string)=>Promise<string|null>;trace?:(event:LlmTrace)=>void;fetch?:typeof fetch;subscribeRoutes?:(listener:()=>void)=>()=>void}
 export interface DiscoveredModel {id:string;name:string;api?:string;contextWindow?:number;maxTokens?:number;input?:('text'|'image')[];reasoning?:boolean}
 export interface RoutesChanged {type:'llm.routes';providers:string[]}
+export interface TextRedactor {push(text:string):string;finish():string}
 /** One model request; never executes tools or performs retries. Finish is terminal, including setup failures. */
 export interface LlmService {
+ redact<T>(value:T):T;
+ textRedactor():TextRedactor;
  stream(request:GenerateOptions):AsyncIterable<StreamChunk>;
  routes():ProviderRoutes;
  models(provider:string):ModelInfo[];
