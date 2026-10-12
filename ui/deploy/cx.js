@@ -17,11 +17,7 @@
   const seat=()=>H.on?H.pane:null;
   const modeLabel=id=>{ const m=(H.modes||[]).find(x=>x.id===id); return m?m.label:(id||'права не заданы'); };
   const allModels=()=>{ const out=[]; Object.entries(H.models||{}).forEach(([v,ms])=>(ms||[]).forEach(m=>out.push(Object.assign({vendor:v},m)))); return out; };
-  const modelLabel=id=>{ const m=allModels().find(x=>x.id===id); return m?m.label:(id||'модель не выбрана'); };
-  // семейство модели роутера Codex — по имени: «:cloud» = Ollama Cloud, qwen* = Qwen (токен-план Alibaba), остальные — DeepSeek / GLM / Kimi через роутер
-  const family=id=>/:cloud$/.test(id)?'Ollama Cloud':/^qwen/.test(id)?'Qwen · токен-план':/^deepseek/.test(id)?'DeepSeek':/^glm/.test(id)?'GLM':/^kimi/.test(id)?'Kimi':'роутер';
-  const vendorGroups=()=>{ const cl=(H.models&&H.models.claude)||[], co=(H.models&&H.models.codex)||[];
-    return [{key:'claude',vendor:'claude',title:'Claude',sub:'подписка Max',models:cl},{key:'codex',vendor:'codex',title:'Codex · GPT',sub:'подписка ChatGPT',models:co.filter(m=>/^gpt-/.test(m.id))},{key:'router',vendor:'codex',title:'Другие провайдеры',sub:'через роутер Codex',models:co.filter(m=>!/^gpt-/.test(m.id)),tag:true}]; };
+  const modelLabel=(id,vendor)=>{ const m=allModels().find(x=>x.id===id&&(!vendor||x.vendor===vendor)); return m?m.label:id==='default'?'по умолчанию программы':(id||'модель не выбрана'); };
   const chip=(k,ico,text,o)=>{ o=o||{}; return '<span class="cx-chip'+(o.cls?' '+o.cls:'')+'" data-cx="'+k+'" title="'+esc(o.title||'')+'">'+svg(ico)+'<b>'+esc(text)+'</b><i>▾</i></span>'; };
 
   // ── строка: верх над .box, вложения внутри перед полем, низ вместо нарисованной .bar2
@@ -34,7 +30,7 @@
     if(H.on){const pending=typeof c.noFolderPending==='string'&&c.noFolderPending===H.project&&S().ui.pane===ROOM&&!H.noProject;if(!pending&&(c.noFolder!==!!H.noProject||c.noFolderPending!==undefined)){c.noFolder=!!H.noProject;delete c.noFolderPending;L.save();}}   // привязка проекта — из статуса движка, а не сохранённого флага окна
     const folder=c.noFolder?'Без проекта':(H.on?base(H.project):(c.folder||'проект не выбран'));
     const role=p?(isRoom(p)?'Без роли':L.paneName(p)):'Без роли', rights=p?modeLabel(p.mode):modeLabel(c.rights);
-    const model=p&&p.model?modelLabel(p.model):'выбрать модель';   // у разговора без роли модели нет, пока её не выбрали
+    const model=p&&p.model?modelLabel(p.model,p.vendor):'выбрать модель';   // у разговора без роли модели нет, пока её не выбрали
     const act=p?((H.active||{})[p.id]):null, meta=(H.chatList||[]).find(x=>x.id===act), chatLabel=(PAGE==='new'&&S().ui.fresh)?'Новый чат':(meta&&meta.messages?(meta.title||'без названия'):'Новый чат');
     const direct=p&&S().ui.direct&&S().ui.direct[p.id]&&p.kind!=='orchestrator'&&!isRoom(p);
     const busy=!!(L.busy&&L.busy()), empty=!(box.__cx.ta&&box.__cx.ta.value.trim())||(H.on&&!(p&&p.model));   // кнопка ввода: по образцу Claude Desktop/Codex — явное «идёт ход» и остановка той же кнопкой (слово владельца 08.10)
@@ -54,7 +50,7 @@
 
   // ── всплывающая панель: одна, от чипа; поле внизу — открывается вверх; внутри переходы с «Назад»
   let pop=null, stack=[];
-  function close(){ if(pop){ pop.remove(); pop=null; stack=[]; } }
+  function close(){ if(pop){ if(pop.__models&&pop.__models.events)pop.__models.events.close(); pop.remove(); pop=null; stack=[]; } }
   function anchorEl(){ const b=pop.__box, k=pop.__key; let a=null;   // живой чип по ключу: после перерисовки строки прежний элемент уже не в документе
     if(b){ a=(b.previousElementSibling&&b.previousElementSibling.querySelector('[data-cx="'+k+'"]'))||b.querySelector('[data-cx="'+k+'"]'); }
     return a||(pop.__anchor&&pop.__anchor.isConnected?pop.__anchor:null); }
@@ -64,8 +60,8 @@
     let left=l; if(l+pw>mw-12) left=l+w-pw; left=Math.max(12,Math.min(left,mw-pw-12));
     let top=t-8-ph; if(top<12) top=t+h+8; if(top+ph>mh-12) top=Math.max(12,mh-ph-12);   // вверх от строки; не влезло — вниз; и никогда за пределы кадра
     pop.style.left=left+'px'; pop.style.top=top+'px'; }
-  function open(anchor,k){ close(); const m=anchor.closest('.main')||document.body; pop=document.createElement('div'); pop.className='cx-pop'; m.appendChild(pop); pop.__anchor=anchor; pop.__box=anchor.closest('.box')||(anchor.parentElement&&anchor.parentElement.nextElementSibling); pop.__key=anchor.dataset.cx; pop.__binding=L.sendBinding(); stack=[k]; draw(); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); }
-  function nav(k){ stack.push(k); draw(); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); } function back(){ stack.pop(); draw(); }
+  function open(anchor,k){ close(); const m=anchor.closest('.main')||document.body; pop=document.createElement('div'); pop.className='cx-pop'; m.appendChild(pop); pop.__anchor=anchor; pop.__box=anchor.closest('.box')||(anchor.parentElement&&anchor.parentElement.nextElementSibling); pop.__key=anchor.dataset.cx; pop.__binding=L.sendBinding(); stack=[k]; draw(); if(k==='model')void loadModels(pop); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); }
+  function nav(k){ stack.push(k); draw(); if(k==='model')void loadModels(pop); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); } function back(){ stack.pop(); draw(); }
   function draw(){ if(!pop) return; const k=stack[stack.length-1]; pop.innerHTML=(stack.length>1?'<div class="cx-hd back" data-cx-back>'+svg('back')+'<span>'+esc(TITLES[k]||'')+'</span></div>':'')+VIEWS[k](); place();
     const f=pop.querySelector('input.cx-find'); if(f){ f.addEventListener('input',()=>filter(f)); if(f.classList.contains('cx-path'))f.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();return submitProjectMenu(!!pop.querySelector('[data-cx-mkdir]'))}}); setTimeout(()=>f.focus(),0); } }
   function filter(inp){ const q=inp.value.trim().toLowerCase(); pop.querySelectorAll('[data-q]').forEach(el=>{ el.style.display=!q||el.dataset.q.toLowerCase().includes(q)?'':'none'; }); if(q) pop.querySelectorAll('.cx-grp').forEach(g=>g.classList.add('open')); }
@@ -76,6 +72,47 @@
   const hd=(t,r)=>'<div class="cx-hd"><span>'+t+'</span>'+(r?'<small>'+r+'</small>':'')+'</div>';
   const row=(html,o)=>{ o=o||{}; return '<div class="cx-row'+(o.on?' on':'')+(o.dis?' dis':'')+'"'+(o.a||'')+(o.q?' data-q="'+esc(o.q)+'"':'')+(o.title?' title="'+esc(o.title)+'"':'')+'>'+html+(o.on?'<span class="ck">✓</span>':'')+(o.r?'<small>'+o.r+'</small>':'')+'</div>'; };
   const note=t=>'<div class="cx-note">'+t+'</div>';
+  // TS-20h: program identity comes from the catalogue; mode support comes from status.
+  const connectionKind=kind=>({subscription:'подписка',apikey:'ключ API',local:'локально'}[kind]||'вид подключения не указан');
+  const modelsN=n=>n+' '+(n%10===1&&n%100!==11?'модель':n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'модели':'моделей');
+  const modelMode=()=>{const p=seat();return p&&(!isRoom(p)||p.busy)?p.mode:cx().noFolder?'chat':'read'};
+  const modeStamp=()=>JSON.stringify([modelMode(),H.turnModes||{}]);
+  function modelSupport(vendor){const mode=modelMode(),cap=H.turnModes&&H.turnModes[vendor]&&H.turnModes[vendor][mode];
+    return cap&&cap.ok===true?{ok:true,note:typeof cap.note==='string'?cap.note:''}:{ok:false,reason:'Ходы в режиме «'+modeLabel(mode)+'» недоступны: '+(cap&&typeof cap.reason==='string'&&cap.reason.trim()?cap.reason:'движок не сообщил поддержку режима')};}
+  function modelRows(response){
+    if(!response||response.ok===false||!Array.isArray(response.providers))return null;
+    const text=v=>typeof v==='string'&&v.trim()&&v.length<=256&&!/[\x00-\x1f\x7f]/.test(v),ids=new Set(),rows=[];
+    for(const p of response.providers){
+      if(!p||!text(p.id)||ids.has(p.id)||!text(p.title)||!['subscription','apikey','local'].includes(p.kind)||!Array.isArray(p.models))return null;
+      ids.add(p.id);const models=[],seen=new Set();for(const m of p.models){if(!m||!text(m.id)||!text(m.label)||seen.has(m.id))return null;seen.add(m.id);models.push({id:m.id,label:m.label})}
+      rows.push({id:p.id,title:p.title,kind:p.kind,models,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''});
+    }return rows;
+  }
+  function modelsCurrent(panel){return panel===pop&&L.bindingCurrent(panel.__binding)}
+  function redrawModels(panel){if(!modelsCurrent(panel)||stack[stack.length-1]!=='model')return;
+    const input=panel.querySelector('.cx-find'),value=input&&input.value,focused=document.activeElement===input,groups=Array.from(panel.querySelectorAll('[data-cx-program]')).map(g=>[g.dataset.cxProgram,g.classList.contains('open')]);
+    draw();const next=panel.querySelector('.cx-find');if(next&&value){next.value=value;filter(next)}else for(const [id,on]of groups){const g=Array.from(panel.querySelectorAll('[data-cx-program]')).find(g=>g.dataset.cxProgram===id);if(g)g.classList.toggle('open',on)}if(next&&focused)next.focus();
+  }
+  async function loadModels(panel){if(!modelsCurrent(panel))return;
+    const state=panel.__models||(panel.__models={rows:null,error:'',loading:false,saving:false,request:0,revision:0,modes:modeStamp(),events:null});
+    if(!state.events&&typeof L.subscribeLiveEvents==='function')state.events=L.subscribeLiveEvents(e=>{let ev;try{ev=JSON.parse(e.data)}catch{return}if(ev.type==='providers'&&(!ev.project||ev.project===panel.__binding.project)&&modelsCurrent(panel))void loadModels(panel)});
+    const request=++state.request;state.loading=true;state.error='';redrawModels(panel);let r=null;
+    try{if(H.on)r=await L.api('/api/providers/catalog')}catch{}
+    if(!modelsCurrent(panel)||request!==state.request)return;state.loading=false;const rows=modelRows(r);
+    if(rows){if(JSON.stringify(rows)!==JSON.stringify(state.rows))state.revision++;state.rows=rows}
+    else {state.revision++;state.error=typeof (r&&r.error)==='string'?r.error:H.on?'ответ каталога недоступен или неполон':'движок не подключён'}
+    redrawModels(panel);
+  }
+  function modelsStatus(){if(!pop||!pop.__models)return;if(!modelsCurrent(pop)){close();return}const state=pop.__models,stamp=modeStamp();if(stamp!==state.modes){state.modes=stamp;state.revision++}redrawModels(pop)}
+  addEventListener('live:status',modelsStatus);addEventListener('pagehide',close);
+  async function chooseModel(button){const panel=pop,state=panel&&panel.__models;if(!state||state.saving||state.loading||state.error||!modelsCurrent(panel))return;
+    const program=(state.rows||[]).find(p=>p.id===button.dataset.cxVendor),model=program&&(program.models.length?program.models:[{id:'default',label:'по умолчанию программы'}]).find(m=>m.id===button.dataset.cxModel);
+    if(!model||!modelSupport(program.id).ok)return;const revision=state.revision,modes=modeStamp();state.saving=true;state.failure='';redrawModels(panel);
+    try{await setSeat({vendor:program.id,model:model.id},'Модель места',{
+      valid:()=>modelsCurrent(panel)&&state.revision===revision&&!state.loading&&!state.error&&modeStamp()===modes&&modelSupport(program.id).ok,
+      failed:r=>{if(modelsCurrent(panel)){state.failure='Настройка не применена · '+(typeof (r&&r.reason)==='string'?r.reason:typeof (r&&r.error)==='string'?r.error:'нет связи');redrawModels(panel)}}
+    })}finally{state.saving=false;redrawModels(panel)}
+  }
   const tog=(k,on)=>'<span class="cx-tog'+(on?' on':'')+'" data-cx-tog="'+k+'" title="'+(on?'Выключить':'Включить')+'"></span>';
   function proposedRoles(){
     if(!H.on||cx().noFolder)return '';const state=L.teamProposals;
@@ -114,11 +151,15 @@
     newchat(){ const p=seat(), act=p?(H.chatList||[]).find(c=>c.id===(H.active||{})[p.id]):null; return hd('Новый чат',p?esc(isRoom(p)?'без роли':L.paneName(p)):'')+row('<b>Передать текст</b>',{a:' data-cx-carry="text"',r:'вся переписка · бесплатно'})+row('<b>Передать выжимку</b>',{a:' data-cx-carry="summary"',r:'один ход модели'})+row('<b>Без контекста</b>',{a:' data-cx-carry="none"',r:'чистый лист'})+note('Прежний чат «'+esc(act&&act.title||'без названия')+'» будет закрыт; контекст уйдёт в новый первой записью — для сведения.'); },
     switch(){ const p=pop.__target, cur=seat(); if(!p) return note('Собеседник не выбран'); return hd('Переключиться на',esc(isRoom(p)?'без роли':L.paneName(p)))+row(svg('role')+'<b>Без контекста</b>',{a:' data-cx-sw="plain"',r:'новый разговор'})+row(svg('src')+'<b>С контекстом — выбрать сообщения…</b>',{a:' data-cx-sw="ctx"',r:'чекбоксы у реплик'})+note('С контекстом: отмеченные реплики уйдут новой роли текстом с промптом «прочитай контекст и жди команду». Между моделями и вендорами переносится только текст — память прежней модели остаётся у '+esc(cur?(isRoom(cur)?'разговора без роли':L.paneName(cur)):'прежнего места')+'.'); },
     rights(){ const p=seat(), c=cx(), cur=p?p.mode:c.rights; return hd('Права',p?'применяются к месту «'+esc(L.paneName(p))+'»':'к первому сообщению')+(H.modes||[]).map(m=>row(svg('lock')+'<b>'+esc(m.label)+'</b>',{on:m.id===cur,a:' data-cx-mode="'+m.id+'"',r:m.id})).join('')+(H.on?'':note('Список прав появится, когда харнесс подключён.')); },
-    model(){ const p=seat(), c=cx(), cur=p?p.model:c.model, sv=p?p.vendor:null;
-      return hd('Модель',p?(isRoom(p)?'разговор без роли':'место «'+esc(L.paneName(p))+'»'):'разговор без роли')+row(svg('bolt')+'Усилие',{dis:true,r:'пока недоступно: харнесс не передаёт'})+'<input class="cx-find" placeholder="Найти модель…">'+
-        vendorGroups().map(g=>{ const open=g.models.some(m=>m.id===cur)||(!cur&&g.key==='claude'), sw=sv&&g.vendor!==sv;   // модель другого вендора переводит место к нему — с новой сессией
-          return '<div class="cx-grp'+(open?' open':'')+'"><div class="cx-row grp" data-cx-grp title="'+(sw?'Выбор переведёт место на '+esc(g.vendor)+' — новая сессия':'')+'"><span class="cv">›</span><b>'+g.title+'</b><small>'+g.sub+(sw?' · сменит вендора':'')+'</small><em>'+g.models.length+'</em></div><div class="cx-sub">'+(sw?note('Выбор модели этой группы переведёт место на '+esc(g.vendor==='claude'?'Claude':'Codex')+': начнётся новая сессия, память прежней модели останется у неё.'):'')+g.models.map(m=>row(esc(m.label),{on:m.id===cur,a:' data-cx-model="'+m.id+'"',q:m.label+' '+m.id+' '+family(m.id),r:g.tag?family(m.id):''})).join('')+'</div></div>'; }).join('')+
-        hd('Размышления','для выбранной модели')+'<div class="cx-seg dis"><span>выкл</span><span class="on">адаптивно</span><span>вкл</span></div>'+note('Усилие и размышления пока недоступны: харнесс не передаёт их месту. Не все GPT из каталога доступны на подписке ChatGPT — при отказе модель сообщит об этом в ответе, выберите другую.'); },
+    model(){const p=seat(),c=cx(),cur=p?p.model:c.model,sv=p?p.vendor:c.vendor,state=pop.__models,rows=state&&state.rows;
+      return hd('Модель',p?(isRoom(p)?'разговор без роли':'место «'+esc(L.paneName(p))+'»'):'разговор без роли')+'<input class="cx-find" aria-label="Найти модель" placeholder="Найти модель…">'+
+        (!state||state.loading?note('Читаю каталог моделей…'):'')+(state&&state.error?'<div class="cx-note" role="status">Каталог моделей не прочитан · '+esc(state.error)+'. <button type="button" class="btn sm ghost" data-cx-model-retry>Повторить</button></div>':'')+
+        (state&&state.failure?'<div class="cx-note" data-cx-model-error role="status">'+esc(state.failure)+'</div>':'')+
+        (rows||[]).map((g,i)=>{const support=modelSupport(g.id),models=g.models.length?g.models:[{id:'default',label:'по умолчанию программы'}],disabled=!support.ok||state.loading||state.saving||!!state.error;
+          return '<div class="cx-grp'+(g.id===sv||!sv&&i===0?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+connectionKind(g.kind)+' · '+modelsN(g.models.length)+'</small></div><div class="cx-sub">'+
+            (g.modelsReason?note(esc(g.modelsReason)):'')+models.map(m=>'<button type="button" class="cx-row cx-model'+(m.id===cur&&g.id===sv?' on':'')+(disabled?' dis':'')+'" data-cx-model="'+esc(m.id)+'" data-cx-vendor="'+esc(g.id)+'" data-q="'+esc(g.title+' '+m.label+' '+m.id)+'"'+(disabled?' disabled':'')+'><span class="cx-model-text"><b>'+esc(m.label)+'</b>'+(!support.ok||support.note?'<small>'+esc(support.reason||support.note)+'</small>':'')+'</span>'+(m.id===cur&&g.id===sv?'<span class="ck">✓</span>':'')+'</button>').join('')+'</div></div>';
+        }).join('')+(rows&&!rows.length?note('Программы не найдены в каталоге.'):'' )+
+        note('Смена модели сохраняет разговор. Контекст можно перенести.')+hd('Размышления','для выбранной модели')+'<div class="cx-seg dis"><span>выкл</span><span class="on">адаптивно</span><span>вкл</span></div>'+note('Усилие и размышления пока недоступны: харнесс не передаёт их месту.');},
     effort(){ return hd('Усилие')+['низкое','среднее','высокое','очень высокое','максимум'].map(x=>row(x,{dis:true})).join('')+note('Пока недоступно: харнесс не передаёт усилие месту. Варианты — для выбранной модели.'); },
     plus(){ return '<input class="cx-find" placeholder="Найти действие или источник…">'+hd('добавить контекст')+['Файлы и папки…','Снимок экрана…','Другие источники…'].map(t=>row(svg('file')+t,{dis:true,r:'вложения пока не передаются модели',title:'вложения пока не передаются модели',q:t})).join('')+
         hd('настроить запрос')+row(svg('folder')+'Проект или без проекта…',{a:' data-cx-nav="folder"',q:'проект комната папка компьютер дерево без проекта'})+row(svg('model')+'Модель и мышление…',{a:' data-cx-nav="model"',q:'модель усилие размышления вендор'})+row(svg('tools')+'Инструменты и субагенты…',{a:' data-cx-nav="tools"',q:'инструменты субагенты поиск думать коннекторы плагины приложения'})+row(svg('role')+(cx().noFolder?'Назначить собеседника…':'Назначить в команде…'),{a:' data-cx-nav="role"',q:'роль команда собеседник оркестратор воркер ревьюер'})+
@@ -180,7 +221,8 @@
       await L.refreshStatus();if(H.project!==project)return;close();renderAll();L.toast('Без проекта: модель ничего не читает');return; }
     if(e.target.closest('[data-cx-mkdir]')||e.target.closest('[data-cx-opendir]')){ await submitProjectMenu(!!e.target.closest('[data-cx-mkdir]'));return; }
     const md=e.target.closest('[data-cx-mode]'); if(md){ await setSeat({mode:md.dataset.cxMode},'Права места'); return; }
-    const mo=e.target.closest('[data-cx-model]'); if(mo){ await setSeat({model:mo.dataset.cxModel},'Модель места'); return; }
+    if(e.target.closest('[data-cx-model-retry]')){await loadModels(pop);return}
+    const mo=e.target.closest('[data-cx-model]'); if(mo){ await chooseModel(mo); return; }
     const pk=e.target.closest('[data-cx-pick]'); if(pk){ pick(pk.dataset.cxPick); return; }
     const sh=e.target.closest('[data-cx-shot]'); if(sh){ L.toast('вложения пока не передаются модели');return; }
     const sr=e.target.closest('[data-cx-src]'); if(sr){ if(H.on) return; c.att.push({kind:'src',name:sr.dataset.cxSrc}); L.save(); renderAll(); close(); return; }
@@ -202,13 +244,13 @@
   }
   async function switchProject(path){ const c=cx();L.invalidateBinding();let r=null; try{ r=await L.api('/api/project',{path}); }catch(x){} if(!r||!r.ok){ L.toast('Проект не открылся: '+esc((r&&r.error)||'нет связи')); return; }
     c.noFolder=false;delete c.noFolderPending; L.save(); S().ui.pane=ROOM; L.save(); H.projects=null; const status=await L.refreshStatus(); close(); renderAll(); L.log('настройка','Проект: '+base(path)); L.toast('Проект: '+esc(base(r.project||path))+rolesNotice(projectRoleCount(r,status))); }
-  function setSeat(patch,what){ return L.configureSetting(async binding=>{ const p=seat(), c=cx();
-    if((!p||isRoom(p))&&patch.model&&H.on&&!(p&&p.busy)){ let r=null; try{ r=await L.api('/api/room',{model:patch.model,folder:!c.noFolder},{trace:binding.trace}); }catch(x){} if(!L.bindingCurrent(binding)) return false;if(!r||!r.ok){ L.toast('Харнесс не принял: '+esc((r&&r.error)||'нет связи')); return false; }
-      S().ui.pane=ROOM; L.save(); await L.refreshStatus();if(!L.bindingCurrent(binding)) return false;L.log('настройка','Разговор без роли: '+modelLabel(patch.model)); L.toast('Без роли · '+esc(modelLabel(patch.model))+(c.noFolder?' · без проекта':'')); close(); renderAll(); return true; }
+  function setSeat(patch,what,choice){ return L.configureSetting(async binding=>{ if(choice&&!choice.valid())return false;const p=seat(),c=cx(),failed=r=>{if(choice)choice.failed(r);else L.toast('Харнесс не принял: '+esc((r&&r.error)||'нет связи'));return false};
+    if((!p||isRoom(p))&&patch.model&&H.on&&!(p&&p.busy)){ let r=null; try{ r=await L.api('/api/room',{model:patch.model,...(patch.vendor?{vendor:patch.vendor}:{}),folder:!c.noFolder},{trace:binding.trace}); }catch(x){} if(!L.bindingCurrent(binding)) return false;if(!r||!r.ok)return failed(r);
+      S().ui.pane=ROOM; L.save(); await L.refreshStatus();if(!L.bindingCurrent(binding)) return false;L.log('настройка','Разговор без роли: '+modelLabel(patch.model,patch.vendor)); L.toast('Без роли · '+esc(modelLabel(patch.model,patch.vendor))+(c.noFolder?' · без проекта':'')); close(); renderAll(); return true; }
     if(!p){ if(patch.mode) c.rights=patch.mode; if(patch.model) c.model=patch.model; L.save(); draw(); renderAll(); return true; }
-    let r=null; try{ r=await L.api('/api/panes/'+p.id,patch,{trace:binding.trace}); }catch(e){} if(!L.bindingCurrent(binding)) return false;if(!r||!r.ok){ L.toast('Харнесс не принял: '+esc((r&&r.error)||'нет связи')); return false; }
+    let r=null; try{ r=await L.api('/api/panes/'+encodeURIComponent(p.id),patch,{trace:binding.trace}); }catch(e){} if(!L.bindingCurrent(binding)) return false;if(!r||!r.ok)return failed(r);
     Object.assign(p,r.pane); const i=(H.panes||[]).findIndex(x=>x.id===p.id); if(i>=0) H.panes[i]=p;
-    const val=patch.mode?modeLabel(patch.mode):modelLabel(patch.model),next=r.appliesFrom==='next'?' · применится со следующего хода':''; L.log('настройка',what+' «'+L.paneName(p)+'»: '+val+next); L.toast(what+' «'+esc(L.paneName(p))+'»: '+esc(val)+next); L.hStatus(); draw(); renderAll(); return true; }); }
+    const val=patch.mode?modeLabel(patch.mode):modelLabel(patch.model,patch.vendor),next=r.appliesFrom==='next'?' · применится со следующего хода':''; L.log('настройка',what+' «'+L.paneName(p)+'»: '+val+next); L.toast(what+' «'+esc(L.paneName(p))+'»: '+esc(val)+next); L.hStatus(); draw(); renderAll(); return true; }); }
   function pick(kind){ L.toast('вложения пока не передаются модели'); }
   window.CX={setBusy,render:renderAll,close,proposalsChanged}; renderAll();
 })();

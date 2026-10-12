@@ -24,6 +24,13 @@ function ui(fetch?:(path:string)=>Promise<any>){
  return {...d,H,context,requests,streams,opened,sheets,find,switchProject,functions:context.testing};
 }
 
+test('308: the place card displays the selected mode note as text and clears it for other modes',async()=>{
+ const p={...pane(),vendor:'agy',mode:'all'},v=ui(async path=>path==='/api/swarm'?snapshot('/a',[p]):{ok:true,project:'/a',proposals:[]});
+ v.H.turnModes={agy:{all:{ok:true,note:'без инструментов Harnessy <img src=x>'},read:{ok:false,reason:'нет изоляции'}}};await v.functions.sync();await v.find('#board [data-swarm-seat]').emit('click');
+ assert.match(v.find('#a-sub').textContent,/без инструментов Harnessy <img src=x>/);assert.equal(v.document.querySelector('#a-sub img'),null);
+ p.mode='read';await v.functions.fetch();assert.doesNotMatch(v.find('#a-sub').textContent,/без инструментов Harnessy/);
+});
+
 test('166: original canvas, cards, channel, composition and comparison survive real data; all seat views open one live card',async t=>{
  const h=await fixture(t),queued=h.runtime.journal.append({sender:'owner',to:'worker',kind:'task',text:'actual <img src=x> goal',thread:'current'});
  const v=ui(async path=>(await call(h.api,path)).body);v.H.project=h.dir;const blocks=['#board','#board .waits','#v-cards .over','#v-chan .chan','#v-chan .msgs','#v-seats .lst','#v-cmp .lst'].map(s=>v.find(s));await v.functions.sync();
