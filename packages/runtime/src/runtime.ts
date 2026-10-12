@@ -130,7 +130,7 @@ export class Runtime {
  else {await this.recover(p,pane)}
  }
  if(!lineErrors.some(text=>text.startsWith('chats.json не читается'))){if(freshRoom)state.savePanes(registry,journal);else state.saveChats(registry)}
- p.starting=false;this.quota(p).start();if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if(pane.status==='idle'&&!p.materializing.has(pane.id)&&!p.restoreFailed.has(pane.id))await this.resumeQueue(pane.id,p);
+ p.starting=false;this.quota(p).start();this.providerOperations.start(p);if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if(pane.status==='idle'&&!p.materializing.has(pane.id)&&!p.restoreFailed.has(pane.id))await this.resumeQueue(pane.id,p);
  }
  async projectSet(path:string,options:{reload?:boolean},initiator:Initiator){
  this.requireOwner(initiator);const p=this.project;
@@ -424,7 +424,8 @@ export class Runtime {
   const catalog=this.providerOperations.catalog,builtin=vendor==='claude'||vendor==='codex';
   if(!catalog.ids().includes(vendor)){if(!builtin)throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);this.validateTurn(vendor,mode);return}
   const row=catalog.peek(vendor),entry=catalog.get(vendor);
-  if(!row.installed)throw new RuntimeError('provider_not_installed','Программа '+row.title+' не установлена или ещё не проверена',409);
+  if(row.installed===null)throw new RuntimeError('provider_checking','Программа проверяется, повторите через несколько секунд',409);
+  if(row.installed!==true)throw new RuntimeError('provider_not_installed','Программа '+row.title+' не установлена',409);
   if(row.login.state!=='ok'&&!(row.login.state==='unknown'&&entry.allowUnverifiedLogin===true)){
    const reason=row.login.reason??'Вход в '+row.title+' не выполнен';throw new RuntimeError('login_required',reason+' · Вход: '+row.login.command,409,{fields:{reason,command:row.login.command}});
   }

@@ -29,9 +29,10 @@ test('307: HTTP catalog/check/login and approved agy probe use all mode without 
 });
 test('276: all agy operations remain owner-only and never run on agent authorization',async t=>{
  const agy=antigravityFixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([agy.entry])}});
+ await h.runtime.providerOperations.catalog.list();const before=agy.capture().length;
  for(const route of ['catalog','antigravity/check','antigravity/login-terminal','antigravity/probe']){
   const r=await call(h.api,'/api/providers/'+route,{...(route==='catalog'?{}:{body:{model:'x'}}),headers:{'X-Pane-Token':'forged'}});
   assert.equal(r.status,403);assert.equal(r.body.code,'owner_only');
  }
- assert.equal(agy.capture().length,0);
+ assert.equal(agy.capture().length,before);
 });

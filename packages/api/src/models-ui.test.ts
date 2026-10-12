@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {setImmediate as immediate} from 'node:timers/promises';
 import {dom} from './ui-dom-test-helpers.ts';
-import {deferred,fixture,call} from './test-helpers.ts';
+import {deferred,fixture,call,sse} from './test-helpers.ts';
 import {ProviderCatalog,cliEntry} from '../../providers/src/index.ts';
 import {cliFixture} from '../../providers/src/cli/test-support.ts';
 
@@ -21,7 +21,7 @@ const catalogue=()=>({ok:true,providers:[
  {id:'copilot',title:'GitHub Copilot',kind:'subscription',models:[{id:'copilot-model',label:'Copilot model'}]},
  {id:'gemini',title:'Gemini CLI',kind:'subscription',models:[],modelsReason:'CLI не даёт безопасного чтения списка'},
  {id:'router',title:'provider-router',kind:'local',models:[{id:'router-model',label:'Router model'}]}
-]});
+].map(p=>({...p,installed:true as boolean|null,checking:false}))});
 const modes=()=>Object.fromEntries(catalogue().providers.map(p=>[p.id,Object.fromEntries(['read','edit','all','chat'].map(m=>[m,
  p.id==='agy'?m==='all'?{ok:true,note:'без инструментов Harnessy'}:{ok:false,reason:'нет изоляции инструментов на ход'}:p.id==='copilot'&&m==='edit'?{ok:false,reason:'нет флага для этого режима'}:{ok:true}]))]));
 function ui(options:{page?:string;room?:boolean;statusFetch?:()=>Promise<Data>;fetch?:(path:string,body:Data|undefined)=>Promise<Data>}={}){
@@ -131,7 +131,7 @@ test('305/309: read failure preserves status groups and choices; retry restores 
  result=catalogue();await v.find('[data-cx-model-retry]').emit('click');assert.equal(v.select('codex','shared').disabled,false);
 });
 
-for(const response of [{ok:true}, {ok:true,providers:[{id:'claude',title:'Claude Code',kind:'subscription'}]}, {ok:true,providers:[...catalogue().providers,catalogue().providers[0]]}])test('305/309: invalid catalogue metadata leaves the real status models visible',async()=>{
+for(const response of [{ok:true}, {ok:true,providers:[{id:'claude',title:'Claude Code',kind:'subscription'}]}, {ok:true,providers:[...catalogue().providers,catalogue().providers[0]]},...['installed','checking'].map(key=>({ok:true,providers:[{...catalogue().providers[0],[key]:undefined}]}))])test('305/309: invalid catalogue metadata leaves the real status models visible',async()=>{
  const v=ui({fetch:async()=>response});await v.open();assert.equal(v.document.querySelectorAll('[data-cx-model]').length,7);assert.match(v.find('.cx-pop').textContent,/Каталог моделей не прочитан/);assert.ok(v.find('[data-cx-model-retry]'));assert.equal(v.select('codex','shared').disabled,false);
 });
 
@@ -168,9 +168,10 @@ test('311: real catalogue discovery refreshes HTTP status and exposes the CLI mo
  entry.version=async()=>{await ready.promise;return '1.0'};t.after(()=>ready.resolve());
  const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([entry])}}),initial=(await call(h.api,'/api/status')).body;
  assert.deepEqual(initial.models['test-cli'],[]);
- const v=ui({fetch:async(path,body)=>{const response=await call(h.api,path,body?{body}:{});if(path==='/api/providers/catalog')discovered.resolve();return response.body},statusFetch:async()=>{const response=await call(h.api,'/api/status');statusReady.resolve();return response.body}});
+ const v=ui({fetch:async(path,body)=>{const response=await call(h.api,path,body?{body}:{});if(path==='/api/providers/catalog')discovered.resolve();return response.body},statusFetch:async()=>{const response=await call(h.api,'/api/status');if(response.body.models['test-cli']?.length)statusReady.resolve();return response.body}});
  v.H.project=initial.project;v.ctx.binding.applyStatus(initial,null);await v.status();await v.open();assert.equal(v.document.querySelector('[data-cx-vendor="test-cli"]'),null);
- ready.resolve();await discovered.promise;
+ const stream=await sse(h.api,'owner');t.after(()=>stream.close());stream.response.on('data',()=>{for(const event of stream.frames.splice(0))if(event.type==='providers')for(const listener of v.listeners)listener.onmessage({data:JSON.stringify(event)})});
+ await discovered.promise;await v.flush();assert.match(v.find('[data-cx-program="test-cli"]').textContent,/проверяется…/);ready.resolve();
  // Wait for the actual status response, not a duration or an assumption about HTTP latency.
  await statusReady.promise;await v.flush();
  assert.equal(v.select('test-cli','test-model').disabled,false);assert.equal(v.requests.filter(r=>r.body).length,0);
@@ -186,8 +187,23 @@ for(const change of ['project','pane','chat','pagehide','reopen','newer-request'
  for(const gate of pending.slice(1))gate.resolve({project:v.H.project,panes:v.H.panes,models:oldModels,turnModes:modes()});await v.flush();
 });
 
-for(const code of ['provider_not_installed','login_required','model_unsupported'])test('310: '+code+' stays readable and preserves the pane',async()=>{
+for(const code of ['provider_checking','provider_not_installed','login_required','model_unsupported'])test('310: '+code+' stays readable and preserves the pane',async()=>{
  const v=ui({fetch:async(path)=>path==='/api/providers/catalog'?catalogue():{ok:false,code,reason:'Действие недоступно: '+code}}),before=plain(v.H.pane);await v.open();await v.select('codex','shared').emit('click');
  assert.deepEqual(v.H.pane,before);assert.match(v.find('[data-cx-model-error]').textContent,new RegExp(code));
  if(code==='login_required')assert.equal(v.find('[data-cx-model-error] a').getAttribute('href'),'11-connections.html');
+});
+
+for(const state of ['cold','refreshing','missing'] as const)test('317: '+state+' program group stays visible and existing models cannot be selected',async()=>{
+ const next=catalogue(),row=next.providers.find(p=>p.id==='codex')!;row.installed=state==='cold'?null:state!=='missing';row.checking=state!=='missing';
+ const v=ui({fetch:async(path,body)=>path==='/api/providers/catalog'?next:{ok:true,pane:{...v.H.pane,...body}}});await v.open();
+ assert.match(v.find('[data-cx-program="codex"]').textContent,state==='missing'?/не установлена/:/проверяется…/);
+ const old=v.select('codex','shared');assert.equal(old.disabled,true);await old.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+ row.installed=true;row.checking=false;await v.providers(next);assert.equal(v.select('codex','shared').disabled,false);
+ await v.select('codex','shared').emit('click');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{vendor:'codex',model:'shared'}}]);
+});
+
+test('317: cold program is visible even without an entry in status.models and never invents a selectable model',async()=>{
+ const next=catalogue();next.providers.find(p=>p.id==='gemini')!.installed=null;next.providers.find(p=>p.id==='gemini')!.checking=true;
+ const v=ui({fetch:async()=>next});delete v.H.models.gemini;await v.open();
+ assert.match(v.find('[data-cx-program="gemini"]').textContent,/проверяется…/);assert.equal(v.document.querySelector('[data-cx-vendor="gemini"]'),null);
 });

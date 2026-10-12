@@ -77,20 +77,23 @@
   const modelsN=n=>n+' '+(n%10===1&&n%100!==11?'модель':n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'модели':'моделей');
   const modelMode=()=>{const p=seat();return p&&(!isRoom(p)||p.busy)?p.mode:cx().noFolder?'chat':'read'};
   const modeStamp=()=>JSON.stringify([modelMode(),H.turnModes||{},H.models||{}]);
-  function modelSupport(vendor){const mode=modelMode(),cap=H.turnModes&&H.turnModes[vendor]&&H.turnModes[vendor][mode];
+  function modelSupport(vendor){const p=pop&&pop.__models&&pop.__models.rows&&pop.__models.rows.find(p=>p.id===vendor);
+    if(p&&(p.installed===null||p.checking))return {ok:false,reason:'Программа проверяется, повторите через несколько секунд'};
+    if(p&&p.installed===false)return {ok:false,reason:'Программа не установлена'};
+    const mode=modelMode(),cap=H.turnModes&&H.turnModes[vendor]&&H.turnModes[vendor][mode];
     return cap&&cap.ok===true?{ok:true,note:typeof cap.note==='string'?cap.note:''}:{ok:false,reason:'Ходы в режиме «'+modeLabel(mode)+'» недоступны: '+(cap&&typeof cap.reason==='string'&&cap.reason.trim()?cap.reason:'движок не сообщил поддержку режима')};}
   function modelRows(response){
     if(!response||response.ok===false||!Array.isArray(response.providers))return null;
     const text=v=>typeof v==='string'&&v.trim()&&v.length<=256&&!/[\x00-\x1f\x7f]/.test(v),ids=new Set(),rows=[];
     for(const p of response.providers){
-      if(!p||!text(p.id)||ids.has(p.id)||!text(p.title)||!['subscription','apikey','local'].includes(p.kind)||!Array.isArray(p.models))return null;
+      if(!p||!text(p.id)||ids.has(p.id)||!text(p.title)||!['subscription','apikey','local'].includes(p.kind)||!Array.isArray(p.models)||p.installed!==null&&typeof p.installed!=='boolean'||typeof p.checking!=='boolean')return null;
       ids.add(p.id);const models=[],seen=new Set();for(const m of p.models){if(!m||!text(m.id)||!text(m.label)||seen.has(m.id))return null;seen.add(m.id);models.push({id:m.id,label:m.label})}
-      rows.push({id:p.id,title:p.title,kind:p.kind,models,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''});
+      rows.push({id:p.id,title:p.title,kind:p.kind,installed:p.installed,checking:p.checking===true,models,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''});
     }return rows;
   }
   function modelGroups(panel=pop){const metadata=panel&&panel.__models&&panel.__models.rows||[];
-    return Object.entries(H.models||{}).filter(([,models])=>Array.isArray(models)).map(([id,models])=>{const detail=metadata.find(p=>p.id===id);
-      return {id,title:detail?detail.title:id,kind:detail?detail.kind:null,modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id}))};});}
+    return [...new Set([...Object.keys(H.models||{}),...metadata.map(p=>p.id)])].map(id=>{const detail=metadata.find(p=>p.id===id),models=Array.isArray(H.models&&H.models[id])?H.models[id]:[];
+      return {id,title:detail?detail.title:id,kind:detail?detail.kind:null,availability:detail&&(detail.installed===null||detail.checking)?'проверяется…':detail&&detail.installed===false?'не установлена':'',modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id}))};});}
   function modelsCurrent(panel){return panel===pop&&L.bindingCurrent(panel.__binding)}
   function redrawModels(panel){if(!modelsCurrent(panel)||stack[stack.length-1]!=='model')return;
     const input=panel.querySelector('.cx-find'),value=input&&input.value,focused=document.activeElement===input,groups=Array.from(panel.querySelectorAll('[data-cx-program]')).map(g=>[g.dataset.cxProgram,g.classList.contains('open')]);
@@ -165,7 +168,7 @@
         (!state||state.loading?note('Читаю каталог моделей…'):'')+(state&&state.error?'<div class="cx-note" role="status">Каталог моделей не прочитан · '+esc(state.error)+'. <button type="button" class="btn sm ghost" data-cx-model-retry>Повторить</button></div>':'')+
         (state&&state.failure?'<div class="cx-note" data-cx-model-error role="status">'+esc(state.failure)+(state.loginRequired?' · <a href="11-connections.html">Открыть «Подключения»</a>':'')+'</div>':'')+
         rows.map((g,i)=>{const support=modelSupport(g.id),models=g.models,disabled=!support.ok||!!(state&&state.saving);
-          return '<div class="cx-grp'+(g.id===sv||!sv&&i===0?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+(g.kind?connectionKind(g.kind)+' · ':'')+modelsN(g.models.length)+'</small></div><div class="cx-sub">'+
+          return '<div class="cx-grp'+(g.id===sv||!sv&&i===0?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+(g.kind?connectionKind(g.kind)+' · ':'')+(g.availability?esc(g.availability):modelsN(g.models.length))+'</small></div><div class="cx-sub">'+
             (g.modelsReason?note(esc(g.modelsReason)):'')+models.map(m=>'<button type="button" class="cx-row cx-model'+(m.id===cur&&g.id===sv?' on':'')+(disabled?' dis':'')+'" data-cx-model="'+esc(m.id)+'" data-cx-vendor="'+esc(g.id)+'" data-q="'+esc(g.title+' '+m.label+' '+m.id)+'"'+(disabled?' disabled':'')+'><span class="cx-model-text"><b>'+esc(m.label)+'</b>'+(!support.ok||support.note?'<small>'+esc(support.reason||support.note)+'</small>':'')+'</span>'+(m.id===cur&&g.id===sv?'<span class="ck">✓</span>':'')+'</button>').join('')+'</div></div>';
         }).join('')+(!rows.length?note('В статусе пока нет списка моделей.'):'' )+
         note('Смена модели сохраняет разговор. Контекст можно перенести.')+hd('Размышления','для выбранной модели')+'<div class="cx-seg dis"><span>выкл</span><span class="on">адаптивно</span><span>вкл</span></div>'+note('Усилие и размышления пока недоступны: харнесс не передаёт их месту.');},

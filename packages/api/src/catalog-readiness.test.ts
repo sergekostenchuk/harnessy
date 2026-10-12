@@ -15,7 +15,7 @@ for(const state of ['missing','none','error'] as const)test('310: '+state+' refu
  await call(h.api,'/api/room',{body:{vendor:'claude',model:'w1',folder:true}});
  const worker=p.registry.get('worker')!,room=p.registry.get('room')!;worker.mode='all';worker.sessionId='worker-session';room.sessionId='room-session';p.state.savePanes(p.registry,p.journal);
  const before=[worker.settings(),room.settings()],bytes=['panes.json','chats.json'].map(file=>readFileSync(join(h.dir,'.harness','state',file)));
- const catalog=await call(h.api,'/api/providers/catalog');assert.equal(catalog.body.providers[0].installed,state!=='missing');
+ await call(h.api,'/api/providers/gemini/check',{body:{}});const catalog=await call(h.api,'/api/providers/catalog');assert.equal(catalog.body.providers[0].installed,state!=='missing');
  const status=(await call(h.api,'/api/status')).body;assert.deepEqual(status.models.gemini,state==='missing'?[]:[{id:'default',label:'по умолчанию программы'}]);
  // The room's read mode is unsupported by Gemini, but readiness is checked first.
  for(const path of ['/api/panes/worker','/api/room'])for(const explicit of state==='missing'?[true]:[true,false]){
@@ -28,18 +28,26 @@ for(const state of ['missing','none','error'] as const)test('310: '+state+' refu
  assert.ok(g.capture().every(c=>JSON.stringify(c.args)==='["--version"]'));assert.equal(h.provider.calls.length,0);
 });
 
-test('310: a cold catalog has no default model and cannot authorize a selection while metadata is pending',async t=>{
+test('317: pending metadata refuses both selection doors while preserving the pane, room, sessions and saved bytes',async t=>{
  const g=geminiFixture(t),gate=deferred();g.entry.version=async()=>{await gate.promise;return '0.63.0'};
  const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([g.entry])}});t.after(()=>gate.resolve());
- const pane=h.runtime.registry.get('worker')!,before=pane.settings();
+ await call(h.api,'/api/room',{body:{vendor:'claude',model:'w1',folder:true}});
+ const p=h.runtime.project,worker=p.registry.get('worker')!,room=p.registry.get('room')!;
+ worker.sessionId='worker-session';room.sessionId='room-session';p.state.savePanes(p.registry,p.journal);
+ const before=[worker.settings(),room.settings()],bytes=['panes.json','chats.json'].map(file=>readFileSync(join(h.dir,'.harness','state',file)));
  assert.deepEqual((await call(h.api,'/api/status')).body.models.gemini,[]);
- const r=await call(h.api,'/api/panes/worker',{body:{vendor:'gemini',model:'default',mode:'all'}});
- assert.equal(r.body.code,'provider_not_installed');assert.deepEqual(pane.settings(),before);gate.resolve();
+ for(const path of ['/api/panes/worker','/api/room']){
+  const r=await call(h.api,path,{body:{vendor:'gemini',model:'default',mode:'all',folder:true}});
+  assert.equal(r.status,409);assert.equal(r.body.code,'provider_checking');assert.match(r.body.error,/Программа проверяется.*повторите/);
+  assert.equal(p.registry.get('room'),room);assert.deepEqual([worker.settings(),room.settings()],before);
+  for(const [i,file] of ['panes.json','chats.json'].entries())assert.deepEqual(readFileSync(join(h.dir,'.harness','state',file)),bytes[i]);
+ }
+ assert.equal(h.provider.calls.length,0);gate.resolve();
 });
 
 test('310: unknown Gemini login permits selection; actual CLI refusal is a turn error without changing selected settings or session',async t=>{
  const g=geminiFixture(t);writeFileSync(g.account,JSON.stringify({active:'alice@example.test'}));
- const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([g.entry])}});await call(h.api,'/api/providers/catalog');
+ const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([g.entry])}});await call(h.api,'/api/providers/'+h.runtime.providerOperations.catalog.ids()[0]+'/check',{body:{}});
  const r=await call(h.api,'/api/panes/worker',{body:{vendor:'gemini',model:'default',mode:'all'}});assert.equal(r.status,200,r.text);
  const pane=h.runtime.registry.get('worker')!;pane.sessionId='ab123456-1234-1234-1234-123456789abc';h.runtime.project.state.savePanes(h.runtime.registry,h.runtime.project.journal);
  const selected=()=>({vendor:pane.vendor,model:pane.model,mode:pane.mode,session:pane.sessionId}),before=selected();
@@ -50,14 +58,14 @@ test('310: unknown Gemini login permits selection; actual CLI refusal is a turn 
 
 test('310: unknown login is not permission for an arbitrary descriptor',async t=>{
  const f=await cliFixture(t,'probe'),entry=cliEntry(f.description,{env:f.env,cwd:f.dir});entry.auth=async()=>({loggedIn:false,state:'unknown',reason:'not verified'});
- const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([entry])}});await call(h.api,'/api/providers/catalog');
+ const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([entry])}});await call(h.api,'/api/providers/'+h.runtime.providerOperations.catalog.ids()[0]+'/check',{body:{}});
  for(const path of ['/api/panes/worker','/api/room']){const r=await call(h.api,path,{body:{vendor:'test-cli',model:'test-model',folder:true}});assert.equal(r.status,409);assert.equal(r.body.code,'login_required')}
  assert.equal(f.capture().some(c=>c.action==='turn'),false);
 });
 
 test('310: absent, forged and default models cannot bypass catalog membership through either door',async t=>{
  const f=await cliFixture(t,'probe'),catalog=new ProviderCatalog([cliEntry(f.description,{env:f.env,cwd:f.dir})]),h=await fixture(t,{deps:{providerCatalog:catalog}});
- await call(h.api,'/api/providers/catalog');h.runtime.roomSet({vendor:'claude',model:'w1',folder:true},OWNER);
+ await call(h.api,'/api/providers/test-cli/check',{body:{}});h.runtime.roomSet({vendor:'claude',model:'w1',folder:true},OWNER);
  const p=h.runtime.project,worker=p.registry.get('worker')!,room=p.registry.get('room')!;worker.sessionId='old-worker';room.sessionId='old-room';p.state.savePanes(p.registry,p.journal);
  const before=[worker.settings(),room.settings()];
  // Registry membership alone is stale/untrusted; selection consumes the catalog snapshot.
