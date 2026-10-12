@@ -4,12 +4,12 @@ import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
 import {deferred,fixture,sse,call} from './test-helpers.ts';
-import {ProviderCatalog,LoginTerminal,type CatalogEntry} from '@harnessy/providers';
+import {ProviderCatalog,ProviderError,LoginTerminal,type CatalogEntry} from '@harnessy/providers';
 import {antigravityFixture} from '../../providers/src/antigravity-test-helpers.ts';
 import type {TestContext} from 'node:test';
 const read=(p:string)=>readFileSync(new URL('../../../'+p,import.meta.url),'utf8');
 const login=(state='ok')=>({state,account:'u•••@example.test',command:'agy',checkedAt:100,reason:''});
-const provider=(extra:any={})=>({id:'antigravity',title:'Antigravity',kind:'subscription',binary:'agy',installed:true,version:'1.2.17',login:login(),models:[{id:'model-a',label:'Model A',default:true},{id:'model-b',label:'Model B'}],capabilities:{headless:true,resume:true,mcp:true,limits:false,probe:{ok:true}},...extra});
+const provider=(extra:any={})=>({id:'antigravity',title:'Antigravity',kind:'subscription',binary:'agy',installed:true,checking:false,version:'1.2.17',login:login(),models:[{id:'model-a',label:'Model A',default:true},{id:'model-b',label:'Model B'}],capabilities:{headless:true,resume:true,mcp:true,limits:false,probe:{ok:true}},...extra});
 const catalog=(...providers:any[])=>({ok:true,providers});
 function ui(handler?:(path:string,body:any)=>Promise<any>,initial:any=catalog(provider()),transport?:(path:string,init?:RequestInit)=>Promise<Response>,project='/a'){
  let httpApi:((path:string,body:any,operation:any)=>Promise<any>)|null=null;
@@ -84,7 +84,7 @@ for(const change of ['project','aba','pagehide','provider','model','account'])te
  await button.emit('click');await v.settle();assert.equal(v.posts('/api/approve').filter(r=>r.body.decision==='allow').length,0);
 });
 
-for(const patch of [{models:null},{models:[{id:'x'}]},{login:null},{login:{state:'ok'}},{capabilities:null},{installed:null},{id:'x\" onclick=\"bad'},{limits:{ref:'https://example.test/private'}}])test('268/ОТСУТСТВИЕ: incomplete or forged catalog fails closed '+JSON.stringify(patch),async()=>{
+for(const patch of [{models:null},{models:[{id:'x'}]},{login:null},{login:{state:'ok'}},{capabilities:null},{installed:'false'},{installed:undefined},{checking:'true'},{checking:undefined},{id:'x\" onclick=\"bad'},{limits:{ref:'https://example.test/private'}}])test('268/ОТСУТСТВИЕ: incomplete or forged catalog fails closed '+JSON.stringify(patch),async()=>{
  const v=ui(undefined,catalog(provider(patch)));await v.settle();await v.find('#addbtn').emit('click');assert.match(v.find('.cbody').textContent,/Каталог не прочитан/);assert.equal(v.document.querySelector('[data-program-probe]'),null);assert.equal(v.posts().length,0);
 });
 
@@ -257,4 +257,20 @@ test('271/СОСЕДИ: an old allow response cannot overwrite a newer approval 
  let rows=catalog(provider()),hold=false,probe=0;const captured=deferred(),catalogGate=deferred(),allowSeen=deferred(),allowGate=deferred<any>(),denySeen=deferred();
  const v=ui(async(path,body)=>{if(path==='/api/providers/catalog'){const snapshot=structuredClone(rows);if(hold){hold=false;captured.resolve();await catalogGate.promise}return snapshot}if(path.endsWith('/probe'))return {ok:true,provider:'antigravity',model:body.model,approvalId:'fresh-'+ ++probe,status:'awaiting_approval',price:{kind:'subscription',label:'расходуется подписка'}};if(path==='/api/approve'){if(body.decision==='allow'){allowSeen.resolve();return allowGate.promise}denySeen.resolve();return {ok:true}}});await open(v);await v.find('[data-program-probe]').emit('click');const old=v.find('[data-program-confirm]');rows=catalog(provider({login:{...login(),account:'z•••@other.test'}}));hold=true;await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'check'})});await captured.promise;const allowing=old.emit('click');await allowSeen.promise;catalogGate.resolve();await denySeen.promise;await v.settle(r=>r.path==='/api/approve'&&r.body.decision==='allow');
  rows=catalog(provider());await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'check'})});await v.settle(r=>r.path==='/api/approve'&&r.body.decision==='allow');await v.find('[data-program-probe]').emit('click');const fresh=v.find('dialog'),confirm=v.find('[data-program-confirm]');allowGate.resolve({ok:false,error:'OLD RECEIPT'});await allowing;await v.settle();await old.emit('click');assert.equal(v.find('dialog'),fresh);assert.equal(v.find('[data-program-confirm]'),confirm);assert.doesNotMatch(v.find('.cbody').textContent,/OLD RECEIPT/);assert.deepEqual(v.posts('/api/approve').map(r=>[r.body.id,r.body.decision]),[['fresh-1','allow'],['fresh-1','deny']]);
+});
+
+// Real HTTP responses from a deferred CLI read exercise both the catalog and open card.
+test('317: cold catalog and card show checking until the program is read; confirmed absence is distinct',async t=>{
+ const f=antigravityFixture(t),gate=deferred(),ready=deferred();f.entry.version=async()=>{await gate.promise;return '1.2.17'};
+ const source=new ProviderCatalog([f.entry]);source.subscribe(()=>ready.resolve());t.after(()=>gate.resolve());
+ const h=await fixture(t,{deps:{providerCatalog:source}}),v=ui(undefined,undefined,(path,init)=>fetch(h.api.url+path,init),h.dir);
+ await v.settle();assert.match(v.find('[data-pv="antigravity"]').textContent,/Проверяется…/);
+ await v.find('#addbtn').emit('click');await v.settle();assert.match(v.find('.cbody').textContent,/Проверяется…/);assert.doesNotMatch(v.find('.cbody').textContent,/Программа не установлена/);
+ await v.find('[data-program-open="antigravity"]').emit('click');assert.match(v.find('.conn-facts').textContent,/проверяется…/);
+ assert.equal(v.find('[data-program-terminal]').disabled,true);assert.equal(v.find('[data-program-probe]').disabled,true);assert.equal(v.find('[data-program-check]').disabled,true);
+ await v.find('[data-program-probe]').emit('click');await v.find('[data-program-terminal]').emit('click');assert.equal(v.posts().length,0);
+ gate.resolve();await ready.promise;await refreshPrograms(v);assert.match(v.find('.cbody').textContent,/Вход проверен/);assert.doesNotMatch(v.find('.conn-facts').textContent,/проверяется/);assert.equal(v.find('[data-program-probe]').disabled,false);
+ source.get('antigravity').version=async()=>{throw new ProviderError('no_binary','missing')};await call(h.api,'/api/providers/antigravity/check',{body:{}});await refreshPrograms(v);
+ assert.match(v.find('.cbody').textContent,/Программа не установлена/);assert.doesNotMatch(v.find('.conn-facts').textContent,/проверяется/);assert.equal(v.find('[data-program-terminal]').disabled,true);assert.equal(v.find('[data-program-probe]').disabled,true);
+ assert.ok(f.capture().every(c=>!c.args.includes('stream-json')));
 });

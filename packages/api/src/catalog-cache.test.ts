@@ -12,10 +12,10 @@ test('290/315: startup and TTL refresh in background; every cached HTTP request 
  const catalog=new ProviderCatalog([entry],()=>now),first=update(catalog),h=await fixture(t,{deps:{providerCatalog:catalog}});t.after(()=>gate.resolve());
  assert.equal(versions,1,'startup begins metadata without waiting for it');
  const fast=async()=>{const start=performance.now(),r=await call(h.api,'/api/providers/catalog');assert.ok(performance.now()-start<100,'cached GET must not wait for CLI');assert.equal(r.status,200);return r.body.providers[0]};
- for(let i=0;i<3;i++){const row=await fast();assert.equal(row.login.state,'unknown');assert.match(row.login.reason,/проверяется/);assert.deepEqual(row.models,[])}assert.equal(versions,1);
- gate.resolve();await first;const ready=await fast();assert.equal(ready.login.state,'ok');assert.equal(ready.models[0].id,'m1');
- gate=deferred();now+=300_000;const fresh=update(catalog);assert.equal((await fast()).login.checkedAt,ready.login.checkedAt);await fast();assert.equal(versions,2);
- gate.resolve();await fresh;assert.equal((await fast()).login.checkedAt,now);assert.equal(versions,2);
+ for(let i=0;i<3;i++){const row=await fast();assert.equal(row.installed,null);assert.equal(row.checking,true);assert.equal(row.login.state,'unknown');assert.match(row.login.reason,/проверяется/);assert.deepEqual(row.models,[])}assert.equal(versions,1);
+ gate.resolve();await first;const ready=await fast();assert.equal(ready.installed,true);assert.equal(ready.checking,false);assert.equal(ready.login.state,'ok');assert.equal(ready.models[0].id,'m1');
+ gate=deferred();now+=300_000;const fresh=update(catalog);const refreshing=await fast();assert.equal(refreshing.installed,true);assert.equal(refreshing.checking,true);assert.equal(refreshing.login.checkedAt,ready.login.checkedAt);await fast();assert.equal(versions,2);
+ gate.resolve();await fresh;const updated=await fast();assert.equal(updated.checking,false);assert.equal(updated.login.checkedAt,now);assert.equal(versions,2);
  now++;await call(h.api,'/api/providers/fixture/check',{body:{}});assert.equal(versions,3,'explicit check bypasses TTL');assert.equal((await fast()).login.checkedAt,now);
 });
 
@@ -35,7 +35,7 @@ test('315: an observed account change, logout, corruption or removed binary neve
  entry.models=models;await call(h.api,'/api/providers/fixture/check',{body:{}});assert.equal(catalog.peek('fixture').login.state,'ok');
  entry.auth=async()=>({loggedIn:false});await call(h.api,'/api/providers/fixture/check',{body:{}});assert.equal(catalog.peek('fixture').login.state,'none');assert.deepEqual(catalog.peek('fixture').models,[]);
  entry.auth=async()=>{throw new ProviderError('protocol','malformed')};await call(h.api,'/api/providers/fixture/check',{body:{}});assert.equal(catalog.peek('fixture').login.state,'error');
- entry.version=async()=>{throw new ProviderError('no_binary','missing')};assert.equal((await call(h.api,'/api/providers/fixture/check',{body:{}})).body.code,'not_installed');const missing=(await call(h.api,'/api/providers/catalog')).body.providers[0];assert.equal(missing.installed,false);assert.deepEqual(missing.models,[]);
+ entry.version=async()=>{throw new ProviderError('no_binary','missing')};assert.equal((await call(h.api,'/api/providers/fixture/check',{body:{}})).body.code,'not_installed');const missing=(await call(h.api,'/api/providers/catalog')).body.providers[0];assert.equal(missing.installed,false);assert.equal(missing.checking,false);assert.deepEqual(missing.models,[]);
 });
 
 test('315: Antigravity metadata process timeout preserves its successful model list, with no inference or login',async t=>{

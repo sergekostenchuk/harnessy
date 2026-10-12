@@ -28,13 +28,21 @@ for(const state of ['missing','none','error'] as const)test('310: '+state+' refu
  assert.ok(g.capture().every(c=>JSON.stringify(c.args)==='["--version"]'));assert.equal(h.provider.calls.length,0);
 });
 
-test('310: a cold catalog has no default model and cannot authorize a selection while metadata is pending',async t=>{
+test('317: pending metadata refuses both selection doors while preserving the pane, room, sessions and saved bytes',async t=>{
  const g=geminiFixture(t),gate=deferred();g.entry.version=async()=>{await gate.promise;return '0.63.0'};
  const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([g.entry])}});t.after(()=>gate.resolve());
- const pane=h.runtime.registry.get('worker')!,before=pane.settings();
+ await call(h.api,'/api/room',{body:{vendor:'claude',model:'w1',folder:true}});
+ const p=h.runtime.project,worker=p.registry.get('worker')!,room=p.registry.get('room')!;
+ worker.sessionId='worker-session';room.sessionId='room-session';p.state.savePanes(p.registry,p.journal);
+ const before=[worker.settings(),room.settings()],bytes=['panes.json','chats.json'].map(file=>readFileSync(join(h.dir,'.harness','state',file)));
  assert.deepEqual((await call(h.api,'/api/status')).body.models.gemini,[]);
- const r=await call(h.api,'/api/panes/worker',{body:{vendor:'gemini',model:'default',mode:'all'}});
- assert.equal(r.body.code,'provider_not_installed');assert.deepEqual(pane.settings(),before);gate.resolve();
+ for(const path of ['/api/panes/worker','/api/room']){
+  const r=await call(h.api,path,{body:{vendor:'gemini',model:'default',mode:'all',folder:true}});
+  assert.equal(r.status,409);assert.equal(r.body.code,'provider_checking');assert.match(r.body.error,/Программа проверяется.*повторите/);
+  assert.equal(p.registry.get('room'),room);assert.deepEqual([worker.settings(),room.settings()],before);
+  for(const [i,file] of ['panes.json','chats.json'].entries())assert.deepEqual(readFileSync(join(h.dir,'.harness','state',file)),bytes[i]);
+ }
+ assert.equal(h.provider.calls.length,0);gate.resolve();
 });
 
 test('310: unknown Gemini login permits selection; actual CLI refusal is a turn error without changing selected settings or session',async t=>{
