@@ -7,7 +7,7 @@ import {json} from './responses.ts';
 function owner(ctx:RequestContext){providerOwner(ctx.request);if(ctx.body.from!==undefined||ctx.body.pane!==undefined)throw new RuntimeError('owner_only','Действие доступно только владельцу',403)}
 export function networkRoutes(r:Runtime):Route[]{return [
  {method:'GET',path:'/api/network/checks',style:'J',handle:ctx=>{owner(ctx);return json({ok:true,check:r.networkProviderChecks.latest(ctx.query.get('project'),OWNER)})}},
- {method:'POST',path:'/api/network/checks/preview',style:'J',handle:ctx=>{owner(ctx);networkFields(ctx.body,['project']);return json({ok:true,check:r.networkProviderChecks.preview(ctx.body.project,OWNER)})}},
+ {method:'POST',path:'/api/network/checks/preview',style:'J',handle:async ctx=>{owner(ctx);networkFields(ctx.body,['project']);return json({ok:true,check:await r.networkProviderChecks.preview(ctx.body.project,OWNER)})}},
  {method:'POST',path:'/api/network/checks/:id/start',style:'J',handle:ctx=>{owner(ctx);networkFields(ctx.body,['project','decision']);return json({ok:true,check:r.networkProviderChecks.start(ctx.params.id,ctx.body.project,ctx.body.decision,OWNER)})}},
  {method:'POST',path:'/api/network/checks/:id/cancel',style:'J',handle:ctx=>{owner(ctx);networkFields(ctx.body,['project']);return json({ok:true,check:r.networkProviderChecks.cancel(ctx.params.id,ctx.body.project,OWNER)})}},
  {method:'GET',path:'/api/network/checks/:id',style:'J',handle:ctx=>{owner(ctx);return json({ok:true,check:r.networkProviderChecks.get(ctx.params.id,ctx.query.get('project'),OWNER)})}},

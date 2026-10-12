@@ -183,7 +183,7 @@ test('22e.2: existing fallback labels are repaired once under the settings lock;
  await h.runtime.settings.changeNetwork(async config=>{Object.assign(config,before);return {result:undefined}});
  const [r,c]=await Promise.all([call(h.api,root+'/exits'),call(h.api,root+'/providers/claude')]);assert.equal(r.status,200);assert.equal(c.status,200);
  const expected=structuredClone(before);expected.exits['legacy-claude'].label='Напрямую · прежний маршрут Claude';expected.exits['legacy-codex-1'].label='Напрямую · прежний маршрут Codex';
- assert.deepEqual(h.runtime.settings.network(),expected);assert.deepEqual(c.body.exits,before.chains.claude);
+ assert.deepEqual(h.runtime.settings.network(),{...expected,legacyLabelsVersion:1});assert.deepEqual(c.body.exits,before.chains.claude);
  const bytes=readFileSync(h.file,'utf8');const restarted=new NetworkSettings(new Settings(h.file),h.keys,h.runtime.connections,()=>['claude','codex']);await restarted.list();assert.equal(readFileSync(h.file,'utf8'),bytes);
  const entry=r.body.exits.find((r:any)=>r.config.id==='legacy-claude');const renamed=await save(h.api,{...entry.config,label:'Выход владельца'},entry.revision);assert.equal(renamed.status,200);await restarted.list();assert.equal(h.runtime.settings.network().exits['legacy-claude']!.label,'Выход владельца');
 });

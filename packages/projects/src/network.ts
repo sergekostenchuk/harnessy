@@ -10,14 +10,14 @@ const absent:KeyDescription={present:false,mask:null,updatedAt:null};
 function slot(exit:NetworkExit|undefined){return exit?.type==='proxy'&&exit.passwordRef?keySlot(exit.passwordRef,exit.passwordGeneration):null}
 function password(value:unknown):asserts value is string {if(typeof value!=='string'||!value.length||Buffer.byteLength(value)>4096||/[\p{C}]/u.test(value))networkInvalid('Пароль: от 1 до 4096 байт, без управляющих символов')}
 function conflict(revision:unknown,value:unknown){if(revision!==networkRevision(value))throw new ProjectError('network_conflict','Настройки изменились; перечитайте выход или цепочку',409)}
-// Only the generated fallback name is upgraded; owner labels and exit IDs stay intact.
+// Upgrade generated fallback names once. Later owner edits, including the old fallback, are authoritative.
 function nameLegacyDirectExits(config:NetworkConfig){
- let changed=false;
+ if(config.legacyLabelsVersion===1)return;
  for(const exit of Object.values(config.exits)){
   const vendor=/^legacy-(claude|codex)(?:-[1-9][0-9]*)?$/.exec(exit.id)?.[1];
-  if(exit.type==='direct'&&vendor&&exit.label===vendor){exit.label='Напрямую · прежний маршрут '+(vendor==='claude'?'Claude':'Codex');changed=true}
+  if(exit.type==='direct'&&vendor&&exit.label===vendor){exit.label='Напрямую · прежний маршрут '+(vendor==='claude'?'Claude':'Codex')}
  }
- return changed;
+ config.legacyLabelsVersion=1;
 }
 export class NetworkSettings {
  private settings:Settings;private keys:KeyStore;private connections:Connections;private programs:()=>string[];
@@ -28,7 +28,7 @@ export class NetworkSettings {
  private async put(ref:string,value:string){try{await this.keys.put(ref,value)}catch{throw new ProjectError('credential_unavailable','Связка ключей недоступна',503)}}
  // Run only at an owner network door. Legacy bytes remain available to the old traffic path until TS-22c.
  async migrate(){
-  const snapshot=this.settings.network();if(snapshot.migrated&&!nameLegacyDirectExits(snapshot))return;
+  const snapshot=this.settings.network();if(snapshot.migrated&&snapshot.legacyLabelsVersion===1)return;
   await this.settings.changeNetwork(async config=>{
    if(config.migrated){nameLegacyDirectExits(config);return {result:undefined}};
    return this.connections.withLegacyRoutes(async rows=>{
