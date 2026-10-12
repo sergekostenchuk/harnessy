@@ -31,7 +31,7 @@ for(const stage of ['version','auth','models'] as const)test('315: '+stage+' tra
 test('315: an observed account change, logout, corruption or removed binary never inherits old models',async t=>{
  const catalog=new ProviderCatalog([metadata()]),h=await fixture(t,{deps:{providerCatalog:catalog}}),entry=catalog.get('fixture');await call(h.api,'/api/providers/fixture/check',{body:{}});
  const old=catalog.peek('fixture'),models=entry.models;entry.auth=async()=>({loggedIn:true,email:'amy@example.test'});entry.models=async()=>{throw new ProviderError('transport_lost','timeout')};
- await call(h.api,'/api/providers/fixture/check',{body:{}});const changed=catalog.peek('fixture');assert.equal(changed.login.account,old.login.account,'even equal public masks are different accounts');assert.equal(changed.login.state,'error');assert.deepEqual(changed.models,[]);
+ await call(h.api,'/api/providers/fixture/check',{body:{}});const changed=catalog.peek('fixture');assert.equal(changed.login.account,old.login.account,'even equal public masks are different accounts');assert.equal(changed.login.state,'unknown','343: interrupted metadata is not a login error, even when old models cannot be reused');assert.deepEqual(changed.models,[]);
  entry.models=models;await call(h.api,'/api/providers/fixture/check',{body:{}});assert.equal(catalog.peek('fixture').login.state,'ok');
  entry.auth=async()=>({loggedIn:false});await call(h.api,'/api/providers/fixture/check',{body:{}});assert.equal(catalog.peek('fixture').login.state,'none');assert.deepEqual(catalog.peek('fixture').models,[]);
  entry.auth=async()=>{throw new ProviderError('protocol','malformed')};await call(h.api,'/api/providers/fixture/check',{body:{}});assert.equal(catalog.peek('fixture').login.state,'error');

@@ -21,3 +21,5 @@ export {QWEN,QWEN_LOGIN_UNKNOWN,QWEN_MODELS_UNAVAILABLE} from './qwen.ts';
 export {DEVIN,DEVIN_UNAVAILABLE} from './devin.ts';
 export {OPENCODE,OPENCODE_UNAVAILABLE,OPENCODE_LOGIN_UNKNOWN} from './opencode.ts';
 export {OllamaProvider,ollamaEntry,OLLAMA_URL,OLLAMA_TIMEOUT_MS,OLLAMA_LOGIN_UNKNOWN} from './ollama.ts';
+
+export {catalogCacheDirectory} from './catalog-cache.ts';
