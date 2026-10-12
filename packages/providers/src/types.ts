@@ -3,7 +3,7 @@ export type Vendor = string;
 export type BuiltinVendor = 'claude'|'codex';
 export interface TurnModeSupport {ok:boolean;reason?:string;note?:string}
 export type TurnModes=Record<'read'|'edit'|'all',TurnModeSupport>&Partial<Record<Mode,TurnModeSupport>>;
-export const providerId=(v:unknown):v is string=>typeof v==='string'&&/^[a-z][a-z0-9-]*$/.test(v)&&!['human','owner','harness'].includes(v);
+export const providerId=(v:unknown):v is string=>typeof v==='string'&&/^(?:[a-z][a-z0-9-]*|api:[a-z][a-z0-9_-]{0,63})$/.test(v)&&!['human','owner','harness'].includes(v);
 export interface Seat { id:string; vendor:Vendor; label:string; model:string; mode:Mode; cwd:string; sessionId:string|null; writePaths:string[]; worktree:string|null }
 /** input is fresh input only; cacheRead is disjoint. Missing/invalid measurements stay null. */
 export interface Usage {input:number|null;output:number|null;cacheRead:number|null}
@@ -22,7 +22,7 @@ export function limitPlan(value:unknown):string|null {const plans:Record<string,
 export type TurnEvent =
  | {type:'delta';text:string}|{type:'tool';name:string;detail:string}|{type:'toolError';text:string}
  | {type:'approval';id:string;title:string;detail:string}|{type:'approvalResolved';id:string;decision:'allow'|'deny'|'timeout'}
- | {type:'done';sessionId:string|null;model:string;durationMs:number;usage:Usage}|{type:'error';text:string};
+ | {type:'done';sessionId:string|null;model:string;durationMs:number;usage:Usage;usageIncomplete?:true}|{type:'error';text:string};
 export type ToolResult={ok:true;text:string}|{ok:false;error:string;code?:string};
 export type Kind='task'|'status'|'question'|'answer'|'review-request'|'verdict'|'blocker'|'escalation'|'note'|'stop'|'resume'|'digest'|'proposal'|'decision'|'report';
 export interface SendArgs {to:string;kind:Kind;text:string;thread?:string;reply_to?:number;evidence?:string[];score?:number;round?:number;sha?:string}

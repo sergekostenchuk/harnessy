@@ -1,4 +1,5 @@
-import {createLlmService,keySlot,MacKeyStore,type KeyStore} from '@harnessy/llm';
+import {ApiAgent,apiRoute,API_MODES} from './api-agent.ts';
+import {createLlmService,keySlot,MacKeyStore,routeModels,type KeyStore} from '@harnessy/llm';
 import {TraceStore,currentTrace,traceReason,type TraceContext} from './trace.ts';
 import {ProviderOperations} from './provider-operations.ts';
 import {ProviderCatalog,LoginTerminal,builtinEntries,CLI_DESCRIPTORS,cliEntry,ollamaEntry} from '@harnessy/providers';
@@ -36,9 +37,10 @@ import {RuntimeError,message,slice,deepFreeze,object} from './errors.ts';
 import {systemClock,type RuntimeDeps,type RuntimeActions,type ProjectState,type TurnScope,type ActiveTurn,type ActionContext,type RuntimeEvent,type TurnRecords,type BridgeSendArgs,type BridgeFailure,type SendResult,type ReadPaneResult,type AskResult,type MergeResult,type AssignRoleResult} from './types.ts';
 const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Initiator & {trust:'harness'}={seat:'harness',trust:'harness'};
 type AttemptDecision=NonNullable<Record_['attempt']>;
+function turnMeasurements(event:Record<string,unknown>|null){if(event?.type!=='done')return {};const raw=object(event.usage)?event.usage:{},value=(key:string)=>typeof raw[key]==='number'&&Number.isSafeInteger(raw[key])&&raw[key]>=0?raw[key] as number:null;return {usage:{input:value('input'),output:value('output'),cacheRead:value('cacheRead')},...(event.usageIncomplete===true?{usageIncomplete:true as const}:{}),...(typeof event.durationMs==='number'?{durationMs:event.durationMs}:{})}}
 export class Runtime {
  readonly providerOperations:ProviderOperations;
- readonly llmKeys:KeyStore;private unsubscribeLlm:()=>void;
+ private apiAgents=new Map<string,ApiAgent>();readonly llmKeys:KeyStore;private unsubscribeLlm:()=>void;
  get llm(){const p=this.project;return createLlmService({routes:()=>this.settings.llmProviders(),resolveKey:(ref,generation)=>this.llmKeys.resolveKey(keySlot(ref,generation)),subscribeRoutes:listener=>this.settings.onLlmRoutesChanged(listener),...(this.deps.llmFetch?{fetch:this.deps.llmFetch}:{}),trace:event=>{p.trace.record(event.kind,{outcome:event.outcome,reason:traceReason(event.code??'none'),durationMs:event.durationMs,data:{id:event.requestId,vendor:event.provider,model:event.model,code:event.code,...event.usage}})}})}
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
  private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();private cliQuotas=new WeakMap<ProjectState,ProviderLimitsStore>();
@@ -48,7 +50,7 @@ export class Runtime {
  this.clock=deps.clock??systemClock;this.connections=deps.connections??new Connections();this.projectRegistry=deps.projectRegistry??new ProjectRegistry();this.defaultDir=canonicalPath(deps.defaultDir??process.env.CHAT_WORK_DIR??'/Users/Shared/simple-claude-chat');
  const current=()=>this.current&&!this.current.closed?this.current.dir:null;
  this.settings=typeof deps.settings==='function'?deps.settings(current):deps.settings??new Settings(undefined,current);
- this.unsubscribeLlm=this.settings.onLlmRoutesChanged(()=>{const p=this.current;if(p&&!p.closed)p.bus.publish('owner',{type:'llm.routes',providers:Object.keys(this.settings.llmProviders())})});
+ this.unsubscribeLlm=this.settings.onLlmRoutesChanged(()=>{const p=this.current;if(p&&!p.closed){this.syncApiModels(p);p.bus.publish('owner',{type:'llm.routes',providers:Object.keys(this.settings.llmProviders())})}});
  this.pins=typeof deps.pins==='function'?deps.pins(current,id=>this.chatMeta(id)):deps.pins??new Pins(undefined,current,id=>this.chatMeta(id));this.traceSettings();
  this.providerOperations=new ProviderOperations(this,deps.providerCatalog??new ProviderCatalog([...builtinEntries(deps.providers,deps.models??{}),...CLI_DESCRIPTORS.map(d=>cliEntry(d)),ollamaEntry()]),deps.loginTerminal??new LoginTerminal())
  }
@@ -76,7 +78,9 @@ export class Runtime {
  private cliQuota(p:ProjectState){let store=this.cliQuotas.get(p);if(!store){store=new ProviderLimitsStore(this.providerOperations.catalog,this.clock,()=>{if(!p.closed&&this.current===p)p.bus.publish('owner',{type:'limits',...this.limitsSnapshot()})},this.deps.limitsCacheDir,event=>{p.trace.record('provider.limits',{outcome:event.ok?'ok':'failed',reason:event.ok?{code:'none',text:''}:traceReason(event.code,event.reason),durationMs:event.durationMs,data:{vendor:event.vendor,code:event.code,reason:event.reason}})});this.cliQuotas.set(p,store)}return store}
  limitsSnapshot(){const p=this.project,base=this.quota(p).snapshot(),cli=this.cliQuota(p).snapshot(),providers=[...base.providers.map(v=>({...v,ok:v.status==='ok'})),...cli.providers],error=cli.errors[0],available=providers.some(v=>v.ok||v.windows.length>0);return {...base,...(error&&!available?{ok:false as const,code:error.code,reason:error.reason}:{}),revision:base.revision+cli.revision,providers,updatedAt:Math.max(base.updatedAt??0,...cli.providers.map(v=>v.fetchedAt??0))||null,...(cli.errors.length?{errors:cli.errors}:{})}}
  async limits(){const p=this.project;await Promise.all([this.quota(p).refresh(),this.cliQuota(p).refresh()]);this.same(p);return this.limitsSnapshot()}
- private provider(vendor:Vendor|'human'){const provider=vendor==='human'?null:this.deps.providers[vendor]??(this.providerOperations.catalog.ids().includes(vendor)?this.providerOperations.catalog.provider(vendor):null);if(!provider)throw new RuntimeError('no_provider','нет провайдера: '+vendor,503);return provider}
+ apiModelSnapshot(){try{const routes=this.settings.llmProviders(),models=Object.fromEntries(Object.entries(routes).map(([id,config])=>['api:'+id,routeModels(id,config).map(m=>({id:m.id,label:m.name}))]));return {models,turnModes:Object.fromEntries(Object.keys(models).map(id=>[id,API_MODES])),apiError:null}}catch{return {models:{} as Record<string,{id:string;label:string}[]>,turnModes:{} as Record<string,typeof API_MODES>,apiError:{code:'settings_unreadable',reason:'Настройки API-маршрутов не прочитаны'}}}}
+ private syncApiModels(p:ProjectState){const snapshot=this.apiModelSnapshot();for(const id of Object.keys(p.registry.models))if(apiRoute(id)&&!Object.hasOwn(snapshot.models,id))p.registry.models[id]=[];for(const [id,models]of Object.entries(snapshot.models)){p.registry.providers.add(id);p.registry.models[id]=models}}
+ private provider(vendor:Vendor|'human'):import('@harnessy/providers').Provider{const route=apiRoute(vendor);if(route){let agent=this.apiAgents.get(vendor);if(!agent){agent=new ApiAgent(route,{service:()=>this.llm});this.apiAgents.set(vendor,agent)}return agent}const provider=vendor==='human'?null:this.deps.providers[vendor]??(this.providerOperations.catalog.ids().includes(vendor)?this.providerOperations.catalog.provider(vendor):null);if(!provider)throw new RuntimeError('no_provider','нет провайдера: '+vendor,503);return provider}
  private requireOwner(initiator:Initiator):void {if(initiator?.seat!=='owner'||initiator.trust!=='owner')throw new RuntimeError('policy_denied','действие доступно только владельцу',403)}
  private same(p:ProjectState):void{if(this.current!==p||p.closed)throw new RuntimeError('project_changed','проект сменился',409)}
  private pane(id:string,p=this.project):Pane{const pane=p.registry.get(id);if(!pane)throw new RuntimeError('pane_unknown','нет окна',404);return pane}
@@ -104,8 +108,8 @@ export class Runtime {
  try{policy=new Policy(join(harness,'comms-policy.yaml'))}catch(e){lineErrors.push(message(e))}
  let registry!:Registry,owner!:Pane;
  const bus=new EventBus(()=>{const panes=[owner,...registry.panes.values()];return [...panes.flatMap(p=>[...p.approvals.values()].map(a=>({pane:p.id,event:a.event()}))),...panes.filter(p=>p.uncertainNote).map(p=>({pane:p.id,replay:true,event:{type:'note',text:p.uncertainNote,warning:this.warningId(this.project,p,'uncertain')}})),...panes.filter(p=>p.recoveryNote).map(p=>({pane:p.id,replay:true,event:{type:'note',text:p.recoveryNote,warning:this.warningId(this.project,p,'recovery')}})),...panes.filter(p=>p.recoveryError).map(p=>({pane:p.id,replay:true,event:p.recoveryError!}))]});
- const models=this.deps.models??{};if(!this.deps.models){const entries=Object.entries(this.deps.providers) as [Vendor,import('@harnessy/providers').Provider][];const results=await Promise.allSettled(entries.map(([,provider])=>provider.models()));for(let i=0;i<entries.length;i++){const result=results[i]!;if(result.status==='fulfilled')models[entries[i]![0]]=result.value;else lineErrors.push(message(result.reason))}}
- const registered=new Set([...Object.keys(this.deps.providers),...this.providerOperations.catalog.ids()]);const seats=Object.values(team?.seats??{}).filter(seat=>{if(seat.vendor==='claude'||seat.vendor==='codex'||registered.has(seat.vendor))return true;lineErrors.push('место '+seat.id+': неизвестная программа '+seat.vendor);return false});
+ const models={...this.deps.models};if(!this.deps.models){const entries=Object.entries(this.deps.providers) as [Vendor,import('@harnessy/providers').Provider][];const results=await Promise.allSettled(entries.map(([,provider])=>provider.models()));for(let i=0;i<entries.length;i++){const result=results[i]!;if(result.status==='fulfilled')models[entries[i]![0]]=result.value;else lineErrors.push(message(result.reason))}}
+ Object.assign(models,this.apiModelSnapshot().models);const registered=new Set([...Object.keys(this.deps.providers),...this.providerOperations.catalog.ids(),...Object.keys(models).filter(id=>apiRoute(id)),...Object.values(team?.seats??{}).map(s=>s.vendor).filter(id=>apiRoute(id))]);const seats=Object.values(team?.seats??{}).filter(seat=>{if(seat.vendor==='claude'||seat.vendor==='codex'||registered.has(seat.vendor))return true;lineErrors.push('место '+seat.id+': неизвестная программа '+seat.vendor);return false});
  registry=new Registry(path,models,seats,bus,this.clock,registered);registry.policy=policy;
  owner=new Pane({id:'owner',vendor:'human',label:'владелец',model:'',cwd:path,role:'owner'},bus,this.clock);
  const journal=new Journal(path,{now:()=>new Date(this.clock.now()),...this.deps.journalOptions});
@@ -120,7 +124,7 @@ export class Runtime {
  if(saved.room===undefined&&roomModel&&!registry.get('room')&&makeRoomIn({registry,dir:path,bus},this,roomModel,path===this.defaultDir?'chat':'read'))state.savePanes(registry,journal);
  const trace=new TraceStore(path,()=>this.traceConfig,()=>this.clock.now(),id=>id===owner.id||!!registry.get(id)||Object.values(state.chats.chats).some(chat=>chat.pane===id));this.traces.add(trace);await trace.restore();
  const p:ProjectState={trace,generation,dir:path,closed:false,starting:true,now:()=>this.clock.now(),editing:new Map(),materializing:new Set(),restoreFailed:new Map(),team,repoRoot:git.repoRoot,policy,journal,channel,registry,owner,bus,state,lineErrors,halted,active:new Map(),pumps:new Map(),resets:new Map(),routeJobs:new Map(),processEpoch:new Map(),wakeups:new Set()};
- this.current=p;this.traceEvents(p);channel.on(event=>{if(!p.closed)this.onChannel(p,event)});
+ this.current=p;this.syncApiModels(p);this.traceEvents(p);channel.on(event=>{if(!p.closed)this.onChannel(p,event)});
  try{await this.projectRegistry.rememberProject(path)}catch(e){lineErrors.push(message(e))}
  await this.actions.restorePendingAcks({runtime:this,project:p});
  await restoreProposals(this,p);
@@ -168,7 +172,7 @@ export class Runtime {
  private async closeProjectLocked():Promise<void>{const p=this.current;if(!p||p.closed)return;if(p.state.undurable.size){try{p.state.saveChats(p.registry);p.state.undurable.clear()}catch(e){throw new RuntimeError('write_failed','ответ модели не сохранён: '+p.state.chatsPath+': '+message(e),409,{cause:e,fields:{path:p.state.chatsPath}})}}p.closed=true;this.actions.closeProject?.(p);const turns=[...p.active.values()];
  this.quotas.get(p)?.close();this.cliQuotas.get(p)?.close();for(const turn of turns)this.cancelTurn(turn.pane.id,'project_closed',p);
  p.owner.denyApprovals();p.bus.close();this.tokens.clear();this.scopes.clear();await this.providerOperations.cancel(p);
- let failure:unknown;try{await Promise.all(Object.values(this.deps.providers).map(provider=>provider?.close()))}catch(e){failure=e}
+ let failure:unknown;try{await Promise.all([...Object.values(this.deps.providers),...this.apiAgents.values()].map(provider=>provider?.close()))}catch(e){failure=e}
  for(const turn of turns)turn.releaseReset();await Promise.all(turns.map(t=>t.finished));if(failure)throw failure
  }
  private onChannel(p:ProjectState,event:ChannelEvent):void {
@@ -380,7 +384,7 @@ export class Runtime {
  const interrupted=turn.stopRequested&&turn.started||result.interrupted===true;pane.sessionId=pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch?result.sessionId:null;
  for(const m of injected)pane.uncommitted.delete(m);
  const response=timestampMessage('ai',result.text,this.clock.now()) as ResultMessage;const held=(turn as ActiveTurn).terminal;
- if(held?.type==='done'){if(typeof held.model==='string'&&held.model)response.model=held.model;if(object(held.usage))response.usage=structuredClone(held.usage);if(typeof held.durationMs==='number'&&Number.isFinite(held.durationMs))response.durationMs=held.durationMs}
+ if(held?.type==='done'){if(typeof held.model==='string'&&held.model)response.model=held.model;if(object(held.usage))response.usage=structuredClone(held.usage);if(held.usageIncomplete===true)response.usageIncomplete=true;if(typeof held.durationMs==='number'&&Number.isFinite(held.durationMs))response.durationMs=held.durationMs}
  response.vendor=launchVendor;response.outcome=interrupted?'interrupted':held?.type==='error'?'error':'ok';if(response.outcome==='error')response.errorCode=typeof held?.code==='string'?held.code:'internal';
  response.deliverySeq=turn.deliverySeq;response.runtime={turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),effectsPending:true,interrupted,nextSeen};turn.result=response;if(artifacts.size)response.artifacts={project:p.dir,chat:p.state.activeChat(pane)!.id,turnInstanceId:scope.turnInstanceId,paths:[...artifacts]};
  p.state.commitResult(pane,p.registry,response);
@@ -394,7 +398,7 @@ export class Runtime {
  if(!turn.result){pane.transcript=pane.transcript.filter(m=>!injected.includes(m));for(const m of injected)pane.uncommitted.delete(m);
  if(!turn.started){try{if(transfer&&pane.vendor===launchVendor&&pane.sessionEpoch===launchEpoch){pane.sessionId=null;p.state.savePanes(p.registry,p.journal)}p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
  else {   // модель уже могла действовать (modelStarted), результата нет: неопределённый исход не повторяется автоматически — долговечный uncertain до действия владельца (ревью №111 п.1)
-  try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:e instanceof ProviderError?e.code:'internal'})}catch(error){p.lineErrors.push(message(error))}
+  try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:e instanceof ProviderError?e.code:'internal',...turnMeasurements(turn.terminal)})}catch(error){p.lineErrors.push(message(error))}
   try{p.state.uncertain(id)}catch(error){p.lineErrors.push(message(error))}
   pane.status='uncertain';pane.uncertainNote=waitingError(p,pane).message;if(!p.closed)pane.publish({type:'note',text:pane.uncertainNote,warning:this.warningId(p,pane,'uncertain')})}
  }else {pane.status='recovering';pane.recoveryNote='ответ модели сохранён; завершается восстановление доставки';pane.publish({type:'note',text:pane.recoveryNote,warning:this.warningId(p,pane,'recovery')})}
@@ -421,11 +425,11 @@ export class Runtime {
  for(const pane of p.registry.panes.values()){if(on&&this.cancelTurn(pane.id,'halt',p))interrupted.push(pane.id);pane.publish({type:'note',text:on?'остановлено владельцем: ходы не идут, сообщения ждут в очереди':'работа возобновлена владельцем'});this.stateEvent(p,pane);if(!on&&pane.status==='idle')void this.kick(pane.id)}
  if(failure)throw failure;return {ok:true,halted:on,interrupted,pending:Object.fromEntries([...p.registry.panes.values()].map(pane=>[pane.id,p.journal.pendingFor(pane.id).length]).filter(([,n])=>n))}
  }
- validateTurn(vendor:string,mode:string){if(vendor==='claude'||vendor==='codex')return;const catalog=this.providerOperations.catalog;if(!catalog.ids().includes(vendor))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);
+ validateTurn(vendor:string,mode:string){if(apiRoute(vendor)){if(!Object.hasOwn(this.settings.llmProviders(),apiRoute(vendor)!))throw new RuntimeError('provider_unknown','Маршрут API не найден',409);if(!Object.hasOwn(API_MODES,mode)||!API_MODES[mode as keyof typeof API_MODES].ok)throw new RuntimeError('mode_unsupported','Режим API-модели не подключён',409);return}if(vendor==='claude'||vendor==='codex')return;const catalog=this.providerOperations.catalog;if(!catalog.ids().includes(vendor))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);
  const supported=catalog.get(vendor).capabilities.turn?.[mode as 'read'|'edit'|'all'];if(supported?.ok!==true){const reason=supported?.reason??'Программа не гарантирует режим '+mode;throw new RuntimeError('capability_unsupported',reason,409,{fields:{reason}})}
  }
  // No await: validation and selection consume the same observed catalog snapshot.
- validateSelection(vendor:string,model:unknown,mode:string){
+ validateSelection(vendor:string,model:unknown,mode:string){if(apiRoute(vendor)){this.validateTurn(vendor,mode);const models=this.apiModelSnapshot().models[vendor]??[];if(typeof model!=='string'||!models.some(m=>m.id===model))throw new RuntimeError('model_unsupported','Модель отсутствует в API-маршруте',409);return models}
   const catalog=this.providerOperations.catalog,builtin=vendor==='claude'||vendor==='codex';
   if(!catalog.ids().includes(vendor)){if(!builtin)throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);this.validateTurn(vendor,mode);return}
   const row=catalog.peek(vendor),entry=catalog.get(vendor);

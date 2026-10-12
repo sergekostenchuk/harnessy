@@ -6,4 +6,4 @@ export const ROLE_CATALOG=[
  {role:'executor',label:'воркер',multi:true},{role:'reviewer',label:'ревьюер',multi:true},{role:'tester',label:'тестер',multi:false},{role:'researcher',label:'ресёрчер',multi:false}
 ] as const;
 export type Vendor=string;
-export const providerId=(v:unknown):v is string=>typeof v==='string'&&/^[a-z][a-z0-9-]*$/.test(v)&&!['human','owner','harness'].includes(v);
+export const providerId=(v:unknown):v is string=>typeof v==='string'&&/^(?:[a-z][a-z0-9-]*|api:[a-z][a-z0-9_-]{0,63})$/.test(v)&&!['human','owner','harness'].includes(v);

@@ -1,4 +1,5 @@
 export * from './types.ts';
+export {schemas as paneSchemas,descriptions as paneDescriptions} from './schemas.ts';
 export {ClaudeProvider} from './claude.ts';
 export {CodexProvider} from './codex/provider.ts';
 export {CliProvider} from './cli/provider.ts';

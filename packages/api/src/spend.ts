@@ -10,9 +10,9 @@ type Outcome='ok'|'interrupted'|'error'|'unknown';
 type Period='7'|'30'|'90'|'all';
 type Row=Record<string,unknown>;
 type Vendor=string|null;
-const knownVendor=(r:Runtime,v:unknown):v is string=>providerId(v)&&(v==='claude'||v==='codex'||r.providerOperations.catalog.ids().includes(v));
+const knownVendor=(r:Runtime,v:unknown):v is string=>providerId(v)&&(v==='claude'||v==='codex'||v.startsWith('api:')||r.providerOperations.catalog.ids().includes(v));
 interface Candidate {message:Row;pane:string;chat:string;title:string}
-interface Turn {turnInstanceId:string;pane:string;chat:string;title:string;ts:number|null;vendor:Vendor;model:string|null;usage:{input:number|null;output:number|null;cacheRead:number|null};durationMs:number|null;outcome:Outcome;cost:number|null;currency:string|null;costReason:string|null}
+interface Turn {turnInstanceId:string;pane:string;chat:string;title:string;ts:number|null;vendor:Vendor;model:string|null;usage:{input:number|null;output:number|null;cacheRead:number|null};durationMs:number|null;outcome:Outcome;usageIncomplete?:true;cost:number|null;currency:string|null;costReason:string|null}
 function object(value:unknown):value is Row {return !!value&&typeof value==='object'&&!Array.isArray(value)}
 const number=(value:unknown):value is number=>typeof value==='number'&&Number.isFinite(value)&&value>=0;
 const measured=(value:unknown)=>number(value)?value:null;
@@ -20,7 +20,7 @@ const pair=(vendor:string|null,model:string|null)=>JSON.stringify([vendor,model]
 const fail=(reason:string):never=>{throw new RuntimeError('spend_unreadable','chats.json не читается: '+reason,409)};
 function price(turn:Omit<Turn,'cost'|'currency'|'costReason'>,prices:Map<string,ModelPrice>){
  const entry=prices.get(pair(turn.vendor,turn.model)),u=turn.usage;
- let costReason=turn.vendor===null?'провайдер не сохранён':turn.model===null?'модель не сохранена':!entry?'нет цены модели':Object.values(u).some(v=>v===null)?'измерения токенов неполны':null;
+ let costReason=turn.vendor===null?'провайдер не сохранён':turn.model===null?'модель не сохранена':!entry?'нет цены модели':turn.usageIncomplete||Object.values(u).some(v=>v===null)?'измерения токенов неполны':null;
  const cost=costReason===null?(u.input!/1e6*entry!.inputPerM+u.output!/1e6*entry!.outputPerM+u.cacheRead!/1e6*entry!.cacheReadPerM):null;
  if(cost!==null&&!Number.isFinite(cost))costReason='стоимость вне числового диапазона';
  return {cost:costReason===null?cost:null,currency:costReason===null?entry!.currency:null,costReason};
@@ -56,7 +56,7 @@ async function readSpend(runtime:Runtime,query:URLSearchParams){
   if(!inPeriod(message))continue;const u=object(message.usage)?message.usage:{};
   const row:Omit<Turn,'cost'|'currency'|'costReason'>={turnInstanceId,pane,chat,title,ts:number(message.ts)&&message.ts>0?message.ts:null,
    vendor:knownVendor(runtime,message.vendor)?message.vendor:null,model:typeof message.model==='string'&&message.model?message.model:null,
-   usage:{input:measured(u.input),output:measured(u.output),cacheRead:measured(u.cacheRead)},durationMs:measured(message.durationMs),
+   ...(message.usageIncomplete===true?{usageIncomplete:true as const}:{}),usage:{input:measured(u.input),output:measured(u.output),cacheRead:measured(u.cacheRead)},durationMs:measured(message.durationMs),
    outcome:message.outcome==='ok'||message.outcome==='interrupted'||message.outcome==='error'?message.outcome:'unknown'};
   turns.push({...row,...price(row,prices)});
  }
@@ -69,7 +69,7 @@ function metrics(rows:Turn[]){
  for(const row of rows){
   outcomes[row.outcome]++;input=sum(input,row.usage.input??0);output=sum(output,row.usage.output??0);cacheRead=sum(cacheRead,row.usage.cacheRead??0);
   if(row.durationMs!==null){durations.push(row.durationMs);durationMs=sum(durationMs,row.durationMs)}
-  if(row.durationMs===null||Object.values(row.usage).some(v=>v===null))missingMeasurements++;
+  if(row.usageIncomplete||row.durationMs===null||Object.values(row.usage).some(v=>v===null))missingMeasurements++;
   if(row.cost!==null&&row.currency!==null){pricedTurns++;costs.set(row.currency,sum(costs.get(row.currency)??0,row.cost))}
   else if(row.costReason)reasons.set(row.costReason,(reasons.get(row.costReason)??0)+1);
  }
