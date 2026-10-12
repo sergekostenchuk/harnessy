@@ -11,7 +11,8 @@ export type ShellMode='workspace-write'|'read-only';
 export function seatbeltProfile(root:string,temporary:string,mode:ShellMode):string {
  const quote=(path:string)=>{if(/[\x00-\x1f\x7f]/.test(path))throw new AgentSandboxError();return '"'+path.replaceAll('\\','\\\\').replaceAll('"','\\"')+'"'};
  const forms=['(version 1)','(allow default)','(deny file-write*)','(allow file-write* (literal "/dev/null"))'];
- if(mode==='workspace-write')forms.push('(allow file-write* (subpath '+quote(root)+') (subpath '+quote(temporary)+'))');
+ forms.push('(allow file-write* (subpath '+quote(temporary)+'))');
+ if(mode==='workspace-write')forms.push('(allow file-write* (subpath '+quote(root)+'))');
  return forms.join(' ');
 }
 /** Seatbelt is inherited by shell children. cwd alone cannot confine their writes. */

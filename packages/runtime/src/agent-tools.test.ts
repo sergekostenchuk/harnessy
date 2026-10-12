@@ -23,12 +23,13 @@ test('21b: traversal, symlink parent/leaf, protected metadata and hardlinked wri
  const stamp=f.stamp('new');symlinkSync(secret,join(h.dir,'new'));assert.throws(()=>f.write('new','bad',stamp));assert.equal(readFileSync(secret,'utf8'),'unchanged');
 });
 
-for(const mode of ['chat','read','edit','ask','all'] as const)test('21b: '+mode+' exposes only its allowed file and shell capabilities',async t=>{
+for(const mode of ['chat','read','edit','ask','all','check','web'] as const)test('21b/21e: '+mode+' exposes only its allowed file, web and shell capabilities',async t=>{
  const h=agentFixture(t);h.seat.mode=mode;let shell=0,approval=0;h.ctx.askApproval=async()=>{approval++;return true};
  const tools=new AgentTools(h.seat,h.ctx,h.controller.signal,async()=>{shell++;return {stdout:'ok',stderr:'',code:0,signal:null}});
- const names=tools.definitions.map(t=>t.name);assert.ok(names.includes('send'));assert.equal(names.includes('read_file'),mode!=='chat');assert.equal(names.includes('write_file'),['edit','ask','all'].includes(mode));assert.equal(names.includes('shell'),mode==='all');
+ const names=tools.definitions.map(t=>t.name);assert.ok(names.includes('send'));assert.equal(names.includes('read_file'),mode!=='chat');assert.equal(names.includes('write_file'),['edit','ask','all'].includes(mode));assert.equal(names.includes('shell'),['all','check'].includes(mode));assert.equal(names.includes('web_fetch'),mode==='web');
  const write=await tools.call('write_file',{path:'a',text:'x'});assert.equal(write.ok,['edit','ask','all'].includes(mode));assert.equal(existsSync(join(h.dir,'a')),write.ok);assert.equal(approval,mode==='ask'?1:0);
- assert.equal((await tools.call('shell',{command:'pwd'})).ok,mode==='all');assert.equal(shell,mode==='all'?1:0);
+ assert.equal((await tools.call('shell',{command:'pwd'})).ok,['all','check'].includes(mode));assert.equal(shell,['all','check'].includes(mode)?1:0);
+ const web=await tools.call('web_fetch',{url:'http://127.0.0.1:3777'});assert.equal(web.ok,false);if(!web.ok)assert.equal(web.code,mode==='web'?'web_url_denied':'tool_denied');
 });
 
 test('21b: pending permission cannot write after cancellation, denial or an intervening file change',async t=>{

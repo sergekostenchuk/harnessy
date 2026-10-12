@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync,statSync,symlinkSync,writeFileSync} from 'node:fs';
-import {join,relative} from 'node:path';
+import {join,relative,basename} from 'node:path';
 import {sandboxedShell,seatbeltProfile} from './agent-sandbox.ts';
 import {agentFixture} from './agent-test-helpers.ts';
 import type {CliProcessRequest} from '@harnessy/providers';
@@ -35,7 +35,10 @@ test('21b sandbox: unavailable protection refuses without falling back to an unc
  assert.equal(launches,0);await assert.rejects(sandboxedShell(request(h.dir,'touch unsafe'),ready(),execute,{platform:'darwin'}),{code:'sandbox_unavailable'});assert.equal(launches,1);assert.equal(existsSync(join(h.dir,'unsafe')),false);
 });
 
-test('21b sandbox: read-only profile prevents project and temporary writes without enabling check mode',{skip:process.platform!=='darwin'},async t=>{
- const h=agentFixture(t);for(const command of ['printf bad > denied','printf bad > "$TMPDIR/denied"'])assert.notEqual((await sandboxedShell(request(h.dir,command),ready(),undefined,{mode:'read-only'})).code,0);
- assert.equal(existsSync(join(h.dir,'denied')),false);assert.throws(()=>seatbeltProfile(h.dir+'\n','/tmp','workspace-write'),{code:'sandbox_unavailable'});
+test('21e sandbox: read-only prevents project writes by children, traversal and symlinks; private temporary writes work',{skip:process.platform!=='darwin'},async t=>{
+ const h=agentFixture(t),outside=agentFixture(t),file=join(h.dir,'guarded');writeFileSync(file,'original');symlinkSync(h.dir,join(outside.dir,'project'));
+ for(const path of ['guarded',file,'../'+basename(h.dir)+'/guarded',join(outside.dir,'project','guarded')])assert.notEqual((await sandboxedShell(request(h.dir,'/bin/sh -c '+quote('printf bad > '+quote(path))),ready(),undefined,{mode:'read-only'})).code,0);
+ assert.equal(readFileSync(file,'utf8'),'original');
+ const result=await sandboxedShell(request(h.dir,'printf temporary > "$TMPDIR/allowed"; cat "$TMPDIR/allowed"; printf "\\n%s" "$TMPDIR"'),ready(),undefined,{mode:'read-only'});assert.equal(result.code,0);const [text,temp]=result.stdout.split('\n');assert.equal(text,'temporary');assert.equal(existsSync(temp!),false);
+ assert.throws(()=>seatbeltProfile(h.dir+'\n','/tmp','workspace-write'),{code:'sandbox_unavailable'});
 });
