@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test,{describe,beforeEach,afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,realpathSync,existsSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -50,7 +50,16 @@ test('18/71: queued model starts only after HTTP listens and sees actual ephemer
  const app=await bootstrap({...h.options,env:{...h.env,HARNESS_NO_LAST:'1'}});t.after(()=>app.close());await app.runtime.idle();assert.equal(httpStatus,200);assert.equal(h.codex.calls.length,1);assert.equal(h.codex.calls[0]!.ctx.appUrl,app.url);assert.ok(!app.url.endsWith(':0'))
 });
 
-for(const via of ['direct','directory link','file link','relative file link'])test('10/17/18/179/180/191: actual ui/desktop/run.sh via '+via+' launches TS, opens the prototype instead of the old window and exits on SIGTERM, duplicate port fails', {timeout:20_000},async t=>{
+// TS-20/323: 2026-10-12, load average up to 61.65, --test-concurrency=8.
+// Four completed variants: 20386.50 / 11961.33 / 16499.30 / 20279.95 ms.
+const launcherWorstUnderLoadMs=20_387; // observed maximum, rounded up
+const launcherTimeoutMs=launcherWorstUnderLoadMs*2;
+describe('323: run.sh variants run serially', {concurrency:false},()=>{
+ let active=0;
+ // Fail on overlapping variants even if a runner or future edit enables concurrency.
+ beforeEach(()=>{active++;assert.equal(active,1,'323: launcher variants overlap')});
+ afterEach(()=>{assert.equal(active,1,'323: launcher variants overlap');active--});
+ for(const via of ['direct','directory link','file link','relative file link'])test('10/17/18/179/180/191: actual ui/desktop/run.sh via '+via+' launches TS, opens the prototype instead of the old window and exits on SIGTERM, duplicate port fails', {timeout:launcherTimeoutMs},async t=>{
  const h=setup(t),trace=join(h.root,'trace'),hook=join(h.root,'providers.mjs'),site=join(h.root,'site');mkdirSync(site);mkdirSync(join(site,'proto'));writeFileSync(join(site,'proto/10-new-chat.html'),'<title>Window</title>');
  // Node's test-only module substitution prevents any SDK process or model call in the child.
  const providers=pathToFileURL(join(repositoryRoot,'packages/providers/src/index.ts')).href;
@@ -73,7 +82,7 @@ mock.module(${JSON.stringify(providers)},{namedExports:{...original,ClaudeProvid
  const duplicate=spawn('/bin/sh',[script],{cwd:h.root,env:{...env,PORT:new URL(url).port},stdio:['ignore','pipe','pipe']});let duplicateError='';duplicate.stderr.on('data',d=>duplicateError+=d);duplicate.stdout.resume();const code=await new Promise<number|null>(resolve=>duplicate.once('exit',resolve));assert.notEqual(code,0);assert.match(duplicateError,/EADDRINUSE/);
  child.kill('SIGTERM');const exit=await ended;assert.equal(exit.code,0);assert.equal(exit.signal,null);assert.match(readFileSync(trace,'utf8'),/claude closed/);assert.match(readFileSync(trace,'utf8'),/codex closed/);assert.match(stdout,/вход Claude по подписке: да \(subscription\)/);assert.ok(stdout.includes('[harness] прототип Harnessy: '+url+PROTO_ENTRY))
 });
-
+});
 
 test('18/71: shutdown during startup auth closes partially started server/providers and never kicks queued models',{timeout:5000},async t=>{
  const h=setup(t),dir=h.env.CHAT_WORK_DIR!;mkdirSync(join(dir,'.harness'),{recursive:true});writeFileSync(join(dir,'.harness/team.yaml'),'version: 1\nseats:\n  codex: {role: executor, vendor: codex, model: gpt-test, mode: read}\n');new Journal(dir).append({sender:'owner',to:['codex'],kind:'task',text:'работа'});
