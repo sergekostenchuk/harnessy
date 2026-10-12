@@ -19,6 +19,13 @@ function nameLegacyDirectExits(config:NetworkConfig){
  }
  config.legacyLabelsVersion=1;
 }
+// The removal receipt describes every affected provider and is checked under the settings lock.
+function removal(config:NetworkConfig,id:string){
+ const affected=Object.entries(config.chains).filter(([,ids])=>ids.includes(id));
+ let direct=Object.values(config.exits).find(e=>e.id!==id&&e.type==='direct'&&!e.expectedIp)?.id;
+ if(!direct){direct='direct';for(let n=1;direct===id||Object.hasOwn(config.exits,direct);n++)direct='direct-'+n}
+ return {networkRevision:networkRevision(config),chains:Object.fromEntries(affected.map(([provider])=>[provider,chainRevision(config,provider)])),changes:affected.map(([provider,ids])=>{const remaining=ids.filter(x=>x!==id),exits=remaining.length?remaining:[direct!];return {provider,exits,direct:!remaining.length||config.exits[exits[0]!]?.type==='direct',reserve:ids.indexOf(id)>0,label:config.exits[exits[0]!]?.label??'Напрямую'}})};
+}
 export class NetworkSettings {
  private settings:Settings;private keys:KeyStore;private connections:Connections;private programs:()=>string[];
  constructor(settings:Settings,keys:KeyStore,connections:Connections,programs:()=>string[]){this.settings=settings;this.keys=keys;this.connections=connections;this.programs=programs}
@@ -76,9 +83,16 @@ export class NetworkSettings {
   });
   if(result.before&&result.before!==result.after)await this.erase([result.before]);return this.receipt(result.next);
  }
- async delete(id:string,revision:unknown){if(!validRoute(id))networkInvalid();await this.migrate();const ref=await this.settings.changeNetwork(async config=>{
+ async removal(id:string){if(!validRoute(id))networkInvalid();await this.migrate();const config=this.settings.network(),exit=config.exits[id];if(!exit)throw new ProjectError('exit_unknown','Подключение не найдено',404);return {id,label:exit.label,revision:networkRevision(exit),...removal(config,id)}}
+ async delete(id:string,revision:unknown,confirmation?:unknown){if(!validRoute(id))networkInvalid();await this.migrate();const ref=await this.settings.changeNetwork(async config=>{
   const exit=config.exits[id];if(!exit)throw new ProjectError('exit_unknown','Выход не найден',404);conflict(revision,exit);
-  if(Object.values(config.chains).some(ids=>ids.includes(id)))throw new ProjectError('exit_in_use','Выход используется в цепочке провайдера; сначала измените цепочку',409);
+  const plan=removal(config,id);
+  if(confirmation===undefined&&plan.changes.length)throw new ProjectError('exit_in_use','Подключение используется провайдерами; подтвердите последствия удаления',409);
+  if(confirmation!==undefined){
+   const receipts=object(confirmation)?confirmation.chains:undefined;
+   if(!object(confirmation)||Object.keys(confirmation).some(k=>!['networkRevision','chains'].includes(k))||confirmation.networkRevision!==plan.networkRevision||!object(receipts)||Object.keys(receipts).length!==Object.keys(plan.chains).length||Object.entries(plan.chains).some(([key,rev])=>receipts[key]!==rev))throw new ProjectError('network_conflict','Настройки изменились; подтвердите новый список изменений',409);
+   for(const change of plan.changes){for(const target of change.exits)if(!config.exits[target])config.exits[target]={id:target,label:'Напрямую',type:'direct'};config.chains[change.provider]=change.exits}
+  }
   delete config.exits[id];return {result:slot(exit)};
  });if(ref)await this.erase([ref]);}
  async chain(id:string):Promise<ChainReceipt>{await this.migrate();const known=this.knownProvider(id,this.settings.llmProviders()),config=this.settings.network(),chains=config.chains;if(!known&&(!validProviderId(id)||!Object.hasOwn(chains,id)))this.providerMissing();const value=chains[id];return {provider:id,configured:value!==undefined,exits:value??[],policy:config.policies?.[id]??defaultNetworkPolicy,revision:chainRevision(config,id),...(!known?{orphaned:true}:{})}}
