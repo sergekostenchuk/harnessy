@@ -419,9 +419,27 @@ export class Runtime {
  validateTurn(vendor:string,mode:string){if(vendor==='claude'||vendor==='codex')return;const catalog=this.providerOperations.catalog;if(!catalog.ids().includes(vendor))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);
  const supported=catalog.get(vendor).capabilities.turn?.[mode as 'read'|'edit'|'all'];if(supported?.ok!==true){const reason=supported?.reason??'Программа не гарантирует режим '+mode;throw new RuntimeError('capability_unsupported',reason,409,{fields:{reason}})}
  }
+ // No await: validation and selection consume the same observed catalog snapshot.
+ validateSelection(vendor:string,model:unknown,mode:string){
+  const catalog=this.providerOperations.catalog,builtin=vendor==='claude'||vendor==='codex';
+  if(!catalog.ids().includes(vendor)){if(!builtin)throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);this.validateTurn(vendor,mode);return}
+  const row=catalog.peek(vendor),entry=catalog.get(vendor);
+  if(!row.installed)throw new RuntimeError('provider_not_installed','Программа '+row.title+' не установлена или ещё не проверена',409);
+  if(row.login.state!=='ok'&&!(row.login.state==='unknown'&&entry.allowUnverifiedLogin===true)){
+   const reason=row.login.reason??'Вход в '+row.title+' не выполнен';throw new RuntimeError('login_required',reason+' · Вход: '+row.login.command,409,{fields:{reason,command:row.login.command}});
+  }
+  if(typeof model!=='string'||!row.models.some(m=>m.id===model))throw new RuntimeError('model_unsupported','Модель отсутствует в снимке каталога программы',409);
+  this.validateTurn(vendor,mode);
+  return row.models.map(m=>({...m}));
+ }
  paneSet(id:string,body:Record<string,unknown>,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);if(p.restoreFailed.has(id))free(p,pane);if(pane.status==='recovering')throw waitingError(p,pane);if(p.editing.has(id)||p.materializing.has(id))throw new RuntimeError('busy','место сейчас отвечает — дождитесь ответа');const {cwd:_,...safe}=body;
- if(body.vendor!==undefined){if(typeof body.vendor!=='string'||!p.registry.providers.has(body.vendor))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);this.validateTurn(body.vendor,pane.busy?pane.mode:typeof body.mode==='string'?body.mode:pane.mode);if(typeof body.model!=='string'||!p.registry.models[body.vendor]?.some(m=>m.id===body.model))throw new RuntimeError('model_unsupported','Модель отсутствует в снимке каталога',400)}
- const target=p.registry.modelVendor(pane,safe)??pane.vendor;this.validateTurn(target,pane.busy?pane.mode:typeof body.mode==='string'?body.mode:pane.mode);
+ if(body.vendor!==undefined&&(typeof body.vendor!=='string'||!p.registry.providers.has(body.vendor)))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);
+ const target=typeof body.vendor==='string'?body.vendor:p.registry.modelVendor(pane,safe)??pane.vendor,mode=pane.busy?pane.mode:typeof body.mode==='string'?body.mode:pane.mode;
+ if(body.vendor!==undefined||target!=='claude'&&target!=='codex'){
+  const model=body.vendor!==undefined?body.model:typeof body.model==='string'&&body.model?body.model:pane.model,models=this.validateSelection(target,model,mode);
+  if(models)p.registry.models[target]=models;
+  if(typeof model!=='string'||!p.registry.models[target]?.some(m=>m.id===model))throw new RuntimeError('model_unsupported','Модель отсутствует в снимке каталога',409);
+ }else this.validateTurn(target,mode);
  const updated=p.registry.update(pane,safe);if(updated){p.state.savePanes(p.registry,p.journal);this.stateEvent(p,pane);if(pane.status==='idle')void this.kick(id)}const info=waiting(p,pane);return {ok:true,pane:pane.settings(),...(updated&&pane.busy?{appliesFrom:'next' as const}:{}),...(info?{waiting:info}:{})}}
  async steer(id:string,text:string,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);text=pythonTrim(text);if(!text)throw new RuntimeError('text_empty','пустое сообщение',400);
  const turn=p.active.get(id),record=p.channel.postCore({to:[id],kind:'note',text,origin:'steer'},OWNER);
