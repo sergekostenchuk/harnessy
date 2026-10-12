@@ -1,7 +1,9 @@
+import {NetworkProviderChecks} from './network-provider-checks.ts';
+import {NetworkRelay,NetworkError,type NetworkTurn} from './network-relay.ts';
 import {turnFailure} from './turn-failure.ts';
 import {SshTunnels} from './ssh-tunnels.ts';
 import {ApiAgent,apiRoute,API_MODES} from './api-agent.ts';
-import {createLlmService,keySlot,MacKeyStore,routeModels,type KeyStore,type LlmDependencies,type ProviderConfig} from '@harnessy/llm';
+import {createLlmService,LlmError,keySlot,MacKeyStore,routeModels,type KeyStore,type LlmDependencies,type ProviderConfig} from '@harnessy/llm';
 import {TraceStore,currentTrace,traceReason,type TraceContext} from './trace.ts';
 import {ProviderOperations} from './provider-operations.ts';
 import {ProviderCatalog,catalogCacheDirectory,LoginTerminal,builtinEntries,CLI_DESCRIPTORS,cliEntry,ollamaEntry,OLLAMA_URL} from '@harnessy/providers';
@@ -41,11 +43,10 @@ const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Ini
 type AttemptDecision=NonNullable<Record_['attempt']>;
 function turnMeasurements(event:Record<string,unknown>|null){if(event?.type!=='done')return {};const raw=object(event.usage)?event.usage:{},value=(key:string)=>typeof raw[key]==='number'&&Number.isSafeInteger(raw[key])&&raw[key]>=0?raw[key] as number:null;return {usage:{input:value('input'),output:value('output'),cacheRead:value('cacheRead')},...(event.usageIncomplete===true?{usageIncomplete:true as const}:{}),...(typeof event.durationMs==='number'?{durationMs:event.durationMs}:{})}}
 export class Runtime {
- readonly sshTunnels:SshTunnels;
- readonly providerOperations:ProviderOperations;readonly network:NetworkSettings;readonly networkChecks:NetworkChecks;
+ readonly networkProviderChecks:NetworkProviderChecks;readonly networkRelay:NetworkRelay;readonly sshTunnels:NonNullable<RuntimeDeps['sshTunnels']>;readonly providerOperations:ProviderOperations;readonly network:NetworkSettings;readonly networkChecks:NetworkChecks;
  private apiAgents=new Map<string,ApiAgent>();readonly llmKeys:KeyStore;private unsubscribeLlm:()=>void;
  get llm(){return this.modelService(()=>this.settings.llmProviders(),listener=>this.settings.onLlmRoutesChanged(listener))}
- private modelService(routes:LlmDependencies['routes'],subscribeRoutes:NonNullable<LlmDependencies['subscribeRoutes']>,p=this.project){return createLlmService({routes,resolveKey:(ref,generation)=>this.llmKeys.resolveKey(keySlot(ref,generation)),subscribeRoutes,...(this.deps.llmFetch?{fetch:this.deps.llmFetch}:{}),trace:event=>{p.trace.record(event.kind,{outcome:event.outcome,reason:traceReason(event.code??'none'),durationMs:event.durationMs,data:{id:event.requestId,vendor:event.provider,model:event.model,code:event.code,...event.usage}})}})}
+ private modelService(routes:LlmDependencies['routes'],subscribeRoutes:NonNullable<LlmDependencies['subscribeRoutes']>,p=this.project,vendorPrefix='api:'){return createLlmService({routes,resolveKey:(ref,generation)=>this.llmKeys.resolveKey(keySlot(ref,generation)),subscribeRoutes,providerFetch:id=>this.routedFetch(vendorPrefix+id),trace:event=>{p.trace.record(event.kind,{outcome:event.outcome,reason:traceReason(event.code??'none'),durationMs:event.durationMs,data:{id:event.requestId,vendor:event.provider,model:event.model,code:event.code,...event.usage}})}})}
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
  private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();private cliQuotas=new WeakMap<ProjectState,ProviderLimitsStore>();
  readonly deps:RuntimeDeps;readonly actions:RuntimeActions;
@@ -58,8 +59,10 @@ export class Runtime {
  this.pins=typeof deps.pins==='function'?deps.pins(current,id=>this.chatMeta(id)):deps.pins??new Pins(undefined,current,id=>this.chatMeta(id));this.traceSettings();
  this.providerOperations=new ProviderOperations(this,deps.providerCatalog??new ProviderCatalog([...builtinEntries(deps.providers,deps.models??{}),...CLI_DESCRIPTORS.map(d=>cliEntry(d)),ollamaEntry()],undefined,{cacheDir:deps.catalogCacheDir??catalogCacheDirectory()}),deps.loginTerminal??new LoginTerminal());
  this.network=new NetworkSettings(this.settings,deps.networkKeys??new MacKeyStore({purpose:'proxy-password'}),this.connections,()=>this.providerOperations.catalog.ids());
- this.networkChecks=new NetworkChecks(this.settings,this.network,deps.networkCheckOptions)
+ this.networkProviderChecks=new NetworkProviderChecks(this);this.networkChecks=new NetworkChecks(this.settings,this.network,deps.networkCheckOptions);
+ this.networkRelay=new NetworkRelay(this.settings,this.network,{...deps.networkRelayOptions,tunnels:()=>this.sshTunnels,check:(id,revision)=>this.networkChecks.snapshot(id,revision),authFailure:provider=>{const p=this.current;if(p&&!p.closed)p.trace.record('network.auth_failed',{outcome:'failed',reason:traceReason('proxy_auth_required','Доступ к ретранслятору отклонён'),data:{vendor:provider,code:'proxy_auth_required'}});deps.networkRelayOptions?.authFailure?.(provider)},trace:value=>{const p=this.current,{provider,exit,outcome,...counters}=value;if(p&&!p.closed)p.trace.record('network.connection',{outcome,data:{vendor:provider,id:exit,...counters}});deps.networkRelayOptions?.trace?.(value)}})
  }
+ routedFetch(provider:string):typeof fetch {const routed=this.networkRelay.fetch(provider,this.deps.llmFetch??fetch);return async(input,init)=>{try{return await routed(input,init)}catch(e){if(e instanceof NetworkError)throw new LlmError(e.code as import('@harnessy/llm').FailureCode);throw e}}}
  private traceSettings(){try{const owner=this.settings.effective();this.traceConfig={enabled:owner.traceEnabled!==false,maxBytes:Number.isSafeInteger(owner.traceMaxMiB)&&Number(owner.traceMaxMiB)>=1&&Number(owner.traceMaxMiB)<=128?Number(owner.traceMaxMiB)*1024*1024:16*1024*1024}}catch{}}
  traceTool<T>(scope:TurnScope,name:string,args:unknown,run:()=>Promise<T>){this.scopes.assert(scope);const p=this.project;return p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId))}
  private traceProvider(p:ProjectState,pane:string,turn:string,event:NonNullable<TurnContext['traceEvent']> extends (e:infer E)=>void?E:never){const parent=p.trace.forTurn(turn),key=turn+':'+event.id;let spans=this.toolSpans.get(p);if(!spans){spans=new Map();this.toolSpans.set(p,spans)}
@@ -86,7 +89,7 @@ export class Runtime {
  async limits(){const p=this.project;await Promise.all([this.quota(p).refresh(),this.cliQuota(p).refresh()]);this.same(p);return this.limitsSnapshot()}
  apiModelSnapshot(){try{const routes=this.settings.llmProviders(),models=Object.fromEntries(Object.entries(routes).map(([id,config])=>['api:'+id,routeModels(id,config).map(m=>({id:m.id,label:m.name}))]));return {models,turnModes:Object.fromEntries(Object.keys(models).map(id=>[id,API_MODES])),apiError:null}}catch{return {models:{} as Record<string,{id:string;label:string}[]>,turnModes:{} as Record<string,typeof API_MODES>,apiError:{code:'settings_unreadable',reason:'Настройки API-маршрутов не прочитаны'}}}}
  private syncApiModels(p:ProjectState){const snapshot=this.apiModelSnapshot();for(const id of Object.keys(p.registry.models))if(apiRoute(id)&&!Object.hasOwn(snapshot.models,id))p.registry.models[id]=[];for(const [id,models]of Object.entries(snapshot.models)){p.registry.providers.add(id);p.registry.models[id]=models}}
- private ollamaAgent(maxSteps?:number){return new ApiAgent('ollama',{vendor:'ollama',...(maxSteps===undefined?{}:{maxSteps}),prepareModel:(model,signal)=>{const prepare=this.providerOperations.catalog.get('ollama').prepareModel;if(!prepare)throw new ProviderError('capability_unsupported','Подготовка модели Ollama не подключена');return prepare(model,signal)},service:async signal=>{const p=this.project,models=await this.providerOperations.catalog.get('ollama').models(signal,false);if(!models.length)throw new ProviderError('models_unavailable','Ollama: список моделей пуст');const config:ProviderConfig={api:'openai-completions',baseURL:OLLAMA_URL+'/v1',models:models.map(m=>({id:m.id,name:m.label})),compat:{supportsStore:false,supportsDeveloperRole:false}};return this.modelService(()=>({ollama:config}),()=>()=>{},p)}})}
+ private ollamaAgent(maxSteps?:number){return new ApiAgent('ollama',{vendor:'ollama',...(maxSteps===undefined?{}:{maxSteps}),prepareModel:async(model,signal)=>{await this.network.migrate();if(this.networkRelay.configured('ollama')&&/(?::cloud|-cloud)$/.test(model))throw new ProviderError('capability_unsupported','Подключите Ollama Cloud как API по адресу https://ollama.com/v1 с ключом — тогда маршрут применится');const prepare=this.providerOperations.catalog.get('ollama').prepareModel;if(!prepare)throw new ProviderError('capability_unsupported','Подготовка модели Ollama не подключена');return prepare(model,signal)},service:async signal=>{const p=this.project,models=await this.providerOperations.catalog.get('ollama').models(signal,false);if(!models.length)throw new ProviderError('models_unavailable','Ollama: список моделей пуст');const config:ProviderConfig={api:'openai-completions',baseURL:OLLAMA_URL+'/v1',models:models.map(m=>({id:m.id,name:m.label})),compat:{supportsStore:false,supportsDeveloperRole:false}};return this.modelService(()=>({ollama:config}),()=>()=>{},p,'')}})}
  private provider(vendor:Vendor|'human'):import('@harnessy/providers').Provider{if(vendor==='ollama'){let agent=this.apiAgents.get(vendor);if(!agent){agent=this.ollamaAgent();this.apiAgents.set(vendor,agent)}return agent}const route=apiRoute(vendor);if(route){let agent=this.apiAgents.get(vendor);if(!agent){agent=new ApiAgent(route,{service:()=>this.llm});this.apiAgents.set(vendor,agent)}return agent}const provider=vendor==='human'?null:this.deps.providers[vendor]??(this.providerOperations.catalog.ids().includes(vendor)?this.providerOperations.catalog.provider(vendor):null);if(!provider)throw new RuntimeError('no_provider','нет провайдера: '+vendor,503);return provider}
  providerProbeTurn(seat:import('@harnessy/providers').CliSeat,prompt:string,ctx:import('@harnessy/providers').CliContext):ReturnType<import('@harnessy/providers').Provider['runTurn']>{return seat.vendor==='ollama'?this.ollamaAgent(1).runTurn({...seat,mode:'chat'},prompt,ctx):this.providerOperations.catalog.get(seat.vendor).runTurn(seat,prompt,ctx)}
  private requireOwner(initiator:Initiator):void {if(initiator?.seat!=='owner'||initiator.trust!=='owner')throw new RuntimeError('policy_denied','действие доступно только владельцу',403)}
@@ -132,7 +135,7 @@ export class Runtime {
  if(saved.room===undefined&&roomModel&&!registry.get('room')&&makeRoomIn({registry,dir:path,bus},this,roomModel,path===this.defaultDir?'chat':'read'))state.savePanes(registry,journal);
  const trace=new TraceStore(path,()=>this.traceConfig,()=>this.clock.now(),id=>id===owner.id||!!registry.get(id)||Object.values(state.chats.chats).some(chat=>chat.pane===id));this.traces.add(trace);await trace.restore();
  const p:ProjectState={trace,generation,dir:path,closed:false,starting:true,now:()=>this.clock.now(),editing:new Map(),materializing:new Set(),restoreFailed:new Map(),team,repoRoot:git.repoRoot,policy,journal,channel,registry,owner,bus,state,lineErrors,halted,active:new Map(),pumps:new Map(),resets:new Map(),routeJobs:new Map(),processEpoch:new Map(),wakeups:new Set()};
- this.current=p;this.syncApiModels(p);this.traceEvents(p);channel.on(event=>{if(!p.closed)this.onChannel(p,event)});
+ this.networkRelay.reopen();this.current=p;this.syncApiModels(p);this.traceEvents(p);channel.on(event=>{if(!p.closed)this.onChannel(p,event)});
  try{await this.projectRegistry.rememberProject(path)}catch(e){lineErrors.push(message(e))}
  await this.actions.restorePendingAcks({runtime:this,project:p});
  await restoreProposals(this,p);
@@ -179,7 +182,7 @@ export class Runtime {
  async closeProject():Promise<void>{return this.changeProject(()=>this.closeProjectLocked())}
  private async closeProjectLocked():Promise<void>{const p=this.current;if(!p||p.closed)return;if(p.state.undurable.size){try{p.state.saveChats(p.registry);p.state.undurable.clear()}catch(e){throw new RuntimeError('write_failed','ответ модели не сохранён: '+p.state.chatsPath+': '+message(e),409,{cause:e,fields:{path:p.state.chatsPath}})}}p.closed=true;this.actions.closeProject?.(p);const turns=[...p.active.values()];
  this.quotas.get(p)?.close();this.cliQuotas.get(p)?.close();for(const turn of turns)this.cancelTurn(turn.pane.id,'project_closed',p);
- p.owner.denyApprovals();p.bus.close();this.tokens.clear();this.scopes.clear();await this.providerOperations.cancel(p);
+ await this.networkProviderChecks.closeProject(p);p.owner.denyApprovals();p.bus.close();this.tokens.clear();this.scopes.clear();await this.providerOperations.cancel(p);
  let failure:unknown;try{await Promise.all([...Object.values(this.deps.providers),...this.apiAgents.values()].map(provider=>provider?.close()))}catch(e){failure=e}
  for(const turn of turns)turn.releaseReset();await Promise.all(turns.map(t=>t.finished));if(failure)throw failure
  }
@@ -342,7 +345,7 @@ export class Runtime {
  pane.busy=true;pane.touched=true;pane.revision++;const launchModel=pane.model,launchEpoch=pane.sessionEpoch;
  const scope=this.scopes.create(p.dir,id,currentTrace()?.turnInstanceId??randomUUID()),controller=new AbortController();let releaseReset!:()=>void,finish!:()=>void;
  const turn:ActiveTurn={scope,controller,pane,vendor:pane.vendor,records,deliverySeq:Math.max(0,...entries.map(e=>e.deliverySeq)),relayDepth,attemptNumber:0,handle:null,started:false,stopRequested:false,terminal:null,partial:'',finished:new Promise(r=>{finish=r}),finish:()=>finish(),timer:undefined,resetWait:new Promise(r=>{releaseReset=r}),releaseReset:()=>releaseReset(),result:null,injected};p.active.set(id,turn);this.stateEvent(p,pane);
- let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null;
+ let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null,networkTurn:NetworkTurn|undefined;
  try{
  if(!validDir(pane.cwd))throw new RuntimeError('cwd_changed','папки нет: '+pane.cwd);const provider=this.provider(turn.vendor),vendor=provider.vendor,epoch=p.processEpoch.get(vendor)??0,sessionEpoch=pane.sessionEpoch;
  launchVendor=vendor;
@@ -357,8 +360,10 @@ export class Runtime {
  for(const r of records){const m=timestampMessage(r.from==='owner'?'me':'peer',r.from==='owner'?r.text:'[от '+this.labelOf(r.from,p)+'] '+r.text,this.clock.now());if(pythonTrim(m.text)){pane.append(m);pane.uncommitted.add(m);injected.push(m)}}
  p.state.startAttempt(pane,{turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),startedAt:this.clock.now(),deliverySeq:turn.deliverySeq});
  const current=()=>!p.closed&&p.active.get(id)===turn;
- let attempt=0,earlySession:string|null=null;
- const ctx:TurnContext={traceTool:(name,args,run)=>p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId)),traceEvent:event=>{if(current())this.traceProvider(p,id,scope.turnInstanceId,event)},signal:controller.signal,modelStarted:()=>{if(current()){
+ const beginNetwork=()=>this.networkRelay.begin(vendor,p.dir+'\0'+id,controller.signal,text=>{if(!current())return;const notice=timestampMessage('peer','[от харнесс] '+text,this.clock.now());pane.append(notice);p.state.saveChats(p.registry);pane.publish({type:'networkRoute',text,ts:notice.ts,seq:notice.seq,chat:p.state.activeChat(pane)!.id,turnInstanceId:scope.turnInstanceId})});
+ networkTurn=beginNetwork();
+ let attempt=0,earlySession:string|null=null,effected=false,sessionLost=false;const failedExits=new Set<string>();
+ const ctx:TurnContext={traceTool:(name,args,run)=>{effected=true;return p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId))},traceEvent:event=>{if(event.phase==='call')effected=true;if(current())this.traceProvider(p,id,scope.turnInstanceId,event)},signal:networkTurn.signal,modelResponded:()=>{effected=true},modelStarted:()=>{if(current()){
   const notices:TranscriptMessage[]=[];
   const teamNotice=knowledge&&teamText&&!teamSaved?{...timestampMessage('peer','[от харнесс] '+teamText,this.clock.now()),teamKnowledge:{project:p.dir,chat:knowledge.chat,team:knowledge.team,turnInstanceId:scope.turnInstanceId}}:null;
   if(teamNotice)notices.push(teamNotice);
@@ -367,13 +372,13 @@ export class Runtime {
   turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
  }},publish:event=>{
  if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:turnFailure({message:event.text},p.dir,0).reason,sessionId:pane.sessionId}:event;return}
- if(turn.stopRequested)return;if(event.type==='toolError')event={...event,text:turnFailure({message:event.text},p.dir,0).reason};if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
+ if(turn.stopRequested)return;if(event.type==='tool'||event.type==='delta'&&event.text.length>0)effected=true;if(event.type==='toolError')event={...event,text:turnFailure({message:event.text},p.dir,0).reason};if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
  },askApproval:(title,detail)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.askApproval(title,detail))},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;if(transfer&&!turn.started){earlySession=sid;return}pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
  if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(p,pane,handle)
- },env:this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[...p.registry.panes.values()].map(p=>({id:p.id,label:p.label,vendor:p.vendor as Vendor})),tools:this.toolsFor(scope),relayDepth:turn.relayDepth,projectDir:p.dir,appUrl:this.deps.appUrl,
+ },beforeModel:async()=>{const route=apiRoute(vendor);if(route){const config=this.settings.llmProviders()[route];let local=false;try{local=!!config?.baseURL&&['127.0.0.1','localhost','[::1]'].includes(new URL(config.baseURL).hostname)}catch{}if(!local)await this.networkRelay.prepare(vendor,controller.signal,networkTurn)}else if(vendor!=='ollama'){const relay=await this.networkRelay.prepare(vendor,controller.signal,networkTurn);if(relay&&ctx.env.HARNESS_RELAY_PROXY!==relay.url)throw new NetworkError()}},env:apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,controller.signal,networkTurn)??this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[...p.registry.panes.values()].map(p=>({id:p.id,label:p.label,vendor:p.vendor as Vendor})),tools:new Proxy(this.toolsFor(scope),{get:(target,key)=>{const value=Reflect.get(target,key);return typeof value==='function'?(...args:unknown[])=>{effected=true;return value.apply(target,args)}:value}}),relayDepth:turn.relayDepth,projectDir:p.dir,appUrl:this.deps.appUrl,
  registerProcessToken:token=>{if(!p.closed&&(p.processEpoch.get(vendor)??0)===epoch)this.tokens.register(token,p.generation,id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,id,vendor),writableRoots:writableRoots(p.repoRoot,!!pane.worktree)};
  let result:{text:string;sessionId:string|null;interrupted?:boolean};const launchSeat=pane.providerSeat();
- while(true){attempt++;turn.terminal=null;turn.attemptNumber=attempt;const attemptNumber=attempt,seat=attempt===1?launchSeat:{...launchSeat,sessionId:null},activeAttempt=()=>current()&&turn.attemptNumber===attemptNumber;
+ while(true){attempt++;turn.terminal=null;turn.attemptNumber=attempt;const attemptNumber=attempt,seat=sessionLost?{...launchSeat,sessionId:null}:launchSeat,activeAttempt=()=>current()&&turn.attemptNumber===attemptNumber;
  if(!seat.sessionId){try{let settings;try{settings=transferSettings(this.settings.get().owner)}catch(e){throw new RuntimeError('context_settings_invalid','настройки переноса: '+message(e),409)}
   const snapshot=transferSnapshot(p,pane,records,settings.contextTransferEnabled);transfer=snapshot?conversationTransfer(snapshot,settings):null;
  }catch(e){
@@ -382,10 +387,12 @@ export class Runtime {
  }}
  // Failed history is never mixed with the current request (including a saved carry).
  const attemptPrompt=transfer?.failure?messageText:transfer?.content?transfer.content+'\n\n---\nНовое сообщение:\n'+prompt:prompt;
- const attemptCtx:TurnContext={...ctx,modelStarted:()=>{if(activeAttempt())ctx.modelStarted?.()},publish:e=>{if(activeAttempt())ctx.publish(e)},session:s=>{if(activeAttempt())ctx.session(s)},setHandle:h=>{if(activeAttempt())ctx.setHandle(h)},askApproval:(title,detail)=>activeAttempt()?ctx.askApproval(title,detail):Promise.resolve(false)};
- try{if(controller.signal.aborted)throw new ProviderError('cancelled','ход отменён');result=await Promise.race([provider.runTurn(seat,attemptPrompt,attemptCtx),turn.resetWait.then(()=>{throw new ProviderError('cancelled','ход отменён')})]);break}
- catch(e){if(turn.stopRequested&&turn.started){result={text:turn.partial,sessionId:pane.sessionId,interrupted:true};break}
- if(e instanceof ProviderError&&e.code==='session_missing'&&attempt===1&&seat.sessionId&&!controller.signal.aborted){if(pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch)pane.sessionId=null;p.state.savePanes(p.registry,p.journal);pane.publish({type:'note',text:'сессия модели не найдена — начат новый разговор'});turn.partial='';turn.started=false;continue}throw e}finally{if(turn.attemptNumber===attemptNumber)turn.attemptNumber=0}}
+ const attemptNetwork=networkTurn,attemptSignal=ctx.signal,acceptResult=()=>activeAttempt()&&!attemptNetwork.failure&&!attemptNetwork.rejection,assertAttempt=()=>{if(!activeAttempt()||attemptSignal.aborted)throw new ProviderError('cancelled','Попытка завершена')};
+ const attemptCtx:TurnContext={...ctx,modelResponded:()=>{if(activeAttempt()&&!attemptSignal.aborted)effected=true},beforeModel:async run=>{assertAttempt();await ctx.beforeModel?.(run);assertAttempt()},traceTool:(name,args,run)=>{assertAttempt();return ctx.traceTool!(name,args,run)},traceEvent:event=>{if(activeAttempt()&&!attemptSignal.aborted)ctx.traceEvent?.(event)},tools:new Proxy(ctx.tools,{get:(target,key)=>{const value=Reflect.get(target,key);return typeof value==='function'?(...args:unknown[])=>{if(!activeAttempt()||attemptSignal.aborted)return Promise.resolve({ok:false,code:'turn_ended',error:'ход не активен'});return value.apply(target,args)}:value}}),modelStarted:()=>{if(activeAttempt()&&!attemptSignal.aborted)ctx.modelStarted?.()},publish:e=>{if(acceptResult())ctx.publish(e)},session:s=>{if(acceptResult())ctx.session(s)},setHandle:h=>{if(acceptResult())ctx.setHandle(h)},askApproval:(title,detail)=>acceptResult()?ctx.askApproval(title,detail):Promise.resolve(false)};
+ try{if(controller.signal.aborted)throw new ProviderError('cancelled','ход отменён');if(!apiRoute(vendor)&&vendor!=='ollama')await ctx.beforeModel?.({provider:vendor,model:seat.model});result=await Promise.race([networkTurn.run(async()=>{const output=await provider.runTurn(seat,attemptPrompt,attemptCtx);if(output.text&&!attemptSignal.aborted)effected=true;return output}),turn.resetWait.then(()=>{throw new ProviderError('cancelled','ход отменён')})]);break}
+ catch(e){if(networkTurn.failure&&!networkTurn.retryBlocked&&!effected&&!controller.signal.aborted){const failed=networkTurn.hop?.id;if(failed&&!failedExits.has(failed)&&failedExits.size<32){failedExits.add(failed);await networkTurn.close();networkTurn=beginNetwork();ctx.signal=networkTurn.signal;ctx.env=apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,controller.signal,networkTurn)??this.connections.proxyEnv(vendor);await networkTurn.ready();if(networkTurn.hop&&failedExits.has(networkTurn.hop.id))throw e;turn.started=false;turn.partial='';continue}}
+ if(turn.stopRequested&&turn.started){result={text:turn.partial,sessionId:pane.sessionId,interrupted:true};break}
+ if(e instanceof ProviderError&&e.code==='session_missing'&&attempt===1&&seat.sessionId&&!controller.signal.aborted){if(pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch)pane.sessionId=null;p.state.savePanes(p.registry,p.journal);pane.publish({type:'note',text:'сессия модели не найдена — начат новый разговор'});sessionLost=true;turn.partial='';turn.started=false;continue}throw e}finally{if(turn.attemptNumber===attemptNumber)turn.attemptNumber=0}}
  if(p.closed)throw new ProviderError('cancelled','ход отменён');
  const interrupted=turn.stopRequested&&turn.started||result.interrupted===true;
  const heldError=(turn as ActiveTurn).terminal;if(heldError?.type==='error'&&!interrupted)throw new ProviderError('turn_failed',String(heldError.message||'Причина отказа не получена'));pane.sessionId=pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch?result.sessionId:null;
@@ -406,8 +413,9 @@ export class Runtime {
  success=true;return result.text
  }catch(e){
  if(!turn.result){pane.transcript=pane.transcript.filter(m=>!injected.includes(m));for(const m of injected)pane.uncommitted.delete(m);
- if(!turn.started){try{if(transfer&&pane.vendor===launchVendor&&pane.sessionEpoch===launchEpoch){pane.sessionId=null;p.state.savePanes(p.registry,p.journal)}p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
- else {   // модель уже могла действовать (modelStarted), результата нет: неопределённый исход не повторяется автоматически — долговечный uncertain до действия владельца (ревью №111 п.1)
+ if(!turn.started&&!(e instanceof ProviderError&&['network_unavailable','network_country_unverified','network_no_reserve','network_proxy_auth'].includes(e.code))){try{if(transfer&&pane.vendor===launchVendor&&pane.sessionEpoch===launchEpoch){pane.sessionId=null;p.state.savePanes(p.registry,p.journal)}p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
+ else {   // Сохраняем также отказ сети до запуска: владелец может повторить после исправления цепочки.
+  // модель уже могла действовать (modelStarted), результата нет: неопределённый исход не повторяется автоматически — долговечный uncertain до действия владельца (ревью №111 п.1)
   try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:turnFailure(e,p.dir,0).code,...turnMeasurements(turn.terminal),failure:turnFailure(e,p.dir,this.clock.now()-(p.state.attempts[id]?.startedAt??this.clock.now()))})}catch(error){p.lineErrors.push(message(error))}
   try{p.state.uncertain(id)}catch(error){p.lineErrors.push(message(error))}
   pane.status='uncertain';pane.uncertainNote=waitingError(p,pane).message;if(!p.closed)pane.publish({type:'note',text:pane.uncertainNote,warning:this.warningId(p,pane,'uncertain')})}
@@ -415,7 +423,7 @@ export class Runtime {
  if(!terminalSent&&!p.closed)this.report(p,pane,e instanceof ProviderError&&e.code==='cancelled'?new RuntimeError('cancelled','ход отменён'):e);
  throw e
  }finally{
- this.scopes.revoke(scope);if(!turn.stopRequested)this.actions.cancelAsks(scope,'turn_ended');this.clock.clearTimeout(turn.timer);
+ await networkTurn?.close();this.scopes.revoke(scope);if(!turn.stopRequested)this.actions.cancelAsks(scope,'turn_ended');this.clock.clearTimeout(turn.timer);
  if(p.active.get(id)===turn){p.active.delete(id);pane.busy=false;pane.handle=null;this.stateEvent(p,pane)}
  if(!p.closed&&turn.started&&(turn.vendor==='claude'||turn.vendor==='codex'))void this.quota(p).refresh(turn.vendor,true);
  if(success&&!p.closed&&!options.entries&&pane.status==='idle')void this.kick(id);turn.finish()
@@ -479,7 +487,7 @@ export class Runtime {
  const turns=[...p.active.values()].filter(t=>t.vendor===vendor);for(const t of turns)this.cancelTurn(t.pane.id,'reset',p);
  void (async()=>{try{await this.provider(vendor).reset();for(const t of turns)t.releaseReset();resolve()}catch(e){reject(e)}finally{if(p.resets.get(vendor)===reset)p.resets.delete(vendor)}})();return reset
  }
- async setRoute(vendor:Vendor,config:{route?:string;proxy?:string;iface?:string;label?:string;expect?:string},initiator:Initiator){this.requireOwner(initiator);const p=this.project,previous=p.routeJobs.get(vendor);const job=(async()=>{await previous;this.same(p);const result=await this.connections.setRoute(vendor,config.route??'direct',config.proxy??'',config.iface??'',config.label??'',config.expect??'');this.same(p);if(result.processRestartNeeded)await this.resetVendor(vendor,p);return result})();p.routeJobs.set(vendor,job);try{return await job}finally{if(p.routeJobs.get(vendor)===job)p.routeJobs.delete(vendor)}}
+ async setRoute(_vendor:Vendor,config:{route?:string;proxy?:string;iface?:string;label?:string;expect?:string},initiator:Initiator):Promise<never>{this.requireOwner(initiator);throw new RuntimeError(config.route==='iface'?'iface_unsupported':'network_route_moved','Подключения → Выходы → цепочка провайдера',409)}
  async auth(vendor:Vendor){await this.waitVendor(this.project,vendor);return this.provider(vendor).auth()}
  async models(vendor:Vendor,fallback?:{id:string;label:string}[]){const p=this.project;await this.waitVendor(p,vendor);let models:{id:string;label:string}[];
  try{models=await this.provider(vendor).models()}catch(e){this.same(p);if(!fallback)throw e;models=structuredClone(fallback)}
@@ -514,6 +522,6 @@ export class Runtime {
  async settingsPatch(scope:unknown,patch:unknown,initiator:Initiator){this.requireOwner(initiator);
  if(object(patch)&&Object.keys(TRANSFER_DEFAULTS).some(key=>Object.hasOwn(patch,key))){if(scope&&scope!=='owner')throw new RuntimeError('context_settings_invalid','настройки переноса: только область owner',400);try{transferSettings(patch)}catch(e){throw new RuntimeError('context_settings_invalid',message(e),400)}}
  const result=await this.settings.patch(scope,patch);this.traceSettings();return result}
- async close(){this.unsubscribeLlm();const tunnels=this.sshTunnels.close();try{await this.closeProject()}finally{await tunnels;await this.providerOperations.close();await Promise.all([...this.traces].map(t=>t.close()))}}
+ async close(){this.unsubscribeLlm();const tunnels=this.sshTunnels.close();try{await this.closeProject()}finally{await tunnels;await this.providerOperations.close();await this.networkRelay.close();await Promise.all([...this.traces].map(t=>t.close()))}}
 }
 export async function createRuntime(deps:RuntimeDeps,actions:RuntimeActions):Promise<Runtime>{const runtime=new Runtime(deps,actions);await runtime.openProject(deps.projectDir);return runtime}

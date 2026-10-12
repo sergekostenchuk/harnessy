@@ -12,7 +12,17 @@ export interface NetworkPrice {monthlyUsd?:number;perGbUsd?:number}
 export type NetworkExit={id:string;label:string;expectedIp?:string;price?:NetworkPrice}&(
  {type:'direct'}|{type:'proxy';url:string;login?:string;passwordRef?:string;passwordGeneration?:string}|
  {type:'ssh';host:string;port:number;user:string;keyPath:string});
-export interface NetworkConfig {exits:Record<string,NetworkExit>;chains:Record<string,string[]>;migrated:boolean}
+export type NetworkPolicy={mode:'fallback';silenceSeconds:number}|{mode:'rotation';rotationMinutes:number;silenceSeconds:number};
+export const defaultNetworkPolicy:NetworkPolicy={mode:'fallback',silenceSeconds:60};
+export function validateNetworkPolicy(raw:unknown):NetworkPolicy {
+ networkFields(raw,['mode','rotationMinutes','silenceSeconds']);
+ if(!Number.isInteger(raw.silenceSeconds)||Number(raw.silenceSeconds)<1||Number(raw.silenceSeconds)>3600)networkInvalid('Молчание: от 1 до 3600 секунд');
+ if(raw.mode==='rotation'){if(!Number.isInteger(raw.rotationMinutes)||Number(raw.rotationMinutes)<1||Number(raw.rotationMinutes)>1440)networkInvalid('Ротация: от 1 до 1440 минут')}
+ else if(raw.mode!=='fallback'||raw.rotationMinutes!==undefined)networkInvalid('Режим: основной + резервы или ротация');
+ return structuredClone(raw) as NetworkPolicy;
+}
+export const chainRevision=(config:NetworkConfig,id:string)=>networkRevision(config.policies?.[id]?[config.chains[id],config.policies[id]]:config.chains[id]);
+export interface NetworkConfig {policies?:Record<string,NetworkPolicy>;exits:Record<string,NetworkExit>;chains:Record<string,string[]>;migrated:boolean}
 export const networkRevision=(value:unknown)=>value===undefined?null:createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function networkInvalid(message='Некорректные настройки выхода'):never{throw new ProjectError('network_invalid',message)}
 export function networkFields(raw:unknown,keys:string[]):asserts raw is Record<string,unknown>{if(!object(raw)||Object.keys(raw).some(k=>!keys.includes(k)))networkInvalid()}
@@ -52,9 +62,10 @@ export function validateExit(raw:unknown):NetworkExit {
 }
 export function validateNetwork(raw:unknown):NetworkConfig {
  if(raw===undefined)return {exits:{},chains:{},migrated:false};
- networkFields(raw,['exits','chains','migrated']);if(!object(raw.exits)||!object(raw.chains)||typeof raw.migrated!=='boolean'||Object.keys(raw.exits).length>256||Object.keys(raw.chains).length>512)networkInvalid();
+ networkFields(raw,['exits','chains','migrated','policies']);if(!object(raw.exits)||!object(raw.chains)||typeof raw.migrated!=='boolean'||Object.keys(raw.exits).length>256||Object.keys(raw.chains).length>512)networkInvalid();
  const exits:Record<string,NetworkExit>={},chains:Record<string,string[]>={};
  for(const [id,value] of Object.entries(raw.exits)){const exit=validateExit(value);if(id!==exit.id)networkInvalid();exits[id]=exit}
  for(const [id,value] of Object.entries(raw.chains)){if(!validProviderId(id)||!Array.isArray(value)||value.length>32||value.some(x=>typeof x!=='string'||!Object.hasOwn(exits,x))||new Set(value).size!==value.length)networkInvalid('Цепочка содержит неизвестный или повторный выход');chains[id]=[...value]}
- return {exits,chains,migrated:raw.migrated};
+ const policies:Record<string,NetworkPolicy>={};if(raw.policies!==undefined){if(!object(raw.policies))networkInvalid();for(const [id,value]of Object.entries(raw.policies)){if(!Object.hasOwn(chains,id))networkInvalid();policies[id]=validateNetworkPolicy(value)}}
+ return {exits,chains,migrated:raw.migrated,...(Object.keys(policies).length?{policies}:{})};
 }

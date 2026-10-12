@@ -48,21 +48,21 @@ export class CliProvider {
   this.deps.env={...this.deps.env};for(const k of ['probeTimeoutMs','turnTimeoutMs','maxBytes'] as const)if(!Number.isSafeInteger(this.deps[k])||this.deps[k]<=0)throw protocol('неверный предел '+k);
  }
  private environment(route:CliContext['env']={}){const env:NodeJS.ProcessEnv={...this.deps.env,...route};for(const key of [...this.d.forbiddenEnv,'PANE_TOKEN','PANE_ID','APP_URL','SEATS'])delete env[key];return env}
- private async query<T>(p:CliProbe<T>,signal:AbortSignal=AbortSignal.timeout(this.deps.probeTimeoutMs),cwd=this.deps.cwd,stateArgs?:string[]):Promise<T>{
+ private async query<T>(p:CliProbe<T>,signal:AbortSignal=AbortSignal.timeout(this.deps.probeTimeoutMs),cwd=this.deps.cwd,stateArgs?:string[],route:CliContext['env']={}):Promise<T>{
   let temporary='';try{const args=stateArgs??(p.privateConfig?['--config-dir',temporary=await mkdtemp(join(this.deps.temporaryDirectory,'harnessy-cli-metadata-'))]:[]);
-  const cmd=command(p.command),r=await waitWithSignal(()=>this.deps.execute({...cmd,args:[...cmd.args,...args],binary:this.d.binary,cwd,env:this.environment(),timeoutMs:this.deps.probeTimeoutMs,maxBytes:1024*1024},signal),signal);
+  const cmd=command(p.command),r=await waitWithSignal(()=>this.deps.execute({...cmd,args:[...cmd.args,...args],binary:this.d.binary,cwd,env:this.environment(route),timeoutMs:this.deps.probeTimeoutMs,maxBytes:1024*1024},signal),signal);
   if(r.signal)throw new ProviderError('transport_lost','CLI: чтение прервано');if(r.code===null||!(p.exitCodes??[0]).includes(r.code))throw protocol('команда чтения завершилась с ошибкой');
   try{return p.parse(r)}catch(e){if(e instanceof ProviderError)throw e;throw protocol('неверный ответ чтения')}
   }finally{if(temporary)await rm(temporary,{recursive:true,force:true})}
  }
  async version(signal?:AbortSignal){const v=await this.query(this.d.version,signal);if(!text(v)||!v.trim()||v.length>128)throw protocol('версия не получена');return v.trim()}
- async auth(signal?:AbortSignal):Promise<CliAuth>{
+ async auth(signal?:AbortSignal,route:CliContext['env']={}):Promise<CliAuth>{
   const stop=signal??AbortSignal.timeout(this.deps.probeTimeoutMs);let value:unknown;
-  if('unavailableReason'in this.d.auth){value={loggedIn:false,state:'unknown',reason:this.d.auth.unavailableReason}}else if('file'in this.d.auth){value=await readCliFileMetadata(this.d.auth,this.deps.env)}else value=await this.query(this.d.auth,stop);
+  if('unavailableReason'in this.d.auth){value={loggedIn:false,state:'unknown',reason:this.d.auth.unavailableReason}}else if('file'in this.d.auth){value=await readCliFileMetadata(this.d.auth,this.deps.env)}else value=await this.query(this.d.auth,stop,undefined,undefined,route);
   if(!record(value)||typeof value.loggedIn!=='boolean'||['email','plan'].some(k=>value[k]!==undefined&&value[k]!==null&&!text(value[k])))throw protocol('неверный статус входа');
   return {loggedIn:value.loggedIn,...(value.state==='unknown'?{state:'unknown' as const,reason:String(value.reason??'вход не проверен')}:{}),...(value.email!==undefined?{email:value.email as string|null}:{}),...(value.plan!==undefined?{plan:value.plan as string|null}:{})};
  }
- async models(signal?:AbortSignal){const values='list'in this.d.models?this.d.models.list:await this.query(this.d.models,signal);if(!Array.isArray(values)||values.some(v=>!v||!text(v.id)||!v.id||!text(v.label))||new Set(values.map(v=>v.id)).size!==values.length)throw new ProviderError('models_unavailable','CLI: список моделей не прочитан');return values.map(v=>({id:v.id,label:v.label}))}
+ async models(signal?:AbortSignal,route:CliContext['env']={}){const values='list'in this.d.models?this.d.models.list:await this.query(this.d.models,signal,undefined,undefined,route);if(!Array.isArray(values)||values.some(v=>!v||!text(v.id)||!v.id||!text(v.label))||new Set(values.map(v=>v.id)).size!==values.length)throw new ProviderError('models_unavailable','CLI: список моделей не прочитан');return values.map(v=>({id:v.id,label:v.label}))}
  async inspect(){try{return {id:this.vendor,name:this.d.name,binary:this.d.binary,login:command(this.d.login),installed:true,version:await this.version(),auth:await this.auth()}}catch(e){if(e instanceof ProviderError&&e.code==='no_binary')return {id:this.vendor,name:this.d.name,binary:this.d.binary,login:command(this.d.login),installed:false,version:null,auth:null};throw e}}
  async limits(signal?:AbortSignal):Promise<ProviderLimits>{
   if(!this.d.limits)return {ok:false,code:'limits_unsupported',reason:this.d.name+': CLI не отдаёт лимиты'};
@@ -85,7 +85,7 @@ export class CliProvider {
   const started=Date.now(),calls=new Map<string,string>(),secrets=this.d.forbiddenEnv.map(k=>this.deps.env[k]).filter((v):v is string=>!!v);
   const clean=(s:string)=>[...secrets,token].filter(Boolean).reduce((out,secret)=>out.replaceAll(secret,'[redacted]'),s);
   // Keep a short suffix so credentials split across process chunks cannot leak through deltas.
-  const delta=(chunk:string,flush=false)=>{pendingText+=chunk;const keys=[...secrets,token].filter(Boolean),width=Math.max(1,...keys.map(s=>s.length));let end=flush?pendingText.length:Math.max(0,pendingText.length-width+1);
+  const delta=(chunk:string,flush=false)=>{if(chunk)ctx.modelResponded?.();pendingText+=chunk;const keys=[...secrets,token].filter(Boolean),width=Math.max(1,...keys.map(s=>s.length));let end=flush?pendingText.length:Math.max(0,pendingText.length-width+1);
    for(const key of keys){let at=pendingText.indexOf(key);while(at>=0){if(at<end&&at+key.length>end)end=at;at=pendingText.indexOf(key,at+1)}}
    const out=clean(pendingText.slice(0,end));pendingText=pendingText.slice(end);if(out){answer+=out;ctx.publish({type:'delta',text:out})}};
   const safe=(v:unknown):unknown=>typeof v==='string'?clean(v):Array.isArray(v)?v.map(safe):record(v)?Object.fromEntries(Object.entries(v).map(([k,value])=>[clean(k),safe(value)])):v;
@@ -94,12 +94,13 @@ export class CliProvider {
   const consume=(events:CliEvent[])=>{
    if(!Array.isArray(events))throw protocol('неверный поток событий');
    for(const e of events){if(!e||typeof e.type!=='string'||result)throw protocol('событие после результата');
-    if(e.type==='session')session(e.id);
+    if(e.type==='response')ctx.modelResponded?.();
+    else if(e.type==='session')session(e.id);
     else if(e.type==='delta'){if(!text(e.text))throw protocol('неверный текст');delta(e.text)}
     else if(e.type==='tool.call'){if(!text(e.id)||!e.id||!text(e.name)||!e.name||calls.has(e.id))throw protocol('неверный вызов инструмента');calls.set(e.id,e.name);ctx.publish({type:'tool',name:clean(e.name),detail:clean(JSON.stringify(e.input??{})).slice(0,300)});ctx.traceEvent?.({id:clean(e.id),name:clean(e.name),phase:'call',data:safe(e.input)})}
     else if(e.type==='tool.result'){const name=calls.get(e.id);if(!name||!['ok','failed','rejected','timeout','cancelled'].includes(e.outcome))throw protocol('неверный результат инструмента');ctx.traceEvent?.({id:clean(e.id),name:clean(name),phase:'result',data:safe(e.output),outcome:e.outcome,...(e.reason?{reason:clean(e.reason)}:{})});calls.delete(e.id);if(e.outcome!=='ok')ctx.publish({type:'toolError',text:clean(e.reason||'инструмент завершился: '+e.outcome)})}
     else if(e.type==='error'){if(!text(e.text)||!['not_logged_in','session_missing','model_unsupported','protocol','transport_lost','cancelled','busy','cwd_changed','turn_failed','unknown_request','models_unavailable','mode_unsupported','permission_denied','capability_unsupported'].includes(e.code))throw protocol('неверная ошибка провайдера');throw new ProviderError(e.code,clean(e.text),sessionId)}
-    else if(e.type==='done'){if(e.sessionId!==undefined&&e.sessionId!==null)session(e.sessionId);if(e.text!==undefined&&!text(e.text))throw protocol('неверный ответ');usage(e.usage);result=e}
+    else if(e.type==='done'){if(e.sessionId!==undefined&&e.sessionId!==null)session(e.sessionId);if(e.text!==undefined&&!text(e.text))throw protocol('неверный ответ');usage(e.usage);if(e.text)ctx.modelResponded?.();result=e}
     else throw protocol('неизвестное событие');
    }
   };
@@ -114,8 +115,8 @@ export class CliProvider {
    const permissions=mode(input);if(!strings(permissions)||!permissions.length)throw protocol('нет флагов разрешений');
    if(seat.sessionId&&!this.d.resume)throw new ProviderError('capability_unsupported','CLI не поддерживает возобновление',sessionId);
    const resume=seat.sessionId?this.d.resume!(seat.sessionId):[];if(!strings(resume))throw protocol('неверное возобновление');
-   const auth=await waitWithSignal(()=>this.auth(signal),signal);if(!auth.loggedIn&&!(this.d.allowUnverifiedLogin&&auth.state==='unknown'))throw new ProviderError('not_logged_in',this.d.name+': выполните вход через программу',sessionId);
-   const models=await waitWithSignal(()=>this.models(signal),signal);if(!models.some(m=>m.id===seat.model))throw new ProviderError('model_unsupported','CLI: модель отсутствует в каталоге',sessionId);
+   const auth=await waitWithSignal(()=>this.auth(signal,ctx.env),signal);if(!auth.loggedIn&&!(this.d.allowUnverifiedLogin&&auth.state==='unknown'))throw new ProviderError('not_logged_in',this.d.name+': выполните вход через программу',sessionId);
+   const models=await waitWithSignal(()=>this.models(signal,ctx.env),signal);if(!models.some(m=>m.id===seat.model))throw new ProviderError('model_unsupported','CLI: модель отсутствует в каталоге',sessionId);
    const state=this.d.state;if(state){const project=ctx.stateProjectDir??ctx.projectDir;if(!project)throw protocol('нет привязки проекта для состояния CLI');lease=new CliStateStore(state.namespace,this.deps.stateRoot).acquire(project,seat.id)}
    const stateArgs=lease?state!.args(lease.path):[];if(!strings(stateArgs))throw protocol('неверные флаги состояния');
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
@@ -135,7 +136,7 @@ export class CliProvider {
     if(!strings(sessionArgs)||!sessionArgs.length)throw protocol('неверные флаги экспорта сессии');
    }
    const c=command(this.d.turn.command(input));
-   if(lease){lease.validate();if(!('command'in this.d.auth))throw protocol('изолированный вход должен проверяться программой');const current=await this.query(this.d.auth,signal,seat.cwd,stateArgs);if(!current.loggedIn||!current.email||current.email!==auth.email)throw new ProviderError('login_changed','Вход приватного состояния отличается; подтвердите вход заново')}
+   if(lease){lease.validate();if(!('command'in this.d.auth))throw protocol('изолированный вход должен проверяться программой');const current=await this.query(this.d.auth,signal,seat.cwd,stateArgs,ctx.env);if(!current.loggedIn||!current.email||current.email!==auth.email)throw new ProviderError('login_changed','Вход приватного состояния отличается; подтвердите вход заново')}
    if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),signal);
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    lease?.validate(); // No await between the final path check and process creation.

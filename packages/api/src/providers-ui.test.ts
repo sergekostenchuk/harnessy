@@ -304,3 +304,7 @@ test('350: provider card exposes failed probe code, safe excerpt and measured du
  const v=ui();await open(v);await v.find('[data-program-probe]').emit('click');await v.find('[data-program-confirm]').emit('click');await v.streams[0].onmessage({data:JSON.stringify({type:'providers',event:'probe',provider:'antigravity',model:'model-a',approvalId:'probe-antigravity',status:'error',error:{code:'transport_lost',reason:'upstream <offline>',durationMs:10000}})});
  const card=v.find('[role="alert"]');assert.match(card.textContent,/upstream <offline>.*transport_lost.*10000 мс/);assert.equal(card.querySelector('offline'),null);
 });
+
+for(const verification of ['verified','unverified'])test('22c: provider card shows observed relay status '+verification,{timeout:15000},async()=>{
+ const v=ui(undefined,catalog(provider({network:{configured:true,verification}})));await open(v);assert.equal(v.find('[data-program-network]').textContent,'Программа ходит через выход: '+(verification==='verified'?'проверено':'не проверено'));assert.equal(v.posts().length,0);
+});

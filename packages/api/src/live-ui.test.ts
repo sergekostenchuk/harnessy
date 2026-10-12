@@ -488,3 +488,9 @@ test('210: every SCREENS entry is reachable from the untruncated palette by clic
  const input=find('.lp-box input');input.value='no matching screen';await input.emit('input');const previous=context.location.href;await input.emit('keydown',{key:'ArrowDown'});await input.emit('keydown',{key:'Enter'});assert.equal(context.location.href,previous);
  await d.window.emit('keydown',{key:'Escape'});assert.equal(find('.live-pal').classList.contains('on'),false);await find('aside .search').emit('click');assert.equal(find('.live-pal').classList.contains('on'),true);assert.equal(rows().filter(n=>n.querySelector('small')?.textContent==='экран').length,screens.length);
 });
+
+test('22d: reserve card belongs to its chat, escapes the label, deduplicates SSE and survives history reload', {timeout:15000},async()=>{
+ const notice='Ход ушёл через резервный выход «<Proxy>» · ответ 429',view=ui({fetch:async()=>({ok:true,project:'/project-a',pane:'worker',chat:'chat-a',messages:[{seq:11,role:'peer',text:'[от харнесс] '+notice,ts:100}]})});
+ view.functions.hEvent({type:'networkRoute',pane:'worker',chat:'other',seq:11,text:notice,ts:100});assert.equal(view.S.chat.length,0);
+ const event={type:'networkRoute',pane:'worker',chat:'chat-a',seq:11,text:notice,ts:100};view.functions.hEvent(event);view.functions.hEvent(event);assert.equal(view.S.chat.length,1);assert.match(view.S.chat[0].html,/live-context-transfer/);assert.match(view.S.chat[0].html,/&lt;Proxy&gt;/);await view.functions.loadChat();assert.match(view.S.chat[0].html,/live-context-transfer/);assert.match(view.S.chat[0].html,/ответ 429/);
+});

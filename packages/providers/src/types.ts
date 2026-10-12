@@ -38,7 +38,7 @@ export interface PeerTools {
  send(a:SendArgs):Promise<ToolResult>;ask(a:AskArgs):Promise<ToolResult>;readPane(a:ReadPaneArgs):Promise<ToolResult>;
  merge(a:MergeArgs):Promise<ToolResult>;assignRole(a:AssignRoleArgs):Promise<ToolResult>
 }
-export type RouteEnv=Partial<Record<'HTTPS_PROXY'|'HTTP_PROXY'|'ALL_PROXY'|'https_proxy'|'http_proxy'|'all_proxy',string>>;
+export type RouteEnv=Partial<Record<'HTTPS_PROXY'|'HTTP_PROXY'|'ALL_PROXY'|'https_proxy'|'http_proxy'|'all_proxy'|'NO_PROXY'|'no_proxy'|'NODE_OPTIONS'|'NODE_USE_ENV_PROXY'|'HARNESS_RELAY_PROXY',string>>;
 export const FORBIDDEN_ENV={claude:['ANTHROPIC_API_KEY','CLAUDECODE','CLAUDE_CODE_SIMPLE'],codex:['OPENAI_API_KEY']} as const;
 export interface TurnHandle {interrupt():Promise<void>;steer(text:string):Promise<void>}
 export interface ToolTrace {id:string;name:string;phase:'call'|'result'|'warning';data?:unknown;outcome?:'ok'|'failed'|'rejected'|'timeout'|'cancelled';reason?:string;error?:string}
@@ -46,12 +46,12 @@ export interface TurnContext {
  /** Optional owner-probe binding check, after preparation and immediately before inference. */
  beforeModel?(run:{provider:string;model:string}):Promise<void>;
  traceTool?<T>(name:string,args:unknown,run:()=>Promise<T>):Promise<T>;traceEvent?(event:ToolTrace):void;
- modelStarted?():void;signal:AbortSignal;publish(ev:TurnEvent):void;askApproval(title:string,detail:string):Promise<boolean>;
+ modelStarted?():void;modelResponded?():void;signal:AbortSignal;publish(ev:TurnEvent):void;askApproval(title:string,detail:string):Promise<boolean>;
  session(id:string):void;setHandle(h:TurnHandle|null):void;env:RouteEnv;roleNote:string;
  peers:{id:string;label:string;vendor:Vendor}[];tools:PeerTools;relayDepth:number;projectDir:string|null;appUrl:string;
  registerProcessToken(token:string):void;revokeProcessToken(token:string):void;writableRoots:string[]
 }
-export type ErrorCode='no_binary'|'not_logged_in'|'session_missing'|'model_unsupported'|'cloud_api_required'|'protocol'|'transport_lost'|'cancelled'|'busy'|'cwd_changed'|'turn_failed'|'unknown_request'|'models_unavailable'|'mode_unsupported'|'capability_unsupported'|'permission_denied'|'provider_unknown'|'not_installed'|'platform_unsupported'|'login_terminal_failed'|'login_changed'|'state_dir_tampered';
+export type ErrorCode='network_unavailable'|'network_country_unverified'|'network_no_reserve'|'network_proxy_auth'|'no_binary'|'not_logged_in'|'session_missing'|'model_unsupported'|'cloud_api_required'|'protocol'|'transport_lost'|'cancelled'|'busy'|'cwd_changed'|'turn_failed'|'unknown_request'|'models_unavailable'|'mode_unsupported'|'capability_unsupported'|'permission_denied'|'provider_unknown'|'not_installed'|'platform_unsupported'|'login_terminal_failed'|'login_changed'|'state_dir_tampered';
 export class ProviderError extends Error {
  code:ErrorCode;vendorText:string;sessionId:string|null;
  constructor(code:ErrorCode,vendorText:string,sessionId:string|null=null){super(vendorText);this.name='ProviderError';this.code=code;this.vendorText=vendorText;this.sessionId=sessionId}
@@ -71,7 +71,7 @@ export function snapshot(seat:Seat,ctx:TurnContext):Seat {
  !(seat.sessionId===null||typeof seat.sessionId==='string')||!(seat.worktree===null||typeof seat.worktree==='string'))
  throw new ProviderError('protocol','invalid Seat');
  if(!record(ctx)||!ctx.signal||typeof ctx.signal.addEventListener!=='function'||typeof ctx.signal.aborted!=='boolean'||
- (ctx.modelStarted!==undefined&&typeof ctx.modelStarted!=='function')||!record(ctx.env)||!record(ctx.tools)||!Array.isArray(ctx.peers)||!ctx.peers.every(p=>record(p)&&typeof p.id==='string'&&typeof p.label==='string'&&providerId(p.vendor))||
+ (ctx.modelResponded!==undefined&&typeof ctx.modelResponded!=='function')||(ctx.modelStarted!==undefined&&typeof ctx.modelStarted!=='function')||!record(ctx.env)||!record(ctx.tools)||!Array.isArray(ctx.peers)||!ctx.peers.every(p=>record(p)&&typeof p.id==='string'&&typeof p.label==='string'&&providerId(p.vendor))||
  !Array.isArray(ctx.writableRoots)||!ctx.writableRoots.every(p=>typeof p==='string')||typeof ctx.roleNote!=='string'||typeof ctx.relayDepth!=='number'||
  !(ctx.projectDir===null||typeof ctx.projectDir==='string')||typeof ctx.appUrl!=='string'||
  ['publish','askApproval','session','setHandle','registerProcessToken','revokeProcessToken'].some(k=>typeof (ctx as unknown as Record<string,unknown>)[k]!=='function')||

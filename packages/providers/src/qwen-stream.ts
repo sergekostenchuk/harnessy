@@ -16,7 +16,7 @@ export function qwenStream(){let session:string|null=null,finished=false;return 
   return value.message.content.flatMap((block:unknown):CliEvent[]=>{
    if(!record(block))return invalid();
    if(block.type==='text'){if(typeof block.text!=='string')return invalid();return value.type==='assistant'&&!child?[{type:'delta',text:block.text}]:[]}
-   if(block.type==='thinking')return [];
+   if(block.type==='thinking')return value.type==='assistant'&&!child?[{type:'response'}]:[];
    if(block.type==='tool_use'&&value.type==='assistant'){
     if(typeof block.id!=='string'||!block.id||typeof block.name!=='string'||!block.name||!record(block.input))return invalid();
     return [{type:'tool.call',id:block.id,name:block.name,input:block.input}];

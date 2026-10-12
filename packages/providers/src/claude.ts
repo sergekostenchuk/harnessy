@@ -105,13 +105,16 @@ export class ClaudeProvider implements Provider {
  if(!main||typeof m.session_id==='string'&&sessionId!==null&&m.session_id!==sessionId)continue;
  if(m.type==='stream_event'){
  if(!record(m.event))throw new ProviderError('protocol','invalid stream event',sessionId);
+ const block=m.event.content_block;if(m.event.type==='content_block_start'&&record(block)&&(block.type==='text'&&typeof block.text==='string'&&block.text||['thinking','redacted_thinking','tool_use'].includes(String(block.type))))ctx.modelResponded?.();
  const delta=m.event.delta;if(m.event.type==='content_block_delta'&&record(delta)&&delta.type==='text_delta'){
  if(typeof delta.text!=='string')throw new ProviderError('protocol','invalid text delta',sessionId);
- streamed=true;text+=delta.text;ctx.publish({type:'delta',text:delta.text})
- }
+ if(delta.text)ctx.modelResponded?.();streamed=true;text+=delta.text;ctx.publish({type:'delta',text:delta.text})
+ }else if(m.event.type==='content_block_delta'&&record(delta)&&delta.type==='thinking_delta'&&typeof delta.thinking==='string'&&delta.thinking)ctx.modelResponded?.();
+ else if(m.event.type==='content_block_delta'&&record(delta)&&delta.type==='input_json_delta'&&typeof delta.partial_json==='string'&&delta.partial_json)ctx.modelResponded?.();
  }else if(m.type==='assistant'){
  if(!record(m.message)||!Array.isArray(m.message.content))throw new ProviderError('protocol','invalid assistant message',sessionId);
- for(const b of m.message.content){if(!record(b))continue;if(b.type==='text'&&typeof b.text==='string')assistant+=b.text;
+ for(const b of m.message.content){if(!record(b))continue;if(b.type==='text'&&typeof b.text==='string'){if(b.text)ctx.modelResponded?.();assistant+=b.text;}
+ else if(b.type==='thinking'||b.type==='redacted_thinking')ctx.modelResponded?.();
  else if(b.type==='tool_use'&&typeof b.name==='string'){ctx.publish({type:'tool',name:b.name,detail:toolDetail(b.input)});if(typeof b.id==='string'&&!b.name.startsWith('mcp__panes__')){tracedTools.set(b.id,b.name);ctx.traceEvent?.({id:b.id,name:b.name,phase:'call',data:b.input})}}}
  }else if(m.type==='user'){
  const content=record(m.message)?m.message.content:null;if(Array.isArray(content))for(const b of content)if(record(b)&&b.type==='tool_result'){

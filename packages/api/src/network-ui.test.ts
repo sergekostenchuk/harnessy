@@ -1,23 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {createContext,runInContext} from 'node:vm';
-import {setImmediate as tick} from 'node:timers/promises';
-import {dom} from './ui-dom-test-helpers.ts';
 import {fixture,call,deferred} from './test-helpers.ts';
 import {MemoryKeys} from '../../llm/src/test-helpers.ts';
 import {ProviderCatalog,builtinEntries} from '@harnessy/providers';
 import {FakeProvider} from './test-helpers.ts';
-const code=readFileSync(new URL('../../../ui/deploy/network.js',import.meta.url),'utf8'),opts={timeout:15000};
+import {networkUi as ui} from './network-ui-test-helpers.ts';
+const opts={timeout:15000};
 const direct={config:{id:'direct',label:'Напрямую',type:'direct'},revision:'one',password:{present:false}},proxy={config:{id:'proxy',label:'Прокси A',type:'proxy',url:'https://proxy.test'},revision:'one',password:{present:true,mask:'••••••••',updatedAt:100}};
-function ui(fetch:(path:string,body?:any)=>Promise<any>,integrated=false){
- const raw=readFileSync(new URL('../../../ui/sketches/disarto/11-connections.html',import.meta.url),'utf8'),d=dom(integrated?raw.slice(raw.indexOf('<body>'),raw.indexOf('<script>')):'<div class="frame"><div class="main"><div id="seg"><button data-v="list">Провайдеры</button></div><div class="views"><div id="v-list" class="view on"><div class="wrap"></div></div></div></div></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});
- const H:any={on:true,project:'/one',confirmedProjectGeneration:0,panes:[],models:{}},pending=new Set<Promise<any>>(),requests:any[]=[];
- const L:any={H,apiRoutes:[],esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),api:async(path:string,body?:any)=>{requests.push({path,body});const promise=fetch(path,body);pending.add(promise);try{return await promise}finally{pending.delete(promise)}},toast(){},paneName:(p:any)=>p.label||p.id,sendBinding:()=>({project:H.project,gen:H.confirmedProjectGeneration}),bindingCurrent:(b:any)=>b.project===H.project&&b.gen===H.confirmedProjectGeneration};
- const context:any={document:d.document,location:{pathname:'/11-connections.html',hash:''},LIVE:L,addEventListener:d.window.addEventListener.bind(d.window),setTimeout:(f:()=>void)=>f(),requestAnimationFrame:(f:()=>void)=>f()};context.window=context;const vm=createContext(context);runInContext(readFileSync(new URL('../../../ui/deploy/network-stats.js',import.meta.url),'utf8'),vm);runInContext(code,vm);if(integrated){runInContext(readFileSync(new URL('../../../ui/deploy/llm.js',import.meta.url),'utf8'),vm);runInContext(readFileSync(new URL('../../../ui/deploy/conn.js',import.meta.url),'utf8'),vm)}
- const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};const click=(s:string)=>find(s).emit('click'),input=async(k:string,value:string)=>{const n=find('[data-net-field="'+k+'"]');n.value=value;await n.emit('input')};
- return {...d,H,L,requests,find,click,input,flush:async()=>{for(let i=0;i<5;i++){await Promise.all([...pending]);await tick()}},change:async()=>{H.project='/two';H.confirmedProjectGeneration++;await d.window.emit('live:status')}};
-}
+
 const response=(path:string)=>path.endsWith('/exits')?{ok:true,exits:[structuredClone(proxy),structuredClone(direct)]}:path.includes('/providers/')?{ok:true,provider:decodeURIComponent(path.split('/').at(-1)!),configured:false,exits:[],revision:null}:{ok:false,error:'not available'};
 test('22e: real exit editor performs owner HTTP, masks passwords, stores explicit direct and orders program/API chains',opts,async t=>{
  const keys=new MemoryKeys(),catalog=new ProviderCatalog(builtinEntries({claude:new FakeProvider()},{},{execute:async()=>({code:0,signal:null,stdout:'1.0.0',stderr:''})})),h=await fixture(t,{deps:{networkKeys:keys,providerCatalog:catalog}}),v=ui(async(path,body)=>(await call(h.api,path,body?{body}:{})).body);await v.flush();
@@ -68,4 +58,17 @@ test('22i: each exit and program/API provider has five sample metrics and an exp
  assert.match(v.find('[data-net-card="api:custom"]').textContent,/макет.*источник статистики/);
  await v.click('[data-pv="claude"]');assert.match(v.find('.cbody [data-net-card]').textContent,/макет/);await v.L.network.refresh();assert.match(v.find('[data-net-summary]').textContent,/макет/);
  assert.equal(v.requests.some(r=>/stats|\/check/.test(r.path)),false,'step 1 performs no statistics or network probes');
+});
+for(const reopen of ['claude','codex','closed'])test('22c: saved chain after Escape updates only its row and the matching pristine dialog: '+reopen,opts,async()=>{
+ const gate=deferred<any>(),seen=deferred();let saved=false;
+ const fetcher=async(path:string,body?:any)=>{if(path==='/api/connections')return {ok:true,project:'/one',routes:['direct','proxy','iface'],providers:['claude','codex'].map(id=>({id,name:id,auth:{loggedIn:true},kind:'подписка',routable:true,route:{route:'direct',proxy:'',iface:'',label:'',expect:'',lastCheck:null},seats:[],models:1}))};if(path==='/api/network/providers/claude'&&body){saved=true;seen.resolve();await gate.promise;return {ok:true,provider:'claude',configured:true,exits:body.exits,revision:'saved'}}if(path==='/api/network/providers/claude'&&saved)return {ok:true,provider:'claude',configured:true,exits:['proxy'],revision:'saved'};return response(path)};
+ const v=ui(fetcher,true);await v.flush();const blocks=['#v-list','#v-roles','#v-keys'].map(s=>v.find(s));await v.click('[data-pv="claude"] .pay [data-net-chain="claude"]');assert.ok(v.find('#v-exits').classList.contains('on'));assert.equal(v.document.querySelector('.cbody [data-rapply]'),null);v.find('[data-net-add]').value='proxy';await v.click('[data-net-action="add"]');const saving=v.click('[data-net-action="save"]');await seen.promise;
+ await v.window.emit('keydown',{key:'Escape'});if(reopen!=='closed')await v.click('[data-pv="'+reopen+'"] .pay [data-net-chain="'+reopen+'"]');const other=reopen==='codex'?v.find('.network-dialog').textContent:null;gate.resolve({});await saving;await v.flush();assert.match(v.find('[data-pv="claude"] .pay').textContent,/Прокси A/);if(reopen==='closed')assert.equal(v.document.querySelector('.network-dialog'),null);if(reopen==='codex')assert.equal(v.find('.network-dialog').textContent,other);if(reopen==='claude')assert.match(v.find('.network-dialog').textContent,/Прокси A/);assert.equal(v.requests.filter(r=>r.body).length,1);assert.equal(v.requests.some(r=>r.path==='/api/connections/route'),false);for(const block of blocks)assert.ok(v.document.contains(block));
+});
+
+test('22d: owner edits rotation and silence; failed save preserves draft and stale receipt does not replace another edit',opts,async()=>{
+ const gate=deferred<any>(),seen=deferred();let hold=false,fail=true;
+ const v=ui(async(path,body)=>{if(body&&path.includes('/providers/')){if(fail)return {ok:false,code:'network_conflict',error:'Перечитайте цепочку'};if(hold){seen.resolve();return gate.promise}return {ok:true,provider:'claude',configured:true,exits:body.exits,policy:body.policy,revision:'next'}}return response(path)});await v.flush();v.L.network.setProviders('programs',[{id:'claude',title:'Claude'},{id:'codex',title:'Codex'}]);await v.flush();const holder=v.document.createElement('div');holder.innerHTML=v.L.network.card('claude')+v.L.network.card('codex');v.body.appendChild(holder);await v.click('[data-net-chain="claude"]');
+ const mode=v.find('[data-net-policy="mode"]');mode.value='rotation';await mode.emit('change');const minutes=v.find('[data-net-policy="rotationMinutes"]');minutes.value='5';await minutes.emit('input');const seconds=v.find('[data-net-policy="silenceSeconds"]');seconds.value='17';await seconds.emit('input');await v.click('[data-net-action="save"]');assert.match(v.find('[data-net-message]').textContent,/network_conflict/);assert.equal(v.find('[data-net-policy="rotationMinutes"]').value,'5');assert.deepEqual(JSON.parse(JSON.stringify(v.requests.filter(r=>r.body).at(-1)!.body.policy)),{mode:'rotation',rotationMinutes:5,silenceSeconds:17});
+ fail=false;hold=true;const saving=v.click('[data-net-action="save"]');await seen.promise;await v.window.emit('keydown',{key:'Escape'});await v.click('[data-net-chain="codex"]');const change=v.find('[data-net-policy="silenceSeconds"]');change.value='90';await change.emit('input');gate.resolve({ok:true,provider:'claude',configured:true,exits:[],policy:{mode:'rotation',rotationMinutes:5,silenceSeconds:17},revision:'next'});await saving;assert.equal(v.find('[data-net-policy="silenceSeconds"]').value,'90');
 });

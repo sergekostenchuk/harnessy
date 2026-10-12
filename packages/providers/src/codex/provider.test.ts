@@ -120,3 +120,10 @@ test('234: Codex call/result spans include successful tools and MCP approval-pol
  const h=codexHarness(t=>{const base=t.responder;t.responder=(m,p,t)=>{if(m!=='turn/start')return base(m,p,t);const id='turn-'+(++t.turn);queueMicrotask(()=>{for(const item of [{id:'cmd',type:'commandExecution',command:'pwd',status:'completed',exitCode:0},{id:'denied',type:'mcpToolCall',server:'panes',tool:'propose_seats',status:'failed',error:{message:'MCP tool call rejected by approval policy'}}]){t.notify('item/started',{threadId:'thread',turnId:id,item});t.notify('item/completed',{threadId:'thread',turnId:id,item})}t.notify('item/completed',{threadId:'thread',turnId:'foreign',item:{id:'foreign',type:'fileChange'}});t.notify('turn/completed',{threadId:'thread',turn:{id,status:'completed'}})});return {turn:{id}}}});
  const f=fixture(),traces:any[]=[];f.ctx.traceEvent=e=>traces.push(e);const provider=new CodexProvider(h.deps);try{await provider.runTurn(f.seat,'fixture',f.ctx);assert.equal(traces.length,4);assert.ok(traces.some(x=>x.id==='cmd'&&x.phase==='result'&&x.outcome==='ok'));assert.ok(traces.some(x=>x.id==='denied'&&x.phase==='result'&&x.outcome==='rejected'&&x.reason==='approval_policy'))}finally{await provider.close()}
 });
+
+test('22c: Codex reopens an unrouted process once, then keeps the stable relay across turns',{timeout:10000},async t=>{
+ const h=codexHarness(),f=fixture(),p=new CodexProvider(h.deps);t.after(()=>p.close());await p.runTurn(f.seat,'before routing',f.ctx);
+ f.ctx.env={HTTPS_PROXY:'http://127.0.0.1:19999',HTTP_PROXY:'http://127.0.0.1:19999',NO_PROXY:'localhost,127.0.0.1',NODE_OPTIONS:'--require /fixture/relay.cjs',NODE_USE_ENV_PROXY:'1',HARNESS_RELAY_PROXY:'http://127.0.0.1:19999'};
+ await p.runTurn(f.seat,'routed',f.ctx);assert.equal(h.transports.length,2);for(const [key,value]of Object.entries(f.ctx.env))assert.equal(h.options[1]!.env[key],value);
+ await p.runTurn(f.seat,'same listener, changed upstream',f.ctx);assert.equal(h.transports.length,2);assert.equal(f.revoked.length,1);
+});
