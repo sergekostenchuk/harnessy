@@ -1,5 +1,6 @@
 import {CliProvider} from './cli/provider.ts';
 import {readCliMetadata} from './cli/query.ts';
+import {executeCli} from './cli/process.ts';
 import {waitWithSignal} from './cancellation.ts';
 import {ProviderError,record,type TurnModes} from './types.ts';
 import {MODES} from './modes.ts';
@@ -12,7 +13,10 @@ export const OLLAMA_URL='http://127.0.0.1:11434';
 export const OLLAMA_LOGIN_UNKNOWN='программа не предоставляет проверку облачного входа без обращения к модели';
 // Measured 2026-10-12: --version 16 ms, /api/version 10 ms, /api/tags 6 ms. No inference in discovery.
 export const OLLAMA_TIMEOUT_MS=3000;
-const forbidden=['OLLAMA_API_KEY','OLLAMA_HOST','OLLAMA_BASE_URL','OPENAI_API_KEY','OPENAI_BASE_URL','CODEX_API_KEY'];
+const forbidden=['OLLAMA_API_KEY','OLLAMA_HOST','OLLAMA_BASE_URL','OPENAI_API_KEY','OPENAI_BASE_URL','CODEX_API_KEY','CODEX_OSS_BASE_URL','CODEX_OSS_PORT'];
+// Only OS/process context is inherited. Provider addresses, proxy variables and turn env cannot override loopback.
+const ambientNames=new Set(['PATH','HOME','USER','LOGNAME','SHELL','TMPDIR','TMP','TEMP','LANG','LC_ALL','LC_CTYPE','TERM','COLORTERM','NO_COLOR','CODEX_HOME','SSH_AUTH_SOCK','__CF_USER_TEXT_ENCODING','SystemRoot','SYSTEMROOT']);
+const ambientEnv=(env:NodeJS.ProcessEnv)=>Object.fromEntries(Object.entries(env).filter(([key,value])=>ambientNames.has(key)&&value!==undefined));
 const versionText=(v:unknown):v is string=>typeof v==='string'&&/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(v);
 const modelId=(v:unknown):v is string=>typeof v==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,179}$/.test(v);
 // CLI reports its client version as a warning when the daemon is absent or differs.
@@ -22,12 +26,13 @@ export interface OllamaOptions extends Partial<CliDependencies>{fetch?:typeof fe
 export class OllamaProvider extends CliProvider {
  private options:OllamaOptions;
  constructor(options:OllamaOptions={}){
+  const inherited=ambientEnv(options.env??process.env),execute=options.execute??executeCli;
   const descriptor:CliDescriptor={id:'ollama',name:'Ollama',binary:options.codexBinary??options.env?.CODEX_BIN??process.env.CODEX_BIN??'codex',login:{args:['signin']},version:{command:{args:['--version']},parse:r=>r.stdout},auth:{unavailableReason:OLLAMA_LOGIN_UNKNOWN},models:{list:[],reason:'модели из демона Ollama'},allowUnverifiedLogin:true,forbiddenEnv:forbidden,
    modes:Object.fromEntries(Object.entries(MODES).map(([mode,row])=>[mode,(i:CliTurnInput)=>['-s',mode==='check'&&i.seat.worktree?'workspace-write':row.sandbox,'-c','approval_policy='+tomlValue(row.approval)]])),
    turn:{format:'stream-json',decoder:codexExecStream,command:i=>({args:['exec','--oss','--local-provider','ollama','--json','--ignore-user-config','--ignore-rules','--skip-git-repo-check','-m',i.seat.model,'-c','developer_instructions='+tomlValue(i.roleNote+'\n'+(i.seat.mode==='chat'?CHAT_INSTRUCTIONS:codexTeamNote(i.seat,{peers:i.peers})+MODES[i.seat.mode].tail))],input:i.message})},
    resume:id=>{if(!/^[a-zA-Z0-9_-]{1,100}$/.test(id))throw new ProviderError('session_missing','Ollama: неверная сессия Codex');return ['resume',id,'-']},
    mcp:{serialize:s=>JSON.stringify(s),args:(_path,s,i)=>overrides(i.seat,{appUrl:s.env.APP_URL,peers:i.peers,writableRoots:i.writableRoots},s.env.PANE_TOKEN,[]).flatMap(v=>['-c',v])}
-  };super(descriptor,options);this.options=options;
+  };super(descriptor,{...options,execute:(request,signal,hooks)=>execute({...request,env:{...inherited,CODEX_OSS_BASE_URL:OLLAMA_URL+'/v1',NO_PROXY:'127.0.0.1,localhost,::1',no_proxy:'127.0.0.1,localhost,::1'}},signal,hooks)});this.options=options;
  }
  private async read(path:string,signal?:AbortSignal):Promise<unknown>{
   const stop=signal?AbortSignal.any([signal,AbortSignal.timeout(this.options.httpTimeoutMs??OLLAMA_TIMEOUT_MS)]):AbortSignal.timeout(this.options.httpTimeoutMs??OLLAMA_TIMEOUT_MS);
@@ -35,7 +40,7 @@ export class OllamaProvider extends CliProvider {
   catch(e){if(signal?.aborted)throw new ProviderError('cancelled','Ollama: чтение отменено');if(e instanceof ProviderError&&e.code!=='cancelled')throw e;throw new ProviderError('transport_lost','демон не запущен · нет связи с 127.0.0.1:11434; запустите ollama serve')}
  }
  async service():Promise<CatalogService>{try{const v=await this.read('/api/version');if(!record(v)||!versionText(v.version))throw new ProviderError('protocol','Ollama: неверная версия демона');return {ok:true,version:v.version}}catch(e){return {ok:false,reason:e instanceof ProviderError?e.vendorText:'демон не запущен',command:'ollama serve'}}}
- override async version(){return readCliMetadata(this.options.binary??'ollama',forbidden,{command:{args:['--version']},parse:r=>ollamaVersion(r.stdout)},{...this.options,probeTimeoutMs:this.options.probeTimeoutMs??OLLAMA_TIMEOUT_MS})}
+ override async version(){return readCliMetadata(this.options.binary??'ollama',forbidden,{command:{args:['--version']},parse:r=>ollamaVersion(r.stdout)},{...this.options,env:ambientEnv(this.options.env??process.env),probeTimeoutMs:this.options.probeTimeoutMs??OLLAMA_TIMEOUT_MS})}
 
  override async auth(signal?:AbortSignal):Promise<CliAuth>{const v=await this.read('/api/version',signal);if(!record(v)||!versionText(v.version))throw new ProviderError('protocol','Ollama: неверный ответ демона');return {loggedIn:false,state:'unknown',reason:OLLAMA_LOGIN_UNKNOWN}}
  override async models(signal?:AbortSignal):Promise<CliModel[]>{const v=await this.read('/api/tags',signal);if(!record(v)||!Array.isArray(v.models)||v.models.length>1000)throw new ProviderError('models_unavailable','Ollama: список моделей не прочитан');const seen=new Set<string>();return v.models.map(m=>{if(!record(m)||!modelId(m.name)||seen.has(m.name)||m.remote_model!==undefined&&!modelId(m.remote_model))throw new ProviderError('models_unavailable','Ollama: неверная модель');seen.add(m.name);return {id:m.name,label:m.name+' · '+(m.remote_model||/(?:[:\-])cloud$/.test(m.name)?'облако':'локально')}})}

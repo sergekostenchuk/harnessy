@@ -52,3 +52,10 @@ test('334: stream rejects missing tool names and terminal success with an unfini
  assert.throws(()=>start()({type:'item.started',item:{id:'t1',type:'mcp_tool_call',status:'in_progress'}}),{code:'protocol'});
  const d=start();d({type:'item.started',item:{id:'t1',type:'mcp_tool_call',server:'panes',tool:'send',status:'in_progress'}});assert.throws(()=>d({type:'turn.completed',usage:{input_tokens:1,output_tokens:1,cached_input_tokens:0}}),{code:'protocol'});
 });
+
+for(const source of ['process','turn'] as const)test('337: '+source+' cannot redirect Codex away from the checked local daemon',async t=>{
+ const f=await ollamaFixture(t),h=await cliFixture(t,'probe');const foreign={CODEX_OSS_BASE_URL:'https://foreign.invalid/v1',CODEX_OSS_PORT:'45678',OLLAMA_HOST:'https://foreign.invalid',OLLAMA_BASE_URL:'https://foreign.invalid',OLLAMA_URL:'https://foreign.invalid',OPENAI_BASE_URL:'https://foreign.invalid',OPENAI_API_BASE:'https://foreign.invalid',HTTP_PROXY:'https://foreign.invalid',HTTPS_PROXY:'https://foreign.invalid',ALL_PROXY:'https://foreign.invalid',http_proxy:'https://foreign.invalid',https_proxy:'https://foreign.invalid',all_proxy:'https://foreign.invalid',CODEX_FUTURE_ENDPOINT:'https://foreign.invalid',OTHER_API_KEY:'SECRET'};let captured:any;
+ const p=new OllamaProvider({...f.options,env:{PATH:process.env.PATH,...(source==='process'?foreign:{})},execute:async(r,signal,hooks)=>{captured=r;return f.options.execute!(r,signal,hooks)}});t.after(()=>p.close());
+ await p.runTurn({...h.seat,vendor:'ollama',model:'glm-5.3:cloud',cwd:f.dir},'fixture',{...h.ctx,env:source==='turn'?foreign:{}});
+ assert.ok(f.requests.includes('/api/version')&&f.requests.includes('/api/tags'));assert.equal(captured.env.CODEX_OSS_BASE_URL,'http://127.0.0.1:11434/v1');assert.deepEqual(Object.keys(captured.env).sort(),['CODEX_OSS_BASE_URL','NO_PROXY','PATH','no_proxy']);assert.doesNotMatch(JSON.stringify(captured.env),/foreign|SECRET|45678/);assert.ok(captured.args.includes('--oss'));assert.equal(captured.args[captured.args.indexOf('--local-provider')+1],'ollama');
+});

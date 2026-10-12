@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {ollamaEntry,OLLAMA_URL,type OllamaOptions} from './ollama.ts';
+import {executeCli} from './cli/process.ts';
 export async function ollamaFixture(t:TestContext,bridge=false){
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-ollama-'))),binary=join(dir,'ollama'),codexBinary=join(dir,'codex'),captureFile=join(dir,'calls.jsonl');
  let offline=false,tags:unknown={models:[{name:'glm-5.3:cloud',remote_model:'glm-5.3'},{name:'gemma4:latest'}]};const requests:string[]=[];
@@ -21,7 +22,8 @@ export async function ollamaFixture(t:TestContext,bridge=false){
  }
  for(const e of [{type:'thread.started',thread_id:'00000000-0000-4000-8000-000000000001'},{type:'turn.started'},{type:'item.started',item:{id:'tool-1',type:'mcp_tool_call',server:'panes',tool:'send',arguments:{text:'fixture'},status:'in_progress'}},{type:'item.completed',item:{id:'tool-1',type:'mcp_tool_call',server:'panes',tool:'send',result:{ok:true},status:'completed'}},{type:'item.completed',item:{id:'msg-1',type:'agent_message',text:'готов'}},{type:'turn.completed',usage:{input_tokens:12,cached_input_tokens:3,output_tokens:2}}])console.log(JSON.stringify(e));});`,{mode:0o700});
  const env={PATH:process.env.PATH,FIXTURE_LOG:captureFile,FIXTURE_BRIDGE:bridge?'1':'0',FIXTURE_TOML:createRequire(import.meta.url).resolve('smol-toml'),OLLAMA_API_KEY:'SECRET-API-KEY',OPENAI_API_KEY:'SECRET-OPENAI-KEY',OLLAMA_HOST:'https://must-not-use.invalid'};
- const options:OllamaOptions={binary,codexBinary,env,cwd:dir,temporaryDirectory:dir,fetch:((url,init)=>{if(!String(url).startsWith(OLLAMA_URL+'/api/'))throw Error('unexpected daemon address');return fetch(String(url).replace(OLLAMA_URL,'http://127.0.0.1:'+port),init)}) as typeof fetch},entry=ollamaEntry(options);
+ // Fixture controls are injected by the test executor after inspecting the production request, never allowlisted by the provider.
+ const options:OllamaOptions={binary,codexBinary,env,cwd:dir,temporaryDirectory:dir,execute:(r,s,h)=>executeCli({...r,env:{...r.env,FIXTURE_LOG:captureFile,FIXTURE_BRIDGE:env.FIXTURE_BRIDGE,FIXTURE_TOML:env.FIXTURE_TOML}},s,h),fetch:((url,init)=>{if(!String(url).startsWith(OLLAMA_URL+'/api/'))throw Error('unexpected daemon address');return fetch(String(url).replace(OLLAMA_URL,'http://127.0.0.1:'+port),init)}) as typeof fetch},entry=ollamaEntry(options);
  t.after(async()=>{await entry.close?.();server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));rmSync(dir,{recursive:true,force:true})});
  return {dir,entry,options,requests,setOffline(v:boolean){offline=v},setTags(v:unknown){tags=v},capture:():any[]=>existsSync(captureFile)?readFileSync(captureFile,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[]};
 }
