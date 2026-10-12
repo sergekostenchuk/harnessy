@@ -64,7 +64,8 @@ export class NetworkSettings {
  }
  private async receipt(exit:NetworkExit){const ref=slot(exit);let description=absent;if(ref)try{const value=await this.keys.describe(ref);description={present:value.present,mask:value.present?'••••••••':null,updatedAt:value.updatedAt}}catch{throw new ProjectError('credential_unavailable','Связка ключей недоступна',503)}return {config:exit,revision:networkRevision(exit),password:description}}
  async list(){await this.migrate();const config=this.settings.network();return Promise.all(Object.values(config.exits).map(exit=>this.receipt(exit)))}
- async save(id:string,raw:unknown,revision:unknown,secret?:unknown,use?:{provider:string;revision:unknown}){
+ async save(id:string,raw:unknown,revision:unknown,secret?:unknown,use?:{provider:string;revision:unknown;policy?:unknown}){
+  const usePolicy=use?.policy===undefined?defaultNetworkPolicy:validateNetworkPolicy(use.policy);
   const proposed=validateExit(raw);if(id!==proposed.id)networkInvalid();if(secret!==undefined&&secret!==null){password(secret);if(proposed.type!=='proxy')networkInvalid('Пароль допустим только для прокси')}
   if(secret===null&&proposed.type!=='proxy')networkInvalid('Пароль допустим только для прокси');
   await this.migrate();
@@ -80,9 +81,9 @@ export class NetworkSettings {
    }
    const after=slot(next),created=typeof secret==='string'?after:null;
    if(created)try{await this.put(created,secret as string)}catch(e){await this.erase([created]);throw e}
-   validateSshKey(next);config.exits[id]=next;if(use){config.chains[use.provider]=[id];(config.policies??={})[use.provider]=defaultNetworkPolicy}return {result:{next,before,after},rollback:()=>this.erase(created?[created]:[])};
+   validateSshKey(next);config.exits[id]=next;if(use){config.chains[use.provider]=[id];(config.policies??={})[use.provider]=usePolicy}const chain=use?{provider:use.provider,configured:true,exits:[id],policy:usePolicy,revision:chainRevision(config,use.provider)}:undefined;return {result:{next,before,after,chain},rollback:()=>this.erase(created?[created]:[])};
   });
-  if(result.before&&result.before!==result.after)await this.erase([result.before]);return this.receipt(result.next);
+  if(result.before&&result.before!==result.after)await this.erase([result.before]);return {...await this.receipt(result.next),...(result.chain?{chain:result.chain}:{})};
  }
  async removal(id:string){if(!validRoute(id))networkInvalid();await this.migrate();const config=this.settings.network(),exit=config.exits[id];if(!exit)throw new ProjectError('exit_unknown','Подключение не найдено',404);return {id,label:exit.label,revision:networkRevision(exit),...removal(config,id)}}
  async delete(id:string,revision:unknown,confirmation?:unknown){if(!validRoute(id))networkInvalid();await this.migrate();const ref=await this.settings.changeNetwork(async config=>{
