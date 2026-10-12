@@ -10,6 +10,15 @@ const absent:KeyDescription={present:false,mask:null,updatedAt:null};
 function slot(exit:NetworkExit|undefined){return exit?.type==='proxy'&&exit.passwordRef?keySlot(exit.passwordRef,exit.passwordGeneration):null}
 function password(value:unknown):asserts value is string {if(typeof value!=='string'||!value.length||Buffer.byteLength(value)>4096||/[\p{C}]/u.test(value))networkInvalid('Пароль: от 1 до 4096 байт, без управляющих символов')}
 function conflict(revision:unknown,value:unknown){if(revision!==networkRevision(value))throw new ProjectError('network_conflict','Настройки изменились; перечитайте выход или цепочку',409)}
+// Only the generated fallback name is upgraded; owner labels and exit IDs stay intact.
+function nameLegacyDirectExits(config:NetworkConfig){
+ let changed=false;
+ for(const exit of Object.values(config.exits)){
+  const vendor=/^legacy-(claude|codex)(?:-[1-9][0-9]*)?$/.exec(exit.id)?.[1];
+  if(exit.type==='direct'&&vendor&&exit.label===vendor){exit.label='Напрямую · прежний маршрут '+(vendor==='claude'?'Claude':'Codex');changed=true}
+ }
+ return changed;
+}
 export class NetworkSettings {
  private settings:Settings;private keys:KeyStore;private connections:Connections;private programs:()=>string[];
  constructor(settings:Settings,keys:KeyStore,connections:Connections,programs:()=>string[]){this.settings=settings;this.keys=keys;this.connections=connections;this.programs=programs}
@@ -19,9 +28,9 @@ export class NetworkSettings {
  private async put(ref:string,value:string){try{await this.keys.put(ref,value)}catch{throw new ProjectError('credential_unavailable','Связка ключей недоступна',503)}}
  // Run only at an owner network door. Legacy bytes remain available to the old traffic path until TS-22c.
  async migrate(){
-  if(this.settings.network().migrated)return;
+  const snapshot=this.settings.network();if(snapshot.migrated&&!nameLegacyDirectExits(snapshot))return;
   await this.settings.changeNetwork(async config=>{
-   if(config.migrated)return {result:undefined};
+   if(config.migrated){nameLegacyDirectExits(config);return {result:undefined}};
    return this.connections.withLegacyRoutes(async rows=>{
     const pending:{exit:NetworkExit;secret:string|undefined;vendor:string}[]=[];
     for(const vendor of ['claude','codex']){
@@ -42,7 +51,7 @@ export class NetworkSettings {
     const refs:string[]=[];
     try{for(const {exit,secret,vendor} of pending){if(secret!==undefined){const ref=slot(exit)!;refs.push(ref);await this.put(ref,secret)}config.exits[exit.id]=exit;config.chains[vendor]=[exit.id]}}
     catch(e){await this.erase(refs);throw e}
-    config.migrated=true;return {result:undefined,rollback:()=>this.erase(refs)};
+    nameLegacyDirectExits(config);config.migrated=true;return {result:undefined,rollback:()=>this.erase(refs)};
    });
   });
  }
