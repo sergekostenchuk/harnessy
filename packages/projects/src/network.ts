@@ -64,11 +64,12 @@ export class NetworkSettings {
  }
  private async receipt(exit:NetworkExit){const ref=slot(exit);let description=absent;if(ref)try{const value=await this.keys.describe(ref);description={present:value.present,mask:value.present?'••••••••':null,updatedAt:value.updatedAt}}catch{throw new ProjectError('credential_unavailable','Связка ключей недоступна',503)}return {config:exit,revision:networkRevision(exit),password:description}}
  async list(){await this.migrate();const config=this.settings.network();return Promise.all(Object.values(config.exits).map(exit=>this.receipt(exit)))}
- async save(id:string,raw:unknown,revision:unknown,secret?:unknown){
+ async save(id:string,raw:unknown,revision:unknown,secret?:unknown,use?:{provider:string;revision:unknown}){
   const proposed=validateExit(raw);if(id!==proposed.id)networkInvalid();if(secret!==undefined&&secret!==null){password(secret);if(proposed.type!=='proxy')networkInvalid('Пароль допустим только для прокси')}
   if(secret===null&&proposed.type!=='proxy')networkInvalid('Пароль допустим только для прокси');
   await this.migrate();
-  const result=await this.settings.changeNetwork(async config=>{
+  const result=await this.settings.changeNetwork(async(config,routes)=>{
+   if(use){if(!this.knownProvider(use.provider,routes))this.providerMissing();if(use.revision!==chainRevision(config,use.provider))throw new ProjectError('network_conflict','Настройки провайдера изменились; перечитайте их перед сохранением',409)}
    const previous=config.exits[id];conflict(revision,previous);let next=structuredClone(proposed);const before=slot(previous);
    if(next.type==='proxy'){
     // Echoing a version is allowed; selecting another exit's or obsolete secret is not.
@@ -79,7 +80,7 @@ export class NetworkSettings {
    }
    const after=slot(next),created=typeof secret==='string'?after:null;
    if(created)try{await this.put(created,secret as string)}catch(e){await this.erase([created]);throw e}
-   validateSshKey(next);config.exits[id]=next;return {result:{next,before,after},rollback:()=>this.erase(created?[created]:[])};
+   validateSshKey(next);config.exits[id]=next;if(use){config.chains[use.provider]=[id];(config.policies??={})[use.provider]=defaultNetworkPolicy}return {result:{next,before,after},rollback:()=>this.erase(created?[created]:[])};
   });
   if(result.before&&result.before!==result.after)await this.erase([result.before]);return this.receipt(result.next);
  }
