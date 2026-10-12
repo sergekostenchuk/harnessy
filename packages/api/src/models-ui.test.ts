@@ -40,7 +40,7 @@ function ui(options:{apiRoutes?:Data[];page?:string;room?:boolean;statusFetch?:(
    if(body&&result.ok)lastPane=result.pane;return {status:result.code==='capability_unsupported'?409:200,json:async()=>result};}};
  ctx.window=ctx;const context=createContext(ctx);
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function applyStatus(','  async function refreshChats(')+
-  '\nglobalThis.binding={api,sendBinding,bindingCurrent,invalidateBinding,configureSetting,applyStatus};',context);
+  '\nglobalThis.binding={networkMenu,networkPath,networkWarning,api,sendBinding,bindingCurrent,invalidateBinding,configureSetting,applyStatus};',context);
  ctx.LIVE={H,S,esc,...ctx.binding,...(options.apiRoutes?{apiRoutes:options.apiRoutes,loadLlmRoutes:async()=>true}:{}),save(){},log(){},toast:ctx.toast,paneName:(p:Data)=>p.label,busy:()=>false,hStatus(){},
   refreshStatus:async()=>{if(lastPane){Object.assign(H.pane,lastPane);await d.window.emit('live:status')}},
   subscribeLiveEvents(onmessage:(event:Data)=>void){const listener={onmessage,close(){listeners.delete(listener)}};listeners.add(listener);return listener}};
@@ -356,4 +356,13 @@ test('21g: actual model menu offers local daemon models and keeps cloud API rout
  const {ollamaFixture}=await import('../../providers/src/ollama-test-helpers.ts');const f=await ollamaFixture(t),h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry])}});await call(h.api,'/api/providers/ollama/check',{body:{}});
  const v=ui({apiRoutes:[{id:'api:cloud',title:'Ollama Cloud',kind:'apikey',installed:true,checking:false,models:[{id:'glm-5.3',label:'glm-5.3'}]}],fetch:async(path,body)=>(await call(h.api,path,{...(body?{body}:{})})).body});v.H.models.ollama=(await call(h.api,'/api/status')).body.models.ollama;v.H.turnModes.ollama={read:{ok:true}};v.H.turnModes['api:cloud']={read:{ok:true}};await v.open();await until(()=>!!v.document.querySelector('[data-cx-vendor="ollama"][data-cx-model="gemma4:latest"]'));
  assert.match(v.select('ollama','gemma4:latest').textContent,/локально/);assert.equal(v.document.querySelector('[data-cx-vendor="ollama"][data-cx-model="glm-5.3:cloud"]'),null);assert.ok(v.select('api:cloud','glm-5.3'));assert.equal(f.cloudReads,0);assert.equal(f.pulls.length,0);
+});
+
+test('23d: provider menu shows engine connection and typed unavailable cause, keeps model selectable and links the provider',async()=>{
+ const network={claude:{id:'nl',type:'ssh',label:'Нидерланды'},codex:null},v=ui({statusFetch:async()=>({project:'/project-a',panes:v.H.panes,models:v.H.models,turnModes:v.H.turnModes,network})});
+ v.H.pane.waiting={failure:{code:'network_unavailable',reason:'technical <img>'}};await v.open();const group=v.find('[data-cx-program="claude"]');assert.match(group.textContent,/через VPS «Нидерланды»/);assert.match(group.textContent,/не отвечает из вашей сети/);assert.equal(v.select('claude','shared').disabled,false);assert.match(v.find('[data-cx-program="claude"] .proxy-model-path a').getAttribute('href')!,/provider=claude&focus=network/);assert.equal(v.document.querySelector('[data-cx-program="codex"] .proxy-model-path'),null);
+});
+
+test('23d: menu login failure class, not free-form reason, labels unavailable providers',async()=>{
+ const v=ui();await v.open();const next:any=catalogue();next.providers[0].login={state:'error',failure:'unresponsive',reason:'REGION BLOCKED'};await v.providers(next);assert.match(v.find('[data-cx-program="claude"] .proxy-model-path').textContent,/не отвечает/);assert.doesNotMatch(v.find('[data-cx-program="claude"] .proxy-model-path').textContent,/регион|блокиров/);assert.equal(v.select('claude','shared').disabled,false);
 });

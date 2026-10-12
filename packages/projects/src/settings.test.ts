@@ -33,3 +33,13 @@ test('[r2:3] parallel settings patches via a file symlink preserve the link and 
  const target=join(t.root,'new','target.json'),dangling=join(t.root,'dangling.json');symlinkSync(target,dangling);await new Settings(dangling).patch('owner',{created:1});assert.equal(lstatSync(dangling).isSymbolicLink(),true);assert.deepEqual(readFileSync(dangling),readFileSync(target));
  }finally{t.close()}
 });
+
+
+test('23d r2: provider network generations persist across writers and never return after A-B-A or deletion',async()=>{
+ const t=temp();try{const path=join(t.root,'settings.json'),a=new Settings(path),b=new Settings(path);
+ const initial=a.networkGeneration('claude');await a.changeNetwork(async c=>{c.exits.p={id:'p',type:'proxy',label:'Proxy',url:'http://127.0.0.1:1'};c.chains.claude=['p'];return {result:undefined}});const first=a.networkGeneration('claude');assert.notEqual(first,initial);assert.equal(b.networkGeneration('claude'),first);
+ for(const port of [2,1])await b.changeNetwork(async c=>{const exit=c.exits.p!;if(exit.type==='proxy')exit.url='http://127.0.0.1:'+port;return {result:undefined}});assert.notEqual(a.networkGeneration('claude'),first);const restored=a.networkGeneration('claude');
+ await b.changeNetwork(async c=>{c.exits.other={id:'other',type:'direct',label:'Direct'};c.chains.codex=['other'];return {result:undefined}});assert.equal(a.networkGeneration('claude'),restored);
+ await b.changeNetwork(async c=>{delete c.chains.claude;return {result:undefined}});assert.notEqual(a.networkGeneration('claude'),initial);const deleted=a.networkGeneration('claude');await a.changeNetwork(async()=>({result:undefined}));assert.equal(a.networkGeneration('claude'),deleted);
+ }finally{t.close()}
+});

@@ -1,4 +1,4 @@
-import {validateNetwork,type NetworkConfig} from './network-config.ts';
+import {validateNetwork,advanceNetworkGenerations,networkGeneration,type NetworkConfig} from './network-config.ts';
 import {createHash} from 'node:crypto';
 import {validateResolvedRoutes,validRoute,LlmError,type ProviderConfig} from '@harnessy/llm';
 import {join,dirname} from 'node:path';
@@ -34,18 +34,19 @@ export class Settings {
    // Route and chain share this file and lock: publish their removal in one rename.
    if(value===undefined&&Object.hasOwn(owner,'network')){
     let network:NetworkConfig;try{network=validateNetwork(owner.network)}catch{throw new ProjectError('network_unreadable','Настройки выходов не читаются',409)}
-    delete network.chains['api:'+id];if(network.policies)delete network.policies['api:'+id];owner.network=network;
+    const before=structuredClone(network);delete network.chains['api:'+id];if(network.policies)delete network.policies['api:'+id];advanceNetworkGenerations(before,network);owner.network=network;
    }
    const rollback=await beforeSave?.();if(value===undefined)delete rows[id];else rows[id]=value;
    try{writeJson(path,{...owner,llmProviders:rows})}catch{if(rollback)await rollback();throw new ProjectError('write_failed','Настройки маршрута не записаны; изменения отменены',500)}return {config:value??null,revision:this.llmRevision(value)};
   });this.llmChanged();return result;
  }
  network(){try{return validateNetwork(this.readOwner().network)}catch(e){if(e instanceof ProjectError&&e.code==='iface_unsupported')throw e;throw new ProjectError('network_unreadable','Настройки выходов не читаются',409)}}
+ networkGeneration(provider:string){return networkGeneration(this.network(),provider)}
  async changeNetwork<T>(edit:(config:NetworkConfig,providers:Record<string,ProviderConfig>)=>Promise<{result:T;rollback?:()=>Promise<void>}>) {
   const path=canonicalPath(this.ownerFile);return withPathLock(path,async()=>{
    let owner:Record<string,unknown>,config:NetworkConfig;try{owner=this.readOwner(true,path);config=validateNetwork(owner.network)}catch{throw new ProjectError('network_unreadable','Настройки выходов не читаются',409)}
-   const before=JSON.stringify(config),changed=await edit(config,validateResolvedRoutes(owner.llmProviders??{}));
-   try{const next=validateNetwork(config);if(before!==JSON.stringify(next))writeJson(path,{...owner,network:next})}
+   const previous=structuredClone(config),before=JSON.stringify(config),changed=await edit(config,validateResolvedRoutes(owner.llmProviders??{}));
+   try{const next=validateNetwork(config);advanceNetworkGenerations(previous,next);if(before!==JSON.stringify(next))writeJson(path,{...owner,network:next})}
    catch(e){await changed.rollback?.();if(e instanceof ProjectError&&e.code==='network_invalid')throw e;throw new ProjectError('write_failed','Выходы не записаны; изменения отменены',500)}
    return changed.result;
   });

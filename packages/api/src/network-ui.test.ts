@@ -94,3 +94,12 @@ test('22h: fresh statistics update exit and provider metrics without replacing a
  assert.equal(v.find('[data-net-field="monthlyUsd"]'),field);assert.equal(field.value,'17');assert.equal(v.document.activeElement,field);
  const holder=v.document.createElement('div');holder.innerHTML=v.L.networkStats.mini('claude','provider');v.body.appendChild(holder);assert.match(holder.textContent,/1 ГБ/);
 });
+
+for(const provider of ['claude','api:custom'])test('23d: connection link opens and highlights exactly '+provider+' without mutation',opts,async()=>{
+ const v=ui(async path=>path==='/api/connections'?{ok:true,project:'/one',routes:['direct','proxy','iface'],providers:[{id:'claude',name:'Claude',kind:'подписка',auth:{loggedIn:true},models:1,seats:[],routable:true,route:{route:'direct',proxy:'',iface:'',label:'',expect:'',lastCheck:null}}]}:path==='/api/llm/providers'?{ok:true,providers:[{id:'custom',config:{displayName:'Custom',api:'openai-completions'},models:[],revision:'one'}],catalog:[]}:response(path),true,'/one','?provider='+encodeURIComponent(provider)+'&focus=network&project=%2Fone');await v.flush();
+ const card=v.find('[data-net-card="'+provider+'"]');assert.equal(card.classList.contains('proxy-network-focus'),true);if(provider==='claude')assert.equal(v.find('.ovl.on').classList.contains('on'),true);assert.equal(v.requests.some(r=>r.body),false);
+});
+
+test('23d: a provider deep link cannot open the same provider in another project',opts,async()=>{
+ const v=ui(async path=>path==='/api/llm/providers'?{ok:true,providers:[{id:'custom',config:{displayName:'Custom',api:'openai-completions'},models:[],revision:'one'}],catalog:[]}:response(path),true,'/two','?provider=api%3Acustom&focus=network&project=%2Fone');await v.flush();assert.equal(v.document.querySelector('.proxy-network-focus'),null);assert.equal(v.requests.some(r=>r.body),false);
+});

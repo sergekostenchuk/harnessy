@@ -89,12 +89,12 @@
     for(const p of response.providers){
       if(!p||!text(p.id)||ids.has(p.id)||!text(p.title)||!['subscription','apikey','local'].includes(p.kind)||!Array.isArray(p.models)||p.installed!==null&&typeof p.installed!=='boolean'||typeof p.checking!=='boolean')return null;
       ids.add(p.id);const models=[],seen=new Set();for(const m of p.models){if(!m||!text(m.id)||!text(m.label)||seen.has(m.id))return null;seen.add(m.id);models.push({id:m.id,label:m.label})}
-      rows.push({id:p.id,title:p.title,kind:p.kind,subtitle:typeof p.subtitle==='string'?p.subtitle:'',installed:p.installed,checking:p.checking===true,models,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''});
+      rows.push({id:p.id,title:p.title,loginFailure:['region','blocked','offline','unresponsive'].includes(p.login?.failure)?p.login.failure:null,kind:p.kind,subtitle:typeof p.subtitle==='string'?p.subtitle:'',installed:p.installed,checking:p.checking===true,models,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''});
     }return rows;
   }
   function modelGroups(panel=pop){const metadata=[...(panel&&panel.__models&&panel.__models.rows||[]),...(L.apiRoutes||[])];
     const groups=[...new Set([...Object.keys(H.models||{}),...metadata.map(p=>p.id)])].filter(id=>!id.startsWith('api:')||metadata.some(p=>p.id===id)).map(id=>{const detail=metadata.find(p=>p.id===id),models=detail&&id.startsWith('api:')?detail.models:Array.isArray(H.models&&H.models[id])?H.models[id]:[];
-      return {id,vendor:id,title:detail?detail.title:id,kind:detail?detail.kind:null,subtitle:detail?detail.subtitle:'',availability:detail&&(detail.installed===null||detail.checking)?'проверяется…':detail&&detail.installed===false?'не установлена':'',modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id,via:m.via,viaStatus:m.viaStatus}))};});
+      return {id,vendor:id,loginFailure:detail?.loginFailure,title:detail?detail.title:id,kind:detail?detail.kind:null,subtitle:detail?detail.subtitle:'',availability:detail&&(detail.installed===null||detail.checking)?'проверяется…':detail&&detail.installed===false?'не установлена':'',modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id,via:m.via,viaStatus:m.viaStatus}))};});
     const codex=groups.find(g=>g.id==='codex'),routed=codex?codex.models.filter(m=>m.via==='provider-router'):[];
     if(routed.length){codex.models=codex.models.filter(m=>m.via!=='provider-router');groups.splice(groups.indexOf(codex)+1,0,{id:'provider-router',vendor:'codex',title:'provider-router',kind:'local',subtitle:'локально · через Codex',availability:codex.availability,modelsReason:'',models:routed})}return groups;
   }
@@ -125,7 +125,7 @@
   }
   async function loadModels(panel){if(!modelsCurrent(panel))return;
     const state=panel.__models||(panel.__models={rows:null,error:'',loading:false,saving:false,request:0,revision:0,modes:modeStamp(),events:null});
-    if(!state.events&&typeof L.subscribeLiveEvents==='function')state.events=L.subscribeLiveEvents(e=>{let ev;try{ev=JSON.parse(e.data)}catch{return}if(['providers','llm.routes'].includes(ev.type)&&(!ev.project||ev.project===panel.__binding.project)&&modelsCurrent(panel))void loadModels(panel)});
+    if(!state.events&&typeof L.subscribeLiveEvents==='function')state.events=L.subscribeLiveEvents(e=>{let ev;try{ev=JSON.parse(e.data)}catch{return}if(['providers','llm.routes','networkRoute','state'].includes(ev.type)&&(!ev.project||ev.project===panel.__binding.project)&&modelsCurrent(panel))void loadModels(panel)});
     const request=++state.request;state.loading=true;state.error='';redrawModels(panel);let r=null;
     try{if(H.on){if(L.loadLlmRoutes)await L.loadLlmRoutes();if(!modelsCurrent(panel)||request!==state.request)return;r=await L.api('/api/providers/catalog')}}catch{}
     if(!modelsCurrent(panel)||request!==state.request)return;state.loading=false;const rows=modelRows(r);
@@ -133,7 +133,7 @@
       try{status=await L.api('/api/status')}catch{}
       if(!modelsCurrent(panel)||request!==state.request||stamp!==modeStamp())return;
       if(status&&status.project===panel.__binding.project&&Array.isArray(status.panes)&&status.models&&typeof status.models==='object'&&!Array.isArray(status.models)){
-        H.models=status.models;H.turnModes=status.turnModes&&typeof status.turnModes==='object'&&!Array.isArray(status.turnModes)?status.turnModes:{};modelsStatus();
+        H.models=status.models;H.network=status.network||{};H.networkError=status.networkError||null;H.turnModes=status.turnModes&&typeof status.turnModes==='object'&&!Array.isArray(status.turnModes)?status.turnModes:{};modelsStatus();
       }else state.error='Не удалось обновить статус моделей';
     }
     else state.error=typeof (r&&r.error)==='string'?r.error:H.on?'ответ каталога недоступен или неполон':'движок не подключён';
@@ -192,7 +192,7 @@
         (!state||state.loading?note('Читаю каталог моделей…'):'')+(state&&state.error?'<div class="cx-note" role="status">Каталог моделей не прочитан · '+esc(state.error)+'. <button type="button" class="btn sm ghost" data-cx-model-retry>Повторить</button></div>':'')+
         (state&&state.failure?'<div class="cx-note" data-cx-model-error role="status">'+esc(state.failure)+(state.loginRequired?' · <a href="11-connections.html">Открыть «Подключения»</a>':'')+'</div>':'')+(state&&state.accessNotice?note(esc(state.accessNotice)):'')+
         rows.map((g,i)=>{const models=g.models;
-          return '<div class="cx-grp'+(g.vendor===sv&&g.models.some(m=>m.id===cur)||!sv&&i===0||state&&state.accessGroup===g.id?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+(g.subtitle?esc(g.subtitle)+' · ':g.kind?connectionKind(g.kind)+' · ':'')+(g.availability?esc(g.availability):modelsN(g.models.length))+'</small></div>'+groupAccessHTML(g,state)+'<div class="cx-sub">'+
+          return '<div class="cx-grp'+(g.vendor===sv&&g.models.some(m=>m.id===cur)||!sv&&i===0||state&&state.accessGroup===g.id?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+(g.subtitle?esc(g.subtitle)+' · ':g.kind?connectionKind(g.kind)+' · ':'')+(g.availability?esc(g.availability):modelsN(g.models.length))+'</small></div>'+(L.networkMenu?L.networkMenu(g):'')+groupAccessHTML(g,state)+'<div class="cx-sub">'+
             (g.modelsReason?note(esc(g.modelsReason)):'')+models.map(m=>{const support=modelSupport(g.vendor,m),disabled=!support.ok||!!(state&&state.saving);return '<button type="button" class="cx-row cx-model'+(m.id===cur&&g.vendor===sv?' on':'')+(disabled?' dis':'')+'" data-cx-model="'+esc(m.id)+'" data-cx-vendor="'+esc(g.vendor)+'" data-cx-group="'+esc(g.id)+'" data-q="'+esc(g.title+' '+m.label+' '+m.id)+'"'+(disabled?' disabled':'')+'><span class="cx-model-text"><b>'+esc(m.label)+'</b></span>'+(m.id===cur&&g.vendor===sv?'<span class="ck">✓</span>':'')+'</button>'}).join('')+'</div></div>';
         }).join('')+(!rows.length?note('В статусе пока нет списка моделей.'):'' )+
         note('Смена модели сохраняет разговор. Контекст можно перенести.')+hd('Размышления','для выбранной модели')+'<div class="cx-seg dis"><span>выкл</span><span class="on">адаптивно</span><span>вкл</span></div>'+note('Усилие и размышления пока недоступны: харнесс не передаёт их месту.');},

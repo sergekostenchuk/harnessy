@@ -230,6 +230,20 @@ html[data-m][data-page="conn"] .row .pay{flex:1 1 100%;margin-left:44px;max-widt
 
 
 .proxy-choice-row input[type="radio"]{appearance:none;border:1px solid var(--line);border-radius:50%;background:transparent}.proxy-choice-row input[type="radio"]:checked{border-color:var(--accent);background:radial-gradient(circle,var(--accent) 0 4px,transparent 4.5px)}.proxy-choice-row input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.proxy-choice-row b{font-weight:500}.proxy-provider-overview>.proxy-connection-block{margin:0}.proxy-provider-overview{margin-top:16px}
+
+/* TS-23d: connection evidence belongs to the answer, failures offer recovery. */
+.proxy-chat-card{padding:18px 20px;border:1px solid var(--line);border-radius:14px;background:var(--paper,var(--bg));margin:12px 0;font-size:13px;line-height:1.55}
+.proxy-chat-card h3{font-size:17px;margin:0 0 8px;color:var(--ink)}
+.proxy-chat-card p{margin:6px 0 12px;color:var(--ink2)}
+.proxy-chat-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.proxy-chat-card details{margin-top:12px;color:var(--ink3);font-size:12px;overflow-wrap:anywhere}
+.proxy-chat-card summary{cursor:pointer}.proxy-chat-actions a.btn{text-decoration:none}.proxy-answer-path{display:block;font-size:11px;color:var(--ink3);margin-top:4px;font-weight:400}
+.proxy-answer-warning{border-left:2px solid var(--accent,var(--ink3));padding:8px 12px;margin:10px 0 14px;font-size:12px;color:var(--ink2);background:var(--bg)}
+.proxy-model-path{font-size:11px;color:var(--ink3);padding:0 14px 8px 30px;line-height:1.5}.proxy-model-path a{display:block;color:var(--accent,var(--ink));text-decoration:none}
+[data-net-card].proxy-network-focus{outline:2px solid var(--accent,var(--ink));outline-offset:6px;scroll-margin:24px}
+
+html[data-proto][data-page="chat"] .main:has(>#live-waiting){grid-template-rows:auto auto minmax(0,1fr) auto}
+html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px)!important}
 </style></head>
 <body><div class="sheet">
   <h1>Harnessy · лист 00 · дизайн-код</h1>
@@ -537,6 +551,14 @@ html[data-m][data-page="conn"] .row .pay{flex:1 1 100%;margin-left:44px;max-widt
 <div class="two">
   <div class="box"><div class="cap2">так говорим</div><p style="margin:0;font-size:12.5px;color:var(--ink2)">Прокси · VPS · «через что подключаемся» · «напрямую — сервис видит ваш адрес» · «если не ответит — через …» · «менять каждые N минут» · «работает / не отвечает» · страна и адрес после проверки · «через него ходят: Claude, Codex».</p></div>
   <div class="box"><div class="cap2">так не говорим</div><p style="margin:0;font-size:12.5px;color:var(--ink3)">выход · цепочка · маршрут провайдера · ретранслятор · привязка · revision · ожидаемый IP · ID выхода · коды вроде project_changed в заголовке. Технические причины — только под «подробнее».</p></div>
+</div>
+<div data-proxy-chat-design class="box" style="margin-top:16px">
+<div class="cap2">Чат и меню модели · кадры 1, 7, 8</div>
+<article class="proxy-chat-card"><h3>Claude не отвечает из вашей сети</h3><p>Нет связи с сервисом. Подключите прокси или свой VPS и повторите ход.</p><div class="proxy-chat-actions"><button class="btn p" disabled>Подключить через прокси или VPS</button><button class="btn ghost" disabled>Повторить</button><button class="btn ghost" disabled>Пропустить</button></div><details><summary>подробнее</summary>Техническая причина от движка.</details></article>
+<div class="thought">Claude · ответ<span class="proxy-answer-path">через VPS «Нидерланды»</span></div><div class="proxy-answer-warning">VPS «Основной» не ответил — ход пошёл через запасной «Нидерланды»</div><p>Ответ модели остаётся видимым.</p>
+<article class="proxy-chat-card"><h3>Остановились: ни один прокси не отвечает</h3><p>Этот ход не отправлен. Проверьте подключение или разрешите отправить его напрямую один раз.</p><div class="proxy-chat-actions"><button class="btn" disabled>Повторить</button><button class="btn ghost" disabled>Настроить</button><button class="btn ghost" disabled>Пустить напрямую один раз</button></div><small>Сервис увидит ваш адрес · только этот ход.</small></article>
+<div class="proxy-model-path">через VPS «Нидерланды»<br>Не отвечает из вашей сети<a>Подключить через прокси или VPS →</a></div>
+<p class="conn-note">Регион, блокировку и отсутствие связи определяет типизированный код движка. Иначе «не отвечает». Подпись ответа — сохранённое подключение этого хода. Сетевая ошибка не отключает выбор моделей. Прямой повтор не меняет настройки и не захватывает более поздние сообщения.</p>
 </div>
 <div data-login-recovery-design class="box" style="margin-top:16px">
 <div class="cap2">Первый запуск и «+ Подключить» · кадр 10</div>

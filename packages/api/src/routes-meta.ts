@@ -2,7 +2,7 @@ import {join} from 'node:path';
 import {statSync} from 'node:fs';
 import {MODES,pyTruthy} from '@harnessy/team';
 import {KINDS,SYSTEM_KINDS} from '@harnessy/journal';
-import {projectsRoot,validDir,ROUTES,billingSnapshot} from '@harnessy/projects';
+import {projectsRoot,validDir,ROUTES,billingSnapshot,ProjectError} from '@harnessy/projects';
 import {RuntimeError,promotionIdentity,type Runtime,type ProjectState} from '@harnessy/runtime';
 import {limitPlan} from '@harnessy/providers';
 import {CLAUDE_MODELS,CODEX_FALLBACK} from './catalog.ts';
@@ -41,7 +41,9 @@ export function metaRoutes(r:Runtime,router:RouterSource={health:routerHealthRea
  {method:'GET',path:'/api/spend/turns',style:'J',handle:async({query})=>json(await spendTurns(r,query))},
  {method:'GET',path:'/api/status',handle:async()=>{
  const {p,claude,codex,models:rawModels}=await metadata(r),models=await routedModels(p,rawModels),programs=r.providerOperations.modelSnapshot(),api=r.apiModelSnapshot();
- return json({project:p.dir,trace:{instanceId:p.trace.instanceId,...p.trace.status},defaultDir:r.defaultDir,limits:r.limitsSnapshot(),models:{...programs.models,...api.models,claude:CLAUDE_MODELS,codex:models},turnModes:{...programs.turnModes,...api.turnModes,claude:{read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true},check:{ok:true},web:{ok:true},ask:{ok:true}},codex:{read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true},check:{ok:true},web:{ok:true},ask:{ok:true}}},modes:MODES,kinds:KINDS,
+ let network:Record<string,ReturnType<Runtime['networkRelay']['summary']>>|null=null,networkError:{code:string;reason:string}|null=null;
+ try{network=Object.fromEntries([...new Set(['claude','codex',...Object.keys(programs.models),...Object.keys(api.models)])].map(id=>[id,r.networkRelay.summary(id)]))}catch(e){if(!(e instanceof ProjectError))throw e;networkError={code:e.code,reason:e.message}}
+ return json({project:p.dir,network,networkError,trace:{instanceId:p.trace.instanceId,...p.trace.status},defaultDir:r.defaultDir,limits:r.limitsSnapshot(),models:{...programs.models,...api.models,claude:CLAUDE_MODELS,codex:models},turnModes:{...programs.turnModes,...api.turnModes,claude:{read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true},check:{ok:true},web:{ok:true},ask:{ok:true}},codex:{read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true},check:{ok:true},web:{ok:true},ask:{ok:true}}},modes:MODES,kinds:KINDS,
  ownerKinds:['task','question','note','stop','resume','decision'],lineErrors:[...p.lineErrors,...(api.apiError?[api.apiError.reason]:[])],apiError:api.apiError,policy:{version:p.policy?.version??null,path:p.policy?.path??null},
  team:{path:p.team?join(p.team.harnessDir,'team.yaml'):null,integrationBranch:p.team?.integrationBranch??null,mergeRoles:p.team?.mergeRoles??[]},repo:p.repoRoot,
  panes:[...p.registry.panes.values()].map(pane=>({...pane.settings(),settingsBinding:r.paneBinding(pane.id,p),pending:p.journal.pendingFor(pane.id).length,status:pane.status,waiting:r.waiting(pane.id)})),
