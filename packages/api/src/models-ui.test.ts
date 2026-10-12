@@ -207,3 +207,29 @@ test('317: cold program is visible even without an entry in status.models and ne
  const v=ui({fetch:async()=>next});delete v.H.models.gemini;await v.open();
  assert.match(v.find('[data-cx-program="gemini"]').textContent,/проверяется…/);assert.equal(v.document.querySelector('[data-cx-vendor="gemini"]'),null);
 });
+
+for(const room of [false,true])test('316: explicit via groups routed models, while selection still uses Codex ('+(room?'room':'seat')+')',async()=>{
+ const v=ui({room});v.H.models.codex=[{id:'gpt-routed',label:'Routed GPT',via:'provider-router',viaStatus:{ok:true}},{id:'qwen-unrelated',label:'Native catalogue model'},{id:'cloud:any',label:'Cloud',via:'provider-router',viaStatus:{ok:true}}];await v.open();
+ const routed=v.find('[data-cx-program="provider-router"]'),native=v.find('[data-cx-program="codex"]');assert.match(routed.textContent,/provider-router.*локально · через Codex/);assert.equal(routed.querySelectorAll('[data-cx-model]').length,2);assert.equal(native.querySelectorAll('[data-cx-model]').length,1);assert.ok(native.querySelector('[data-cx-model="qwen-unrelated"]'));
+ await v.select('codex','gpt-routed').emit('click');const sent=v.requests.find(r=>r.body?.model==='gpt-routed')!;assert.equal(sent.path,room?'/api/room':'/api/panes/worker');assert.equal(sent.body!.vendor,'codex');
+});
+
+test('316: router models inherit Codex capability refusals and vanish from the group when metadata is absent',async()=>{
+ const v=ui();v.H.models.codex=[{id:'opaque',label:'Opaque',via:'provider-router',viaStatus:{ok:true}}];v.H.turnModes.codex.read={ok:false,reason:'provider disabled'};await v.open();const button=v.select('codex','opaque');assert.equal(button.disabled,true);assert.match(button.textContent,/provider disabled/);await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+ v.H.models.codex=[{id:'opaque',label:'Opaque'}];await v.status();assert.equal(v.document.querySelector('[data-cx-program="provider-router"]'),null);assert.ok(v.find('[data-cx-program="codex"] [data-cx-model="opaque"]'));
+});
+
+for(const page of ['chat','new'])test('328: '+page+' keeps offline router models visible and disabled from real HTTP status; recovery restores selection',async t=>{
+ let offline=false;const models=[{id:'gpt-routed',label:'Routed GPT'},{id:'qwen-native',label:'Native custom'}],h=await fixture(t,{deps:{models:{codex:models}},router:{models:()=>({ok:true,models:['gpt-routed']}),health:async()=>offline?{ok:false,reason:'/health: HTTP 503'}:{ok:true,models:['gpt-routed'],families:['gpt']}}});h.codex.models=async()=>models;
+ const pending=new Set<Promise<Data>>(),get=(path:string,body?:Data)=>{const p=call(h.api,path,body?{body}:{}).then(r=>r.body);pending.add(p);void p.finally(()=>pending.delete(p));return p},settle=async()=>{do{await Promise.all([...pending]);await immediate()}while(pending.size)};
+ const initial=await get('/api/status'),v=ui({page,room:page==='new',fetch:get,statusFetch:()=>get('/api/status')});v.H.project=initial.project;v.ctx.binding.applyStatus(initial,null);await v.open();await settle();assert.equal(v.select('codex','gpt-routed').disabled,false);
+ offline=true;await v.providers(catalogue());await settle();
+ assert.ok(v.find('[data-cx-program="provider-router"]'));const unavailable=v.select('codex','gpt-routed');assert.equal(unavailable.disabled,true);assert.match(unavailable.textContent,/provider-router не отвечает: \/health: HTTP 503/);assert.equal(v.select('codex','qwen-native').disabled,false);
+ unavailable.disabled=false;await unavailable.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0,'forged enabled DOM cannot bypass engine availability');
+ offline=false;await v.providers(catalogue());await settle();assert.equal(v.select('codex','gpt-routed').disabled,false);await v.select('codex','gpt-routed').emit('click');await settle();
+ assert.deepEqual(v.requests.filter(r=>r.body),[{path:page==='new'?'/api/room':'/api/panes/worker',body:page==='new'?{model:'gpt-routed',vendor:'codex',folder:true}:{vendor:'codex',model:'gpt-routed'}}]);assert.equal(h.codex.calls.length+h.provider.calls.length,0);
+});
+
+for(const viaStatus of [undefined,{}, {ok:'true'}, {ok:false}])test('328: missing or malformed router availability cannot enable a routed model: '+JSON.stringify(viaStatus),async()=>{
+ const v=ui();v.H.models.codex=[{id:'opaque',label:'Opaque',via:'provider-router',viaStatus}];await v.open();const button=v.select('codex','opaque');assert.equal(button.disabled,true);assert.match(button.textContent,/provider-router не отвечает/);await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+});
