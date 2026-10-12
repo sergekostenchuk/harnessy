@@ -39,7 +39,7 @@ test('21b: pending permission cannot write after cancellation, denial or an inte
 
 test('21b: shell receives a clean environment and enforces actual time/output limits; peer tools preserve role denials',async t=>{
  const h=agentFixture(t);h.seat.mode='all';h.ctx.env={HTTPS_PROXY:'http://fixture-secret.invalid'};const seen:any[]=[];const fake=new AgentTools(h.seat,h.ctx,h.controller.signal,async(req)=>{seen.push(req);return {stdout:'ok',stderr:'',code:0,signal:null}});
- await fake.call('shell',{command:'pwd',timeout_ms:50});assert.equal(seen[0].cwd,h.dir);assert.deepEqual(Object.keys(seen[0].env).sort(),['HOME','LANG','PATH']);assert.equal(seen[0].maxBytes,65536);assert.equal(seen[0].timeoutMs,50);
+ await fake.call('shell',{command:'pwd',timeout_ms:50});assert.equal(seen[0].cwd,h.dir);assert.deepEqual(Object.keys(seen[0].env).sort(),['HOME','LANG','PATH','TEMP','TMP','TMPDIR']);assert.equal(seen[0].binary,'/usr/bin/sandbox-exec');assert.deepEqual(seen[0].args.slice(2),['/bin/sh','-c','pwd']);assert.equal(seen[0].maxBytes,65536);assert.equal(seen[0].timeoutMs,50);
  const real=new AgentTools(h.seat,h.ctx,h.controller.signal);assert.equal((await real.call('shell',{command:'while :; do :; done',timeout_ms:10})).ok,false);assert.equal((await real.call('shell',{command:'yes overflow',timeout_ms:3000})).ok,false);
  h.ctx.tools.createSeats=async()=>({ok:false,code:'role_denied',error:'только оркестратор'});assert.deepEqual(await real.call('create_seats',{proposalId:'p123456',version:1}),{ok:false,code:'role_denied',error:'только оркестратор'});
  assert.equal((await real.call('write_file',{path:'a',text:'x',extra:true})).ok,false);assert.equal(existsSync(join(h.dir,'a')),false);

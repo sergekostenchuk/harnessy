@@ -11,6 +11,14 @@ type Call=Extract<ContentBlock,{type:'tool-call'}>;
 export interface ApiAgentOptions {service:()=>LlmService;maxSteps?:number;maxToolCalls?:number;shell?:CliExecutor;wait?:(ms:number,signal:AbortSignal)=>Promise<void>}
 function stopped(signal:AbortSignal){if(signal.aborted)throw new ProviderError('cancelled','Ход отменён')}
 const usageEmpty=():Usage=>({input:null,output:null,cacheRead:null});
+function protectMessage(service:LlmService,message:Message):Message {
+ const safe=service.redact(message);
+ for(const kind of ['text','reasoning'] as const){const filter=service.textRedactor();let last:Extract<ContentBlock,{type:typeof kind}>|undefined;
+  message.content.forEach((block,index)=>{if(block.type===kind){const target=safe.content[index] as Extract<ContentBlock,{type:typeof kind}>;target.text=filter.push(block.text);last=target}});
+  if(last)last.text+=filter.finish();
+ }
+ return safe;
+}
 
 /** One Harnessy turn owns the service and tool loop. Native agent sessions are
  * never created: the runtime supplies the saved Harnessy conversation next turn. */
@@ -40,23 +48,24 @@ export class ApiAgent implements Provider {
   try{
    unsubscribe=service.onRoutesChanged(()=>{let current:string|undefined;try{current=JSON.stringify(service.routes()[this.route])}catch{}if(current!==route){changed=true;controller.abort()}});
    stopped(signal);if(!Number.isSafeInteger(maxSteps)||maxSteps<1||maxSteps>256||!Number.isSafeInteger(maxCalls)||maxCalls<1||maxCalls>1024)throw new ProviderError('protocol','Неверные пределы агентного цикла');
-   const tools=new AgentTools(seat,ctx,signal,this.options.shell);
+   const tools=new AgentTools(seat,ctx,signal,this.options.shell,service.redact);
    ctx.setHandle({interrupt:async()=>controller.abort(),steer:async()=>{throw new ProviderError('unknown_request','Сообщение будет передано следующим ходом Harnessy')}});
    for(let step=0;step<maxSteps;step++){
     const policy=service.retryPolicy(this.route);let finish:Finish|undefined;
     for(let retry=0;;retry++){
      stopped(signal);await untilAbort(signal,async()=>ctx.beforeModel?.({provider:this.vendor,model:seat.model}));stopped(signal);
      if(!started){ctx.modelStarted?.();started=true}
-     let emitted='',bytes=0;finish=undefined;pendingRequest=true;
+     let emitted='',bytes=0,sawText=false;const filter=service.textRedactor(),publish=(value:string)=>{if(!value)return;if(!emitted&&text){text+='\n\n';ctx.publish({type:'delta',text:'\n\n'})}emitted+=value;text+=value;if(text.length>1024*1024)throw new ProviderError('protocol','Текст хода превысил предел');ctx.publish({type:'delta',text:value})};finish=undefined;pendingRequest=true;
      for await(const chunk of cancellable(service.stream({provider:this.route,model:seat.model,messages:structuredClone(messages),tools:tools.definitions,signal}),signal)){
       stopped(signal);if(finish)throw new ProviderError('protocol','Событие после завершения ответа API');
       bytes+=Buffer.byteLength(JSON.stringify(chunk));if(bytes>4*1024*1024)throw new ProviderError('protocol','Ответ API превысил предел');
       if(chunk.type==='text-delta'){
-       if(!emitted&&text){text+='\n\n';ctx.publish({type:'delta',text:'\n\n'})}emitted+=chunk.text;text+=chunk.text;if(text.length>1024*1024)throw new ProviderError('protocol','Текст хода превысил предел');ctx.publish({type:'delta',text:chunk.text});
+       sawText||=chunk.text.length>0;publish(filter.push(chunk.text));
       }
       if(chunk.type==='finish')finish=chunk;
      }
      stopped(signal);if(!finish)throw new ProviderError('protocol','Поток API завершился без конечного исхода');
+     publish(filter.finish());finish={...finish,...(finish.failure?{failure:service.redact(finish.failure)}:{}),...(finish.message?{message:protectMessage(service,finish.message)}:{})};
      pendingRequest=false;if(finish.usage){for(const value of Object.values(finish.usage))if(!Number.isSafeInteger(value)||value<0)throw new ProviderError('protocol','Неверный учёт токенов API');measured=true;usage.input+=finish.usage.input+finish.usage.cacheWrite;usage.output+=finish.usage.output;usage.cacheRead+=finish.usage.cacheRead;if(Object.values(usage).some(v=>!Number.isSafeInteger(v)))throw new ProviderError('protocol','Учёт токенов вне допустимого диапазона')}else unknownUsage=true;
      if(finish.reason==='cancelled')throw new ProviderError('cancelled','Вызов модели отменён');
      if(finish.reason!=='error'){
@@ -66,7 +75,7 @@ export class ApiAgent implements Provider {
       if(!emitted&&finalText){const addition=(text?'\n\n':'')+finalText;if(text.length+addition.length>1024*1024)throw new ProviderError('protocol','Текст хода превысил предел');text+=addition;ctx.publish({type:'delta',text:addition})}break;
      }
      const failure=finish.failure;if(!failure)throw new ProviderError('protocol','Нет причины отказа API');
-     if(!failure.retryable||emitted||policy.mode!=='always'&&retry>=(policy.maxRetries??5))throw this.failed(failure);
+     if(!failure.retryable||sawText||policy.mode!=='always'&&retry>=(policy.maxRetries??5))throw this.failed(failure);
      const base=Math.min(policy.maxDelayMs??30000,(policy.initialDelayMs??1000)*2**Math.min(retry,20)),jitter=policy.jitterRatio??.2,ms=Math.max(1,Math.round(base*(1+jitter*(Math.random()*2-1))));
      ctx.traceEvent?.({id:'api-retry-'+step+'-'+retry,name:'api.retry',phase:'warning',reason:failure.code});
      await untilAbort(signal,()=>this.options.wait?this.options.wait(ms,signal):delay(ms,undefined,{signal}));
@@ -75,7 +84,7 @@ export class ApiAgent implements Provider {
     if(finish.reason!=='tool-calls'){if(toolCalls.length)throw new ProviderError('protocol','Вызовы инструментов без разрешающего исхода API');receipt();return {text,sessionId:null}}
     if(!toolCalls.length||calls+toolCalls.length>maxCalls)throw new ProviderError('turn_failed','Достигнут предел вызовов инструментов');
     for(const call of toolCalls){if(typeof call.id!=='string'||!call.id||call.id.length>200||callIds.has(call.id)||typeof call.name!=='string'||!record(call.arguments)||Buffer.byteLength(JSON.stringify(call.arguments))>1024*1024)throw new ProviderError('protocol','Неверный вызов инструмента API');callIds.add(call.id)}
-    // Preserve reasoning/signatures/replay exactly as returned by the service.
+    // Preserve reasoning/signatures/replay, except any reflected route credential.
     messages.push(structuredClone(message));
     for(const call of toolCalls){stopped(signal);calls++;const result=await tools.call(call.name,call.arguments);stopped(signal);messages.push({role:'tool',toolCallId:call.id,toolName:call.name,isError:!result.ok,content:[{type:'text',text:result.ok?result.text:JSON.stringify(result)}]})}
    }

@@ -3,6 +3,7 @@ import {resolve} from 'node:path';
 import {approval,executeCli,paneSchemas,paneDescriptions,record,type Seat,type TurnContext,type CliExecutor,type ToolResult} from '@harnessy/providers';
 import type {Tool,Json} from '@harnessy/llm';
 import {AgentFiles,AgentFileError} from './agent-files.ts';
+import {sandboxedShell,AgentSandboxError} from './agent-sandbox.ts';
 import {untilAbort} from './agent-cancel.ts';
 
 type Args=Record<string,Json>;
@@ -14,23 +15,25 @@ const FILE_TOOLS:Tool[]=[
  {name:'search_files',description:'Найти буквальную строку в текстовых файлах проекта, до 100 совпадений. Служебные файлы .git/.harness не читаются.',parameters:parameters({query:{...string,minLength:1,maxLength:200},path:string},['query'])},
  {name:'write_file',description:'Записать UTF-8 файл внутри области правки места, до 1 МиБ. Служебные файлы движка защищены.',parameters:parameters({path:string,text:string})},
  {name:'edit_file',description:'Заменить ровно одно вхождение old_text в файле проекта. Если текст отсутствует или неоднозначен, правка отклоняется.',parameters:parameters({path:string,old_text:{...string,minLength:1},new_text:string})},
- {name:'shell',description:'Команда оболочки в папке проекта; только Полный доступ. Максимум 30 с и 64 КиБ вывода. Команда выполняется без учётных данных движка в окружении.',parameters:parameters({command:{...string,minLength:1,maxLength:16384},timeout_ms:{...integer,minimum:1,maximum:30000}},['command'])},
+ {name:'shell',description:'Команда оболочки; только Полный доступ. Запись — в проект и личный временный каталог, чтение и сеть разрешены. Максимум 30 с и 64 КиБ вывода; без учётных данных движка в окружении.',parameters:parameters({command:{...string,minLength:1,maxLength:16384},timeout_ms:{...integer,minimum:1,maximum:30000}},['command'])},
 ];
 const names=Object.keys(paneSchemas) as (keyof typeof paneSchemas)[];
 const methods={send:'send',ask:'ask',read_pane:'readPane',merge:'merge',assign_role:'assignRole',propose_seats:'proposeSeats',create_seats:'createSeats'} as const;
 const failure=(code:string,error:string):ToolResult=>({ok:false,code,error});
 
 export class AgentTools {
- private seat:Seat;private ctx:TurnContext;private signal:AbortSignal;private shell:CliExecutor;readonly definitions:Tool[];private files:AgentFiles|null;private permitted:Set<string>;
- constructor(seat:Seat,ctx:TurnContext,signal:AbortSignal,shell:CliExecutor=executeCli){this.seat=seat;this.ctx=ctx;this.signal=signal;this.shell=shell;
+ private seat:Seat;private ctx:TurnContext;private signal:AbortSignal;private shell:CliExecutor;readonly definitions:Tool[];private files:AgentFiles|null;private permitted:Set<string>;private redact:<T>(value:T)=>T;
+ constructor(seat:Seat,ctx:TurnContext,signal:AbortSignal,shell:CliExecutor=executeCli,redact:<T>(value:T)=>T=value=>value){this.seat=seat;this.ctx=ctx;this.signal=signal;this.shell=shell;this.redact=redact;
   this.files=seat.mode==='chat'?null:new AgentFiles(seat.cwd,[...seat.writePaths]);
   const fs=FILE_TOOLS.filter(t=>seat.mode!=='chat'&&(t.name==='shell'?seat.mode==='all':['write_file','edit_file'].includes(t.name)?['ask','edit','all'].includes(seat.mode):true));
   this.definitions=[...names.map(name=>({name,description:paneDescriptions[name],parameters:paneSchemas[name].toJSONSchema() as Tool['parameters']})),...fs];this.permitted=new Set(this.definitions.map(t=>t.name));
  }
  async call(name:string,args:unknown):Promise<ToolResult>{
   if(this.signal.aborted)return failure('cancelled','Ход отменён');
+  name=this.redact(name);args=this.redact(args);
   const id=randomUUID(),metadata={name,...(record(args)&&typeof args.path==='string'?{path:args.path}:{})};this.ctx.traceEvent?.({id,name,phase:'call',data:metadata});let result:ToolResult;
-  try{result=await untilAbort(this.signal,()=>this.execute(name,args))}catch(e){result=e instanceof AgentFileError?failure(e.code,e.message):this.signal.aborted?failure('cancelled','Ход отменён'):(e as NodeJS.ErrnoException).code==='ENOENT'?failure('file_not_found','Файл не найден'):failure('tool_failed','Инструмент не завершён')}
+  try{result=await untilAbort(this.signal,()=>this.execute(name,args))}catch(e){result=e instanceof AgentFileError||e instanceof AgentSandboxError?failure(e.code,e.message):this.signal.aborted?failure('cancelled','Ход отменён'):(e as NodeJS.ErrnoException).code==='ENOENT'?failure('file_not_found','Файл не найден'):failure('tool_failed','Инструмент не завершён')}
+  result=result.ok?{...this.redact(result),text:this.protectText(result.text)}:{...this.redact(result),error:this.protectText(result.error)};
   this.ctx.traceEvent?.({id,name,phase:'result',outcome:result.ok?'ok':result.code==='cancelled'?'cancelled':'rejected',reason:result.ok?'none':result.code??'tool_failed',data:{name,bytes:Buffer.byteLength(result.ok?result.text:result.error)}});
   if(!result.ok)this.ctx.publish({type:'toolError',text:result.code+': '+result.error});return result;
  }
@@ -56,10 +59,11 @@ export class AgentTools {
   else if(name==='edit_file')data=this.files!.edit(path,args.old_text as string,args.new_text as string);
   else if(name==='shell'){
    this.ctx.publish({type:'tool',name,detail:'Команда в папке проекта'});
-   const result=await this.shell({binary:'/bin/sh',args:['-c',args.command as string],cwd:this.files!.directory(),env:{PATH:process.env.PATH??'/usr/bin:/bin:/usr/sbin:/sbin',HOME:this.files!.root,LANG:'C.UTF-8'},timeoutMs:typeof args.timeout_ms==='number'?args.timeout_ms:30000,maxBytes:65536},this.signal);
+   const result=await sandboxedShell({binary:'/bin/sh',args:['-c',args.command as string],cwd:this.files!.directory(),env:{PATH:process.env.PATH??'/usr/bin:/bin:/usr/sbin:/sbin',HOME:this.files!.root,LANG:'C.UTF-8'},timeoutMs:typeof args.timeout_ms==='number'?args.timeout_ms:30000,maxBytes:65536},this.signal,this.shell);
    if(result.code!==0)return failure('shell_failed',JSON.stringify(result));data=result;
   }
   if(name==='write_file'||name==='edit_file')this.ctx.publish({type:'tool',name:name==='write_file'?'Write':'Edit',detail:resolve(this.files!.root,path)});
   return {ok:true,text:JSON.stringify(data)};
  }
+ private protectText(text:string){try{return JSON.stringify(this.redact(JSON.parse(text)))}catch{return this.redact(text)}}
 }
