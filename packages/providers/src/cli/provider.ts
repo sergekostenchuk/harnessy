@@ -54,7 +54,7 @@ export class CliProvider {
   try{return p.parse(r)}catch(e){if(e instanceof ProviderError)throw e;throw protocol('неверный ответ чтения')}
   }finally{if(temporary)await rm(temporary,{recursive:true,force:true})}
  }
- async version(){const v=await this.query(this.d.version);if(!text(v)||!v.trim()||v.length>128)throw protocol('версия не получена');return v.trim()}
+ async version(signal?:AbortSignal){const v=await this.query(this.d.version,signal);if(!text(v)||!v.trim()||v.length>128)throw protocol('версия не получена');return v.trim()}
  async auth(signal?:AbortSignal):Promise<CliAuth>{
   const stop=signal??AbortSignal.timeout(this.deps.probeTimeoutMs);let value:unknown;
   if('unavailableReason'in this.d.auth){value={loggedIn:false,state:'unknown',reason:this.d.auth.unavailableReason}}else if('file'in this.d.auth){value=await readCliFileMetadata(this.d.auth,this.deps.env)}else value=await this.query(this.d.auth,stop);

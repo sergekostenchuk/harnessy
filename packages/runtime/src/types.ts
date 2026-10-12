@@ -35,7 +35,7 @@ export interface RuntimeActions {
 }
 export interface RuntimeDeps {
  llmKeys?:import('@harnessy/llm').KeyStore;llmFetch?:typeof fetch;
- providerCatalog?:import('@harnessy/providers').ProviderCatalog;loginTerminal?:import('@harnessy/providers').LoginTerminal;
+ catalogCacheDir?:string;providerCatalog?:import('@harnessy/providers').ProviderCatalog;loginTerminal?:import('@harnessy/providers').LoginTerminal;
  projectDir:string;providers:Partial<Record<Vendor,Provider>>;appUrl:string;models?:ModelCatalog;clock?:Clock;limitsCacheDir?:string;
  connections?:Connections;projectRegistry?:ProjectRegistry;gitops?:GitOps;stateIO?:StateIO;journalOptions?:JournalOptions;
  id?:()=>string;defaultDir?:string;settings?:Settings|((currentProject:()=>string|null)=>Settings);pins?:Pins|((currentProject:()=>string|null,chatMeta:(id:string)=>import('@harnessy/projects').ChatMeta|null)=>Pins);
