@@ -164,3 +164,9 @@ for(const moment of ['menu','post','status'] as const)test('211a r3 await audit:
  const move=async()=>{project='/b';v.H.project=project;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await until(()=>v.find('[data-connections-status]').dataset.project==='/b')};
  if(moment==='menu'){await move();await callback({id:'new'});assert.equal(v.requests.some(r=>r.body),false)}else{const choosing=callback({id:'new'});await seen.promise;await move();const toasts=v.toasts.length;gate.resolve({ok:true});await choosing;assert.equal(v.toasts.length,toasts);assert.equal(refreshes,moment==='post'?0:1)}assert.equal(v.find('[data-connections-status]').dataset.project,'/b');
 });
+
+test('302: real Connections markup uses router health and exact via metadata rather than model name patterns',async t=>{
+ let available=true;const h=await fixture(t,{router:{models:()=>({ok:true,models:['gpt-routed']}),health:async()=>available?{ok:true,models:['nova3'],families:['nova']}:{ok:false,reason:'offline fixture'}}});h.codex.models=async()=>[{id:'gpt-routed',label:'Routed GPT'},{id:'qwen-unrelated',label:'Native custom model'}];
+ const v=ui(async(path,body)=>(await call(h.api,path,{body})).body,h.dir);v.H.models=(await call(h.api,'/api/status')).body.models;await v.settle();assert.match(v.find('[data-pv="router"]').textContent,/provider-router.*локально · 127.0.0.1:11435 · nova/);
+ await v.find('[data-pv="router"]').emit('click');assert.match(v.find('.cbody').textContent,/Routed GPT/);assert.doesNotMatch(v.find('.cbody').textContent,/Native custom model/);available=false;await v.find('[data-recheck]').emit('click');await v.settle();assert.match(v.find('[data-pv="router"]').textContent,/нет данных · offline fixture/);assert.doesNotMatch(v.find('[data-pv="router"]').textContent,/null|нет входа/);assert.equal(h.codex.calls.length,0);
+});

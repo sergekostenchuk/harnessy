@@ -6,6 +6,7 @@ import {checkBrowser,readBody} from './security.ts';
 import {json,plain,failure,writeReply} from './responses.ts';
 import {ownerRoutes} from './routes-owner.ts';
 import {providerRoutes} from './routes-providers.ts';
+import type {RouterSource} from './router-health.ts';
 import {metaRoutes} from './routes-meta.ts';
 import {traceRoutes} from './routes-trace.ts';
 import {bridgeRoutes} from './routes-bridge.ts';
@@ -13,9 +14,9 @@ import type {Route} from './routes.ts';
 import {serveSse} from './sse.ts';
 import {serveStatic} from './static.ts';
 export const PROTO_ENTRY='/sketches/proto/10-new-chat.html';
-export interface ApiOptions {runtime:Runtime;siteDir:string;port?:number;host?:string}
+export interface ApiOptions {runtime:Runtime;siteDir:string;port?:number;host?:string;router?:RouterSource}
 export function createApi(options:ApiOptions){
- const r=options.runtime,routes=[...ownerRoutes(r),...metaRoutes(r),...bridgeRoutes(r),...traceRoutes(r),...providerRoutes(r)],streams=new Set<()=>void>();let closing=false,closeJob:Promise<void>|null=null;
+ const r=options.runtime,routes=[...ownerRoutes(r),...metaRoutes(r,options.router),...bridgeRoutes(r),...traceRoutes(r),...providerRoutes(r)],streams=new Set<()=>void>();let closing=false,closeJob:Promise<void>|null=null;
  const responseReasons=new WeakMap<ServerResponse,ReturnType<typeof traceReason>>();
  function match(route:Route,path:string){const a=route.path.split('/'),b=path.split('/');if(a.length!==b.length)return null;const params:Record<string,string>={};for(let i=0;i<a.length;i++){if(a[i]!.startsWith(':')){if(!b[i])return null;params[a[i]!.slice(1)]=b[i]!}else if(a[i]!==b[i])return null}return params}
  const server=createServer((request,res)=>{void traceDispatch(request,res).catch(e=>{if(res.headersSent)res.destroy();else writeReply(res,failure(e),request.method==='HEAD')})});

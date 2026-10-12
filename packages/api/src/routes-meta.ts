@@ -12,6 +12,7 @@ import {spend,spendTurns} from './spend.ts';
 import {projectFileRoutes} from './project-file.ts';
 import {sectionRoutes} from './routes-sections.ts';
 import {swarm} from './swarm.ts';
+import {readRouterModels,routerHealthReader,type RouterSource} from './router-health.ts';
 export function sameProject(r:Runtime,p:ProjectState):void {if(p.closed||r.project!==p)throw new RuntimeError('project_changed','проект сменился',409)}
 export const threads=(p:ProjectState)=>Object.fromEntries(p.channel.threads);
 export async function metadata(r:Runtime,connections=false){
@@ -23,7 +24,13 @@ export async function metadata(r:Runtime,connections=false){
  const codex={loggedIn:pyTruthy(raw.loggedIn),email:raw.email??null,plan:raw.plan??'',...(raw.error?{error:raw.error}:{})};
  return {p,claude,codex,models:models.status==='fulfilled'?models.value:structuredClone(CODEX_FALLBACK)}
 }
-export function metaRoutes(r:Runtime):Route[]{return [
+export function metaRoutes(r:Runtime,router:RouterSource={health:routerHealthReader(),models:readRouterModels}):Route[]{
+ let lastIssue='',issueProject:ProjectState|null=null;
+ function routedModels(p:ProjectState,models:{id:string;label:string}[]){
+  const source=router.models();if(!source.ok){if(issueProject!==p||lastIssue!==source.reason)p.trace.record('models.unavailable',{actor:'engine',outcome:'failed',reason:{code:'unavailable',text:source.reason},data:{provider:'provider-router'}});issueProject=p;lastIssue=source.reason}else{issueProject=p;lastIssue=''}
+  const ids=new Set(source.ok?source.models:[]);return models.map(({id,label})=>({id,label,...(ids.has(id)?{via:'provider-router' as const}:{})}));
+ }
+ return [
  ...sectionRoutes(r),
  ...projectFileRoutes(r),
  {method:'GET',path:'/api/swarm',style:'J',handle:()=>json(swarm(r))},
@@ -31,7 +38,7 @@ export function metaRoutes(r:Runtime):Route[]{return [
  {method:'GET',path:'/api/spend',style:'J',handle:async({query})=>json(await spend(r,query))},
  {method:'GET',path:'/api/spend/turns',style:'J',handle:async({query})=>json(await spendTurns(r,query))},
  {method:'GET',path:'/api/status',handle:async()=>{
- const {p,claude,codex,models}=await metadata(r),programs=r.providerOperations.modelSnapshot();
+ const {p,claude,codex,models:rawModels}=await metadata(r),programs=r.providerOperations.modelSnapshot(),models=routedModels(p,rawModels);
  return json({project:p.dir,trace:{instanceId:p.trace.instanceId,...p.trace.status},defaultDir:r.defaultDir,limits:r.limitsSnapshot(),models:{...programs.models,claude:CLAUDE_MODELS,codex:models},turnModes:{...programs.turnModes,claude:{read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true},check:{ok:true},web:{ok:true},ask:{ok:true}},codex:{read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true},check:{ok:true},web:{ok:true},ask:{ok:true}}},modes:MODES,kinds:KINDS,
  ownerKinds:['task','question','note','stop','resume','decision'],lineErrors:[...p.lineErrors],policy:{version:p.policy?.version??null,path:p.policy?.path??null},
  team:{path:p.team?join(p.team.harnessDir,'team.yaml'):null,integrationBranch:p.team?.integrationBranch??null,mergeRoles:p.team?.mergeRoles??[]},repo:p.repoRoot,
@@ -62,9 +69,9 @@ export function metaRoutes(r:Runtime):Route[]{return [
  return json({ok:true,project:p.dir,...billingSnapshot(config,sources,r.clock.now()/1000)})
  }},
  {method:'GET',path:'/api/connections',handle:async()=>{
- const {p,claude,codex,models}=await metadata(r,true),seats=(v:string)=>[...p.registry.panes.values()].filter(p=>p.vendor===v&&p.id!=='room').map(p=>p.id),other=models.filter(m=>!m.id.startsWith('gpt'));
+ const {p,claude,codex,models:rawModels}=await metadata(r,true),health=await router.health();sameProject(r,p);const models=routedModels(p,rawModels),seats=(v:string)=>[...p.registry.panes.values()].filter(p=>p.vendor===v&&p.id!=='room').map(p=>p.id),other=models.filter(m=>m.via==='provider-router');
  const providers:Record<string,unknown>[]=[{id:'claude',name:'Claude',kind:'подписка · вход через claude',auth:claude,models:CLAUDE_MODELS.length,seats:seats('claude'),routable:true,route:r.connections.get('claude')},{id:'codex',name:'Codex',kind:'подписка ChatGPT · codex app-server',auth:codex,models:models.length-other.length,seats:seats('codex'),routable:true,route:r.connections.get('codex')}];
- if(other.length)providers.push({id:'router',name:'Роутер провайдеров',kind:'локальный роутер 127.0.0.1:11435 · Ollama Cloud, Qwen, DeepSeek, GLM, Kimi',auth:{loggedIn:true},models:other.length,seats:[],routable:false,route:null,note:'выход в сеть у роутера свой — движок его маршрут не задаёт'});
+ providers.push({id:'router',name:'provider-router',kind:'локально · 127.0.0.1:11435 · '+(health.ok?(health.families.join(', ')||'нет данных · список моделей пуст'):'нет данных · '+health.reason),auth:{loggedIn:health.ok},health:health.ok?'доступен':'нет данных · '+health.reason,models:health.ok?health.models.length:null,seats:seats('codex').filter(id=>other.some(m=>m.id===p.registry.get(id)?.model)),routable:false,route:null,note:'выход в сеть у роутера свой — движок его маршрут не задаёт'});
  return json({ok:true,project:p.dir,providers,routes:ROUTES})
  }},
  {method:'POST',path:'/api/connections/route',handle:async({body})=>{

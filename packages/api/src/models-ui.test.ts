@@ -207,3 +207,14 @@ test('317: cold program is visible even without an entry in status.models and ne
  const v=ui({fetch:async()=>next});delete v.H.models.gemini;await v.open();
  assert.match(v.find('[data-cx-program="gemini"]').textContent,/проверяется…/);assert.equal(v.document.querySelector('[data-cx-vendor="gemini"]'),null);
 });
+
+for(const room of [false,true])test('316: explicit via groups routed models, while selection still uses Codex ('+(room?'room':'seat')+')',async()=>{
+ const v=ui({room});v.H.models.codex=[{id:'gpt-routed',label:'Routed GPT',via:'provider-router'},{id:'qwen-unrelated',label:'Native catalogue model'},{id:'cloud:any',label:'Cloud',via:'provider-router'}];await v.open();
+ const routed=v.find('[data-cx-program="provider-router"]'),native=v.find('[data-cx-program="codex"]');assert.match(routed.textContent,/provider-router.*локально · через Codex/);assert.equal(routed.querySelectorAll('[data-cx-model]').length,2);assert.equal(native.querySelectorAll('[data-cx-model]').length,1);assert.ok(native.querySelector('[data-cx-model="qwen-unrelated"]'));
+ await v.select('codex','gpt-routed').emit('click');const sent=v.requests.find(r=>r.body?.model==='gpt-routed')!;assert.equal(sent.path,room?'/api/room':'/api/panes/worker');assert.equal(sent.body!.vendor,'codex');
+});
+
+test('316: router models inherit Codex capability refusals and vanish from the group when metadata is absent',async()=>{
+ const v=ui();v.H.models.codex=[{id:'opaque',label:'Opaque',via:'provider-router'}];v.H.turnModes.codex.read={ok:false,reason:'provider disabled'};await v.open();const button=v.select('codex','opaque');assert.equal(button.disabled,true);assert.match(button.textContent,/provider disabled/);await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
+ v.H.models.codex=[{id:'opaque',label:'Opaque'}];await v.status();assert.equal(v.document.querySelector('[data-cx-program="provider-router"]'),null);assert.ok(v.find('[data-cx-program="codex"] [data-cx-model="opaque"]'));
+});

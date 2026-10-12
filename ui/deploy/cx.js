@@ -92,8 +92,11 @@
     }return rows;
   }
   function modelGroups(panel=pop){const metadata=panel&&panel.__models&&panel.__models.rows||[];
-    return [...new Set([...Object.keys(H.models||{}),...metadata.map(p=>p.id)])].map(id=>{const detail=metadata.find(p=>p.id===id),models=Array.isArray(H.models&&H.models[id])?H.models[id]:[];
-      return {id,title:detail?detail.title:id,kind:detail?detail.kind:null,availability:detail&&(detail.installed===null||detail.checking)?'проверяется…':detail&&detail.installed===false?'не установлена':'',modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id}))};});}
+    const groups=[...new Set([...Object.keys(H.models||{}),...metadata.map(p=>p.id)])].map(id=>{const detail=metadata.find(p=>p.id===id),models=Array.isArray(H.models&&H.models[id])?H.models[id]:[];
+      return {id,vendor:id,title:detail?detail.title:id,kind:detail?detail.kind:null,availability:detail&&(detail.installed===null||detail.checking)?'проверяется…':detail&&detail.installed===false?'не установлена':'',modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id,via:m.via}))};});
+    const codex=groups.find(g=>g.id==='codex'),routed=codex?codex.models.filter(m=>m.via==='provider-router'):[];
+    if(routed.length){codex.models=codex.models.filter(m=>m.via!=='provider-router');groups.splice(groups.indexOf(codex)+1,0,{id:'provider-router',vendor:'codex',title:'provider-router',kind:'local',subtitle:'локально · через Codex',availability:codex.availability,modelsReason:'',models:routed})}return groups;
+  }
   function modelsCurrent(panel){return panel===pop&&L.bindingCurrent(panel.__binding)}
   function redrawModels(panel){if(!modelsCurrent(panel)||stack[stack.length-1]!=='model')return;
     const input=panel.querySelector('.cx-find'),value=input&&input.value,focused=document.activeElement===input,groups=Array.from(panel.querySelectorAll('[data-cx-program]')).map(g=>[g.dataset.cxProgram,g.classList.contains('open')]);
@@ -118,10 +121,10 @@
   function modelsStatus(){if(!pop||!pop.__models)return;if(!modelsCurrent(pop)){close();return}const state=pop.__models,stamp=modeStamp();if(stamp!==state.modes){state.modes=stamp;state.revision++}redrawModels(pop)}
   addEventListener('live:status',modelsStatus);addEventListener('pagehide',close);
   async function chooseModel(button){const panel=pop,state=panel&&panel.__models;if(!state||state.saving||!modelsCurrent(panel))return;
-    const program=modelGroups(panel).find(p=>p.id===button.dataset.cxVendor),model=program&&program.models.find(m=>m.id===button.dataset.cxModel);
-    if(!model||!modelSupport(program.id).ok)return;const revision=state.revision,modes=modeStamp();state.saving=true;state.failure='';redrawModels(panel);
-    try{await setSeat({vendor:program.id,model:model.id},'Модель места',{
-      valid:()=>modelsCurrent(panel)&&state.revision===revision&&modeStamp()===modes&&modelSupport(program.id).ok,
+    const program=modelGroups(panel).find(p=>p.id===(button.dataset.cxGroup||button.dataset.cxVendor)),model=program&&program.models.find(m=>m.id===button.dataset.cxModel);
+    if(!model||!modelSupport(program.vendor).ok)return;const revision=state.revision,modes=modeStamp();state.saving=true;state.failure='';redrawModels(panel);
+    try{await setSeat({vendor:program.vendor,model:model.id},'Модель места',{
+      valid:()=>modelsCurrent(panel)&&state.revision===revision&&modeStamp()===modes&&modelSupport(program.vendor).ok,
       failed:r=>{if(modelsCurrent(panel)){state.loginRequired=r&&r.code==='login_required';state.failure='Настройка не применена · '+(typeof (r&&r.reason)==='string'?r.reason:typeof (r&&r.error)==='string'?r.error:'нет связи');redrawModels(panel)}}
     })}finally{state.saving=false;redrawModels(panel)}
   }
@@ -167,9 +170,9 @@
       return hd('Модель',p?(isRoom(p)?'разговор без роли':'место «'+esc(L.paneName(p))+'»'):'разговор без роли')+'<input class="cx-find" aria-label="Найти модель" placeholder="Найти модель…">'+
         (!state||state.loading?note('Читаю каталог моделей…'):'')+(state&&state.error?'<div class="cx-note" role="status">Каталог моделей не прочитан · '+esc(state.error)+'. <button type="button" class="btn sm ghost" data-cx-model-retry>Повторить</button></div>':'')+
         (state&&state.failure?'<div class="cx-note" data-cx-model-error role="status">'+esc(state.failure)+(state.loginRequired?' · <a href="11-connections.html">Открыть «Подключения»</a>':'')+'</div>':'')+
-        rows.map((g,i)=>{const support=modelSupport(g.id),models=g.models,disabled=!support.ok||!!(state&&state.saving);
-          return '<div class="cx-grp'+(g.id===sv||!sv&&i===0?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+(g.kind?connectionKind(g.kind)+' · ':'')+(g.availability?esc(g.availability):modelsN(g.models.length))+'</small></div><div class="cx-sub">'+
-            (g.modelsReason?note(esc(g.modelsReason)):'')+models.map(m=>'<button type="button" class="cx-row cx-model'+(m.id===cur&&g.id===sv?' on':'')+(disabled?' dis':'')+'" data-cx-model="'+esc(m.id)+'" data-cx-vendor="'+esc(g.id)+'" data-q="'+esc(g.title+' '+m.label+' '+m.id)+'"'+(disabled?' disabled':'')+'><span class="cx-model-text"><b>'+esc(m.label)+'</b>'+(!support.ok||support.note?'<small>'+esc(support.reason||support.note)+'</small>':'')+'</span>'+(m.id===cur&&g.id===sv?'<span class="ck">✓</span>':'')+'</button>').join('')+'</div></div>';
+        rows.map((g,i)=>{const support=modelSupport(g.vendor),models=g.models,disabled=!support.ok||!!(state&&state.saving);
+          return '<div class="cx-grp'+(g.vendor===sv&&g.models.some(m=>m.id===cur)||!sv&&i===0?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+(g.subtitle?esc(g.subtitle)+' · ':g.kind?connectionKind(g.kind)+' · ':'')+(g.availability?esc(g.availability):modelsN(g.models.length))+'</small></div><div class="cx-sub">'+
+            (g.modelsReason?note(esc(g.modelsReason)):'')+models.map(m=>'<button type="button" class="cx-row cx-model'+(m.id===cur&&g.vendor===sv?' on':'')+(disabled?' dis':'')+'" data-cx-model="'+esc(m.id)+'" data-cx-vendor="'+esc(g.vendor)+'" data-cx-group="'+esc(g.id)+'" data-q="'+esc(g.title+' '+m.label+' '+m.id)+'"'+(disabled?' disabled':'')+'><span class="cx-model-text"><b>'+esc(m.label)+'</b>'+(!support.ok||support.note?'<small>'+esc(support.reason||support.note)+'</small>':'')+'</span>'+(m.id===cur&&g.vendor===sv?'<span class="ck">✓</span>':'')+'</button>').join('')+'</div></div>';
         }).join('')+(!rows.length?note('В статусе пока нет списка моделей.'):'' )+
         note('Смена модели сохраняет разговор. Контекст можно перенести.')+hd('Размышления','для выбранной модели')+'<div class="cx-seg dis"><span>выкл</span><span class="on">адаптивно</span><span>вкл</span></div>'+note('Усилие и размышления пока недоступны: харнесс не передаёт их месту.');},
     effort(){ return hd('Усилие')+['низкое','среднее','высокое','очень высокое','максимум'].map(x=>row(x,{dis:true})).join('')+note('Пока недоступно: харнесс не передаёт усилие месту. Варианты — для выбранной модели.'); },
