@@ -317,6 +317,12 @@ html[data-proto] .feed .col.live-demo-off > :not(.live-msg):not(.live-sep):not(.
 html[data-proto][data-page="chat"] .live-selbar { width:auto; max-width:760px; margin:0 auto 8px; }
 .live-selbar .t { font:10.5px var(--mono); letter-spacing:.05em; text-transform:uppercase; color:var(--ink2); } .live-selbar .t b { color:var(--ink); font-weight:500; }
 .live-selbar .live-f { margin:0; height:34px; background:var(--panel); } .live-selbar .acts { display:flex; gap:6px; flex-wrap:wrap; }
+.live-sel-list { max-height:220px; overflow:auto; display:grid; gap:6px; }
+.live-sel-list label { display:flex; align-items:flex-start; gap:8px; padding:7px 8px; border-radius:8px; background:var(--panel); cursor:pointer; }
+.live-sel-list input { accent-color:var(--accent); flex:none; margin-top:3px; }
+.live-sel-list label > span { min-width:0; display:grid; gap:3px; font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.live-sel-list b { font:10px var(--mono); color:var(--ink3); }
+.live-selbar .btn:disabled { opacity:.45; cursor:default; }
 .live-hint { font-size:12px; color:var(--ink3); margin:4px 0 0; }
 /* чаты мест и прямое обращение */
 .cx-dot { width:7px; height:7px; border-radius:50%; background:var(--line2); display:inline-block; flex:none; } .cx-dot.on { background:var(--ok); }
