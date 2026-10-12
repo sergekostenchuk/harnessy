@@ -4,7 +4,9 @@ import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {setImmediate as immediate} from 'node:timers/promises';
 import {dom} from './ui-dom-test-helpers.ts';
-import {deferred} from './test-helpers.ts';
+import {deferred,fixture,call} from './test-helpers.ts';
+import {ProviderCatalog,cliEntry} from '../../providers/src/index.ts';
+import {cliFixture} from '../../providers/src/cli/test-support.ts';
 
 type Data=Record<string,any>;
 const cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
@@ -22,17 +24,17 @@ const catalogue=()=>({ok:true,providers:[
 ]});
 const modes=()=>Object.fromEntries(catalogue().providers.map(p=>[p.id,Object.fromEntries(['read','edit','all','chat'].map(m=>[m,
  p.id==='agy'?m==='all'?{ok:true,note:'без инструментов Harnessy'}:{ok:false,reason:'нет изоляции инструментов на ход'}:p.id==='copilot'&&m==='edit'?{ok:false,reason:'нет флага для этого режима'}:{ok:true}]))]));
-function ui(options:{page?:string;room?:boolean;fetch?:(path:string,body:Data|undefined)=>Promise<Data>}={}){
+function ui(options:{page?:string;room?:boolean;statusFetch?:()=>Promise<Data>;fetch?:(path:string,body:Data|undefined)=>Promise<Data>}={}){
  const d=dom('<div class="frame cur"><div class="main"><div class="feed"></div><div class="box"><input class="in live-in"><div class="bar2"></div></div></div></div>');
  d.html.setAttribute('data-proto','');d.html.setAttribute('data-page',options.page??'chat');Object.assign(d.document,{documentElement:d.html,body:d.body});
  const pane={id:options.room?'room':'worker',label:options.room?'без роли':'воркер',vendor:'claude',model:'shared',mode:'read',busy:false};
- const H:Data={on:true,project:'/project-a',pane,panes:[pane],active:{[pane.id]:'chat-a'},models:Object.fromEntries(catalogue().providers.map(p=>[p.id,p.models])),turnModes:modes(),modes:[{id:'read',label:'Чтение'},{id:'edit',label:'Правка'},{id:'all',label:'Полный доступ'},{id:'chat',label:'Без проекта'}],chatList:[]};
+ const H:Data={on:true,project:'/project-a',pane,panes:[pane],active:{[pane.id]:'chat-a'},models:Object.fromEntries(catalogue().providers.map(p=>[p.id,p.id==='gemini'?[{id:'default',label:'по умолчанию программы'}]:p.models])),turnModes:modes(),modes:[{id:'read',label:'Чтение'},{id:'edit',label:'Правка'},{id:'all',label:'Полный доступ'},{id:'chat',label:'Без проекта'}],chatList:[]};
  const S:Data={ui:{pane:pane.id},cx:{folder:'',noFolder:false,modes:{},att:[],conn:{}},chat:[]},requests:{path:string;body?:Data}[]=[],toasts:string[]=[],waiting:Data[]=[],listeners=new Set<Data>();
- let snapshot:Data=catalogue(),lastPane:Data|null=null;
+ let snapshot:Data=catalogue(),lastPane:Data|null=null,serverModels:Data|null=null;
  const ctx:Data={document:d.document,H,S,PAGE:options.page??'chat',esc,toast:(s:string)=>toasts.push(s),setTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),
   showWaiting:(p:Data,info:Data,project:string)=>waiting.push({pane:p.id,info,project}),showRestore(){},badges(){},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)},renderWaiting(){},save(){},
   fetch:async(path:string,opts?:{body?:string})=>{const body=opts?.body?JSON.parse(opts.body):undefined;requests.push({path,body});
-   const result=options.fetch?await options.fetch(path,body):path==='/api/providers/catalog'?snapshot:{ok:true,pane:{...H.pane,...body}};
+   const result=path==='/api/status'?(options.statusFetch?await options.statusFetch():{project:H.project,panes:H.panes,models:serverModels??H.models,turnModes:H.turnModes}):options.fetch?await options.fetch(path,body):path==='/api/providers/catalog'?snapshot:{ok:true,pane:{...H.pane,...body}};
    if(body&&result.ok)lastPane=result.pane;return {status:result.code==='capability_unsupported'?409:200,json:async()=>result};}};
  ctx.window=ctx;const context=createContext(ctx);
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function applyStatus(','  async function refreshChats(')+
@@ -46,7 +48,7 @@ function ui(options:{page?:string;room?:boolean;fetch?:(path:string,body:Data|un
  const flush=async()=>{await immediate()};
  const open=async()=>{await find('[data-cx="model"]').emit('click');await flush()};
  const select=(vendor:string,model:string)=>find('[data-cx-vendor="'+vendor+'"][data-cx-model="'+model+'"]');
- const providers=async(next:Data)=>{snapshot=next;if(next.ok&&Array.isArray(next.providers))H.models=Object.fromEntries(next.providers.map((p:Data)=>[p.id,p.models]));for(const l of [...listeners])l.onmessage({data:JSON.stringify({type:'providers',project:H.project})});await flush()};
+ const providers=async(next:Data)=>{snapshot=next;if(next.ok&&Array.isArray(next.providers))serverModels=Object.fromEntries(next.providers.map((p:Data)=>[p.id,p.id==='gemini'?[{id:'default',label:'по умолчанию программы'}]:p.models]));for(const l of [...listeners])l.onmessage({data:JSON.stringify({type:'providers',project:H.project})});await flush()};
  return {...d,H,S,ctx,requests,toasts,waiting,listeners,find,open,select,flush,providers,
   status:()=>d.window.emit('live:status'),hide:()=>d.window.emit('pagehide')};
 }
@@ -63,7 +65,7 @@ for(const page of ['chat','new','first'])test('305/306: '+page+' lists every cat
 });
 
 for(const page of ['chat','new','first'])test('306: '+page+' room passes vendor and the program default without launching a turn',async()=>{
- const v=ui({page,room:true});await v.open();const button=v.select('gemini','default');assert.equal(button.textContent,'по умолчанию программы');assert.match(v.find('[data-cx-program="gemini"]').textContent,/0 моделей/);
+ const v=ui({page,room:true});await v.open();const button=v.select('gemini','default');assert.equal(button.textContent,'по умолчанию программы');assert.match(v.find('[data-cx-program="gemini"]').textContent,/1 модель/);
  await button.emit('click');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/room',body:{vendor:'gemini',model:'default',folder:true}}]);assert.equal(v.H.pane.vendor,'gemini');
  assert.equal(v.listeners.size,0);
  assert.equal(v.find('[data-cx="model"] b').textContent,'по умолчанию программы');
@@ -76,7 +78,7 @@ test('305: + → model uses the same catalogue and vendor selection',async()=>{
 
 test('305: a stale catalogue response cannot restore a removed model',async()=>{
  const pending:ReturnType<typeof deferred<Data>>[]=[];const v=ui({fetch:async()=>{const gate=deferred<Data>();pending.push(gate);return gate.promise}});
- await v.find('[data-cx="model"]').emit('click');await v.providers(catalogue());assert.equal(pending.length,2);
+ await v.find('[data-cx="model"]').emit('click');await v.providers({ok:false});assert.equal(pending.length,2);
  const next=catalogue();next.providers[1]!.models=[{id:'new-model',label:'New Codex'}];v.H.models.codex=next.providers[1]!.models;await v.status();pending[1]!.resolve(next);await v.flush();pending[0]!.resolve(catalogue());await v.flush();
  assert.ok(v.select('codex','new-model'));assert.equal(v.document.querySelector('[data-cx-vendor="codex"][data-cx-model="shared"]'),null);
 });
@@ -151,4 +153,41 @@ test('305/308: status enables the supported mode with its note; omitted capabili
  v.ctx.binding.applyStatus({...status,turnModes:modes()},null);await v.status();const button=v.select('agy','agy-model');assert.equal(button.disabled,false);assert.match(button.textContent,/без инструментов Harnessy/);
  await button.emit('click');assert.equal(v.H.pane.vendor,'agy');assert.equal(v.requests.filter(r=>r.body).length,1);
  v.ctx.binding.applyStatus(status,null);await v.status();assert.equal(v.select('agy','agy-model').disabled,true);assert.match(v.select('agy','agy-model').textContent,/движок не сообщил поддержку режима/);
+});
+
+for(const page of ['chat','new','first'])test('311: '+page+' refreshes cold status after catalogue discovery without inventing default',async()=>{
+ const catalog=deferred<Data>(),fresh=deferred<Data>();const v=ui({page,fetch:async()=>catalog.promise,statusFetch:()=>fresh.promise});v.H.models.copilot=[];v.H.models.gemini=[];
+ await v.open();assert.equal(v.document.querySelector('[data-cx-vendor="copilot"]'),null);assert.equal(v.document.querySelector('[data-cx-vendor="gemini"]'),null);
+ catalog.resolve(catalogue());await v.flush();assert.equal(v.requests.filter(r=>r.path==='/api/status').length,1);
+ fresh.resolve({project:v.H.project,panes:v.H.panes,models:{...v.H.models,copilot:[{id:'discovered',label:'Discovered Copilot'}],gemini:[{id:'default',label:'по умолчанию программы'}]},turnModes:modes()});await v.flush();
+ assert.equal(v.select('copilot','discovered').disabled,false);assert.ok(v.select('gemini','default'));
+});
+
+test('311: real catalogue discovery refreshes HTTP status and exposes the CLI model on cold startup',async t=>{
+ const cli=await cliFixture(t,'probe'),entry=cliEntry(cli.description,{env:cli.env,cwd:cli.dir,temporaryDirectory:cli.dir}),ready=deferred(),discovered=deferred(),statusReady=deferred();
+ entry.version=async()=>{await ready.promise;return '1.0'};t.after(()=>ready.resolve());
+ const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([entry])}}),initial=(await call(h.api,'/api/status')).body;
+ assert.deepEqual(initial.models['test-cli'],[]);
+ const v=ui({fetch:async(path,body)=>{const response=await call(h.api,path,body?{body}:{});if(path==='/api/providers/catalog')discovered.resolve();return response.body},statusFetch:async()=>{const response=await call(h.api,'/api/status');statusReady.resolve();return response.body}});
+ v.H.project=initial.project;v.ctx.binding.applyStatus(initial,null);await v.status();await v.open();assert.equal(v.document.querySelector('[data-cx-vendor="test-cli"]'),null);
+ ready.resolve();await discovered.promise;
+ // Wait for the actual status response, not a duration or an assumption about HTTP latency.
+ await statusReady.promise;await v.flush();
+ assert.equal(v.select('test-cli','test-model').disabled,false);assert.equal(v.requests.filter(r=>r.body).length,0);
+});
+
+for(const change of ['project','pane','chat','pagehide','reopen','newer-request'])test('311: late status is discarded after '+change,async()=>{
+ const pending:ReturnType<typeof deferred<Data>>[]=[];const v=ui({statusFetch:()=>{const gate=deferred<Data>();pending.push(gate);return gate.promise}});await v.open();const oldProject=v.H.project,oldModels=v.H.models;
+ assert.equal(pending.length,1);
+ if(change==='project')v.H.project='/different';if(change==='pane')v.S.ui.pane='other';if(change==='chat')v.H.active.worker='different';
+ if(change==='pagehide')await v.hide();else if(change==='reopen'){await v.find('[data-cx="model"]').emit('click');await v.open()}else if(change==='newer-request')await v.providers(catalogue());else await v.status();
+ pending[0]!.resolve({project:oldProject,panes:v.H.panes,models:{forged:[{id:'late',label:'Late'}]},turnModes:{}});await v.flush();
+ assert.equal(v.H.models,oldModels);assert.equal(v.document.querySelector('[data-cx-model="late"]'),null);
+ for(const gate of pending.slice(1))gate.resolve({project:v.H.project,panes:v.H.panes,models:oldModels,turnModes:modes()});await v.flush();
+});
+
+for(const code of ['provider_not_installed','login_required','model_unsupported'])test('310: '+code+' stays readable and preserves the pane',async()=>{
+ const v=ui({fetch:async(path)=>path==='/api/providers/catalog'?catalogue():{ok:false,code,reason:'Действие недоступно: '+code}}),before=plain(v.H.pane);await v.open();await v.select('codex','shared').emit('click');
+ assert.deepEqual(v.H.pane,before);assert.match(v.find('[data-cx-model-error]').textContent,new RegExp(code));
+ if(code==='login_required')assert.equal(v.find('[data-cx-model-error] a').getAttribute('href'),'11-connections.html');
 });

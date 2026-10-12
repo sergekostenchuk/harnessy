@@ -108,7 +108,7 @@ test('132: a refused or same-project request cannot mask a genuine reconnect; an
 
 // TS-20g status/catalogue contract double; room/project mutations still use the real HTTP routes.
 async function modelMenuContract(h:Awaited<ReturnType<typeof fixture>>,path:string,body?:any){
- if(path==='/api/providers/catalog')return {ok:true,providers:Object.entries(h.runtime.registry.models).map(([id,models])=>({id,title:id,kind:'subscription',models:models.map(m=>({...m,label:m.label||m.id}))}))};
+ if(path==='/api/providers/catalog')return {ok:true,providers:Object.entries(h.runtime.registry.models).map(([id,models])=>({id,title:id,kind:'subscription',models:(models??[]).map(m=>({...m,label:m.label||m.id}))}))};
  const result=(await call(h.api,path,body?{body}:{})).body;
  if(path==='/api/status')result.turnModes=Object.fromEntries(Object.keys(result.models).map(id=>[id,Object.fromEntries(result.modes.map((m:any)=>[m.id,{ok:true}]))]));
  return result;

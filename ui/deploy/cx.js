@@ -102,18 +102,24 @@
     const request=++state.request;state.loading=true;state.error='';redrawModels(panel);let r=null;
     try{if(H.on)r=await L.api('/api/providers/catalog')}catch{}
     if(!modelsCurrent(panel)||request!==state.request)return;state.loading=false;const rows=modelRows(r);
-    if(rows)state.rows=rows;
+    if(rows){state.rows=rows;redrawModels(panel);const stamp=modeStamp();let status=null;
+      try{status=await L.api('/api/status')}catch{}
+      if(!modelsCurrent(panel)||request!==state.request||stamp!==modeStamp())return;
+      if(status&&status.project===panel.__binding.project&&Array.isArray(status.panes)&&status.models&&typeof status.models==='object'&&!Array.isArray(status.models)){
+        H.models=status.models;H.turnModes=status.turnModes&&typeof status.turnModes==='object'&&!Array.isArray(status.turnModes)?status.turnModes:{};modelsStatus();
+      }else state.error='Не удалось обновить статус моделей';
+    }
     else state.error=typeof (r&&r.error)==='string'?r.error:H.on?'ответ каталога недоступен или неполон':'движок не подключён';
     redrawModels(panel);
   }
   function modelsStatus(){if(!pop||!pop.__models)return;if(!modelsCurrent(pop)){close();return}const state=pop.__models,stamp=modeStamp();if(stamp!==state.modes){state.modes=stamp;state.revision++}redrawModels(pop)}
   addEventListener('live:status',modelsStatus);addEventListener('pagehide',close);
   async function chooseModel(button){const panel=pop,state=panel&&panel.__models;if(!state||state.saving||!modelsCurrent(panel))return;
-    const program=modelGroups(panel).find(p=>p.id===button.dataset.cxVendor),model=program&&(program.models.length?program.models:[{id:'default',label:'по умолчанию программы'}]).find(m=>m.id===button.dataset.cxModel);
+    const program=modelGroups(panel).find(p=>p.id===button.dataset.cxVendor),model=program&&program.models.find(m=>m.id===button.dataset.cxModel);
     if(!model||!modelSupport(program.id).ok)return;const revision=state.revision,modes=modeStamp();state.saving=true;state.failure='';redrawModels(panel);
     try{await setSeat({vendor:program.id,model:model.id},'Модель места',{
       valid:()=>modelsCurrent(panel)&&state.revision===revision&&modeStamp()===modes&&modelSupport(program.id).ok,
-      failed:r=>{if(modelsCurrent(panel)){state.failure='Настройка не применена · '+(typeof (r&&r.reason)==='string'?r.reason:typeof (r&&r.error)==='string'?r.error:'нет связи');redrawModels(panel)}}
+      failed:r=>{if(modelsCurrent(panel)){state.loginRequired=r&&r.code==='login_required';state.failure='Настройка не применена · '+(typeof (r&&r.reason)==='string'?r.reason:typeof (r&&r.error)==='string'?r.error:'нет связи');redrawModels(panel)}}
     })}finally{state.saving=false;redrawModels(panel)}
   }
   const tog=(k,on)=>'<span class="cx-tog'+(on?' on':'')+'" data-cx-tog="'+k+'" title="'+(on?'Выключить':'Включить')+'"></span>';
@@ -157,8 +163,8 @@
     model(){const p=seat(),c=cx(),cur=p?p.model:c.model,sv=p?p.vendor:c.vendor,state=pop.__models,rows=modelGroups();
       return hd('Модель',p?(isRoom(p)?'разговор без роли':'место «'+esc(L.paneName(p))+'»'):'разговор без роли')+'<input class="cx-find" aria-label="Найти модель" placeholder="Найти модель…">'+
         (!state||state.loading?note('Читаю каталог моделей…'):'')+(state&&state.error?'<div class="cx-note" role="status">Каталог моделей не прочитан · '+esc(state.error)+'. <button type="button" class="btn sm ghost" data-cx-model-retry>Повторить</button></div>':'')+
-        (state&&state.failure?'<div class="cx-note" data-cx-model-error role="status">'+esc(state.failure)+'</div>':'')+
-        rows.map((g,i)=>{const support=modelSupport(g.id),models=g.models.length?g.models:[{id:'default',label:'по умолчанию программы'}],disabled=!support.ok||!!(state&&state.saving);
+        (state&&state.failure?'<div class="cx-note" data-cx-model-error role="status">'+esc(state.failure)+(state.loginRequired?' · <a href="11-connections.html">Открыть «Подключения»</a>':'')+'</div>':'')+
+        rows.map((g,i)=>{const support=modelSupport(g.id),models=g.models,disabled=!support.ok||!!(state&&state.saving);
           return '<div class="cx-grp'+(g.id===sv||!sv&&i===0?' open':'')+'" data-cx-program="'+esc(g.id)+'"><div class="cx-row grp" data-cx-grp><span class="cv">›</span><b>'+esc(g.title)+'</b><small>'+(g.kind?connectionKind(g.kind)+' · ':'')+modelsN(g.models.length)+'</small></div><div class="cx-sub">'+
             (g.modelsReason?note(esc(g.modelsReason)):'')+models.map(m=>'<button type="button" class="cx-row cx-model'+(m.id===cur&&g.id===sv?' on':'')+(disabled?' dis':'')+'" data-cx-model="'+esc(m.id)+'" data-cx-vendor="'+esc(g.id)+'" data-q="'+esc(g.title+' '+m.label+' '+m.id)+'"'+(disabled?' disabled':'')+'><span class="cx-model-text"><b>'+esc(m.label)+'</b>'+(!support.ok||support.note?'<small>'+esc(support.reason||support.note)+'</small>':'')+'</span>'+(m.id===cur&&g.id===sv?'<span class="ck">✓</span>':'')+'</button>').join('')+'</div></div>';
         }).join('')+(!rows.length?note('В статусе пока нет списка моделей.'):'' )+
