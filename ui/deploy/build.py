@@ -185,6 +185,8 @@ PROTO_PAGES = {"01-chat": "Чат", "02-plan": "План", "04-swarm": "Стая
                "10-new-chat": "Новый чат", "11-connections": "Подключения", "12-research": "Ресёрч", "13-sensors": "Датчики", "14-now": "Сейчас",
                "15-artifacts": "Артефакты", "16-memory": "Память проекта", "17-doc": "Документ стадии", "18-overlays": "Уйти · окно · поиск",
                "19-first-run": "Первый запуск", "20-login-pour": "Вход", "21-journal": "Журнал"}
+PROTO_PAGES["02-om-map"] = "План · карта проекта"   # вкладка «Карта проекта» экрана «План · карта»: живая карта (скетч 26); «План пользователя» — прежний 02-plan
+PROTO_SRC = {"02-om-map": "26-om-map-app"}   # экран прототипа, собираемый из другого исходника
 PROTO_START = "/sketches/proto/10-new-chat.html"
 CLASSIC = "/sketches/harness-classic.html"
 LAUNCH = ('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Harnessy</title>'
@@ -197,13 +199,13 @@ LAUNCH = ('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name
 def build_proto():
     """Прототип из новых экранов: копия скетчей в режиме прототипа (proto.css + proto.js) → out/site/sketches/proto.
     Исходники в sketches/disarto остаются листами с пояснениями; прототип всегда выводится из них."""
-    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "proto.js", "responsive.js") if (HERE / n).exists()])
     src = ROOT / "sketches" / "disarto"
+    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "proto.js", "responsive.js") if (HERE / n).exists()] + [src / "om-map.js"])
     dst = OUT / "sketches" / "proto"
     if dst.exists():
         shutil.rmtree(dst)
     dst.mkdir(parents=True)
-    for name in ("style.css", "app.js", "pour-scene.js"):
+    for name in ("style.css", "app.js", "pour-scene.js", "om-map.js", "om-map.css"):   # om-map.* — общий код карты проекта (скетч 26 и экран «План · карта»)
         shutil.copy(src / name, dst / name)
     app_js = (src / "app.js").read_text(encoding="utf-8")
     i = app_js.index("const IC={")
@@ -217,7 +219,7 @@ def build_proto():
     (dst / "proto.js").write_text(rep((HERE / "proto.js").read_text(encoding="utf-8"), "/*IC*/", ic), encoding="utf-8")
     boot = (HERE / "proto.js").read_text(encoding="utf-8").split("/* LIVE_BOOT_END */", 1)[0]
     for stem, title in PROTO_PAGES.items():
-        t = (src / f"{stem}.html").read_text(encoding="utf-8")
+        t = (src / f"{PROTO_SRC.get(stem, stem)}.html").read_text(encoding="utf-8")
         t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto>')
         t = rep(t, "<head>", "<head><script>" + boot + "</script>")
         t = rep(t, "</head>", '<link rel="stylesheet" href="proto.css"></head>')

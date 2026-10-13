@@ -251,6 +251,12 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
   /* полотно: точечная сетка как в 02, стрелки под карточками */
   .om-canvas{position:relative;border:1px solid var(--line);border-radius:14px;background:var(--panel);background-image:radial-gradient(circle at 1px 1px,#1f1f23 1px,transparent 1px);background-size:22px 22px;overflow:hidden;min-height:0}
   .om-canvas.static{pointer-events:none}
+  .om-view{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:0 0}
+  .om-canvas:not(.static){cursor:grab;user-select:none;-webkit-user-select:none}.om-canvas.panning{cursor:grabbing}.om-canvas:not(.static) [data-id],.om-canvas:not(.static) [data-ghost]{cursor:pointer}
+  /* управление масштабом: − · процент · + · вписать */
+  .om-zoom{position:absolute;right:12px;bottom:12px;display:flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line2);border-radius:10px;background:var(--raised);z-index:3;user-select:none}
+  .om-zoom span{min-width:26px;height:24px;padding:0 6px;border-radius:7px;display:grid;place-items:center;cursor:pointer;color:var(--ink2);font:500 14px/1 var(--font)}.om-zoom span:hover{background:var(--tile);color:var(--ink)}
+  .om-zoom span.fit{font-size:11.5px}.om-zoom b{font:500 10.5px var(--mono);color:var(--ink3);min-width:44px;text-align:center}
   .om-under,.om-edges{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
   .om-edges path{fill:none;stroke:#585860;stroke-width:1.5;transition:opacity .18s,stroke .18s}
   .om-edges path.fail{stroke-dasharray:5 4;stroke:#44444c}
@@ -364,7 +370,7 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
   .fcap .l{display:grid;grid-template-columns:118px 1fr;gap:3px 12px;font-size:12.5px;color:var(--ink2);max-width:980px}.fcap .l span{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding-top:2px}
   /* статичные образцы в дизайн-коде */
   .om-static .om-card,.om-static .om-work,.om-static .om-task,.om-static .om-ghost,.om-static .om-lbl{position:relative;right:auto;top:auto;left:auto;bottom:auto;transform:none}
-  .om-static .om-side{height:300px;width:300px;flex:none}.om-static .om-stages{width:100%}
+  .om-static .om-side{height:300px;width:300px;flex:none}.om-static .om-stages{width:100%}.om-static .om-zoom{position:relative;right:auto;bottom:auto;display:inline-flex}
 </style></head>
 <body><div class="sheet">
   <h1>Harnessy · лист 00 · дизайн-код</h1>
@@ -750,10 +756,11 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
     <p class="conn-note">Узкая панель под стадиями. Для блока: вход, действие (поведение целиком), выход, ответ на технический вопрос, пробелы (вопрос, кто закрыл; ваш — варианты с отмеченным выбором), соседи (клик — выбрать), работы и задачи. Для работы — предмет и ответ движка; для задачи — четыре поля, находка и что переиздано. Пусто — что видно и что можно на этой стадии.</p></div>
 </div>
 
-<div class="box om-static" style="margin-top:12px"><div class="cap2">таймлайн по стадиям · .om-time · обводка фичи · .om-under</div>
+<div class="box om-static" style="margin-top:12px"><div class="cap2">таймлайн по стадиям · .om-time · управление масштабом · .om-zoom · обводка фичи · .om-under</div>
   <div class="om-time"><span class="lbl">стадии</span><div class="tr"><div class="ln"><i style="width:71.4%"></i></div>
     <span class="tk past" style="left:0%"><small>Исследование</small></span><span class="tk past" style="left:14.3%"><small>Концепция</small></span><span class="tk past" style="left:28.6%"><small>Опер. карта</small></span><span class="tk past" style="left:42.9%"><small>Спецификация</small></span><span class="tk past" style="left:57.1%"><small>Фичи</small></span><span class="tk cur" style="left:71.4%"><small>Проход OM</small></span><span class="tk" style="left:85.7%"><small>Компиляция</small></span><span class="tk" style="left:100%"><small>Исполнение</small></span><span class="knob" style="left:71.4%"></span></div>
     <span class="txt"><b>Проход OM · om-g2</b></span></div>
+  <div class="rowx" style="gap:14px;align-items:center;margin-top:14px"><div class="om-zoom"><span>−</span><b>87 %</b><span>+</span><span class="fit">вписать</span></div><span style="font-size:12px;color:var(--ink2)">в правом нижнем углу полотна: «−» / «+» — к центру, ⌘ или ctrl + колесо и щипок тачпада — к точке курсора, пределы 30–200 %; «вписать» — вся карта уровня в полотно (срабатывает само при раскрытии и смене стадии); колесо и тачпад без ⌘ — прокрутка, перетаскивание пустого места — панорама, карта не уезжает за рамку узлов; карточки перетаскиваются мышью, связи следуют</span></div>
   <div style="position:relative;height:150px;margin-top:14px">
     <svg class="om-under" style="position:absolute;inset:0;width:100%;height:150px"><rect x="9" y="24" width="186" height="110" style="--fc:#dcb866"/><rect x="229" y="24" width="186" height="110" style="--fc:#3fbf6f"/></svg>
     <span class="om-flbl" style="--fc:#dcb866;position:absolute;left:16px;top:8px">Ф2 Ход с проверкой<small>Т2 · Т3</small></span><span class="om-flbl" style="--fc:#3fbf6f;position:absolute;left:236px;top:8px">Ф3 История<small>Т4</small></span>

@@ -855,3 +855,7 @@ html[data-m][data-page="conn"] .row .pay{flex:1 1 100%;margin-left:44px;max-widt
 
 html[data-proto][data-page="chat"] .main:has(>#live-waiting){grid-template-rows:auto auto minmax(0,1fr) auto}
 html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px)!important}
+
+/* экран «План · карта»: вкладки «Карта проекта» / «План пользователя» в шапке (proto.js) */
+html[data-proto] .plan-tabs { margin-left:12px; }
+html[data-proto] .plan-tabs > span { cursor:pointer; }

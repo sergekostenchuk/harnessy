@@ -41,8 +41,18 @@
   const PAGES={new:'10-new-chat.html',now:'14-now.html',chat:'01-chat.html',plan:'02-plan.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',events:'09-events.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
   const TIP={now:'Сейчас',chat:'Чат',plan:'План · карта',res:'Ресёрч',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Стая агентов',sens:'Датчики',spend:'Расход и лимиты',events:'События',log:'Журнал'};
   const TOP=['now','chat','plan','res','doc','art','mem','swarm','sens','spend','events','log'];
-  const KEY=Object.keys(PAGES).find(k=>PAGES[k]===FILE)||'';
+  /* экран «План · карта» — две вкладки: «Карта проекта» (02-om-map.html#om, по умолчанию) и «План пользователя» (02-plan.html#user); выбранная вкладка запоминается */
+  const PLAN_TABS=[['om','Карта проекта','02-om-map.html'],['user','План пользователя','02-plan.html']], PLAN_KEY='harnessy-plan-tab';
+  const planTab=()=>{ let t='om'; try{ t=localStorage.getItem(PLAN_KEY)||'om'; }catch(e){} return PLAN_TABS.find(x=>x[0]===t)||PLAN_TABS[0]; };
+  const planPage=()=>{ const t=planTab(); return t[2]+'#'+t[0]; };
+  const SKETCH={'02-om-map.html':'26-om-map.html'};   /* лист с пояснениями для экрана, собранного из другого скетча */
+  const KEY=Object.keys(PAGES).find(k=>PAGES[k]===FILE)||(PLAN_TABS.some(t=>t[2]===FILE)?'plan':'');
   document.documentElement.dataset.page=KEY;
+  if(KEY==='plan'){ const cur=PLAN_TABS.find(t=>t[2]===FILE)||PLAN_TABS[1]; try{ localStorage.setItem(PLAN_KEY,cur[0]); }catch(e){} if(!location.hash) history.replaceState(null,'','#'+cur[0]);
+    document.querySelectorAll('.frame .main .top').forEach(top=>{ if(top.querySelector('.plan-tabs')) return; const seg=document.createElement('span'); seg.className='seg plan-tabs';
+      seg.innerHTML=PLAN_TABS.map(t=>'<span'+(t===cur?' class="on"':'')+' data-ptab="'+t[0]+'" title="'+t[1]+'">'+t[1]+'</span>').join('');
+      seg.addEventListener('click',e=>{ const s=e.target.closest('[data-ptab]'); if(!s) return; const t=PLAN_TABS.find(x=>x[0]===s.dataset.ptab); if(!t||t===cur) return; try{ localStorage.setItem(PLAN_KEY,t[0]); }catch(x){} location.href=t[2]+'#'+t[0]; });
+      const b=top.querySelector(':scope > b'); if(b) b.after(seg); else top.prepend(seg); }); }
   // TS-15a specification labels are independent of connection/boot state.
   const SPEC={
     res:['частично','Материалы читаются из проекта; ход исследования, прошлые исследования и версии отмечены как макет.'],
@@ -136,13 +146,13 @@
     if(k==='profile'){ if(window.LIVE) return;   // меню профиля рисует рабочий слой (live.js); старый кадр с тремя меню — только без движка
       if(KEY==='set'&&frames[1]) show(1); else location.href=PAGES.set+'#f2'; return; }
     if(k===KEY){ if(frames.length>1&&cur) show(0); return; }
-    if(PAGES[k]){ e.preventDefault(); e.stopPropagation(); location.href=PAGES[k]; } },true);
+    if(PAGES[k]){ e.preventDefault(); e.stopPropagation(); location.href=k==='plan'?planPage():PAGES[k]; } },true);
   addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&!e.altKey&&e.key.toLowerCase()==='n'&&KEY!=='new'){ e.preventDefault(); location.href=PAGES.new; } });
 
   // ── навигация телефона: кнопка ☰ и выдвижная панель со всеми экранами
   function mobileNav(){ if(document.querySelector('.m-btn')) return;
     const X={new:'<path d="M12 5v14M5 12h14"/>',conn:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',away:'<path d="M20 14.5A8 8 0 1 1 9.500 4a6.500 6.500 0 0 0 10.500 10.500z"/>'};
-    const item=(k,tx,extra)=>'<a class="m-i'+(k===KEY?' on':'')+(extra==='p'?' p':'')+'" href="'+PAGES[k]+(k==='away'?'#leave':'')+'"><svg viewBox="0 0 24 24">'+(IC[k]||X[k]||'')+'</svg>'+tx+(extra&&extra!=='p'?'<small>'+extra+'</small>':'')+'</a>';
+    const item=(k,tx,extra)=>'<a class="m-i'+(k===KEY?' on':'')+(extra==='p'?' p':'')+'" href="'+(k==='plan'?planPage():PAGES[k]+(k==='away'?'#leave':''))+'"><svg viewBox="0 0 24 24">'+(IC[k]||X[k]||'')+'</svg>'+tx+(extra&&extra!=='p'?'<small>'+extra+'</small>':'')+'</a>';
     const btn=document.createElement('button'); btn.className='m-btn'; btn.setAttribute('aria-label','Меню'); btn.textContent='☰';
     const bg=document.createElement('div'); bg.className='m-bg';
     const dr=document.createElement('nav'); dr.className='m-drawer';
@@ -150,7 +160,7 @@
       '<div class="m-g">работа</div>'+item('now','Сейчас','2')+item('chat','Чат')+item('plan','План · карта')+item('doc','Документы проекта')+item('art','Артефакты')+item('mem','Память проекта')+item('res','Ресёрч')+
       '<div class="m-g">команда</div>'+item('swarm','Стая агентов')+item('sens','Датчики')+item('spend','Расход и лимиты')+item('conn','Подключения и лимиты')+
       '<div class="m-g">прочее</div>'+item('events','События')+item('log','Журнал')+item('set','Настройки')+item('away','Уйти')+
-      '<div class="m-f"><a href="../disarto/'+FILE+'">этот экран листом, с пояснениями ↗</a><a href="../disarto/index.html">все скетчи ↗</a></div>';
+      '<div class="m-f"><a href="../disarto/'+(SKETCH[FILE]||FILE)+'">этот экран листом, с пояснениями ↗</a><a href="../disarto/index.html">все скетчи ↗</a></div>';
     document.body.append(btn,bg,dr);
     const open=v=>document.documentElement.classList.toggle('m-open',v);
     btn.addEventListener('click',()=>open(true)); bg.addEventListener('click',()=>open(false)); dr.addEventListener('click',e=>{ if(e.target.closest('[data-mx]')) open(false); }); }
@@ -160,7 +170,7 @@
     const md=[...F.querySelectorAll('.mode span')].find(s=>/список/i.test(s.textContent)); if(md&&!md.classList.contains('on')) md.click(); }
 
   // ── служебные ссылки
-  const note=document.createElement('a'); note.className='proto-note'; note.href='../disarto/'+FILE; note.textContent='скетч с пояснениями ↗'; note.title='Этот же экран листом: с описанием, подписями и сверкой'; document.body.appendChild(note);
+  const note=document.createElement('a'); note.className='proto-note'; note.href='../disarto/'+(SKETCH[FILE]||FILE); note.textContent='скетч с пояснениями ↗'; note.title='Этот же экран листом: с описанием, подписями и сверкой'; document.body.appendChild(note);
   const back=document.createElement('a'); back.className='proto-back'; back.href=PAGES.new; document.body.appendChild(back);   // у кадра без боковой панели — выход назад
   back.addEventListener('click',e=>{ if(cur>0){ e.preventDefault(); show(0); } });
 
