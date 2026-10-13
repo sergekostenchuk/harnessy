@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 26 · Карта OM · путь человека</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+  /* ── карта входов (как в 25) ── */
+  .map{border:1px solid var(--line2);border-radius:14px;background:var(--panel);padding:18px 20px;margin:0 0 40px;max-width:1280px}
+  .map .cap2{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:12px}
+  .map-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .ent{border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:12px 14px;display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:start;font-size:12.5px;color:var(--ink2)}
+  .ent b{display:block;color:var(--ink);font-weight:500;margin-bottom:3px}.ent .n{font:11px var(--mono);color:var(--accent);padding-top:2px}
+  .ent.main{border-color:rgba(194,122,52,.5)}.ent .tag{display:inline-block;margin-top:6px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.ent.main .tag{color:var(--accent)}
+  .words{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  .words div{border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:12px 14px;font-size:12.5px;color:var(--ink2)}.words b{display:block;color:var(--ink);font-weight:500;margin-bottom:6px}.words s{color:var(--ink3)}
+  /* ── подписи шагов ── */
+  .step-cap{display:grid;grid-template-columns:70px 1fr;gap:14px;align-items:baseline;margin:0 0 12px;max-width:1280px}
+  .step-cap .n{font:500 22px/1 var(--mono);color:var(--accent);letter-spacing:-.02em}.step-cap h2{margin:0 0 4px;font-size:16px;font-weight:500;color:var(--ink)}.step-cap p{margin:0;color:var(--ink2);font-size:12.5px;max-width:980px}.step-cap .w{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);display:block;margin-bottom:4px}
+  /* ── чат ── */
+  .chat{display:grid;grid-template-rows:1fr auto;min-height:0}
+  .feed{overflow:hidden;padding:22px 0 10px;display:flex;flex-direction:column;gap:14px;max-width:820px;width:100%;margin:0 auto}
+  .msg{font-size:13.5px;line-height:1.55;color:var(--ink)}.msg.me{align-self:flex-end;background:var(--raised);border:1px solid var(--line2);border-radius:14px 14px 4px 14px;padding:10px 14px;max-width:70%}
+  .msg .who{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px;display:flex;gap:8px;align-items:center}.msg .who i{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+  .comp{padding:12px 20px 14px}
+  .box-in{max-width:820px;margin:0 auto;border:1px solid var(--line2);border-radius:14px;background:var(--panel);padding:10px 12px 10px}
+  .box-in .txt{color:var(--ink3);font-size:13.5px;padding:4px 4px 10px}
+  .chips{display:flex;gap:6px;align-items:center}.chips .chip.hot{border-color:rgba(194,122,52,.5);color:var(--ink)}.chips .send{margin-left:auto;width:28px;height:28px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#1a1a1a;font-weight:600}
+  /* карточка прохода в чате */
+  .runcard{border:1px solid var(--line2);border-radius:14px;background:var(--panel);padding:14px 16px;max-width:680px}
+  .runcard .h{display:flex;align-items:center;gap:10px;margin-bottom:10px}.runcard .h b{font-weight:500;font-size:14px}
+  .runcard p{margin:10px 0 0;font-size:12.5px;color:var(--ink2);line-height:1.5}.runcard .act{display:flex;gap:8px;align-items:center;margin-top:12px}
+  /* ── карта ── */
+  .mapwrap{display:grid;grid-template-rows:auto auto 1fr;gap:12px;height:100%;min-height:0}
+  .maplay{display:grid;grid-template-columns:1fr 320px;gap:16px;min-height:0}
+  .om-graph{height:600px}
+  .om-graph svg path.dash{stroke-dasharray:4 4}
+  .glegend{position:absolute;left:0;bottom:6px;display:flex;gap:12px;white-space:nowrap;align-items:center;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}.glegend i{display:inline-block;width:14px;height:0;border-top:1.5px solid var(--line2);vertical-align:3px;margin-right:5px}.glegend i.dash{border-top-style:dashed}
+  .gctl{position:absolute;right:0;bottom:40px;display:flex;gap:6px}
+  .where{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:12px 14px;font-size:12.5px;color:var(--ink2)}
+  .where .t{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px;display:flex;justify-content:space-between}
+  .where .kv{display:grid;grid-template-columns:96px 1fr;gap:7px 12px}.where .kv span{color:var(--ink3)}.where .kv b{font-weight:400;color:var(--ink)}
+  .where+.where{margin-top:12px}
+  /* раскрытая карточка поверх — видима всегда (в style.css .ovl скрыт без .on) */
+  .ovl{position:absolute;inset:0;z-index:20;background:rgba(6,6,8,.55);opacity:1;pointer-events:auto}
+  .panel{position:absolute;left:150px;top:60px;width:900px;border:1px solid var(--line2);border-radius:14px;background:var(--panel);box-shadow:0 30px 80px rgba(0,0,0,.65);padding:20px 22px}
+  .panel .x{position:absolute;right:14px;top:12px;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--ink3);font-size:16px}
+  .head2{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-right:36px}.head2 h3{margin:0;font-size:20px;font-weight:500}.head2 small{display:block;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-top:3px}
+  .two2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .blk{border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:14px 16px;font-size:12.5px;color:var(--ink2)}.blk .t{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:10px;display:flex;justify-content:space-between}
+  .blk .kv{display:grid;grid-template-columns:110px 1fr;gap:6px 12px}.blk .kv span{color:var(--ink3);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding-top:2px}.blk .kv b{font-weight:400;color:var(--ink);line-height:1.45}
+  .blk.hot{border-color:rgba(194,122,52,.55)}
+  .decide{border-left:2px solid var(--accent);padding-left:12px;font-size:12.5px;color:var(--ink2);margin-top:12px}.decide .lbl{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+  .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
+  /* диалог */
+  .dlg{position:absolute;left:330px;top:150px;width:560px;border:1px solid var(--line2);border-radius:14px;background:var(--panel);box-shadow:0 30px 80px rgba(0,0,0,.7);padding:20px 22px;z-index:25}
+  .dlg h3{margin:0 0 4px;font-size:17px;font-weight:500}.dlg .lead{margin:0 0 14px;color:var(--ink2);font-size:12.5px;line-height:1.5}
+  .dlg .x{position:absolute;right:14px;top:12px;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--ink3);font-size:16px}
+  .ft{display:flex;gap:8px;align-items:center;margin-top:16px}.ft .note{margin-left:auto;font-size:11.5px;color:var(--ink3)}
+  .seqline{display:flex;gap:6px;align-items:center;font:10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-top:12px;flex-wrap:wrap}.seqline b{color:var(--ink);font-weight:500}.seqline .ar{color:var(--line2)}
+  /* списки */
+  .wrap{max-width:1180px;margin:0 auto;padding:4px 0}
+  .list{border:1px solid var(--line2);border-radius:14px;background:var(--panel);overflow:hidden}
+  .row{display:grid;grid-template-columns:var(--cols);gap:14px;align-items:center;padding:11px 16px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.row:last-child{border-bottom:0}
+  .row.head{padding:8px 16px;background:var(--raised);font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+  .row b{font-weight:500;font-size:13px;color:var(--ink);display:block}.row small{display:block;font:10px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);margin-top:2px}
+  .row .m{font:11px var(--mono);color:var(--ink2)}.row .m.bad{color:var(--bad)}.row .m.dim{color:var(--ink3)}.row .chev{color:var(--ink3);text-align:right}.row.dim b{color:var(--ink2)}
+  .cb{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--line2);display:inline-grid;place-items:center;font-size:10px;color:#1a1a1a}.cb.on{background:var(--accent);border-color:var(--accent)}
+  .ta{border:1px solid var(--line2);border-radius:10px;background:var(--raised);padding:10px 12px;font-size:12.5px;color:var(--ink3);min-height:96px;line-height:1.5}
+  .toast{position:absolute;right:20px;top:64px;width:380px;border:1px solid rgba(194,122,52,.55);border-left:3px solid var(--accent);border-radius:12px;background:var(--panel);box-shadow:0 20px 50px rgba(0,0,0,.6);padding:12px 14px;font-size:12.5px;color:var(--ink2);z-index:30}
+  .toast b{display:block;color:var(--ink);font-weight:500;margin-bottom:3px}.toast .act{display:flex;gap:8px;margin-top:10px}
+  .nums{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 14px}.nums div{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px 14px}.nums b{display:block;font:500 22px/1.1 var(--font);letter-spacing:-.01em;margin-bottom:4px}.nums small{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.nums b.bad{color:var(--bad)}.nums b.acc{color:var(--accent)}
+  .chainbox{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--ink2)}.chainbox span{border:1px solid var(--line2);border-radius:8px;background:var(--raised);padding:6px 9px}.chainbox span.m{border-color:rgba(194,122,52,.5);color:var(--ink)}.chainbox .ar{color:var(--ink3);border:0;padding:0}
+  .srcline{display:flex;justify-content:space-between;gap:12px;margin-top:10px;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  .top .st{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  /* ── карта OM · элементы (скетч 26 · раздел om-map-spec) ── */
+  .src{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);display:block;margin-top:8px}
+  .src.in{display:inline;margin:0 0 0 8px}
+  .pill.mock{color:var(--warn);border-color:transparent;background:rgba(224,178,60,.14)}
+  /* лестница прохода: ступень = планка; цвет планки — состояние */
+  .om-ladder{display:flex;gap:4px;align-items:stretch}
+  .om-ladder .rung{flex:1;min-width:0;border:1px solid var(--line2);border-radius:10px;background:var(--raised);padding:8px 10px}
+  .om-ladder .rung::before{content:"";display:block;height:3px;border-radius:2px;background:var(--line2);margin-bottom:7px}
+  .om-ladder .rung b{display:block;font-weight:500;font-size:12.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .om-ladder .rung small{display:block;font:9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .om-ladder .rung.done::before{background:var(--ok)}.om-ladder .rung.cur::before{background:var(--accent)}.om-ladder .rung.stale::before{background:var(--warn)}
+  .om-ladder .rung.cur{border-color:rgba(194,122,52,.55)}.om-ladder .rung.cur small{color:var(--accent)}.om-ladder .rung.stale small{color:var(--warn)}.om-ladder .rung.todo b{color:var(--ink2)}
+  .om-ladder.mini .rung{padding:6px 8px}.om-ladder.mini .rung b{font-size:11.5px}.om-ladder.mini .rung::before{margin-bottom:5px}
+  /* строка состояния прохода */
+  .om-run{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line2);border-radius:12px;background:var(--panel);font-size:12.5px;color:var(--ink2)}
+  .om-run .o{width:10px;height:10px}.om-run b{color:var(--ink);font-weight:500}.om-run .sep{color:var(--ink3)}.om-run .r{margin-left:auto;display:flex;gap:6px;align-items:center}
+  .om-run.stopped{border-color:rgba(163,48,75,.5)}.om-run.live{border-color:rgba(194,122,52,.5)}
+  /* индикатор «к цели / по кругу» */
+  .om-goal{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .om-goal>div{border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:12px 14px}
+  .om-goal .t{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px;display:flex;justify-content:space-between}
+  .om-goal .v{font:500 20px/1.1 var(--font);letter-spacing:-.01em;margin-bottom:8px;color:var(--ink)}.om-goal .v.bad{color:var(--bad)}.om-goal .v.ok{color:var(--ok)}
+  .om-goal p{margin:6px 0 0;font-size:12px;color:var(--ink2);line-height:1.5}
+  .om-chain{display:flex;gap:3px;align-items:center}.om-chain i{flex:1;height:8px;border-radius:2px;background:var(--line2)}.om-chain i.same{background:var(--bad-fill)}.om-chain i.ok{background:var(--ok)}.om-chain i.cur{background:var(--ink)}
+  /* лента событий прохода */
+  .om-feed{display:flex;flex-direction:column}
+  .om-feed>div{display:grid;grid-template-columns:48px 104px 1fr;gap:12px;align-items:start;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}
+  .om-feed>div:last-child{border-bottom:0}.om-feed .tm{font:10.5px var(--mono);color:var(--ink3);padding-top:3px}.om-feed b{color:var(--ink);font-weight:500}
+  .om-feed .k{font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);padding-top:3px}.om-feed .k.acc{color:var(--accent)}.om-feed .k.bad{color:var(--bad)}.om-feed .k.ok{color:var(--ok)}
+  .om-feed small{display:block;color:var(--ink3);font-size:11px;margin-top:2px}
+  /* карточка блока и узел на карте */
+  .om-block{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:12px 14px;font-size:12.5px;color:var(--ink2)}
+  .om-block .h{display:flex;align-items:center;gap:8px;margin-bottom:8px}.om-block .h b{font-weight:500;font-size:13.5px;color:var(--ink)}.om-block .h .pill{margin-left:auto}
+  .om-block .kv{display:grid;grid-template-columns:96px 1fr;gap:6px 12px}.om-block .kv span{color:var(--ink3);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding-top:2px}.om-block .kv b{font-weight:400;color:var(--ink);line-height:1.45}
+  .om-block.cur{border-color:rgba(194,122,52,.55)}
+  .om-node{position:absolute;width:190px;border:1px solid var(--line2);border-radius:10px;background:var(--panel);padding:9px 11px;font-size:12px;cursor:pointer}
+  .om-node b{display:block;font-weight:500;color:var(--ink);line-height:1.3}.om-node small{display:block;font:9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-top:5px}
+  .om-node.cur{border-color:rgba(194,122,52,.6);box-shadow:0 0 0 3px rgba(194,122,52,.12)}.om-node.cur small{color:var(--accent)}.om-node.todo{opacity:.55}
+  .om-graph{position:relative}.om-graph svg{position:absolute;inset:0;width:100%;height:100%}.om-graph svg path{fill:none;stroke:var(--line2);stroke-width:1.5}.om-graph svg path.on{stroke:var(--accent)}
+  /* решение модели с альтернативами */
+  .om-decision{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:12px 14px;font-size:12.5px;color:var(--ink2)}
+  .om-decision .q{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px}
+  .om-decision .d{font-weight:500;color:var(--ink);font-size:13.5px;margin-bottom:6px}.om-decision p{margin:0 0 8px;line-height:1.5}
+  .om-decision .alt{display:grid;gap:6px}.om-decision .alt div{border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:var(--raised)}.om-decision .alt b{display:block;font-weight:500;color:var(--ink2)}.om-decision .alt small{display:block;color:var(--ink3);font-size:11.5px}
+  .om-decision .who{display:flex;gap:12px;margin-top:8px;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+  /* блокирующий вопрос с предответами */
+  .om-question{border:1px solid rgba(194,122,52,.55);border-left:3px solid var(--accent);border-radius:12px;background:var(--panel);padding:14px 16px;font-size:12.5px;color:var(--ink2)}
+  .om-question .h{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}.om-question .h b{font-weight:500;font-size:14px;color:var(--ink)}
+  .om-question p{margin:0 0 10px;line-height:1.5}
+  .om-question .pre{display:grid;gap:6px}.om-question .pre>div{display:grid;grid-template-columns:18px 1fr auto;gap:10px;align-items:center;border:1px solid var(--line2);border-radius:10px;padding:9px 12px;background:var(--raised);color:var(--ink)}
+  .om-question .pre .rd{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--line2)}.om-question .pre>div.on{border-color:var(--accent)}.om-question .pre>div.on .rd{border-color:var(--accent);background:radial-gradient(circle,var(--accent) 0 4px,transparent 4.5px)}
+  .om-question .pre small{display:block;color:var(--ink3);font-size:11.5px}.om-question .pre .r{font:10px var(--mono);color:var(--ink3);text-align:right}
+  .om-question .ft{display:flex;gap:8px;align-items:center;margin-top:12px}.om-question .ft .note{margin-left:auto;font-size:11.5px;color:var(--ink3)}
+  /* полоса расхода против лимитов */
+  .om-spend{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:12px 14px}
+  .om-spend .row{display:grid;grid-template-columns:170px 1fr 130px;gap:12px;align-items:center;padding:6px 0;font-size:12.5px;color:var(--ink2)}.om-spend .row b{font:500 12px var(--mono);color:var(--ink);text-align:right;white-space:nowrap}
+  .om-spend .bar{height:8px;border-radius:2px;background:var(--line2);overflow:hidden;display:flex}.om-spend .bar i{display:block;height:100%}.om-spend .bar i.m{background:var(--ok)}.om-spend .bar i.u{background:var(--accent)}.om-spend .bar i.f{background:repeating-linear-gradient(90deg,var(--accent-hi) 0 4px,transparent 4px 7px)}.om-spend .bar i.z{background:var(--ink)}.om-spend .bar i.lim{background:var(--bad-fill)}
+  .om-spend .lg{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}.om-spend .lg i{display:inline-block;width:10px;height:6px;border-radius:1px;margin-right:5px;vertical-align:1px}
+  /* стоп-кнопка и состояние «остановлен» */
+  .btn.stop{background:var(--bad-fill);border-color:var(--bad-fill);color:#fff}.btn.stop.off{background:transparent;border-color:var(--line2);color:var(--ink3)}
+  .om-stopped{display:inline-flex;align-items:center;gap:8px;height:26px;padding:0 10px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font:500 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}.om-stopped i{width:8px;height:8px;border-radius:2px;background:currentColor}
+  .om-stopped.live{background:var(--accent-soft);color:var(--accent)}.om-stopped.live i{border-radius:50%}
+  /* задача плана с проваленной проверкой */
+  .om-task{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:12px 14px;font-size:12.5px;color:var(--ink2)}
+  .om-task .h{display:flex;align-items:center;gap:8px;margin-bottom:8px}.om-task .h b{font-weight:500;font-size:13.5px;color:var(--ink)}.om-task .h .pill{margin-left:auto;flex:none;white-space:nowrap}
+  .om-task .kv{display:grid;grid-template-columns:110px 1fr;gap:6px 12px}.om-task .kv span{color:var(--ink3);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding-top:2px}.om-task .kv b{font-weight:400;color:var(--ink);line-height:1.45}
+  .om-fail{margin-top:10px;border:1px solid rgba(163,48,75,.5);border-left:3px solid var(--bad-fill);border-radius:10px;background:var(--raised);padding:10px 12px}
+  .om-fail b{display:block;font-weight:500;color:var(--ink);margin-bottom:3px}.om-fail p{margin:0;color:var(--ink2);line-height:1.5}.om-fail code{font:11px var(--mono);color:var(--ink2)}
+
+</style></head>
+<body><div class="sheet">
+  <h1>Harnessy · скетч 26 · карта OM · путь человека</h1>
+  <p class="sub">OM ведёт проект без владельца: машина пишет код и выдаёт готовые задачи, владелец нужен только чтобы срочно остановить, выбрать из предответов или переоткрыть работы. Поэтому карта отвечает на шесть вопросов владельца — что с проходом, где мы, по кругу или к цели, сколько стоит, что делает движок и почему затык, что дальше — и даёт пять действий. Все цифры в кадрах — из снимка копии базы OM от 13.10 (проект omg-live); стыка OM ↔ ядро Harnessy пока нет, об этом сказано в паспорте каждого экрана. Элементы — в <a href="00-design-code.html#om-map-spec">дизайн-коде · om-map-spec</a>. <a href="index.html">← все скетчи</a></p>
+
+  <div class="map">
+    <div class="cap2">Откуда человек попадает к карте OM · шесть входов</div>
+    <div class="map-grid">
+      <div class="ent main"><span class="n">1</span><div><b>Чат оркестратора · карточка прохода</b>В ленте чата проекта живёт карточка «Проход OM»: состояние словами, мини-лестница, причина стопа и две кнопки — «Открыть карту», «Продолжить». Самый частый вход: человек спрашивает «что с проходом?» и видит ответ, не уходя из чата.<span class="tag">главный · по ситуации</span></div></div>
+      <div class="ent main"><span class="n">2</span><div><b>Боковая панель · «План · карта»</b>Тот же раздел, что план разработки (скетч 02), но вкладка «Карта OM»: лестница ступеней сверху, блоки на полотне, справа «где мы». Сюда ведут входы 1, 3, 4 и 5.<span class="tag">главный · осознанно</span></div></div>
+      <div class="ent"><span class="n">3</span><div><b>Уведомление «OM спрашивает»</b>Блокирующий вопрос приходит плашкой поверх любого экрана и строкой «Чей ход» на экране «Сейчас» (скетч 14). Клик — карточка вопроса с предответами. Неблокирующие вопросы плашкой не ходят.<span class="tag">по ситуации</span></div></div>
+      <div class="ent"><span class="n">4</span><div><b>Кнопка «Остановить»</b>Пока проход идёт, бордовая кнопка стоит в шапке карты и в карточке прохода в чате. Одно нажатие, одно подтверждение. Остановлен — кнопка гаснет, её место занимает «Продолжить».<span class="tag">срочно</span></div></div>
+      <div class="ent"><span class="n">5</span><div><b>Экран «Сейчас» · скетч 14</b>В «Чей ход» — строка «OM ждёт ваш ответ · блокирует проход» с главной кнопкой «Выбрать ответ»; в «Пока вас не было» — «OM остановлен сторожем в 02:27». Клик — карточка вопроса или карта.<span class="tag">подсказка</span></div></div>
+      <div class="ent"><span class="n">6</span><div><b>«Расход и лимиты» · скетч 05</b>Вкладка «Проход OM»: вход против мягкого бюджета, вызовы против лимитов сторожа, заслон — зафиксировано / измерено / прогноз / запас. Отчёт расхода движка сейчас отдаёт отказ, об этом написано на экране.<span class="tag">аналитика</span></div></div>
+    </div>
+    <div class="words">
+      <div><b>Так говорим на экранах</b>проход · ступень · блок «Состояние» · работа · задача плана · вызов модели · попытка · «нужен источник» · идёт / остановлен / ждёт (с причиной) / не может / переоткрыт · «к цели / по кругу» · предответ · «блокирует проход» · измерено / без замера / прогноз / запас · лимиты сторожа.</div>
+      <div><b>Так не говорим</b><s>n-state · cycle · model-call · readiness · obligations · revision · hash · seq · pid · токен стопа · «выбор горизонта» · «церемония» · «вызовов 20 из 50» как прогресс</s>. Идентификаторы — нигде перед глазами; технический вывод — только под «подробнее».</div>
+    </div>
+  </div>
+
+  <!-- КАДР 01 -->
+  <div class="step-cap"><span class="n">01</span><div><span class="w">чат оркестратора · карточка прохода · «что с живым проходом?»</span><h2>Проход OM остановлен в 02:27 — сторож: блок «Состояние», 12 из 12 вызовов</h2><p>Человек спросил в чате. Оркестратор отвечает карточкой, а не абзацем: состояние словами, причина стопа, мини-лестница «что сделано», одна строка «где мы» и две кнопки. Число вызовов здесь — причина лимита, не прогресс. Техническая строка сторожа — под «подробнее».</p></div></div>
+  <div class="frame"><div class="app" data-side="chat">
+    <section class="main">
+      <div class="top"><b>OMG · живой проход</b><span class="st"><i style="background:var(--bad-fill)"></i>Оркестратор · Claude · Opus 5.5</span><div class="r"><span class="om-stopped"><i></i>OM остановлен · 02:27</span><span class="btn sm ghost">Сейчас</span></div></div>
+      <div class="chat">
+        <div class="feed">
+          <div class="msg me">Что с живым проходом?</div>
+          <div class="msg"><div class="who"><i style="background:var(--bad-fill)"></i>Оркестратор · Claude</div>
+            <div class="runcard">
+              <div class="h"><span class="o err"></span><b>Проход OM остановлен · 02:27</b><span class="pill bad">сторож</span></div>
+              <div class="om-run stopped" style="padding:8px 12px"><span class="o err"></span><b>Причина</b><span class="sep">·</span>блок «Состояние» — 12 из 12 вызовов<span class="sep">·</span>лимит на блок исчерпан</div>
+              <div class="om-ladder mini" style="margin-top:10px">
+                <div class="rung done"><b>Дискавери</b><small>сделано</small></div><div class="rung done"><b>Замысел</b><small>сделано</small></div><div class="rung done"><b>Блоки</b><small>сделано</small></div><div class="rung done"><b>Договоры</b><small>сделано</small></div><div class="rung cur"><b>Операции</b><small>сейчас</small></div><div class="rung todo"><b>Работы</b><small>нет</small></div><div class="rung stale"><b>План</b><small>устарел</small></div><div class="rung todo"><b>Исполнение</b><small>нет</small></div>
+              </div>
+              <p><b style="color:var(--ink);font-weight:500">Где мы:</b> исследование операций · блок «Состояние» · попытка 14 · последний шаг — вызов модели. Вопросов без ответа — 3 из 15.</p>
+              <div class="act"><span class="btn sm p">Открыть карту</span><span class="btn sm">Продолжить</span><span class="btn sm stop off">■ Остановить</span><span style="margin-left:auto;font:11px var(--mono);color:var(--ink3)">подробнее ▾</span></div>
+              <div class="srcline"><span>источник: om-state · live-watch · project.phases · project.ownerQuestions</span><span>читаем копию базы OM</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="comp"><div class="box-in"><div class="txt">Напишите что угодно…</div><div class="chips"><span class="chip">＋</span><span class="chip">Чтение папки ▾</span><span class="chip hot">Claude · Opus 5.5 ▾</span><span class="chip">усилие среднее ▾</span><span class="send">↑</span></div></div></div>
+      </div>
+    </section>
+  </div></div>
+
+  <!-- КАДР 02 -->
+  <div class="step-cap"><span class="n">02</span><div><span class="w">план · карта OM · обзор · «где мы, на каком месте?»</span><h2>Лестница ступеней сверху, строка состояния, блоки на полотне, справа — «где мы»</h2><p>Как в старой карте OM-VIEW — лестница над графом, — но без идентификаторов и без «показать всё» ради 55 узлов. Показаны блоки верхнего уровня; текущий подсвечен. Справа одна панель отвечает на вопрос «где мы» цифрами по сути: ступени, стадии, вопросы, план. Состояние остальных блоков в проходе в снимке отсутствует — об этом сказано под полотном.</p></div></div>
+  <div class="frame"><div class="app" data-side="map">
+    <section class="main">
+      <div class="top"><b>План · карта OM</b><span class="st"><i style="background:var(--bad-fill)"></i>остановлен 02:27 · блок «Состояние»</span><div class="r"><span class="seg"><span class="on">Карта</span><span>Проход</span><span>Решения · 14</span><span>Вопросы · 3</span><span>План · 10</span></span><span class="btn sm p">Продолжить</span><span class="btn sm stop off">■ Остановить</span><span class="btn sm ghost">ⓘ Паспорт</span></div></div>
+      <div class="body"><div class="mapwrap">
+        <div class="om-ladder">
+          <div class="rung done"><b>Дискавери</b><small>сделано</small></div><div class="rung done"><b>Замысел</b><small>сделано</small></div><div class="rung done"><b>Исследование блоков</b><small>сделано</small></div><div class="rung done"><b>Блоки и договоры</b><small>сделано</small></div><div class="rung cur"><b>Исследование операций</b><small>сейчас · «Состояние»</small></div><div class="rung todo"><b>Работы</b><small>не завершено</small></div><div class="rung stale"><b>План</b><small>устарел</small></div><div class="rung todo"><b>Исполнение</b><small>нет</small></div>
+        </div>
+        <div class="om-run stopped"><span class="o err"></span><b>Проход остановлен</b><span class="sep">·</span>02:27<span class="sep">·</span>сторож: блок «Состояние» — 12 из 12 вызовов<span class="sep">·</span>попытка 14 · исполнитель<div class="r"><span class="src in">источник: om-state · live-watch</span></div></div>
+        <div class="maplay">
+          <div class="om-graph">
+            <svg><path d="M190 30 L215 30"/><path class="on" d="M405 30 L430 30"/><path d="M190 140 C310 140, 310 30, 430 30"/><path d="M525 66 L525 110"/><path d="M740 176 L740 220"/><path d="M740 286 L740 330"/><path d="M740 396 L740 440"/><path class="dash" d="M835 250 C858 250, 858 140, 835 140"/><path class="dash" d="M835 360 C862 360, 862 140, 835 140"/><path class="dash" d="M835 140 C858 140, 858 30, 835 30"/><path d="M190 470 L215 470"/></svg>
+            <div class="om-node" style="left:0;top:0"><b>Приём поручения через CLI/API</b><small>блок</small></div>
+            <div class="om-node cur" style="left:215px;top:0"><b>Состояние</b><small>сейчас · попытка 14</small></div>
+            <div class="om-node" style="left:0;top:110px"><b>Разрешённая среда и адаптеры</b><small>блок</small></div>
+            <div class="om-node" style="left:430px;top:0"><b>Запуск, повтор, остановка и возобновление</b><small>блок</small></div>
+            <div class="om-node" style="left:430px;top:110px"><b>Адресное исследование и происхождение оснований</b><small>блок</small></div>
+            <div class="om-node" style="left:430px;top:220px"><b>Каталог пригодных самостоятельных результатов</b><small>блок</small></div>
+            <div class="om-node todo" style="left:645px;top:0"><b>Машинный план и достаточный контекст</b><small>план · устарел</small></div>
+            <div class="om-node todo" style="left:645px;top:110px"><b>Реализация назначенного результата</b><small>исполнение · нет</small></div>
+            <div class="om-node todo" style="left:645px;top:220px"><b>Полный применимый прогон кандидата</b><small>исполнение · нет</small></div>
+            <div class="om-node todo" style="left:645px;top:330px"><b>Независимое ревью и адресация дефекта</b><small>исполнение · нет</small></div>
+            <div class="om-node todo" style="left:645px;top:440px"><b>Обычный коммит и регистрация изменения</b><small>исполнение · нет</small></div>
+            <div class="om-node" style="left:0;top:440px"><b>Согласованные снимки A/B</b><small>блок</small></div>
+            <div class="om-node" style="left:215px;top:440px"><b>Безопасный отказ, восстановление и продолжение</b><small>блок · рёбра скрыты</small></div>
+            <div class="gctl"><span class="btn sm ghost">к текущему</span><span class="btn sm ghost">показать все 26</span></div>
+            <div class="glegend"><span><i></i>вперёд</span><span><i class="dash"></i>возврат</span><span>13 рёбер в «Безопасный отказ» скрыты</span><span class="pill mock" style="height:18px">макет · состояния блоков кроме текущего</span></div>
+          </div>
+          <div>
+            <div class="where"><div class="t"><span>где мы</span><span>сейчас</span></div>
+              <div class="kv"><span>ступень</span><b>исследование операций · 5-я из 8</b><span>блок</span><b>«Состояние»</b><span>роль</span><b>исполнитель</b><span>шаг</span><b>вызов модели · попытка 14</b><span>состояние</span><b style="color:var(--bad)">остановлен 02:27 · лимит блока</b></div>
+              <span class="src">источник: om-state · live-watch</span></div>
+            <div class="where"><div class="t"><span>что сделано</span><span>по сути</span></div>
+              <div class="kv"><span>ступени</span><b>4 из 6 исследовательских</b><span>стадии</span><b>5 приняты · 2 устарели (G2, компиляция) · исполнение — нет</b><span>вопросы</span><b>12 из 15 отвечены · 3 ждут</b><span>план</span><b>1 план · 10 задач · 1 запуск — «нужен код»</b></div>
+              <span class="src">источник: project.phases · project.stages · project.ownerQuestions · project.plans</span></div>
+            <div class="where"><div class="t"><span>паспорт</span></div><div style="font-size:12px;line-height:1.5">Читаем копию базы OM (снимок 13.10). Стыка с ядром Harnessy нет — ни договора, ни решения.</div></div>
+          </div>
+        </div>
+      </div></div>
+    </section>
+  </div></div>
+
+  <!-- КАДР 03 -->
+  <div class="step-cap"><span class="n">03</span><div><span class="w">карта · раскрытая карточка блока · «что делает движок и почему затык?»</span><h2>Клик по «Состоянию»: что это за блок — и что на нём делает движок прямо сейчас</h2><p>Карточка поверх карты. Слева — блок как он есть в карте: назначение, польза, результат, договоры. Справа — движок на этом блоке: ступень, роль, попытка, лимит вызовов, последнее звено и что оно значит словами. Внизу — три действия, которые здесь уместны. Решения модели по проходу — отдельной вкладкой (кадр 05).</p></div></div>
+  <div class="frame"><div class="app" data-side="map">
+    <section class="main">
+      <div class="top"><b>План · карта OM</b><span class="st"><i style="background:var(--bad-fill)"></i>остановлен 02:27 · блок «Состояние»</span><div class="r"><span class="seg"><span class="on">Карта</span><span>Проход</span><span>Решения · 14</span><span>Вопросы · 3</span><span>План · 10</span></span><span class="btn sm p">Продолжить</span><span class="btn sm stop off">■ Остановить</span><span class="btn sm ghost">ⓘ Паспорт</span></div></div>
+      <div class="ovl"><div class="panel"><span class="x">×</span>
+        <div class="from">раскрытая карточка · блок · из узла на карте</div>
+        <div class="head2"><span class="o run" style="width:14px;height:14px"></span><div><h3>Состояние</h3><small>блок · исследование операций · сейчас</small></div><span class="pill acc" style="margin-left:10px">попытка 14</span><span class="pill bad">остановлен · лимит блока</span></div>
+        <div class="two2">
+          <div class="blk"><div class="t"><span>блок в карте</span><span>источник: project.graph · узел</span></div>
+            <div class="kv"><span>назначение</span><b>Единственный модуль записи канонических исследований, стадий, одной карты, плана, попыток и результатов. Все производители сохраняют результат через эту границу; чтение прежних версий не зависит от будущих записей.</b><span>польза</span><b>Состояние переживает процесс и не расходится с файловой проекцией.</b><span>результат</span><b>канонический срез</b><span>договоры</span><b>вход — поручение · выход — канонический срез</b></div></div>
+          <div class="blk hot"><div class="t"><span>движок на этом блоке</span><span>источник: om-state · live-watch</span></div>
+            <div class="kv"><span>ступень</span><b>исследование операций</b><span>роль</span><b>исполнитель</b><span>шаг</span><b>вызов модели</b><span>попытка</span><b>14</b><span>вызовов на блок</span><b style="color:var(--bad)">12 из 12 — лимит исчерпан</b><span>последнее звено</span><b>вызов 20 · продолжение → ответ вне формы, движок отклонил</b></div>
+            <div class="decide"><div class="lbl">почему затык · словами</div>Модель просит источник, движок досылает, следующее звено — и так все 12 вызовов блока. Ответ последнего звена пришёл не в той форме, которую ждёт движок, и был отклонён. Сторож остановил проход по лимиту вызовов на блок.</div></div>
+        </div>
+        <div class="acts"><span class="btn p">Продолжить с этого блока</span><span class="btn">Переоткрыть работы</span><span class="btn ghost">Решения модели · 14</span><span style="margin-left:auto;font:11px var(--mono);color:var(--ink3)">подробнее ▾ — строки сторожа как есть</span></div>
+      </div></div>
+    </section>
+  </div></div>
+
+  <!-- КАДР 04 -->
+  <div class="step-cap"><span class="n">04</span><div><span class="w">карта · вкладка «проход» · «по кругу или к цели?»</span><h2>Два числа рядом: сколько ступеней позади — и сколько вызовов подряд на одном блоке без продвижения</h2><p>Левая плитка — движение к цели по сути. Правая — та же цепочка продолжений, из-за которой 19 вызовов однажды выглядели как работа: модель — «нужен источник», движок досылает, следующее звено. Ниже — лента событий сторожа по-русски. Признак «0 продвижения» считается из событий окна: в движке такого поля нет, и это помечено.</p></div></div>
+  <div class="frame"><div class="app" data-side="map">
+    <section class="main">
+      <div class="top"><b>План · карта OM</b><span class="st"><i style="background:var(--bad-fill)"></i>остановлен 02:27 · блок «Состояние»</span><div class="r"><span class="seg"><span>Карта</span><span class="on">Проход</span><span>Решения · 14</span><span>Вопросы · 3</span><span>План · 10</span></span><span class="btn sm p">Продолжить</span><span class="btn sm stop off">■ Остановить</span><span class="btn sm ghost">ⓘ Паспорт</span></div></div>
+      <div class="body"><div class="wrap">
+        <div class="om-goal">
+          <div><div class="t"><span>к цели</span><span>ступени</span></div><div class="v ok">4 из 6</div><div class="ticks"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="on"></i><i></i></div><p>Сделаны дискавери, замысел, исследование блоков, блоки и договоры. Сейчас — исследование операций; работы не начаты. План по старому входу устарел.</p><span class="src">источник: project.phases · project.stages</span></div>
+          <div><div class="t"><span>по кругу</span><span>блок «Состояние»</span></div><div class="v bad">12 вызовов · 0 продвижения</div><div class="om-chain"><i class="same"></i><i class="same"></i><i class="same"></i><i class="same"></i><i class="same"></i><i class="same"></i><i class="same"></i><i class="same"></i><i class="same"></i><i class="same"></i><i class="same"></i><i class="same"></i></div><p>Все вызовы блока ушли в цепочку продолжений. Новых результатов блока за это время нет. Попытка 14.</p><span class="src">источник: live-watch (12 из 12, вид звена) · признак «0 продвижения» — окно из событий</span> <span class="pill mock">макет · расчёт признака</span></div>
+        </div>
+        <div class="two2" style="margin-top:14px">
+          <div class="card"><div class="h">Лента событий прохода<span class="cnt">источник: live-watch</span></div>
+            <div class="om-feed" style="margin-top:8px">
+              <div><span class="tm">02:27</span><span class="k bad">стоп доказан</span><div><b>Проход остановлен</b></div></div>
+              <div><span class="tm">02:27</span><span class="k bad">стоп</span><div><b>Сторож: блок «Состояние» — 12 из 12 вызовов</b><small>исчерпан лимит вызовов на блок</small></div></div>
+              <div><span class="tm">—</span><span class="k acc">вызов 20</span><div><b>«Состояние» · продолжение → вне формы, отказ</b><small>накоплено: вызовов 20 из 50 · вход 13 078 437 из мягкого бюджета 40 000 000</small></div></div>
+              <div><span class="tm">—</span><span class="k">вызовы 9–19</span><div><b>«Состояние» · звенья продолжения</b><small>строки сторожа за эти вызовы в снимок не вошли</small></div></div>
+              <div><span class="tm">—</span><span class="k ok">проход начат</span><div><b>Проход начат</b></div></div>
+              <div><span class="tm">—</span><span class="k">взведён</span><div><b>Сторож взведён</b><small>лимиты: вызовов всего 50 · на блок 12 · вход 40 000 000 (мягкий) · срок и застой — значений в снимке нет</small></div></div>
+            </div></div>
+          <div class="card"><div class="h">Что просит модель и почему это выглядит как работа<span class="cnt">класс 03.10</span></div>
+            <div class="chainbox" style="margin-top:10px"><span class="m">модель: «нужен источник»</span><span class="ar">→</span><span>движок досылает</span><span class="ar">→</span><span class="m">следующее звено</span><span class="ar">→</span><span>…</span></div>
+            <p style="font-size:12.5px;color:var(--ink2);line-height:1.5;margin:12px 0 0">Каждое звено — настоящий вызов модели с расходом, но без нового результата блока. В проходе 03.10 таких звеньев было 19 подряд — по журналу это была «работа». Карта показывает их одной красной цепочкой, а не девятнадцатью строками.</p>
+            <p style="font-size:12.5px;color:var(--ink2);line-height:1.5;margin:8px 0 0">Сейчас: 12 вызовов на блоке «Состояние», последнее звено — ответ вне формы, отказ.</p>
+            <span class="src">источник: цепочка продолжений (класс 03.10 · 19 звеньев) · live-watch (вызов 20)</span></div>
+        </div>
+      </div></div>
+    </section>
+  </div></div>
+
+  <!-- КАДР 05 -->
+  <div class="step-cap"><span class="n">05</span><div><span class="w">карта · вкладка «решения» · «что решила модель и почему»</span><h2>Четырнадцать решений, принятых моделью, списком — и карточка решения с альтернативами и последствиями</h2><p>Владелец не решает вопросы прохода — их решает модель, и каждое решение записано: вопрос, решение, обоснование, альтернативы с последствиями, время, кто решил. Список — тема и число альтернатив; клик — карточка поверх. Тема первого решения и число его альтернатив — настоящие; формулировки в кадре — макет, тексты решений в снимок не вошли.</p></div></div>
+  <div class="frame"><div class="app" data-side="map">
+    <section class="main">
+      <div class="top"><b>План · карта OM</b><span class="st"><i style="background:var(--bad-fill)"></i>остановлен 02:27 · блок «Состояние»</span><div class="r"><span class="seg"><span>Карта</span><span>Проход</span><span class="on">Решения · 14</span><span>Вопросы · 3</span><span>План · 10</span></span><span class="btn sm p">Продолжить</span><span class="btn sm stop off">■ Остановить</span><span class="btn sm ghost">ⓘ Паспорт</span></div></div>
+      <div class="body"><div class="wrap">
+        <div class="list" style="--cols:1fr 120px 120px 150px 16px">
+          <div class="row head"><span>тема · вопрос</span><span>кто решил</span><span>альтернатив</span><span>когда</span><span></span></div>
+          <div class="row"><div><b>Договор продолжения</b><small>как продолжать, когда модель отвечает «нужен источник» · макет формулировки</small></div><span class="m">модель</span><span class="m">3</span><span class="m dim">время — в записи</span><span class="chev">›</span></div>
+          <div class="row dim"><div><b>Тема решения 2</b><small>текст в снимок не вошёл</small></div><span class="m">модель</span><span class="m dim">—</span><span class="m dim">—</span><span class="chev">›</span></div>
+          <div class="row dim"><div><b>Тема решения 3 … 14</b><small>ещё 12 решений · тексты в снимок не вошли</small></div><span class="m">модель</span><span class="m dim">—</span><span class="m dim">—</span><span class="chev">›</span></div>
+        </div>
+        <div class="srcline"><span>источник: om-decisions · 14 решений · поля записи</span><span><span class="pill mock">макет · тексты решений</span></span></div>
+      </div></div>
+      <div class="ovl"><div class="panel" style="width:720px;left:240px;top:90px"><span class="x">×</span>
+        <div class="from">раскрытая карточка · решение модели · из строки списка</div>
+        <div class="om-decision" style="border:0;padding:0;background:transparent">
+          <div class="q">договор продолжения · вопрос</div><div class="d" style="font-size:18px">Как продолжать, когда модель отвечает «нужен источник»?</div>
+          <p><b style="color:var(--ink);font-weight:500">Решение:</b> досылать источник звеном той же попытки, не открывая новую.</p>
+          <p><b style="color:var(--ink);font-weight:500">Обоснование:</b> источник есть в базе; новая попытка потеряла бы накопленный контекст звеньев.</p>
+          <div class="t" style="font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:12px 0 8px">альтернативы и последствия · 3</div>
+          <div class="alt"><div><b>Открывать новую попытку на каждый запрос источника</b><small>последствие: контекст звеньев теряется, расход растёт</small></div><div><b>Отказать и спросить владельца</b><small>последствие: проход встаёт на каждом источнике — противоречит «OM без владельца»</small></div><div><b>Досылать без ограничения звеньев</b><small>последствие: цепочка «по кругу» не распознаётся сторожем</small></div></div>
+          <div class="who"><span>решила модель</span><span>время — в записи</span><span>альтернатив 3</span><span class="pill mock" style="height:18px">макет · формулировки</span></div>
+        </div>
+        <div class="acts"><span class="btn ghost">Открыть блок «Состояние»</span><span style="margin-left:auto;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)">источник: om-decisions · первое решение · поля настоящие, текст макет</span></div>
+      </div></div>
+    </section>
+  </div></div>
+
+  <!-- КАДР 06 -->
+  <div class="step-cap"><span class="n">06</span><div><span class="w">расход и лимиты · вкладка «проход OM» · «сколько стоит?»</span><h2>Факт против лимитов сторожа — и заслон: зафиксировано, измерено, без замера, прогноз, запас</h2><p>Экран из скетча 05, вкладка «Проход OM». Верх — то, что ограничивает проход: вход против мягкого бюджета, вызовы против лимитов, вызовы на блок — исчерпаны. Низ — заслон: из 8,26 М зафиксированных измерено только 1,40 М, остальное без замера; прогноз 4,82 М, запас 0,14 М. Отчёт расхода движка отдаёт отказ — экран говорит об этом, а не рисует нули.</p></div></div>
+  <div class="frame"><div class="app" data-side="spend">
+    <section class="main">
+      <div class="top"><b>Расход и лимиты · OMG</b><span class="st"><i style="background:var(--bad-fill)"></i>проход остановлен · лимит на блок исчерпан</span><div class="r"><span class="seg"><span>Обзор</span><span class="on">Проход OM</span><span>Проекты</span><span>Причины</span><span>Смета</span></span><span class="btn sm ghost">ⓘ Паспорт</span></div></div>
+      <div class="body"><div class="wrap">
+        <div class="nums"><div><b class="acc">13,08 М</b><small>вход · из 40 М мягкого бюджета</small></div><div><b>20 из 50</b><small>вызовов всего</small></div><div><b class="bad">12 из 12</b><small>вызовов на блок «Состояние»</small></div><div><b>8,26 М</b><small>зафиксировано заслоном</small></div></div>
+        <div class="two2">
+          <div class="om-spend">
+            <div class="t" style="font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px">сторож · факт против лимитов</div>
+            <div class="row"><span>вход · мягкий бюджет</span><div class="bar"><i class="u" style="width:32.7%"></i></div><b>13,08 М из 40 М</b></div>
+            <div class="row"><span>вызовов всего</span><div class="bar"><i class="u" style="width:40%"></i></div><b>20 из 50</b></div>
+            <div class="row"><span>вызовов на блок</span><div class="bar"><i class="lim" style="width:100%"></i></div><b>12 из 12</b></div>
+            <div class="row"><span>срок · застой</span><div class="bar"></div><b style="color:var(--ink3)">нет в снимке</b></div>
+            <div class="lg"><span><i style="background:var(--accent)"></i>факт</span><span><i style="background:var(--bad-fill)"></i>лимит исчерпан</span></div>
+            <span class="src">источник: live-watch · строка вызова 20 · лимиты при взведении</span>
+          </div>
+          <div class="om-spend">
+            <div class="t" style="font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px">заслон · токены</div>
+            <div class="row"><span>зафиксировано</span><div class="bar"><i class="m" style="width:10.6%"></i><i class="u" style="width:51.9%"></i><i class="f" style="width:36.5%"></i><i class="z" style="width:1%"></i></div><b>8,26 М + 4,82 М</b></div>
+            <div class="row"><span>из них измерено</span><div class="bar"><i class="m" style="width:17%"></i></div><b>1,40 М</b></div>
+            <div class="row"><span>без замера</span><div class="bar"><i class="u" style="width:83%"></i></div><b>6,86 М</b></div>
+            <div class="row"><span>прогноз · запас</span><div class="bar"><i class="f" style="width:97%"></i><i class="z" style="width:3%"></i></div><b>4,82 М · 0,14 М</b></div>
+            <div class="lg"><span><i style="background:var(--ok)"></i>измерено</span><span><i style="background:var(--accent)"></i>без замера</span><span><i style="background:repeating-linear-gradient(90deg,var(--accent-hi) 0 3px,transparent 3px 5px)"></i>прогноз</span><span><i style="background:var(--ink)"></i>запас</span></div>
+            <span class="src">источник: gate-log</span>
+          </div>
+        </div>
+        <div class="card" style="margin-top:14px;border-color:rgba(163,48,75,.5)"><div class="h"><span class="o err"></span>Отчёт расхода движка — отказ<span class="cnt">источник: om-spend</span></div><p style="margin:6px 0 0;font-size:12.5px;color:var(--ink2)">Цены в деньгах и расход по моделям здесь не показаны: отчёт расхода движка сейчас отдаёт отказ. Полосы выше читаются из заслона и сторожа. Починить отчёт — задача движка; экран не подставляет оценки.</p></div>
+      </div></div>
+    </section>
+  </div></div>
+
+  <!-- КАДР 07 -->
+  <div class="step-cap"><span class="n">07</span><div><span class="w">карта · проход идёт · «срочно остановить»</span><h2>Пока проход идёт, в шапке одна бордовая кнопка. Нажал — одно подтверждение, и движок отвечает «стоп доказан»</h2><p>Единственное действие, ради которого владелец нужен во время прохода. Диалог говорит, что произойдёт, и не предлагает вариантов. После подтверждения состояние проходит три шага: «останавливаем…» → «стоп» → «стоп доказан» — и только тогда «остановлен». Что станет с вызовом, который сейчас в полёте, в снимке не сказано — строка помечена.</p></div></div>
+  <div class="frame"><div class="app" data-side="map">
+    <section class="main">
+      <div class="top"><b>План · карта OM</b><span class="st"><i style="background:var(--accent)"></i>идёт · вызов модели · блок «Состояние» · попытка 14</span><div class="r"><span class="seg"><span class="on">Карта</span><span>Проход</span><span>Решения · 14</span><span>Вопросы · 3</span><span>План · 10</span></span><span class="om-stopped live"><i></i>идёт</span><span class="btn sm stop">■ Остановить</span><span class="btn sm ghost">ⓘ Паспорт</span></div></div>
+      <div class="body"><div class="mapwrap">
+        <div class="om-ladder"><div class="rung done"><b>Дискавери</b><small>сделано</small></div><div class="rung done"><b>Замысел</b><small>сделано</small></div><div class="rung done"><b>Исследование блоков</b><small>сделано</small></div><div class="rung done"><b>Блоки и договоры</b><small>сделано</small></div><div class="rung cur"><b>Исследование операций</b><small>сейчас · «Состояние»</small></div><div class="rung todo"><b>Работы</b><small>не завершено</small></div><div class="rung stale"><b>План</b><small>устарел</small></div><div class="rung todo"><b>Исполнение</b><small>нет</small></div></div>
+        <div class="om-run live"><span class="o run"></span><b>Проход идёт</b><span class="sep">·</span>вызов модели<span class="sep">·</span>блок «Состояние» · попытка 14 · исполнитель<span class="sep">·</span>вызовов на блок 12 из 12<div class="r"><span class="src in">источник: om-state · live-watch</span></div></div>
+      </div></div>
+      <div class="ovl"><div class="dlg"><span class="x">×</span>
+        <h3>Остановить проход?</h3><p class="lead">Новых вызовов модели не будет. Движок запишет «стоп», проверит и ответит «стоп доказан» — только после этого проход считается остановленным. Продолжить можно потом кнопкой «Продолжить».</p>
+        <div class="blk" style="padding:10px 12px"><div class="kv" style="grid-template-columns:130px 1fr"><span>сейчас</span><b>вызов модели · блок «Состояние» · попытка 14</b><span>вызов в полёте</span><b style="color:var(--ink3)">дождаться или прервать — в снимке не сказано <span class="pill mock" style="height:18px;margin-left:6px">макет</span></b></div></div>
+        <div class="seqline"><b>останавливаем…</b><span class="ar">→</span><span>стоп</span><span class="ar">→</span><span>стоп доказан</span><span class="ar">→</span><b style="color:var(--bad)">остановлен</b><span style="margin-left:auto">источник: live-watch · события</span></div>
+        <div class="ft"><span class="btn stop">■ Остановить</span><span class="btn ghost">Отмена</span><span class="note">одно нажатие · без вариантов</span></div>
+      </div></div>
+    </section>
+  </div></div>
+
+  <!-- КАДР 08 -->
+  <div class="step-cap"><span class="n">08</span><div><span class="w">карта · «что дальше?» · продолжить</span><h2>Что дальше — три вещи по порядку, и диалог «Продолжить проход» с теми лимитами, с которыми сторож взведётся заново</h2><p>Карта не спрашивает про «горизонт». Она показывает, что мешает и что произойдёт: ответить на блокирующий вопрос, продолжить проход (сторож взведётся заново с теми же лимитами), переоткрыть работы, если ответы модели не устраивают. Про план сказано честно: он устарел и пересоберётся после работ — это вывод из стадий, не поле движка.</p></div></div>
+  <div class="frame"><div class="app" data-side="map">
+    <section class="main">
+      <div class="top"><b>План · карта OM</b><span class="st"><i style="background:var(--bad-fill)"></i>остановлен 02:27 · блок «Состояние»</span><div class="r"><span class="seg"><span class="on">Карта</span><span>Проход</span><span>Решения · 14</span><span>Вопросы · 3</span><span>План · 10</span></span><span class="btn sm p">Продолжить</span><span class="btn sm stop off">■ Остановить</span><span class="btn sm ghost">ⓘ Паспорт</span></div></div>
+      <div class="body"><div class="wrap" style="max-width:900px">
+        <div class="card"><div class="h">Что дальше<span class="cnt">по порядку</span></div>
+          <div class="list" style="--cols:28px 1fr 170px 16px;margin-top:10px;border:0;border-radius:0;background:transparent">
+            <div class="row"><span class="m" style="color:var(--accent)">1</span><div><b>Ответить на вопрос, который блокирует проход</b><small>3 вопроса без ответа · источник: project.ownerQuestions</small></div><span><span class="btn sm p">Выбрать ответ</span></span><span class="chev">›</span></div>
+            <div class="row"><span class="m" style="color:var(--accent)">2</span><div><b>Продолжить проход с блока «Состояние»</b><small>сторож взведётся заново · источник: live-watch «взведён»</small></div><span><span class="btn sm">Продолжить</span></span><span class="chev">›</span></div>
+            <div class="row"><span class="m" style="color:var(--accent)">3</span><div><b>Переоткрыть работы своей командой</b><small>если ответы модели по операциям не устраивают · фаза «переоткрыт»</small></div><span><span class="btn sm ghost">Переоткрыть</span></span><span class="chev">›</span></div>
+            <div class="row dim"><span class="m">·</span><div><b>План пересоберётся после работ</b><small>стадии G2 и компиляция устарели · вывод из стадий, не поле движка <span class="pill mock" style="height:18px">макет</span></small></div><span class="m dim">само</span><span></span></div>
+          </div></div>
+      </div></div>
+      <div class="ovl"><div class="dlg" style="top:120px"><span class="x">×</span>
+        <h3>Продолжить проход</h3><p class="lead">Остановлен в 02:27 сторожем: блок «Состояние» — 12 из 12 вызовов. Продолжение начнётся с этого же блока; сторож взведётся заново.</p>
+        <div class="blk" style="padding:10px 12px"><div class="t"><span>лимиты сторожа при взведении</span><span>источник: live-watch</span></div><div class="kv" style="grid-template-columns:130px 1fr"><span>вызовов всего</span><b>50</b><span>на блок</span><b>12</b><span>вход · мягкий</span><b>40 000 000</b><span>срок · застой</span><b style="color:var(--ink3)">значений в снимке нет</b></div></div>
+        <div class="blk" style="padding:10px 12px;margin-top:8px;border-color:rgba(194,122,52,.5)"><div class="kv" style="grid-template-columns:130px 1fr"><span>вопросы</span><b>3 без ответа — если среди них блокирующий, проход встанет на нём сразу</b></div></div>
+        <div class="ft"><span class="btn p">Продолжить</span><span class="btn ghost">Отмена</span><span class="note">вариантов нет · условия — те, что в одобренном плане прохода</span></div>
+      </div></div>
+    </section>
+  </div></div>
+
+  <!-- КАДР 09 -->
+  <div class="step-cap"><span class="n">09</span><div><span class="w">уведомление «OM спрашивает» · блокирующий вопрос · предответы</span><h2>Плашка поверх чата → карточка вопроса: что спрашивает движок, зачем, и предответы, из которых выбирает владелец</h2><p>Слово владельца: «вопросы решает модель, факты — код, владелец выбирает из предответов». У записи вопроса есть флаг «блокирует проход», но вариантов ответа в данных нет — поэтому предответы помечены «макет» с подписью, какого источника не хватает. Два других вопроса не блокируют и плашкой не ходят; они ждут во вкладке «Вопросы».</p></div></div>
+  <div class="frame"><div class="app" data-side="chat">
+    <section class="main">
+      <div class="top"><b>OMG · живой проход</b><span class="st"><i style="background:var(--accent)"></i>Оркестратор · Claude · Opus 5.5</span><div class="r"><span class="om-stopped live"><i></i>OM ждёт ваш ответ</span><span class="btn sm ghost">Сейчас</span></div></div>
+      <div class="chat">
+        <div class="feed" style="opacity:.45">
+          <div class="msg me">Что с живым проходом?</div>
+          <div class="msg"><div class="who"><i></i>Оркестратор · Claude</div>Проход идёт: исследование операций, блок «Состояние», попытка 14…</div>
+        </div>
+        <div class="toast"><b>OM спрашивает · блокирует проход</b>Движок не может продолжить без вашего выбора. Остальные 2 вопроса не блокируют.<div class="act"><span class="btn sm p">Выбрать ответ</span><span class="btn sm ghost">Позже</span></div></div>
+        <div class="comp"><div class="box-in"><div class="txt">Напишите что угодно…</div><div class="chips"><span class="chip">＋</span><span class="chip">Чтение папки ▾</span><span class="chip hot">Claude · Opus 5.5 ▾</span><span class="chip">усилие среднее ▾</span><span class="send">↑</span></div></div></div>
+      </div>
+      <div class="ovl"><div class="panel" style="width:680px;left:260px;top:140px;padding:0;border:0;background:transparent;box-shadow:none">
+        <div class="om-question" style="box-shadow:0 30px 80px rgba(0,0,0,.65)">
+          <div class="from">раскрытая карточка · вопрос движка · из плашки или строки «Сейчас»</div>
+          <div class="h"><span class="o need"></span><b>OM спрашивает</b><span class="pill bad">блокирует проход</span><span class="pill">вопрос 13 из 15</span></div>
+          <p><b style="color:var(--ink);font-weight:500">Текст вопроса из записи.</b> Здесь — вопрос как он сформулирован движком, зачем ответ нужен блоку «Состояние» и что будет, если не ответить. <span class="pill mock" style="height:18px">макет · текст</span></p>
+          <div class="pre">
+            <div class="on"><span class="rd"></span><div>Предответ 1 — тот, что движок считает наиболее вероятным<small>последствие словами</small></div><span class="r">по умолчанию</span></div>
+            <div><span class="rd"></span><div>Предответ 2<small>последствие словами</small></div><span class="r"></span></div>
+            <div><span class="rd"></span><div>Свой ответ<small>текстом · движок проверит форму</small></div><span class="r"></span></div>
+          </div>
+          <div class="ft"><span class="btn p">Ответить и продолжить</span><span class="btn ghost">Позже</span><span class="note">предответы — нужен источник в движке</span></div>
+          <div class="srcline"><span>источник: project.ownerQuestions · 15 вопросов · 12 отвечены · флаг «блокирует проход»</span><span><span class="pill mock">макет · предответы и текст</span></span></div>
+        </div>
+      </div></div>
+    </section>
+  </div></div>
+
+  <!-- КАДР 10 -->
+  <div class="step-cap"><span class="n">10</span><div><span class="w">карта · ступень «работы» · переоткрыть своей командой</span><h2>Десять работ списком — отметить, написать, что именно не так, и переоткрыть</h2><p>Ступень «Работы» не завершена, но работы как узлы в карте уже есть — те же десять, из которых собран устаревший план. Владелец отмечает, какие переоткрыть, и пишет команду своими словами: что переделать и почему. Движок получает фазу «переоткрыт» по каждой. Список — настоящий; форма команды — макет, у движка нет источника для неё.</p></div></div>
+  <div class="frame"><div class="app" data-side="map">
+    <section class="main">
+      <div class="top"><b>План · карта OM</b><span class="st"><i style="background:var(--bad-fill)"></i>остановлен 02:27 · блок «Состояние»</span><div class="r"><span class="seg"><span>Карта</span><span>Проход</span><span>Решения · 14</span><span>Вопросы · 3</span><span class="on">Работы · 10</span></span><span class="btn sm p">Продолжить</span><span class="btn sm stop off">■ Остановить</span><span class="btn sm ghost">ⓘ Паспорт</span></div></div>
+      <div class="body"><div class="maplay" style="grid-template-columns:1fr 360px">
+        <div class="list" style="--cols:24px 1fr 190px 16px">
+          <div class="row head"><span></span><span>работа</span><span>состояние</span><span></span></div>
+          <div class="row"><span class="cb on">✓</span><div><b>Согласованно принять поручение и вернуть идентичность сохранённого запуска</b><small>приём поручения</small></div><span class="m bad">задача плана · нужен код</span><span class="chev">›</span></div>
+          <div class="row"><span class="cb on">✓</span><div><b>Разрешить возможность по точным основаниям и сохранить причину ограничения</b><small>среда и адаптеры</small></div><span class="m dim">задача плана · запусков нет</span><span class="chev">›</span></div>
+          <div class="row"><span class="cb"></span><div><b>Согласованно сохранить изменения и открыть точный канонический срез</b><small>состояние</small></div><span class="m dim">задача плана · запусков нет</span><span class="chev">›</span></div>
+          <div class="row"><span class="cb"></span><div><b>Выдать воспроизводимое основание проекций из сохранённого среза</b><small>состояние</small></div><span class="m dim">задача плана · запусков нет</span><span class="chev">›</span></div>
+          <div class="row"><span class="cb"></span><div><b>Публиковать целое поколение файлов и восстанавливать его из точных версий</b><small>состояние</small></div><span class="m dim">задача плана · запусков нет</span><span class="chev">›</span></div>
+          <div class="row"><span class="cb"></span><div><b>Построить каталог доказанно пригодных точных результатов</b><small>каталог результатов</small></div><span class="m dim">задача плана · запусков нет</span><span class="chev">›</span></div>
+          <div class="row"><span class="cb"></span><div><b>Вычислить обоснованный переход сохранённого запуска</b><small>запуск и управление</small></div><span class="m dim">задача плана · запусков нет</span><span class="chev">›</span></div>
+          <div class="row"><span class="cb"></span><div><b>Атомарно согласовать попытку и сохраняемую остановку запуска</b><small>запуск и управление</small></div><span class="m dim">задача плана · запусков нет</span><span class="chev">›</span></div>
+          <div class="row"><span class="cb"></span><div><b>Собрать и сохранить адресный пакет исследовательских материалов</b><small>исследование</small></div><span class="m dim">задача плана · запусков нет</span><span class="chev">›</span></div>
+          <div class="row"><span class="cb"></span><div><b>Оценить материалы и сохранить пригодные основания потребителя</b><small>исследование</small></div><span class="m dim">задача плана · запусков нет</span><span class="chev">›</span></div>
+        </div>
+        <div>
+          <div class="where"><div class="t"><span>переоткрыть · выбрано 2</span><span class="pill mock" style="height:18px">макет · форма</span></div>
+            <div style="font-size:12px;color:var(--ink2);margin-bottom:8px">Команда — своими словами: что переделать и почему. Уйдёт в движок вместе с выбранными работами.</div>
+            <div class="ta">Например: приём поручения и разрешение возможности — переоткрыть, потому что…</div>
+            <div class="acts" style="margin-top:12px"><span class="btn p">Переоткрыть выбранные · 2</span><span class="btn ghost">Отмена</span></div>
+            <span class="src">источник: project.plans · узлы работ (10) · фаза «переоткрыт» — om-state · форма команды — нет источника</span></div>
+          <div class="where"><div class="t"><span>что произойдёт</span></div><div style="font-size:12px;line-height:1.5;color:var(--ink2)">Каждая выбранная работа получит фазу «переоткрыт». Устаревший план останется в истории; новый соберётся после работ.</div><span class="src">источник: фазы шага (переоткрыт) · project.stages (компиляция — устарела)</span></div>
+        </div>
+      </div></div>
+    </section>
+  </div></div>
+
+  <!-- КАДР 11 -->
+  <div class="step-cap"><span class="n">11</span><div><span class="w">карта · вкладка «план» · «почему задача не проходит?»</span><h2>Один план, десять задач, один запуск — и карточка задачи с проваленной проверкой</h2><p>Статуса у задачи нет — он берётся из запуска: состояние «нужен код», попытка 10, проверка бэкенда 174 из 175, упал тест 146. Карточка показывает задачу как записал её движок (назначение, польза, кому, узел, зависимости, результат, обязательства, тесты) и падение по-человечески; вывод проверки целиком — под «подробнее». Остальные девять задач не запускались, и про них так и сказано.</p></div></div>
+  <div class="frame"><div class="app" data-side="map">
+    <section class="main">
+      <div class="top"><b>План · карта OM</b><span class="st"><i style="background:var(--bad-fill)"></i>остановлен 02:27 · блок «Состояние»</span><div class="r"><span class="seg"><span>Карта</span><span>Проход</span><span>Решения · 14</span><span>Вопросы · 3</span><span class="on">План · 10</span></span><span class="btn sm p">Продолжить</span><span class="btn sm stop off">■ Остановить</span><span class="btn sm ghost">ⓘ Паспорт</span></div></div>
+      <div class="body"><div class="wrap">
+        <div class="om-run" style="margin-bottom:12px"><span class="o idle"></span><b>План устарел</b><span class="sep">·</span>собран по старому входу · 10 задач · 1 запуск<div class="r"><span class="src in">источник: project.stages · project.plans</span></div></div>
+        <div class="list" style="--cols:28px 1fr 150px 200px 16px">
+          <div class="row head"><span>№</span><span>задача</span><span>зависит от</span><span>запуск</span><span></span></div>
+          <div class="row"><span class="m">1</span><div><b>Согласованно принять поручение и вернуть идентичность сохранённого запуска</b></div><span class="m dim">—</span><span class="m bad">нужен код · попытка 10 · 174 из 175</span><span class="chev">›</span></div>
+          <div class="row dim"><span class="m">2</span><div><b>Разрешить возможность по точным основаниям и сохранить причину ограничения</b></div><span class="m dim">1</span><span class="m dim">запусков нет</span><span class="chev">›</span></div>
+          <div class="row dim"><span class="m">3</span><div><b>Согласованно сохранить изменения и открыть точный канонический срез</b></div><span class="m dim">2</span><span class="m dim">запусков нет</span><span class="chev">›</span></div>
+          <div class="row dim"><span class="m">4</span><div><b>Выдать воспроизводимое основание проекций из сохранённого среза</b></div><span class="m dim">1</span><span class="m dim">запусков нет</span><span class="chev">›</span></div>
+          <div class="row dim"><span class="m">5 … 10</span><div><b>Ещё шесть задач</b><small>поколение файлов · каталог результатов · переход запуска · попытка и остановка · материалы исследования · оценка материалов</small></div><span class="m dim">1–4</span><span class="m dim">запусков нет</span><span class="chev">›</span></div>
+        </div>
+      </div></div>
+      <div class="ovl"><div class="panel" style="width:860px;left:180px;top:70px;padding:0;border:0;background:transparent;box-shadow:none">
+        <div class="om-task" style="box-shadow:0 30px 80px rgba(0,0,0,.65);padding:20px 22px">
+          <div class="from">раскрытая карточка · задача плана · из строки списка</div>
+          <div class="h"><span class="o err"></span><b style="font-size:17px">Согласованно принять поручение и вернуть идентичность сохранённого запуска</b><span class="pill bad">нужен код · попытка 10</span></div>
+          <div class="two2">
+            <div class="kv"><span>назначение</span><b>Добавить команду приёма поручения в общий движок продукта: CLI и API передают её одним разбором команды в приём поручения.</b><span>польза</span><b>Владелец передаёт поручение один раз, получает идентичность сохранённого запуска и продолжает тот же проход после потери ответа.</b><span>кому</span><b>владельцу</b><span>узел</span><b>Приём поручения через CLI/API</b><span>зависимости</span><b>нет</b></div>
+            <div class="kv"><span>результат</span><b>принятое и сохранённое поручение</b><span>обязательства</span><b>результат · холодное чтение · перезапуск с холода · безопасность провайдера — не применимо</b><span>тесты</span><b>1 набор · 2 контрпримера: подмена содержания при том же запросе; подмена оснований</b><span>исполнитель</span><b>модель Codex · усилие высокое · 10 попыток</b></div>
+          </div>
+          <div class="om-fail"><b>Проверка бэкенда не прошла: 174 из 175</b><p>Тест 146 «интерфейс команд сохраняет команды, отвергает лишние поля полномочий и возвращает холодную проекцию»: ожидалось 0, получено 1. Движок вернул задачу в «нужен код» — следующая попытка начнётся с этого теста.</p><p style="margin-top:6px"><code>подробнее ▾ — вывод проверки целиком (TAP, 175 тестов)</code></p></div>
+          <div class="acts"><span class="btn ghost">Открыть работу</span><span class="btn ghost">Открыть блок «Приём поручения»</span><span style="margin-left:auto;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)">источник: project.plans · задача 1 · запуск исполнения (состояние, попытка, проверка, тест, модель)</span></div>
+        </div>
+      </div></div>
+    </section>
+  </div></div>
+
+  <div class="map" style="margin-top:8px">
+    <div class="cap2">что уходит и что остаётся · из демо-скетча 02 и старой карты OM-VIEW</div>
+    <div class="words" style="margin-top:0">
+      <div><b>Уходит</b>из OM-VIEW: плеер истории с «×1 000 · без паузы» и ползунком по 2 729 событиям (его дело делает лента событий прохода); идентификаторы и ревизии на узлах и в лестнице (n-intake, rev 27, seq); «граница R2», счётчики портов и операций на узле; поиск узла по id; дорожка «разработка OM» и панель задачи разработки (это план разработки движка — он живёт в скетче 02, не на карте OM); «слой OM» как переключатель. Из скетча 02 на карту OM не переносится ничего: там план разработки Harnessy, здесь — результат OM; путать нельзя.</div>
+      <div><b>Остаётся</b>из OM-VIEW: лестница ступеней над полотном (теперь без вызовов как прогресса, с состоянием словами), граф блоков с подсветкой текущего и «к текущему / показать все», раскрытая панель блока справа — теперь карточкой поверх, светлая тема как была. Из скетча 02: боковая панель «План · карта» как общий вход, принцип «обзор → карточка поверх», пилюли состояний, строка «что дальше». Данные берутся из копии базы OM; стык с ядром Harnessy — отдельное решение, в этом скетче его нет.</div>
+    </div>
+  </div>
+  <div class="hint-bar"><span>11 кадров · каждый блок — подпись-источник или «макет» · цифры только из снимка 13.10 · 1280 × 860</span></div>
+</div>
+<script>
+  const nav=(on)=>`<aside class="side"><div class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
+    <div class="nav${on==='chat'?' on':''}"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg></div>
+    <div class="nav${on==='map'?' on':''}"><svg viewBox="0 0 24 24"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg>${on==='map'?'':'<span class="b">!</span>'}</div>
+    <div class="nav${on==='now'?' on':''}"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.700 19.400l1.2-6L3.400 9.300l6-.7z"/></svg></div>
+    <div class="nav${on==='spend'?' on':''}"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10.5h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4"/></svg></div>
+    <div class="nav"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg></div>
+    <div class="foot"><div class="nav"><span class="ring"><i></i></span></div><div class="nav"><span class="av">S<i></i></span></div></div></aside>`;
+  document.querySelectorAll('.app[data-side]').forEach(a=>{a.insertAdjacentHTML('afterbegin',nav(a.dataset.side))});
+</script>
+</body></html>
