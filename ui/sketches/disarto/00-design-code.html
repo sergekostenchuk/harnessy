@@ -21,6 +21,28 @@
   .where{font-size:12.5px;color:var(--ink2);display:grid;gap:6px}.where div{display:grid;grid-template-columns:190px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}.where div:last-child{border-bottom:0}.where b{color:var(--ink);font-weight:500}
   .llm-status.is-error{padding:12px 14px;border:1px solid var(--bad-fill);border-radius:8px;color:var(--bad);font:600 16px/1.5 var(--font);overflow-wrap:anywhere}
 
+  /* TS-24c: изображения в поле ввода и сообщении. */
+  .image-attachment-strip{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin:0 0 12px}
+  .image-attachment{position:relative;width:64px;height:64px;flex:none;border:1px solid var(--line2);border-radius:10px;background:var(--raised);overflow:hidden}
+  .image-attachment-art{display:block;width:100%;height:100%;background:linear-gradient(145deg,#4f301d 0 34%,#87603f 34% 61%,#222126 61%);object-fit:cover}
+  .image-attachment-art.alt{background:linear-gradient(160deg,#252b31 0 42%,#6b7f88 42% 68%,#16171a 68%)}
+  .image-attachment-remove{position:absolute;top:4px;right:4px;width:20px;height:20px;border:1px solid rgba(255,255,255,.24);border-radius:50%;background:rgba(8,8,10,.78);color:#fff;font:14px/17px var(--font);cursor:pointer}
+  .image-attachment-state{position:absolute;inset:auto 4px 4px;padding:3px 5px;border-radius:5px;background:rgba(8,8,10,.78);color:#fff;font:8.5px/1.2 var(--mono);text-align:center}
+  .image-attachment.is-error{border-color:var(--bad)}
+  .image-attachment.is-error .image-attachment-art{opacity:.2}
+  .image-attachment.is-error .image-attachment-state{inset:auto 3px 3px;background:var(--bad);white-space:normal}
+  .image-attachment-count{align-self:flex-end;color:var(--ink3);font:10px/1.4 var(--mono)}
+  .image-attachment-warning{margin:0 0 10px;padding:9px 11px;border:1px solid var(--bad-fill);border-radius:8px;background:rgba(163,48,75,.08);color:var(--bad);font:12px/1.45 var(--font)}
+  .image-composer-demo{padding:12px 14px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);color:var(--ink2);font:13px/1.5 var(--font)}
+  .image-composer-actions{display:flex;justify-content:flex-end;margin-top:10px}.image-composer-actions .btn:disabled{opacity:.45}
+  .message-image-row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+  .message-image-row button{width:96px;height:72px;padding:0;border:1px solid var(--line2);border-radius:9px;overflow:hidden;background:var(--raised);cursor:pointer}
+  .message-image-row .image-attachment-art{width:100%;height:100%}
+  .image-lightbox-demo{display:grid;grid-template-columns:minmax(0,280px) auto;gap:16px;align-items:start;padding:14px;border:1px solid var(--line2);border-radius:12px;background:#0d0d0f}
+  .image-lightbox-demo .image-attachment-art{width:100%;height:180px;border-radius:8px}
+  .image-lightbox-demo p{margin:0;color:var(--ink2);font:12px/1.55 var(--font)}
+  @media(max-width:700px){.image-lightbox-demo{grid-template-columns:1fr}.image-lightbox-demo .image-attachment-art{height:150px}}
+
 /* TS-09b4: saved operation progress in the design-code palette. */
 [data-live-operations] { margin:16px 0; flex:none; }
 .frame .main > [data-live-operations] { margin:16px 22px; }
@@ -633,6 +655,33 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
           <p class="conn-note">Без инструментов Harnessy оркестратор не сможет назначать роли и писать другим местам.</p>
           <div class="rowx"><button class="btn" type="button" disabled>Подтвердить полный доступ</button><button class="btn ghost" type="button" disabled>Отмена</button></div>
           <p class="conn-note">При смене проекта, места, разговора или доступности режима требуется новое подтверждение.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="image-attachments-spec"><h2>Изображения · поле ввода и сообщение<i></i></h2>
+      <div class="two">
+        <div class="box"><div class="cap2">Миниатюры над полем · 64 × 64</div>
+          <div class="image-attachment-strip" aria-label="Два вложенных изображения">
+            <div class="image-attachment"><span class="image-attachment-art"></span><button class="image-attachment-remove" type="button" aria-label="Убрать изображение">×</button></div>
+            <div class="image-attachment"><span class="image-attachment-art alt"></span><button class="image-attachment-remove" type="button" aria-label="Убрать изображение">×</button><span class="image-attachment-state">загрузка…</span></div>
+            <div class="image-attachment is-error"><span class="image-attachment-art"></span><button class="image-attachment-remove" type="button" aria-label="Убрать изображение">×</button><span class="image-attachment-state">больше 10 МБ</span></div>
+            <span class="image-attachment-count">2 из 8</span>
+          </div>
+          <div class="image-composer-demo">Опишите, что нужно проверить на скриншотах…</div>
+          <p class="conn-note">Вставка ⌘V и перетаскивание добавляют только картинки. Ошибка называется словами: «больше 10 МБ» или «не картинка». × убирает одну миниатюру.</p>
+        </div>
+        <div class="box"><div class="cap2">Модель без поддержки изображений</div>
+          <div class="image-attachment-strip"><div class="image-attachment"><span class="image-attachment-art alt"></span><button class="image-attachment-remove" type="button" aria-label="Убрать изображение">×</button></div><span class="image-attachment-count">1 из 8</span></div>
+          <p class="image-attachment-warning" role="alert">Эта модель не видит изображения — выберите другую или уберите картинку</p>
+          <div class="image-composer-demo">Сравни два состояния экрана</div>
+          <div class="image-composer-actions"><button class="btn" type="button" disabled>Отправить</button></div>
+        </div>
+      </div>
+      <div class="box"><div class="cap2">Картинки в сообщении · клик открывает крупно поверх</div>
+        <div class="two">
+          <div><div class="message-image-row"><button type="button" aria-label="Открыть изображение"><span class="image-attachment-art"></span></button><button type="button" aria-label="Открыть изображение"><span class="image-attachment-art alt"></span></button></div><p style="margin:0">Проверь эти два состояния формы.</p></div>
+          <div class="image-lightbox-demo" role="dialog" aria-label="Просмотр изображения"><span class="image-attachment-art alt"></span><p><b>Крупный просмотр</b><br>Закрывается кнопкой ×, кликом по фону или клавишей Esc. Исходное изображение не обрезается.</p></div>
         </div>
       </div>
     </section>

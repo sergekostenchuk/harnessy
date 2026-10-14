@@ -41,6 +41,10 @@ test('121: zero timestamps and missing measurements remain unknown; legacy answe
  assert.match(replies[0]!.textContent,/модель не сохранена · время не сохранено/);assert.match(replies[0]!.textContent,/расход недоступен/);assert.match(replies[1]!.textContent,/расход: неполные данные · вход 0 · выход — · кэш — · 0 с/);assert.equal(v.S.chat[1].t,1250);assert.match(replies[2]!.textContent,/время не сохранено/);assert.match(replies[2]!.textContent,/· 2 с/);assert.doesNotMatch(replies.map(n=>n.textContent).join(' '),/configured-later|1970|03:00/);
 });
 
+test('TS-24c: saved image refs render in history and open the large viewer',async()=>{
+ const ref={id:'e'.repeat(64),mime:'image/png',size:68,w:1,h:1},forged={...ref,id:'not-a-hash'},v=ui('/projects/a',{worker:'a'},async()=>({messages:[{role:'me',text:'Сравни',ts:1,attachments:[ref,forged]}]}));await v.functions.load();v.functions.render();assert.deepEqual(JSON.parse(JSON.stringify(v.S.chat[0].attachments)),[ref]);const opener=v.document.querySelector('[data-attachment-view]')!;assert.equal(opener.dataset.attachmentView,ref.id);assert.match(opener.innerHTML,new RegExp('/api/attachments/'+ref.id));await opener.emit('click');const dialog=v.body.querySelector('.live-image-dialog')!;assert.ok(dialog);assert.equal(dialog.hasAttribute('open'),true);assert.match(dialog.querySelector('img')!.getAttribute('src')!,new RegExp('/api/attachments/'+ref.id));await dialog.querySelector('[data-attachment-close]')!.emit('click');assert.equal(v.body.querySelector('.live-image-dialog'),null);
+});
+
 
 test('23d: reloaded response uses its captured connection, not the current provider route',async()=>{
  const network={provider:'claude',via:{id:'nl',type:'ssh',label:'Нидерланды'},reserve:{from:{id:'first',type:'ssh',label:'Первый <сервер>'},reason:'connection'}};

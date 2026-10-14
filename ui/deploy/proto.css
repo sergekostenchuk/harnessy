@@ -170,6 +170,27 @@ html[data-m][data-page="set"] .row .seg { max-width:100%; overflow-x:auto; }
 /* ===== РАБОЧИЙ СЛОЙ (live.js): поле ввода, разговор, всплывающая строка, поиск ⌘K ===== */
 .live-in { display:block; width:100%; min-height:22px; border:0; outline:0; resize:none; background:transparent; color:var(--ink); font:inherit; line-height:1.5; padding:0; }
 .live-in::placeholder { color:var(--ink3); }
+.live-attachments { display:none; margin:0 0 10px; }
+.live-attachment-strip { display:flex; align-items:flex-start; flex-wrap:wrap; gap:8px; }
+.live-attachment-strip > small { align-self:flex-end; color:var(--ink3); font:9.5px/1.4 var(--mono); }
+.live-attachment { position:relative; width:64px; height:64px; flex:none; overflow:hidden; border:1px solid var(--line2); border-radius:9px; background:var(--raised); }
+.live-attachment > img { display:block; width:100%; height:100%; object-fit:cover; }
+.live-attachment-placeholder { display:grid; place-items:center; width:100%; height:100%; color:var(--ink3); font-size:24px; }
+.live-attachment > button { position:absolute; top:4px; right:4px; width:20px; height:20px; padding:0; border:1px solid rgba(255,255,255,.25); border-radius:50%; background:rgba(8,8,10,.8); color:#fff; font:14px/17px var(--font); cursor:pointer; }
+.live-attachment > span:not(.live-attachment-placeholder) { position:absolute; inset:auto 4px 4px; padding:3px 5px; border-radius:5px; background:rgba(8,8,10,.82); color:#fff; font:8.5px/1.2 var(--mono); text-align:center; }
+.live-attachment.is-uploading > img,.live-attachment.is-uploading > .live-attachment-placeholder { opacity:.62; }
+.live-attachment.is-error { border-color:var(--bad); }.live-attachment.is-error > img,.live-attachment.is-error > .live-attachment-placeholder { opacity:.22; }
+.live-attachment.is-error > span:not(.live-attachment-placeholder) { inset:auto 3px 3px; background:var(--bad); white-space:normal; }
+.live-attachment-warning { margin:9px 0 0; padding:8px 10px; border:1px solid var(--bad-fill); border-radius:8px; background:rgba(163,48,75,.08); color:var(--bad); font:11.5px/1.45 var(--font); }
+.box.live-image-drag { outline:2px solid var(--accent); outline-offset:3px; }
+.live-message-images { display:flex; gap:7px; flex-wrap:wrap; margin:0 0 8px; }
+.live-message-images button { width:96px; height:72px; padding:0; overflow:hidden; border:1px solid rgba(255,255,255,.18); border-radius:8px; background:var(--raised); cursor:zoom-in; }
+.live-message-images img { display:block; width:100%; height:100%; object-fit:cover; }
+.live-message-text { display:block; white-space:pre-wrap; }
+.live-image-dialog { width:min(1080px,calc(100vw - 48px)); max-width:none; height:min(82vh,820px); padding:42px 18px 18px; border:1px solid var(--line2); border-radius:14px; background:#0d0d0f; color:var(--ink); }
+.live-image-dialog::backdrop { background:rgba(0,0,0,.78); }.live-image-dialog > img { display:block; width:100%; height:100%; object-fit:contain; }
+.live-image-dialog > button { position:absolute; top:10px; right:12px; width:28px; height:28px; border:1px solid var(--line2); border-radius:50%; background:var(--raised); color:var(--ink); cursor:pointer; }
+@media(max-width:700px){.live-image-dialog{width:calc(100vw - 18px);height:86vh;padding:40px 8px 8px}.live-message-images button{width:80px;height:60px}}
 .live-sep { align-self:center; font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); margin:10px 0 2px; }
 .live-sep a { color:var(--ink2); cursor:pointer; text-decoration:underline; }
 .live-typing .thought { animation:live-t 1s steps(2) infinite; } @keyframes live-t { 50% { opacity:.35; } }
