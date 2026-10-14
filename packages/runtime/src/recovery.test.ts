@@ -60,13 +60,13 @@ for(const code of ['transport_lost','protocol'] as const)test('46/111: '+code+' 
  second.postOwner({to:'worker',kind:'task',text:'повтори'},OWNER);await second.idle();assert.equal(next.calls.length,0);await second.attempt('worker',{project:second.project.dir,turnInstanceId:second.waiting('worker')!.turnInstanceId,action:'retry'},OWNER);await second.idle();assert.equal(next.calls.length,1);assert.equal(second.project.state.attempts.worker,undefined);assert.equal(second.journal.pendingFor('worker').length,0)
 });
 
-test('46/111: failure before modelStarted clears the attempt and the queue recovers normally',async t=>{
+test('46/111 + TS-26: failure before modelStarted stays unsent until explicit retry; peer traffic cannot restart it',async t=>{
  const h=await harness(t);let first=true;h.provider.onRun=async(seat,m,ctx)=>{if(first){first=false;throw new ProviderError('transport_lost','обрыв до запуска')}ctx.modelStarted?.();ctx.publish({type:'done',sessionId:'s1',model:seat.model,durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'ответ '+m.length,sessionId:'s1'}};
- h.runtime.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await h.runtime.idle();const pane=h.runtime.registry.get('worker')!;assert.equal(pane.status,'idle');assert.equal(h.runtime.project.state.attempts.worker,undefined);assert.equal(h.runtime.journal.pendingFor('worker').length,1);
- h.runtime.journal.append({sender:'peer',to:['worker'],kind:'question',text:'от другого агента'});await h.runtime.kick('worker');await h.runtime.idle();assert.equal(h.provider.calls.length,2);assert.equal(h.runtime.journal.pendingFor('worker').length,0)
+ h.runtime.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await h.runtime.idle();const pane=h.runtime.registry.get('worker')!;assert.equal(pane.status,'uncertain');const waiting=h.runtime.waiting('worker')!;assert.equal(waiting.status,'unsent');assert.equal(h.runtime.journal.pendingFor('worker').length,1);
+ h.runtime.journal.append({sender:'peer',to:['worker'],kind:'question',text:'от другого агента'});await h.runtime.kick('worker');await h.runtime.idle();assert.equal(h.provider.calls.length,1);await h.runtime.attempt('worker',{project:h.dir,turnInstanceId:waiting.turnInstanceId,action:'retry'},OWNER);await h.runtime.idle();assert.equal(h.provider.calls.length,3);assert.equal(h.runtime.journal.pendingFor('worker').length,0)
 });
 
-test('44/111: session_missing retry resets the start mark, so a pre-start failure of attempt 2 is not uncertain',async t=>{
+test('44/111 + TS-26: session_missing retry resets the start mark, so attempt 2 failing before start is unsent',async t=>{
  const h=await harness(t);h.runtime.registry.get('worker')!.sessionId='old';let n=0;h.provider.onRun=async(_s,_m,ctx)=>{n++;if(n===1){ctx.modelStarted?.();throw new ProviderError('session_missing','нет сессии','old')}throw new ProviderError('transport_lost','обрыв до запуска второй попытки')};
- h.runtime.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await h.runtime.idle();assert.equal(n,2);assert.equal(h.runtime.registry.get('worker')!.status,'idle');assert.equal(h.runtime.project.state.attempts.worker,undefined);assert.equal(h.runtime.journal.pendingFor('worker').length,1)
+ h.runtime.postOwner({to:'worker',kind:'task',text:'работа'},OWNER);await h.runtime.idle();assert.equal(n,2);assert.equal(h.runtime.waiting('worker')!.status,'unsent');assert.equal(h.runtime.waiting('worker')!.failure?.code,'transport_lost');assert.equal(h.runtime.journal.pendingFor('worker').length,1)
 });

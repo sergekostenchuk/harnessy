@@ -32,7 +32,7 @@ export function artifactPaths(event:{name?:unknown;detail?:unknown},project:stri
 }
 export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;vendor?:string|null;outcome:'error';errorCode:string;failure?:import('./turn-failure.ts').TurnFailure;usage?:import('@harnessy/providers').Usage;usageIncomplete?:true;durationMs?:number}
 export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}
-export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;deliverySeq?:number;status?:'uncertain'}
+export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;deliverySeq?:number;status?:'uncertain';unsent?:{afterSeq:number;failure:import('./turn-failure.ts').TurnFailure}}
 export interface DocumentRef {project:string;path:string}
 export interface Chat {transcriptSeq?:number;revision?:number;revisionHash?:string;documents?:DocumentRef[];id:string;pane:string;title:string;created:number;closed:number|null;model:string|null;vendor:string;sessionId:string|null;transcript:TranscriptMessage[];carry:string;turns?:AnalyticalTurn[];[key:string]:unknown}
 export function chatMetadata(c:Chat):void {if(c.revision!==undefined&&(!Number.isSafeInteger(c.revision)||c.revision<0)||c.documents!==undefined&&(!Array.isArray(c.documents)||c.documents.length>50||!c.documents.every(d=>object(d)&&typeof d.project==='string'&&typeof d.path==='string')))throw new RuntimeError('chat_invalid','revision или documents сохранённого разговора не читаются',409)}
@@ -102,7 +102,7 @@ export class StateStore {
  saveChats(registry:Registry):void{this.sync(registry);this.write(this.chatsPath,this.chats,2)}
  savePanes(registry:Registry,journal:Journal):void {journal.savePanes(Object.fromEntries([...registry.panes].map(([id,p])=>[id,p.persist()])));this.saveChats(registry)}
  saveHalt(on:boolean):void{this.write(this.haltPath,{on,ts:Math.floor(this.clock.now()/1000),by:'владелец'})}
- private validAttempts(raw:unknown):raw is Record<string,Attempt> {return object(raw)&&Object.values(raw).every(v=>object(v)&&typeof v.turnInstanceId==='string'&&!!v.turnInstanceId&&Array.isArray(v.recordSeqs)&&v.recordSeqs.every(n=>Number.isSafeInteger(n)&&Number(n)>0)&&typeof v.startedAt==='number'&&Number.isFinite(v.startedAt)&&(v.deliverySeq===undefined||Number.isSafeInteger(v.deliverySeq)&&Number(v.deliverySeq)>=0))}
+ private validAttempts(raw:unknown):raw is Record<string,Attempt> {return object(raw)&&Object.values(raw).every(v=>object(v)&&typeof v.turnInstanceId==='string'&&!!v.turnInstanceId&&Array.isArray(v.recordSeqs)&&v.recordSeqs.every(n=>Number.isSafeInteger(n)&&Number(n)>0)&&typeof v.startedAt==='number'&&Number.isFinite(v.startedAt)&&(v.deliverySeq===undefined||Number.isSafeInteger(v.deliverySeq)&&Number(v.deliverySeq)>=0)&&(v.unsent===undefined||object(v.unsent)&&Number.isSafeInteger(v.unsent.afterSeq)&&Number(v.unsent.afterSeq)>=0&&object(v.unsent.failure)&&typeof v.unsent.failure.code==='string'&&typeof v.unsent.failure.reason==='string'&&typeof v.unsent.failure.durationMs==='number'))}
  private restoreRepair():void {
   try{this.io.read(this.attemptsPath);return}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')return}
   let repair:unknown;try{repair=this.read(this.attemptsPath+'.repair')}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return;throw e}
@@ -132,6 +132,7 @@ export class StateStore {
   this.damagedFingerprint=null;
  }
  startAttempt(pane:Pane,attempt:Attempt):void {const next=orderedClone(this.attempts,{[pane.id]:attempt});this.writeAttempts(next);this.attempts=next}
+ notSent(id:string,afterSeq:number,failure:import('./turn-failure.ts').TurnFailure,attempt?:Attempt):void {const a=attempt??this.attempts[id];if(!a)throw new RuntimeError('write_failed','попытка не сохранена');const next=orderedClone(this.attempts,{[id]:{...a,status:'uncertain' as const,unsent:{afterSeq,failure}}});this.writeAttempts(next);this.attempts=next}
  clearAttempt(id:string):void {if(!Object.hasOwn(this.attempts,id))return;const next=orderedClone(this.attempts);delete next[id];this.writeAttempts(next);this.attempts=next}
  uncertain(id:string):void {const a=this.attempts[id];if(a&&a.status!=='uncertain'){const next=orderedClone(this.attempts,{[id]:{...a,status:'uncertain' as const}});this.writeAttempts(next);this.attempts=next}}
  commitResult(pane:Pane,registry:Registry,result:ResultMessage):void {

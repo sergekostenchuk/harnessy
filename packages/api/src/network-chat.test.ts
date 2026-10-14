@@ -16,8 +16,10 @@ async function blocked(t:Parameters<typeof fixture>[0]){
 
 test('23d: owner direct once consumes only failed records; next message still uses saved proxy, and receipt survives HTTP reload',{timeout:20000},async t=>{
  const {h,input}=await blocked(t),settings=h.runtime.settings.network(),stream=await sse(h.api);t.after(()=>stream.close());
+ // TS-26 allows visible combination on a new message; pause to inspect an explicit retry in isolation.
+ await h.runtime.halt(true,OWNER);
  const second=await call(h.api,'/api/chat',{body:{pane:'worker',message:'later queued message'}});assert.equal(second.status,200);
- input.binding=h.runtime.paneBinding('worker');const approved=await call(h.api,'/api/panes/worker/attempt',{body:input});assert.equal(approved.status,200,approved.text);await h.runtime.idle();
+ input.binding=h.runtime.paneBinding('worker');const approved=await call(h.api,'/api/panes/worker/attempt',{body:input});assert.equal(approved.status,200,approved.text);await h.runtime.halt(false,OWNER);await h.runtime.idle();
  assert.equal(h.provider.calls.length,1);assert.match(h.provider.calls[0]!.message,/first failed message/);assert.doesNotMatch(h.provider.calls[0]!.message,/later queued message/);
  assert.deepEqual(h.runtime.settings.network(),settings);assert.ok(h.runtime.waiting('worker'));assert.deepEqual(h.runtime.waiting('worker')!.recordSeqs,[second.body.seq]);
  const repeat=await call(h.api,'/api/panes/worker/attempt',{body:input});assert.equal(repeat.status,200);await h.runtime.idle();assert.equal(h.provider.calls.length,1);
@@ -73,7 +75,7 @@ async function networkChange(h:Awaited<ReturnType<typeof fixture>>,what:string){
 for(const what of ['chain','policy','address','aba'])test('23d r2: old direct approval rejects changed '+what+'; refreshed decision works',async t=>{
  const {h,input}=await blocked(t),generation=input.binding.networkGeneration;await networkChange(h,what);assert.notEqual(h.runtime.paneBinding('worker').networkGeneration,generation);
  const denied=await call(h.api,'/api/panes/worker/attempt',{body:input});assert.equal(denied.status,409);assert.equal(denied.body.code,'binding_changed');assert.match(denied.body.error,/Настройки изменились — решите заново/);await h.runtime.idle();assert.equal(h.provider.calls.length,0);assert.ok(h.runtime.waiting('worker'));
- const binding=h.runtime.paneBinding('worker'),approved=await call(h.api,'/api/panes/worker/attempt',{body:{...input,binding}});assert.equal(approved.status,200,approved.text);await h.runtime.idle();assert.equal(h.provider.calls.length,1);
+ const binding=h.runtime.paneBinding('worker'),approved=await call(h.api,'/api/panes/worker/attempt',{body:{...input,binding}});assert.equal(approved.status,200,approved.text);await h.runtime.halt(false,OWNER);await h.runtime.idle();assert.equal(h.provider.calls.length,1);
 });
 for(const what of ['chain','policy','address','aba'])test('23d r2: '+what+' during vendor wait restores a fresh decision card',async t=>{
  const {h,input}=await blocked(t),gate=deferred(),p=h.runtime.project;p.routeJobs.set('claude',gate.promise);t.after(()=>{p.routeJobs.delete('claude');gate.resolve()});

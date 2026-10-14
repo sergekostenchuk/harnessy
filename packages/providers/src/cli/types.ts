@@ -51,7 +51,7 @@ export interface CliDescriptor {
  /** Provider-specific exit status classification; stdout is never assumed to be a successful answer. */
  failure?(result:CliProcessResult):{code:ErrorCode;text:string};
 }
-export interface CliDependencies {execute:CliExecutor;env:NodeJS.ProcessEnv;cwd:string;temporaryDirectory:string;probeTimeoutMs:number;turnTimeoutMs:number;maxBytes:number;stateRoot?:string}
+export interface CliDependencies {execute:CliExecutor;env:NodeJS.ProcessEnv;cwd:string;temporaryDirectory:string;probeTimeoutMs:number;loginTimeoutMs:number;turnTimeoutMs:number;maxBytes:number;stateRoot?:string}
 
 /** Metadata remains usable when an isolated, permission-safe turn is unavailable. */
 export interface CliUnavailableDescriptor extends Pick<CliDescriptor,'id'|'name'|'binary'|'login'|'version'|'forbiddenEnv'> {
