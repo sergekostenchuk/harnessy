@@ -41,10 +41,11 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  function hEvent(','  const isDirect=')+
   part(live,'  async function loadChat(','  // подключение к движку')+
   part(live,'  // TS-09b2:','  // End TS-09b2 promotion.')+
+  part(live,'  const timePart=','  const ckBox=')+
   part(live,'  const bubble=','  const cols=')+
   '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
-  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw};',context);
+  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelectionText,quoteBlock,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw};',context);
  const functions=(context as Data).testing as Data;
  function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
  function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
@@ -54,6 +55,30 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   return (mode:'on'|'orch')=>listener({target:{closest:(selector:string)=>selector==='[data-direct]'?{dataset:{direct:mode}}:null}}) as Promise<boolean>}
  return {H,S,ta,requests,toasts,storage,elements,rows,column,sandbox,context,functions,journal,sidebar,direct,clicks,hidePage:()=>pagehide.forEach(fn=>fn()),showPage:(event:Data)=>Promise.all(pageshow.map(fn=>fn(event))),get rendered(){return rendered}};
 }
+
+test('TS-25: question and answer share copy and relative time; undated messages invent nothing',()=>{
+ const view=ui(),nowAt=1791500000125,at=new Date(2026,9,15,10,0,0).getTime();view.S.chat=[{role:'me',text:'Исходный вопрос',t:nowAt-120000},{role:'ai',src:'live',text:'Исходный ответ',html:'<div class="md-body">Исходный ответ</div>',who:'воркер',model:'w1',pane:'worker',t:nowAt}];
+ const question=view.functions.bubble(view.S.chat[0],0),answer=view.functions.bubble(view.S.chat[1],1),legacy=view.functions.bubble({role:'me',text:'Старый вопрос'},0);
+ assert.match(question,/data-la="copy"[^>]*>копировать<\/span>/);assert.match(question,/data-live-time=/);assert.match(question,/2 мин назад/);
+ assert.match(answer,/data-la="copy"/);assert.match(answer,/только что/);assert.match(answer,/live-last/);assert.doesNotMatch(answer,/время не сохранено/);
+ assert.doesNotMatch(legacy,/<time|время не сохранено/);assert.equal(view.functions.messageTime(at-120000,at),'2 мин назад');assert.equal(view.functions.messageTime(at-30000,at),'только что');assert.equal(view.functions.messageTime(new Date(2026,9,14,3,9).getTime(),at),'вчера 03:09');assert.equal(view.functions.messageTime(new Date(2026,9,12,18,40).getTime(),at),'12.10 18:40');assert.match(view.functions.fullMessageTime(at),/^\d\d\.\d\d\.\d{4} \d\d:\d\d:\d\d$/);
+ const stamp=nowAt-120000,node:Data={dataset:{liveTime:String(stamp)},textContent:'старое',title:'',remove(){throw Error('timestamp unexpectedly removed')}};const query=view.sandbox.document.querySelectorAll;view.sandbox.document.querySelectorAll=(selector:string)=>selector==='[data-live-time]'?[node]:query(selector);view.functions.updateMessageTimes();assert.match(node.textContent,/^2 мин назад$/);assert.match(node.title,/^\d\d\.\d\d\.\d{4} \d\d:\d\d:\d\d$/);
+});
+
+test('TS-25: quote insertion keeps typed text, caret and image draft intact',()=>{
+ const view=ui(),key=view.functions.attachmentKey(),image=imageRef();view.S.attachmentDrafts={[key]:[image]};let caret:number[]=[];
+ const ta:Data={value:'Уже набранный текст',selectionStart:19,selectionEnd:19,scrollHeight:48,style:{},focus(){},setSelectionRange(a:number,b:number){caret=[a,b]},dispatchEvent(){}};
+ view.sandbox.document.querySelector=(selector:string)=>selector.includes('.live-in')?ta:null;
+ assert.equal(view.functions.insertQuote('первая строка\nвторая строка'),true);assert.equal(ta.value,'Уже набранный текст\n> первая строка\n> вторая строка\n\n');assert.deepEqual(caret,[ta.value.length,ta.value.length]);assert.deepEqual(plain(view.functions.attachmentRefs(key)),[image]);assert.equal(view.S.draft,ta.value);
+});
+
+test('TS-25: reply selection accepts text inside one message and rejects cross-message or outside selection',()=>{
+ const view=ui();
+ const message=(id:string)=>({id}),a=message('a'),b=message('b');
+ const content=(parent:Data)=>({nodeType:1,closest(selector:string){if(selector==='.live-message-text,.md-body')return this;if(selector==='.live-msg'||selector==='.live-msg[data-message-index]')return parent;return null}}),ca=content(a),cb=content(b),node=(parent:Data)=>({nodeType:3,parentElement:parent});
+ const selection=(start:Data,end:Data,text='выделенный текст')=>({isCollapsed:false,rangeCount:1,anchorNode:node(start),focusNode:node(end),toString:()=>text});
+ assert.equal(view.functions.messageSelectionText(selection(ca,ca)),'выделенный текст');assert.equal(view.functions.messageSelectionText(selection(ca,cb)),'');assert.equal(view.functions.messageSelectionText({isCollapsed:true,rangeCount:1,toString:()=>''}),'');
+});
 
 function attachmentComposer(view:ReturnType<typeof ui>){
  const inputListeners:Data={},boxListeners:Data={};let host:Data|null=null;

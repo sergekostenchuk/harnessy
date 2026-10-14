@@ -43,6 +43,17 @@
   .image-lightbox-demo p{margin:0;color:var(--ink2);font:12px/1.55 var(--font)}
   @media(max-width:700px){.image-lightbox-demo{grid-template-columns:1fr}.image-lightbox-demo .image-attachment-art{height:150px}}
 
+  /* TS-25: действия сообщения, выделение и цитата в поле ввода. */
+  .message-action-demo{display:grid;gap:14px;padding:4px 0}
+  .message-action-demo article{position:relative;max-width:78%;font:13px/1.55 var(--font)}
+  .message-action-demo article.me{justify-self:end;padding:10px 13px;border:1px solid var(--line2);border-radius:12px 12px 4px 12px;background:var(--raised)}
+  .message-action-demo article.ai{padding-left:22px}.message-action-demo article.ai::before{content:"";position:absolute;left:0;top:6px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+  .message-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:7px;font:10px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink3)}
+  .message-actions button{padding:0;border:0;background:none;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}.message-actions button:hover{color:var(--ink)}
+  .message-actions i{font-style:normal;color:var(--line2)}.message-actions time{text-transform:none;letter-spacing:0}
+  .message-selection{background:rgba(194,122,52,.24);border-radius:2px}.message-reply-float{position:absolute;left:34px;top:52px;padding:5px 8px;border:1px solid var(--line2);border-radius:7px;background:var(--raised);color:var(--ink);font:11px var(--font);box-shadow:0 8px 24px #0008}
+  .message-quote-composer{margin-top:14px;padding:12px 14px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);font:13px/1.55 var(--font);white-space:pre-wrap}.message-quote-composer b{font-weight:400;color:var(--ink2)}
+
 /* TS-09b4: saved operation progress in the design-code palette. */
 [data-live-operations] { margin:16px 0; flex:none; }
 .frame .main > [data-live-operations] { margin:16px 22px; }
@@ -682,6 +693,25 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
         <div class="two">
           <div><div class="message-image-row"><button type="button" aria-label="Открыть изображение"><span class="image-attachment-art"></span></button><button type="button" aria-label="Открыть изображение"><span class="image-attachment-art alt"></span></button></div><p style="margin:0">Проверь эти два состояния формы.</p></div>
           <div class="image-lightbox-demo" role="dialog" aria-label="Просмотр изображения"><span class="image-attachment-art alt"></span><p><b>Крупный просмотр</b><br>Закрывается кнопкой ×, кликом по фону или клавишей Esc. Исходное изображение не обрезается.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="message-actions-spec"><h2>Сообщение · цитата, копирование и время<i></i></h2>
+      <div class="two">
+        <div class="box"><div class="cap2">Строка действий · вопрос и ответ</div>
+          <div class="message-action-demo">
+            <article class="me">Сравни эти два состояния.<div class="message-actions"><button type="button">Копировать</button><i>·</i><time title="15 октября 2026, 01:24:18">2 мин назад</time></div></article>
+            <article class="ai">Во втором состоянии кнопка остаётся доступной.<div class="message-actions"><button type="button">Копировать</button><i>·</i><button type="button">Передать контекст</button><i>·</i><time title="15 октября 2026, 01:25:02">только что</time></div></article>
+          </div>
+          <p class="conn-note">Строка видна при наведении и у последнего сообщения. Если запись не содержит времени, дата не показывается.</p>
+        </div>
+        <div class="box"><div class="cap2">Выделение → ответить цитатой</div>
+          <div class="message-action-demo"><article class="ai">Во втором состоянии <span class="message-selection">кнопка остаётся доступной</span>.<button class="message-reply-float" type="button">Ответить</button></article></div>
+          <div class="message-quote-composer"><b>&gt; кнопка остаётся доступной</b>
+
+Уже набранный текст и картинки остаются в черновике.</div>
+          <p class="conn-note">Кнопка появляется только для выделения внутри одного вопроса или ответа. Меню правой кнопки даёт то же действие.</p>
         </div>
       </div>
     </section>
