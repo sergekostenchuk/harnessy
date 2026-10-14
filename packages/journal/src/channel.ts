@@ -6,7 +6,7 @@ import {JournalError,object,freeze,SYSTEM_KINDS,type AgentPostInput,type CorePos
 import {POLICY_BROKEN,POLICY_BROKEN_REASON,SCORE_INVALID,ROUND_INVALID,REPLY_REQUIRED,SHA_REQUIRED,EVIDENCE_REQUIRED} from './strings.ts';
 export interface ChannelDeps {journal:Journal;policy:Policy|null;projectDir:string;liveSeats:()=>string[];roleOf:(seat:string)=>string|null;labelOf:(seat:string)=>string;hasRepo:()=>boolean;resolveSha:(sha:string)=>string|null;mergeCommitFor:(sha:string)=>string|null}
 const AGENT_KEYS=['to','kind','text','thread','reply_to','evidence','score','round','sha'];
-const CORE_KEYS=[...AGENT_KEYS,'origin','merged'];
+const CORE_KEYS=[...AGENT_KEYS,'origin','merged','attachments'];
 export class Channel {
  private emittedAckEvents=new Set<string>();private announcedVerdictEffects=new Set<string>();private deps:ChannelDeps;private handlers=new Set<(event:ChannelEvent)=>void>();private states=new Map<string,ThreadState>();
  constructor(deps:ChannelDeps){this.deps=deps;this.restoreThreads()}
@@ -88,7 +88,7 @@ export class Channel {
  }
  }
  if(input.kind==='verdict'&&bounds.max_rounds&&input.round!>Number(bounds.max_rounds))deny('раунд '+input.round+' больше max_rounds='+String(bounds.max_rounds)+' треда '+String(input.thread||target?.thread)+'; эскалируй владельцу');
- const record=this.deps.journal.append({sender,to,kind:input.kind,text:form.text,thread:input.thread??null,reply_to:reply,evidence:form.evidence,policy:version,
+ const record=this.deps.journal.append({sender,to,kind:input.kind,text:form.text,thread:input.thread??null,reply_to:reply,evidence:form.evidence,...(form.attachments.length?{attachments:form.attachments}:{}),policy:version,
  ...(input.score!==undefined?{score:input.score}:{}),...(input.round!==undefined?{round:input.round}:{}),...(sha!==undefined?{sha}:{}),
  ...(core&&coreInput.origin!=null?{origin:coreInput.origin}:agentOrigin?{origin:agentOrigin}:{}),...(core&&coreInput.merged!=null?{merged:coreInput.merged}:{}),
  ...(input.kind==='verdict'?{accepted:bounds.accept_score!=null&&input.score!>=Number(bounds.accept_score),bounds:Object.keys(bounds).length?bounds:null}:{}),...(pending?{ack:'pending' as const}:{})});

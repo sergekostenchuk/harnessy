@@ -16,7 +16,7 @@ for(const state of ['missing','none','error'] as const)test('310: '+state+' refu
  const worker=p.registry.get('worker')!,room=p.registry.get('room')!;worker.mode='all';worker.sessionId='worker-session';room.sessionId='room-session';p.state.savePanes(p.registry,p.journal);
  const before=[worker.settings(),room.settings()],bytes=['panes.json','chats.json'].map(file=>readFileSync(join(h.dir,'.harness','state',file)));
  await call(h.api,'/api/providers/gemini/check',{body:{}});const catalog=await call(h.api,'/api/providers/catalog');assert.equal(catalog.body.providers[0].installed,state!=='missing');
- const status=(await call(h.api,'/api/status')).body;assert.deepEqual(status.models.gemini,state==='missing'?[]:[{id:'default',label:'по умолчанию программы'}]);
+ const status=(await call(h.api,'/api/status')).body;assert.deepEqual(status.models.gemini,state==='missing'?[]:[{id:'default',label:'по умолчанию программы',images:false}]);
  // The room's read mode is unsupported by Gemini, but readiness is checked first.
  for(const path of ['/api/panes/worker','/api/room'])for(const explicit of state==='missing'?[true]:[true,false]){
   const r=await call(h.api,path,{body:{...(explicit?{vendor:'gemini'}:{}),model:'default',folder:true}});

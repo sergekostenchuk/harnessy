@@ -11,6 +11,7 @@ export * from './settings.ts';
 export * from './billing.ts';
 export {priceList,type ModelPrice} from './price-list.ts';
 export * from './connections.ts';
+export * from './attachments.ts';
 export {ownerPaths,validDir,expandUser} from './files.ts';
 
 export * from './network-config.ts';

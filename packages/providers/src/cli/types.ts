@@ -5,7 +5,7 @@ export type CliSeat=Omit<Seat,'vendor'>&{vendor:string};
 // Storage identity only; stateProjectDir never adds filesystem permissions to a turn.
 export type CliContext=Omit<TurnContext,'peers'>&{peers:{id:string;label:string;vendor:string}[];stateProjectDir?:string};
 export interface CliAuth {loggedIn:boolean;email?:string|null;plan?:string|null;state?:'unknown';reason?:string}
-export interface CliModel {id:string;label:string}
+export interface CliModel {id:string;label:string;images?:boolean}
 export interface CliCommand {args:string[];input?:string;rpcMethod?:'auth.getStatus'|'models.list'|'account.getQuota'}
 export interface CliProcessRequest extends CliCommand {binary:string;cwd:string;env:NodeJS.ProcessEnv;timeoutMs:number;maxBytes:number}
 export interface CliProcessResult {stdout:string;stderr:string;code:number|null;signal:NodeJS.Signals|null}

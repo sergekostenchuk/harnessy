@@ -4,7 +4,7 @@ import {createServer,type IncomingMessage,type ServerResponse} from 'node:http';
 import type {AddressInfo} from 'node:net';
 import type {Runtime} from '@harnessy/runtime';
 import {RuntimeError,traceId,traceReason} from '@harnessy/runtime';
-import {checkBrowser,readBody} from './security.ts';
+import {ATTACHMENT_BODY_LIMIT,checkBrowser,readBody} from './security.ts';
 import {json,plain,failure,writeReply} from './responses.ts';
 import {ownerRoutes} from './routes-owner.ts';
 import {providerRoutes} from './routes-providers.ts';
@@ -54,7 +54,7 @@ export function createApi(options:ApiOptions){
  const matching=routes.map(route=>({route,params:match(route,path)})).filter(x=>x.params);
  const chosen=matching.find(x=>x.route.method===method||head&&x.route.method==='GET');
  if(!chosen){writeReply(res,matching.length?plain('405: Method Not Allowed',405,{Allow:[...new Set(matching.flatMap(x=>x.route.method==='GET'?['GET','HEAD']:['POST']))].sort().join(',')}):plain('404: Not Found',404),head);return}
- try{const body=method==='POST'?await readBody(request):{};const reply=await chosen.route.handle({request,body,query,params:chosen.params!});if(reply.status>=400&&reply.value&&typeof reply.value==='object'){const value=reply.value as {code?:string;error?:string};responseReasons.set(res,traceReason(value.code,value.error??'HTTP '+reply.status));res.setHeader('X-Harness-Reason',responseReasons.get(res)!.code)}if(!res.destroyed)writeReply(res,reply,head)}catch(e){if(!res.destroyed){responseReasons.set(res,traceReason((e as {code?:string}).code,e instanceof Error?e.message:''));res.setHeader('X-Harness-Reason',responseReasons.get(res)!.code);writeReply(res,failure(e,chosen.route.style,chosen.route.statuses),head)}}
+ try{const body=method==='POST'?await readBody(request,path==='/api/attachments'?ATTACHMENT_BODY_LIMIT:undefined):{};const reply=await chosen.route.handle({request,body,query,params:chosen.params!});if(reply.status>=400&&reply.value&&typeof reply.value==='object'){const value=reply.value as {code?:string;error?:string};responseReasons.set(res,traceReason(value.code,value.error??'HTTP '+reply.status));res.setHeader('X-Harness-Reason',responseReasons.get(res)!.code)}if(!res.destroyed)writeReply(res,reply,head)}catch(e){if(!res.destroyed){responseReasons.set(res,traceReason((e as {code?:string}).code,e instanceof Error?e.message:''));res.setHeader('X-Harness-Reason',responseReasons.get(res)!.code);writeReply(res,failure(e,chosen.route.style,chosen.route.statuses),head)}}
  }
  const close=()=>closeJob??=(async()=>{
  closing=true;const httpClosed=new Promise<void>(resolve=>server.close(()=>resolve()));for(const stop of [...streams])stop();

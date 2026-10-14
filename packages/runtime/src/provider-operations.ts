@@ -41,7 +41,7 @@ export class ProviderOperations {
   const ok=p.owner.resolveApproval(approvalId,decision==='allow');return {ok:ok||decision==='deny',error:ok||decision==='deny'?null:'вопрос уже закрыт'};
  }
  private snapshot(){this.catalog.refresh();const p=this.runtime.project;for(const issue of this.catalog.cacheDiagnostics())p.trace.record('provider.catalog_cache',{outcome:'failed',data:{vendor:issue.vendor,code:issue.code},reason:{code:'storage',text:issue.code==='cache_owner'?'Другой владелец файла снимка':issue.code==='cache_permissions'?'Права файла снимка шире 0600':issue.code==='cache_fields'?'Недопустимые поля снимка':'Снимок не прочитан'}});const values=this.catalog.snapshot();for(const value of values)if(value.row.login.checkedAt!==undefined)this.observe(p,value);return values.map(v=>v.row)}
- modelSnapshot(){const rows=this.snapshot();return {models:Object.fromEntries(rows.map(row=>[row.id,row.models])),turnModes:Object.fromEntries(rows.map(row=>[row.id,row.capabilities.turn]))}}
+ modelSnapshot(){const rows=this.snapshot();return {models:Object.fromEntries(rows.map(row=>[row.id,row.models.map(model=>({...model,images:model.images===true||row.capabilities.images===true}))])),turnModes:Object.fromEntries(rows.map(row=>[row.id,row.capabilities.turn]))}}
  private checked(p:ProjectState,id:string){this.event(p,{provider:id,event:'check',status:'done'})}
  async list(who:Initiator):Promise<{ok:true;providers:(CatalogRead['row']&{network:Awaited<ReturnType<Runtime['networkRelay']['status']>>})[]}>{this.owner(who);return {ok:true as const,providers:await Promise.all(this.snapshot().map(async row=>({...row,network:await this.runtime.networkRelay.status(row.id)})))}}
 

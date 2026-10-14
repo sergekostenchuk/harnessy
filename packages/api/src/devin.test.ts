@@ -9,7 +9,7 @@ test('333 Devin HTTP: catalog/check/status/login; read/edit refusals preserve ch
  const f=devinFixture(t),scripts:string[]=[],h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([f.entry]),loginTerminal:new LoginTerminal({platform:'darwin',temporaryDirectory:f.dir,open:async file=>{scripts.push(readFileSync(file,'utf8'))}})}});
  const checked=await call(h.api,'/api/providers/devin/check',{body:{}});assert.equal(checked.status,200);assert.equal(checked.body.login.state,'ok');
  const catalog=(await call(h.api,'/api/providers/catalog')).body.providers.find((p:any)=>p.id==='devin');assert.equal(catalog.version,'3000.11.3');assert.equal(catalog.models.length,2);assert.equal(catalog.capabilities.probe.ok,true);
- const status=(await call(h.api,'/api/status')).body;assert.deepEqual(status.models.devin,catalog.models);for(const mode of ['read','edit'])assert.equal(status.turnModes.devin[mode].ok,false);
+ const status=(await call(h.api,'/api/status')).body;assert.deepEqual(status.models.devin,catalog.models.map((m:any)=>({...m,images:false})));for(const mode of ['read','edit'])assert.equal(status.turnModes.devin[mode].ok,false);
  assert.deepEqual(status.turnModes.devin.all,{ok:true,note:'без инструментов Harnessy'});
  const pane=h.runtime.registry.get('worker')!;pane.sessionId='existing-session';const settings=pane.settings(),session=pane.sessionId;
  for(const mode of ['read','edit']){const response=await call(h.api,'/api/panes/worker',{body:{vendor:'devin',model:'adaptive',mode}});assert.equal(response.status,409);assert.equal(response.body.code,'capability_unsupported');assert.deepEqual(pane.settings(),settings);assert.equal(pane.sessionId,session)}
