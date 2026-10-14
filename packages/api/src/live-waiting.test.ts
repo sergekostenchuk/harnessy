@@ -268,3 +268,21 @@ test('TS-26 window: late chat HTTP response cannot restore an unsent card after 
  runInContext(source.slice(source.indexOf('  async function ask('),source.indexOf('  function rememberLive('))+'\nglobalThis.askTest=ask;',context);
  assert.equal(await (context as any).askTest('новое'),true);assert.equal(reads,1);assert.equal(pane.waiting,null);
 });
+
+function sendingWindow(){
+ const response=deferred<unknown>(),pane={id:'room',model:'w1',waiting:null as unknown},H={pane,panes:[pane],active:{room:'chat-a'},cur:null as any},S={chat:[{role:'me',text:'новое'}] as any[],ui:{},cx:{}};
+ const context=createContext({H,S,sendBinding:()=>({pane:'room'}),bindingCurrent:()=>true,drawLive(){},render(){},renderWaiting(){},toast(){},save(){},api:()=>response.promise,refreshStatus:async()=>{pane.waiting=null},log(){},esc:String,md:(text:string)=>text,mdFiles:new Map(),toolLine:()=>'',paneName:()=>'',now:()=>1,window:{},setTimeout(){},warningEvent:()=>false,networkCodes:new Set()});
+ runInContext(source.slice(source.indexOf('  function finish('),source.indexOf('  const isDirect='))+source.slice(source.indexOf('  async function ask('),source.indexOf('  function rememberLive('))+'\nglobalThis.askTest=ask;globalThis.eventTest=hEvent;',context);
+ return {H,S,ask:()=>(context as any).askTest('новое'),event:(event:unknown)=>(context as any).eventTest(event),respond:()=>response.resolve({ok:true,seq:2,waiting:{...waiting,status:'unsent'}})};
+}
+for(const stream of ['after-send','before-send','replacement','finished'] as const)test('TS-26 r2: late unsent HTTP preserves SSE response '+stream,async()=>{
+ const v=sendingWindow();if(stream==='before-send')v.event({type:'delta',text:'PREFIX '});const sent=v.ask();
+ if(stream==='replacement')v.H.cur={text:'PREFIX ',tools:[]};else if(stream!=='before-send')v.event({type:'delta',text:'PREFIX '});
+ if(stream==='finished'){v.event({type:'delta',text:'SUFFIX'});v.event({type:'done',chat:'chat-a',model:'w1'})}
+ v.respond();assert.equal(await sent,true);
+ if(stream!=='finished'){assert.equal(v.H.cur?.text,'PREFIX ');v.event({type:'delta',text:'SUFFIX'});v.event({type:'done',chat:'chat-a',model:'w1'})}
+ assert.equal(v.S.chat.at(-1)?.text,'PREFIX SUFFIX');assert.equal(v.S.chat.filter(m=>m.src==='live').length,1);
+});
+test('TS-26 r2: waiting HTTP still removes its own placeholder before any SSE response',async()=>{
+ const v=sendingWindow(),sent=v.ask();assert.ok(v.H.cur);v.respond();assert.equal(await sent,true);assert.equal(v.H.cur,null);assert.equal(v.S.chat.length,1);
+});

@@ -180,3 +180,9 @@ test('167: untrusted attempt-shaped records do not claim completed owner decisio
  const malformed=record(2,'malformed decision',{from:'harness',kind:'note',origin:'attempt',thread:'attempt:x',attempt:{done:true,pane:'worker',action:'destroy',turnInstanceId:'x'}});
  const v=nowUI(async path=>path==='/api/status'?status():journal('/a',[fake,malformed]));await v.start();assert.equal(v.functions.items().resolved.length,0);assert.equal(v.functions.items().pending.length,0);assert.match(v.find('#v-away .lst').textContent,/forged decision/); // still available as journal evidence
 });
+
+for(const action of ['retry','skip'])test('TS-26: Now accepts unsent HTTP state and '+action+' uses the bound attempt',async t=>{
+ const h=await fixture(t);h.provider.onRun=async()=>{throw new ProviderError('login_timeout','Devin не ответил на проверку входа')};await call(h.api,'/api/chat',{body:{pane:'worker',message:'не отправлено'}});await h.runtime.idle();
+ const v=nowUI(async(path,body)=>(await call(h.api,path,{body})).body);v.H.project=h.dir;await v.start();assert.equal(v.functions.state.error,null);assert.match(v.find('#v-week .lst').textContent,/Не отправлено: Devin не ответил на проверку входа/);assert.match(v.find('#v-week .lst').textContent,/Отправить снова/);assert.match(v.find('#v-week .lst').textContent,/Убрать/);
+ h.provider.onRun=null;await v.find('#v-week [data-attempt-action="'+action+'"]').emit('click');await h.runtime.idle();await v.functions.fetch();assert.equal(h.provider.calls.length,action==='retry'?2:1);assert.equal(h.runtime.waiting('worker'),null);
+});
