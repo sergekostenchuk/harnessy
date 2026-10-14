@@ -11,7 +11,7 @@ import {ProviderCatalog,catalogCacheDirectory,LoginTerminal,builtinEntries,CLI_D
 import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
 import {propose,proposals,confirm,create,createOwnerSeat,restoreProposals,type ProposalInput,type ProposalRef,type OwnerSeatInput} from './proposals.ts';
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
-import {isAbsolute} from 'node:path';
+import {isAbsolute,join,relative,sep} from 'node:path';
 import {AttachmentStore,expandUser,initProject,projectsRoot} from '@harnessy/projects';
 import {pyTruthy} from '@harnessy/team';
 import {askDeliveryDepth} from './action-state.ts';
@@ -23,14 +23,14 @@ import {chatsList,chatGet,chatsNew,chatsOpen,meta,transferSnapshot} from './chat
 import {handoff} from './handoff.ts';
 import {chat} from './owner-chat.ts';
 import {execFileSync} from 'node:child_process';
-import {realpathSync} from 'node:fs';
-import {join} from 'node:path';
+import {chmodSync,mkdtempSync,realpathSync,rmSync,writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {ensureLineLocked,withPathLock,loadTeam,instructionsFor,canonicalPath,type Vendor} from '@harnessy/team';
 import {ATTACHMENT_MAX_COUNT,Journal,Channel,Policy,JournalError,normalizeAttachments,pythonTrim,type AgentPostInput,type AttachmentRef,type Initiator,type Record_,type DeliveryEntry,type ChannelEvent} from '@harnessy/journal';
 import {NetworkChecks,NetworkSettings,openProjectGit,writableRoots,Connections,ProjectRegistry,Settings,Pins,gitops} from '@harnessy/projects';
 import {digest,roleNote,contextCard,conversationTransfer,transferSettings,transferLabel,TRANSFER_DEFAULTS,type ConversationTransfer} from '@harnessy/context';
-import {ProviderError,type TurnContext,type PeerTools,type SendArgs,type AskArgs,type ReadPaneArgs,type MergeArgs,type AssignRoleArgs} from '@harnessy/providers';
+import {ProviderError,type TurnAttachment,type TurnContext,type PeerTools,type SendArgs,type AskArgs,type ReadPaneArgs,type MergeArgs,type AssignRoleArgs} from '@harnessy/providers';
 import {Pane,Registry,validDir} from './pane.ts';
 import {EventBus,type Selector} from './events.ts';
 import {StateStore,diskIO,timestampMessage,artifactPaths,type ResultMessage,type TranscriptMessage} from './state.ts';
@@ -41,6 +41,14 @@ import {renderInbox,queueNote} from './inbox.ts';
 import {RuntimeError,message,slice,deepFreeze,object} from './errors.ts';
 import {systemClock,type RuntimeDeps,type RuntimeActions,type ProjectState,type TurnScope,type ActiveTurn,type ActionContext,type RuntimeEvent,type TurnRecords,type BridgeSendArgs,type BridgeFailure,type SendResult,type ReadPaneResult,type AskResult,type MergeResult,type AssignRoleResult} from './types.ts';
 const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Initiator & {trust:'harness'}={seat:'harness',trust:'harness'};
+const attachmentExtension:Record<TurnAttachment['mime'],string>={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif'};
+function providerAttachments(source:TurnAttachment[],vendor:string,projectDir:string):{attachments:TurnAttachment[];cleanup:()=>void}{
+ if(vendor!=='codex'||!source.length)return {attachments:source,cleanup:()=>{}};let directory:string|undefined;
+ try{directory=mkdtempSync(join(realpathSync(tmpdir()),'harnessy-turn-attachments-'));chmodSync(directory,0o700);const fromProject=relative(realpathSync(projectDir),directory),inside=fromProject===''||!isAbsolute(fromProject)&&fromProject!=='..'&&!fromProject.startsWith('..'+sep);if(inside)throw new RuntimeError('attachment_invalid','приватный снимок вложения оказался внутри проекта',400);
+  const attachments=source.map((attachment,index)=>{const path=join(directory!,index+'.'+attachmentExtension[attachment.mime]);writeFileSync(path,attachment.data,{flag:'wx',mode:0o600});chmodSync(path,0o600);return {...attachment,path}});
+  return {attachments,cleanup:()=>{try{rmSync(directory!,{recursive:true,force:true})}catch{}}};
+ }catch(error){if(directory)try{rmSync(directory,{recursive:true,force:true})}catch{}if(error instanceof RuntimeError)throw error;throw new RuntimeError('attachment_invalid','приватный снимок вложения не создан',400,{cause:error})}
+}
 type AttemptDecision=NonNullable<Record_['attempt']>;
 function turnMeasurements(event:Record<string,unknown>|null){if(event?.type!=='done')return {};const raw=object(event.usage)?event.usage:{},value=(key:string)=>typeof raw[key]==='number'&&Number.isSafeInteger(raw[key])&&raw[key]>=0?raw[key] as number:null;return {usage:{input:value('input'),output:value('output'),cacheRead:value('cacheRead')},...(event.usageIncomplete===true?{usageIncomplete:true as const}:{}),...(typeof event.durationMs==='number'?{durationMs:event.durationMs}:{})}}
 export class Runtime {
@@ -365,14 +373,15 @@ export class Runtime {
  if(!pane.model)throw new RuntimeError('model_required','Сначала выберите модель разговора',400);
  const attachmentRefs=records.flatMap(record=>normalizeAttachments(record.attachments));
  if(attachmentRefs.length&&!this.modelSupportsImages(p,pane.vendor,pane.model))throw new RuntimeError('images_unsupported','Выбранная модель не видит изображения',409);
- const turnAttachments=attachmentRefs.map(ref=>{const {id:_,size:__,w:___,h:____,...attachment}=this.attachmentStore(p).verify(ref);return attachment});
+ const verifiedAttachments=attachmentRefs.map(ref=>{const {id:_,size:__,w:___,h:____,...attachment}=this.attachmentStore(p).verify(ref);return attachment});
  pane.busy=true;pane.touched=true;pane.revision++;const launchModel=pane.model,launchEpoch=pane.sessionEpoch;
  const scope=this.scopes.create(p.dir,id,currentTrace()?.turnInstanceId??randomUUID()),controller=new AbortController();let releaseReset!:()=>void,finish!:()=>void;
  const turn:ActiveTurn={scope,controller,pane,vendor:pane.vendor,records,deliverySeq:Math.max(0,...entries.map(e=>e.deliverySeq)),relayDepth,attemptNumber:0,handle:null,started:false,stopRequested:false,terminal:null,partial:'',finished:new Promise(r=>{finish=r}),finish:()=>finish(),timer:undefined,resetWait:new Promise(r=>{releaseReset=r}),releaseReset:()=>releaseReset(),result:null,injected};p.active.set(id,turn);this.stateEvent(p,pane);
- let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null,networkTurn:NetworkTurn|undefined;
+ let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null,networkTurn:NetworkTurn|undefined,turnAttachments:TurnAttachment[]=verifiedAttachments,cleanupAttachments=()=>{};
  try{
  if(!validDir(pane.cwd))throw new RuntimeError('cwd_changed','папки нет: '+pane.cwd);const provider=this.provider(turn.vendor),vendor=provider.vendor,epoch=p.processEpoch.get(vendor)??0,sessionEpoch=pane.sessionEpoch;
  launchVendor=vendor;
+ ({attachments:turnAttachments,cleanup:cleanupAttachments}=providerAttachments(verifiedAttachments,vendor,p.dir));
  const knowledgeChat=p.state.activeChat(pane,false),knowledge=knowledgeChat?deepFreeze(roleKnowledge(p,knowledgeChat)):null;
  const previousKnowledge=[...pane.transcript].reverse().find(m=>m.teamKnowledge)?.teamKnowledge;
  if(previousKnowledge!==undefined&&(!object(previousKnowledge)||previousKnowledge.project!==p.dir||previousKnowledge.chat!==knowledgeChat?.id||!isTeamSnapshot(previousKnowledge.team)))throw new RuntimeError('chat_invalid','снимок команды не соответствует разговору',409);
@@ -400,7 +409,7 @@ export class Runtime {
  if(turn.stopRequested)return;if(event.type==='tool'||event.type==='delta'&&event.text.length>0)effected=true;if(event.type==='toolError')event={...event,text:turnFailure({message:event.text},p.dir,0).reason};if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
  },askApproval:(title,detail)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.askApproval(title,detail))},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;if(transfer&&!turn.started){earlySession=sid;return}pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
  if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(p,pane,handle)
- },beforeModel:async()=>{const verified=attachmentRefs.map(ref=>{const {id:_,size:__,w:___,h:____,...attachment}=this.attachmentStore(p).verify(ref);return attachment});turnAttachments.splice(0,turnAttachments.length,...verified);const route=apiRoute(vendor);if(route){const config=this.settings.llmProviders()[route];let local=false;try{local=!!config?.baseURL&&['127.0.0.1','localhost','[::1]'].includes(new URL(config.baseURL).hostname)}catch{}if(!local)await this.networkRelay.prepare(vendor,controller.signal,networkTurn)}else if(vendor!=='ollama'){const relay=await this.networkRelay.prepare(vendor,controller.signal,networkTurn);if(relay&&ctx.env.HARNESS_RELAY_PROXY!==relay.url)throw new NetworkError()}checkDirectNetwork()},env:apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,controller.signal,networkTurn)??this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[...p.registry.panes.values()].map(p=>({id:p.id,label:p.label,vendor:p.vendor as Vendor})),tools:new Proxy(this.toolsFor(scope),{get:(target,key)=>{const value=Reflect.get(target,key);return typeof value==='function'?(...args:unknown[])=>{effected=true;return value.apply(target,args)}:value}}),relayDepth:turn.relayDepth,projectDir:p.dir,appUrl:this.deps.appUrl,attachments:turnAttachments,
+ },beforeModel:async()=>{const route=apiRoute(vendor);if(route){const config=this.settings.llmProviders()[route];let local=false;try{local=!!config?.baseURL&&['127.0.0.1','localhost','[::1]'].includes(new URL(config.baseURL).hostname)}catch{}if(!local)await this.networkRelay.prepare(vendor,controller.signal,networkTurn)}else if(vendor!=='ollama'){const relay=await this.networkRelay.prepare(vendor,controller.signal,networkTurn);if(relay&&ctx.env.HARNESS_RELAY_PROXY!==relay.url)throw new NetworkError()}checkDirectNetwork()},env:apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,controller.signal,networkTurn)??this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[...p.registry.panes.values()].map(p=>({id:p.id,label:p.label,vendor:p.vendor as Vendor})),tools:new Proxy(this.toolsFor(scope),{get:(target,key)=>{const value=Reflect.get(target,key);return typeof value==='function'?(...args:unknown[])=>{effected=true;return value.apply(target,args)}:value}}),relayDepth:turn.relayDepth,projectDir:p.dir,appUrl:this.deps.appUrl,attachments:turnAttachments,
  registerProcessToken:token=>{if(!p.closed&&(p.processEpoch.get(vendor)??0)===epoch)this.tokens.register(token,p.generation,id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,id,vendor),writableRoots:writableRoots(p.repoRoot,!!pane.worktree)};
  let result:{text:string;sessionId:string|null;interrupted?:boolean};const launchSeat=pane.providerSeat();
  while(true){attempt++;turn.terminal=null;turn.attemptNumber=attempt;const attemptNumber=attempt,seat=sessionLost?{...launchSeat,sessionId:null}:launchSeat,activeAttempt=()=>current()&&turn.attemptNumber===attemptNumber;
@@ -450,7 +459,7 @@ export class Runtime {
  if(!terminalSent&&!p.closed)this.report(p,pane,e instanceof ProviderError&&e.code==='cancelled'?new RuntimeError('cancelled','ход отменён'):e);
  throw e
  }finally{
- await networkTurn?.close();this.scopes.revoke(scope);if(!turn.stopRequested)this.actions.cancelAsks(scope,'turn_ended');this.clock.clearTimeout(turn.timer);
+ cleanupAttachments();await networkTurn?.close();this.scopes.revoke(scope);if(!turn.stopRequested)this.actions.cancelAsks(scope,'turn_ended');this.clock.clearTimeout(turn.timer);
  if(p.active.get(id)===turn){p.active.delete(id);pane.busy=false;pane.handle=null;this.stateEvent(p,pane)}
  if(!p.closed&&turn.started&&(turn.vendor==='claude'||turn.vendor==='codex'))void this.quota(p).refresh(turn.vendor,true);
  if(success&&!p.closed&&!options.entries&&pane.status==='idle')void this.kick(id);turn.finish()

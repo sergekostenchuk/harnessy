@@ -41,7 +41,7 @@ export interface PeerTools {
 export type RouteEnv=Partial<Record<'HTTPS_PROXY'|'HTTP_PROXY'|'ALL_PROXY'|'https_proxy'|'http_proxy'|'all_proxy'|'NO_PROXY'|'no_proxy'|'NODE_OPTIONS'|'NODE_USE_ENV_PROXY'|'HARNESS_RELAY_PROXY',string>>;
 export const FORBIDDEN_ENV={claude:['ANTHROPIC_API_KEY','CLAUDECODE','CLAUDE_CODE_SIMPLE'],codex:['OPENAI_API_KEY']} as const;
 export interface TurnHandle {interrupt():Promise<void>;steer(text:string):Promise<void>}
-export interface TurnAttachment {path:string;mime:'image/png'|'image/jpeg'|'image/webp'|'image/gif'}
+export interface TurnAttachment {data:Buffer;path?:string;mime:'image/png'|'image/jpeg'|'image/webp'|'image/gif'}
 export interface ToolTrace {id:string;name:string;phase:'call'|'result'|'warning';data?:unknown;outcome?:'ok'|'failed'|'rejected'|'timeout'|'cancelled';reason?:string;error?:string}
 export interface TurnContext {
  /** Optional owner-probe binding check, after preparation and immediately before inference. */
@@ -74,7 +74,7 @@ export function snapshot(seat:Seat,ctx:TurnContext):Seat {
  if(!record(ctx)||!ctx.signal||typeof ctx.signal.addEventListener!=='function'||typeof ctx.signal.aborted!=='boolean'||
  (ctx.modelResponded!==undefined&&typeof ctx.modelResponded!=='function')||(ctx.modelStarted!==undefined&&typeof ctx.modelStarted!=='function')||!record(ctx.env)||!record(ctx.tools)||!Array.isArray(ctx.peers)||!ctx.peers.every(p=>record(p)&&typeof p.id==='string'&&typeof p.label==='string'&&providerId(p.vendor))||
  !Array.isArray(ctx.writableRoots)||!ctx.writableRoots.every(p=>typeof p==='string')||typeof ctx.roleNote!=='string'||typeof ctx.relayDepth!=='number'||
- !(ctx.projectDir===null||typeof ctx.projectDir==='string')||typeof ctx.appUrl!=='string'||(ctx.attachments!==undefined&&(!Array.isArray(ctx.attachments)||ctx.attachments.some(a=>!record(a)||typeof a.path!=='string'||!a.path||!['image/png','image/jpeg','image/webp','image/gif'].includes(String(a.mime)))))||
+ !(ctx.projectDir===null||typeof ctx.projectDir==='string')||typeof ctx.appUrl!=='string'||(ctx.attachments!==undefined&&(!Array.isArray(ctx.attachments)||ctx.attachments.some(a=>!record(a)||!Buffer.isBuffer(a.data)||a.data.length<1||a.data.length>10*1024*1024||a.path!==undefined&&(typeof a.path!=='string'||!a.path)||!['image/png','image/jpeg','image/webp','image/gif'].includes(String(a.mime)))))||
  ['publish','askApproval','session','setHandle','registerProcessToken','revokeProcessToken'].some(k=>typeof (ctx as unknown as Record<string,unknown>)[k]!=='function')||
  ['send','ask','readPane','merge','assignRole','proposeSeats','createSeats'].some(k=>typeof (ctx.tools as unknown as Record<string,unknown>)[k]!=='function'))
  throw new ProviderError('protocol','invalid TurnContext');
