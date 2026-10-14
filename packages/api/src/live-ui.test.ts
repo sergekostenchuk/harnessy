@@ -208,6 +208,12 @@ test('TS-08 r2/2: pending new-chat transition shares the setting wait and preser
  assert.equal(h.provider.calls.length,0);assert.equal(view.S.draft,'pending question');assert.equal(view.S.chat.length,0);
 });
 
+test('new chat: text sent from the start screen is not restored into the composer after the answer',async()=>{
+ const view=ui();view.sandbox.cols=()=>[];view.ta.value='first question';
+ assert.equal(await view.functions.onSend('first question',view.ta),true);
+ assert.equal(view.S.pending.text,'first question');assert.equal(view.S.draft,null);assert.equal(view.ta.value,'');assert.equal(view.sandbox.location.href,'01-chat.html');
+});
+
 const records=(count:number)=>Array.from({length:count},(_,i)=>({seq:i+1,ts:i%2?'2026-10-10T10:37:00+03:00':'2026-10-10T02:01:00Z',from:'owner',to:['worker'],kind:i%2?'note':'question',text:'record '+(i+1),thread:null}));
 test('79/80/107: >800 records, refresh, missing kinds, seq chronology and local card time',async()=>{
  let data=records(805);const view=ui({fetch:async path=>{const url=new URL(path,'http://localhost'),before=Number(url.searchParams.get('before')||Infinity);return {records:data.filter(r=>r.seq<before).slice(-400).reverse(),lastSeq:data.length,threads:{}}}}),journal=view.journal();

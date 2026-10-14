@@ -651,7 +651,7 @@
   async function onSend(v,ta,binding=sendBinding()){S.draft=ta&&ta.value||v;save();if(H.on&&(!await settingsReady(binding)||!bindingCurrent(binding))){if(leftPage)return false;S.draft=ta&&ta.value||v;save();toast('Настройка или разговор изменились; сообщение осталось в черновике');return false; }
     if(H.on&&!(H.panes||[]).some(p=>p.id===binding.pane&&p.model)){S.draft=ta&&ta.value||v;save();toast('Сначала выберите модель разговора');return false}
     if(ta&&ta.value.trim()!==v){S.draft=ta.value;save();return false} if(ta){ta.value='';ta.style.height=''} log('чат','Вопрос: '+v.slice(0,90));
-    if(!cols().length){ S.pending={text:v,t:now(),target:binding}; save(); location.href='01-chat.html'; return true; }
+    if(!cols().length){ S.draft=null; S.pending={text:v,t:now(),target:binding}; save(); location.href='01-chat.html'; return true; }
     S.draft=null;S.chat.push({role:'me',text:v,t:now()}); save(); render(); return reply(v,binding); }
   function composer(){ document.querySelectorAll('.box').forEach(box=>{ const inEl=box.querySelector(':scope > .in'); if(!inEl||inEl.querySelector('textarea')) return;
       const ta=document.createElement('textarea'); ta.className='live-in'; ta.rows=PAGE==='new'?2:1; ta.placeholder=PAGE==='new'?'Спросите или поручите: «что сейчас делает команда?», «покажи расход», «что с планом»':(inEl.textContent.trim()||'Написать…'); inEl.textContent=''; inEl.appendChild(ta);
