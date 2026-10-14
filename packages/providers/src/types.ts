@@ -66,6 +66,12 @@ export interface Provider {
  reset():Promise<void>;close():Promise<void>
 }
 export function record(v:unknown):v is Record<string,unknown>{return typeof v==='object'&&v!==null&&!Array.isArray(v)}
+const turnAttachment=(a:unknown):a is TurnAttachment=>record(a)&&Buffer.isBuffer(a.data)&&a.data.length>=1&&a.data.length<=10*1024*1024&&(a.path===undefined||typeof a.path==='string'&&!!a.path)&&['image/png','image/jpeg','image/webp','image/gif'].includes(String(a.mime));
+export function attachmentSnapshot(value:unknown):TurnAttachment[]{
+ if(value===undefined)return [];
+ if(!Array.isArray(value)||value.some(a=>!turnAttachment(a)))throw new ProviderError('protocol','invalid TurnContext attachments');
+ return value.map(a=>({...a,data:Buffer.from(a.data)}));
+}
 export function snapshot(seat:Seat,ctx:TurnContext):Seat {
  if(!record(seat)||typeof seat.id!=='string'||!seat.id||typeof seat.cwd!=='string'||!seat.cwd||!['claude','codex'].includes(seat.vendor)||!['chat','read','check','web','ask','edit','all'].includes(seat.mode)||
  typeof seat.model!=='string'||typeof seat.label!=='string'||!Array.isArray(seat.writePaths)||!seat.writePaths.every(p=>typeof p==='string')||
@@ -74,7 +80,7 @@ export function snapshot(seat:Seat,ctx:TurnContext):Seat {
  if(!record(ctx)||!ctx.signal||typeof ctx.signal.addEventListener!=='function'||typeof ctx.signal.aborted!=='boolean'||
  (ctx.modelResponded!==undefined&&typeof ctx.modelResponded!=='function')||(ctx.modelStarted!==undefined&&typeof ctx.modelStarted!=='function')||!record(ctx.env)||!record(ctx.tools)||!Array.isArray(ctx.peers)||!ctx.peers.every(p=>record(p)&&typeof p.id==='string'&&typeof p.label==='string'&&providerId(p.vendor))||
  !Array.isArray(ctx.writableRoots)||!ctx.writableRoots.every(p=>typeof p==='string')||typeof ctx.roleNote!=='string'||typeof ctx.relayDepth!=='number'||
- !(ctx.projectDir===null||typeof ctx.projectDir==='string')||typeof ctx.appUrl!=='string'||(ctx.attachments!==undefined&&(!Array.isArray(ctx.attachments)||ctx.attachments.some(a=>!record(a)||!Buffer.isBuffer(a.data)||a.data.length<1||a.data.length>10*1024*1024||a.path!==undefined&&(typeof a.path!=='string'||!a.path)||!['image/png','image/jpeg','image/webp','image/gif'].includes(String(a.mime)))))||
+ !(ctx.projectDir===null||typeof ctx.projectDir==='string')||typeof ctx.appUrl!=='string'||(ctx.attachments!==undefined&&(!Array.isArray(ctx.attachments)||ctx.attachments.some(a=>!turnAttachment(a))))||
  ['publish','askApproval','session','setHandle','registerProcessToken','revokeProcessToken'].some(k=>typeof (ctx as unknown as Record<string,unknown>)[k]!=='function')||
  ['send','ask','readPane','merge','assignRole','proposeSeats','createSeats'].some(k=>typeof (ctx.tools as unknown as Record<string,unknown>)[k]!=='function'))
  throw new ProviderError('protocol','invalid TurnContext');

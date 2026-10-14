@@ -66,8 +66,13 @@ test('Claude busy, steer and interrupt are bound to active query; snapshot survi
  const run=p.runTurn(f.seat,'x',f.ctx);await until(()=>h.options.length===1);
  await assert.rejects(p.runTurn(f.seat,'second',f.ctx),e=>e instanceof ProviderError&&e.code==='busy');
  f.seat.cwd='/changed';await f.handle!.steer('correction');await f.handle!.interrupt();finish();await run;
- assert.equal(h.interrupts,1);assert.equal(h.steering[0]?.priority,'now');assert.deepEqual(h.steering[0]?.origin,{kind:'human'});assert.equal(h.options[0]?.options?.cwd,'/project');
+ assert.equal(h.interrupts,1);assert.equal(h.steering[0]?.priority,'now');assert.deepEqual(h.steering[0]?.origin,{kind:'human'});assert.equal(h.steering[0]?.message.content,'correction');assert.equal(h.options[0]?.options?.cwd,'/project');
  assert.equal(terminals(f.events).length,1);assert.equal(f.handle,null);
+});
+test('24b: Claude streamed input carries ordered base64 image blocks before text',async()=>{
+ const f=fixture('claude'),h=harness([init,done]);f.ctx.attachments=[{data:Buffer.from([1,2,3]),mime:'image/png'},{data:Buffer.from([4,5]),mime:'image/webp'}];f.ctx.beforeModel=async()=>{f.ctx.attachments![0]!.data.fill(9)};await new ClaudeProvider(h.deps).runTurn(f.seat,'посмотри',f.ctx);
+ const sent:SDKUserMessage[]=[];const source=h.options[0]!.prompt;assert.notEqual(typeof source,'string');for await(const item of source as AsyncIterable<SDKUserMessage>)sent.push(item);
+ assert.deepEqual(sent[0]?.message.content,[{type:'image',source:{type:'base64',media_type:'image/png',data:'AQID'}},{type:'image',source:{type:'base64',media_type:'image/webp',data:'BAU='}},{type:'text',text:'посмотри'}]);
 });
 test('Claude sessions strip digest and merge consecutive assistant messages',async()=>{
  const f=fixture('claude'),h=harness([]);let dir='';

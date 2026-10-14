@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {homedir} from 'node:os';
 import {join} from 'node:path';
 import {query,listSessions,getSessionMessages,type Options,type SDKUserMessage,type Query} from '@anthropic-ai/claude-agent-sdk';
-import {ProviderError,snapshot,approval,record,limitPlan,type Seat,type TurnContext,type Provider,type ProviderLimits,type LimitWindow} from './types.ts';
+import {ProviderError,snapshot,attachmentSnapshot,approval,record,limitPlan,type Seat,type TurnContext,type Provider,type ProviderLimits,type LimitWindow} from './types.ts';
 import {vendorError,asError} from './errors.ts';
 import {waitWithSignal} from './cancellation.ts';
 import {claudeBinary,childEnv} from './env.ts';
@@ -14,6 +14,11 @@ export interface ClaudeDependencies {
  queryFn:typeof query;listSessionsFn:typeof listSessions;getSessionMessagesFn:typeof getSessionMessages;
  findBinary:()=>Promise<string|null>;authStatus:(binary:string,env:NodeJS.ProcessEnv,signal?:AbortSignal)=>Promise<unknown>;env:NodeJS.ProcessEnv;
  readOauthLogin:(env:NodeJS.ProcessEnv,signal:AbortSignal)=>Promise<{token:string;plan:string|null;planLevel?:'5x'|'20x'|null}|null>;usageFetch:typeof fetch
+}
+function claudePrompt(text:string,attachments:NonNullable<TurnContext['attachments']>):SDKUserMessage['message']['content']{
+ if(!attachments.length)return text;
+ const images=attachments.map(attachment=>({type:'image' as const,source:{type:'base64' as const,media_type:attachment.mime,data:attachment.data.toString('base64')}}));
+ return [...images,...(text?[{type:'text' as const,text}]:[])];
 }
 // Read credentials only inside the product; never return credentials or vendor error bodies.
 async function readOauthLogin(env:NodeJS.ProcessEnv,signal:AbortSignal):Promise<{token:string;plan:string|null;planLevel?:'5x'|'20x'|null}|null>{
@@ -76,7 +81,7 @@ export class ClaudeProvider implements Provider {
  let sessionId=seat.sessionId,sessionSeen=false,text='',assistant='',streamed=false,terminal=false;
  const abort=new AbortController();const active={query:null as Query|null,abort};this.active.set(seat.id,active);
  const stop=()=>{void active.query?.interrupt().catch(()=>{});abort.abort()};ctx.signal.addEventListener('abort',stop,{once:true});const started=Date.now();
- const turnContext={...ctx,signal:AbortSignal.any([ctx.signal,abort.signal])};
+ const turnContext={...ctx,signal:AbortSignal.any([ctx.signal,abort.signal]),attachments:attachmentSnapshot(ctx.attachments)};
  const handle={interrupt:async()=>{if(this.active.get(seat.id)!==active||terminal)throw new ProviderError('cancelled','ход не активен',sessionId);if(active.query)await active.query.interrupt();else abort.abort()},
  steer:async(text:string)=>{if(this.active.get(seat.id)!==active||terminal||!active.query||turnContext.signal.aborted)throw new ProviderError('cancelled','ход не активен',sessionId);
  const prompt:SDKUserMessage={type:'user',message:{role:'user',content:text},parent_tool_use_id:null,priority:'now',origin:{kind:'human'}};
@@ -89,10 +94,10 @@ export class ClaudeProvider implements Provider {
  if(!auth.loggedIn)throw new ProviderError('not_logged_in','Claude не вошёл в учётную запись',sessionId);
  if(ctx.signal.aborted||abort.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
  const keepOpen=new Promise<void>(resolve=>{release=resolve});
- const first:SDKUserMessage={type:'user',message:{role:'user',content:message},parent_tool_use_id:null};
  const options={...claudeOptions(seat,turnContext,binary,this.deps.env),abortController:abort};
  if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),turnContext.signal);
  if(turnContext.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
+ const first:SDKUserMessage={type:'user',message:{role:'user',content:claudePrompt(message,turnContext.attachments)},parent_tool_use_id:null};
  ctx.modelStarted?.();
  active.query=this.deps.queryFn({prompt:(async function*(){yield first;await keepOpen})(),options});
  for await(const raw of active.query){

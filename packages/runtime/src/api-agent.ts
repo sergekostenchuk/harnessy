@@ -1,5 +1,5 @@
 import {setTimeout as delay} from 'node:timers/promises';
-import {ProviderError,record,API_TURN_MODES,type Provider,type Seat,type TurnContext,type Usage,type CliExecutor} from '@harnessy/providers';
+import {ProviderError,attachmentSnapshot,record,API_TURN_MODES,type Provider,type Seat,type TurnContext,type Usage,type CliExecutor} from '@harnessy/providers';
 import {validRoute,type LlmService,type Message,type StreamChunk,type Failure,type ContentBlock} from '@harnessy/llm';
 import {AgentTools} from './agent-tools.ts';
 import {untilAbort,cancellable} from './agent-cancel.ts';
@@ -26,7 +26,7 @@ function protectMessage(service:LlmService,message:Message):Message {
 export class ApiAgent implements Provider {
  readonly vendor:string;readonly route:string;private options:ApiAgentOptions;private active=new Map<AbortController,Promise<void>>();
  constructor(route:string,options:ApiAgentOptions){this.route=route;this.options=options;if(!validRoute(route))throw new ProviderError('provider_unknown','Неизвестный API-маршрут');this.vendor=options.vendor??'api:'+route}
- async models(){return (await this.options.service()).models(this.route).map(m=>({id:m.id,label:m.name}))}
+ async models(){return (await this.options.service()).models(this.route).map(m=>({id:m.id,label:m.name,...(m.input.includes('image')?{images:true}:{})}))}
  async auth():ReturnType<Provider['auth']>{return {loggedIn:false,state:'unknown',reason:'Учётные данные проверяются при запросе API'}}
  async listSessions(){return []}
  async sessionMessages():Promise<{role:'me'|'ai';text:string}[]>{throw new ProviderError('session_missing','История API-моделей хранится в разговоре Harnessy')}
@@ -36,17 +36,18 @@ export class ApiAgent implements Provider {
   if(!record(raw)||raw.vendor!==this.vendor||typeof raw.id!=='string'||typeof raw.cwd!=='string'||!Array.isArray(raw.writePaths)||!raw.writePaths.every(p=>typeof p==='string')||!Object.hasOwn(API_MODES,raw.mode))throw new ProviderError('protocol','Неверная привязка API-места');
   if(API_MODES[raw.mode].ok!==true)throw new ProviderError('mode_unsupported','Этот режим API-модели не подключён');
   if(raw.mode!=='chat'&&!ctx.projectDir)throw new ProviderError('permission_denied','Файловые инструменты требуют проект');
-  const seat={...raw,writePaths:[...raw.writePaths]};
+  const seat={...raw,writePaths:[...raw.writePaths]},attachments=attachmentSnapshot(ctx.attachments);
   const controller=new AbortController(),signal=AbortSignal.any([ctx.signal,controller.signal]);let settle!:()=>void;this.active.set(controller,new Promise<void>(done=>{settle=done}));
   let changed=false,text='',measured=false,unknownUsage=false,pendingRequest=false,usage={input:0,output:0,cacheRead:0},calls=0,started=false;const callIds=new Set<string>();
   let unsubscribe=()=>{};
-  const messages:Message[]=[{role:'system',content:[{type:'text',text:ctx.roleNote}]},{role:'user',content:[{type:'text',text:prompt}]}];
+  const messages:Message[]=[{role:'system',content:[{type:'text',text:ctx.roleNote}]},{role:'user',content:[]}];
   const start=performance.now(),maxSteps=this.options.maxSteps??32,maxCalls=this.options.maxToolCalls??128;
   const receipt=()=>ctx.publish({type:'done',sessionId:null,model:seat.model,durationMs:Math.round(performance.now()-start),usage:measured?{...usage}:usageEmpty(),...(unknownUsage||pendingRequest?{usageIncomplete:true as const}:{})});
   try{
+   let service:LlmService|undefined;
+   if(attachments.length){service=await untilAbort(signal,async()=>this.options.service(signal));const model=service.models(this.route).find(m=>m.id===seat.model);if(model&&!model.input.includes('image'))throw new ProviderError('images_unsupported','Выбранная модель не видит изображения')}
    if(this.options.prepareModel)await untilAbort(signal,()=>this.options.prepareModel!(seat.model,signal));
-   const service=await untilAbort(signal,async()=>this.options.service(signal)),model=service.models(this.route).find(m=>m.id===seat.model);
-   if(!model)throw new ProviderError('model_unsupported','Модель отсутствует в маршруте');
+   service??=await untilAbort(signal,async()=>this.options.service(signal));const model=service.models(this.route).find(m=>m.id===seat.model);if(!model)throw new ProviderError('model_unsupported','Модель отсутствует в маршруте');if(attachments.length&&!model.input.includes('image'))throw new ProviderError('images_unsupported','Выбранная модель не видит изображения');
    const route=JSON.stringify(service.routes()[this.route]);
    unsubscribe=service.onRoutesChanged(()=>{let current:string|undefined;try{current=JSON.stringify(service.routes()[this.route])}catch{}if(current!==route){changed=true;controller.abort()}});
    stopped(signal);if(!Number.isSafeInteger(maxSteps)||maxSteps<1||maxSteps>256||!Number.isSafeInteger(maxCalls)||maxCalls<1||maxCalls>1024)throw new ProviderError('protocol','Неверные пределы агентного цикла');
@@ -56,6 +57,7 @@ export class ApiAgent implements Provider {
     const policy=service.retryPolicy(this.route);let finish:Finish|undefined;
     for(let retry=0;;retry++){
      stopped(signal);await untilAbort(signal,async()=>ctx.beforeModel?.({provider:this.vendor,model:seat.model}));stopped(signal);
+     if(step===0&&retry===0&&!messages[1]!.content.length){const images=attachments.map(attachment=>({type:'image' as const,data:attachment.data.toString('base64'),mimeType:attachment.mime}));messages[1]!.content.push(...images,...(prompt?[{type:'text' as const,text:prompt}]:[]))}
      if(seat.sessionId)throw new ProviderError('session_missing','API-модель использует историю Harnessy');
      if(!started){ctx.modelStarted?.();started=true}
      let emitted='',bytes=0,sawText=false;const filter=service.textRedactor(),publish=(value:string)=>{if(!value)return;if(!emitted&&text){text+='\n\n';ctx.publish({type:'delta',text:'\n\n'})}emitted+=value;text+=value;if(text.length>1024*1024)throw new ProviderError('protocol','Текст хода превысил предел');ctx.publish({type:'delta',text:value})};finish=undefined;pendingRequest=true;

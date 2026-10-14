@@ -45,6 +45,19 @@ for(const mode of ['check','web'] as const)test('21e: '+mode+' reaches the model
 
 test('21b: an old native session fails explicitly for Harnessy history recovery',async t=>{const h=agentFixture(t);h.seat.sessionId='legacy';const model=modelDouble(()=>[end()]);await assert.rejects(new ApiAgent('local',{service:()=>model.service}).runTurn(h.seat,'task',h.ctx),{code:'session_missing'});assert.equal(model.requests.length,0)});
 
+test('24b: API agent sends ordered image ContentBlocks before text and reports the model capability',async t=>{
+ const h=agentFixture(t);h.ctx.attachments=[{data:Buffer.from([1,2,3]),mime:'image/png'},{data:Buffer.from([4,5]),mime:'image/jpeg'}];h.ctx.beforeModel=async()=>{h.ctx.attachments![0]!.data.fill(9)};const model=modelDouble(()=>[end()],{mode:'normal',maxRetries:0},['text','image']),agent=new ApiAgent('local',{service:()=>model.service});
+ assert.deepEqual(await agent.models(),[{id:'test-model',label:'Fixture',images:true}]);await agent.runTurn(h.seat,'посмотри',h.ctx);assert.deepEqual(model.requests[0]!.messages[1]!.content,[{type:'image',data:'AQID',mimeType:'image/png'},{type:'image',data:'BAU=',mimeType:'image/jpeg'},{type:'text',text:'посмотри'}]);
+});
+test('24b: API text-only model rejects attachments before preparation or inference',async t=>{
+ const h=agentFixture(t);h.ctx.attachments=[{data:Buffer.from('fixture'),mime:'image/png'}];let preparations=0;const model=modelDouble(()=>[end()]),agent=new ApiAgent('local',{service:()=>model.service,prepareModel:async()=>{preparations++}});
+ assert.deepEqual(await agent.models(),[{id:'test-model',label:'Fixture'}]);await assert.rejects(agent.runTurn(h.seat,'нельзя',h.ctx),{code:'images_unsupported'});assert.equal(preparations,0);assert.equal(model.requests.length,0);
+});
+test('24b: API model capability is rechecked after asynchronous preparation',async t=>{
+ const h=agentFixture(t),modalities:('text'|'image')[]=['text','image'];h.ctx.attachments=[{data:Buffer.from('fixture'),mime:'image/png'}];const model=modelDouble(()=>[end()],{mode:'normal',maxRetries:0},modalities),agent=new ApiAgent('local',{service:()=>model.service,prepareModel:async()=>{modalities.splice(1)}});
+ await assert.rejects(agent.runTurn(h.seat,'смена модели',h.ctx),{code:'images_unsupported'});assert.equal(model.requests.length,0);
+});
+
 test('21b secrets: split deltas and split final text blocks agree; opaque replay remains intact',async t=>{
  const h=agentFixture(t),secret='fixture-private-route-key',model=modelDouble(()=>[...Array.from(secret,char=>({type:'text-delta' as const,index:0,text:char})),end([{type:'text',text:secret.slice(0,9)},{type:'text',text:secret.slice(9)},{type:'reasoning',text:'opaque',signature:'signature'}])]);model.protection.add(secret);
  const result=await new ApiAgent('local',{service:()=>model.service}).runTurn(h.seat,'task',h.ctx);assert.equal(result.text,'[ключ скрыт]');assert.equal(h.events.filter(e=>e.type==='delta').map(e=>e.text).join(''),'[ключ скрыт]');assert.equal(JSON.stringify(h.events).includes(secret),false);
