@@ -10,7 +10,7 @@ export interface Clock {now():number;setTimeout(fn:()=>void,ms:number):unknown;c
 export const systemClock:Clock={now:Date.now,setTimeout(fn,ms){const t=setTimeout(fn,ms);t.unref();return t},clearTimeout(t){clearTimeout(t as ReturnType<typeof setTimeout>)}};
 export type RuntimeEvent={type:string;[field:string]:unknown};
 export interface Waiting {failure?:import('./turn-failure.ts').TurnFailure;queuedSeqs?:number[];status:'uncertain'|'recovering';recordSeqs:number[];startedAt:number|null;turnInstanceId:string;actions:('retry'|'skip'|'finish')[]}
-export type ModelCatalog=Partial<Record<Vendor,{id:string;label?:string}[]>>;
+export type ModelCatalog=Partial<Record<Vendor,{id:string;label?:string;images?:boolean}[]>>;
 export interface TurnScope {readonly projectDir:string;readonly seatId:string;readonly turnInstanceId:string}
 export type TurnRecords=readonly Readonly<Record_>[];
 export interface ActionContext {readonly runtime:Runtime;readonly scope:TurnScope;readonly turnRecords:TurnRecords;readonly relayDepth:number;assertActive():void}

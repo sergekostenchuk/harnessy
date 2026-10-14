@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
-import {KINDS,SYSTEM_KINDS,JournalError,object,freeze,type Record_,type AppendInput,type DeliveryEntry} from './types.ts';
+import {KINDS,SYSTEM_KINDS,JournalError,normalizeAttachments,object,freeze,type Record_,type AppendInput,type DeliveryEntry} from './types.ts';
 import {compatJson,localIso,pythonTrim,parseCompat,orderedClone} from './compat-json.ts';
 import {PROTOCOL_TEXT,PROTOCOL_VERSION} from './strings.ts';
 type JournalFs=Pick<typeof fs,'mkdirSync'|'readFileSync'|'openSync'|'appendFileSync'|'fsyncSync'|'closeSync'|'writeFileSync'|'renameSync'>;
@@ -10,14 +10,15 @@ export function ackResolution(record:Record_,replies:Record_[]):Record_|null {
  if(record.ack!=='pending')return null;
  return replies.find(r=>r.seq>record.seq&&(r.kind==='ack'&&r.from==='owner'||r.kind==='rejected'&&r.from==='harness'&&r.to.includes('owner')))??null
 }
-export function validateForm(input:{to:unknown;text:unknown;evidence?:unknown}) {
+export function validateForm(input:{to:unknown;text:unknown;evidence?:unknown;attachments?:unknown}) {
  const to=typeof input.to==='string'?[input.to]:input.to;
  if(!Array.isArray(to)||!to.length||!to.every(t=>typeof t==='string'&&!!t))throw new JournalError('to_invalid','адресат — имя места или список мест');
- if(typeof input.text!=='string'||!pythonTrim(input.text))throw new JournalError('text_empty','пустой текст записи');
+ const attachments=normalizeAttachments(input.attachments);
+ if(typeof input.text!=='string'||!pythonTrim(input.text)&&!attachments.length)throw new JournalError('text_empty','пустой текст записи');
  if([...input.text].length>100000)throw new JournalError('text_too_long','текст записи длиннее 100000 символов');
  const evidence=input.evidence??[];
  if(!Array.isArray(evidence)||!evidence.every(e=>typeof e==='string'))throw new JournalError('evidence_invalid','evidence — список строк');
- return {to:[...to] as string[],text:input.text,evidence:[...evidence] as string[]}
+ return {to:[...to] as string[],text:input.text,evidence:[...evidence] as string[],attachments}
 }
 export function requireKind(kind:unknown,system=true):asserts kind is string {
  if(typeof kind!=='string'||!KINDS.includes(kind as never)&&(!system||!SYSTEM_KINDS.includes(kind as never)))throw new JournalError('kind_unknown','неизвестный вид записи: '+String(kind)+'; есть '+KINDS.join(', '))
@@ -69,7 +70,7 @@ export class Journal {
  append(input:AppendInput):Record_ {
  this.recover();requireKind(input.kind);const form=validateForm(input);let thread=input.thread??null,reply=input.reply_to??null;
  if(reply!==null){const target=this.get(reply);if(!target)throw new JournalError('reply_to_missing','нет записи #'+String(reply));if(thread===null)thread=target.thread??null}
- const now=this.now();const rec:Record_={seq:this.lastSeq+1,id:this.id(now.getTime()),ts:localIso(now),from:input.sender,to:form.to,kind:input.kind,thread,reply_to:reply,text:form.text,evidence:form.evidence,policy:input.policy??0};
+ const now=this.now();const rec:Record_={seq:this.lastSeq+1,id:this.id(now.getTime()),ts:localIso(now),from:input.sender,to:form.to,kind:input.kind,thread,reply_to:reply,text:form.text,evidence:form.evidence,...(form.attachments.length?{attachments:form.attachments}:{}),policy:input.policy??0};
  for(const key of ['score','round','origin','accepted','bounds','ack','sha','merged'] as const)if(input[key]!==null&&input[key]!==undefined)Object.assign(rec,{[key]:input[key]});
  if(input.attempt!==undefined)rec.attempt={...input.attempt};
  return this.write(rec)

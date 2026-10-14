@@ -43,6 +43,10 @@ test('missing context and seat fields reject with protocol',()=>{
 test('snapshot owns write paths and does not follow mutable settings',()=>{
  const f=fixture(),s=snapshot(f.seat,f.ctx);f.seat.cwd='/other';f.seat.writePaths.push('secret');assert.equal(s.cwd,'/project');assert.deepEqual(s.writePaths,['src']);
 });
+test('attachment context requires verified bytes and rejects byte-like masquerades',()=>{
+ const f=fixture();f.ctx.attachments=[{data:Buffer.from('verified'),mime:'image/png'}];assert.doesNotThrow(()=>snapshot(f.seat,f.ctx));
+ for(const attachment of [{mime:'image/png'},{data:new Uint8Array([1]),mime:'image/png'},{data:Buffer.alloc(0),mime:'image/png'},{data:Buffer.from('x'),path:'',mime:'image/png'}])assert.throws(()=>snapshot(f.seat,{...f.ctx,attachments:[attachment]} as TurnContext),e=>e instanceof ProviderError&&e.code==='protocol');
+});
 test('only agreed vendor observations classify failure',()=>{
  assert.equal(vendorError('claude','No conversation found with session ID: fake').code,'session_missing');
  assert.equal(vendorError('codex','missing','thread/resume').code,'session_missing');

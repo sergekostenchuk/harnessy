@@ -41,6 +41,7 @@ export interface PeerTools {
 export type RouteEnv=Partial<Record<'HTTPS_PROXY'|'HTTP_PROXY'|'ALL_PROXY'|'https_proxy'|'http_proxy'|'all_proxy'|'NO_PROXY'|'no_proxy'|'NODE_OPTIONS'|'NODE_USE_ENV_PROXY'|'HARNESS_RELAY_PROXY',string>>;
 export const FORBIDDEN_ENV={claude:['ANTHROPIC_API_KEY','CLAUDECODE','CLAUDE_CODE_SIMPLE'],codex:['OPENAI_API_KEY']} as const;
 export interface TurnHandle {interrupt():Promise<void>;steer(text:string):Promise<void>}
+export interface TurnAttachment {data:Buffer;path?:string;mime:'image/png'|'image/jpeg'|'image/webp'|'image/gif'}
 export interface ToolTrace {id:string;name:string;phase:'call'|'result'|'warning';data?:unknown;outcome?:'ok'|'failed'|'rejected'|'timeout'|'cancelled';reason?:string;error?:string}
 export interface TurnContext {
  /** Optional owner-probe binding check, after preparation and immediately before inference. */
@@ -49,9 +50,9 @@ export interface TurnContext {
  modelStarted?():void;modelResponded?():void;signal:AbortSignal;publish(ev:TurnEvent):void;askApproval(title:string,detail:string):Promise<boolean>;
  session(id:string):void;setHandle(h:TurnHandle|null):void;env:RouteEnv;roleNote:string;
  peers:{id:string;label:string;vendor:Vendor}[];tools:PeerTools;relayDepth:number;projectDir:string|null;appUrl:string;
- registerProcessToken(token:string):void;revokeProcessToken(token:string):void;writableRoots:string[]
+ registerProcessToken(token:string):void;revokeProcessToken(token:string):void;writableRoots:string[];attachments?:TurnAttachment[]
 }
-export type ErrorCode='region_restricted'|'network_blocked'|'network_unavailable'|'network_country_unverified'|'network_no_reserve'|'network_proxy_auth'|'no_binary'|'not_logged_in'|'session_missing'|'model_unsupported'|'cloud_api_required'|'protocol'|'transport_lost'|'cancelled'|'busy'|'cwd_changed'|'turn_failed'|'unknown_request'|'models_unavailable'|'mode_unsupported'|'capability_unsupported'|'permission_denied'|'provider_unknown'|'not_installed'|'platform_unsupported'|'login_terminal_failed'|'login_changed'|'state_dir_tampered';
+export type ErrorCode='images_unsupported'|'region_restricted'|'network_blocked'|'network_unavailable'|'network_country_unverified'|'network_no_reserve'|'network_proxy_auth'|'no_binary'|'not_logged_in'|'session_missing'|'model_unsupported'|'cloud_api_required'|'protocol'|'transport_lost'|'cancelled'|'busy'|'cwd_changed'|'turn_failed'|'unknown_request'|'models_unavailable'|'mode_unsupported'|'capability_unsupported'|'permission_denied'|'provider_unknown'|'not_installed'|'platform_unsupported'|'login_terminal_failed'|'login_changed'|'state_dir_tampered';
 export class ProviderError extends Error {
  code:ErrorCode;vendorText:string;sessionId:string|null;
  constructor(code:ErrorCode,vendorText:string,sessionId:string|null=null){super(vendorText);this.name='ProviderError';this.code=code;this.vendorText=vendorText;this.sessionId=sessionId}
@@ -60,7 +61,7 @@ export interface Provider {
  readonly vendor:Vendor;runTurn(seat:Seat,message:string,ctx:TurnContext):Promise<{text:string;sessionId:string|null;interrupted?:boolean}>;
  listSessions(cwd:string):Promise<{id:string;title:string;updated:number}[]>;
  sessionMessages(cwd:string,id:string):Promise<{role:'me'|'ai';text:string}[]>;
- auth():Promise<{loggedIn:boolean;[k:string]:unknown}>;models():Promise<{id:string;label:string}[]>;
+ auth():Promise<{loggedIn:boolean;[k:string]:unknown}>;models():Promise<{id:string;label:string;images?:boolean}[]>;
  limits?(signal?:AbortSignal):Promise<ProviderLimits>;
  reset():Promise<void>;close():Promise<void>
 }
@@ -73,7 +74,7 @@ export function snapshot(seat:Seat,ctx:TurnContext):Seat {
  if(!record(ctx)||!ctx.signal||typeof ctx.signal.addEventListener!=='function'||typeof ctx.signal.aborted!=='boolean'||
  (ctx.modelResponded!==undefined&&typeof ctx.modelResponded!=='function')||(ctx.modelStarted!==undefined&&typeof ctx.modelStarted!=='function')||!record(ctx.env)||!record(ctx.tools)||!Array.isArray(ctx.peers)||!ctx.peers.every(p=>record(p)&&typeof p.id==='string'&&typeof p.label==='string'&&providerId(p.vendor))||
  !Array.isArray(ctx.writableRoots)||!ctx.writableRoots.every(p=>typeof p==='string')||typeof ctx.roleNote!=='string'||typeof ctx.relayDepth!=='number'||
- !(ctx.projectDir===null||typeof ctx.projectDir==='string')||typeof ctx.appUrl!=='string'||
+ !(ctx.projectDir===null||typeof ctx.projectDir==='string')||typeof ctx.appUrl!=='string'||(ctx.attachments!==undefined&&(!Array.isArray(ctx.attachments)||ctx.attachments.some(a=>!record(a)||!Buffer.isBuffer(a.data)||a.data.length<1||a.data.length>10*1024*1024||a.path!==undefined&&(typeof a.path!=='string'||!a.path)||!['image/png','image/jpeg','image/webp','image/gif'].includes(String(a.mime)))))||
  ['publish','askApproval','session','setHandle','registerProcessToken','revokeProcessToken'].some(k=>typeof (ctx as unknown as Record<string,unknown>)[k]!=='function')||
  ['send','ask','readPane','merge','assignRole','proposeSeats','createSeats'].some(k=>typeof (ctx.tools as unknown as Record<string,unknown>)[k]!=='function'))
  throw new ProviderError('protocol','invalid TurnContext');

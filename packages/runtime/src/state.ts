@@ -13,7 +13,7 @@ export const diskIO:StateIO={read:path=>new TextDecoder('utf-8',{fatal:true}).de
 export interface Receipt {turnInstanceId:string;recordSeqs:number[];effectsPending:boolean;interrupted:boolean;nextSeen:Record<string,number>}
 export type TurnOutcome='ok'|'interrupted'|'error';
 export interface ArtifactRefs {project:string;chat:string;turnInstanceId:string;paths:string[]}
-export interface TranscriptMessage {seq?:number;artifacts?:ArtifactRefs;role:string;text:string;ts:number;model?:string;outcome?:TurnOutcome;errorCode?:string;origin?:'transferred';[key:string]:unknown}
+export interface TranscriptMessage {seq?:number;artifacts?:ArtifactRefs;attachments?:import('@harnessy/journal').AttachmentRef[];role:string;text:string;ts:number;model?:string;outcome?:TurnOutcome;errorCode?:string;origin?:'transferred';[key:string]:unknown}
 // Chat-local identity survives deletion and reload; it is unrelated to journal deliverySeq.
 export function numberTranscript(holder:{transcript:TranscriptMessage[];transcriptSeq?:number}):number {
  let high=holder.transcriptSeq??0,last=0;

@@ -26,11 +26,11 @@ export async function metadata(r:Runtime,connections=false){
 }
 export function metaRoutes(r:Runtime,router:RouterSource={health:routerHealthReader(),models:readRouterModels}):Route[]{
  let lastIssue='',issueProject:ProjectState|null=null;
- async function routedModels(p:ProjectState,models:{id:string;label:string}[],knownHealth?:RouterHealth){
+ async function routedModels(p:ProjectState,models:{id:string;label:string;images?:boolean}[],knownHealth?:RouterHealth){
   const source=router.models();if(!source.ok){if(issueProject!==p||lastIssue!==source.reason)p.trace.record('models.unavailable',{actor:'engine',outcome:'failed',reason:{code:'unavailable',text:source.reason},data:{provider:'provider-router'}});issueProject=p;lastIssue=source.reason}else{issueProject=p;lastIssue=''}
   const ids=new Set(source.ok?source.models:[]),health=models.some(m=>ids.has(m.id))?knownHealth??await router.health():null;sameProject(r,p);
   const viaStatus=health?.ok?{ok:true as const}:{ok:false as const,reason:'provider-router не отвечает: '+(health&&!health.ok?health.reason:'движок не сообщил доступность')};
-  return models.map(({id,label})=>({id,label,...(ids.has(id)?{via:'provider-router' as const,viaStatus}:{})}));
+  return models.map(({id,label,images=false})=>({id,label,images,...(ids.has(id)?{via:'provider-router' as const,viaStatus}:{})}));
  }
  return [
  ...sectionRoutes(r),

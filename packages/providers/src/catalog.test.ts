@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,readFileSync,readdirSync,writeFileSync} from 'node:fs';
+import {existsSync,readFileSync,readdirSync,realpathSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {ProviderCatalog,cliEntry,builtinEntries} from './catalog.ts';
 import {LoginTerminal} from './login-terminal.ts';
@@ -27,4 +27,11 @@ test('269: terminal script safely quotes literal arguments and cleans its privat
 
 test('268: existing Claude/Codex metadata use their provider ports without changing their implementations',async()=>{
  let turns=0;const provider:any={auth:async()=>({loggedIn:true,email:'a@test'}),models:async()=>[],runTurn:async()=>{turns++;return {text:'ok',sessionId:null}}},entries=builtinEntries({claude:provider},{claude:[{id:'existing-model'}]},{execute:async()=>({code:0,signal:null,stdout:'existing-cli 1\n',stderr:''})}),catalog=new ProviderCatalog(entries);const rows=await catalog.list();assert.equal(rows[0]!.row.title,'Claude Code');assert.equal(rows[0]!.row.models[0]!.id,'existing-model');assert.equal(turns,0);
+});
+
+test('24a: a safe image capability survives the public catalog disk snapshot',async t=>{
+ const f=await cliFixture(t),cache=join(realpathSync(f.dir),'catalog-cache'),base=cliEntry(f.description,{env:f.env,cwd:f.dir,temporaryDirectory:f.dir}),entry={...base,models:async()=>[{id:'vision-model',label:'Vision model',images:true}]};
+ const first=new ProviderCatalog([entry],()=>1791500000125,{cacheDir:cache});assert.equal((await first.read(entry.id)).row.capabilities.images,true);await first.close();
+ const saved=JSON.parse(readFileSync(join(cache,entry.id+'.json'),'utf8'));assert.equal(saved.models[0]?.images,true);
+ const restored=new ProviderCatalog([entry],()=>1791500001125,{cacheDir:cache});t.after(()=>restored.close());assert.equal(restored.peek(entry.id).models[0]?.images,true);assert.equal(restored.peek(entry.id).capabilities.images,true);
 });
