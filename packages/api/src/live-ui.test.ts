@@ -257,6 +257,17 @@ test('TS-24c: a new-chat transition carries images once and does not restore the
  const chat=view.requests.find(r=>r.path==='/api/chat');assert.deepEqual(chat?.body?.attachments,[ref.id]);assert.equal(view.S.pending,null);assert.equal(view.S.draft,null);assert.equal(view.functions.attachmentState(null).ready.length,0);
 });
 
+for(const change of ['chat','project'] as const)test('TS-24c: pending images return only to the original draft after '+change+' changes',async()=>{
+ const ref=imageRef('e'),view=ui({fetch:async path=>path==='/api/attachments'?ref:{ok:true}});view.functions.attachmentFiles([imageFile()]);await until(()=>view.functions.attachmentState(null).ready.length===1);const original=view.functions.attachmentKey();view.sandbox.cols=()=>[];view.ta.value='Исходное сообщение';assert.equal(await view.functions.onSend(view.ta.value,view.ta),true);
+ if(change==='chat')view.H.active.worker='chat-b';else{view.H.project='/project-b';view.H.confirmedProjectGeneration=2}view.functions.sendBinding();const target=view.functions.attachmentKey();assert.notEqual(target,original);view.sandbox.cols=()=>[view.column];view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+part(live,'  hConnect().finally(',"  addEventListener('resize',()=>{ wireSearch();"),view.context);await (view.context as Data).pendingSend;
+ assert.equal(view.requests.some(r=>r.path==='/api/chat'),false);assert.equal(view.S.draft,'Исходное сообщение');assert.equal(view.functions.attachmentRefs(target).length,0);assert.deepEqual(plain(view.functions.attachmentRefs(original)),[ref]);
+});
+
+test('TS-24c: pending text and images return to their original draft after capability refusal',async()=>{
+ const ref=imageRef('7'),view=ui({fetch:async path=>path==='/api/attachments'?ref:{ok:true}});view.functions.attachmentFiles([imageFile()]);await until(()=>view.functions.attachmentState(null).ready.length===1);const original=view.functions.attachmentKey();view.sandbox.cols=()=>[];view.ta.value='Исходное сообщение';assert.equal(await view.functions.onSend(view.ta.value,view.ta),true);view.H.models.claude[0].images=false;view.sandbox.cols=()=>[view.column];view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+part(live,'  hConnect().finally(',"  addEventListener('resize',()=>{ wireSearch();"),view.context);await (view.context as Data).pendingSend;
+ assert.equal(view.requests.some(r=>r.path==='/api/chat'),false);assert.equal(view.S.draft,'Исходное сообщение');assert.deepEqual(plain(view.functions.attachmentRefs(original)),[ref]);
+});
+
 const records=(count:number)=>Array.from({length:count},(_,i)=>({seq:i+1,ts:i%2?'2026-10-10T10:37:00+03:00':'2026-10-10T02:01:00Z',from:'owner',to:['worker'],kind:i%2?'note':'question',text:'record '+(i+1),thread:null}));
 test('79/80/107: >800 records, refresh, missing kinds, seq chronology and local card time',async()=>{
  let data=records(805);const view=ui({fetch:async path=>{const url=new URL(path,'http://localhost'),before=Number(url.searchParams.get('before')||Infinity);return {records:data.filter(r=>r.seq<before).slice(-400).reverse(),lastSeq:data.length,threads:{}}}}),journal=view.journal();
