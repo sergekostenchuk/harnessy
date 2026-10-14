@@ -78,15 +78,22 @@ test('Codex snapshot, busy and steer preserve active turn identity',async()=>{
  await assert.rejects(p.runTurn(f.seat,'again',f.ctx),e=>e instanceof ProviderError&&e.code==='busy');
  f.seat.cwd='/changed';await assert.rejects(p.runTurn(f.seat,'again',f.ctx),e=>e instanceof ProviderError&&e.code==='cwd_changed');
  await f.handle!.steer('correction');const t=h.transports[0]!,steer=t.requests.find(r=>r.method==='turn/steer')!.params as Record<string,unknown>;
- assert.equal(steer.expectedTurnId,'turn-1');assert.equal(h.options[0]?.cwd,'/project');await f.handle!.interrupt();await run;await p.close();
+ assert.equal(steer.expectedTurnId,'turn-1');assert.deepEqual(steer.input,[{type:'text',text:'correction'}]);assert.equal(h.options[0]?.cwd,'/project');await f.handle!.interrupt();await run;await p.close();
+});
+test('24b: Codex turn/start carries ordered localImage inputs before text',async()=>{
+ const h=codexHarness(),f=fixture(),p=new CodexProvider(h.deps);f.ctx.attachments=[{data:Buffer.from([1]),path:'/private/tmp/harnessy-turn-attachments-one/0.png',mime:'image/png'},{data:Buffer.from([2]),path:'/private/tmp/harnessy-turn-attachments-two/1.gif',mime:'image/gif'}];f.ctx.beforeModel=async()=>{f.ctx.attachments![0]!.path='/project/.harness/attachments/forged.png'};await p.runTurn(f.seat,'посмотри',f.ctx);
+ const turn=h.transports[0]!.requests.find(r=>r.method==='turn/start')!.params as Record<string,unknown>;assert.deepEqual(turn.input,[{type:'localImage',path:'/private/tmp/harnessy-turn-attachments-one/0.png'},{type:'localImage',path:'/private/tmp/harnessy-turn-attachments-two/1.gif'},{type:'text',text:'посмотри'}]);await p.close();
+});
+test('24b: Codex rejects absent or project-local image paths before app-server launch',async()=>{
+ for(const attachment of [{data:Buffer.from([1]),mime:'image/png'},{data:Buffer.from([1]),path:'/project/.harness/attachments/one.png',mime:'image/png'}] as const){const h=codexHarness(),f=fixture(),p=new CodexProvider(h.deps);f.ctx.attachments=[attachment];await assert.rejects(p.runTurn(f.seat,'нельзя',f.ctx),e=>e instanceof ProviderError&&e.code==='protocol');assert.equal(h.transports.length,0);await p.close()}
 });
 test('models pagination and failure are independent of account; history strips digest',async()=>{
  const h=codexHarness(t=>{const base=t.responder;t.responder=(m,p,t)=>{
- if(m==='model/list')return p.cursor?{data:[{model:'second',displayName:'Second'}],nextCursor:null}:{data:[{model:'first',displayName:'First'}],nextCursor:'page'};
+ if(m==='model/list')return p.cursor?{data:[{model:'second',displayName:'Second',inputModalities:['text']}],nextCursor:null}:{data:[{model:'first',displayName:'First',inputModalities:['text','image']}],nextCursor:'page'};
  if(m==='thread/read')return {thread:{turns:[{items:[{type:'userMessage',content:[{type:'text',text:'digest\n---\nСообщение тебе:\nhello'}]},{type:'agentMessage',text:'one'},{type:'agentMessage',text:'two'}]}]}};
  if(m==='thread/list')return {data:[{id:'s',name:'',updatedAt:4}],nextCursor:null};return base(m,p,t)
  }});
- const p=new CodexProvider(h.deps);assert.deepEqual(await p.models(),[{id:'first',label:'First'},{id:'second',label:'Second'}]);
+ const p=new CodexProvider(h.deps);assert.deepEqual(await p.models(),[{id:'first',label:'First',images:true},{id:'second',label:'Second'}]);
  assert.deepEqual(await p.sessionMessages('/project','s'),[{role:'me',text:'hello'},{role:'ai',text:'one\ntwo'}]);assert.equal((await p.listSessions('/project'))[0]?.title,'hello');await p.reset();
  const fail=codexHarness(t=>{const base=t.responder;t.responder=(m,p,t)=>{if(m==='model/list')throw Error('catalog unavailable');return base(m,p,t)}});
  const q=new CodexProvider(fail.deps);await assert.rejects(q.models(),e=>e instanceof ProviderError&&e.code==='models_unavailable');assert.equal((await q.auth()).loggedIn,true);await q.close();

@@ -1,5 +1,6 @@
 import {randomBytes} from 'node:crypto';
-import {ProviderError,snapshot,record,limitPlan,limitCredits,type Seat,type TurnContext,type Provider,type Usage,type ProviderLimits,type LimitWindow} from '../types.ts';
+import {isAbsolute,relative,sep} from 'node:path';
+import {ProviderError,snapshot,attachmentSnapshot,record,limitPlan,limitCredits,type Seat,type TurnAttachment,type TurnContext,type Provider,type Usage,type ProviderLimits,type LimitWindow} from '../types.ts';
 import {asError,requireRecord,vendorError} from '../errors.ts';
 import {waitWithSignal} from '../cancellation.ts';
 import {childEnv} from '../env.ts';
@@ -10,6 +11,10 @@ import {argumentsFor,BASE_OVERRIDES,overrides,userServers,sparkRouter,tomlKey} f
 import {serverRequest} from './protocol.ts';
 interface ProcessRecord {client:RpcClient;cwd:string;peers:string;network:string;token:string;revoke:()=>void}
 interface Active {seat:Seat;ctx:TurnContext;client:RpcClient|null;threadId:string|null;turnId:string|null;stopRequested:boolean;reject:(e:ProviderError)=>void}
+function codexImageInputs(attachments:TurnAttachment[],projectDir:string|null){
+ if(attachments.length&&!projectDir)throw new ProviderError('protocol','missing project for Codex image snapshot');
+ return attachments.map(attachment=>{const path=attachment.path,fromProject=path&&projectDir?relative(projectDir,path):'';if(!path||!isAbsolute(path)||fromProject===''||!isAbsolute(fromProject)&&fromProject!=='..'&&!fromProject.startsWith('..'+sep))throw new ProviderError('protocol','invalid Codex image snapshot path');return {type:'localImage' as const,path}});
+}
 export function codexLimits(raw:unknown,now=Date.now()/1000,plan:unknown=null):ProviderLimits{
  const invalid:ProviderLimits={ok:false,code:'limits_invalid',reason:'Codex: неполный ответ лимитов подписки'};
  if(!record(raw))return invalid;
@@ -30,7 +35,7 @@ export interface CodexDependencies {transportFactory:TransportFactory;servers:()
 export class CodexProvider implements Provider {
  readonly vendor='codex' as const;private deps:CodexDependencies;
  private clients=new Map<string,ProcessRecord>();private lists=new Map<string,RpcClient>();private listStarts=new Map<string,Promise<RpcClient>>();private active=new Map<string,Active>();
- private modelsCache:{id:string;label:string}[]|null=null;private generation=0;
+ private modelsCache:{id:string;label:string;images?:boolean}[]|null=null;private generation=0;
  constructor(deps:Partial<CodexDependencies>={}){this.deps={transportFactory:spawnTransport,servers:userServers,router:sparkRouter,env:process.env,cwd:process.cwd(),...deps}}
  private async dispose(id:string,r:ProcessRecord){if(this.clients.get(id)===r)this.clients.delete(id);r.revoke();await r.client.close()}
  private async process(seat:Seat,ctx:TurnContext){
@@ -58,8 +63,9 @@ export class CodexProvider implements Provider {
  }
  async runTurn(input:Seat,message:string,ctx:TurnContext){
  const seat=snapshot(input,ctx);if(seat.vendor!=='codex')throw new ProviderError('protocol','wrong provider');
- ctx={...ctx,peers:ctx.peers.map(p=>({...p}))};
+ const attachments=attachmentSnapshot(ctx.attachments);ctx={...ctx,peers:ctx.peers.map(p=>({...p})),attachments};
  const busy=this.active.get(seat.id);if(busy)throw new ProviderError(busy.seat.cwd===seat.cwd?'busy':'cwd_changed',busy.seat.cwd===seat.cwd?'место занято':'папка окна изменилась во время хода',seat.sessionId);
+ const imageInputs=codexImageInputs(attachments,ctx.projectDir);
  let resolve!:(value:{text:string;usage:Usage;durationMs:number;interrupted:boolean})=>void,reject!:(e:ProviderError)=>void;
  const ended=new Promise<{text:string;usage:Usage;durationMs:number;interrupted:boolean}>((a,b)=>{resolve=a;reject=b});void ended.catch(()=>{});
  const active:Active={seat,ctx,client:null,threadId:null,turnId:null,stopRequested:false,reject};this.active.set(seat.id,active);
@@ -132,7 +138,8 @@ export class CodexProvider implements Provider {
  if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),startupContext.signal);
  if(startupContext.signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
  ctx.modelStarted?.();
- const start=requireRecord(await client.request('turn/start',{threadId:sessionId,input:[{type:'text',text:message}],sandboxPolicy:mode.sandboxPolicy,approvalPolicy:mode.approvalPolicy},startupContext.signal),'turn start');
+ const input=[...imageInputs,...(message?[{type:'text' as const,text:message}]:[])];
+ const start=requireRecord(await client.request('turn/start',{threadId:sessionId,input,sandboxPolicy:mode.sandboxPolicy,approvalPolicy:mode.approvalPolicy},startupContext.signal),'turn start');
  const turn=requireRecord(start.turn,'turn');if(typeof turn.id!=='string'||!turn.id)throw new ProviderError('protocol','missing turn id',sessionId);
  active.turnId=turn.id;ready(turn.id);for(const q of queued)receive(q.method,q.params);
  if((active.stopRequested||ctx.signal.aborted)&&!settled)await handle.interrupt();
@@ -195,9 +202,9 @@ export class CodexProvider implements Provider {
  catch{return {ok:false,code:stop.aborted?'limits_timeout':'limits_unavailable',reason:stop.aborted?'Codex: чтение лимитов отменено или превысило время ожидания':'Codex: лимиты провайдер не отдаёт'}}
  }
  async models(){if(this.modelsCache)return this.modelsCache;try{
- const client=await this.listClient(this.deps.cwd),out:{id:string;label:string}[]=[];let cursor:string|null=null;
+ const client=await this.listClient(this.deps.cwd),out:{id:string;label:string;images?:boolean}[]=[];let cursor:string|null=null;
  do{const res=requireRecord(await client.request('model/list',cursor?{cursor}:{}),'model list');if(!Array.isArray(res.data))throw new ProviderError('protocol','missing models');
- for(const raw of res.data){const m=requireRecord(raw,'model');if(typeof m.model!=='string'||typeof m.displayName!=='string')throw new ProviderError('protocol','invalid model');out.push({id:m.model,label:m.displayName})}
+ for(const raw of res.data){const m=requireRecord(raw,'model');if(typeof m.model!=='string'||typeof m.displayName!=='string'||m.inputModalities!==undefined&&(!Array.isArray(m.inputModalities)||m.inputModalities.some(value=>!['text','image','audio'].includes(String(value)))))throw new ProviderError('protocol','invalid model');out.push({id:m.model,label:m.displayName,...(Array.isArray(m.inputModalities)&&m.inputModalities.includes('image')?{images:true}:{})})}
  if(res.nextCursor!==null&&typeof res.nextCursor!=='string')throw new ProviderError('protocol','invalid models cursor');if(cursor!==null&&cursor===res.nextCursor)throw new ProviderError('protocol','repeated models cursor');cursor=res.nextCursor;
  }while(cursor);if(this.lists.get(this.deps.cwd)===client&&!client.closed)this.modelsCache=out;return out;
  }catch(e){throw new ProviderError('models_unavailable',asError(e).vendorText)}
