@@ -225,7 +225,7 @@ test('new chat: text sent from the start screen is not restored into the compose
 test('TS-24c: paste and drop upload images in order and the composer sends their ids',async()=>{
  const refs=[imageRef('a'),imageRef('b')],view=ui({fetch:async path=>path==='/api/attachments'?refs[view.requests.filter(r=>r.path==='/api/attachments').length-1]!:{ok:true}}),composer=attachmentComposer(view);
  let pastePrevented=false;composer.inputListeners.paste({clipboardData:{items:[{kind:'file',type:'image/png',getAsFile:()=>imageFile(1)}]},preventDefault(){pastePrevented=true}});await until(()=>view.functions.attachmentState(composer.box).ready.length===1);assert.equal(pastePrevented,true);
- let dropPrevented=false;composer.boxListeners.drop({dataTransfer:{files:[imageFile(5)]},preventDefault(){dropPrevented=true}});await until(()=>view.functions.attachmentState(composer.box).ready.length===2);assert.equal(dropPrevented,true);assert.match(composer.host!.innerHTML,/2 из 8/);
+ let dropPrevented=false;composer.boxListeners.drop({dataTransfer:{files:[imageFile(5)]},preventDefault(){dropPrevented=true}});await until(()=>view.functions.attachmentState(composer.box).ready.length===2);assert.equal(dropPrevented,true);assert.match(composer.host!.innerHTML,/2 из 8/);assert.equal(composer.host!.style.display,'block','proto.css hides .live-attachments by default; a strip with images must be shown explicitly');
  composer.ta.value='Сравни состояния';await composer.box.__cx.send();const chat=view.requests.find(r=>r.path==='/api/chat');assert.deepEqual(chat?.body?.attachments,refs.map(r=>r.id));assert.equal(chat?.body?.message,'Сравни состояния');assert.equal(view.functions.attachmentState(composer.box).ready.length,0);assert.equal(composer.ta.value,'');
 });
 
