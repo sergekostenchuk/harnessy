@@ -1,6 +1,6 @@
 // main.js — оболочка Harnessy (Electron). Окно вокруг прототипа, который отдаёт харнесс ~/HARNESS на :3777.
 // Если харнесс не поднят — запускает его сам (run.sh) и ждёт. Окно без Node внутри: contextIsolation + sandbox.
-const { app, BrowserWindow, shell, nativeTheme, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, shell, nativeTheme, ipcMain, dialog, Menu } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs'), os = require('os'), path = require('path');
 
@@ -37,6 +37,14 @@ const offline = reason => 'data:text/html;charset=utf-8,' + encodeURIComponent(
   <body><div class="c"><div class="e">harnessy · оболочка</div><h1>Харнесс не отвечает</h1>
   <p>Окно ждёт сервер на <code>${ORIGIN}</code>.</p><p>${reason}</p><p>Запустите в Терминале: <code>~/HARNESS/run.sh</code> и нажмите ⌘R.</p></div></body></html>`);
 
+const { contextMenuTemplate } = require('./context-menu.js');
+const contextMeta = new WeakMap();
+ipcMain.on('harnessy:context-meta', (event, value) => {
+  const text = value && typeof value.text === 'string' ? value.text.slice(0, 100000) : '';
+  contextMeta.set(event.sender, { quote: value && value.quote === true, image: value && value.image === true, text });
+  event.returnValue = true;
+});
+
 async function createWindow() {
   const win = new BrowserWindow({
     width: 1440, height: 920, minWidth: 900, minHeight: 600, title: 'Harnessy', backgroundColor: DARK, show: false,
@@ -48,6 +56,14 @@ async function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { if (!url.startsWith(ORIGIN)) { shell.openExternal(url); return { action: 'deny' }; } return { action: 'allow' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(ORIGIN) && !url.startsWith('data:')) { e.preventDefault(); shell.openExternal(url); } });
   win.webContents.on('page-title-updated', e => e.preventDefault());     // в заголовке окна всегда «Harnessy»
+  win.webContents.on('context-menu', (event, params) => {
+    event.preventDefault();
+    const template = contextMenuTemplate(params, contextMeta.get(win.webContents), {
+      quote: text => win.webContents.send('harnessy:quote-selection', text),
+      copyImage: () => win.webContents.copyImageAt(params.x, params.y),
+    });
+    Menu.buildFromTemplate(template).popup({ window: win });
+  });
   if (process.env.HARNESSY_SHOT) win.webContents.once('did-finish-load', () => setTimeout(async () => {   // кадр окна в файл — для проверки без доступа к экрану; ОДИН раз: иначе любая следующая страница перезапишет кадр (урок 07.10)
     try { fs.writeFileSync(process.env.HARNESSY_SHOT, (await win.webContents.capturePage()).toPNG()); log('кадр: ' + process.env.HARNESSY_SHOT); } catch (e) { log('кадр не снят: ' + e.message); } }, 1800));
   const ok = await ensureHarness(log);
