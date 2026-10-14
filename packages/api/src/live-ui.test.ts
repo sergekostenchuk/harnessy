@@ -15,9 +15,11 @@ process.env.TZ='Europe/Istanbul';
 function part(source:string,start:string,end:string){const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return source.slice(a,b)}
 const plain=(value:unknown)=>JSON.parse(JSON.stringify(value));
 type Data=Record<string,any>;
+const imageRef=(hex='a')=>({id:hex.repeat(64),mime:'image/png',size:4,w:1,h:1});
+const imageFile=(value=1)=>{const bytes=Uint8Array.of(value,2,3,4);return {name:'screen.png',type:'image/png',size:bytes.byteLength,arrayBuffer:async()=>bytes.buffer}};
 function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;storage?:Map<string,string>}={}){
  const storage=options.storage??new Map<string,string>(),requests:{path:string;body:Data|undefined}[]=[],toasts:string[]=[],clicks:((event:Data)=>unknown)[]=[],pagehide:(()=>void)[]=[],pageshow:((event:Data)=>unknown)[]=[],elements=new Map<string,Data>(),rows:Data[]=[];
- const H:Data={on:true,project:'/project-a',active:{worker:'chat-a'},panes:[{id:'worker',label:'воркер',model:'w1',vendor:'claude',role:'orchestrator',kind:'orchestrator',busy:false},{id:'room',label:'без роли',model:'w1',vendor:'claude'}],cur:null,asks:{},kinds:['question','note','verdict'],projects:[]};H.pane=H.panes[0];
+ const H:Data={on:true,project:'/project-a',active:{worker:'chat-a'},panes:[{id:'worker',label:'воркер',model:'w1',vendor:'claude',role:'orchestrator',kind:'orchestrator',busy:false},{id:'room',label:'без роли',model:'w1',vendor:'claude'}],models:{claude:[{id:'w1',label:'W1',images:true}]},cur:null,asks:{},kinds:['question','note','verdict'],projects:[]};H.pane=H.panes[0];
  const S:Data={ui:{pane:'worker',direct:{worker:true}},chat:[],cx:{noFolder:false},draft:null},ta:Data={value:'question',style:{}};let rendered=0;
  const column={querySelectorAll:()=>[],classList:{toggle(){}},insertAdjacentHTML(){}};
  const document={getElementById(id:string){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',dataset:{},remove(){elements.delete(id)},parentElement:{querySelector:()=>({textContent:''})},querySelector:()=>null,insertAdjacentHTML(){},replaceWith(){},cloneNode(){return this}});return elements.get(id)!},
@@ -26,7 +28,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
  const sandbox:Data={H,S,document,window:{},localStorage:{getItem:(key:string)=>storage.get(key)??null,setItem:(key:string,value:string)=>storage.set(key,value)},location:{pathname:'/21-journal.html',href:''},PAGE:'chat',
   fetch:async(path:string,opts?:{body:string})=>{const body=opts?.body?JSON.parse(opts.body):undefined;requests.push({path,body});return {json:async()=>options.fetch?options.fetch(path,body):({ok:true,pane:{...H.pane,...body}})}},
   toast:(text:string)=>toasts.push(text),esc:(value:unknown)=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),paneName:(p:Data)=>p.label,save(){},log(){},render(){rendered++},cols:()=>[column],drawLive(){},scrollEnd(){},md:(text:string)=>text,mdFiles:new Map(),mdToolPaths:()=>[],knowledgeReset(){},knowledgeSet(){return true},knowledgeOpen:async()=>{},knowledgeFetch(){},KN:{data:null},hydrateArtifacts(){},mdMessageArtifacts(){return ""},toolLine:()=>'',hStatus(){},now:()=>1791500000125,hhmm:()=>'',costLine:()=>'',actsLine:()=>'',ckBox:()=>'',onboardOnce:async()=>{},LOADED:null,
-  showWaiting(){},showRestore(){},renderWaiting(){},loadAttemptNotes:async()=>{},setTimeout(){},clearInterval(){},setInterval(){return 1},addEventListener(type:string,fn:(event:Data)=>unknown){if(type==='pagehide')pagehide.push(fn as ()=>void);if(type==='pageshow')pageshow.push(fn)},dispatchEvent(){},CustomEvent:class {},confirm:()=>false,sideChats(){},
+  showWaiting(){},showRestore(){},renderWaiting(){},loadAttemptNotes:async()=>{},setTimeout(){},clearInterval(){},setInterval(){return 1},addEventListener(type:string,fn:(event:Data)=>unknown){if(type==='pagehide')pagehide.push(fn as ()=>void);if(type==='pageshow')pageshow.push(fn)},dispatchEvent(){},CustomEvent:class {},confirm:()=>false,sideChats(){},btoa:(raw:string)=>Buffer.from(raw,'binary').toString('base64'),URL:{createObjectURL:()=>"blob:test-image",revokeObjectURL(){}},
   refreshStatus:async()=>{},refreshChats:async()=>{},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)||null},close(){},renderAll(){},draw(){},base:()=>'',modeLabel:(s:string)=>s,modelLabel:(s:string)=>s,ROOM:'room',isRoom:(p:Data)=>p.id==='room',ico:()=>'',pl:(n:number)=>String(n)};
  const context=createContext(sandbox);
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+
@@ -42,7 +44,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  const bubble=','  const cols=')+
   '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
-  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,setSeat,consumeState,hEvent};',context);
+  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw};',context);
  const functions=(context as Data).testing as Data;
  function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
  function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
@@ -50,7 +52,13 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   '\nglobalThis.sidebar={expanded:projectExpanded,folder:projectFolder,toggle:toggleProjectFolder};',context);return (context as Data).sidebar as Data}
  function direct(){runInContext(part(live,"  document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]');",'  // ── переключение собеседника'),context);const listener=clicks.at(-1)!;
   return (mode:'on'|'orch')=>listener({target:{closest:(selector:string)=>selector==='[data-direct]'?{dataset:{direct:mode}}:null}}) as Promise<boolean>}
- return {H,S,ta,requests,toasts,storage,elements,rows,sandbox,context,functions,journal,sidebar,direct,clicks,hidePage:()=>pagehide.forEach(fn=>fn()),showPage:(event:Data)=>Promise.all(pageshow.map(fn=>fn(event))),get rendered(){return rendered}};
+ return {H,S,ta,requests,toasts,storage,elements,rows,column,sandbox,context,functions,journal,sidebar,direct,clicks,hidePage:()=>pagehide.forEach(fn=>fn()),showPage:(event:Data)=>Promise.all(pageshow.map(fn=>fn(event))),get rendered(){return rendered}};
+}
+
+function attachmentComposer(view:ReturnType<typeof ui>){
+ const inputListeners:Data={},boxListeners:Data={};let host:Data|null=null;
+ const input={textContent:'Написать…',querySelector:()=>null,appendChild(){}},ta:Data={value:'',style:{},focus(){},addEventListener(type:string,fn:Function){inputListeners[type]=fn},closest:()=>box},box:Data={classList:{add(){},remove(){}},querySelector(selector:string){if(selector===':scope > .in')return input;if(selector==='.live-attachments')return host;return null},insertBefore(node:Data){host=node},addEventListener(type:string,fn:Function){boxListeners[type]=fn},closest:()=>null};
+ const query=view.sandbox.document.querySelectorAll;view.sandbox.document.querySelectorAll=(selector:string)=>selector==='.box'?[box]:query(selector);view.sandbox.document.createElement=(tag:string)=>tag==='textarea'?ta:{className:'',innerHTML:'',style:{}};view.functions.composer();return {ta,box,inputListeners,boxListeners,get host(){return host}};
 }
 
 test('81/109: real HTTP setting and send are ordered; launch uses the accepted model',async t=>{
@@ -212,6 +220,52 @@ test('new chat: text sent from the start screen is not restored into the compose
  const view=ui();view.sandbox.cols=()=>[];view.ta.value='first question';
  assert.equal(await view.functions.onSend('first question',view.ta),true);
  assert.equal(view.S.pending.text,'first question');assert.equal(view.S.draft,null);assert.equal(view.ta.value,'');assert.equal(view.sandbox.location.href,'01-chat.html');
+});
+
+test('TS-24c: paste and drop upload images in order and the composer sends their ids',async()=>{
+ const refs=[imageRef('a'),imageRef('b')],view=ui({fetch:async path=>path==='/api/attachments'?refs[view.requests.filter(r=>r.path==='/api/attachments').length-1]!:{ok:true}}),composer=attachmentComposer(view);
+ let pastePrevented=false;composer.inputListeners.paste({clipboardData:{items:[{kind:'file',type:'image/png',getAsFile:()=>imageFile(1)}]},preventDefault(){pastePrevented=true}});await until(()=>view.functions.attachmentState(composer.box).ready.length===1);assert.equal(pastePrevented,true);
+ let dropPrevented=false;composer.boxListeners.drop({dataTransfer:{files:[imageFile(5)]},preventDefault(){dropPrevented=true}});await until(()=>view.functions.attachmentState(composer.box).ready.length===2);assert.equal(dropPrevented,true);assert.match(composer.host!.innerHTML,/2 из 8/);
+ composer.ta.value='Сравни состояния';await composer.box.__cx.send();const chat=view.requests.find(r=>r.path==='/api/chat');assert.deepEqual(chat?.body?.attachments,refs.map(r=>r.id));assert.equal(chat?.body?.message,'Сравни состояния');assert.equal(view.functions.attachmentState(composer.box).ready.length,0);assert.equal(composer.ta.value,'');
+});
+
+test('TS-24c WINDOWS: a delayed upload cannot survive project A to B to A',async()=>{
+ const gate=deferred<Data>(),ref=imageRef('9'),view=ui({fetch:async path=>path==='/api/attachments'?gate.promise:{ok:true}});view.H.confirmedProjectGeneration=1;view.functions.attachmentFiles([imageFile()]);await until(()=>view.requests.some(r=>r.path==='/api/attachments'));
+ view.H.project='/project-b';view.H.confirmedProjectGeneration=2;view.functions.sendBinding();view.H.project='/project-a';view.H.confirmedProjectGeneration=3;view.functions.sendBinding();gate.resolve(ref);await until(()=>view.functions.attachmentState(null).invalid);
+ const state=view.functions.attachmentState(null);assert.equal(state.ready.length,0);assert.match(state.local[0].error,/проект изменился/);assert.equal(view.requests.some(r=>r.path==='/api/chat'),false);
+});
+
+test('TS-24c: model capability, typed failure and chat switch keep the exact image draft',async()=>{
+ const ref=imageRef('c');let fail=false;const view=ui({fetch:async path=>path==='/api/attachments'?ref:path==='/api/chat'&&fail?{ok:false,code:'attachment_not_found',error:'изображение исчезло'}:{ok:true}}),composer=attachmentComposer(view);view.functions.attachmentFiles([imageFile()]);await until(()=>view.functions.attachmentState(composer.box).ready.length===1);const keyA=view.functions.attachmentKey();
+ view.H.active.worker='chat-b';view.functions.sendBinding();assert.equal(view.functions.attachmentState(composer.box).ready.length,0);view.H.active.worker='chat-a';view.functions.sendBinding();assert.equal(view.functions.attachmentKey(),keyA);assert.deepEqual(plain(view.functions.attachmentState(composer.box).ready),[ref]);
+ view.H.models.claude[0].images=false;view.functions.attachmentDraw(composer.box);const before=view.requests.length;assert.match(composer.host!.innerHTML,/Эта модель не видит изображения — выберите другую или уберите картинку/);assert.equal(await view.functions.onSend('Посмотри',composer.ta),false);assert.equal(view.requests.length,before);assert.match(view.functions.attachmentState(composer.box).reason,/Эта модель не видит изображения/);assert.deepEqual(plain(view.functions.attachmentState(composer.box).ready),[ref]);
+ view.H.models.claude[0].images=true;fail=true;composer.ta.value='Посмотри';assert.equal(await view.functions.onSend('Посмотри',composer.ta),false);const state=view.functions.attachmentState(composer.box);assert.deepEqual(plain(state.ready),[ref]);assert.match(state.fieldError,/не найдено/);assert.equal(composer.ta.value,'Посмотри');assert.equal(view.S.chat.some((m:Data)=>m.role==='me'),false);
+});
+
+test('TS-24c PATHS: an image-only message survives the direct-address confirmation',async()=>{
+ const ref=imageRef('f');let chats=0;const view=ui({fetch:async path=>path==='/api/attachments'?ref:path==='/api/chat'&&++chats===1?{needDirect:true}:{ok:true}});view.functions.attachmentFiles([imageFile()]);await until(()=>view.functions.attachmentState(null).ready.length===1);view.ta.value='';assert.equal(await view.functions.onSend('',view.ta),false);assert.deepEqual(plain(view.functions.attachmentState(null).ready),[ref]);assert.equal(await view.direct()('on'),true);assert.equal(chats,2);assert.deepEqual(view.requests.filter(r=>r.path==='/api/chat').map(r=>r.body?.attachments),[[ref.id],[ref.id]]);assert.equal(view.functions.attachmentState(null).ready.length,0);
+});
+
+test('TS-24c: oversize and non-image upload errors stay in the field without a chat call',async()=>{
+ const tooLarge=ui(),oversize={name:'huge.png',type:'image/png',size:10*1024*1024+1,arrayBuffer:async()=>new ArrayBuffer(0)};tooLarge.functions.attachmentFiles([oversize]);let state=tooLarge.functions.attachmentState(null);assert.equal(state.invalid,true);assert.equal(state.local[0].error,'больше 10 МБ');assert.equal(tooLarge.requests.length,0);
+ const invalid=ui({fetch:async()=>({ok:false,code:'attachment_invalid',error:'bad'})});invalid.functions.attachmentFiles([imageFile()]);await until(()=>invalid.functions.attachmentState(null).invalid);state=invalid.functions.attachmentState(null);assert.equal(state.local[0].error,'не картинка');assert.equal(await invalid.functions.onSend('Текст',invalid.ta),false);assert.equal(invalid.requests.filter(r=>r.path==='/api/chat').length,0);
+});
+
+test('TS-24c: a new-chat transition carries images once and does not restore the sent draft',async()=>{
+ const ref=imageRef('d'),view=ui({fetch:async path=>path==='/api/attachments'?ref:{ok:true}});view.functions.attachmentFiles([imageFile()]);await until(()=>view.functions.attachmentState(null).ready.length===1);view.sandbox.cols=()=>[];view.ta.value='Первый вопрос';assert.equal(await view.functions.onSend('Первый вопрос',view.ta),true);assert.deepEqual(plain(view.S.pending.attachments),[ref]);assert.equal(view.S.draft,null);assert.equal(view.ta.value,'');
+ view.sandbox.cols=()=>[view.column];view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+part(live,'  hConnect().finally(',"  addEventListener('resize',()=>{ wireSearch();"),view.context);await (view.context as Data).pendingSend;
+ const chat=view.requests.find(r=>r.path==='/api/chat');assert.deepEqual(chat?.body?.attachments,[ref.id]);assert.equal(view.S.pending,null);assert.equal(view.S.draft,null);assert.equal(view.functions.attachmentState(null).ready.length,0);
+});
+
+for(const change of ['chat','project'] as const)test('TS-24c: pending images return only to the original draft after '+change+' changes',async()=>{
+ const ref=imageRef('e'),view=ui({fetch:async path=>path==='/api/attachments'?ref:{ok:true}});view.functions.attachmentFiles([imageFile()]);await until(()=>view.functions.attachmentState(null).ready.length===1);const original=view.functions.attachmentKey();view.sandbox.cols=()=>[];view.ta.value='Исходное сообщение';assert.equal(await view.functions.onSend(view.ta.value,view.ta),true);
+ if(change==='chat')view.H.active.worker='chat-b';else{view.H.project='/project-b';view.H.confirmedProjectGeneration=2}view.functions.sendBinding();const target=view.functions.attachmentKey();assert.notEqual(target,original);view.sandbox.cols=()=>[view.column];view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+part(live,'  hConnect().finally(',"  addEventListener('resize',()=>{ wireSearch();"),view.context);await (view.context as Data).pendingSend;
+ assert.equal(view.requests.some(r=>r.path==='/api/chat'),false);assert.equal(view.S.draft,'Исходное сообщение');assert.equal(view.functions.attachmentRefs(target).length,0);assert.deepEqual(plain(view.functions.attachmentRefs(original)),[ref]);
+});
+
+test('TS-24c: pending text and images return to their original draft after capability refusal',async()=>{
+ const ref=imageRef('7'),view=ui({fetch:async path=>path==='/api/attachments'?ref:{ok:true}});view.functions.attachmentFiles([imageFile()]);await until(()=>view.functions.attachmentState(null).ready.length===1);const original=view.functions.attachmentKey();view.sandbox.cols=()=>[];view.ta.value='Исходное сообщение';assert.equal(await view.functions.onSend(view.ta.value,view.ta),true);view.H.models.claude[0].images=false;view.sandbox.cols=()=>[view.column];view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+part(live,'  hConnect().finally(',"  addEventListener('resize',()=>{ wireSearch();"),view.context);await (view.context as Data).pendingSend;
+ assert.equal(view.requests.some(r=>r.path==='/api/chat'),false);assert.equal(view.S.draft,'Исходное сообщение');assert.deepEqual(plain(view.functions.attachmentRefs(original)),[ref]);
 });
 
 const records=(count:number)=>Array.from({length:count},(_,i)=>({seq:i+1,ts:i%2?'2026-10-10T10:37:00+03:00':'2026-10-10T02:01:00Z',from:'owner',to:['worker'],kind:i%2?'note':'question',text:'record '+(i+1),thread:null}));

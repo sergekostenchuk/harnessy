@@ -25,7 +25,7 @@
     const top=document.createElement('div'); top.className='cx-top'; box.before(top);
     const att=document.createElement('div'); att.className='cx-att'; box.insertBefore(att, box.querySelector('.in'));
     const bar=box.querySelector('.bar2'), bot=document.createElement('div'); bot.className='cx-bot'; if(bar) bar.replaceWith(bot); else box.appendChild(bot);
-    const ta=box.__cx.ta; if(ta) ta.addEventListener('input',()=>{ const g=box.querySelector('.cx-go'),p=seat(); if(g&&!g.classList.contains('busy')) g.classList.toggle('off',!ta.value.trim()||H.on&&!(p&&p.model)); }); }
+    const ta=box.__cx.ta; if(ta) ta.addEventListener('input',()=>{ const g=box.querySelector('.cx-go'),p=seat(),state=L.composerState?L.composerState(box):{hasContent:!!ta.value.trim(),blocked:false}; if(g&&!g.classList.contains('busy')){g.classList.toggle('off',!state.hasContent||state.blocked||H.on&&!(p&&p.model));g.title=state.blocked?state.reason:H.on&&!(p&&p.model)?'выберите модель: у разговора нет сохранённой настройки':'Отправить · Enter'} }); }
   function render(box){ const c=cx(), p=seat(), top=box.previousElementSibling, bot=box.querySelector('.cx-bot'), att=box.querySelector('.cx-att'); if(!top||!bot) return;
     if(H.on){const pending=typeof c.noFolderPending==='string'&&c.noFolderPending===H.project&&S().ui.pane===ROOM&&!H.noProject;if(!pending&&(c.noFolder!==!!H.noProject||c.noFolderPending!==undefined)){c.noFolder=!!H.noProject;delete c.noFolderPending;L.save();}}   // привязка проекта — из статуса движка, а не сохранённого флага окна
     const folder=c.noFolder?'Без проекта':(H.on?base(H.project):(c.folder||'проект не выбран'));
@@ -33,7 +33,7 @@
     const model=p&&p.model?modelLabel(p.model,p.vendor):'выбрать модель';   // у разговора без роли модели нет, пока её не выбрали
     const act=p?((H.active||{})[p.id]):null, meta=(H.chatList||[]).find(x=>x.id===act), chatLabel=(PAGE==='new'&&S().ui.fresh)?'Новый чат':(meta&&meta.messages?(meta.title||'без названия'):'Новый чат');
     const direct=p&&S().ui.direct&&S().ui.direct[p.id]&&p.kind!=='orchestrator'&&!isRoom(p);
-    const busy=!!(L.busy&&L.busy()), empty=!(box.__cx.ta&&box.__cx.ta.value.trim())||(H.on&&!(p&&p.model));   // кнопка ввода: по образцу Claude Desktop/Codex — явное «идёт ход» и остановка той же кнопкой (слово владельца 08.10)
+    const busy=!!(L.busy&&L.busy()),compose=L.composerState?L.composerState(box):{hasContent:!!(box.__cx.ta&&box.__cx.ta.value.trim()),blocked:false,reason:''},empty=!compose.hasContent||compose.blocked||(H.on&&!(p&&p.model));   // текст или готовая картинка отправляются одной кнопкой; загрузка и несовместимая модель блокируют её
     // слева — где и какой разговор (папка · чат · включённые режимы), справа — кто (роль), в порядке чтения после модели (слово владельца 08.10)
     top.innerHTML=chip('folder',c.noFolder?'src':'folder',folder,{title:c.noFolder?'Разговор без проекта: модель ничего не читает':'Проект: '+(H.project||'')})+
       (H.on&&p?chip('chat','file',chatLabel,{title:'Чаты: новый, чаты роли, чаты проекта'}):'')+
@@ -42,11 +42,11 @@
     att.innerHTML=c.att.map((a,i)=>'<span class="cx-chip on" title="'+esc(a.name)+'">'+svg(a.kind)+'<b>'+esc(a.name)+'</b><i class="x" data-cx-att="'+i+'" title="Убрать">×</i></span>').join(''); att.style.display=c.att.length?'':'none';
     bot.innerHTML='<span class="cx-plus" data-cx="plus" title="Добавить и настроить">＋</span>'+chip('rights','lock',rights,{title:'Права · применяются к месту'})+'<span class="cx-sp"></span>'+
       chip('model','model',model,{cls:'acc'+(p&&p.model?'':' empty'),title:p&&p.model?'Модель: вендор → модель':'Модель ещё не выбрана'})+chip('effort','bolt','Усилие: —',{cls:'dim',title:'Усилие пока недоступно: харнесс не передаёт его месту'})+
-      '<span class="cx-info" data-cx="info" title="Информация: клавиши, примеры, права, расход">i</span><span class="cx-go'+(busy?' busy':(empty?' off':''))+'" data-cx="go" title="'+(busy?'Остановить · Esc':H.on&&!(p&&p.model)?'выберите модель: у разговора нет сохранённой настройки':'Отправить · Enter')+'">'+(busy?'<i class="sq"></i>':svg('up'))+'</span>';
+      '<span class="cx-info" data-cx="info" title="Информация: клавиши, примеры, права, расход">i</span><span class="cx-go'+(busy?' busy':(empty?' off':''))+'" data-cx="go" title="'+(busy?'Остановить · Esc':compose.blocked?esc(compose.reason):H.on&&!(p&&p.model)?'выберите модель: у разговора нет сохранённой настройки':'Отправить · Enter')+'">'+(busy?'<i class="sq"></i>':svg('up'))+'</span>';
     if(box.__cx.ta) box.__cx.ta.placeholder=p&&!isRoom(p)?'Написать: '+L.paneName(p)+'…':'Написать сообщение…'; }
   function setBusy(on){ document.querySelectorAll('.cx-go').forEach(g=>{ if(g.classList.contains('busy')===!!on) return; const p=seat();g.classList.toggle('busy',!!on); g.title=on?'Остановить · Esc':H.on&&!(p&&p.model)?'выберите модель: у разговора нет сохранённой настройки':'Отправить · Enter'; g.innerHTML=on?'<i class="sq"></i>':svg('up');
-    const box=g.closest('.box'), ta=box&&box.__cx&&box.__cx.ta; g.classList.toggle('off',!on&&(!(ta&&ta.value.trim())||H.on&&!(p&&p.model))); }); }
-  function renderAll(){ document.querySelectorAll('.box').forEach(b=>{ if(b.__cx){ build(b); render(b); } });if(L.operationsDraw)L.operationsDraw(); }
+    const box=g.closest('.box'), ta=box&&box.__cx&&box.__cx.ta,state=L.composerState&&box?L.composerState(box):{hasContent:!!(ta&&ta.value.trim()),blocked:false}; g.classList.toggle('off',!on&&(!state.hasContent||state.blocked||H.on&&!(p&&p.model))); }); }
+  function renderAll(){ if(L.attachmentsDraw)L.attachmentsDraw();document.querySelectorAll('.box').forEach(b=>{ if(b.__cx){ build(b); render(b); } });if(L.operationsDraw)L.operationsDraw(); }
 
   // ── всплывающая панель: одна, от чипа; поле внизу — открывается вверх; внутри переходы с «Назад»
   let pop=null, stack=[];
@@ -88,13 +88,13 @@
     const text=v=>typeof v==='string'&&v.trim()&&v.length<=256&&!/[\x00-\x1f\x7f]/.test(v),ids=new Set(),rows=[];
     for(const p of response.providers){
       if(!p||!text(p.id)||ids.has(p.id)||!text(p.title)||!['subscription','apikey','local'].includes(p.kind)||!Array.isArray(p.models)||p.installed!==null&&typeof p.installed!=='boolean'||typeof p.checking!=='boolean')return null;
-      ids.add(p.id);const models=[],seen=new Set();for(const m of p.models){if(!m||!text(m.id)||!text(m.label)||seen.has(m.id))return null;seen.add(m.id);models.push({id:m.id,label:m.label})}
+      ids.add(p.id);const models=[],seen=new Set();for(const m of p.models){if(!m||!text(m.id)||!text(m.label)||m.images!==undefined&&typeof m.images!=='boolean'||seen.has(m.id))return null;seen.add(m.id);models.push({id:m.id,label:m.label,...(m.images===true?{images:true}:{})})}
       rows.push({id:p.id,title:p.title,loginFailure:['region','blocked','offline','unresponsive'].includes(p.login?.failure)?p.login.failure:null,kind:p.kind,subtitle:typeof p.subtitle==='string'?p.subtitle:'',installed:p.installed,checking:p.checking===true,models,modelsReason:typeof p.modelsReason==='string'?p.modelsReason:''});
     }return rows;
   }
   function modelGroups(panel=pop){const metadata=[...(panel&&panel.__models&&panel.__models.rows||[]),...(L.apiRoutes||[])];
     const groups=[...new Set([...Object.keys(H.models||{}),...metadata.map(p=>p.id)])].filter(id=>!id.startsWith('api:')||metadata.some(p=>p.id===id)).map(id=>{const detail=metadata.find(p=>p.id===id),models=detail&&id.startsWith('api:')?detail.models:Array.isArray(H.models&&H.models[id])?H.models[id]:[];
-      return {id,vendor:id,loginFailure:detail?.loginFailure,title:detail?detail.title:id,kind:detail?detail.kind:null,subtitle:detail?detail.subtitle:'',availability:detail&&(detail.installed===null||detail.checking)?'проверяется…':detail&&detail.installed===false?'не установлена':'',modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id,via:m.via,viaStatus:m.viaStatus}))};});
+      return {id,vendor:id,loginFailure:detail?.loginFailure,title:detail?detail.title:id,kind:detail?detail.kind:null,subtitle:detail?detail.subtitle:'',availability:detail&&(detail.installed===null||detail.checking)?'проверяется…':detail&&detail.installed===false?'не установлена':'',modelsReason:detail?detail.modelsReason:'',models:models.filter(m=>m&&typeof m.id==='string'&&m.id).map(m=>({id:m.id,label:typeof m.label==='string'&&m.label?m.label:m.id,via:m.via,viaStatus:m.viaStatus,images:m.images===true}))};});
     const codex=groups.find(g=>g.id==='codex'),routed=codex?codex.models.filter(m=>m.via==='provider-router'):[];
     if(routed.length){codex.models=codex.models.filter(m=>m.via!=='provider-router');groups.splice(groups.indexOf(codex)+1,0,{id:'provider-router',vendor:'codex',title:'provider-router',kind:'local',subtitle:'локально · через Codex',availability:codex.availability,modelsReason:'',models:routed})}return groups;
   }
@@ -263,7 +263,7 @@
     if(e.target.closest('[data-cx-model-retry]')){await loadModels(pop);return}
     const mo=e.target.closest('[data-cx-model]'); if(mo){ await chooseModel(mo); return; }
     const pk=e.target.closest('[data-cx-pick]'); if(pk){ pick(pk.dataset.cxPick); return; }
-    const sh=e.target.closest('[data-cx-shot]'); if(sh){ L.toast('вложения пока не передаются модели');return; }
+    const sh=e.target.closest('[data-cx-shot]'); if(sh){ close();L.pickImages();return; }
     const sr=e.target.closest('[data-cx-src]'); if(sr){ if(H.on) return; c.att.push({kind:'src',name:sr.dataset.cxSrc}); L.save(); renderAll(); close(); return; }
     const cm=e.target.closest('[data-cx-cmd]'); if(cm){ close(); if(/Слэш/.test(cm.dataset.cxCmd)) L.openPal(); else L.toast('«'+esc(cm.dataset.cxCmd)+'» — в прототипе пока отметка'); return; }
     const fl=e.target.closest('[data-cx-fill]'); if(fl){ const ta=document.querySelector('.frame.cur .live-in')||document.querySelector('.live-in'); if(ta){ ta.value=fl.dataset.cxFill; ta.dispatchEvent(new Event('input')); ta.focus(); } close(); return; }
@@ -290,6 +290,6 @@
     let r=null; try{ r=await L.api('/api/panes/'+encodeURIComponent(p.id),patch,{trace:binding.trace}); }catch(e){} if(!L.bindingCurrent(binding)||choice&&choice.pendingValid&&!choice.pendingValid()) return false;if(!r||!r.ok)return failed(r);if(choice&&choice.accepted&&!choice.accepted(r))return failed({error:'Харнесс не подтвердил полный доступ; обновите статус и повторите подтверждение'});
     Object.assign(p,r.pane); const i=(H.panes||[]).findIndex(x=>x.id===p.id); if(i>=0) H.panes[i]=p;
     const val=patch.mode?modeLabel(patch.mode):modelLabel(patch.model,patch.vendor),next=r.appliesFrom==='next'?' · применится со следующего хода':''; L.log('настройка',what+' «'+L.paneName(p)+'»: '+val+next); L.toast(what+' «'+esc(L.paneName(p))+'»: '+esc(val)+next); L.hStatus(); draw(); renderAll(); return true; }); }
-  function pick(kind){ L.toast('вложения пока не передаются модели'); }
+  function pick(kind){ if(kind==='shot')L.pickImages();else L.toast('Источник пока не подключён'); }
   window.CX={setBusy,render:renderAll,close,proposalsChanged}; renderAll();
 })();

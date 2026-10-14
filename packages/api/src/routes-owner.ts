@@ -31,6 +31,7 @@ export function ownerRoutes(r:Runtime):Route[]{return [
  {method:'POST',path:'/api/handoff',handle:async({body})=>json(await r.handoff(body,OWNER))},
  {method:'POST',path:'/api/chat',style:'E',handle:({body})=>json(r.chat(body,OWNER))},
  {method:'POST',path:'/api/attachments',style:'J',handle:({body})=>json(r.attachmentUpload(body,OWNER),201)},
+ {method:'GET',path:'/api/attachments/:id',style:'J',handle:({request,params})=>{providerOwner(request);const attachment=r.attachmentRead(params.id,OWNER);return {status:200,value:null,bytes:attachment.data,headers:{'Content-Type':attachment.mime,'X-Content-Type-Options':'nosniff','Cache-Control':'private, no-store'}}}},
  {method:'POST',path:'/api/steer',style:'E',handle:async({body})=>json(await r.steer(string(body.pane),string(body.message),OWNER))},
  {method:'POST',path:'/api/approve',style:'E',handle:({body,request})=>{const probe=string(body.id).startsWith('provider-probe:');if(probe){providerOwner(request);if(body.pane!=='owner'||!['allow','deny'].includes(string(body.decision))||typeof body.project!=='string')return json({ok:false,code:'approval_invalid',error:'Ожидаются pane:owner, id, decision:allow|deny и project'},400)}if(body.project!==undefined&&body.project!==r.project.dir)throw new RuntimeError('project_changed','проект сменился',409);return json(r.approve(string(body.pane),string(body.id),body.decision==='allow'?'allow':'deny',OWNER))}},
  {method:'POST',path:'/api/interrupt',style:'E',handle:({body})=>json(r.interrupt(string(body.pane),OWNER))},
