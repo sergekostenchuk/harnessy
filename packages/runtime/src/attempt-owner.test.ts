@@ -152,8 +152,9 @@ for(const bytes of [Buffer.from('{original damaged bytes'),Buffer.from([0xff,0x8
  };
  r.roomSet({model:'w1',folder:false},OWNER);r.chat({pane:'room',message:'unrelated room turn'},OWNER);await r.idle();
  assert.equal(h.provider.calls.length,1);assert.equal(h.provider.calls[0]!.seat.id,'room');assert.deepEqual(backups(),[bytes]);assert.equal(r.waiting('worker')!.turnInstanceId,worker.turnInstanceId);assert.equal(r.registry.get('worker')!.status,'uncertain');
- const saved=JSON.parse(readFileSync(r.project.state.attemptsPath,'utf8'));assert.equal(saved.worker.turnInstanceId,worker.turnInstanceId);assert.equal(saved.room?.status,outcome==='uncertain'?'uncertain':undefined);
- if(outcome==='uncertain')assert.ok(r.waiting('room'));else assert.equal(saved.room,undefined);
+ const saved=JSON.parse(readFileSync(r.project.state.attemptsPath,'utf8'));assert.equal(saved.worker.turnInstanceId,worker.turnInstanceId);assert.equal(saved.room?.status,outcome==='done'?undefined:'uncertain');
+ // TS-26 keeps cancellation before model start as unsent; damaged neighbors are unchanged.
+ if(outcome==='cancelled')assert.equal(r.waiting('room')?.status,'unsent');else if(outcome==='uncertain')assert.ok(r.waiting('room'));else assert.equal(saved.room,undefined);
  if(outcome!=='cancelled'){
   await r.close();const provider=new FakeProvider(),restored=await createRuntime({...h.deps,providers:{claude:provider}},completedActions);t.after(()=>restored.close());await restored.idle();
   assert.equal(provider.calls.length,0);assert.equal(restored.waiting('worker')!.turnInstanceId,worker.turnInstanceId);assert.deepEqual(backups(),[bytes]);

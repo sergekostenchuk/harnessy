@@ -56,10 +56,10 @@ for(const bad of ['missing','foreign-chat','foreign-project'] as const)test('251
  if(bad==='missing')delete c.firstOpen;else (c.firstOpen as any)[bad==='foreign-chat'?'chat':'project']='foreign';
  const before=h.provider.calls.length;const result=await call(h.api,'/api/onboard',{body:{project:h.dir,pane:out.pane,chat:out.chat}});assert.equal(result.status,409);assert.match(result.body.error,/ожидание первого открытия/);await assert.rejects(h.runtime.onboard(out.pane,OWNER,{project:h.dir,chat:out.chat}),(e:any)=>e.code==='chat_invalid');await h.runtime.kick(out.pane);assert.equal(h.provider.calls.length,before);
 });
-test('251/252: failure before modelStarted does not mark knowledge delivered; simultaneous opening delivers it once',async t=>{
+test('251/252 + TS-26: pre-start failure preserves knowledge for explicit retry; simultaneous opening creates it once',async t=>{
  const h=await setup(t),out=await h.runtime.createOwnerSeat({project:h.dir,proposalId:h.q.proposalId,version:1,seatIndex:0},OWNER);h.provider.onRun=async()=>{throw Error('provider unavailable')};
  await Promise.all([h.runtime.onboard(out.pane,OWNER,{project:h.dir,chat:out.chat}),h.runtime.onboard(out.pane,OWNER,{project:h.dir,chat:out.chat})]);await h.runtime.idle();const pane=h.runtime.registry.get(out.pane)!;assert.equal(pane.transcript.some(m=>m.teamKnowledge),false);
- h.provider.onRun=async(_s,text,c)=>{assert.match(text,/Что знает эта роль/);c.modelStarted?.();return {text:'готово',sessionId:'s'}};await h.runtime.kick(out.pane);await h.runtime.idle();assert.equal(pane.transcript.filter(m=>m.teamKnowledge).length,1);assert.equal(h.runtime.journal.read({limit:0}).filter(r=>r.origin==='onboarding'&&r.to.includes(out.pane)).length,1);
+ h.provider.onRun=async(_s,text,c)=>{assert.match(text,/Что знает эта роль/);c.modelStarted?.();return {text:'готово',sessionId:'s'}};await h.runtime.kick(out.pane);await h.runtime.idle();assert.equal(pane.transcript.some(m=>m.teamKnowledge),false);const waiting=h.runtime.waiting(out.pane)!;assert.equal(waiting.status,'unsent');await h.runtime.attempt(out.pane,{project:h.dir,turnInstanceId:waiting.turnInstanceId,action:'retry'},OWNER);await h.runtime.idle();assert.equal(pane.transcript.filter(m=>m.teamKnowledge).length,1);assert.equal(h.runtime.journal.read({limit:0}).filter(r=>r.origin==='onboarding'&&r.to.includes(out.pane)).length,1);
 });
 
 test('251 paths: a new conversation cannot bypass the first owner opening of the created role',async t=>{

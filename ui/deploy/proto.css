@@ -886,3 +886,8 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
 /* экран «План · карта»: вкладки «Карта проекта» / «План пользователя» в шапке (proto.js) */
 html[data-proto] .plan-tabs { margin-left:12px; }
 html[data-proto] .plan-tabs > span { cursor:pointer; }
+
+/* TS-26: persisted unsent message, visible before composing the next one. */
+.live-unsent-join{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.45}
+.live-unsent-join span{flex:1;min-width:0;overflow-wrap:anywhere}.live-unsent-join button{flex:none}
+.live-attempt-controls details{margin-top:10px;font-size:12px;color:var(--muted)}

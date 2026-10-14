@@ -256,3 +256,15 @@ test('23d r2: rejected stale direct click refreshes the existing card with a new
  v.sandbox.fetch=async(path,options)=>{paths.push(path);return {json:async()=>(await call(h.api,path,options?.body?{body:JSON.parse(options.body)}:{})).body}};await v.click({attemptProject:h.dir,attemptPane:'worker',attemptId:pane.waiting.turnInstanceId,attemptAction:'retry',attemptNetwork:'direct_once',attemptBinding:JSON.stringify(old)});
  const binding=h.runtime.paneBinding('worker');assert.notEqual(binding.networkGeneration,old.networkGeneration);assert.ok(paths.includes('/api/status'));assert.match(v.cards.get('live-waiting')!.innerHTML,new RegExp(binding.networkGeneration!));assert.equal(h.provider.calls.length,0);
 });
+
+test('TS-26 window: unsent card uses plain reason, bound retry/remove and technical details',()=>{
+ const view=ui(),info={...waiting,status:'unsent',failure:{code:'transport_lost',reason:'Devin не ответил на проверку входа',durationMs:120000},messages:[{seq:36,text:'старое'}]};
+ const html=view.functions.waitingControls(view.H.pane,info,view.H.project);assert.match(html,/Не отправлено: Devin не ответил на проверку входа/);assert.match(html,/Отправить снова/);assert.match(html,/>Убрать</);assert.match(html,/<details><summary>подробнее/);assert.match(html,/data-attempt-id="turn-a"/);assert.doesNotMatch(html,/<b[^>]*>[^<]*transport_lost/);
+});
+
+test('TS-26 window: late chat HTTP response cannot restore an unsent card after done SSE',async()=>{
+ const pane={id:'room',model:'w1',waiting:null as unknown},H={pane,panes:[pane],cur:{} as unknown},S={chat:[{role:'me',text:'новое'}],ui:{}};let reads=0;
+ const context=createContext({H,S,sendBinding:()=>({pane:'room'}),bindingCurrent:()=>true,drawLive(){},render(){},renderWaiting(){},toast(){},save(){},api:async()=>({ok:true,seq:2,waiting:{...waiting,status:'unsent'}}),refreshStatus:async()=>{reads++;pane.waiting=null},log(){},esc:String});
+ runInContext(source.slice(source.indexOf('  async function ask('),source.indexOf('  function rememberLive('))+'\nglobalThis.askTest=ask;',context);
+ assert.equal(await (context as any).askTest('новое'),true);assert.equal(reads,1);assert.equal(pane.waiting,null);
+});

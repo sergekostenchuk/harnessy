@@ -52,7 +52,7 @@ export interface TurnContext {
  peers:{id:string;label:string;vendor:Vendor}[];tools:PeerTools;relayDepth:number;projectDir:string|null;appUrl:string;
  registerProcessToken(token:string):void;revokeProcessToken(token:string):void;writableRoots:string[];attachments?:TurnAttachment[]
 }
-export type ErrorCode='images_unsupported'|'region_restricted'|'network_blocked'|'network_unavailable'|'network_country_unverified'|'network_no_reserve'|'network_proxy_auth'|'no_binary'|'not_logged_in'|'session_missing'|'model_unsupported'|'cloud_api_required'|'protocol'|'transport_lost'|'cancelled'|'busy'|'cwd_changed'|'turn_failed'|'unknown_request'|'models_unavailable'|'mode_unsupported'|'capability_unsupported'|'permission_denied'|'provider_unknown'|'not_installed'|'platform_unsupported'|'login_terminal_failed'|'login_changed'|'state_dir_tampered';
+export type ErrorCode='login_timeout'|'images_unsupported'|'region_restricted'|'network_blocked'|'network_unavailable'|'network_country_unverified'|'network_no_reserve'|'network_proxy_auth'|'no_binary'|'not_logged_in'|'session_missing'|'model_unsupported'|'cloud_api_required'|'protocol'|'transport_lost'|'cancelled'|'busy'|'cwd_changed'|'turn_failed'|'unknown_request'|'models_unavailable'|'mode_unsupported'|'capability_unsupported'|'permission_denied'|'provider_unknown'|'not_installed'|'platform_unsupported'|'login_terminal_failed'|'login_changed'|'state_dir_tampered';
 export class ProviderError extends Error {
  code:ErrorCode;vendorText:string;sessionId:string|null;
  constructor(code:ErrorCode,vendorText:string,sessionId:string|null=null){super(vendorText);this.name='ProviderError';this.code=code;this.vendorText=vendorText;this.sessionId=sessionId}

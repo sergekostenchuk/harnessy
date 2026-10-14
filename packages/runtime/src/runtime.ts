@@ -166,7 +166,7 @@ export class Runtime {
  else {await this.recover(p,pane)}
  }
  if(!lineErrors.some(text=>text.startsWith('chats.json не читается'))){if(freshRoom)state.savePanes(registry,journal);else state.saveChats(registry)}
- p.starting=false;this.quota(p).start();this.providerOperations.start(p);if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if(pane.status==='idle'&&!p.materializing.has(pane.id)&&!p.restoreFailed.has(pane.id))await this.resumeQueue(pane.id,p);
+ p.starting=false;this.quota(p).start();this.providerOperations.start(p);if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if((pane.status==='idle'||p.state.attempts[pane.id]?.unsent)&&!p.materializing.has(pane.id)&&!p.restoreFailed.has(pane.id))await this.resumeQueue(pane.id,p);
  }
  async projectSet(path:string,options:{reload?:boolean},initiator:Initiator){
  this.requireOwner(initiator);const p=this.project;
@@ -212,7 +212,7 @@ export class Runtime {
  for(const id of event.record.to){if(id==='owner'){p.owner.publish({type:'owner',record:event.record});continue}const pane=p.registry.get(id);if(!pane)continue;
  pane.publish({type:'queued',record:event.record,pending:p.journal.pendingFor(id).length});
  if(event.record.kind==='stop')this.cancelTurn(id,'stop',p);
- if(pane.status==='uncertain'){this.stateEvent(p,pane);continue}void this.kick(id)
+ if(pane.status==='uncertain'&&!(p.state.attempts[id]?.unsent&&event.record.from==='owner'&&['task','question','note'].includes(event.record.kind))){this.stateEvent(p,pane);continue}void this.kick(id)
  }
  }
  waiting(id:string){const p=this.project,pane=this.pane(id,p);if(p.restoreFailed.has(id))return null;const info=waiting(p,pane);if(info)return info;const pending=this.attemptDecisions(p).find(d=>d.record.attempt!.pane===id&&!d.done);if(!pending)return null;const a=pending.record.attempt!,result=p.state.results(pane).find(r=>r.runtime?.turnInstanceId===a.turnInstanceId);return {status:a.action==='finish'?'recovering' as const:'uncertain' as const,recordSeqs:Array.isArray(result?.runtime.recordSeqs)?[...result.runtime.recordSeqs]:[],startedAt:null,turnInstanceId:a.turnInstanceId,actions:[a.action]}}
@@ -259,7 +259,7 @@ export class Runtime {
     const direct=input.network==='direct_once';let grantedBinding:string|null=null;if(direct){const expected=this.paneBinding(id,p),binding=input.binding;if(!object(binding)||Object.entries(expected).some(([k,v])=>binding[k]!==v)||!expected.networkGeneration)throw new RuntimeError('binding_changed','Настройки изменились — решите заново',409,{fields:{pane:id,project:p.dir,waiting:info,settingsBinding:expected}});if(!info?.recordSeqs.length||!info.failure||!['network_unavailable','network_no_reserve','network_country_unverified','network_proxy_auth','network_changed'].includes(info.failure.code)||!['ssh','proxy'].includes(this.networkRelay.summary(pane.vendor)?.type??''))throw new RuntimeError('attempt_invalid','Для этого ожидания прямой повтор недоступен');grantedBinding=JSON.stringify(expected);}
     const action=input.action as AttemptDecision['action'],deliverySeq=previous?previous.record.attempt!.deliverySeq:action==='finish'?p.state.results(pane).find(r=>r.runtime?.turnInstanceId===input.turnInstanceId)!.deliverySeq:p.state.deliveryBoundary(id,p.journal);
     const seqs=info?.recordSeqs??[],range=seqs.length?' #'+seqs[0]+'–#'+seqs.at(-1):'',label=action==='retry'?'повторить':action==='skip'?'пропустить':'завершить восстановление';
-    const record=previous?.record??p.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'attempt',thread:'attempt:'+input.turnInstanceId,text:'владелец решил: '+label+range,attempt:{pane:id,turnInstanceId:input.turnInstanceId as string,action,...(direct?{network:'direct_once' as const}:{}),deliverySeq,done:false}});
+    const record=previous?.record??p.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'attempt',thread:'attempt:'+input.turnInstanceId,text:'владелец решил: '+label+range,attempt:{pane:id,turnInstanceId:input.turnInstanceId as string,action,...(direct?{network:'direct_once' as const}:{}),...(info?.status==='unsent'?{unsent:true as const}:{}),deliverySeq,done:false}});
     await this.finishDecision(p,record);if(direct){let grants=this.directRetries.get(p);if(!grants)this.directRetries.set(p,grants=new Map());grants.set(id,{binding:grantedBinding!,seqs:[...seqs]})}return this.decisionResult(record)
    }catch(e){const pending=this.attemptDecisions(p).find(d=>d.record.attempt!.pane===id&&!d.done);if(pending){pane.status=pending.record.attempt!.action==='finish'?'recovering':'uncertain';this.report(p,pane,e)}throw e}finally{hold.release()}
   });if(!p.closed)void this.kick(id);return result
@@ -274,14 +274,18 @@ export class Runtime {
  if(p.closed||p.starting||pane.busy||p.editing.has(pane.id)||p.materializing.has(pane.id)||p.restoreFailed.has(pane.id))return false;
  if(firstOpenPending(p,pane))return false;
  await this.restoreAttemptDecisions(p,pane);
- if(!await this.recover(p,pane))return false;
- while(!p.closed&&!p.halted&&!pane.busy){if(p.state.attempts[pane.id]?.status==='uncertain'||pane.status==='uncertain')return false;
+ const unsent=p.state.attempts[pane.id];
+ let combine=unsent?.unsent&&p.journal.pendingFor(pane.id).some(e=>e.record.from==='owner'&&['task','question','note'].includes(e.record.kind)&&e.record.seq>unsent.unsent!.afterSeq)?unsent:null;
+ if(combine&&!p.halted)pane.status='idle';else if(!await this.recover(p,pane))return false;
+ while(!p.closed&&!p.halted&&!pane.busy){if((!combine&&p.state.attempts[pane.id]?.status==='uncertain')||pane.status==='uncertain')return false;
  let entries=p.journal.pendingFor(pane.id).filter(e=>e.record.origin!=='steer');if(!entries.length)return true;
+ const retry=!combine?this.attemptDecisions(p).find(d=>d.done&&d.record.attempt?.pane===pane.id&&d.record.attempt.unsent&&d.record.attempt.action==='retry'&&d.record.attempt.deliverySeq! > (p.journal.cursors[pane.id]??0)):null;
+ if(retry)entries=entries.filter(e=>e.deliverySeq<=retry.record.attempt!.deliverySeq!);
  const direct=this.directRetries.get(p)?.get(pane.id);this.directRetries.get(p)?.delete(pane.id);if(direct){if(direct.seqs.some(seq=>!entries.some(e=>e.record.seq===seq)))throw new RuntimeError('binding_changed','Разговор изменился; прямой повтор отменён');entries=entries.filter(e=>direct.seqs.includes(e.record.seq));this.assertDirectReady(p,pane,direct.binding,entries)}
  const records=entries.map(e=>e.record),work=records.filter(r=>r.kind!=='stop');for(const record of work)p.trace.record('queue.taken',{pane:pane.id,refs:{journalSeq:record.seq}},p.trace.forJournal(record.seq));pane.publish({type:'delivered',records});
  if(!work.length){p.journal.advance(pane.id,Math.max(...entries.map(e=>e.deliverySeq)));continue}
- try{await this.runTurn(pane.id,renderInbox(work,id=>this.labelOf(id,p)),{entries,project:p,...(direct?{directOnce:direct.binding}:{})})}catch(e){if(!p.closed){pane.publish({type:'note',text:queueNote(work.length)});this.stateEvent(p,pane)}return false}
- if(pane.status==='recovering')return false
+ try{await this.runTurn(pane.id,renderInbox(work,id=>this.labelOf(id,p)),{entries,project:p,...(combine?{combined:combine.recordSeqs}:{}),...(direct?{directOnce:direct.binding}:{})})}catch(e){if(!p.closed){if(!p.state.attempts[pane.id]&&pane.status==='idle'&&!(e instanceof RuntimeError&&e.code==='stale_attempt')){p.state.startAttempt(pane,{turnInstanceId:randomUUID(),recordSeqs:records.map(r=>r.seq),deliverySeq:Math.max(...entries.map(e=>e.deliverySeq)),startedAt:this.clock.now()});p.state.notSent(pane.id,p.journal.lastSeq,turnFailure(e,p.dir,0));pane.status='uncertain';this.report(p,pane,e)}if(!p.state.attempts[pane.id]?.unsent)pane.publish({type:'note',text:queueNote(work.length)});this.stateEvent(p,pane)}return false}
+ combine=null;if(pane.status==='recovering')return false
  }return true
  }
  private async recover(p:ProjectState,pane:Pane,throwErrors=false):Promise<boolean>{
@@ -356,12 +360,12 @@ export class Runtime {
   throw new RuntimeError('binding_changed',reason,409,{fields:{pane:pane.id,project:p.dir,waiting:this.waiting(pane.id),settingsBinding:current}});
  }
  private async waitVendor(p:ProjectState,vendor:Vendor|'human'):Promise<void>{if(vendor==='human')return;while(p.resets.has(vendor)||p.routeJobs.has(vendor)){await Promise.all([p.resets.get(vendor),p.routeJobs.get(vendor)]);this.same(p)}}
- async runTurn(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol;directOnce?:string}={}):Promise<string> {
+ async runTurn(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol;directOnce?:string;combined?:number[]}={}):Promise<string> {
  const p=options.project??this.project,parent=options.entries?.length?p.trace.parentForJournal(options.entries.map(e=>e.record.seq)):currentTrace(),turnInstanceId=randomUUID(),started=this.clock.now(),span=p.trace.record('turn.start',{actor:'model:'+id,pane:id,chat:p.state.chats.active[id]??null,turnInstanceId,refs:{attemptId:turnInstanceId}},parent);
  return p.trace.run(span,async()=>{try{const text=await this.runTurnCore(id,messageText,options),result=p.registry.get(id)?.transcript.find(m=>object(m.runtime)&&m.runtime.turnInstanceId===turnInstanceId);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:result?.outcome==='interrupted'?'cancelled':result?.outcome==='error'?'failed':'ok',reason:result?.outcome==='error'?traceReason(result.errorCode,'Ошибка провайдера'):{code:'none',text:''},durationMs:this.clock.now()-started,data:{model:result?.model,usage:result?.usage}});return text}catch(e){const failure=turnFailure(e,p.dir,this.clock.now()-started),reason=traceReason(failure.code,failure.reason);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:reason.code==='cancelled'?'cancelled':reason.code==='timeout'?'timeout':'failed',reason,durationMs:this.clock.now()-started});throw e}finally{this.finishTraceTools(p,turnInstanceId)}});
  }
- private async runTurnCore(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol;directOnce?:string}={}):Promise<string> {
- const p=options.project??this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);this.same(p);if(options.directOnce)this.assertDirectReady(p,pane,options.directOnce,options.entries??[]);this.validateTurn(pane.vendor,pane.mode);
+ private async runTurnCore(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol;directOnce?:string;combined?:number[]}={}):Promise<string> {
+ const p=options.project??this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);this.same(p);if(options.entries?.some(entry=>!p.journal.pendingFor(id).some(current=>current.record.seq===entry.record.seq&&current.deliverySeq===entry.deliverySeq)))throw new RuntimeError('stale_attempt','Сообщение уже убрано или отправлено');if(options.directOnce)this.assertDirectReady(p,pane,options.directOnce,options.entries??[]);this.validateTurn(pane.vendor,pane.mode);
  if(p.starting)throw new RuntimeError('project_opening','проект открывается',409);
  if(firstOpenPending(p,pane))throw new RuntimeError('role_not_opened','Откройте чат роли, чтобы она получила вводную',409);
  if(p.halted)throw new RuntimeError('halted','остановлено владельцем: ходы не идут, сообщения ждут в очереди');
@@ -381,6 +385,7 @@ export class Runtime {
  const turn:ActiveTurn={scope,controller,pane,vendor:pane.vendor,records,deliverySeq:Math.max(0,...entries.map(e=>e.deliverySeq)),relayDepth,attemptNumber:0,handle:null,started:false,stopRequested:false,terminal:null,partial:'',finished:new Promise(r=>{finish=r}),finish:()=>finish(),timer:undefined,resetWait:new Promise(r=>{releaseReset=r}),releaseReset:()=>releaseReset(),result:null,injected};p.active.set(id,turn);this.stateEvent(p,pane);
  let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null,networkTurn:NetworkTurn|undefined,turnAttachments:TurnAttachment[]=verifiedAttachments,cleanupAttachments=()=>{};
  try{
+ p.state.startAttempt(pane,{turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),startedAt:this.clock.now(),deliverySeq:turn.deliverySeq});
  if(!validDir(pane.cwd))throw new RuntimeError('cwd_changed','папки нет: '+pane.cwd);const provider=this.provider(turn.vendor),vendor=provider.vendor,epoch=p.processEpoch.get(vendor)??0,sessionEpoch=pane.sessionEpoch;
  launchVendor=vendor;
  ({attachments:turnAttachments,cleanup:cleanupAttachments}=providerAttachments(verifiedAttachments,vendor,p.dir));
@@ -392,8 +397,8 @@ export class Runtime {
  let prompt=messageText;if(pane.carry){prompt='Прежний разговор (был без папки, продолжается здесь):\n'+pane.carry+'\n\n---\nНовое сообщение:\n'+prompt;pane.publish({type:'note',text:'в сообщение добавлен прежний разговор'})}
  if(summary.text){prompt=summary.text+'\n\n---\nСообщение тебе:\n'+prompt;pane.publish({type:'note',text:'в сообщение добавлена сводка соседей ('+[...summary.text].length+' символов)'})}
  if(teamText)prompt=teamText+'\n\n---\n'+prompt;
+ if(options.combined?.length){const note=timestampMessage('peer','[от харнесс] Отправлено вместе с ранее неотправленным сообщением',this.clock.now());pane.append(note);pane.uncommitted.add(note);injected.push(note)}
  for(const r of records){const attachments=normalizeAttachments(r.attachments),m={...timestampMessage(r.from==='owner'?'me':'peer',r.from==='owner'?r.text:'[от '+this.labelOf(r.from,p)+'] '+r.text,this.clock.now()),...(attachments.length?{attachments}:{})};if(pythonTrim(m.text)||attachments.length){pane.append(m);pane.uncommitted.add(m);injected.push(m)}}
- p.state.startAttempt(pane,{turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),startedAt:this.clock.now(),deliverySeq:turn.deliverySeq});
  const current=()=>!p.closed&&p.active.get(id)===turn;
  const checkDirectNetwork=()=>{if(options.directOnce){const generation=JSON.parse(options.directOnce).networkGeneration;if(!generation||generation!==this.networkGeneration(pane.vendor))throw new RuntimeError('network_changed','Настройки изменились — решите заново')}};
  const beginNetwork=()=>this.networkRelay.begin(vendor,p.dir+'\0'+id,controller.signal,(text,network)=>{if(!current())return;pane.publish({type:'networkRoute',text,network,chat:p.state.activeChat(pane)!.id,turnInstanceId:scope.turnInstanceId})},!!options.directOnce);
@@ -441,6 +446,7 @@ export class Runtime {
  const transferNotice=transfer&&!interrupted?{...timestampMessage('peer','[от харнесс] '+transferLabel(transfer),this.clock.now()),contextTransfer:{...transfer,turnInstanceId:scope.turnInstanceId}}:null;
  if(transferNotice)pane.append(transferNotice);
  try{p.state.commitResult(pane,p.registry,response)}catch(e){if(transferNotice)pane.transcript=pane.transcript.filter(m=>m!==transferNotice);throw e}
+ if(options.combined?.length){const note=injected.find(m=>m.role==='peer'&&m.text.includes('Отправлено вместе'));if(note)pane.publish({type:'note',text:note.text,seq:note.seq})}
  if(transferNotice)pane.publish({type:'contextTransfer',text:transferLabel(transfer!),transfer:transferNotice.contextTransfer,ts:transferNotice.ts});
  const receipt=p.state.attempts[id];if(receipt?.turnInstanceId===scope.turnInstanceId)p.state.clearAttempt(id);
  await this.recover(p,pane,true);
@@ -451,9 +457,13 @@ export class Runtime {
  }catch(e){
  if(options.directOnce&&!p.closed&&!controller.signal.aborted&&JSON.parse(options.directOnce).networkGeneration!==this.networkGeneration(pane.vendor))e=new RuntimeError('network_changed','Настройки изменились — решите заново');
  if(!turn.result){pane.transcript=pane.transcript.filter(m=>!injected.includes(m));for(const m of injected)pane.uncommitted.delete(m);
- if(!turn.started&&!(e instanceof RuntimeError&&e.code==='network_changed')&&!(e instanceof ProviderError&&['network_unavailable','network_country_unverified','network_no_reserve','network_proxy_auth','region_restricted','network_blocked'].includes(e.code))){try{if(transfer&&pane.vendor===launchVendor&&pane.sessionEpoch===launchEpoch){pane.sessionId=null;p.state.savePanes(p.registry,p.journal)}p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
- else {   // Сохраняем также отказ сети до запуска: владелец может повторить после исправления цепочки.
-  // модель уже могла действовать (modelStarted), результата нет: неопределённый исход не повторяется автоматически — долговечный uncertain до действия владельца (ревью №111 п.1)
+ if(!turn.started&&!records.length&&!(e instanceof RuntimeError&&e.code==='network_changed')&&!(e instanceof ProviderError&&['network_unavailable','network_country_unverified','network_no_reserve','network_proxy_auth','region_restricted','network_blocked'].includes(e.code))){try{p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
+ else if(!turn.started&&records.length){try{if(transfer&&pane.vendor===launchVendor&&pane.sessionEpoch===launchEpoch){pane.sessionId=null;p.state.savePanes(p.registry,p.journal)}
+  if(p.state.attempts[id]?.turnInstanceId!==scope.turnInstanceId)p.state.refreshDamage(p.registry);
+  p.state.notSent(id,p.journal.lastSeq,turnFailure(e,p.dir,this.clock.now()-(p.state.attempts[id]?.startedAt??this.clock.now())),{turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),startedAt:p.state.attempts[id]?.startedAt??this.clock.now(),deliverySeq:turn.deliverySeq});
+ }catch(error){p.lineErrors.push(message(error))}pane.status='uncertain';pane.uncertainNote=waitingError(p,pane).message;}
+ else {
+  // После modelStarted сохраняем прежний uncertain; внутренний отказ сети без записи очереди также сохраняет карточку TS-22c.
   try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:turnFailure(e,p.dir,0).code,...turnMeasurements(turn.terminal),failure:turnFailure(e,p.dir,this.clock.now()-(p.state.attempts[id]?.startedAt??this.clock.now()))})}catch(error){p.lineErrors.push(message(error))}
   try{p.state.uncertain(id)}catch(error){p.lineErrors.push(message(error))}
   pane.status='uncertain';pane.uncertainNote=waitingError(p,pane).message;if(!p.closed)pane.publish({type:'note',text:pane.uncertainNote,warning:this.warningId(p,pane,'uncertain')})}
