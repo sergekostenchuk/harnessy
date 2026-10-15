@@ -1,5 +1,6 @@
 import {isIP} from 'node:net';
 import {validId,validRoute,type Usage} from '@harnessy/llm';
+import {validProviderId} from '@harnessy/projects';
 import {safeDiagnostic,hasSecretField,hasPublicSecret} from '@harnessy/providers';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {randomUUID} from 'node:crypto';
@@ -35,7 +36,7 @@ const usageCounters:Record<keyof Usage,true>={input:true,output:true,cacheRead:t
 function secretDataField(key:string,value:unknown){return hasSecretField(key)&&!(Object.hasOwn(usageCounters,key)&&typeof value==='number'&&Number.isSafeInteger(value)&&value>=0)}
 // Network-check result fields are public only when their value has the declared shape.
 function networkDataField(key:string,value:string){if(hasPublicSecret(value))return false;return key==='ip'?isIP(value)!==0:key==='country'?/^[\p{L}\p{M} .()-]{1,100}$/u.test(value):['exit','from','to'].includes(key)?/^[a-z][a-z0-9_-]{0,63}$/.test(value):key==='checkId'?traceId(value):key==='state'?['starting','up','down','stopped','pending','running','done','failed','skipped','cancelled'].includes(value):false}
-function pathId(key:string,value:string){if(hasPublicSecret(value))return false;return key==='paneId'?traceBindingId(value,'pane'):key==='chatId'?traceBindingId(value,'chat'):key==='providerId'||key==='routeId'?validRoute(value):false}
+function pathId(key:string,value:string){if(value==='[неизвестный id]')return true;if(hasPublicSecret(value))return false;return key==='paneId'?traceBindingId(value,'pane'):key==='chatId'?traceBindingId(value,'chat'):key==='providerId'?validProviderId(value):key==='routeId'?validRoute(value):false}
 export function traceData(value:unknown,project:string,routes?:ReadonlySet<string>){let truncated=false,budget=2048;const visible=/^(name|action|page|kind|type|status|code|vendor|model|method|route|path|file|filename|binding|id|operationId|proposalId|tool|reason|error)$/;
  const clean=(text:string,key:string)=>traceText(text,project,key);
  const visit=(v:unknown,key='',depth=0):unknown=>{if(depth>4||budget<=0){truncated=true;return '[усечено]'}budget-=8;if(v===null||typeof v==='boolean'||typeof v==='number'&&Number.isFinite(v))return v;if(typeof v==='string'){if(hasSecretField(key)||!visible.test(key)&&!networkDataField(key,v)&&!pathId(key,v)){truncated=true;return '[усечено: '+v.length+' символов]'}const text=depth===1&&(key==='route'&&routes?.has(v)||traceMetadataId(v,key)||pathId(key,v)||key!=='country'&&networkDataField(key,v))?v:clean(v,key),limit=Math.min(256,budget);budget-=Math.min(text.length,limit);if(text!==v||text.length>limit)truncated=true;return text.slice(0,limit)}if(Array.isArray(v)){if(v.length>16)truncated=true;return v.slice(0,16).map(x=>visit(x,key,depth+1))}if(v&&typeof v==='object'){const entries=Object.entries(v);if(entries.length>24)truncated=true;return Object.fromEntries(entries.slice(0,24).map(([k,x])=>[secretDataField(k,x)?'[секрет]':clean(k,'key').slice(0,60),secretDataField(k,x)?(truncated=true,'[скрыто]'):visit(x,k,depth+1)]))}truncated=true;return '[усечено]'};

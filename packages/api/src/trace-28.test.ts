@@ -3,13 +3,19 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
-import {fixture,call} from './test-helpers.ts';
+import {fixture,call,OWNER} from './test-helpers.ts';
 
 test('TS-28: HTTP spans carry only typed path identities; a forged credential in path, body or query is absent',async t=>{
- const h=await fixture(t),paths=[['/api/network/exits/fixture-exit/removal','exit','fixture-exit'],['/api/network/providers/claude','providerId','claude'],['/api/panes/worker','paneId','worker'],['/api/chats/cdeadbeef','chatId','cdeadbeef'],['/api/llm/providers/fixture-route','routeId','fixture-route']] as const;
+ const h=await fixture(t);h.runtime.roomSet({model:'w1'},OWNER);const chat=h.runtime.project.state.chats.active.room!;
+ await call(h.api,'/api/network/exits/fixture-exit/save',{body:{config:{id:'fixture-exit',label:'Fixture',type:'direct'},revision:null}});
+ await h.runtime.settings.changeLlmProvider('fixture-route',{api:'openai-completions',baseURL:'http://127.0.0.1:1/v1',models:[{id:'fixture-model'}]},null);
+ const paths=[['/api/network/exits/fixture-exit/removal','exit','fixture-exit'],['/api/network/providers/claude','providerId','claude'],['/api/panes/worker','paneId','worker'],['/api/chats/'+chat,'chatId',chat],['/api/llm/providers/fixture-route','routeId','fixture-route']] as const;
  for(const [path,key,id] of paths){await call(h.api,path);const rows=await h.runtime.project.trace.read();assert.ok(rows.some(row=>row.kind==='http.request'&&(row.data as Record<string,unknown>)[key]===id),path)}
+ const apiPath='/api/network/providers/api%3Afixture-route';await call(h.api,apiPath);const apiRows=(await h.runtime.project.trace.read()).filter(row=>['http.request','http.response'].includes(row.kind)&&(row.data as any).route==='/api/network/providers/:id');assert.ok(apiRows.some(row=>(row.data as any).providerId==='api:fixture-route'));
+ const bareToken='a'+'f'.repeat(63),denied=await call(h.api,'/api/network/exits/'+bareToken+'/removal',{headers:{'X-Harness-Pane':'worker','X-Pane-Token':bareToken}});assert.equal(denied.status,403);const unknown=(await h.runtime.project.trace.read()).reverse().find(row=>row.kind==='http.request'&&(row.data as any).route==='/api/network/exits/:id/removal');assert.equal((unknown?.data as any).exit,'[неизвестный id]');
  const secret='sk_test_syntheticsecret1234567890',reply=await call(h.api,'/api/network/exits/'+secret+'/save?password='+secret,{body:{password:secret}});assert.equal(reply.text.includes(secret),false);
  const records=await call(h.api,'/api/trace');assert.equal(records.text.includes(secret),false);await h.runtime.project.trace.flush();assert.equal(readFileSync(h.runtime.project.trace.path,'utf8').includes(secret),false);
+ assert.equal(records.text.includes(bareToken),false);
 });
 
 test('TS-28: healthy background reads aggregate; bound, rejected and slow reads retain individual spans',async t=>{
