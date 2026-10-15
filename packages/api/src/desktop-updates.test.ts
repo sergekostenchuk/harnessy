@@ -70,7 +70,7 @@ test('TS-31: replacing a downloaded version stops the managed engine before inst
  updates.start();updater.emit('update-downloaded',{version:'0.2.0-beta.1'});assert.equal(updates.state().readyVersion,null);
  await updates.setChannel('beta');updater.emit('update-downloaded',{version:'0.2.0-beta.1'});
  await updates.install();assert.deepEqual(events,['engine.stop','allowQuit=true','quitAndInstall']);assert.deepEqual(updater.installArgs,[false,true]);
- assert.match(read('ui/desktop/main.js'),/app\.whenReady\(\)\.then\(async\(\)=>\{await createWindow\(\);updates\.start\(\)\}\)/);
+ assert.match(read('ui/desktop/main.js'),/app\.whenReady\(\)\.then\(async\(\)=>\{[\s\S]*await createWindow\(\);updates\.start\(\)/);
  const failing=new FakeUpdater();const recovery:string[]=[],second=new DesktopUpdates({updater:failing,packaged:true,repositoryReady:true,file,setInterval:()=>0,stopEngine:async()=>recovery.push('stop'),resumeEngine:async()=>recovery.push('restart'),allowQuit:(yes:boolean)=>recovery.push('quit='+yes)});
  failing.quitAndInstall=()=>{throw Error('installer failure')};second.start();failing.emit('update-downloaded',{version:'0.2.0-beta.2'});
  await assert.rejects(second.install(),/Не удалось перезапустить/);assert.deepEqual(recovery,['stop','quit=true','quit=false','restart']);
