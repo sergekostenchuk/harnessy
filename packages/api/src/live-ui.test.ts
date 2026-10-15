@@ -45,7 +45,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  const bubble=','  const cols=')+
   '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
-  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw};',context);
+  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw};',context);
  const functions=(context as Data).testing as Data;
  function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
  function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
@@ -55,6 +55,15 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   return (mode:'on'|'orch')=>listener({target:{closest:(selector:string)=>selector==='[data-direct]'?{dataset:{direct:mode}}:null}}) as Promise<boolean>}
  return {H,S,ta,requests,toasts,storage,elements,rows,column,sandbox,context,functions,journal,sidebar,direct,clicks,hidePage:()=>pagehide.forEach(fn=>fn()),showPage:(event:Data)=>Promise.all(pageshow.map(fn=>fn(event))),get rendered(){return rendered}};
 }
+
+
+test('TS-32: sidebar profile uses only a confirmed engine account and otherwise stays anonymous',()=>{
+ const view=ui(),avatar={firstChild:{nodeValue:''},textContent:''},name={textContent:''},email={textContent:'',hidden:true,removeAttribute(key:string){if(key==='hidden')this.hidden=false},setAttribute(key:string){if(key==='hidden')this.hidden=true}},row={title:'',querySelector(selector:string){return selector==='[data-owner-avatar]'?avatar:selector==='[data-owner-name]'?name:selector==='[data-owner-email]'?email:null}};
+ const query=view.sandbox.document.querySelectorAll;view.sandbox.document.querySelectorAll=(selector:string)=>selector==='aside.side.ps [data-owner-profile]'?[row]:query(selector);
+ assert.deepEqual(plain(view.functions.profileDraw({auth:{claude:{loggedIn:true,email:'owner@example.test',name:'Мария'},codex:{loggedIn:true,email:'other@example.test'}}})),{name:'Мария',email:'owner@example.test'});assert.equal(avatar.firstChild.nodeValue,'М');assert.equal(name.textContent,'Мария');assert.equal(email.textContent,'owner@example.test');assert.equal(email.hidden,false);
+ assert.deepEqual(plain(view.functions.profileDraw({auth:{claude:{loggedIn:false,email:'forged@example.test'},codex:{loggedIn:true,email:'invalid'}}})),{name:'Владелец',email:''});assert.equal(avatar.firstChild.nodeValue,'В');assert.equal(name.textContent,'Владелец');assert.equal(email.textContent,'');assert.equal(email.hidden,true);
+ assert.doesNotMatch(proto,/9616166@gmail\.com|>Serge</);assert.match(proto,/data-owner-profile/);
+});
 
 test('TS-25: question and answer share copy and relative time; undated messages invent nothing',()=>{
  const view=ui(),nowAt=1791500000125,at=new Date(2026,9,15,10,0,0).getTime();view.S.chat=[{role:'me',text:'Исходный вопрос',t:nowAt-120000},{role:'ai',src:'live',text:'Исходный ответ',html:'<div class="md-body">Исходный ответ</div>',who:'воркер',model:'w1',pane:'worker',t:nowAt}];

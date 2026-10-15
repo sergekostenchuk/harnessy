@@ -399,6 +399,7 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
   .om-time .txt{font:11px var(--mono);color:var(--ink2);white-space:nowrap;max-width:330px;overflow:hidden;text-overflow:ellipsis;text-align:right}.om-time .txt b{color:var(--ink);font-weight:500}
   .om-note{position:absolute;left:16px;bottom:12px;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);background:var(--raised);border:1px solid var(--line2);border-radius:8px;padding:5px 10px;max-width:calc(100% - 32px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:3}
   .om-note b{color:var(--ink2);font-weight:500}
+  .profile-spec{display:flex;align-items:center;gap:9px;padding:9px 10px;border:1px solid var(--line2);border-radius:9px;background:var(--raised);max-width:270px}.profile-spec .profile-av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#3a3a40,#1b1b1e);border:1px solid var(--line2);font:500 11px var(--mono)}.profile-spec b,.profile-spec small{display:block}.profile-spec b{font-size:13px}.profile-spec small{font-size:10.5px;color:var(--ink3)}
   /* подпись под кадром: вход · даёт · может вернуть */
   .fcap{display:grid;grid-template-columns:70px 1fr;gap:14px;align-items:baseline;margin:8px 0 48px;max-width:1280px}
   .fcap .n{font:500 22px/1 var(--mono);color:var(--accent);letter-spacing:-.02em}.fcap h2{margin:0 0 6px;font-size:15px;font-weight:500;color:var(--ink)}.fcap h2 small{font:10px var(--mono);letter-spacing:.06em;color:var(--ink3);margin-left:8px}
@@ -463,7 +464,9 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
           <div class="rowx"><div class="ticks thin" style="flex:1" id="t2"></div><b class="mono" style="color:var(--ink)">9 из 12</b></div>
           <div class="cap2" style="margin-top:14px">сегмент и переключатель</div>
           <div class="rowx"><span class="seg"><span class="on">Обзор</span><span>Проекты</span><span>Причины</span></span><span class="tog on"></span><span class="tog"></span></div></div>
-      </div></section>
+      </div>
+      <div class="two" style="margin-top:14px"><div class="box"><div class="cap2">профиль · учётная запись движка</div><div class="profile-spec"><span class="profile-av">В</span><div><b>Владелец</b><small>you@example.com</small></div></div><p class="t3" style="margin-top:10px">Имя и почта появляются только из подтверждённого входа Claude или Codex.</p></div><div class="box"><div class="cap2">профиль · входа нет</div><div class="profile-spec"><span class="profile-av">В</span><div><b>Владелец</b></div></div><p class="t3" style="margin-top:10px">Без подтверждённой учётной записи строка почты не рисуется.</p></div></div>
+      </section>
 
     <!-- TS-20e: connection components; examples only, no provider calls. -->
     <section id="connections-spec" aria-labelledby="connections-spec-title">

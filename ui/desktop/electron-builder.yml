@@ -4,6 +4,7 @@ asar: true
 npmRebuild: false
 removePackageScripts: true
 compression: maximum
+afterPack: ./after-pack.cjs
 directories:
   output: release
 files:

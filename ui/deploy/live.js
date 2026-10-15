@@ -391,12 +391,24 @@
     document.addEventListener('keydown',event=>{const item=event.target.closest('[data-section-item]');if(H.on&&item&&(event.key==='Enter'||event.key===' ')){event.preventDefault();event.stopImmediatePropagation();sectionOpenItem(item)}});
   }
   // End TS-09a project sections.
+  const profileText=(value,max=254)=>typeof value==='string'&&value.trim()&&value.trim().length<=max&&!/[\u0000-\u001f\u007f<>]/.test(value)?value.trim():'';
+  function ownerProfile(status=H.liveStatus){
+    const auth=status&&status.auth&&typeof status.auth==='object'&&!Array.isArray(status.auth)?status.auth:{},accounts=['claude','codex'].map(id=>auth[id]).filter(account=>account&&account.loggedIn===true);
+    const account=accounts.find(value=>{const email=profileText(value.email);return !!email&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)})||accounts.find(value=>profileText(value.name,80)||profileText(value.displayName,80));
+    if(!account)return {name:'Владелец',email:''};
+    const rawEmail=profileText(account.email),email=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)?rawEmail:'',name=profileText(account.name,80)||profileText(account.displayName,80)||'Владелец';
+    return {name,email};
+  }
+  function profileDraw(status=H.liveStatus){
+    const profile=ownerProfile(status),initial=Array.from(profile.name)[0]?.toLocaleUpperCase('ru-RU')||'В';
+    document.querySelectorAll('aside.side.ps [data-owner-profile]').forEach(row=>{const avatar=row.querySelector('[data-owner-avatar]'),name=row.querySelector('[data-owner-name]'),email=row.querySelector('[data-owner-email]');if(avatar)avatar.firstChild?avatar.firstChild.nodeValue=initial:avatar.textContent=initial;if(name)name.textContent=profile.name;if(email){email.textContent=profile.email;if(profile.email)email.removeAttribute('hidden');else email.setAttribute('hidden','')}row.title=profile.email?'Профиль · '+profile.email:'Профиль'});return profile;
+  }
   function applyStatus(st,request,connected=false){if(leftPage||window.HARNESS_BOOT&&!window.HARNESS_BOOT.confirm(st.project||'',request))return false;if(connected){H.on=true;H.snapshotOnly=false}H.liveStatus=st;const changed=H.project!==(st.project||''),previousRoom=(H.panes||[]).find(p=>p.id==='room');H.panes=st.panes; H.models=st.models||{}; H.turnModes=st.turnModes||{}; H.network=st.network||{}; H.networkError=st.networkError||null; H.modes=st.modes||[]; H.project=st.project||''; H.defaultDir=st.defaultDir||''; H.roleCatalog=st.roleCatalog||[]; H.noProject=!!st.noProject; H.projectsRoot=st.projectsRoot||''; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; H.halted=!!st.halted; H.kinds=st.kinds||[]; H.threads=st.threads||{};
     if(changed){knowledgeReset();H.confirmedProjectGeneration=(H.confirmedProjectGeneration||0)+1;S.chat=[];H.chatList=[];H.pins=[];H.projects=null;const selectedRoom=(H.panes||[]).find(p=>p.id==='room');if(previousRoom&&selectedRoom&&previousRoom.model!==selectedRoom.model)toast('у проекта своя настройка модели: '+esc(modelName(selectedRoom.model)));}
     if(changed&&typeof eventsReset==='function')eventsReset();if(changed&&typeof swarmReset==='function')swarmReset();
     if(changed&&typeof resetJournal==='function'){resetJournal(H.project);if(H.on&&!H.snapshotOnly&&window.psKey==='log')journalFetch()}setTimeout(()=>dispatchEvent(new CustomEvent('live:status')),0);
     if(PAGE==='new') document.querySelectorAll('.status > span:first-child').forEach(el=>{ el.textContent=(H.noProject||!!(S.cx&&S.cx.noFolder))?'без проекта · модель ничего не читает':'папка '+((H.project||'').split('/').filter(Boolean).pop()||'проект')+(st.repo?' · git':'')+' · ролей '+(H.panes||[]).filter(p=>p.id!=='room').length; });   // строка папки — от движка, не статика скетча (Kimi UX-1 №85 п.2)
-    if(typeof sectionSync==='function')sectionSync();if(typeof proposalsSync==='function')proposalsSync();badges();
+    if(typeof sectionSync==='function')sectionSync();if(typeof proposalsSync==='function')proposalsSync();if(typeof profileDraw==='function')profileDraw(st);badges();
     if(PAGE==='new'){ S.ui.pane='room'; S.ui.fresh=true; S.ui.switched=false; save(); }   // стартовый экран — ВСЕГДА без роли · новый чат; выбор роли или чата отсюда = переход в чат (слово владельца 08.10)
     if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); renderWaiting(); }
   async function refreshChats(){ const binding=sendBinding();try{ const r=await api('/api/chats');if(!bindingCurrent(binding))return; H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } if(typeof sideChats==='function') await sideChats();if(window.HARNESS_BOOT)rememberLive(); }
@@ -1939,7 +1951,7 @@
   }
   addEventListener('pageshow',event=>{if(event.persisted)return resumePage()});
   // End TS-09a.1 page lifecycle.
-  window.LIVE={networkMenu,networkPath,networkWarning,firstModelsDraw:()=>{if(PAGE==='first')firstDraw()},subscribeLiveEvents,providerLimitHTML:(id,name,kind,supported)=>{if(!supported)return '<p class="conn-note">Провайдер лимиты не отдаёт.</p>';return spLimitHTML({id,name,kind},true)},stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,operationsDraw,operationAttention,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting,composerState,attachmentsDraw,pickImages,get teamProposals(){return TP;},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};   // для cx.js (поле ввода)
+  window.LIVE={networkMenu,networkPath,networkWarning,profileDraw,firstModelsDraw:()=>{if(PAGE==='first')firstDraw()},subscribeLiveEvents,providerLimitHTML:(id,name,kind,supported)=>{if(!supported)return '<p class="conn-note">Провайдер лимиты не отдаёт.</p>';return spLimitHTML({id,name,kind},true)},stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,operationsDraw,operationAttention,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting,composerState,attachmentsDraw,pickImages,get teamProposals(){return TP;},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};   // для cx.js (поле ввода)
   // TS-09b3: proposal cards always confirm the exact displayed project and version.
   const TP={project:null,generation:0,data:[],loading:false,queued:false,sending:false,error:null,focus:null,kinds:{}};
   const KN={request:0,data:null,binding:null,error:null};
