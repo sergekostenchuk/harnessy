@@ -7,7 +7,7 @@ import {dom} from './ui-dom-test-helpers.ts';
 import {fixture,deferred,until,call,sse} from './test-helpers.ts';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),block=live.slice(live.indexOf('  function md('),live.indexOf('  const paneName='));
 const modelText='## Цель проекта\n\n**Состав команды** и *ответственность*.\n\n| Роль | Модель |\n| --- | --- |\n| Архитектор | Claude |\n| Ревьюер | Codex |\n\n> Проверка проекта\n\n- [x] Цель согласована\n- [ ] Сделать прототип\n\n1. Начать\n2. Завершить\n\n---\n\n```typescript\nconst answer = "<script>";\nconsole.log(answer);\n```';
-function ui(fetcher:any=async()=>{throw Error('unexpected fetch')}){const d=dom('<main></main>');Object.assign(d.document,{body:d.body,documentElement:d.html});const H:any={on:true,project:'/a'},copied:string[]=[];const c:any={H,document:d.document,addEventListener:d.window.addEventListener.bind(d.window),fetch:fetcher,URL,AbortController,navigator:{clipboard:{writeText:async(s:string)=>{copied.push(s)}}},esc:(s:any)=>String(s).replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x]!))};runInContext(block+'globalThis.f={md,hydrateArtifacts,mdToolPaths,mdReset,mdCsv,mdMessageArtifacts,mdFiles};',createContext(c));const draw=(s:string)=>{d.document.querySelector('main')!.innerHTML=c.f.md(s);c.f.hydrateArtifacts()};const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};
+function ui(fetcher:any=async()=>{throw Error('unexpected fetch')}){const d=dom('<main></main>');Object.assign(d.document,{body:d.body,documentElement:d.html});const H:any={on:true,project:'/a'},copied:string[]=[];const c:any={H,document:d.document,addEventListener:d.window.addEventListener.bind(d.window),fetch:fetcher,URL,AbortController,navigator:{clipboard:{writeText:async(s:string)=>{copied.push(s)}}},esc:(s:any)=>String(s).replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x]!))};runInContext(block+'globalThis.f={md,mdView,hydrateArtifacts,mdToolPaths,mdReset,mdCsv,mdMessageArtifacts,mdFiles};',createContext(c));const draw=(s:string)=>{d.document.querySelector('main')!.innerHTML=c.f.md(s);c.f.hydrateArtifacts()};const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};
  // hydrateArtifacts registers its DOM callbacks before ready subscribes to the same metadata promises.
  const ready=async(...paths:string[])=>{const reads=paths.length?paths.map(path=>{const read=c.f.mdFiles.get(H.project+'\n'+path);assert.ok(read,'metadata requested for '+path);return read}):[...c.f.mdFiles.values()];assert.ok(reads.length,'metadata requests exist');await Promise.all(reads)};
  return {...d,H,c,f:c.f,draw,find,copied,ready}}
@@ -43,6 +43,11 @@ test('229: actual streamed file-write event renders an attachment before and aft
 
 test('228: code identifiers stay code; fenced pipes and escaped pipes do not split table cells',()=>{
  const v=ui();v.H.on=false;v.draw('`console.log`\n\n| Name | Value |\n| --- | --- |\n| `a|b` | one\\|two |');assert.equal(v.document.querySelectorAll('[data-artifact-path]').length,0);assert.equal(v.find('code').textContent,'console.log');assert.equal(v.document.querySelectorAll('td').length,2);assert.equal(v.document.querySelectorAll('td')[1]!.textContent,'one|two');
+});
+
+test('TS-27 r2: one Markdown parse keeps visible code literal and drops unrendered table cells',()=>{
+ const v=ui(),inline=v.f.mdView('Literal: `**literal**`'),fenced=v.f.mdView('```js\nconst label = "**literal**";\n```'),hidden='https://hidden.invalid/not-rendered',table=v.f.mdView('| First | Second |\n| --- | --- |\n| Visible | Also visible | '+hidden+' |');
+ assert.match(inline.html,/<code>\*\*literal\*\*<\/code>/);assert.match(inline.visible,/\*\*literal\*\*/);assert.match(fenced.html,/md-code/);assert.equal(fenced.visible,'const label = "**literal**";');assert.doesNotMatch(table.html,/hidden\.invalid/);assert.doesNotMatch(table.visible,/hidden\.invalid/);
 });
 
 import {createRuntime} from '../../runtime/src/runtime.ts';

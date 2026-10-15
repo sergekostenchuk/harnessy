@@ -1,10 +1,12 @@
+import {renderMarkdown,markdownVisible} from '../../context/src/markdown.js';
+
 // Small DOM/event surface for exercising the shipped UI handlers together, without a browser dependency.
 type Listener={fn:(e:any)=>any;capture:boolean};
 const decode=(s:string)=>s.replace(/&(amp|lt|gt|quot);/g,(_,v)=>({amp:'&',lt:'<',gt:'>',quot:'"'}[v as 'amp']));
 const encode=(s:string)=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!));
 const key=(s:string)=>s.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
 export class DomNode {
- tagName:string;attributes:Record<string,string>={};dataset:Record<string,string>={};style:Record<string,string>={};children:DomNode[]=[];parentElement:DomNode|null=null;value='';text='';listeners=new Map<string,Listener[]>();owner:DomNode;activeElement:DomNode|null=null;
+ tagName:string;attributes:Record<string,string>={};dataset:Record<string,string>={};style:Record<string,string>={};children:DomNode[]=[];parentElement:DomNode|null=null;value='';text='';listeners=new Map<string,Listener[]>();owner:DomNode;activeElement:DomNode|null=null;defaultView:any=null;HARNESS_MARKDOWN:any=null;
  constructor(tag='div',owner?:DomNode){this.tagName=tag.toUpperCase();this.owner=owner??this}
  get className(){return this.attributes.class??''}set className(v:string){this.attributes.class=v}
  get id(){return this.attributes.id??''}set id(v:string){this.attributes.id=v}
@@ -53,4 +55,4 @@ export class DomNode {
   for(const n of [...path].reverse()){invoke(n,true);if(stopped)break}if(!stopped)for(const n of path){invoke(n,false);if(stopped)break}await Promise.all(pending);return {prevented,stopped}
  }
 }
-export function dom(html:string){const document=new DomNode('#document'),window=new DomNode('#window',document);document.parentElement=window;document.innerHTML='<html><body>'+html+'</body></html>';return {document,window,html:document.querySelector('html')!,body:document.querySelector('body')!}}
+export function dom(html:string){const document=new DomNode('#document'),window=new DomNode('#window',document);document.parentElement=window;document.defaultView=window;window.HARNESS_MARKDOWN={renderMarkdown,markdownVisible};document.innerHTML='<html><body>'+html+'</body></html>';return {document,window,html:document.querySelector('html')!,body:document.querySelector('body')!}}

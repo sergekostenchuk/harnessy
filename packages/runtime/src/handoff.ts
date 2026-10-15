@@ -1,4 +1,4 @@
-import {handoffPrompt} from '@harnessy/context';
+import {handoffPrompt,markdownVisible} from '@harnessy/context';
 import {pythonTrim,type Initiator} from '@harnessy/journal';
 import {RuntimeError,slice} from './errors.ts';
 import {owner} from './operations.ts';
@@ -7,19 +7,6 @@ type QuoteInput={seq:number;text:string;comment:string};
 const normalized=(value:string)=>value.replace(/\r\n?/g,'\n');
 const quoteBlock=(text:string,index:number)=>normalized(text).split('\n').map((line,i)=>(i?'':'['+index+'] ') +'> '+line).join('\n');
 const quoteComparable=(value:string)=>normalized(value).replace(/\s+/g,' ').trim();
-function visibleMarkdown(value:string):string {
- let text=normalized(value)
-  .replace(/^\s*(?:`{3,}|~{3,})[^\n]*\n([\s\S]*?)^\s*(?:`{3,}|~{3,})\s*$/gm,'$1')
-  .replace(/^\s{0,3}#{1,6}\s+/gm,'').replace(/^\s*>\s?/gm,'').replace(/^\s*(?:[-+*]|\d+[.)])\s+/gm,'')
-  .replace(/^\s*\[[ xX]\]\s+/gm,'').replace(/^\s*\|?\s*:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)+\s*\|?\s*$/gm,'')
-  .replace(/^\s*(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/gm,'');
- const inline=/\\([\\`*_\[\]{}()#+.!|>-])|(`+)([^`]*?)\2|(!?)\[([^\]\n]*)\]\((<[^>\n]*>|[^\s)]*)(?:\s+"[^"\n]*")?\)|\*\*([^*\n]+)\*\*|__([^_\n]+)__|\*([^*\n]+)\*|_([^_\n]+)_|<((?:https?:\/\/|mailto:)[^<>\s]+)>/g;
- for(let pass=0;pass<8;pass++){
-  const next=text.replace(inline,(_all,escaped,_ticks,code,_image,label,target,strong,under,emphasis,italic,link)=>escaped!==undefined?escaped:code!==undefined?code:label!==undefined?(label||(target||'').replace(/^<|>$/g,'')):strong!==undefined?strong:under!==undefined?under:emphasis!==undefined?emphasis:italic!==undefined?italic:link);
-  if(next===text)break;text=next;
- }
- return text.replace(/(^|\n)\s*\|/g,'$1').replace(/\|\s*(?=\n|$)/g,'').replace(/\s*\|\s*/g,' ');
-}
 function quoteTime(seconds:number):string {
  if(!Number.isFinite(seconds)||seconds<=0)return '';
  const date=new Date(seconds*1000);if(!Number.isFinite(date.getTime()))return '';const two=(value:number)=>String(value).padStart(2,'0');
@@ -48,7 +35,7 @@ export function handoff(runtime:Runtime,input:{to?:unknown;from?:unknown;kind?:u
    if(!value||typeof value!=='object'||!Number.isSafeInteger((value as any).seq)||(value as any).seq<=0||typeof (value as any).text!=='string'||typeof ((value as any).comment??'')!=='string')throw new RuntimeError('selection_invalid','неверная форма выбранной цитаты',400);
    const selected=normalized(pythonTrim((value as any).text)),comment=normalized(pythonTrim((value as any).comment??''));
    if(!selected||[...selected].length>10000||[...comment].length>4000)throw new RuntimeError('selection_invalid','цитата или комментарий слишком длинные',400);
-   const message=bySeq.get((value as any).seq),visible=message?.role==='ai'?visibleMarkdown(message.text):normalized(message?.text||'');
+   const message=bySeq.get((value as any).seq),visible=message?.role==='ai'?markdownVisible(message.text):normalized(message?.text||'');
    if(!message||!['me','ai'].includes(message.role)||!quoteComparable(visible).includes(quoteComparable(selected)))throw new RuntimeError('selection_invalid','цитата не принадлежит выбранной реплике',400);
    return {seq:(value as any).seq,text:selected,comment};
   });
