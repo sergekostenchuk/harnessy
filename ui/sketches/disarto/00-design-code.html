@@ -520,6 +520,35 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
         </article>
       </div>
 
+      <h3 class="conn-section-title" id="limits-widget-spec">ИСПОЛЬЗОВАНО · компактный виджет (скетч 27)</h3>
+      <style>
+        .lw-demo{display:grid;grid-template-columns:repeat(3,230px);gap:18px;align-items:start}
+        .lw{padding:9px 10px;border:1px solid var(--line2);border-radius:9px;background:var(--raised);cursor:pointer;width:230px}
+        .lw:hover,.lw:focus-visible{border-color:rgba(194,122,52,.6);outline:0}
+        .lw .cap{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px;display:flex;justify-content:space-between}
+        .lw .cap i{font-style:normal;color:var(--ink3)}
+        .lw .row{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;color:var(--ink2);margin-bottom:3px}
+        .lw .row b{font:500 11px var(--mono);color:var(--ink)}.lw .row b.warn{color:var(--warn,#e0b23c)}.lw .row b.bad{color:var(--bad-fill,#a3304b)}
+        .lw .row .p{font:9.5px var(--mono);color:var(--ink3);margin-left:5px}
+        .lw .ticks{display:flex;gap:2px;margin-bottom:7px}.lw .ticks:last-child{margin-bottom:0}
+        .lw .ticks i{flex:1;height:4px;border-radius:1px;background:var(--line2)}.lw .ticks i.on{background:var(--ok)}.lw .ticks.warn i.on{background:var(--warn,#e0b23c)}.lw .ticks.bad i.on{background:var(--bad-fill,#a3304b)}
+        .lw .row.dim span,.lw .row.dim b{color:var(--ink3)}
+      </style>
+      <p class="conn-note"><b>Строки:</b> Claude и Codex — только если подключены (не подключён → строки нет вовсе); третья — самый активный провайдер по статистике ходов за 7 дней (<code>/api/spend?period=7 → byVendor</code>, без Claude и Codex); нет такого — строки нет. <b>Число</b> — ОСТАТОК окна (100 − percentUsed). <b>Период:</b> W неделя · M месяц · 5h — только если недельного окна нет. <b>Нет данных по лимиту</b> (программа не отдаёт, источник не подключён) → 100 %, серый тон, пустая полоска, «—». Весь блок кликабелен → попап «Все лимиты». Внутри — ни подписей о свежести, ни кнопок, ни ссылок.</p>
+      <div class="lw-demo">
+        <div class="lw" role="button" tabindex="0" aria-label="Все лимиты" data-state="lw-now"><div class="cap">Осталось</div>
+          <div class="row"><span>Claude</span><span><b class="warn">16 %</b><span class="p">W</span></span></div><div class="ticks warn"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="row"><span>Codex</span><span><b>96 %</b><span class="p">W</span></span></div><div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div><div class="row dim" title="лимит программой не отдаётся · считаем 100 %"><span>Devin</span><span><b>100 %</b><span class="p">—</span></span></div><div class="ticks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+        <div class="lw" role="button" tabindex="0" aria-label="Все лимиты" data-state="lw-sample"><div class="cap">Осталось <i>образец</i></div>
+          <div class="row"><span>Claude</span><span><b class="bad">4 %</b><span class="p">W</span></span></div><div class="ticks bad"><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="row"><span>Codex</span><span><b>58 %</b><span class="p">5h</span></span></div><div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="row"><span>Copilot</span><span><b>100 %</b><span class="p">M</span></span></div><div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+        </div>
+        <div class="lw" role="button" tabindex="0" aria-label="Все лимиты" data-state="lw-one"><div class="cap">Осталось <i>образец</i></div>
+          <div class="row"><span>Claude</span><span><b>71 %</b><span class="p">W</span></span></div><div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+      <p class="conn-note">Слева — сейчас по данным движка 15.10 09:48: Claude по неделе почти исчерпан (жёлтый), Codex свободен, третий по активности — Devin (13 ходов за неделю), лимита у него нет → 100 %. В центре — образец: Claude &lt; 10 % (красный), у Codex недельного окна нет → 5h, Copilot по месяцу. Справа — подключён только Claude: одна строка. Тон: ≥ 25 % зелёный · &lt; 25 % жёлтый · &lt; 10 % красный.</p>
+      <p class="conn-note"><b>Попап «Все лимиты»</b> (по клику): Claude — три окна отдельно: <b>Fable · неделя</b>, <b>остальные · неделя</b>, <b>5 ч</b> (источник claude.ai /usage: seven_day_fable, seven_day, five_hour); Codex — недельное окно и кредиты; затем до трёх самых активных по статистике (если их два — два, один — один, никого — никого); Claude и Codex — только если подключены. У каждого — остаток, сброс через, свежесть данных, источник. <b>Дни до оплаты</b> — одной строкой «продление через N д · дата»; сейчас в движке источника нет (claude.ai /usage и Codex app-server дату продления не отдают) → в скетче помечено «макет».</p>
+
       <h3 class="conn-section-title">ИСПОЛЬЗОВАНО · Все лимиты</h3>
       <div class="conn-spec-grid">
         <article class="conn-program"><h3>ИСПОЛЬЗОВАНО</h3><p class="conn-note">Образцы месячного окна и отказа источника.</p><div class="conn-limit-example">
