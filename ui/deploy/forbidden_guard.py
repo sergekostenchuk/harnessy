@@ -158,10 +158,9 @@ def _scan_utf16(
             scanned_until = end
             if end - start > MAX_UTF16_RUN:
                 raise _container_error(display, "UTF-16 превышает предел размера")
-            try:
-                decoded = data[start:end].decode(encoding, errors="strict")
-            except UnicodeDecodeError:
-                continue
+            # Битая кодовая единица рядом с секретом не должна отключать проверку: заменяем её U+FFFD
+            # и проверяем остальное (с BOM повреждение по-прежнему даёт отказ выше).
+            decoded = data[start:end].decode(encoding, errors="replace")
             found = record(decoded) or found
     return found
 

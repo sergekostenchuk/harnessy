@@ -50,6 +50,11 @@ test('TS-32 r2: guard opens names, PNG text, UTF-16, gzip in ASAR and refuses un
  blocked('unicode-be.strings',Buffer.from(unicodePath,'utf16le').swap16());
  blocked('unicode-le-bom.strings',Buffer.from('\uFEFF'+unicodePath,'utf16le'));
  blocked('unicode-be-bom.strings',Buffer.from('\uFEFF'+unicodePath,'utf16le').swap16());
+ const secret='sk-review-0123456789abcdefghijklmnop';
+ blocked('surrogate-trail-le.strings',Buffer.from(secret+'\uDC00','utf16le'));
+ blocked('surrogate-trail-be.strings',Buffer.from(secret+'\uDC00','utf16le').swap16());
+ blocked('surrogate-lead-le.strings',Buffer.from('\uD800'+secret,'utf16le'));
+ blocked('surrogate-lead-be.strings',Buffer.from('\uD800'+secret,'utf16le').swap16());
  blocked('app.asar',asar({'profile.gz':gzipSync(Buffer.from(marker))}));
  blocked('bomb.gz',gzipSync(Buffer.alloc(16*1024*1024+1,65)),/предел/);
  blocked('unknown.zip',Buffer.from('PK\x03\x04clean'),/неизвестный тип контейнера/);
