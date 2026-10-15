@@ -42,6 +42,13 @@ test('259: process output/time bounds and UTF-8 failures terminate instead of re
  await assert.rejects(executeCli({...base,args:['-e','setInterval(()=>{},1000)'],timeoutMs:50},new AbortController().signal),{code:'transport_lost'});
 });
 
+test('TS-30 r2: packaged generic CLI bridge inherits Electron Node mode',async t=>{
+ const before=process.env.ELECTRON_RUN_AS_NODE;process.env.ELECTRON_RUN_AS_NODE='1';
+ t.after(()=>{if(before===undefined)delete process.env.ELECTRON_RUN_AS_NODE;else process.env.ELECTRON_RUN_AS_NODE=before});
+ const f=await cliFixture(t);await f.provider.runTurn(f.seat,'hello',f.ctx);
+ assert.equal(f.capture().find(row=>row.configPath)!.runAsNode,'1');
+});
+
 test('259: all mode is an explicit flag choice, metadata nonzero exit is refused unless descriptor declares it',async t=>{
  const f=await cliFixture(t);f.seat.mode='all';await f.provider.runTurn(f.seat,'hello',f.ctx);const args=f.capture().find(x=>x.action==='turn')!.args as string[];assert.ok(args.includes('all'));
  const deps={cwd:f.dir,env:f.env,execute:async()=>({stdout:'{"loggedIn":false}',stderr:'',code:1,signal:null})},p=new CliProvider(f.description,deps);t.after(()=>p.close());await assert.rejects(p.auth(),{code:'protocol'});

@@ -23,7 +23,7 @@ else if(args[0]==='sessions')output([{id:'session-1',title:'fixture',updated:1}]
 else if(args[0]==='history')output([{role:'ai',text:'fixture answer'}]);
 else if(args[0]==='turn'){
  let raw='';for await(const chunk of process.stdin)raw+=chunk;const input=JSON.parse(raw),path=get('--mcp-config'),server=JSON.parse(readFileSync(path,'utf8')).mcpServers.panes;
- log({configPath:path,mode:statSync(path).mode&511,directoryMode:statSync(new URL('.', 'file://'+path)).mode&511,input,serverCommand:server.command,serverArgs:server.args,tokenPresent:!!server.env.PANE_TOKEN});
+ log({configPath:path,mode:statSync(path).mode&511,directoryMode:statSync(new URL('.', 'file://'+path)).mode&511,input,serverCommand:server.command,serverArgs:server.args,tokenPresent:!!server.env.PANE_TOKEN,runAsNode:server.env.ELECTRON_RUN_AS_NODE??null});
  const format=get('--format'),emit=e=>{if(format==='stream-json')output(e)};
  if(scenario==='hang'){setInterval(()=>{},1000)}else if(scenario==='denied'){console.error('fixture permission denied');process.exitCode=23}
  else if(scenario==='crash'){console.error('fixture crash');process.exitCode=7}

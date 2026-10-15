@@ -24,3 +24,13 @@ test('own bridge stays enabled and empty roots override inherited write access',
  const parsed=parse(line) as {sandbox_workspace_write:{writable_roots:unknown}};
  assert.deepEqual(parsed.sandbox_workspace_write.writable_roots,[]);
 });
+
+test('TS-30 r2: packaged Codex bridge inherits Electron Node mode',t=>{
+ const before=process.env.ELECTRON_RUN_AS_NODE;process.env.ELECTRON_RUN_AS_NODE='1';
+ t.after(()=>{if(before===undefined)delete process.env.ELECTRON_RUN_AS_NODE;else process.env.ELECTRON_RUN_AS_NODE=before});
+ const f=fixture(),values=overrides(f.seat,f.ctx,'token',[]),line=values.find(s=>s.startsWith('mcp_servers.panes.env='))!;
+ const parsed=parse(line) as {mcp_servers:{panes:{env:Record<string,string>}}};
+ assert.equal(parsed.mcp_servers.panes.env.ELECTRON_RUN_AS_NODE,'1');
+ assert.equal(parsed.mcp_servers.panes.env.PANE_TOKEN,'token');
+ assert.equal(parsed.mcp_servers.panes.env.PANE_ID,'worker');
+});

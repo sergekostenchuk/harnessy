@@ -1,5 +1,6 @@
 import {safeDiagnostic} from '../diagnostic.ts';
 import {limitsReason} from '../limits-reason.ts';
+import {nodeChildEnv} from '../node-child.ts';
 import {mkdtemp,writeFile,rm,open} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -136,7 +137,7 @@ export class CliProvider {
    if(this.d.mcp){
     token=randomBytes(32).toString('hex');ctx.registerProcessToken(token);registered=true;
     directory=await mkdtemp(join(this.deps.temporaryDirectory,'harnessy-cli-'));const path=join(directory,'mcp.json');
-    const server:CliMcpServer={command:process.execPath,args:[fileURLToPath(new URL('../../bin/pane-mcp.mjs',import.meta.url))],env:{PANE_ID:seat.id,APP_URL:ctx.appUrl,PANE_TOKEN:token,SEATS:input.peers.map(p=>p.id+':'+p.label.replace(/[;\r\n]/g,' ')).join(';')}};
+    const server:CliMcpServer={command:process.execPath,args:[fileURLToPath(new URL('../../bin/pane-mcp.mjs',import.meta.url))],env:nodeChildEnv({PANE_ID:seat.id,APP_URL:ctx.appUrl,PANE_TOKEN:token,SEATS:input.peers.map(p=>p.id+':'+p.label.replace(/[;\r\n]/g,' ')).join(';')})};
     const config=this.d.mcp.serialize(server,input);mcpArgs=this.d.mcp.args(path,server,input);configEnv=this.d.mcp.env?.(path)??{};
     if(!text(config)||!config||!strings(mcpArgs))throw protocol('нет конфигурации MCP');
     await writeFile(path,config,{encoding:'utf8',mode:0o600,flag:'wx'});

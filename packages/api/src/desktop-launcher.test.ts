@@ -48,15 +48,18 @@ test('TS-30: desktop shutdown owns the child and clean first launch keeps the TS
  assert.match(engine,/ELECTRON_RUN_AS_NODE:'1'/);assert.match(engine,/stdio:\['ignore',output,output,'ipc'\]/);assert.match(entry,/process\.once\('disconnect',stop\)/);
 });
 
-test('TS-30: alpha acknowledgement is exact-version and build metadata stays visibly alpha',()=>{
- const release=requireFromTest('../../../ui/deploy/release.js'),values=new Map<string,string>(),storage={getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>values.set(key,value)};
+test('TS-30 r2: alpha acknowledgement is exact-version owner state independent of runtime port',async()=>{
+ const release=requireFromTest('../../../ui/deploy/release.js'),settings:Record<string,unknown>={},calls:{origin:string;path:string;method:string}[]=[];
+ const request=(origin:string)=>async(pathname:string,options:any={})=>{const method=options.method??'GET';calls.push({origin,path:pathname,method});if(method==='POST'){const body=JSON.parse(options.body);Object.assign(settings,body.patch);return {ok:true,json:async()=>({ok:true,saved:{...settings}})}}return {ok:true,json:async()=>({ok:true,owner:{...settings}})}};
  const a={channel:'alpha',version:'0.1.0-alpha',label:'alpha · 0.1.0'},b={channel:'alpha',version:'0.1.1-alpha',label:'alpha · 0.1.1'};
- assert.equal(release.accepted(storage,a),false);release.remember(storage,a);assert.equal(release.accepted(storage,a),true);assert.equal(release.accepted(storage,b),false);assert.equal(release.releaseValue({channel:'beta',version:'0.1.0-alpha'}),null);
+ assert.equal(await release.accepted(request('http://127.0.0.1:3778'),a),false);assert.equal(await release.remember(request('http://127.0.0.1:3778'),a),true);
+ assert.equal(await release.accepted(request('http://127.0.0.1:3779'),a),true);assert.equal(await release.accepted(request('http://127.0.0.1:3779'),b),false);
+ assert.deepEqual(calls.map(c=>[c.origin,c.path,c.method]),[['http://127.0.0.1:3778','/api/settings','GET'],['http://127.0.0.1:3778','/api/settings','POST'],['http://127.0.0.1:3779','/api/settings','GET'],['http://127.0.0.1:3779','/api/settings','GET']]);
+ assert.equal(release.acceptanceKey(a),'releaseUnderstood_0_1_0_alpha');assert.equal(release.releaseValue({channel:'beta',version:'0.1.0-alpha'}),null);assert.doesNotMatch(fs.readFileSync(new URL('../../../ui/deploy/release.js',import.meta.url),'utf8'),/localStorage/);
  const desktop=JSON.parse(fs.readFileSync(new URL('../../../ui/desktop/package.json',import.meta.url),'utf8')),builder=fs.readFileSync(new URL('../../../ui/desktop/electron-builder.yml',import.meta.url),'utf8'),build=fs.readFileSync(new URL('../../../ui/desktop/build-engine.mjs',import.meta.url),'utf8'),testers=fs.readFileSync(new URL('../../../ui/desktop/TESTERS.md',import.meta.url),'utf8');
  assert.match(desktop.version,/^0\.1\.\d+-alpha/);assert.equal(desktop.productName,'Harnessy-alpha');assert.match(desktop.scripts.dist,/electron-builder --mac --arm64/);assert.match(builder,/asar: true/);assert.match(builder,/target: dmg/);assert.match(builder,/target: zip/);assert.match(builder,/from: engine\/node_modules[\s\S]*to: engine\/node_modules/);assert.match(builder,/from: engine[\s\S]*from: \.\.\/deploy\/out\/site/);assert.match(builder,/Harnessy-alpha-/);
  assert.match(build,/rewriteRelativeImportExtensions|tsconfig\.engine/);assert.match(build,/unsafeFiles/);assert.match(testers,/Node\.js не нужен/);assert.match(testers,/связке ключей macOS/);assert.match(testers,/server-desktop\.log/);
 });
-
 test('TS-25: desktop menu follows edit state and keeps quote/image actions on their exact context',()=>{
  const editable=contextMenuTemplate({isEditable:true,editFlags:{canCut:false,canCopy:true,canPaste:true,canSelectAll:false}},{},{});
  assert.deepEqual(editable.map((item:any)=>[item.label,item.role,item.enabled]),[['Вырезать','cut',false],['Копировать','copy',true],['Вставить','paste',true],['Выделить всё','selectAll',false]]);
