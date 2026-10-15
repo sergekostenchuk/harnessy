@@ -354,7 +354,7 @@ html[data-m] .cx-pop { position:fixed; left:12px !important; right:12px; width:a
 .cx-chip.empty { border-style:dashed; } .cx-chip.empty b { color:var(--ink2); font-weight:400; }
 .cx-path { font:12px var(--mono); }
 /* живая лента без нарисованного примера; чекбоксы и панель передачи контекста */
-html[data-proto] .feed .col.live-demo-off > :not(.live-msg):not(.live-sep):not(.live-cur):not(.live-ask):not([data-live-operations]) { display:none !important; }
+html[data-proto] .feed .col.live-demo-off > :not(.live-msg):not(.live-sep):not(.live-cur):not(.live-ask):not(.live-guidance):not([data-live-operations]) { display:none !important; }
 .live-sep a[data-demo] { color:var(--ink3); }
 .live-ck { display:inline-flex; align-items:center; margin-right:8px; vertical-align:middle; } .live-ck input { width:14px; height:14px; accent-color:var(--accent); cursor:pointer; margin:0; }
 .ai.live-msg .live-ck { position:absolute; left:-26px; top:4px; } .ai.live-msg { position:relative; }
@@ -758,9 +758,12 @@ html[data-proto][data-page="first"] .fr .feed .col { width:100%; max-width:none;
 html[data-proto][data-page="first"] .fr .team-proposals { margin:12px 0; }
 html[data-proto][data-page="first"] .first-team-actions { display:flex; flex-wrap:wrap; gap:8px; }
 html[data-proto][data-page="first"] [data-first-door] .done { margin-top:12px; }
+html[data-proto][data-page="first"] .first-equal { display:grid; grid-template-columns:auto minmax(0,1fr) minmax(0,1fr); gap:8px; }
+html[data-proto][data-page="first"] .first-equal .btn { width:100%; white-space:normal; }
 html[data-proto][data-page="first"] [aria-disabled="true"] { opacity:.55; }
 html[data-proto][data-page="first"] .fr a { color:var(--accent); }
 html[data-proto][data-page="first"] .fr .kv b { overflow-wrap:anywhere; }
+.live-guidance{position:relative;width:min(720px,calc(100% - 32px));margin:12px auto;padding:14px 16px;border:1px solid var(--line2);border-radius:12px;background:var(--panel);color:var(--ink);box-sizing:border-box}.live-guidance b{display:block;padding-right:28px;font-weight:600}.live-guidance p{margin:6px 0 12px;color:var(--ink2);font-size:12.5px;line-height:1.45}.live-guidance .act{display:flex;gap:8px;flex-wrap:wrap}.live-guidance-close{position:absolute;right:10px;top:8px;width:28px;height:28px;border:0;background:transparent;color:var(--ink3);font-size:18px;cursor:pointer}.live-guidance-close:hover{color:var(--ink)}html[data-proto][data-page="new"] .nc>.live-guidance{margin:0 0 12px;flex:none}html[data-m] .live-guidance{width:calc(100% - 20px)}
 
 /* TS-20e: connection components, graphite surfaces and cognac actions from sketch 11. */
 html[data-page="conn"] [data-connections-components] { min-width:0; }

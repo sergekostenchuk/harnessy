@@ -398,7 +398,7 @@
     if(PAGE==='new') document.querySelectorAll('.status > span:first-child').forEach(el=>{ el.textContent=(H.noProject||!!(S.cx&&S.cx.noFolder))?'без проекта · модель ничего не читает':'папка '+((H.project||'').split('/').filter(Boolean).pop()||'проект')+(st.repo?' · git':'')+' · ролей '+(H.panes||[]).filter(p=>p.id!=='room').length; });   // строка папки — от движка, не статика скетча (Kimi UX-1 №85 п.2)
     if(typeof sectionSync==='function')sectionSync();if(typeof proposalsSync==='function')proposalsSync();badges();
     if(PAGE==='new'){ S.ui.pane='room'; S.ui.fresh=true; S.ui.switched=false; save(); }   // стартовый экран — ВСЕГДА без роли · новый чат; выбор роли или чата отсюда = переход в чат (слово владельца 08.10)
-    if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); renderWaiting(); }
+    if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); renderWaiting();if(typeof chatGuidanceDraw==='function')chatGuidanceDraw(); }
   async function refreshChats(){ const binding=sendBinding();try{ const r=await api('/api/chats');if(!bindingCurrent(binding))return; H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } if(typeof sideChats==='function') await sideChats();if(window.HARNESS_BOOT)rememberLive(); }
   async function refreshStatus(connected=false){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){} if(!st||!Array.isArray(st.panes))return null; if(applyStatus(st,request,connected)===false)return null; await refreshChats(); hStatus(); if(window.CX) CX.render(); return st; }
   // лента активного чата — из харнесса (один источник правды для Electron, браузера и сервера); цена хода у старых реплик неизвестна
@@ -509,8 +509,17 @@
   if(window.harnessy&&typeof window.harnessy.onTransfer==='function')window.harnessy.onTransfer(text=>{const snapshot=selectionForText(text);if(snapshot)transferSelection(snapshot,quoteButton||document.body)});
   const cols=()=>document.querySelectorAll('.feed .col');
   function scrollEnd(){ document.querySelectorAll('.feed').forEach(f=>f.scrollTop=f.scrollHeight); if(document.documentElement.hasAttribute('data-m')) window.scrollTo(0,document.documentElement.scrollHeight); }
+  function guidanceState(){if(!S.chatGuidance||typeof S.chatGuidance!=='object'||Array.isArray(S.chatGuidance))S.chatGuidance={model:{},orchestrator:{}};if(!S.chatGuidance.model||typeof S.chatGuidance.model!=='object'||Array.isArray(S.chatGuidance.model))S.chatGuidance.model={};if(!S.chatGuidance.orchestrator||typeof S.chatGuidance.orchestrator!=='object'||Array.isArray(S.chatGuidance.orchestrator))S.chatGuidance.orchestrator={};return S.chatGuidance}
+  function guidanceKey(binding=sendBinding()){return JSON.stringify([binding.project||'',binding.pane||'room',binding.chat||null])}
+  let orchestratorOfferForced=null;
+  function chatGuidanceDraw(){document.querySelectorAll('[data-model-guidance], [data-orchestrator-guidance]').forEach(node=>node.remove());if(!H.on||H.snapshotOnly||!['new','chat','first'].includes(PAGE))return;const binding=sendBinding(),key=guidanceKey(binding),state=guidanceState(),pane=(H.panes||[]).find(p=>p.id===binding.pane)||null;
+    if((PAGE==='new'||PAGE==='chat')&&(!pane||!pane.model)&&!state.model[key]){const html='<section class="live-guidance" data-model-guidance role="status"><button type="button" class="live-guidance-close" data-model-guidance-close aria-label="Закрыть">×</button><b>Подключите модель, когда захотите</b><p>Чат уже доступен. Выберите модель перед первым сообщением.</p><a class="btn sm ghost" href="11-connections.html">Подключения</a></section>',host=PAGE==='new'?document.querySelector('.frame.cur .nc')||document.querySelector('.nc'):document.querySelector('.frame.cur .feed .col')||document.querySelector('.frame .feed .col');if(host){if(PAGE==='new'){const holder=document.createElement('div'),box=host.querySelector('.box');holder.innerHTML=html;host.insertBefore(holder.firstElementChild,box&&box.previousElementSibling||box||host.firstChild)}else host.insertAdjacentHTML('beforeend',html)}}
+    const answered=S.chat.some(message=>message&&message.src==='live'&&message.role!=='me'&&message.pane==='room'),forced=orchestratorOfferForced===key,room=binding.pane==='room'&&!!binding.chat,hasOrchestrator=(H.panes||[]).some(p=>p.kind==='orchestrator');if(room&&!hasOrchestrator&&(answered||forced)&&!state.orchestrator[key]){const host=document.querySelector('.frame.cur .feed .col')||document.querySelector('.frame .feed .col');if(host)host.insertAdjacentHTML('beforeend','<section class="live-guidance live-orchestrator-guidance" data-orchestrator-guidance role="status"><b>Назначить оркестратора этому разговору?</b><p>Оркестратор сохранит разговор и сможет предложить команду. Это можно сделать позже.</p><div class="act"><button type="button" class="btn sm p" data-orchestrator-guidance-accept>Назначить</button><button type="button" class="btn sm ghost" data-orchestrator-guidance-later>Не сейчас</button></div></section>')}
+  }
+  function showOrchestratorOffer(){const binding=sendBinding();if(binding.pane!=='room'||!binding.chat){toast('Выберите разговор без роли');return false}const key=guidanceKey(binding),state=guidanceState();delete state.orchestrator[key];orchestratorOfferForced=key;save();chatGuidanceDraw();document.querySelector('[data-orchestrator-guidance]')?.scrollIntoView?.({block:'nearest'});return true}
+  document.addEventListener('click',async event=>{const modelClose=event.target.closest('[data-model-guidance-close]'),later=event.target.closest('[data-orchestrator-guidance-later]'),accept=event.target.closest('[data-orchestrator-guidance-accept]');if(!modelClose&&!later&&!accept)return;event.preventDefault();event.stopImmediatePropagation();const binding=sendBinding(),key=guidanceKey(binding),state=guidanceState();if(modelClose){state.model[key]=true;save();chatGuidanceDraw();return}if(later){state.orchestrator[key]=true;orchestratorOfferForced=null;save();chatGuidanceDraw();return}if(!accept.disabled){accept.disabled=true;let promoted=false;try{promoted=await promoteConversation(accept.closest('[data-orchestrator-guidance]')||accept,binding)}finally{accept.disabled=false;if(promoted)chatGuidanceDraw()}}},true);
   function render(){ cols().forEach(c=>{ c.querySelectorAll('.live-msg, .live-sep').forEach(x=>x.remove()); c.classList.toggle('live-demo-off',H.on||!S.ui.demo);
-      c.insertAdjacentHTML('beforeend','<div class="live-sep">'+(H.on?(S.chat.length?'ваш разговор · через харнесс':'разговор пуст'):(S.chat.length?'ваш разговор в прототипе · <a data-clear>очистить</a> · ':'разговор пуст · ')+'<a data-demo>'+(S.ui.demo?'скрыть пример':'пример разговора')+'</a>')+'</div>'+S.chat.map(bubble).join('')); }); updateMessageTimes();hydrateArtifacts();selBar(); drawLive();if(typeof operationsDraw==='function')operationsDraw(); if(S.chat.length) scrollEnd(); }
+      c.insertAdjacentHTML('beforeend','<div class="live-sep">'+(H.on?(S.chat.length?'ваш разговор · через харнесс':'разговор пуст'):(S.chat.length?'ваш разговор в прототипе · <a data-clear>очистить</a> · ':'разговор пуст · ')+'<a data-demo>'+(S.ui.demo?'скрыть пример':'пример разговора')+'</a>')+'</div>'+S.chat.map(bubble).join('')); }); updateMessageTimes();hydrateArtifacts();selBar(); drawLive();chatGuidanceDraw();if(typeof operationsDraw==='function')operationsDraw(); if(S.chat.length) scrollEnd(); }
   document.addEventListener('click',e=>{ if(e.target.closest('a[data-demo]')){ S.ui.demo=!S.ui.demo; save(); render(); } });
   let attachmentDialog=null,attachmentOpener=null;
   function closeAttachmentDialog(){if(!attachmentDialog)return;attachmentDialog.close();attachmentDialog.remove();attachmentDialog=null;if(attachmentOpener&&attachmentOpener.isConnected)attachmentOpener.focus();attachmentOpener=null}
@@ -662,7 +671,7 @@
     if(kind==='copy'){ try{ await navigator.clipboard.writeText(m.text||la.closest('.live-msg').innerText);const label=la.textContent;la.textContent='скопировано';setTimeout(()=>{if(la.isConnected)la.textContent=label},1200);toast('Скопировано'); }catch(x){ toast('Не удалось скопировать'); } return; }
     if(!H.on) { toast('Харнесс не подключён'); return; }
     if(kind==='handoff-none'){ toast('В команде пока один собеседник — сначала назначьте роль'); return; }
-    if(kind==='assign'){if(promotionBusy){operationAttention('promotion');return}const binding=sendBinding();laMenu(anchor,'Назначить оркестратора этому разговору',[{t:'Оркестратор',r:'Сохранит разговор и предложит команду',dis:binding.pane!=='room'&&!((H.chatList||[]).find(c=>c.id===binding.chat)||{}).promotion?.pending}],()=>promoteConversation(anchor,binding));return}
+    if(kind==='assign'){if(promotionBusy){operationAttention('promotion');return}showOrchestratorOffer();return}
     if(kind==='handoff'){ const me=H.pane?H.pane.id:'room'; const items=(H.panes||[]).filter(p=>p.id!=='room'&&p.id!==me).map(p=>({t:esc(paneName(p)),r:esc(modelName(p.model))+(p.busy?' · отвечает':''),id:p.id}));
       const binding=sendBinding();laMulti(anchor,'передать контекст в чат · адресат прочитает и ответит (один ход модели)',items,'Выбрать сообщения',picked=>{if(bindingCurrent(binding)&&!leftPage)selStart(picked.map(x=>x.id),{sw:false})});return;}
     // новые проекты — в корень проектов движка, не рядом с текущим (урок 08.10: проект лёг внутрь репозитория harnessy)
@@ -701,7 +710,7 @@
   async function onSend(v,ta,binding=sendBinding(),providedAttachments=null,providedKey=null){v=renumberQuotes(String(v||'').trim());const provided=Array.isArray(providedAttachments),key=attachmentKey(binding),draftKey=provided&&typeof providedKey==='string'?providedKey:key;let refs=provided?providedAttachments.map(attachmentRef).filter(Boolean).slice(0,ATTACHMENT_LIMIT):[];
     const restoreDraft=reason=>{S.draft=ta&&ta.value||v;if(provided&&refs.length)attachmentRestore(draftKey,refs);if(reason)ATT.errors.set(draftKey,reason);attachmentChanged(draftKey);return false};
     S.draft=ta&&ta.value||v;save();if(H.on&&(!await settingsReady(binding)||!bindingCurrent(binding))){if(leftPage)return restoreDraft();toast('Настройка или разговор изменились; сообщение осталось в черновике');return restoreDraft(); }
-    if(H.on&&!(H.panes||[]).some(p=>p.id===binding.pane&&p.model)){toast('Сначала выберите модель разговора');return restoreDraft()}
+    if(H.on&&!(H.panes||[]).some(p=>p.id===binding.pane&&p.model)){toast('Сначала выберите модель');return restoreDraft()}
     const state=attachmentState(ta&&ta.closest?ta.closest('.box'):null,binding);if(!provided)refs=state.ready;
     if(!provided&&(state.pending||state.invalid||state.unsupported)||refs.length&&!attachmentModelSupports(binding))return restoreDraft(state.reason||'Эта модель не видит изображения — выберите другую или уберите картинку');
     if(ta&&renumberQuotes(ta.value.trim())!==v){S.draft=ta.value;save();return false} if(ta){ta.value='';ta.style.height=''} log('чат','Вопрос: '+(v?v.slice(0,90):refs.length+' изображений'));
@@ -1511,8 +1520,8 @@
       card.setAttribute('data-first-program',row?row.id:'');if(row)title.textContent=row.title;else title.textContent=card.__title;
       const support=row?firstSupport(row.id):{ok:false,reason:'нет данных · подключите модель в «Подключениях»'},rows=row?models.filter(m=>m.vendor===row.id):[];
       const html='<option value="">Выберите модель</option>'+rows.map(m=>'<option value="'+esc(m.id)+'"'+(!support.ok?' disabled':'')+'>'+esc(m.label||m.id)+(support.reason||support.note?' · '+esc(support.reason||support.note):'')+'</option>').join('');if(select.innerHTML!==html)select.innerHTML=html;
-      select.setAttribute('aria-label','Модель · '+title.textContent);select.value=row&&row.id===FIRST.vendor&&rows.some(m=>m.id===FIRST.model)?FIRST.model:'';select.disabled=!live||!rows.length||FIRST.busy||!!orch;select.hidden=false;card.classList.toggle('on',!!select.value);
-      card.querySelector('small').textContent=!live?'макет · движок не подключён':!support.ok?support.reason:rows.length?(orch?'Оркестратор: '+modelName(orch.model):row.title+(row.subtitle?' · '+row.subtitle:'')+' · моделей: '+rows.length+(support.note?' · '+support.note:'')):'нет данных'+(row&&row.reason?' · '+row.reason:' · подключите модель в «Подключениях»');
+      select.setAttribute('aria-label','Модель · '+title.textContent);select.value=row&&row.id===FIRST.vendor&&rows.some(m=>m.id===FIRST.model)?FIRST.model:'';select.disabled=!live||!rows.length||FIRST.busy;select.hidden=false;card.classList.toggle('on',!!select.value);
+      card.querySelector('small').textContent=!live?'макет · движок не подключён':!support.ok?support.reason:rows.length?row.title+(row.subtitle?' · '+row.subtitle:'')+' · моделей: '+rows.length+(support.note?' · '+support.note:''):'нет данных'+(row&&row.reason?' · '+row.reason:' · подключите модель в «Подключениях»');
     }
     for(const card of [...original,...root.querySelectorAll('[data-first-extra]')]){let recovery=card.querySelector('[data-first-login]');if(!recovery){recovery=document.createElement('div');recovery.setAttribute('data-first-login','');card.appendChild(recovery)}const html=window.LIVE?.loginRecovery?.html(card.__program,{check:true,busy:!!FIRST_MODELS.checking})||'';if(recovery.innerHTML!==html)recovery.innerHTML=html;}
     const error=root.querySelector('[data-first-model-error]');error.hidden=!FIRST_MODELS.error;error.querySelector('span').textContent=FIRST_MODELS.error;
@@ -1522,22 +1531,18 @@
     catch{if(FIRST_MODELS.alive&&bindingCurrent(binding))FIRST_MODELS.error='Не удалось проверить вход. Повторите проверку.'}
     finally{if(FIRST_MODELS.checking===job)FIRST_MODELS.checking=null;firstDraw()}
   }
-  function firstSelectPane(){const p=(H.panes||[]).find(p=>p.kind==='orchestrator')||(H.panes||[]).find(p=>p.id==='room');const id=p?p.id:'room';if(S.ui.pane!==id){invalidateBinding();S.ui.pane=id;S.chat=[];H.cur=null;save();pickPane()}}
+  function firstSelectPane(){const id='room';if(S.ui.pane!==id){invalidateBinding();S.ui.pane=id;S.chat=[];H.cur=null;save()}pickPane()}
   function firstGo(n){const root=firstRoot();if(!root||leftPage)return;FIRST_MODELS.selection++;root.scrollTop=0;firstDraw();root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s===String(n)));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i<n));operationsDraw()}
   function firstDraw(){const root=firstRoot();if(!root||leftPage)return;const live=H.on&&!H.snapshotOnly;
     if(FIRST.project!==H.project||FIRST.confirmed!==(H.confirmedProjectGeneration||0)){if(FIRST.project){root.querySelectorAll('.st[data-s]').forEach(el=>el.classList.toggle('on',el.dataset.s==='1'));root.querySelectorAll('#steps i').forEach((el,i)=>el.classList.toggle('on',i===0));const draft=root.querySelector('.live-in');if(draft)draft.value='';}FIRST.project=H.project;FIRST.confirmed=H.confirmedProjectGeneration||0;FIRST.model=null;FIRST.vendor=null;FIRST.folder=!H.noProject;FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML='';}
-    const models=firstModels(),orch=(H.panes||[]).find(p=>p.kind==='orchestrator');
-    if(!firstSelected()){const preferred=orch||H.pane,chosen=models.find(m=>m.id===preferred?.model&&m.vendor===preferred?.vendor)||models.find(m=>firstSupport(m.vendor).ok);FIRST.model=chosen?.id||null;FIRST.vendor=chosen?.vendor||null;}
+    const models=firstModels();
+    if(!firstSelected()){const preferred=H.pane,chosen=models.find(m=>m.id===preferred?.model&&m.vendor===preferred?.vendor)||models.find(m=>firstSupport(m.vendor).ok);FIRST.model=chosen?.id||null;FIRST.vendor=chosen?.vendor||null;}
     const places=root.querySelectorAll('.st[data-s="1"] .pick');places.forEach((el,i)=>el.classList.toggle('on',i===0?FIRST.folder:!FIRST.folder));
     if(places[0])places[0].querySelector('small').textContent=live?(H.noProject?'Выберите или создайте папку проекта':H.project):'макет · движок не подключён';
-    firstModelCards(models,live,orch);
-    const kb=root.querySelectorAll('.st[data-s="3"] .kv b');if(live){kb[0].textContent=H.noProject?'комната без проекта':H.project;kb[1].textContent=modelName(orch&&orch.model||FIRST.model);kb[2].textContent='≈ 0,05 % недели · макет: прогноз первого хода не подключён';kb[3].textContent='ответ в чате; состав — только после вашего подтверждения'}
-    const proposalNote=root.querySelector('[data-first-proposal-state]');proposalNote.textContent=!live?'макет · источник состава не подключён':TP.error?TP.error:TP.loading?'Читаю предложение состава…':!TP.data.length?'Предложение не зарегистрировано. Если оркестратор описал состав в разговоре, попросите его: «зарегистрируй предложение».':'';
-    const message=root.querySelector('[data-first-state]');message.textContent=!live?'Макет · движок не подключён':!orch?'Сначала назначьте оркестратора на шаге «Чем отвечать».':H.pane&&H.pane.busy?'Оркестратор отвечает…':'Предложено в разговоре';
-    root.querySelector('.st[data-s="2"] [data-go="3"]').setAttribute('aria-disabled',String(FIRST.busy||live&&!orch&&(!firstSelected()||!firstSupport(FIRST.vendor).ok)));
-    root.querySelector('[data-first-team-request]').disabled=!live||!orch||FIRST.sending;
-    root.querySelector('.st[data-s="3"] .btn.p').setAttribute('aria-disabled',String(!live||!orch||FIRST.sending));
-    root.querySelector('[data-first-open]').disabled=!live||!orch;
+    firstModelCards(models,live,null);
+    const kb=root.querySelectorAll('.st[data-s="3"] .kv b');if(live){kb[0].textContent=H.noProject?'комната без проекта':H.project;kb[1].textContent=modelName(FIRST.model);kb[2].textContent='≈ 0,05 % недели · макет: прогноз первого хода не подключён';kb[3].textContent='ответ в чате; оркестратора можно назначить позже'}
+    const connect=root.querySelector('[data-first-connect]');if(connect){const blocked=FIRST.busy||live&&(!firstSelected()||!firstSupport(FIRST.vendor).ok);connect.disabled=blocked;connect.setAttribute('aria-disabled',String(blocked))}
+    const send=root.querySelector('[data-first-send]');if(send){send.disabled=FIRST.sending||FIRST.busy||live&&(!H.pane||!H.pane.model);send.setAttribute('aria-disabled',String(send.disabled))}
     if(FIRST.missing&&!bindingCurrent(FIRST.missing.binding)){FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML=''}
     if(FIRST.door&&(!bindingCurrent(FIRST.door.binding)||FIRST.door.model!==FIRST.model||FIRST.door.vendor!==FIRST.vendor||FIRST.door.folder!==FIRST.folder||!firstSupport(FIRST.door.vendor).ok)){FIRST.door=null;root.querySelector('[data-first-door]').innerHTML=''}
   }
@@ -1554,14 +1559,16 @@
     }catch(error){if(!leftPage&&H.project===missing.binding.project)toast(esc(error.message))}finally{FIRST.busy=false;firstDraw()}
     if(restart)await firstNext();
   }
+  function firstFailure(message){const root=firstRoot();FIRST.failure=message;if(!root)return;root.querySelector('[data-first-door]').innerHTML='<div class="done first-failure" role="alert"><b>Подключение не удалось</b><p>'+esc(message||'Причина не установлена. Попробуйте позже.')+'</p><div class="ft"><button class="btn ghost" type="button" data-go="1">← Назад</button><button class="btn" type="button" data-first-simple>Просто чат</button></div></div>'}
+  function firstSimpleChat(){invalidateBinding();S.ui.pane='room';S.ui.fresh=true;S.ui.switched=false;save();location.href='10-new-chat.html'}
+  function firstBack(){if(globalThis.history&&history.length>1)history.back();else location.href='20-login-pour.html'}
   async function firstNext(){if(FIRST.busy||leftPage)return;firstSelectPane();firstDraw();const root=firstRoot();if(!H.on||H.snapshotOnly){firstGo(3);return}
-    const orch=(H.panes||[]).find(p=>p.kind==='orchestrator');if(orch){const binding=sendBinding();await loadChat({onboard:false,visible:true});if(!leftPage&&bindingCurrent(binding))firstGo(3);return}
-    if(!firstSelected()||!firstSupport(FIRST.vendor).ok){toast(firstSelected()?firstSupport(FIRST.vendor).reason:'Сначала выберите модель разговора');return}
+    if(!firstSelected()||!firstSupport(FIRST.vendor).ok){firstFailure(firstSelected()?firstSupport(FIRST.vendor).reason:'Сначала выберите модель');return false}
     let binding=sendBinding(),pending;
     try{const entries=S.firstRoomCreations;if(entries!==undefined&&(!entries||typeof entries!=='object'||Array.isArray(entries)))throw Error('Не удалось прочитать созданный разговор');const exists=entries&&Object.hasOwn(entries,binding.project);pending=exists?entries[binding.project]:null;
       if(exists&&(!pending||!pending.binding||pending.binding.project!==binding.project||pending.binding.pane!=='room'||pending.binding.chat!==null||typeof pending.chat!=='string'||!/^[a-zA-Z0-9_-]{1,128}$/.test(pending.chat)))throw Error('Не удалось прочитать созданный разговор');
-    }catch(error){toast(esc(error.message));return}
-    FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML='';
+    }catch(error){firstFailure(error.message);return false}
+    FIRST.failure=null;FIRST.door=null;FIRST.missing=null;root.querySelector('[data-first-door]').innerHTML='';
     if(pending||!binding.chat){const model=FIRST.model,vendor=FIRST.vendor,folder=FIRST.folder,navigation=bindingNavigation;FIRST.busy=true;
       try{if(!pending){const r=await api('/api/chats/new',{pane:'room',carry:'none'});if(!r||!r.ok||typeof r.chat?.id!=='string'||!/^[a-zA-Z0-9_-]{1,128}$/.test(r.chat.id)||r.chat.pane!=='room')throw Error(r&&r.error||'Не удалось открыть разговор');
           pending={binding:{project:binding.project,pane:binding.pane,chat:binding.chat},chat:r.chat.id};S.firstRoomCreations=S.firstRoomCreations||{};S.firstRoomCreations[binding.project]=pending;save();
@@ -1569,40 +1576,34 @@
         }
         if(!await refreshStatus())throw Error('Не удалось прочитать состояние проекта');const current=sendBinding();if(leftPage||bindingNavigation!==navigation||current.project!==binding.project||current.pane!==binding.pane)return;
         if(current.chat!==pending.chat){if(current.chat){delete S.firstRoomCreations[binding.project];save()}else if(await firstChatMissing(current,pending)){
-            FIRST.missing={binding:current,pending};root.querySelector('[data-first-door]').innerHTML='<div class="done" role="status"><b>Разговор не найден</b><p>Сохранённого разговора больше нет в проекте. Начните заново, чтобы создать новый разговор.</p><button class="btn p" type="button" data-first-restart>Начать заново</button></div>';return;
+            FIRST.missing={binding:current,pending};root.querySelector('[data-first-door]').innerHTML='<div class="done" role="status"><b>Разговор не найден</b><p>Сохранённого разговора больше нет в проекте. Начните заново, чтобы создать новый разговор.</p><button class="btn p" type="button" data-first-restart>Начать заново</button><button class="btn ghost" type="button" data-go="1">← Назад</button><button class="btn" type="button" data-first-simple>Просто чат</button></div>';return false;
           }toast('Разговор изменился; повторите выбор');return}
         delete S.firstRoomCreations[binding.project];save();if(FIRST.model!==model||FIRST.vendor!==vendor||FIRST.folder!==folder||!firstSupport(vendor).ok){toast('Выбор модели изменился; повторите выбор');return}binding=current;
-      }catch(error){if(!leftPage&&H.project===binding.project)toast(esc(error.message));return}finally{FIRST.busy=false;firstDraw()}
+      }catch(error){if(!leftPage&&H.project===binding.project)firstFailure(error.message);return false}finally{FIRST.busy=false;firstDraw()}
     }
-    FIRST.door={binding,model:FIRST.model,vendor:FIRST.vendor,folder:FIRST.folder};root.querySelector('[data-first-door]').innerHTML='<div class="done"><b>Назначить оркестратора</b><p>'+esc(modelName(FIRST.model))+' · '+esc(FIRST.folder&&!H.noProject?H.project:'новый проект по разговору')+'</p><p>Разговор и документы сохранятся. Harnessy создаст роль и запустит её первое поручение. Состав команды вы подтвердите отдельно.</p><button class="btn p" type="button" data-first-promote>Назначить этому разговору оркестратора</button><button class="btn ghost" type="button" data-first-cancel>Отмена</button></div>';
-  }
-  async function firstPromote(anchor){const choice=FIRST.door;if(FIRST.busy||!choice||leftPage||!H.on||H.snapshotOnly)return false;
-    if(!bindingCurrent(choice.binding)||choice.model!==FIRST.model||choice.vendor!==FIRST.vendor||choice.folder!==FIRST.folder||!firstSelected()||!firstSupport(choice.vendor).ok){FIRST.door=null;firstDraw();toast('Проект или выбор модели изменились');return false}
-    FIRST.busy=true;anchor.disabled=true;
-    try{const r=await api('/api/room',{vendor:choice.vendor,model:choice.model,folder:choice.folder});if(!bindingCurrent(choice.binding)||leftPage)return false;if(!r||!r.ok)throw Error(r&&r.error||'Модель не выбрана');
-      await refreshStatus();if(leftPage)return false;if(!bindingCurrent(choice.binding)){FIRST.door=null;firstRoot().querySelector('[data-first-door]').innerHTML='';toast('Разговор изменился; подтвердите назначение заново');return false}
-      if(choice.binding.pane!=='room'||!choice.binding.chat||H.pane?.model!==choice.model||H.pane?.vendor!==choice.vendor||!firstSupport(choice.vendor).ok)throw Error('Разговор изменился; повторите выбор');
-      const promoted=await promoteConversation(anchor,choice.binding);if(!promoted)return false;
-      FIRST.door=null;firstRoot().querySelector('[data-first-door]').innerHTML='';const selected=sendBinding();await loadChat({onboard:false,visible:true});if(leftPage||!bindingCurrent(selected))return false;firstGo(3);await proposalsFetch();return true;
-    }catch(error){if(!leftPage&&H.project===choice.binding.project)toast(esc(error.message));return false}
-    finally{FIRST.busy=false;anchor.disabled=false;firstDraw()}
+    const choice={binding,model:FIRST.model,vendor:FIRST.vendor,folder:FIRST.folder};FIRST.busy=true;firstDraw();
+    try{const response=await api('/api/room',{vendor:choice.vendor,model:choice.model,folder:choice.folder});if(leftPage||!bindingCurrent(choice.binding))return false;if(!response||!response.ok)throw Error(response&&response.error||'Модель не подключена');
+      if(!await refreshStatus())throw Error('Не удалось прочитать состояние проекта');const current=sendBinding();if(leftPage||current.project!==choice.binding.project||current.pane!=='room'||current.chat!==choice.binding.chat)return false;
+      if(!H.pane||H.pane.id!=='room'||H.pane.model!==choice.model||H.pane.vendor!==choice.vendor||!firstSupport(choice.vendor).ok)throw Error('Настройка модели изменилась; повторите выбор');
+      FIRST.failure=null;root.querySelector('[data-first-door]').innerHTML='';await loadChat({onboard:false,visible:true});if(leftPage||!bindingCurrent(current))return false;firstGo(3);return true;
+    }catch(error){if(!leftPage&&H.project===choice.binding.project)firstFailure(error.message);return false}
+    finally{FIRST.busy=false;firstDraw()}
   }
   async function firstSend(team=false){if(FIRST.sending||FIRST.busy||leftPage||!H.on||H.snapshotOnly)return false;const root=firstRoot(),input=root.querySelector('.live-in'),binding=sendBinding();
-    if(!H.pane||H.pane.kind!=='orchestrator'){toast('Сначала назначьте оркестратора');return false}const text=input.value.trim();if(!team&&!text){input.focus();return false}FIRST.sending=true;firstDraw();
-    try{return team?await requestTeamProposal(binding):await onSend(text,input,binding)}finally{FIRST.sending=false;firstDraw()}
+    if(!H.pane||!H.pane.model){toast('Сначала выберите модель');return false}const text=input.value.trim();if(!text){input.focus();return false}FIRST.sending=true;firstDraw();
+    try{return await onSend(text,input,binding)}finally{FIRST.sending=false;firstDraw()}
   }
   if(PAGE==='first'){
     const root=firstRoot(),s2=root.querySelector('.st[data-s="2"]'),s3=root.querySelector('.st[data-s="3"]'),input=s3.querySelector('.in');delete S.first;if(S.pending){const pending=S.pending;S.draft=pending.text;attachmentRestore(pending.key||attachmentKey(pending.target),attachmentPendingRefs(pending));S.pending=null;save()}
     root.querySelector('.st[data-s="1"] .pick').setAttribute('data-cx','folder');
-    s2.querySelector('h2').textContent='Чем отвечаем';s2.querySelector('p').textContent='Одна модель для начала. Остальные подключите потом в «Подключениях».';
+    s2.querySelector('h2').textContent='Что у вас есть';s2.querySelector('p').textContent='Выберите найденную модель или продолжайте без неё — подключить можно позже.';
     s2.querySelectorAll('.pick').forEach((el,i)=>{el.setAttribute('data-first-vendor',String(i));el.__title=el.firstChild.textContent;el.firstChild.textContent='';const title=document.createElement('span');title.setAttribute('data-first-title','');title.textContent=el.__title;el.insertBefore(title,el.firstChild);const select=document.createElement('select');select.setAttribute('data-first-model','');el.appendChild(select)});
     s2.insertAdjacentHTML('beforeend','<p data-first-model-error role="status" hidden><span></span> <button type="button" class="btn sm ghost" data-first-model-retry>Повторить</button></p><p><a href="11-connections.html">Подключения →</a></p><div data-first-door></div>');
     input.innerHTML='<input class="live-in" aria-label="Первый вопрос" placeholder="Написать…" value="Посмотри проект и скажи, что мешает первому запуску"><span class="k">⏎</span>';
-    s3.insertAdjacentHTML('beforeend','<p data-first-state role="status"></p><div class="first-team-actions"><button class="btn ghost" type="button" data-first-team-request>Попросить оркестратора</button><button class="btn ghost" type="button" data-first-open>Открыть чат</button></div><p data-first-proposal-state></p><div data-first-team></div><div class="feed"><div class="col"></div></div>');
-    // The intro may read files or request approval; never claim that its role has read-only rights.
-    s3.querySelector('p').textContent='Первый вопрос — в разговоре с оркестратором. Предложение состава подтвердите здесь.';
-    root.querySelectorAll('[data-go], [data-skip], .pick').forEach(el=>{el.setAttribute('tabindex','0');el.setAttribute('role','button')});
-    root.addEventListener('keydown',e=>{if(e.target.closest('[data-first-model]'))return;if(e.target===input.querySelector('input')&&e.key==='Enter'&&!e.isComposing){e.preventDefault();void firstSend();return}if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-go], [data-skip], .pick')){e.preventDefault();e.target.click()}});
+    s3.insertAdjacentHTML('beforeend','<div class="feed"><div class="col"></div></div>');
+    s3.querySelector('p').textContent='Первый вопрос уйдёт выбранной модели. Оркестратора можно назначить позже из чата.';
+    root.querySelectorAll('[data-go], [data-first-simple], [data-first-connect], [data-first-send], [data-first-back], .pick').forEach(el=>{el.setAttribute('tabindex','0');el.setAttribute('role','button')});
+    root.addEventListener('keydown',e=>{if(e.target.closest('[data-first-model]'))return;if(e.target===input.querySelector('input')&&e.key==='Enter'&&!e.isComposing){e.preventDefault();void firstSend();return}if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-go], [data-first-simple], [data-first-connect], [data-first-send], [data-first-back], .pick')){e.preventDefault();e.target.click()}});
     root.addEventListener('change',e=>{const select=e.target.closest('[data-first-model]');if(!select||select.disabled)return;const card=select.closest('[data-first-program]');if(!card)return;const vendor=card.dataset.firstProgram,model=firstModels().find(m=>m.vendor===vendor&&m.id===select.value);if(!model||!firstSupport(vendor).ok){firstDraw();return}FIRST_MODELS.selection++;FIRST.model=model.id;FIRST.vendor=vendor;firstDraw()});
     document.addEventListener('click',async e=>{const target=e.target;if(!root.contains(target))return;
       const recovery=target.closest('[data-login-connect],[data-login-other],[data-login-check]');
@@ -1614,12 +1615,10 @@
       }
       if(target.closest('[data-first-model-retry]')){e.preventDefault();e.stopImmediatePropagation();void firstCatalog();return}
       if(target.closest('[data-first-model]')){e.stopPropagation();return}
-      const restart=target.closest('[data-first-restart]'),g=target.closest('[data-go]'),promote=target.closest('[data-first-promote]'),cancel=target.closest('[data-first-cancel]'),skip=target.closest('[data-skip]'),request=target.closest('[data-first-team-request]'),open=target.closest('[data-first-open]');
-      if(restart||g||promote||cancel||skip||request||open){e.preventDefault();e.stopImmediatePropagation();if(FIRST.busy)return;
-        if(restart){await firstRestart();return}if(promote){await firstPromote(promote);return}if(cancel){FIRST.door=null;root.querySelector('[data-first-door]').innerHTML='';return}
-        if(request){await firstSend(true);return}if(open){const p=H.pane;if(p&&p.kind==='orchestrator')await openTeamChat(p.id,(H.active||{})[p.id],sendBinding());return}
-        if(skip){if(skip.closest('.st[data-s="3"]'))await firstSend();else location.href='10-new-chat.html';return}
-        if(g.dataset.go==='3'){await firstNext();return}if(g.dataset.go==='2')firstSelectPane();firstGo(Number(g.dataset.go));return;
+      const restart=target.closest('[data-first-restart]'),g=target.closest('[data-go]'),connect=target.closest('[data-first-connect]'),simple=target.closest('[data-first-simple]'),send=target.closest('[data-first-send]'),back=target.closest('[data-first-back]');
+      if(restart||g||connect||simple||send||back){e.preventDefault();e.stopImmediatePropagation();if(FIRST.busy||target.closest('button')?.disabled)return;
+        if(restart){await firstRestart();return}if(simple){firstSimpleChat();return}if(back){firstBack();return}if(connect){await firstNext();return}if(send){await firstSend();return}
+        if(g.dataset.go==='2')firstSelectPane();firstGo(Number(g.dataset.go));return;
       }
       const place=target.closest('.st[data-s="1"] .pick');if(place){FIRST.folder=!!place.getAttribute('data-cx');firstDraw()}
     },true);
