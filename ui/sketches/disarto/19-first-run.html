@@ -15,7 +15,7 @@
 </style></head>
 <body><div class="sheet">
   <h1>Harnessy · скетч 19 · первый запуск · живой</h1>
-  <p class="sub">Три шага, по одному вопросу на шаг, как у страницы входа: где работаем → чем отвечаем → первый вопрос. На каждом шаге можно выйти — «просто чат». Ничего не запускается до последней кнопки. <a href="index.html">← все скетчи</a></p>
+  <p class="sub">Три коротких шага: где работаем → что уже есть → первый вопрос. Модель и оркестратора можно подключить позже; «Просто чат» работает на каждом шаге. <a href="index.html">← все скетчи</a></p>
 
   <div class="frame" data-demo><div class="app"><div class="fr">
     <div class="mark"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></div>
@@ -24,30 +24,30 @@
     <div class="st on" data-s="1"><h2>Где будем работать</h2><p>В папке агент читает проект и помнит его; комната — для быстрых дел без памяти.</p>
       <label class="pick on" data-pick>📁 Выбрать папку<small>~/HARNESS · 412 файлов · агент прочитает перед первым ответом</small></label>
       <label class="pick" data-pick>Комната без папки<small>просто разговор; папку можно подключить позже</small></label>
-      <div class="ft"><span class="skip" data-skip>Пропустить — просто чат</span><span class="btn p" data-go="2" style="margin-left:auto">Дальше →</span></div></div>
+      <div class="ft"><button class="btn ghost" type="button" data-first-back>← Назад</button><button class="btn" type="button" data-first-simple>Просто чат</button><button class="btn p" type="button" data-go="2" style="margin-left:auto">Дальше →</button></div></div>
 
-    <div class="st" data-s="2"><h2>Чем отвечать</h2><p>Подключите хотя бы одну модель. Остальные добавите в «Подключениях».</p>
+    <div class="st" data-s="2"><h2>Что у вас есть</h2><p>Выберите найденную модель или продолжайте без неё — подключить можно позже.</p>
       <label class="pick on" data-pick>Claude — войти в аккаунт<small>подписка · лимиты по окнам</small></label>
       <label class="pick" data-pick>Codex — войти в аккаунт<small>подписка</small></label>
       <label class="pick" data-pick>Ключ API<small>OpenRouter, Qwen, DeepSeek — цена за токен</small></label>
       <label class="pick" data-pick>Локально<small>Ollama · без оплаты</small></label>
-      <div class="ft"><span class="btn ghost" data-go="1">← Назад</span><span class="skip" data-skip style="margin-left:14px">Пропустить — просто чат</span><span class="btn p" data-go="3" style="margin-left:auto">Дальше →</span></div></div>
+      <div class="ft first-equal"><button class="btn ghost" type="button" data-go="1">← Назад</button><button class="btn p" type="button" data-first-connect>Подключить выбранное</button><button class="btn" type="button" data-first-simple>Просто чат</button></div></div>
 
-    <div class="st" data-s="3"><h2>С чего начнём</h2><p>Первый вопрос ничего не меняет в папке: агент только читает.</p>
+    <div class="st" data-s="3"><h2>С чего начнём</h2><p>Первый вопрос уйдёт выбранной модели. Оркестратора можно назначить позже из чата.</p>
       <div class="done" style="margin-bottom:12px">
         <div class="kv"><span>папка</span><b>~/HARNESS · только чтение</b><span>модель</span><b>Claude · Sonnet · усилие среднее</b><span>цена первого хода</span><b>≈ 0,05 % недели</b><span>что будет</span><b>ответ в чате; действий без вашего «да» не будет</b></div></div>
       <div class="in">Посмотри проект и скажи, что мешает первому запуску<span class="k">⏎</span></div>
-      <div class="ft"><span class="btn ghost" data-go="2">← Назад</span><span class="btn p" data-skip style="margin-left:auto">Начать разговор</span></div></div>
+      <div class="ft"><button class="btn ghost" type="button" data-go="2">← Назад</button><button class="btn" type="button" data-first-simple>Просто чат</button><button class="btn p" type="button" data-first-send style="margin-left:auto">Начать разговор</button></div></div>
   </div></div>
-  <div class="cap"><span>19 · первый запуск · три шага · папка → модель → первый вопрос</span><span>1280 × 860</span></div>
-  <div class="recon"><b>Сверка с прототипом</b> (p-first): «📁 выбрать папку / комната без папки» → шаг 1; подключение модели → шаг 2 (тот же выбор, что в потоке «Подключить» скетча 11); «Пропустить — просто чат» — на шагах 1 и 2; «Дальше →» — на каждом шаге; итог и цена первого хода — шаг 3.</div></div>
+  <div class="cap"><span>19 · первый запуск · папка → что найдено → первый вопрос</span><span>1280 × 860</span></div>
+  <div class="recon"><b>Сверка с прототипом</b> (p-first): «Просто чат» — настоящая кнопка на каждом шаге; выбор модели не обязателен; назначение оркестратора не входит в первый запуск.</div></div>
 </div>
 <script>
 (function(){
   const go=n=>{ document.querySelectorAll('.st').forEach(s=>s.classList.toggle('on',s.dataset.s===String(n))); document.querySelectorAll('#steps i').forEach((s,i)=>s.classList.toggle('on',i<n)); };
   document.addEventListener('click',e=>{ const g=e.target.closest('[data-go]'); if(g){ go(g.dataset.go); return; }
     const pk=e.target.closest('[data-pick]'); if(pk){ pk.parentElement.querySelectorAll('[data-pick]').forEach(x=>x.classList.toggle('on',x===pk)); return; }
-    if(e.target.closest('[data-skip]')) location.href='10-new-chat.html'; });
+    if(e.target.closest('[data-first-simple]')) location.href='10-new-chat.html'; });
 })();
 </script>
 </body></html>

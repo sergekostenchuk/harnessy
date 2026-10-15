@@ -13,21 +13,21 @@ const part=(a:string,b:string)=>{const start=live.indexOf(a),end=live.indexOf(b,
 async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body:any)=>Promise<void>,saved:Record<string,any>={},transform?:(path:string,response:any)=>any){
  const d=dom(sketch.slice(sketch.indexOf('<div class="frame"'),sketch.indexOf('<script>')));Object.assign(d.document,{documentElement:d.html,body:d.body});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page','first');d.document.querySelector('.frame')!.classList.add('cur');
  const H:any={on:true,panes:[],active:{},project:h.dir},S:any={ui:{pane:'room'},chat:[],cx:{noFolder:false},...saved},requests:any[]=[],toasts:string[]=[],pending=new Set<Promise<any>>(),streams:any[]=[];
- const c:any={H,S,PAGE:'first',document:d.document,window:null,location:{href:'',pathname:'/19-first-run.html'},save(){},log(){},now:Date.now,setTimeout(){},clearTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),removeEventListener:d.window.removeEventListener.bind(d.window),
+ const c:any={H,S,PAGE:'first',document:d.document,window:null,location:{href:'',pathname:'/19-first-run.html'},AbortController,save(){},log(){},now:Date.now,setTimeout(){},clearTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),removeEventListener:d.window.removeEventListener.bind(d.window),
   esc:(v:any)=>String(v??'').replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x]!)),toast:(v:string)=>toasts.push(v),paneName:(p:any)=>p.label,modelName:(id:string)=>id||'модель не выбрана',knowledgeReset(){},hStatus(){},render(){},drawLive(){},scrollEnd(){},cols:()=>d.document.querySelectorAll('.feed .col'),
   pickPane(){H.pane=H.panes.find((p:any)=>p.id===S.ui.pane)||null},async loadChat(){},
-  api(path:string,body?:any){requests.push({path,body});const job=(async()=>{await pause?.(path,body);const response=(await call(h.api,path,body?{body}:{})).body;return transform?transform(path,response):response})();pending.add(job);job.then(()=>pending.delete(job),()=>pending.delete(job));return job},
+  api(path:string,body?:any,operation?:any){requests.push({path,body});const job=(async()=>{await pause?.(path,body);if(operation?.signal?.aborted)throw Object.assign(Error('aborted'),{name:'AbortError'});const response=(await call(h.api,path,body?{body}:{})).body;return transform?transform(path,response):response})();pending.add(job);job.then(()=>pending.delete(job),()=>pending.delete(job));return job},
   async refreshStatus(){const status=await c.api('/api/status');if(H.project!==status.project)H.confirmedProjectGeneration=(H.confirmedProjectGeneration||0)+1;Object.assign(H,{project:status.project,panes:status.panes,models:status.models,turnModes:status.turnModes,active:status.activeChats,liveStatus:status,noProject:status.noProject});const list=h.runtime.chatsList(OWNER);H.chatList=list.chats;c.pickPane();return status},laMenu(){},KN:{data:null}
   ,subscribeLiveEvents(onmessage:any){const stream={onmessage,closed:false,close(){this.closed=true}};streams.push(stream);return stream}
  };
  c.window=c;await c.refreshStatus();const vm=createContext(c);
- runInContext(part('  function captureProjectOperation','  // TS-07: waiting controls')+part('  let bindingGeneration','  function md(')+part('  const isDirect=','  function rememberLive(')+part('  // TS-09b4: one progress view','  // TS-09b2:')+part('  // TS-09b2:','  // End TS-09b2 promotion.')+part('  function reply(','  function composer(')+part('  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+part('  // TS-15f:','  // End TS-15f first run.')+'globalThis.first={draw:firstDraw,next:firstNext,send:firstSend,state:FIRST,go:firstGo,binding:sendBinding,invalidate:invalidateBinding,proposals:proposalsFetch,proposalsReset,TP,catalog:firstCatalog,models:FIRST_MODELS};',vm);
+ runInContext(part('  function captureProjectOperation','  // TS-07: waiting controls')+part('  let bindingGeneration','  function md(')+part('  const isDirect=','  function rememberLive(')+part('  // TS-09b4: one progress view','  // TS-09b2:')+part('  // TS-09b2:','  // End TS-09b2 promotion.')+part('  function guidanceState(','  function render(')+part("  document.addEventListener('click',async e=>{ const la=",'  function reply(')+part('  function reply(','  function composer(')+part('  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+part('  // TS-15f:','  // End TS-15f first run.')+'globalThis.first={draw:firstDraw,next:firstNext,send:firstSend,sendNow:onSend,state:FIRST,go:firstGo,binding:sendBinding,invalidate:invalidateBinding,proposals:proposalsFetch,proposalsReset,TP,catalog:firstCatalog,models:FIRST_MODELS,guidance:chatGuidanceDraw,offer:showOrchestratorOffer};',vm);
  const recoveryOpens:any[]=[];c.LIVE={H,esc:c.esc,network:{openAdd:(options:any)=>recoveryOpens.push(options)},networkAdd:{close(){}},firstModelsDraw:c.first.draw};runInContext(readFileSync(new URL('../../../ui/deploy/network-recovery.js',import.meta.url),'utf8'),vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  const settle=async()=>{do{await Promise.all([...pending]);await immediate()}while(pending.size)};
  await settle();return {...d,H,S,c,vm,find,requests,toasts,settle,streams,recoveryOpens,f:c.first};
 }
-async function promote(v:Awaited<ReturnType<typeof ui>>){await v.find('.st[data-s="1"] [data-go="2"]').emit('click');await v.find('.st[data-s="2"] [data-go="3"]').emit('click');await v.find('[data-first-promote]').emit('click');await v.settle();assert.ok(v.H.panes.some((p:any)=>p.kind==='orchestrator'),v.toasts.join(' | '))}
+async function connectSelected(v:Awaited<ReturnType<typeof ui>>){await v.find('.st[data-s="1"] [data-go="2"]').emit('click');await v.find('[data-first-connect]').emit('click');await v.settle();assert.equal(v.find('.st[data-s="3"]').classList.contains('on'),true)}
 
 const programs=()=>({ok:true,providers:[['claude','Claude Code'],['codex','Codex'],['antigravity','Antigravity'],['copilot','GitHub Copilot'],['gemini','Gemini CLI']].map(([id,title])=>({id,title,kind:'subscription',installed:true as boolean|null,checking:false,models:[]}))});
 function programData(path:string,response:any,catalog=programs()){
@@ -52,17 +52,16 @@ for(const state of ['missing-mode','not-installed','checking'])test('313: '+stat
  v.f.state.vendor='copilot';v.f.state.model='shared';await v.f.next();assert.equal(v.document.querySelector('[data-first-promote]'),null);assert.equal(v.requests.filter(r=>r.body).length,0);
 });
 
-test('313: exact vendor survives an identical model id through the existing owner promotion door',async t=>{
+test('313/TS-34: exact vendor survives an identical model id through room setup',async t=>{
  const h=await fixture(t,{deps:{models:{claude:[{id:'w1'}],codex:[{id:'w1'}]}}});h.codex.models=async()=>[{id:'w1',label:'Codex W1'}];const v=await ui(h);
  const select=v.find('[data-first-program="codex"] select');select.value='w1';await select.emit('change');assert.equal(v.f.state.vendor,'codex');assert.equal(v.requests.filter(r=>r.body).length,0);
- await v.f.next();await v.find('[data-first-promote]').emit('click');await v.settle();await h.runtime.idle();
- assert.equal(v.requests.find(r=>r.path==='/api/room').body.vendor,'codex');assert.equal(h.runtime.registry.get('orchestrator')!.vendor,'codex');assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,1);
+ await v.f.next();await v.settle();assert.equal(v.requests.find(r=>r.path==='/api/room').body.vendor,'codex');assert.equal(h.runtime.registry.get('room')!.vendor,'codex');assert.equal(h.runtime.registry.get('orchestrator'),null);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);
 });
 
-test('313: providers refreshes status, invalidates an unsupported owner door, and keeps one subscription',async t=>{
+test('313/TS-34: providers refresh disables an unsupported choice and keeps one subscription',async t=>{
  const h=await fixture(t);let revoked=false;const v=await ui(h,undefined,{},(path,result)=>{const out=programData(path,result);if(path==='/api/status'&&revoked)out.turnModes.claude.read={ok:false,reason:'режим отозван'};return out});
- await v.f.next();const old=v.find('[data-first-promote]');revoked=true;v.streams[0].onmessage({data:JSON.stringify({type:'providers',project:h.dir})});await v.settle();assert.equal(v.document.querySelector('[data-first-promote]'),null);
- const before=v.requests.filter(r=>r.body).length;await old.emit('click');assert.equal(v.requests.filter(r=>r.body).length,before);assert.equal(v.streams.length,1);await v.window.emit('pagehide');assert.equal(v.streams[0].closed,true);
+ v.f.go(2);const button=v.find('[data-first-connect]');assert.equal(button.disabled,false);revoked=true;v.streams[0].onmessage({data:JSON.stringify({type:'providers',project:h.dir})});await v.settle();assert.equal(button.disabled,true);assert.match(v.find('[data-first-program="claude"] small').textContent,/режим отозван/);
+ assert.equal(v.requests.filter(r=>r.path==='/api/room').length,0);assert.equal(v.streams.length,1);await v.window.emit('pagehide');assert.equal(v.streams[0].closed,true);
 });
 
 for(const change of ['project','pane','pagehide'])test('313: late catalogue cannot replace models after '+change,async t=>{
@@ -91,157 +90,99 @@ for(const change of ['project','pane','pagehide'])test('313: late status after c
  gate.resolve({project:h.dir,panes:v.H.panes,models:{foreign:[{id:'late',label:'Late'}]},turnModes:{}});await work;assert.equal(v.H.models,previous);assert.equal(v.document.querySelector('[data-first-program="foreign"]'),null);
 });
 
-test('170/189: first run keeps sketch blocks; model selection and navigation never start a turn before the bound owner door',async t=>{
- const h=await fixture(t,{seats:'  {}'}),v=await ui(h);assert.equal(v.document.querySelectorAll('.fr .st[data-s]').length,3);assert.equal(v.document.querySelectorAll('.st[data-s="2"] .pick').length,4);assert.equal(v.document.querySelectorAll('.st[data-s="3"] .kv b').length,4);
- await v.find('.st[data-s="1"] [data-go="2"]').emit('click');const select=v.find('[data-first-vendor="1"] select');select.value='gpt-test';await select.emit('change');await v.find('.st[data-s="2"] [data-go="3"]').emit('click');assert.match(v.find('[data-first-door]').textContent,/gpt-test/);assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
- await v.find('[data-first-cancel]').emit('click');assert.equal(v.document.querySelector('[data-first-promote]'),null);await v.find('.st[data-s="2"] [data-go="3"]').emit('click');await v.find('[data-first-promote]').emit('click');await v.settle();await h.runtime.idle();
- assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,1);assert.equal(h.runtime.registry.get('orchestrator')!.settings().model,'gpt-test');assert.equal(v.find('.st[data-s="3"]').classList.contains('on'),true);assert.match(v.find('.done .kv').textContent,/макет/);assert.equal(v.S.first,undefined);assert.equal(v.S.pending,undefined);assert.equal(v.c.location.href,'');
+test('TS-34: every first-run screen has working Back and Simple chat exits',async t=>{
+ const h=await fixture(t,{seats:'  {}'}),v=await ui(h);assert.equal(v.document.querySelectorAll('.fr .st[data-s]').length,3);assert.equal(v.document.querySelectorAll('[data-first-simple]').length,3);
+ await v.find('.st[data-s="1"] [data-first-simple]').emit('click');assert.equal(v.c.location.href,'10-new-chat.html');v.c.location.href='';
+ await v.find('.st[data-s="1"] [data-go="2"]').emit('click');assert.equal(v.find('.st[data-s="2"]').classList.contains('on'),true);await v.find('.st[data-s="2"] [data-first-simple]').emit('click');assert.equal(v.c.location.href,'10-new-chat.html');v.c.location.href='';
+ await v.find('.st[data-s="2"] [data-go="1"]').emit('click');assert.equal(v.find('.st[data-s="1"]').classList.contains('on'),true);v.f.go(3);await v.find('.st[data-s="3"] [data-first-simple]').emit('click');assert.equal(v.c.location.href,'10-new-chat.html');v.c.location.href='';
+ await v.find('.st[data-s="3"] [data-go="2"]').emit('click');assert.equal(v.find('.st[data-s="2"]').classList.contains('on'),true);v.f.go(1);await v.find('[data-first-back]').emit('click');assert.equal(v.c.location.href,'20-login-pour.html');
+ assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
 });
 
-test('170: promotion preserves the saved conversation, coalesces double clicks and shows its operation',async t=>{
- const h=await fixture(t);h.runtime.roomSet({model:'w1'},OWNER);h.runtime.registry.get('room')!.record('me','Проект для моей команды');const id=h.runtime.chatsList(OWNER).active.room;
- const entered=deferred(),gate=deferred();const v=await ui(h,async path=>{if(path.endsWith('/orchestrator')){entered.resolve();await gate.promise}});
- await v.find('.st[data-s="1"] [data-go="2"]').emit('click');await v.find('.st[data-s="2"] [data-go="3"]').emit('click');const button=v.find('[data-first-promote]'),work=button.emit('click');await entered.promise;await button.emit('click');assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,1);assert.match(v.find('.st[data-s="2"] [data-live-operations]').textContent,/Harnessy создаёт оркестратора/);gate.resolve();await work;await v.settle();await h.runtime.idle();
- assert.equal(h.runtime.chatsList(OWNER).active.orchestrator,id);assert.equal(h.runtime.registry.get('orchestrator')!.transcript[0]!.text,'Проект для моей команды');assert.deepEqual(v.requests.find(r=>r.path.endsWith('/orchestrator')).body.documents,[]);
+test('TS-34: no connected program still opens an empty chat without network work',async t=>{
+ const h=await fixture(t,{seats:'  {}'}),v=await ui(h,undefined,{},(path,result)=>path==='/api/providers/catalog'?{ok:true,providers:[]}:path==='/api/status'?{...result,models:{},turnModes:{}}:result);
+ v.f.go(2);assert.equal(v.find('[data-first-connect]').disabled,true);await v.find('[data-first-simple]').emit('click');assert.equal(v.c.location.href,'10-new-chat.html');assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
 });
 
-for(const change of ['project','aba','chat','pagehide','model'])test('170: stale owner door cannot promote after '+change,async t=>{
- const h=await fixture(t),v=await ui(h);await v.find('.st[data-s="1"] [data-go="2"]').emit('click');await v.f.next();const button=v.find('[data-first-promote]'),before=v.requests.filter(r=>r.body).length;
- if(change==='project')v.H.project='/other';else if(change==='aba'){v.H.project='/other';v.f.invalidate();v.H.project=h.dir}else if(change==='chat')v.H.active.room='other';else if(change==='model')v.f.state.model='c1';else await v.window.emit('pagehide');
- await button.emit('click');assert.equal(v.requests.filter(r=>r.body).length,before);assert.equal(h.runtime.registry.get('orchestrator'),null);
+test('TS-34: selected exact vendor configures the room and advances without an orchestrator',async t=>{
+ const h=await fixture(t,{seats:'  {}',deps:{models:{claude:[{id:'w1'}],codex:[{id:'w1'}]}}});h.codex.models=async()=>[{id:'w1',label:'Codex W1'}];const v=await ui(h);
+ const select=v.find('[data-first-program="codex"] select');select.value='w1';await select.emit('change');assert.equal(v.f.state.vendor,'codex');await connectSelected(v);
+ const setting=v.requests.find(r=>r.path==='/api/room');assert.equal(setting.body.vendor,'codex');assert.equal(setting.body.model,'w1');assert.equal(setting.body.folder,true);assert.equal(h.runtime.registry.get('room')!.vendor,'codex');assert.equal(h.runtime.registry.get('orchestrator'),null);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
 });
 
-for(const change of ['project','pagehide'])test('170: delayed room response does not promote or advance a replacement '+change,async t=>{
- const h=await fixture(t),entered=deferred(),gate=deferred();const v=await ui(h,async path=>{if(path==='/api/room'){entered.resolve();await gate.promise}});await v.f.next();const work=v.find('[data-first-promote]').emit('click');await entered.promise;
- if(change==='project')v.H.project='/other';else await v.window.emit('pagehide');gate.resolve();await work;await v.settle();assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);assert.equal(v.find('.st[data-s="3"]').classList.contains('on'),false);
+test('TS-34: connection failure names the reason and keeps Back plus Simple chat',async t=>{
+ const h=await fixture(t,{seats:'  {}'}),v=await ui(h,undefined,{},(path,result)=>path==='/api/room'?{ok:false,error:'вход программы не подтверждён'}:result);v.f.go(2);await v.find('[data-first-connect]').emit('click');await v.settle();
+ const failure=v.find('.first-failure');assert.match(failure.textContent,/вход программы не подтверждён/);assert.ok(failure.querySelector('[data-go="1"]'));assert.ok(failure.querySelector('[data-first-simple]'));assert.equal(v.find('.st[data-s="3"]').classList.contains('on'),false);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);
+ await failure.querySelector('[data-first-simple]')!.emit('click');assert.equal(v.c.location.href,'10-new-chat.html');
 });
 
-for(const state of ['offline','empty','unknown-model','snapshot'])test('170: '+state+' has an honest reason and cannot run the model',async t=>{
- const h=await fixture(t,{seats:'  {}'}),v=await ui(h);if(state==='offline')v.H.on=false;else if(state==='snapshot')v.H.snapshotOnly=true;else v.H.models={};v.f.draw();if(state==='unknown-model')v.f.state.model='injected <script>';
- await v.f.next();await v.f.send();assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.provider.calls.length,0);assert.match(v.find('[data-first-vendor="0"] small').textContent,state==='offline'||state==='snapshot'?/макет/:/нет данных/);assert.equal(v.document.querySelector('script'),null);
+for(const change of ['project','pagehide'])test('TS-34: delayed room configuration cannot advance after '+change,async t=>{
+ const h=await fixture(t,{seats:'  {}'}),entered=deferred(),gate=deferred(),v=await ui(h,async path=>{if(path==='/api/room'){entered.resolve();await gate.promise}});v.f.go(2);const work=v.find('[data-first-connect]').emit('click');await entered.promise;
+ if(change==='project')v.H.project='/other';else await v.window.emit('pagehide');gate.resolve();await work;await v.settle();assert.equal(v.find('.st[data-s="3"]').classList.contains('on'),false);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);assert.equal(h.provider.calls.length,0);
 });
 
-test('170: explicit first question, proposal registration, exact confirmation and role chat share the actual HTTP operations',async t=>{
- const h=await fixture(t,{seats:'  {}'}),v=await ui(h);await promote(v);await h.runtime.idle();let proposed=false;
- h.provider.onRun=async(_s,text,ctx)=>{ctx.modelStarted?.();if(text.endsWith('зарегистрируй предложение')){const result=await ctx.tools.proposeSeats({seats:[{kind:'worker',label:'Исследователь <script>bad</script>',vendor:'claude',model:'w1',mode:'read',intro:'Собери данные для первого запуска'}]});assert.equal(result.ok,true);proposed=true}return {text:'ответ',sessionId:'s1'}};
- const input=v.find('.live-in');input.value='Первый вопрос';await v.find('.st[data-s="3"] .btn.p').emit('click');await v.settle();await h.runtime.idle();assert.equal(h.provider.calls.at(-1)!.message,'Первый вопрос');assert.equal(v.c.location.href,'');
- await v.find('[data-first-team-request]').emit('click');await v.settle();await h.runtime.idle();assert.equal(proposed,true,JSON.stringify({calls:h.provider.calls.map(c=>c.message),requests:v.requests.filter(r=>r.body),toasts:v.toasts}));await v.f.proposals();assert.match(v.find('[data-first-state]').textContent,/Предложено в разговоре/);assert.match(v.find('#live-team-proposals').textContent,/Исследователь|Собери данные/);assert.equal(v.document.querySelector('script'),null);const before=h.runtime.registry.ids.length;
- await v.find('[data-team-confirm]').emit('click');await v.settle();await h.runtime.idle();assert.equal(h.runtime.registry.ids.length,before+1);assert.equal(v.requests.filter(r=>r.path==='/api/seats/confirm').length,1);assert.match(v.find('#live-team-proposals').textContent,/Все участники созданы/);
- const row=v.find('[data-team-create]');await row.emit('click');await v.settle();assert.equal(v.c.location.href,'01-chat.html');assert.notEqual(v.S.ui.pane,'orchestrator');
+for(const held of ['/api/room','/api/chats/new'])for(const exit of ['back','simple'])test('TS-34 r2: '+exit+' exits immediately while '+held+' is pending and ignores its late reply',async t=>{
+ const h=await fixture(t,{seats:'  {}'}),entered=deferred(),gate=deferred(),v=await ui(h,async path=>{if(path===held){entered.resolve();await gate.promise}});v.f.go(2);if(held==='/api/chats/new'){v.H.active.room=null;v.f.invalidate()}
+ const beforeChats=h.runtime.chatsList(OWNER).chats.length,beforeRoom=h.runtime.registry.get('room')?.settings();
+ const work=v.find('[data-first-connect]').emit('click');await entered.promise;assert.equal(v.f.state.busy,true);
+ if(exit==='back'){await v.find('.st[data-s="2"] [data-go="1"]').emit('click');assert.equal(v.find('.st[data-s="1"]').classList.contains('on'),true)}else {await v.find('.st[data-s="2"] [data-first-simple]').emit('click');assert.equal(v.c.location.href,'10-new-chat.html')}
+ assert.equal(v.f.state.busy,false);const operation=v.f.state.operation;gate.resolve();await work;await v.settle();assert.equal(v.f.state.operation,operation);assert.equal(v.f.state.busy,false);assert.equal(v.document.querySelector('.first-failure'),null);
+ if(exit==='back')assert.equal(v.find('.st[data-s="1"]').classList.contains('on'),true);else assert.equal(v.c.location.href,'10-new-chat.html');if(held==='/api/chats/new'){assert.equal(v.S.firstRoomCreations?.[h.dir],undefined);assert.equal(h.runtime.chatsList(OWNER).chats.length,beforeChats)}else assert.deepEqual(h.runtime.registry.get('room')?.settings(),beforeRoom);assert.equal(h.provider.calls.length,0);
 });
 
-test('170: reopening an existing orchestrator reads its proposal without another promotion or introductory turn',async t=>{
- const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: orchestrator, model: w1, vendor: claude, mode: read}'}),v=await ui(h);await v.f.next();await v.f.proposals();assert.equal(v.S.ui.pane,'lead');assert.equal(v.find('.st[data-s="3"]').classList.contains('on'),true);assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.provider.calls.length,0);
+test('TS-34: first question runs in the room and never promotes it',async t=>{
+ const h=await fixture(t,{seats:'  {}'}),v=await ui(h);await connectSelected(v);h.provider.onRun=async(_seat,text,ctx)=>{ctx.modelStarted?.();return {text:'первый ответ на '+text,sessionId:'s1'}};
+ const input=v.find('.st[data-s="3"] .live-in');input.value='Первый вопрос';await v.find('[data-first-send]').emit('click');await v.settle();await h.runtime.idle();
+ assert.equal(h.provider.calls.length,1);assert.equal(h.provider.calls[0]!.seat.id,'room');assert.equal(h.provider.calls[0]!.message,'Первый вопрос');assert.equal(h.runtime.registry.get('orchestrator'),null);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);
 });
 
-test('170/189: an old pending send becomes a draft; entering first run does not replay it',async t=>{
+test('TS-34: an existing orchestrator does not take over first-run model choice',async t=>{
+ const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: orchestrator, model: w1, vendor: claude, mode: read}'}),v=await ui(h);assert.equal(v.S.ui.pane,'room');assert.equal(v.H.pane,null);await connectSelected(v);assert.equal(v.H.pane.id,'room');assert.equal(v.find('.st[data-s="3"]').classList.contains('on'),true);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);
+});
+
+test('TS-34: empty chat model hint is dismissible for that chat while the composer stays available',async t=>{
+ const h=await fixture(t,{seats:'  {}'}),v=await ui(h);v.c.PAGE='chat';v.f.go(3);v.f.guidance();const card=v.find('[data-model-guidance]');assert.match(card.textContent,/Подключите модель, когда захотите/);assert.ok(v.find('.st[data-s="3"] .live-in'));
+ await v.find('[data-model-guidance-close]').emit('click');assert.equal(v.document.querySelector('[data-model-guidance]'),null);v.f.guidance();assert.equal(v.document.querySelector('[data-model-guidance]'),null);
+});
+
+test('TS-34: sending without a model explains the next action and keeps the draft',async t=>{
+ const h=await fixture(t,{seats:'  {}'}),v=await ui(h);v.c.PAGE='chat';const input=v.find('.st[data-s="3"] .live-in');input.value='Не потеряй это';assert.equal(await v.f.sendNow(input.value,input,v.f.binding()),false);assert.equal(v.toasts.at(-1),'Сначала выберите модель');assert.equal(input.value,'Не потеряй это');assert.equal(v.S.draft,'Не потеряй это');assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+});
+
+test('TS-34: malformed remembered guidance and a stale selected pane cannot hide the empty-chat card',async t=>{
+ const h=await fixture(t,{seats:'  {}'}),v=await ui(h,undefined,{chatGuidance:{model:[],orchestrator:[]}});v.c.PAGE='chat';v.H.pane={id:'lead',model:'w1'};v.S.ui.pane='room';v.f.go(3);v.f.guidance();
+ assert.match(v.find('[data-model-guidance]').textContent,/Подключите модель, когда захотите/);assert.equal(Array.isArray(v.S.chatGuidance.model),false);assert.equal(Array.isArray(v.S.chatGuidance.orchestrator),false);
+});
+
+test('TS-34: first model answer offers an orchestrator; Not now is per chat and Assign role restores the card',async t=>{
+ const h=await fixture(t,{seats:'  {}'}),v=await ui(h);await connectSelected(v);const binding=v.f.binding();v.S.chat=[{role:'ai',src:'live',pane:'room',who:'Без роли',model:v.H.pane.model,text:'Ответ',html:'<p>Ответ</p>',t:Date.now()}];v.f.guidance();assert.ok(v.find('[data-orchestrator-guidance]'));
+ await v.find('[data-orchestrator-guidance-later]').emit('click');assert.equal(v.document.querySelector('[data-orchestrator-guidance]'),null);v.f.guidance();assert.equal(v.document.querySelector('[data-orchestrator-guidance]'),null);
+ h.provider.onRun=async(_seat,text,ctx)=>{ctx.modelStarted?.();return {text:'продолжение '+text,sessionId:'s2'}};const input=v.find('.st[data-s="3"] .live-in');input.value='Продолжим';assert.equal(await v.f.send(),true);await v.settle();await h.runtime.idle();assert.equal(h.provider.calls.at(-1)?.message,'Продолжим');
+ const assign=v.document.createElement('span');assign.setAttribute('data-la','assign');assign.setAttribute('data-i','0');v.find('.feed .col').appendChild(assign);await assign.emit('click');assert.ok(v.find('[data-orchestrator-guidance]'));assert.equal(v.f.binding().chat,binding.chat);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);
+});
+
+test('TS-34: pending send becomes a draft and first run never replays it',async t=>{
  const h=await fixture(t),v=await ui(h,undefined,{pending:{text:'старый запрос'},first:{place:'HARNESS',model:'выдуманная модель'}});assert.equal(v.S.pending,null);assert.equal(v.S.draft,'старый запрос');assert.equal(v.S.first,undefined);assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.provider.calls.length,0);
 });
 
-test('170: first-page stream registers before a slow chat read; replay approvals and proposal changes arrive, pagehide closes it',async t=>{
- const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: orchestrator, model: w1, vendor: claude, mode: read}'}),v=await ui(h),entered=deferred(),gate=deferred(),streams:any[]=[],events:any[]=[];
- Object.assign(v.c,{EventSource:class{onmessage:any;onopen:any;onerror:any;closed=false;constructor(){streams.push(this)}close(){this.closed=true}},applyStatus:()=>true,refreshChats:async()=>{entered.resolve();await gate.promise},hEvent:(e:any)=>events.push(e),consumeState(){},journalLive(){}});
- runInContext(part('  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part('  async function hConnect(){','  // ── чат: настоящее поле ввода')+'globalThis.connect=hConnect;',v.vm);
- const connecting=v.c.connect();await entered.promise;assert.equal(streams.length,1);await streams[0].onmessage({data:JSON.stringify({type:'approval',pane:'lead',id:'a1',title:'Подтвердите действие'})});assert.equal(events[0]?.id,'a1');const before=v.requests.filter(r=>r.path==='/api/seats/proposals').length;
- streams[0].onmessage({data:JSON.stringify({type:'teamProposals',project:h.dir})});await v.settle();assert.ok(v.requests.filter(r=>r.path==='/api/seats/proposals').length>before);gate.resolve();await connecting;await v.window.emit('pagehide');assert.equal(streams[0].closed,true);assert.equal(v.requests.filter(r=>r.body).length,0);
-});
-
-for(const change of ['project','pagehide'])test('170: existing conversation loading cannot advance after '+change,async t=>{
- const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: orchestrator, model: w1, vendor: claude, mode: read}'}),v=await ui(h),entered=deferred(),gate=deferred();v.c.loadChat=async()=>{entered.resolve();await gate.promise};const work=v.f.next();await entered.promise;if(change==='project'){v.H.project='/other';v.f.draw()}else await v.window.emit('pagehide');gate.resolve();await work;assert.equal(v.find('.st[data-s="3"]').classList.contains('on'),false);assert.equal(v.requests.filter(r=>r.body).length,0);
-});
-
-test('170: the sketch folder control opens the existing project form and creates the chosen real project without a turn',async t=>{
+test('TS-34: folder control still creates the selected project without a model turn',async t=>{
  const h=await fixture(t,{seats:'  {}'}),v=await ui(h);runInContext('globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,sendBinding,bindingCurrent,invalidateBinding,operationsDraw};',v.vm);runInContext(readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8'),v.vm);
  await v.find('[data-cx="folder"]').emit('click');await v.settle();await v.find('[data-cx-nav="mkdir"]').emit('click');v.find('input.cx-path').value=h.dir+'/first-project';await v.find('[data-cx-mkdir]').emit('click');await v.settle();v.f.draw();assert.equal(h.runtime.project.dir,h.dir+'/first-project');assert.equal(v.H.project,h.dir+'/first-project');assert.match(v.find('.st[data-s="1"] .pick small').textContent,/first-project/);assert.equal(h.provider.calls.length,0);
 });
 
-test('170: choosing a room promotes through createProject and retains the selected model in the new project',async t=>{
- const h=await fixture(t,{seats:'  {}'});await h.runtime.settingsPatch('owner',{projectsRoot:h.dir+'/projects'},OWNER);const v=await ui(h);await v.find('.st[data-s="1"] .pick:not([data-cx])').emit('click');assert.equal(v.f.state.folder,false);await promote(v);await h.runtime.idle();assert.notEqual(h.runtime.project.dir,h.dir);assert.ok(h.runtime.project.dir.startsWith(h.dir+'/projects/'));assert.equal(v.requests.find(r=>r.path.endsWith('/orchestrator')).body.createProject,true);assert.equal(v.find('.st[data-s="3"]').classList.contains('on'),true);assert.equal(h.runtime.registry.get('orchestrator')!.settings().model,v.f.state.model);
-});
-
-test('170: readonly snapshot rendering cannot invalidate the initial status request by switching to the cached orchestrator',async t=>{
- const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: orchestrator, model: w1, vendor: claude, mode: read}'}),v=await ui(h);v.S.ui.pane='room';v.c.pickPane();v.H.snapshotOnly=true;v.f.state.project=null;runInContext("globalThis.statusRequest=captureProjectOperation('/api/status');",v.vm);v.f.draw();assert.equal(v.S.ui.pane,'room');assert.equal(runInContext('projectOperationCurrent(statusRequest)',v.vm),true);assert.equal(v.requests.filter(r=>r.body).length,0);
-});
-
-test('170: interrupted first turn retains the shared bound recovery controls on step three',async t=>{
- const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: orchestrator, model: w1, vendor: claude, mode: read}'}),v=await ui(h);await v.f.next();v.H.pane.waiting={turnInstanceId:'known-turn',recordSeqs:[4],status:'unknown',actions:['retry','skip']};
- runInContext(part('  function waitingControls(','  const attemptRequests=')+'renderWaiting();',v.vm);assert.equal(v.find('[data-attempt-action="retry"]').dataset.attemptProject,h.dir);assert.equal(v.find('[data-attempt-action="retry"]').dataset.attemptPane,'lead');assert.equal(v.find('[data-attempt-action="skip"]').dataset.attemptId,'known-turn');assert.equal(v.requests.filter(r=>r.body).length,0);
-});
-
-for(const change of ['chat','pane','pane-aba','project-aba','pagehide'])test('170: delayed status after room setup retains the confirmed chat across '+change,async t=>{
- const h=await fixture(t,{seats:'  {}'});h.runtime.roomSet({model:'w1'},OWNER);const a=h.runtime.chatsList(OWNER).active.room;
- const entered=deferred(),gate=deferred();let hold=false;const v=await ui(h,async path=>{if(hold&&path==='/api/status'){hold=false;entered.resolve();await gate.promise}});
- Object.assign(v.c,{badges(){},renderWaiting(){},sideChats:async()=>{}});v.f.TP.project=h.dir;runInContext(part('  function applyStatus(','  // лента активного чата'),v.vm);
- await v.f.next();assert.equal(v.f.state.door.binding.chat,a);const button=v.find('[data-first-promote]');hold=true;const work=button.emit('click');await entered.promise;
- if(change==='chat'){const b=await call(h.api,'/api/chats/new',{body:{pane:'room',carry:'none'}});assert.equal(b.status,200);assert.notEqual(b.body.chat.id,a)}
- else if(change==='pane'||change==='pane-aba'){v.S.ui.pane='another';v.f.invalidate();if(change==='pane-aba')v.S.ui.pane='room'}
- else if(change==='project-aba'){v.H.project='/other';v.f.invalidate();v.H.project=h.dir}else await v.window.emit('pagehide');
- gate.resolve();await work;await v.settle();await h.runtime.idle();assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);assert.equal(h.provider.calls.length,0);assert.equal(v.f.state.door,null);assert.equal(v.document.querySelector('[data-first-promote]'),null);
- await button.emit('click');await v.settle();assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);assert.equal(h.provider.calls.length,0);
-});
-
-test('170: a missing room is created before the owner door so even the first confirmation has an exact chat',async t=>{
- const h=await fixture(t),v=await ui(h);assert.equal(v.f.binding().chat,null);await v.f.next();const id=v.f.state.door.binding.chat;assert.ok(id);assert.equal(id,h.runtime.chatsList(OWNER).active.room);assert.equal(h.provider.calls.length,0);assert.deepEqual(v.requests.filter(r=>r.body).map(r=>r.path),['/api/chats/new']);
- await v.find('[data-first-promote]').emit('click');await v.settle();await h.runtime.idle();assert.equal(v.requests.find(r=>r.path.endsWith('/orchestrator')).path,'/api/chats/'+id+'/orchestrator');assert.equal(h.provider.calls.length,1);
- await v.f.next();await v.f.next();await v.settle();assert.equal(h.provider.calls.length,1);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,1);
-});
-
-test('170: a saved failed promotion is retried for the same conversation without a second introductory turn',async t=>{
- const h=await fixture(t,{seats:'  {}'}),r=h.runtime;r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','Сохранённый разговор');const row=r.chatsList(OWNER).chats.find(c=>c.pane==='room')!,append=r.journal.append.bind(r.journal);let once=true;
- r.journal.append=(record)=>{const out=append(record);if(once&&record.origin==='onboarding'){once=false;throw Error('interrupted after intro')}return out};await assert.rejects(r.promoteChat(row.id,{project:h.dir,revision:row.revision,documents:[]},OWNER),/interrupted after intro/);
- const v=await ui(h);await v.window.emit('live:status');assert.match(v.find('[data-live-operations]').textContent,/interrupted after intro/);assert.equal(h.provider.calls.length,0);await v.find('[data-operation-retry]').emit('click');await v.settle();await r.idle();assert.equal(r.chatsList(OWNER).active.orchestrator,row.id);assert.equal(h.provider.calls.length,1);
- await v.f.next();await v.f.next();await v.settle();assert.equal(h.provider.calls.length,1);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,1);
-});
-
-for(const cold of [false,true])test('211b: a created room survives failed status and '+(cold?'cold opening':'retry')+' without a second creation',async t=>{
- const h=await fixture(t);let fail=false;const v=await ui(h,async path=>{if(path==='/api/chats/new')fail=true;if(path==='/api/status'&&fail)throw Error('fixture status unavailable')});await v.f.next();const created=h.runtime.chatsList(OWNER).active.room;assert.ok(created);assert.equal(v.S.firstRoomCreations[h.dir].chat,created);assert.equal(v.S.firstRoomCreations[h.dir].binding.project,h.dir);assert.equal(v.f.state.door,null);assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length,1);
- fail=false;const next=cold?await ui(h,undefined,JSON.parse(JSON.stringify(v.S))):v;await next.f.next();assert.equal(next.f.state.door.binding.chat,created);assert.equal(next.S.firstRoomCreations[h.dir],undefined);assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length+(cold?next.requests.filter(r=>r.path==='/api/chats/new').length:0),1);assert.equal(h.runtime.chatsList(OWNER).chats.filter(c=>c.pane==='room').length,1);assert.equal(h.provider.calls.length,0);
- await next.find('[data-first-cancel]').emit('click');await next.f.next();assert.equal(h.runtime.chatsList(OWNER).chats.filter(c=>c.pane==='room').length,1);assert.equal(h.provider.calls.length,0);
-});
-
-test('211b: a recovered creation does not substitute a different active chat or repeat creation',async t=>{
- const h=await fixture(t);let fail=false;const v=await ui(h,async path=>{if(path==='/api/chats/new')fail=true;if(path==='/api/status'&&fail)throw Error('fixture status unavailable')});await v.f.next();const created=v.S.firstRoomCreations[h.dir].chat,newer=await call(h.api,'/api/chats/new',{body:{pane:'room',carry:'none'}});assert.notEqual(newer.body.chat.id,created);fail=false;
- await v.f.next();assert.equal(v.f.state.door,null);assert.equal(v.S.firstRoomCreations[h.dir],undefined);assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length,1);assert.equal(h.provider.calls.length,0);await v.f.next();assert.equal(v.f.state.door.binding.chat,newer.body.chat.id);assert.equal(h.provider.calls.length,0);
-});
-
-for(const bad of [null,[],{binding:{project:'/wrong',pane:'room',chat:null},chat:'known'},{binding:{project:'self',pane:'worker',chat:null},chat:'known'},{binding:{project:'self',pane:'room',chat:null},chat:'<script>'}])test('211b: a malformed persisted creation cannot cause another creation '+JSON.stringify(bad),async t=>{
- const h=await fixture(t),entry=JSON.parse(JSON.stringify(bad).replace('self',h.dir)),v=await ui(h,undefined,{firstRoomCreations:Array.isArray(bad)?bad:{[h.dir]:entry}});await v.f.next();assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(v.f.state.door,null);assert.match(v.toasts.at(-1)!,/Не удалось прочитать созданный разговор/);assert.equal(h.provider.calls.length,0);
-});
-
-test('211b: a successful creation received after pagehide is retained for the next cold opening',async t=>{
- const h=await fixture(t),gate=deferred(),seen=deferred(),v=await ui(h,async path=>{if(path==='/api/chats/new'){seen.resolve();await gate.promise}});const work=v.f.next();await seen.promise;await v.window.emit('pagehide');gate.resolve();await work;const created=v.S.firstRoomCreations[h.dir].chat;assert.ok(created);const cold=await ui(h,undefined,JSON.parse(JSON.stringify(v.S)));await cold.f.next();assert.equal(cold.f.state.door.binding.chat,created);assert.equal(cold.requests.filter(r=>r.path==='/api/chats/new').length,0);assert.equal(h.provider.calls.length,0);
+for(const bad of [null,[],{binding:{project:'/wrong',pane:'room',chat:null},chat:'known'},{binding:{project:'self',pane:'worker',chat:null},chat:'known'},{binding:{project:'self',pane:'room',chat:null},chat:'<script>'}])test('TS-34: malformed persisted room creation cannot create another chat '+JSON.stringify(bad),async t=>{
+ const h=await fixture(t),entry=JSON.parse(JSON.stringify(bad).replace('self',h.dir)),v=await ui(h,undefined,{firstRoomCreations:Array.isArray(bad)?bad:{[h.dir]:entry}});await v.f.next();assert.equal(v.requests.filter(r=>r.body).length,0);assert.match(v.find('.first-failure').textContent,/Не удалось прочитать созданный разговор/);assert.equal(h.provider.calls.length,0);
 });
 
 const missingCreation=(project:string,chat='c-missing')=>({firstRoomCreations:{[project]:{binding:{project,pane:'room',chat:null},chat}}});
-test('211b.1: a cold opening with a confirmed missing chat offers an explicit restart that creates one conversation',async t=>{
- const h=await fixture(t),saved=missingCreation(h.dir),v=await ui(h,undefined,saved);assert.equal((await call(h.api,'/api/chats/c-missing')).status,404);
- for(let i=0;i<3;i++){await v.f.next();assert.match(v.find('[data-first-door]').textContent,/Разговор не найден/);assert.equal(v.S.firstRoomCreations[h.dir].chat,'c-missing');assert.equal(v.f.state.door,null)}
- assert.equal(v.requests.filter(r=>r.body).length,0);const button=v.find('[data-first-restart]');await Promise.all([button.emit('click'),button.emit('click')]);await v.settle();
- const created=h.runtime.chatsList(OWNER).active.room;assert.ok(created);assert.equal(v.f.state.door.binding.chat,created);assert.equal(v.S.firstRoomCreations[h.dir],undefined);assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length,1);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+test('TS-34: confirmed missing room offers restart, Back and Simple chat',async t=>{
+ const h=await fixture(t),v=await ui(h,undefined,missingCreation(h.dir));assert.equal((await call(h.api,'/api/chats/c-missing')).status,404);await v.f.next();const door=v.find('[data-first-door]');
+ assert.match(door.textContent,/Разговор не найден/);assert.ok(door.querySelector('[data-first-restart]'));assert.ok(door.querySelector('[data-go="1"]'));assert.ok(door.querySelector('[data-first-simple]'));assert.equal(v.S.firstRoomCreations[h.dir].chat,'c-missing');assert.equal(v.requests.filter(r=>r.body).length,0);
 });
 
-test('211b.1: two failed status reads retain the one created chat and never offer a restart',async t=>{
- const h=await fixture(t);let fail=false;const v=await ui(h,async path=>{if(path==='/api/chats/new')fail=true;if(path==='/api/status'&&fail)throw Error('fixture status unavailable')});
- await v.f.next();const created=v.S.firstRoomCreations[h.dir].chat;await v.f.next();assert.equal(v.S.firstRoomCreations[h.dir].chat,created);assert.equal(v.document.querySelector('[data-first-restart]'),null);assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length,1);
- fail=false;await v.f.next();assert.equal(v.f.state.door.binding.chat,created);assert.equal(h.runtime.chatsList(OWNER).chats.filter(c=>c.pane==='room').length,1);assert.equal(h.provider.calls.length,0);
-});
-
-for(const fault of ['status-null','list-error','list-malformed','list-throw'])test('211b.1: '+fault+' is not proof that the saved chat is missing',async t=>{
- const h=await fixture(t),v=await ui(h,undefined,missingCreation(h.dir)),original=v.c.api;
- if(fault==='status-null')v.c.refreshStatus=async()=>null;else v.c.api=async(path:string,body:any)=>path==='/api/chats'?(fault==='list-throw'?Promise.reject(Error('offline')):fault==='list-error'?{error:'unavailable'}:{chats:[{}],active:{}}):original(path,body);
- await v.f.next();assert.equal(v.S.firstRoomCreations[h.dir].chat,'c-missing');assert.equal(v.document.querySelector('[data-first-restart]'),null);assert.equal(v.requests.filter(r=>r.body).length,0);assert.match(v.toasts.at(-1)!,/Не удалось|offline/);assert.equal(h.provider.calls.length,0);
-});
-
-for(const change of ['project','aba','pagehide','active-chat','restored-chat','read-error'])test('211b.1: restart cannot discard a creation after '+change,async t=>{
- const h=await fixture(t),saved=missingCreation(h.dir),v=await ui(h,undefined,saved);await v.f.next();const button=v.find('[data-first-restart]'),original=v.c.api;
- if(change==='project')v.H.project='/other';else if(change==='aba')v.f.invalidate();else if(change==='pagehide')await v.window.emit('pagehide');else if(change==='active-chat')await call(h.api,'/api/chats/new',{body:{pane:'room',carry:'none'}});else v.c.api=async(path:string,body:any)=>path==='/api/chats'?(change==='restored-chat'?{chats:[{id:'c-missing',pane:'room'}],active:{}}:Promise.reject(Error('offline'))):original(path,body);
- await button.emit('click');await v.settle();assert.equal(v.S.firstRoomCreations[h.dir].chat,'c-missing');assert.equal(v.requests.filter(r=>r.path==='/api/chats/new').length,0);assert.equal(v.f.state.door,null);assert.equal(h.provider.calls.length,0);
-});
-
-for(const change of ['project','aba','pagehide'])test('211b.1: a delayed missing-chat response cannot install recovery in another '+change,async t=>{
+for(const change of ['project','aba','pagehide'])test('TS-34: delayed missing-room read cannot cross '+change,async t=>{
  const h=await fixture(t),entered=deferred(),gate=deferred(),v=await ui(h,async path=>{if(path==='/api/chats'){entered.resolve();await gate.promise}},missingCreation(h.dir));const work=v.f.next();await entered.promise;
- if(change==='project')v.H.project='/other';else if(change==='aba')v.f.invalidate();else await v.window.emit('pagehide');gate.resolve();await work;
- assert.equal(v.document.querySelector('[data-first-restart]'),null);assert.equal(v.S.firstRoomCreations[h.dir].chat,'c-missing');assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.provider.calls.length,0);
+ if(change==='project')v.H.project='/other';else if(change==='aba')v.f.invalidate();else await v.window.emit('pagehide');gate.resolve();await work;assert.equal(v.document.querySelector('[data-first-restart]'),null);assert.equal(v.S.firstRoomCreations[h.dir].chat,'c-missing');assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.provider.calls.length,0);
 });
 
 
@@ -274,7 +215,7 @@ for(const action of ['use','save','changed'])test('TS-23e: first run keeps recov
   if(path==='/api/providers/catalog'){const rows=programs();return {...rows,providers:rows.providers.map(p=>({...p,login:{state:checked?'ok':'unknown',command:'login',...(p.id==='claude'&&!checked?{failure:'region'}:{})}}))}}
   if(path==='/api/providers/claude/check'){checked=true;return {ok:true,login:{state:'ok',command:'login'}}}return response;
  });v.f.go(2);assert.equal(v.find('.st[data-s="2"]').classList.contains('on'),true);assert.equal(v.document.querySelectorAll('.st[data-s]').length,3);assert.match(v.find('[data-login-recovery="claude"]').textContent,/регион/);
- assert.equal(v.find('.st[data-s="2"] [data-go="3"]').getAttribute('aria-disabled'),'true');await v.find('.st[data-s="2"] [data-go="3"]').emit('click');assert.equal(v.document.querySelector('[data-first-promote]'),null);
+ assert.equal(v.find('[data-first-connect]').getAttribute('aria-disabled'),'true');await v.find('[data-first-connect]').emit('click');assert.equal(v.document.querySelector('[data-first-promote]'),null);
  await v.find('[data-login-connect="claude"]').emit('click');assert.equal(v.recoveryOpens[0].provider,'claude');
  if(action==='changed'){await v.find('[data-login-other="claude"]').emit('click');assert.equal(v.document.activeElement?.getAttribute('data-first-model'),'')}
  v.recoveryOpens[0].onSaved({ok:true},{usedFor:action==='save'?null:'claude'});await v.settle();

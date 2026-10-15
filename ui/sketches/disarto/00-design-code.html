@@ -644,12 +644,14 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
       </div></div>
     </section>
 
-    <section id="first-program-models"><h2>Первый запуск · программы и модели<i></i></h2>
-      <div class="grid g2"><div class="box"><b>Claude Code</b><p class="conn-note">подписка · модели из статуса</p><select aria-label="Модель · Claude Code"><option value="">Выберите модель</option><option>Fable 5.1</option></select></div>
-      <div class="box"><b>Antigravity</b><p class="conn-note">подписка · режим чтения недоступен</p><select aria-label="Модель · Antigravity"><option value="">Выберите модель</option><option disabled>Gemini · нет изоляции инструментов на ход</option></select></div>
-      <div class="box"><b>Gemini CLI</b><p class="conn-note">проверяется…</p><select aria-label="Модель · Gemini CLI" disabled><option>Выберите модель</option></select></div></div>
-      <p class="conn-note" role="status">Каталог программ не прочитан · нет связи. <button class="btn sm ghost" type="button" disabled>Повторить</button></p>
-      <p class="conn-note">Длинный список прокручивается внутри мастера. Макет выбора на шаге «Чем отвечать». Назначение оркестратора требует отдельного подтверждения.</p>
+    <section id="first-program-models"><h2>Первый запуск · без тупиков<i></i></h2>
+      <div class="grid g2"><div class="box"><div class="cap2">найдено</div><b>Claude Code</b><p class="conn-note">подписка · модели из статуса</p><select aria-label="Модель · Claude Code"><option value="">Выберите модель</option><option>Fable 5.1</option></select></div>
+      <div class="box"><div class="cap2">не нашли</div><b>Gemini CLI</b><p class="conn-note">Программы нет в обычных папках.</p><button class="btn sm" type="button" disabled>Установить</button> <button class="btn sm ghost" type="button" disabled>Указать путь</button></div></div>
+      <div class="rowx" style="margin-top:14px"><button class="btn p" style="flex:1" type="button" disabled>Подключить выбранное</button><button class="btn" style="flex:1" type="button" disabled>Просто чат</button></div>
+      <div class="box" style="margin-top:14px" role="alert"><b>Подключение не удалось</b><p>Программа не ответила. Можно повторить позже — чат уже доступен.</p><div class="rowx"><button class="btn ghost" type="button" disabled>← Назад</button><button class="btn" type="button" disabled>Просто чат</button></div></div>
+      <div class="grid g2" style="margin-top:14px"><div class="box"><div class="cap2">пустой чат</div><b>Подключите модель, когда захотите</b><p class="conn-note">Поле ввода остаётся доступным. Без выбранной модели: «Сначала выберите модель».</p><button class="btn sm ghost" type="button" disabled>Подключения</button> <button class="btn sm ghost" type="button" disabled>×</button></div>
+      <div class="box"><div class="cap2">после первого ответа</div><b>Назначить оркестратора этому разговору?</b><p class="conn-note">Оркестратор сохранит разговор и сможет предложить команду. Это можно сделать позже.</p><button class="btn sm p" type="button" disabled>Назначить</button> <button class="btn sm ghost" type="button" disabled>Не сейчас</button></div></div>
+      <p class="conn-note">«Просто чат» доступен на каждом шаге. Отказ от оркестратора запоминается только для этого разговора и не мешает следующим сообщениям.</p>
     </section>
 
     <section id="full-access-programs"><h2>Devin · Kimi Code · OpenCode<i></i></h2>

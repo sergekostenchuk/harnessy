@@ -10,6 +10,7 @@ import {dom} from './ui-dom-test-helpers.ts';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');
 const cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
 const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');
+const style=readFileSync(new URL('../../../ui/deploy/proto.css',import.meta.url),'utf8');
 const away=readFileSync(new URL('../../../ui/sketches/disarto/18-overlays.html',import.meta.url),'utf8');
 process.env.TZ='Europe/Istanbul';
 function part(source:string,start:string,end:string){const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return source.slice(a,b)}
@@ -43,9 +44,10 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  // TS-09b2:','  // End TS-09b2 promotion.')+
   part(live,'  const timePart=','  const ckBox=')+
   part(live,'  const bubble=','  const cols=')+
+  part(live,'  function guidanceState(','  function render(')+
   '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
-  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw};',context);
+  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw};',context);
  const functions=(context as Data).testing as Data;
  function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
  function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
@@ -72,6 +74,16 @@ test('TS-25: question and answer share copy and relative time; undated messages 
  assert.match(answer,/data-la="copy"/);assert.match(answer,/только что/);assert.match(answer,/live-last/);assert.doesNotMatch(answer,/время не сохранено/);
  assert.doesNotMatch(legacy,/<time|время не сохранено/);assert.equal(view.functions.messageTime(at-120000,at),'2 мин назад');assert.equal(view.functions.messageTime(at-30000,at),'только что');assert.equal(view.functions.messageTime(new Date(2026,9,14,3,9).getTime(),at),'вчера 03:09');assert.equal(view.functions.messageTime(new Date(2026,9,12,18,40).getTime(),at),'12.10 18:40');assert.match(view.functions.fullMessageTime(at),/^\d\d\.\d\d\.\d{4} \d\d:\d\d:\d\d$/);
  const stamp=nowAt-120000,node:Data={dataset:{liveTime:String(stamp)},textContent:'старое',title:'',remove(){throw Error('timestamp unexpectedly removed')}};const query=view.sandbox.document.querySelectorAll;view.sandbox.document.querySelectorAll=(selector:string)=>selector==='[data-live-time]'?[node]:query(selector);view.functions.updateMessageTimes();assert.match(node.textContent,/^2 мин назад$/);assert.match(node.title,/^\d\d\.\d\d\.\d{4} \d\d:\d\d:\d\d$/);
+});
+
+test('TS-34: new-chat guidance stays above the context row owned by the composer',()=>{
+ const view=ui(),d=dom('<div class="frame cur"><div class="nc"><h2>Чем займёмся?</h2><div class="cx-top">исходный контекст</div><div class="box"></div></div></div>');Object.assign(d.document,{body:d.body});view.sandbox.document=d.document;view.sandbox.PAGE='new';view.S.ui.pane='room';view.H.pane=view.H.panes[1];view.H.pane.model=null;
+ view.functions.chatGuidanceDraw();const card=d.document.querySelector('[data-model-guidance]')!,contextRow=d.document.querySelector('.cx-top')!,box=d.document.querySelector('.box')!;
+ assert.equal(box.previousElementSibling,contextRow);assert.equal(contextRow.previousElementSibling,card);contextRow.innerHTML='<span>Без проекта · Новый чат · Без роли</span>';assert.match(card.textContent,/Подключите модель, когда захотите/);
+});
+
+test('TS-34: hiding sketch messages keeps live guidance cards visible',()=>{
+ const rule=style.match(/html\[data-proto\] \.feed \.col\.live-demo-off[^}]+/);assert.ok(rule);assert.match(rule[0],/:not\(\.live-guidance\)/);assert.match(rule[0],/display:none !important/);
 });
 
 test('TS-25: quote insertion keeps typed text, caret and image draft intact',()=>{
@@ -390,6 +402,7 @@ const realStatus=()=>({project:'/real/project',panes:[{id:'worker',label:'Нас
 
 function historyDOM(v:ReturnType<typeof firstPaint>,html='<div class="frame"><div class="main"><div class="top"><b>Project A</b><span class="st"></span></div><div class="feed"><div class="col"></div></div></div></div>'){
  const d=dom(html),all=v.sandbox.document.querySelectorAll,one=v.sandbox.document.querySelector;
+ v.sandbox.document.createElement=d.document.createElement.bind(d.document);
  v.sandbox.document.querySelectorAll=(q:string)=>['.feed .col','.feed','.frame .top > b','.frame .top .st'].includes(q)?d.document.querySelectorAll(q):all(q);
  v.sandbox.document.querySelector=(q:string)=>d.document.querySelector(q)||one(q);
  v.sandbox.cols=()=>d.document.querySelectorAll('.feed .col');v.sandbox.selBar=()=>{};
