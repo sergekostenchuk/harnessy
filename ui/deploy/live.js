@@ -1111,7 +1111,7 @@
   // TS-14b: spend blocks stay in their sketch positions; only their data and actions change.
   const spendPeriod=()=>{try{const p=new URLSearchParams(location.search||'').get('period');return ['7','30','90','all'].includes(p)?p:'all'}catch(e){return 'all'}};
   const SP={period:spendPeriod(),group:'byPane',project:null,generation:0,data:null,loading:false,error:null,alive:true,history:[],next:null,historyError:null,historyLoading:false,historyGeneration:0,vendor:'',model:'',card:null,mutation:false};
-  const LIM={generation:0,project:null,providers:[],disconnected:new Set(),limits:[],activity:[],error:null,loading:false,updatedAt:null,revision:null};
+  const LIM={generation:0,project:null,providers:[],catalogConnected:new Set(),limits:[],activity:[],error:null,loading:false,updatedAt:null,revision:null};
   const spendGroups={byPane:'по местам',byChat:'по чатам',byModel:'по моделям',byVendor:'по провайдерам',byModelVendor:'модель и провайдер',byDay:'по дням UTC'};
   const spButton=(text,attr,disabled=false)=>'<button type="button" class="btn sm ghost" '+attr+(disabled?' disabled':'')+'>'+esc(text)+'</button>';
   const spMock=(title,reason,actions=[])=>'<div class="sp-mock"><b>'+esc(title)+'</b><span class="pill">макет</span><p>'+esc(reason)+'</p>'+actions.map(t=>spButton(t,'data-spend-unavailable title="'+esc(reason)+'"',true)).join(' ')+'</div>';
@@ -1156,7 +1156,7 @@
   const limitActivity=id=>{const row=LIM.activity.find(item=>item.vendor===id);return Number.isSafeInteger(row?.turns)&&row.turns>0?row.turns:0};
   function widgetProviders(extra=1){
     const basics=['claude','codex'].flatMap(id=>{const p=LIM.providers.find(item=>item.id===id);return p?[p]:[]});
-    const others=LIM.activity.filter(row=>typeof row.vendor==='string'&&/^[a-z][a-z0-9_:-]{0,63}$/.test(row.vendor)&&!['claude','codex','router'].includes(row.vendor)&&Number.isSafeInteger(row.turns)&&row.turns>0&&!LIM.disconnected.has(row.vendor))
+    const others=LIM.activity.filter(row=>typeof row.vendor==='string'&&/^[a-z][a-z0-9_:-]{0,63}$/.test(row.vendor)&&!['claude','codex','router'].includes(row.vendor)&&Number.isSafeInteger(row.turns)&&row.turns>0&&LIM.catalogConnected.has(row.vendor))
       .sort((a,b)=>b.turns-a.turns||a.vendor.localeCompare(b.vendor)).slice(0,extra)
       .map(row=>LIM.providers.find(p=>p.id===row.vendor)||{id:row.vendor,name:LIM.limits.find(p=>p.vendor===row.vendor)?.label||row.vendor[0].toUpperCase()+row.vendor.slice(1)});
     return basics.concat(others);
@@ -1167,7 +1167,7 @@
   const limitRemaining=w=>Math.max(0,Math.min(100,Math.round((100-w.percentUsed)*10)/10));
   const widgetTicks=(remaining,tone,count)=>'<div class="ticks'+(tone?' '+tone:'')+'" role="meter" aria-label="Осталось '+remaining.toLocaleString('ru-RU',{maximumFractionDigits:1})+' %" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+remaining+'">'+Array.from({length:count},(_,i)=>'<i'+(i<Math.round(remaining/100*count)?' class="on"':'')+'></i>').join('')+'</div>';
   function widgetWindow(p){
-    const info=spWindow(p),wins=info.mock||info.failed||info.unavailable||info.unlimited?[]:info.windows;
+    const info=spWindow(p),wins=info.mock||info.failed||info.unavailable||info.unlimited||info.found?.sourceConnected===false?[]:info.windows;
     const week=wins.find(p.id==='claude'?claudeCommonWeek:widgetWeek);
     const w=week||wins.find(limitMonth)||wins.find(limitFive);
     return {w,period:w?(widgetWeek(w)?'W':limitMonth(w)?'M':'5h'):'—',info};
@@ -1175,7 +1175,7 @@
   function sidebarLimitHTML(p){const {w,period}=widgetWindow(p),remaining=w?limitRemaining(w):100,tone=w?widgetTone(remaining):'',name=limitName(p);
     return '<div class="limit-provider'+(w?'':' dim')+'" data-limit-vendor="'+esc(p.id)+'"><div class="row"><span class="limit-label">'+esc(name)+'</span><span><b'+(tone?' class="'+tone+'"':'')+'>'+remaining.toLocaleString('ru-RU',{maximumFractionDigits:1})+' %</b><span class="limit-period">'+period+'</span></span></div>'+(w?widgetTicks(remaining,tone,24):'<div class="ticks empty" aria-hidden="true">'+Array.from({length:24},()=>'<i></i>').join('')+'</div>')+'</div>';
   }
-  function popupWindows(p,info){const wins=info.mock?[]:info.windows;
+  function popupWindows(p,info){const wins=info.mock||info.found?.sourceConnected===false?[]:info.windows;
     if(p.id==='claude')return [[wins.find(w=>widgetWeek(w)&&/fable/i.test(w.label)),'Fable · неделя'],[wins.find(claudeCommonWeek),'остальные · неделя'],[wins.find(limitFive),'5 ч']].filter(([w])=>w).map(([w,label])=>({w,label}));
     if(p.id==='codex'){const week=wins.find(widgetWeek);const w=week||wins.find(limitFive);return w?[{w,label:week?'неделя':'5 ч'}]:[]}
     return limitDetailWindows(p,wins);
@@ -1186,7 +1186,7 @@
   function popupLimitHTML(p){const info=spWindow(p),windows=popupWindows(p,info),name=limitName(p),turns=limitActivity(p.id),extra=p.id!=='claude'&&p.id!=='codex';
     const rows=windows.map(({w,label})=>{const remaining=limitRemaining(w),tone=widgetTone(remaining),reset=typeof w.resetsAt==='number'?limitCountdown(w.resetsAt-Date.now()/1000):typeof w.resetsIn==='number'?limitCountdown(w.resetsIn):'время уточняется';
       return '<section class="sp-limit-window"><div class="row sp-value"><b'+(tone?' class="'+tone+'"':'')+'>'+remaining.toLocaleString('ru-RU',{maximumFractionDigits:1})+' %</b><span>остаток · '+esc(label)+'</span></div>'+widgetTicks(remaining,tone,40)+'<small>сброс '+esc(reset)+(typeof w.resetsAt==='number'?' · '+esc(spDate(w.resetsAt)):'')+'</small></section>'}).join('');
-    const missing=!windows.length?'<div class="sp-limit-missing"><b>100 %</b><p>'+(info.failed||info.unavailable||!extra?'нет данных · '+esc(info.reason):'лимит программой не отдаётся · считаем 100 %')+'</p></div>':'';
+    const missing=!windows.length?'<div class="sp-limit-missing"><b>100 %</b><p>'+(info.failed||info.unavailable||info.found?.sourceConnected===false||!extra?'нет данных · '+esc(info.reason):'лимит программой не отдаётся · считаем 100 %')+'</p></div>':'';
     const turnWord=turns%10===1&&turns%100!==11?'ход':turns%10>=2&&turns%10<=4&&(turns%100<12||turns%100>14)?'хода':'ходов';
     return '<div class="sp-limit'+(info.stale?' stale':'')+'"><div class="sp-limit-title"><b>'+esc(name+(info.found?.plan?' '+info.found.plan:''))+'</b>'+(extra?'<small>'+turns+' '+turnWord+' за 7 дней</small>':'')+'</div>'+rows+missing+(p.id==='codex'?spLimitCreditHTML(info.found):'')+(p.id==='claude'&&typeof info.found?.extraUsageEnabled==='boolean'?'<p class="sp-limit-extra">доплата: '+(info.found.extraUsageEnabled?'вкл':'выкл')+'</p>':'')+((p.id==='claude'||p.id==='codex')?popupRenewal(info.found):'')+spLimitRetryHTML(info.found,!info.unavailable)+(info.found&&info.updatedAt?'<small>'+(info.stale?'устаревшие данные · ':'')+esc(limitAge(info))+' · данные за '+esc(spDate(info.updatedAt))+' · '+esc(info.found.source||'источник не указан')+'</small>':'')+'</div>';
   }
@@ -1202,10 +1202,11 @@
   }
   function limitsEvent(data){if(!H.on||H.snapshotOnly||!SP.alive||!limitsApply(data))return;LIM.error=null;limitsDraw();if(PAGE==='spend'){spendDraw();void spendWindows()}}
   function limitsRestart(){if(!SP.alive||!H.on||H.snapshotOnly)return;LIM.generation++;LIM.revision=null;return limitsFetch();}
-  async function limitsFetch(){if(!H.on||H.snapshotOnly||!SP.alive)return false;const project=H.project,generation=++LIM.generation;LIM.loading=true;if(LIM.project!==project){LIM.providers=[];LIM.disconnected=new Set();LIM.limits=[];LIM.activity=[];LIM.updatedAt=null;LIM.revision=null;LIM.project=project}limitsDraw();
-    const [connections,limits,activity]=await Promise.allSettled([api('/api/connections'),api('/api/limits'),api('/api/spend?period=7')]);if(!SP.alive||project!==H.project||generation!==LIM.generation)return false;
-    const c=connections.status==='fulfilled'?connections.value:null,l=limits.status==='fulfilled'?limits.value:null,a=activity.status==='fulfilled'?activity.value:null;
-    LIM.error=null;if(c&&c.ok&&Array.isArray(c.providers)){LIM.providers=c.providers.filter(p=>p&&typeof p.id==='string'&&p.auth&&p.auth.loggedIn===true);LIM.disconnected=new Set(c.providers.filter(p=>p&&typeof p.id==='string'&&p.auth?.loggedIn===false).map(p=>p.id))}
+  async function limitsFetch(){if(!H.on||H.snapshotOnly||!SP.alive)return false;const project=H.project,generation=++LIM.generation;LIM.loading=true;if(LIM.project!==project){LIM.providers=[];LIM.catalogConnected=new Set();LIM.limits=[];LIM.activity=[];LIM.updatedAt=null;LIM.revision=null;LIM.project=project}limitsDraw();
+    const [connections,limits,activity,catalog]=await Promise.allSettled([api('/api/connections'),api('/api/limits'),api('/api/spend?period=7'),api('/api/providers/catalog')]);if(!SP.alive||project!==H.project||generation!==LIM.generation)return false;
+    const c=connections.status==='fulfilled'?connections.value:null,l=limits.status==='fulfilled'?limits.value:null,a=activity.status==='fulfilled'?activity.value:null,g=catalog.status==='fulfilled'?catalog.value:null;
+    LIM.error=null;if(c&&c.ok&&Array.isArray(c.providers))LIM.providers=c.providers.filter(p=>p&&typeof p.id==='string'&&p.auth&&p.auth.loggedIn===true);
+    LIM.catalogConnected=new Set(g?.ok&&Array.isArray(g.providers)?g.providers.filter(p=>p&&typeof p.id==='string'&&p.installed===true&&p.login?.state==='ok').map(p=>p.id):[]);
     if(!c||!c.ok||!Array.isArray(c.providers))LIM.error=c&&c.error||'Подключения не прочитаны';
     if(!limitsApply(l)){LIM.error=LIM.error||'Лимиты временно недоступны';LIM.limits=LIM.limits.map(p=>({...p,stale:true}))}
     LIM.activity=a&&a.ok&&a.project===project&&a.period==='7'&&Array.isArray(a.byVendor)?a.byVendor:[];LIM.loading=false;limitsDraw();spendDraw();if(PAGE==='spend'){void spendBilling();await spendWindows()}return true;
