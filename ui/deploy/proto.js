@@ -121,9 +121,9 @@
     const pins=rail?'':'<div class="grp">закреплённые</div><div class="ps-pins"><div class="ps-chat more">закреплённых пока нет</div></div>';
     const folders=rail?'<i class="ps-sep"></i><div class="nav" data-folders title="Проекты и чаты">'+ico('folder')+'</div>':'<div class="grp">проекты</div><div class="ps-folders"><div class="ps-chat more">проекты — из движка</div></div>';
     const log=(rail?'<i class="ps-sep"></i>':'<div class="grp"></div>')+item(['log','Журнал','']);
-    const foot=rail?'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="nav'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Расход и лимиты">'+ico('spend')+'</div><div class="nav" data-go="profile" title="Профиль"><span class="av">S<i></i></span></div></div>'
+    const foot=rail?'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="nav'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Расход и лимиты">'+ico('spend')+'</div><div class="nav" data-go="profile" data-owner-profile title="Профиль"><span class="av" data-owner-avatar>В<i></i></span></div></div>'
       :'<div class="ps-foot">'+item(['away','Уйти',''])+item(['set','Настройки',''])+'<div class="limits'+(KEY==='spend'?' on':'')+'" data-go="spend" title="Расход и лимиты"><div class="cap">ИСПОЛЬЗОВАНО</div>'+limit('Claude · Fable · неделя',32)+limit('Claude · остальные · неделя',62.4)+limit('Claude · 5 ч',18)+limit('Codex · неделя',71)+limit('Codex · 5 ч',94)+'<small class="limit-note">макет</small></div>'+
-       '<div class="user" data-go="profile" title="Профиль"><span class="av">S<i></i></span><div>Serge<small>9616166@gmail.com</small></div><span class="chev">⌄</span></div></div>';
+       '<div class="user" data-go="profile" data-owner-profile title="Профиль"><span class="av" data-owner-avatar>В<i></i></span><div><span data-owner-name>Владелец</span><small data-owner-email hidden></small></div><span class="chev">⌄</span></div></div>';
     return head+top+'<div class="ps-scroll">'+work+pins+folders+log+'</div>'+foot; }
   window.psKey=KEY;
   // демонстрация без движка (сайт harnessy.ai): нарисованные папка, роли и закреплённые — рабочий слой заменяет их настоящими, когда движок подключён
@@ -135,7 +135,7 @@
     document.querySelectorAll('aside.side.ps .ps-proj').forEach(b=>{ b.innerHTML='OMG <i>▾</i>'; b.title='Демонстрация: проект'; }); }
   setTimeout(demoSide,1300); addEventListener('resize',()=>setTimeout(demoSide,50));
   function renderSide(){ document.querySelectorAll('aside.side').forEach(a=>{ const ob=a.querySelector('.nav[data-go="now"] .b'), keep=ob?{t:ob.textContent,d:ob.style.display}:null;   // счётчик «ждут вас» ведёт рабочий слой — не терять при перерисовке
-      a.classList.add('ps'); a.classList.toggle('rail',side==='rail'); a.innerHTML=sideHTML(); if(keep){ const nb=a.querySelector('.nav[data-go="now"] .b'); nb.textContent=keep.t; nb.style.display=keep.d; } }); }
+      a.classList.add('ps'); a.classList.toggle('rail',side==='rail'); a.innerHTML=sideHTML(); if(keep){ const nb=a.querySelector('.nav[data-go="now"] .b'); nb.textContent=keep.t; nb.style.display=keep.d; } }); if(window.LIVE&&typeof window.LIVE.profileDraw==='function')window.LIVE.profileDraw(); }
   function toggleSide(){ side=side==='rail'?'wide':'rail'; try{ localStorage.setItem(SIDE_KEY,side); }catch(e){} document.documentElement.dataset.side=side; renderSide(); fit(); dispatchEvent(new Event('resize')); }
   renderSide();
   document.addEventListener('click',e=>{ const a=e.target.closest('aside.side'); if(!a) return;

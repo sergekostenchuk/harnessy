@@ -1,0 +1,16 @@
+# literal: exact private-owner markers; regex: public secret formats and absolute project roots.
+literal:9616166@gmail.com
+literal:kostenchuksergey
+regex:(?:/Users|/home)/[^/\s"']+/Harnessy-Projects(?:/|\b)
+regex:\bsk-[A-Za-z0-9_-]{20,}\b
+regex:\bgh[pousr]_[A-Za-z0-9_]{20,}\b
+regex:\bgithub_pat_[A-Za-z0-9_]{20,}\b
+regex:\bAIza[0-9A-Za-z_-]{20,}\b
+regex:\bxox[baprs]-[0-9A-Za-z-]{20,}\b
+regex:\bAKIA[0-9A-Z]{16}\b
+regex:\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b
+regex:Bearer\s+[A-Za-z0-9._~+/-]{20,}
+regex:\bglpat-[A-Za-z0-9_-]{20,}\b
+regex:\bnpm_[A-Za-z0-9]{20,}\b
+regex:\bxai-[A-Za-z0-9_-]{20,}\b
+regex:-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----\r?\n[A-Za-z0-9+/=\r\n]{64,}-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----

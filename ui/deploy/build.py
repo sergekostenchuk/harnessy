@@ -12,6 +12,7 @@
 """
 import json, re, shutil, sys
 from pathlib import Path
+from forbidden_guard import assert_clean
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -284,6 +285,8 @@ def main():
     build_sketches()
     build_proto()
     stamp_assets(OUT / "sketches" / "proto")
+    assert_clean([OUT])
+    print(f"запрещённые строки: не найдены → {OUT}")
 
 
 if __name__ == "__main__":
