@@ -1,6 +1,7 @@
 {
   "name": "harnessy-desktop",
   "productName": "Harnessy-alpha",
+  "author": "Harnessy",
   "version": "0.1.0-alpha",
   "private": true,
   "description": "Harnessy alpha: автономная оболочка и встроенный движок",
