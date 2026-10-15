@@ -10,7 +10,7 @@
 Где: ~/Harnessy/ui/deploy/ → out/site/. Заливка: deploy.sh.
 Зачем: правки эскиза делаются в мастере, серверная копия всегда выводится из него — ручных патчей больше нет.
 """
-import re, shutil, sys
+import json, re, shutil, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -200,7 +200,7 @@ def build_proto():
     """Прототип из новых экранов: копия скетчей в режиме прототипа (proto.css + proto.js) → out/site/sketches/proto.
     Исходники в sketches/disarto остаются листами с пояснениями; прототип всегда выводится из них."""
     src = ROOT / "sketches" / "disarto"
-    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "proto.js", "responsive.js") if (HERE / n).exists()] + [src / "om-map.js"])
+    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "release.js", "proto.js", "responsive.js") if (HERE / n).exists()] + [src / "om-map.js"])
     dst = OUT / "sketches" / "proto"
     if dst.exists():
         shutil.rmtree(dst)
@@ -215,18 +215,23 @@ def build_proto():
     markdown = re.sub(r"^export\s+", "", markdown, flags=re.MULTILINE)
     (dst / "markdown.js").write_text(markdown + "\nglobalThis.HARNESS_MARKDOWN={renderMarkdown,markdownVisible};\n", encoding="utf-8")
     shutil.copy(HERE / "live.js", dst / "live.js")                    # рабочий слой: состояние, решения, чат, поиск
+    shutil.copy(HERE / "release.js", dst / "release.js")              # канал/версия, постоянный бейдж и дисклеймер alpha
     shutil.copy(HERE / "cx.js", dst / "cx.js")                        # поле ввода C′: папка · роль · режимы / ＋ · права · модель · усилие · ⓘ
     for extra in ("ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js"):                      # модули экранов: контекст чата, настройки, подключения (08.10.2026)
         if (HERE / extra).exists():
             shutil.copy(HERE / extra, dst / extra)
     (dst / "proto.js").write_text(rep((HERE / "proto.js").read_text(encoding="utf-8"), "/*IC*/", ic), encoding="utf-8")
     boot = (HERE / "proto.js").read_text(encoding="utf-8").split("/* LIVE_BOOT_END */", 1)[0]
+    release = json.loads((ROOT / "desktop" / "package.json").read_text(encoding="utf-8"))
+    version = str(release.get("version", ""))
+    assert re.fullmatch(r"0\.1\.\d+-alpha(?:\.\d+)?", version), "desktop version: ожидается 0.1.x-alpha"
+    release_script = '<script>globalThis.HARNESS_RELEASE=Object.freeze('+json.dumps({"channel":"alpha","version":version,"label":"alpha · "+version.split("-",1)[0]}, ensure_ascii=False, separators=(",",":"))+')</script>\n<script src="release.js"></script>\n'
     for stem, title in PROTO_PAGES.items():
         t = (src / f"{PROTO_SRC.get(stem, stem)}.html").read_text(encoding="utf-8")
         t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto>')
         t = rep(t, "<head>", "<head><script>" + boot + "</script>")
         t = rep(t, "</head>", '<link rel="stylesheet" href="proto.css"></head>')
-        t = rep(t, "</body>", '<script src="proto.js"></script>\n<script src="markdown.js"></script>\n<script src="live.js"></script>\n<script src="llm.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="network-stats.js"></script>\n<script src="network-add.js"></script>\n<script src="network-recovery.js"></script>\n<script src="network.js"></script>\n<script src="conn.js"></script>\n</body>')
+        t = rep(t, "</body>", release_script+'<script src="proto.js"></script>\n<script src="markdown.js"></script>\n<script src="live.js"></script>\n<script src="llm.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="network-stats.js"></script>\n<script src="network-add.js"></script>\n<script src="network-recovery.js"></script>\n<script src="network.js"></script>\n<script src="conn.js"></script>\n</body>')
         t = re.sub(r"<title>.*?</title>", f"<title>Harnessy · {title}</title>", t, count=1, flags=re.S)
         (dst / f"{stem}.html").write_text(t, encoding="utf-8")
     gallery = (src / "index.html").read_text(encoding="utf-8")

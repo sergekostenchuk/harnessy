@@ -11,7 +11,8 @@
   },
   "scripts": {
     "test": "node packages/projects/src/test-helpers.ts run",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "dist": "npm --prefix ui/desktop run dist"
   },
   "devDependencies": {
     "typescript": "7.0.2",
