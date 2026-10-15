@@ -42,8 +42,7 @@ class DesktopUpdates {
     this.readyVersion=null;
     this.checking=false;
     this.installing=false;
-    this.engineStopped=false;
-    this.recovering=null;
+    this.attempt=null;
     this.error=null;
     this.generation=0;
     this.timer=null;
@@ -66,7 +65,11 @@ class DesktopUpdates {
       this.readyVersion=version;this.error=null;this.emit();
     });
     this.updater.on('error',()=>{
-      if(this.installing){void this.recoverInstall();return}
+      if(this.attempt){
+        this.attempt.failed=true;
+        if(this.attempt.phase==='native')void this.recoverInstall(this.attempt);
+        return;
+      }
       this.error='Не удалось проверить обновления';this.checking=false;this.emit();this.log('обновления: проверка не удалась');
     });
     this.emit();
@@ -101,30 +104,41 @@ class DesktopUpdates {
   }
   async install(){
     if(!this.readyVersion||this.installing||!this.packaged||!this.repositoryReady)throw Error('Обновление ещё не готово');
-    this.installing=true;this.error=null;this.emit();
+    const attempt={phase:'stopping',failed:false,recovering:null,nativeListeners:null};
+    this.attempt=attempt;this.installing=true;this.error=null;this.emit();
     try{
-      await this.stopEngine();this.engineStopped=true;
+      await this.stopEngine();
+      if(attempt.failed)throw Error('Проверка обновления не удалась при остановке движка');
       this.allowQuit(true);
+      attempt.phase='native';
+      const native=this.updater.nativeUpdater;
+      if(native?.listeners&&native?.removeListener)attempt.nativeListeners=native.listeners('update-downloaded');
       this.updater.quitAndInstall(false,true);
-      if(this.recovering){await this.recovering;throw Error(this.error)}
+      if(attempt.failed){await this.recoverInstall(attempt);throw Error(this.error)}
       return true;
     }catch(error){
-      await this.recoverInstall();
+      await this.recoverInstall(attempt);
       throw Error(this.error);
     }
   }
-  async recoverInstall(){
-    if(this.recovering)return this.recovering;
-    if(!this.installing)return;
-    this.recovering=(async()=>{
+  async recoverInstall(attempt){
+    if(this.attempt!==attempt)return attempt.recovering;
+    if(attempt.recovering)return attempt.recovering;
+    attempt.failed=true;
+    attempt.recovering=(async()=>{
       this.allowQuit(false);
-      if(this.engineStopped){
-        try{await this.resumeEngine()}catch{this.log('обновления: движок не перезапустился')}
+      const native=this.updater.nativeUpdater;
+      if(attempt.nativeListeners&&native?.listeners&&native?.removeListener){
+        for(const listener of native.listeners('update-downloaded')){
+          if(!attempt.nativeListeners.includes(listener))native.removeListener('update-downloaded',listener);
+        }
       }
-      this.engineStopped=false;this.installing=false;
+      try{await this.resumeEngine()}catch{this.log('обновления: движок не перезапустился')}
+      if(this.attempt!==attempt)return;
+      this.attempt=null;this.installing=false;
       this.error='Не удалось перезапустить приложение для обновления';this.log('обновления: перезапуск не удался');this.emit();
-    })().finally(()=>{this.recovering=null});
-    return this.recovering;
+    })();
+    return attempt.recovering;
   }
   dispose(){if(this.timer!==null){this.clearInterval(this.timer);this.timer=null}}
 }

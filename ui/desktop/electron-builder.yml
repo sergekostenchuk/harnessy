@@ -29,6 +29,7 @@ extraResources:
     to: site
 mac:
   icon: icon.icns
+  forceCodeSigning: true
   identity: Developer ID Application
   hardenedRuntime: true
   entitlements: entitlements.mac.plist

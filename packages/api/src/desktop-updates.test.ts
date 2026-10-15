@@ -12,6 +12,7 @@ import {dom} from './ui-dom-test-helpers.ts';
 const requireFromTest=createRequire(import.meta.url);
 const {DesktopUpdates,CHECK_INTERVAL_MS,readChannel,RELEASE_REPOSITORY,trustedUpdateOrigin}=requireFromTest('../../../ui/desktop/updates.js');
 const {requireSigningEnvironment}=requireFromTest('../../../ui/desktop/signing.js');
+const {verifySignedBundles}=requireFromTest('../../../ui/desktop/verify-signing.js');
 const read=(file:string)=>fs.readFileSync(new URL('../../../'+file,import.meta.url),'utf8');
 
 class FakeUpdater extends EventEmitter {
@@ -29,11 +30,22 @@ test('TS-31: signed build fails closed without all five environment inputs and k
  const message=(()=>{try{requireSigningEnvironment({},()=>false)}catch(error){return String(error)}return ''})();
  for(const secret of Object.values(env))assert.doesNotMatch(message,new RegExp(secret.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
  const packageJson=JSON.parse(read('ui/desktop/package.json')),builder=read('ui/desktop/electron-builder.yml'),entitlements=read('ui/desktop/entitlements.mac.plist'),workflow=read('.github/workflows/desktop-release.yml');
- assert.match(packageJson.scripts.dist,/node signing\.js/);assert.match(builder,/identity: Developer ID Application/);assert.match(builder,/hardenedRuntime: true/);assert.match(builder,/notarize: true/);
+ assert.match(packageJson.scripts.dist,/node signing\.js/);assert.match(packageJson.scripts.dist,/node verify-signing\.js/);assert.match(builder,/identity: Developer ID Application/);assert.match(builder,/forceCodeSigning: true/);assert.match(builder,/hardenedRuntime: true/);assert.match(builder,/notarize: true/);
  assert.match(entitlements,/com\.apple\.security\.cs\.allow-jit/);assert.match(entitlements,/com\.apple\.security\.network\.client/);assert.match(entitlements,/com\.apple\.security\.network\.server/);
  assert.doesNotMatch(entitlements,/\<key\>com\.apple\.security\.app-sandbox\<\/key\>/);
  assert.match(builder,new RegExp('repo: '+RELEASE_REPOSITORY));assert.match(workflow,/tags:[\s\S]*v\*/);assert.match(workflow,/secrets\.HARNESSY_RELEASE_TOKEN/);
  assert.ok(workflow.includes("git for-each-ref --format='%(contents)'"));assert.match(workflow,/gh release create/);assert.match(workflow,/spctl --assess/);assert.match(workflow,/stapler validate/);
+});
+
+test('TS-31: a missing or mismatched signing identity cannot produce an accepted local release',t=>{
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'harnessy-signing-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+ assert.throws(()=>verifySignedBundles(directory,()=>{}),/нет \.app/);
+ const app=path.join(directory,'mac-arm64','Harnessy.app');fs.mkdirSync(app,{recursive:true});
+ const calls:string[]=[];
+ assert.equal(verifySignedBundles(directory,(command:string)=>{calls.push(command)}),1);
+ assert.deepEqual(calls,['codesign','spctl','xcrun']);
+ assert.throws(()=>verifySignedBundles(directory,(command:string)=>{if(command==='codesign')throw Error('wrong certificate')}),/Подпись или нотаризация/);
+ assert.throws(()=>verifySignedBundles(directory,(command:string)=>{if(command==='xcrun')throw Error('not notarized')}),/Подпись или нотаризация/);
 });
 
 test('TS-31: beta/latest selection persists, checks on startup and every six hours, and stable ignores prereleases',async t=>{
@@ -75,6 +87,30 @@ test('TS-31: a delayed native updater failure restores the stopped engine',async
  await immediate();assert.deepEqual(events,['stop','quit=true','quit=false','restart']);
  assert.equal(updates.state().installing,false);assert.match(updates.state().error!,/Не удалось перезапустить/);
  assert.doesNotMatch(JSON.stringify(updates.state()),/private installer detail/);
+});
+
+test('TS-31: error during engine drain invalidates the attempt before the installer starts',async t=>{
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'harnessy-update-drain-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+ let releaseStop:()=>void=()=>{},installed=0,restarted=0;
+ const stop=new Promise<void>(resolve=>{releaseStop=resolve}),updater=new FakeUpdater();updater.quitAndInstall=()=>{installed++};
+ const updates=new DesktopUpdates({updater,packaged:true,repositoryReady:true,file:path.join(directory,'updates.json'),setInterval:()=>0,
+  stopEngine:()=>stop,resumeEngine:async()=>{restarted++}});
+ updates.start();updater.emit('update-downloaded',{version:'0.2.0'});
+ const pending=updates.install();updater.emit('error',Error('check failed'));releaseStop();
+ await assert.rejects(pending,/Не удалось перезапустить/);
+ assert.equal(installed,0);assert.equal(restarted,1);assert.equal(updates.state().installing,false);
+});
+
+test('TS-31: failed Mac installer drops only its own native completion listener before retry',async t=>{
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'harnessy-update-retry-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+ const native=new EventEmitter(),updater=new FakeUpdater() as FakeUpdater & {nativeUpdater:EventEmitter};updater.nativeUpdater=native;
+ let installed=0;const persistent=()=>{};native.on('update-downloaded',persistent);
+ updater.quitAndInstall=()=>{native.on('update-downloaded',()=>{installed++})};
+ const updates=new DesktopUpdates({updater,packaged:true,repositoryReady:true,file:path.join(directory,'updates.json'),setInterval:()=>0});
+ updates.start();updater.emit('update-downloaded',{version:'0.2.0'});await updates.install();
+ updater.emit('error',Error('native failure'));await immediate();
+ assert.equal(native.listenerCount('update-downloaded'),1);assert.equal(native.listeners('update-downloaded')[0],persistent);
+ await updates.install();native.emit('update-downloaded');assert.equal(installed,1);
 });
 
 test('TS-31: update IPC is confined to the managed loopback window',()=>{
