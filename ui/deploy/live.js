@@ -1202,8 +1202,8 @@
   }
   function limitsEvent(data){if(!H.on||H.snapshotOnly||!SP.alive||!limitsApply(data))return;LIM.error=null;limitsDraw();if(PAGE==='spend'){spendDraw();void spendWindows()}}
   function limitsRestart(){if(!SP.alive||!H.on||H.snapshotOnly)return;LIM.generation++;LIM.revision=null;return limitsFetch();}
-  async function limitsFetch(){if(!H.on||H.snapshotOnly||!SP.alive)return false;const project=H.project,generation=++LIM.generation;LIM.loading=true;if(LIM.project!==project){LIM.providers=[];LIM.catalogConnected=new Set();LIM.limits=[];LIM.activity=[];LIM.updatedAt=null;LIM.revision=null;LIM.project=project}limitsDraw();
-    const [connections,limits,activity,catalog]=await Promise.allSettled([api('/api/connections'),api('/api/limits'),api('/api/spend?period=7'),api('/api/providers/catalog')]);if(!SP.alive||project!==H.project||generation!==LIM.generation)return false;
+  async function limitsFetch(){if(!H.on||H.snapshotOnly||!SP.alive)return false;const project=H.project,confirmed=H.confirmedProjectGeneration||0,generation=++LIM.generation;LIM.loading=true;if(LIM.project!==project){LIM.providers=[];LIM.catalogConnected=new Set();LIM.limits=[];LIM.activity=[];LIM.updatedAt=null;LIM.revision=null;LIM.project=project}limitsDraw();
+    const [connections,limits,activity,catalog]=await Promise.allSettled([api('/api/connections'),api('/api/limits'),api('/api/spend?period=7'),api('/api/providers/catalog')]);if(!SP.alive||project!==H.project||confirmed!==(H.confirmedProjectGeneration||0)||generation!==LIM.generation)return false;
     const c=connections.status==='fulfilled'?connections.value:null,l=limits.status==='fulfilled'?limits.value:null,a=activity.status==='fulfilled'?activity.value:null,g=catalog.status==='fulfilled'?catalog.value:null;
     LIM.error=null;if(c&&c.ok&&Array.isArray(c.providers))LIM.providers=c.providers.filter(p=>p&&typeof p.id==='string'&&p.auth&&p.auth.loggedIn===true);
     LIM.catalogConnected=new Set(g?.ok&&Array.isArray(g.providers)?g.providers.filter(p=>p&&typeof p.id==='string'&&p.installed===true&&p.login?.state==='ok').map(p=>p.id):[]);
@@ -1211,6 +1211,7 @@
     if(!limitsApply(l)){LIM.error=LIM.error||'Лимиты временно недоступны';LIM.limits=LIM.limits.map(p=>({...p,stale:true}))}
     LIM.activity=a&&a.ok&&a.project===project&&a.period==='7'&&Array.isArray(a.byVendor)?a.byVendor:[];LIM.loading=false;limitsDraw();spendDraw();if(PAGE==='spend'){void spendBilling();await spendWindows()}return true;
   }
+  subscribeLiveEvents(event=>{let value;try{value=JSON.parse(event.data)}catch{return}if(value?.type==='providers'&&value.event==='check'&&value.status==='done'&&(!value.project||value.project===H.project))void limitsFetch()});
   const SB={data:null,error:null,project:null,generation:0,saving:false};
   async function spendBilling(){if(PAGE!=='spend'||!H.on||!SP.alive)return;const project=H.project,generation=++SB.generation;if(SB.project!==project){SB.project=project;SB.data=null;SB.error=null}
     try{const r=await api('/api/billing');if(!SP.alive||H.project!==project||generation!==SB.generation)return;if(!r||!r.ok||r.project!==project||!r.config||!Array.isArray(r.subscriptions)||!Array.isArray(r.payments))throw Error(r&&r.error||'Настройки платежей не прочитаны');SB.data=r;SB.error=null}catch(e){if(H.project===project&&generation===SB.generation)SB.error=e.message}if(SP.alive&&H.project===project&&generation===SB.generation)spendDraw();

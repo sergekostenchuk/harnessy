@@ -96,6 +96,24 @@ test('TS-29: saved Devin turns do not prove current login after a confirmed logo
  const v=ui(async path=>(await call(h.api,path)).body);v.H.project=h.dir;v.context.PAGE='new';await v.functions.limits();assert.equal(v.find('.limits').querySelector('[data-limit-vendor="devin"]'),null);await v.find('.limits').emit('click');assert.doesNotMatch(v.find('.limits-dialog').textContent,/Devin/);assert.equal(calls,0);
 });
 
+test('TS-29: completed catalog checks add and remove the active third row and open popup without reload',async()=>{
+ const v=ui(),sources:any[]=[];let login='unknown';const stamp=Date.now()/1000;
+ v.context.api=async(path:string)=>path==='/api/connections'?{ok:true,providers:['claude','codex'].map(id=>({id,name:id,auth:{loggedIn:true}}))}:path==='/api/providers/catalog'?{ok:true,providers:[{id:'devin',installed:true,login:{state:login}}]}:path==='/api/limits'?{ok:true,project:v.H.project,revision:1,providers:['claude','codex'].map(vendor=>({vendor,ok:true,sourceConnected:true,fetchedAt:stamp,windows:[{label:'неделя',percentUsed:20,windowMinutes:10080}]}))}:path==='/api/spend?period=7'?{...snapshot(v.H.project,'7'),byVendor:[{vendor:'devin',turns:13}]}:v.response(path);
+ await v.functions.limits();await v.find('.limits').emit('click');assert.equal(v.find('.limits').querySelector('[data-limit-vendor="devin"]'),null);
+ v.context.EventSource=class{onmessage:any;closed=false;constructor(){sources.push(this)}close(){this.closed=true}};v.context.syncLiveEvents();assert.equal(sources.length,1);
+ const checked=()=>sources[0].onmessage({data:JSON.stringify({type:'providers',provider:'devin',event:'check',status:'done'})});
+ login='ok';checked();await until(()=>!!v.find('.limits').querySelector('[data-limit-vendor="devin"]'));assert.match(v.find('.limits-dialog').textContent,/Devin.*13 ходов за 7 дней/);
+ login='none';checked();await until(()=>!v.find('.limits').querySelector('[data-limit-vendor="devin"]'));assert.doesNotMatch(v.find('.limits-dialog').textContent,/Devin/);
+});
+
+test('TS-29: a late catalog read cannot redraw the widget after project A → B → A',async()=>{
+ const v=ui(),gate=deferred<any>();let hold=false,entered=false;v.H.confirmedProjectGeneration=0;
+ v.context.api=async(path:string)=>path==='/api/connections'?{ok:true,providers:[{id:'claude',auth:{loggedIn:true}}]}:path==='/api/providers/catalog'?(hold?(entered=true,gate.promise):{ok:true,providers:[{id:'devin',installed:true,login:{state:'unknown'}}]}):path==='/api/limits'?{ok:true,project:v.H.project,revision:1,providers:[]}:path==='/api/spend?period=7'?{...snapshot(v.H.project,'7'),byVendor:[{vendor:'devin',turns:13}]}:v.response(path);
+ await v.functions.limits();hold=true;const pending=v.functions.limits();await until(()=>entered);
+ v.H.project='/projects/b';v.H.confirmedProjectGeneration++;v.H.project='/projects/a';v.H.confirmedProjectGeneration++;gate.resolve({ok:true,providers:[{id:'devin',installed:true,login:{state:'ok'}}]});assert.equal(await pending,false);assert.equal(v.find('.limits').querySelector('[data-limit-vendor="devin"]'),null);
+ hold=false;await v.functions.limits();assert.equal(v.find('.limits').querySelector('[data-limit-vendor="devin"]'),null);
+});
+
 test('TS-29: weekly then monthly then five-hour quota controls the remaining value and tone; no data is grey 100%',()=>{
  const v=ui(),l=v.functions.limitState,stamp=Date.now()/1000;l.providers=[{id:'claude',name:'Claude'}];
  const draw=(windows:any[],failed=false)=>{l.limits=[{vendor:'claude',ok:!failed,status:failed?'unavailable':'ok',sourceConnected:true,fetchedAt:stamp,windows}];v.functions.limitDraw();return v.find('.limits [data-limit-vendor="claude"]')};
