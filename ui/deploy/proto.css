@@ -923,3 +923,9 @@ html[data-proto] .plan-tabs > span { cursor:pointer; }
 .live-unsent-join{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.45}
 .live-unsent-join span{flex:1;min-width:0;overflow-wrap:anywhere}.live-unsent-join button{flex:none}
 .live-attempt-controls details{margin-top:10px;font-size:12px;color:var(--muted)}
+
+/* TS-31: update is ready in the desktop shell, on any page. */
+.desktop-update-banner{position:fixed;right:22px;bottom:22px;z-index:11000;display:flex;align-items:center;justify-content:space-between;gap:18px;max-width:min(450px,calc(100vw - 44px));padding:14px 16px;border:1px solid var(--accent);border-radius:10px;background:var(--panel);box-shadow:0 12px 32px #0009;color:var(--ink)}
+.desktop-update-banner b,.desktop-update-banner small{display:block}.desktop-update-banner b{font-size:13px;font-weight:600}.desktop-update-banner small{font-size:11px;color:var(--ink2);margin-top:3px}.desktop-update-banner .btn{flex:none}
+.desktop-update-channel{display:flex;gap:6px;flex-wrap:wrap}.desktop-update-channel button[aria-pressed="true"]{border-color:var(--accent)}
+@media(max-width:560px){.desktop-update-banner{left:12px;right:12px;bottom:12px;max-width:none}.desktop-update-banner small{max-width:220px}}

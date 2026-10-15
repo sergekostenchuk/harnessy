@@ -20,6 +20,8 @@
   .drink{height:64px;border-radius:10px;background:radial-gradient(ellipse at 55% 110%,rgba(255,150,46,.75),rgba(214,104,24,.25) 40%,transparent 70%),linear-gradient(180deg,#1d0802,#341003 55%,#4a1a05);border:1px solid var(--line2);box-shadow:inset 0 0 0 1px rgba(240,154,58,.25),inset 0 0 26px rgba(208,106,22,.35)}
   .where{font-size:12.5px;color:var(--ink2);display:grid;gap:6px}.where div{display:grid;grid-template-columns:190px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}.where div:last-child{border-bottom:0}.where b{color:var(--ink);font-weight:500}
   .llm-status.is-error{padding:12px 14px;border:1px solid var(--bad-fill);border-radius:8px;color:var(--bad);font:600 16px/1.5 var(--font);overflow-wrap:anywhere}
+  .desktop-update-banner{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 16px;border:1px solid var(--accent);border-radius:10px;background:var(--panel);box-shadow:0 12px 32px #0006}
+  .desktop-update-banner b,.desktop-update-banner small{display:block}.desktop-update-banner b{font-size:13px;font-weight:600}.desktop-update-banner small{font-size:11px;color:var(--ink2);margin-top:3px}.desktop-update-channel{display:flex;gap:6px;flex-wrap:wrap}
 
   /* TS-24c: изображения в поле ввода и сообщении. */
   .image-attachment-strip{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;margin:0 0 12px}
@@ -740,6 +742,19 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
         <div class="box"><div class="cap2">Постоянная отметка сборки</div>
           <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line2);border-radius:10px;background:var(--panel)"><b>Harnessy</b><span style="margin-left:auto;display:inline-flex;padding:4px 8px;border:1px solid rgba(194,122,52,.45);border-radius:999px;color:var(--accent);font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase">alpha · 0.1.0</span></div>
           <p class="conn-note">Бейдж всегда виден в шапке и в «Настройки · О программе». Дисклеймер сохраняет принятие только для точной версии и появляется снова после обновления.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="desktop-update-spec"><h2>Обновление приложения · готово к перезапуску<i></i></h2>
+      <div class="two">
+        <div class="box"><div class="cap2">Плашка во всех экранах окна</div>
+          <div class="desktop-update-banner" role="status"><div><b>Обновление готово</b><small>Новая версия установится после перезапуска приложения.</small></div><button class="btn p" type="button">Перезапустить</button></div>
+          <p class="conn-note">Плашка появляется только после полной загрузки обновления. Движок останавливается до замены приложения; новая версия запускает его снова.</p>
+        </div>
+        <div class="box"><div class="cap2">Настройки · О программе</div>
+          <div class="row"><div><b>Канал обновлений</b><small>beta — пробные выпуски; latest — стабильные.</small></div><div class="desktop-update-channel" role="group" aria-label="Канал обновлений"><button type="button" class="btn p" aria-pressed="true">beta</button><button type="button" class="btn" aria-pressed="false">latest</button></div></div>
+          <p class="conn-note">Смена канала действует сразу. Если репозиторий релизов ещё не указан, проверка обновлений недоступна с явной причиной.</p>
         </div>
       </div>
     </section>

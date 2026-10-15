@@ -10,6 +10,7 @@ files:
   - main.js
   - engine.js
   - preload.js
+  - updates.js
   - context-menu.js
   - trace.js
   - package.json
@@ -27,7 +28,13 @@ extraResources:
   - from: ../deploy/out/site
     to: site
 mac:
-  identity: null
+  icon: icon.icns
+  forceCodeSigning: true
+  identity: Developer ID Application
+  hardenedRuntime: true
+  entitlements: entitlements.mac.plist
+  entitlementsInherit: entitlements.mac.plist
+  notarize: true
   category: public.app-category.developer-tools
   target:
     - target: dmg
@@ -35,3 +42,9 @@ mac:
     - target: zip
       arch: [arm64]
 artifactName: Harnessy-alpha-${version}-${arch}.${ext}
+generateUpdatesFilesForAllChannels: true
+# Owner confirmation is required before enabling checks or publishing.
+publish:
+  provider: github
+  owner: sergekostenchuk
+  repo: OWNER_CONFIRM_RELEASE_REPOSITORY

@@ -8,6 +8,15 @@
   const binding=()=>{ if(currentProject!==L.H.project){ currentProject=L.H.project; projectGeneration++; } return {project:currentProject,generation:projectGeneration}; };
   const same=b=>{ const now=binding(); return b.project===now.project&&b.generation===now.generation; };
   const hhmm=ts=>{ const d=ts?new Date(ts*1000):new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+  const desktopUpdates=globalThis.harnessy&&globalThis.harnessy.updates;
+  const UPDATE={state:null,saving:false,error:null};
+  function updateHTML(){
+    if(!desktopUpdates)return row('Канал обновлений','Доступно в установленном приложении','<span class="pill">только приложение</span>');
+    const state=UPDATE.state,channel=state?.channel||'latest',disabled=UPDATE.saving;
+    const controls='<span class="desktop-update-channel" role="group" aria-label="Канал обновлений">'+[['beta','beta'],['latest','latest']].map(([value,label])=>'<button type="button" class="btn sm'+(channel===value?' p':'')+'" data-update-channel="'+value+'" aria-pressed="'+(channel===value)+'"'+(disabled?' disabled':'')+'>'+label+'</button>').join('')+'</span>';
+    const status=UPDATE.error||(!state?'Читаю настройки обновлений…':!state.configured?'Репозиторий релизов ещё не подтверждён':!state.packaged?'Проверка доступна в установленной сборке':state.readyVersion?'Готова версия '+state.readyVersion:state.checking?'Проверяю обновления…':'Обновления проверяются при запуске и раз в 6 часов');
+    return row('Канал обновлений','beta — пробные выпуски; latest — стабильные',controls)+'<p class="d" role="status">'+esc(status)+'</p>';
+  }
   const TRACE_SET={saving:false,error:null,receipt:null};
   function traceSettingsHTML(){const owner=SET&&SET.owner||{};return '<div><h3>Трассировка</h3><p class="d">Личное · цепочки действий, ходов и инструментов сохраняются в текущем проекте. Секреты скрыты, длинные данные усечены. При заполнении остаются последние события.</p></div><div class="rows">'+(TRACE_SET.error?'<p role="alert">'+esc(TRACE_SET.error)+'</p>':'')+(TRACE_SET.receipt?'<p role="status">'+esc(TRACE_SET.receipt)+'</p>':'')+'<label class="row"><span>Записывать цепочки действий</span><input type="checkbox" data-trace-enabled '+(owner.traceEnabled!==false?'checked ':'')+(!SET||TRACE_SET.saving?'disabled':'')+'></label><label class="row"><span>Предел размера · МиБ<small>От 1 до 128 · на проект, с ротацией</small></span><input type="number" min="1" max="128" value="'+esc(owner.traceMaxMiB||16)+'" data-trace-size '+(!SET||TRACE_SET.saving?'disabled':'')+'></label><button class="btn sm" data-trace-save '+(!SET||TRACE_SET.saving?'disabled':'')+'>'+(TRACE_SET.saving?'Сохраняю…':'Сохранить')+'</button><a href="09-events.html">Цепочки действий →</a></div>'}
   document.addEventListener('click',async e=>{const button=e.target.closest('[data-trace-save]');if(!button||button.disabled||TRACE_SET.saving)return;e.preventDefault();e.stopImmediatePropagation();const panel=button.closest('.pane'),max=Number(panel.querySelector('[data-trace-size]').value),enabled=panel.querySelector('[data-trace-enabled]').checked;if(!Number.isSafeInteger(max)||max<1||max>128){TRACE_SET.error='Размер: целое число от 1 до 128 МиБ';render();return}TRACE_SET.saving=true;TRACE_SET.error=null;TRACE_SET.receipt=null;loadGeneration++;const trace=window.HARNESS_TRACE&&window.HARNESS_TRACE.capture();render();try{const r=await api('/api/settings',{scope:'owner',patch:{traceEnabled:enabled,traceMaxMiB:max}},{trace});if(!r||!r.ok||r.scope!=='owner'||r.saved.traceEnabled!==enabled||r.saved.traceMaxMiB!==max)throw Error(r&&r.error||'Настройки не сохранены');SET={...(SET||{}),owner:r.saved,effective:r.effective};TRACE_SET.receipt='Сохранено · личная область · '+hhmm(r.ts);await L.refreshStatus()}catch(e){TRACE_SET.error=e.message}finally{TRACE_SET.saving=false;render()}},true);
@@ -86,7 +95,7 @@
     if(k==='subscriptions')return billingHTML();
     if(k==='priceList')return priceHTML();
     if(k==='contextTransfer')return transferHTML();if(k==='trace')return traceSettingsHTML();
-    if(k==='about'){const release=globalThis.HARNESS_RELEASE||{version:'неизвестно',label:'alpha'};return head('О программе','Эта сборка предназначена для внутренней пробы. Канал alpha остаётся видимым до перехода проекта в beta.')+'<div class="rows">'+row('Harnessy','локальное приложение для работы с командой моделей','<span class="release-badge">'+esc(release.label||'alpha')+'</span>')+row('Версия',esc(release.version),'')+row('Данные проектов','лежат в ваших папках и в git','')+row('Ключи','хранятся в связке ключей macOS','')+'</div>';}
+    if(k==='about'){const release=globalThis.HARNESS_RELEASE||{version:'неизвестно',label:'alpha'};return head('О программе','Версия локального приложения и канал его обновлений.')+'<div class="rows">'+row('Harnessy','локальное приложение для работы с командой моделей','<span class="release-badge">'+esc(release.label||'alpha')+'</span>')+row('Версия',esc(release.version),'')+row('Данные проектов','лежат в ваших папках и в git','')+row('Ключи','хранятся в связке ключей macOS','')+'</div><div class="rows">'+updateHTML()+'</div>';}
     if(k==='profile'){ const maskMail=m=>String(m||'').replace(/^(.)[^@]*(@.*)$/,'$1•••$2'); const cl=CONN?CONN.find(p=>p.id==='claude'):null, cx=CONN?CONN.find(p=>p.id==='codex'):null; const a=cl&&cl.auth||{}, b=cx&&cx.auth||{};
       return head('Профиль и входы','Локальное окно Harnessy работает без входа. Входы провайдеров — это ваши подписки; сайт harnessy.ai имеет свои входы (Telegram, GitHub, Google) и к окну не относится.')+
         '<div class="rows">'+row('Это окно','локально · '+esc(L.H.project||'проект не открыт'),'<span class="pill ok">без входа</span>')+
@@ -125,6 +134,11 @@
     if(!r||!r.ok||r.scope!=='project'||!r.saved||typeof r.saved!=='object'||Array.isArray(r.saved)||!r.effective||typeof r.effective!=='object'||Array.isArray(r.effective)){ toast('Не вышло: '+esc((r&&r.error)||'нет подтверждения сохранённой настройки')); return false; }
     loadGeneration++; SET={...(SET||{}),project:r.saved,effective:r.effective,applies:r.applies}; return true; }
   // ── действия
+  document.addEventListener('click',async e=>{const button=e.target.closest('[data-update-channel]');if(!button)return;e.preventDefault();e.stopImmediatePropagation();if(!desktopUpdates||UPDATE.saving||button.disabled)return;
+    UPDATE.saving=true;UPDATE.error=null;render();
+    try{UPDATE.state=await desktopUpdates.setChannel(button.dataset.updateChannel)}catch{UPDATE.error='Не удалось сохранить канал обновлений'}
+    finally{UPDATE.saving=false;render()}
+  },true);
   document.addEventListener('click',async e=>{ const disabled=e.target.closest('[data-set-disabled]'); if(disabled){ e.preventDefault(); e.stopImmediatePropagation(); toast(disabled.title); return; }
     const tl=e.target.closest('[data-set-local]'); if(tl){ e.preventDefault(); e.stopImmediatePropagation(); const on=!tl.classList.contains('on'); tl.classList.toggle('on',on); document.documentElement.classList.toggle('less-motion',on); try{ localStorage.setItem('harnessy-less-motion',on?'1':'0'); }catch(x){} toast(on?'Меньше анимации: включено':'Анимация: как обычно'); L.log('настройка','Меньше анимации: '+(on?'включено':'выключено')); return; }
     const it=e.target.closest('.snav .it[data-p]'); if(it){ e.preventDefault(); e.stopImmediatePropagation(); if(window.HX) HX.close(); query=''; go(it.dataset.p); return; }
@@ -155,4 +169,5 @@
   addEventListener('live:status',()=>{ binding(); load(); });
   try{ if(localStorage.getItem('harnessy-less-motion')==='1') document.documentElement.classList.add('less-motion'); }catch(e){}
   const initial=location.hash.match(/#p=([a-zA-Z]+)/); if(initial&&NAV.flatMap(x=>x[1]).some(x=>x[0]===initial[1]&&!x[2])) cur=initial[1]; render(); load();
+  if(desktopUpdates){desktopUpdates.onState(state=>{UPDATE.state=state;if(cur==='about')render()});desktopUpdates.getState().then(state=>{UPDATE.state=state;if(cur==='about')render()}).catch(()=>{UPDATE.error='Не удалось прочитать канал обновлений';if(cur==='about')render()})}
 })();

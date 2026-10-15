@@ -3,6 +3,8 @@
 const {app,BrowserWindow,shell,nativeTheme,ipcMain,dialog,Menu}=require('electron');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {EngineManager,defaultPaths}=require('./engine.js');
+const {DesktopUpdates,trustedUpdateOrigin}=require('./updates.js');
+const {autoUpdater}=require('electron-updater');
 const {reportDesktopTrace}=require('./trace.js');
 
 const DARK='#0a0a0b';
@@ -19,6 +21,23 @@ const engine=new EngineManager({
   log:message=>console.log('[harnessy] '+message),
 });
 let currentOrigin='';
+let allowQuit=false,stopping=false;
+const updates=new DesktopUpdates({
+  updater:autoUpdater,packaged:app.isPackaged,file:path.join(app.getPath('userData'),'updates.json'),
+  notify:state=>BrowserWindow.getAllWindows().forEach(win=>{if(!win.isDestroyed())win.webContents.send('harnessy:update-state',state)}),
+  stopEngine:()=>engine.stop(),resumeEngine:async()=>{
+    const launch=await engine.start(),previous=currentOrigin;
+    currentOrigin=launch.origin;
+    if(previous!==currentOrigin)for(const win of BrowserWindow.getAllWindows()){
+      if(win.isDestroyed())continue;
+      const old=win.webContents.getURL();
+      if(!sameOrigin(old,previous))continue;
+      const page=new URL(old);
+      void win.loadURL(new URL(page.pathname+page.search+page.hash,currentOrigin).href);
+    }
+  },allowQuit:value=>{allowQuit=value},
+  log:message=>console.log('[harnessy] '+message),
+});
 
 const html=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const offline=reason=>'data:text/html;charset=utf-8,'+encodeURIComponent(
@@ -80,8 +99,15 @@ ipcMain.handle('harnessy:pick-folder',async(event,options={})=>{
   return result.canceled||!result.filePaths.length?null:result.filePaths[0];
 });
 
-let allowQuit=false,stopping=false;
+function updateSender(event){
+  return !!BrowserWindow.fromWebContents(event.sender)&&trustedUpdateOrigin(event.sender.getURL(),currentOrigin);
+}
+ipcMain.handle('harnessy:update-state',event=>{if(!updateSender(event))throw Error('Окно не подтверждено');return updates.state()});
+ipcMain.handle('harnessy:update-channel',(event,channel)=>{if(!updateSender(event))throw Error('Окно не подтверждено');return updates.setChannel(channel)});
+ipcMain.handle('harnessy:update-install',event=>{if(!updateSender(event))throw Error('Окно не подтверждено');return updates.install()});
+
 app.on('before-quit',event=>{
+  updates.dispose();
   if(allowQuit||!PRIMARY)return;
   event.preventDefault();
   if(stopping)return;
@@ -90,6 +116,6 @@ app.on('before-quit',event=>{
 });
 process.once('exit',()=>engine.killNow());
 process.on('uncaughtExceptionMonitor',()=>{if(currentOrigin)void reportDesktopTrace(currentOrigin,'uncaught-exception')});
-if(PRIMARY)app.whenReady().then(createWindow);
+if(PRIMARY)app.whenReady().then(async()=>{await createWindow();updates.start()});
 app.on('activate',()=>{if(PRIMARY&&BrowserWindow.getAllWindows().length===0)void createWindow()});
 app.on('window-all-closed',()=>app.quit());

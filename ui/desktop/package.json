@@ -1,6 +1,7 @@
 {
   "name": "harnessy-desktop",
   "productName": "Harnessy-alpha",
+  "author": "Harnessy",
   "version": "0.1.0-alpha",
   "private": true,
   "description": "Harnessy alpha: автономная оболочка и встроенный движок",
@@ -10,12 +11,15 @@
     "prepare:site": "python3 ../deploy/build.py",
     "prepare:engine": "node build-engine.mjs",
     "prepare:dist": "npm run prepare:site && npm run prepare:engine",
-    "dist": "npm run prepare:dist && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --arm64",
-    "dist:x64": "npm run prepare:dist && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --x64"
+    "dist": "node signing.js && npm run prepare:dist && electron-builder --mac --arm64 --publish never && node verify-signing.js",
+    "dist:x64": "node signing.js && npm run prepare:dist && electron-builder --mac --x64 --publish never && node verify-signing.js"
   },
   "devDependencies": {
     "electron": "44.4.1",
     "electron-builder": "26.15.3",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
   }
 }
