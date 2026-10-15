@@ -9,7 +9,7 @@ export interface Transport {
 export interface SpawnOptions {cwd:string;args:string[];env:NodeJS.ProcessEnv;secrets?:string[]}
 export type TransportFactory=(options:SpawnOptions)=>Transport;
 export const spawnTransport:TransportFactory=opts=>{
- const child=spawn('codex',opts.args,{cwd:opts.cwd,env:opts.env,stdio:['pipe','pipe','pipe']});
+ const child=spawn(opts.env.CODEX_BIN||'codex',opts.args,{cwd:opts.cwd,env:opts.env,stdio:['pipe','pipe','pipe']});
  const lines=new Set<(line:string)=>void>(),closed=new Set<(error:ProviderError)=>void>();let last:ProviderError|null=null;let stderr='';
  const clean=(s:string)=>(opts.secrets??[]).reduce((v,key)=>v.replaceAll(key,'[redacted]'),s);
  const die=(e:ProviderError)=>{if(last)return;last=e;for(const cb of closed)cb(e)};

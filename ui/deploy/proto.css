@@ -444,6 +444,15 @@ aside.side.ps .ps-foot .nav { height:28px; } aside.side.ps .limits.on { border-c
 aside.side.ps .ps-foot { position:relative; } aside.side.ps .ps-foot .live-menu.la { left:0; right:0; bottom:calc(100% + 6px); top:auto; min-width:0; }
 
 /* подключения на данных движка (conn.js): состояния проверки выхода, форма маршрута */
+.program-missing{margin:14px 0;padding:14px;border:1px solid var(--line2);border-radius:10px;background:var(--raised)}
+.program-missing strong{font-weight:500;color:var(--ink)}
+.program-missing p{margin:6px 0;color:var(--ink2);font:12px/1.5 var(--font);overflow-wrap:anywhere}
+.program-missing code{display:block;color:var(--accent);margin:10px 0;overflow-wrap:anywhere}
+.program-missing-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
+.program-missing-error{color:var(--bad)!important}
+.program-missing summary{cursor:pointer;color:var(--ink);font:12px/1.4 var(--font)}
+.program-missing.compact{padding:10px 12px;margin:8px 0}
+.program-missing .program-paths{margin:6px 0}
 .cs { font:10px var(--mono); letter-spacing:.06em; text-transform:uppercase; } .cs.ok { color:var(--ok); } .cs.bad { color:var(--bad,#a3304b); } .cs.warn { color:#c27a34; } .cs.none { color:var(--ink3); }
 .blk .t small { display:block; font:10.5px var(--font); letter-spacing:0; text-transform:none; color:var(--ink3); margin-top:2px; text-align:right; }
 .rform { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:6px 0 4px; } .rform .live-f { margin:0; height:34px; font:12px var(--mono); } .rform .live-f:only-child { grid-column:1/3; }

@@ -25,6 +25,7 @@ export {OPENCODE,OPENCODE_UNAVAILABLE,OPENCODE_LOGIN_UNKNOWN} from './opencode.t
 export {OllamaProvider,ollamaEntry,OLLAMA_URL,OLLAMA_TIMEOUT_MS,OLLAMA_LOGIN_UNKNOWN} from './ollama.ts';
 
 export {catalogCacheDirectory} from './catalog-cache.ts';
+export {recoverProgramPath} from './path-recovery.ts';
 export {API_TURN_MODES} from './modes.ts';
 
 export {safeDiagnostic,hasPublicSecret,hasSecretField} from './diagnostic.ts';

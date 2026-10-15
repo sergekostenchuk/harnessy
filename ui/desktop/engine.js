@@ -3,6 +3,7 @@ const fs=require('node:fs');
 const net=require('node:net');
 const os=require('node:os');
 const path=require('node:path');
+const {recoverProgramPath}=require('./path-recovery.js');
 
 const START_PATH='/sketches/proto/10-new-chat.html';
 
@@ -76,6 +77,8 @@ class EngineManager {
     if(external){if(!await this.status(external.origin))throw new Error('внешний движок не отвечает: '+external.origin);if(!this.active(generation))throw this.cancelled();return {...external,managed:false};}
     const paths=this.options.paths;
     if(!paths||!fs.existsSync(paths.entry))throw new Error('собранный движок не найден: '+String(paths&&paths.entry));
+    const recovered=recoverProgramPath(this.env);this.env={...this.env,PATH:recovered.path};
+    this.log('программы ищем в: '+recovered.searched.join(', '));
     let launches=0;
     for(let port=this.portStart,attempt=0;attempt<(this.options.portAttempts??100);attempt++,port++){
       if(!this.active(generation))throw this.cancelled();

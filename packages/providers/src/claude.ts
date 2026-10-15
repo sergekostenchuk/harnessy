@@ -72,7 +72,7 @@ export class ClaudeProvider implements Provider {
  readonly vendor='claude' as const;private active=new Map<string,{query:Query|null;abort:AbortController}>();
  private deps:ClaudeDependencies;
  constructor(deps:Partial<ClaudeDependencies>={}){
- this.deps={queryFn:query,listSessionsFn:listSessions,getSessionMessagesFn:getSessionMessages,findBinary:()=>claudeBinary(),authStatus,env:process.env,readOauthLogin,usageFetch:fetch,...deps}
+ this.deps={queryFn:query,listSessionsFn:listSessions,getSessionMessagesFn:getSessionMessages,findBinary:()=>claudeBinary(deps.env??process.env),authStatus,env:process.env,readOauthLogin,usageFetch:fetch,...deps}
  }
  async runTurn(input:Seat,message:string,ctx:TurnContext){
  const seat=snapshot(input,ctx);if(seat.vendor!=='claude')throw new ProviderError('protocol','wrong provider');

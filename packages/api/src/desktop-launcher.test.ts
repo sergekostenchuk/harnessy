@@ -10,6 +10,12 @@ import {EventEmitter} from 'node:events';
 const main=fs.readFileSync(new URL('../../../ui/desktop/main.js',import.meta.url),'utf8');
 const preload=fs.readFileSync(new URL('../../../ui/desktop/preload.js',import.meta.url),'utf8');
 const requireFromTest=createRequire(import.meta.url),{contextMenuTemplate}=requireFromTest('../../../ui/desktop/context-menu.js'),{EngineManager,defaultPaths}=requireFromTest('../../../ui/desktop/engine.js');
+const {recoverProgramPath}=requireFromTest('../../../ui/desktop/path-recovery.js');
+
+test('TS-33: packaged shell PATH is restored before the engine child starts',()=>{
+ let calls=0;const pathValue=recoverProgramPath({HOME:'/test/home',PATH:'/usr/bin:/bin',SHELL:'/bin/zsh'},()=>{calls++;return {status:0,stdout:'/test/home/.local/bin:/usr/bin'}});
+ assert.equal(calls,1);assert.equal(pathValue.searched[0],'/test/home/.local/bin');assert.equal(pathValue.source,'login-shell');
+});
 
 class Child extends EventEmitter {
  exitCode:number|null=null;signalCode:string|null=null;kills:string[]=[];

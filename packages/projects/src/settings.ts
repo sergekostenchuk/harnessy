@@ -71,12 +71,13 @@ export class Settings {
  }
  private merged(owner:Record<string,unknown>,project:Record<string,unknown>){const overrides=orderedClone(project);for(const key of ['network','llmProviders','priceList','traceEnabled','traceMaxMiB',...BILLING_KEYS])delete overrides[key];return orderedClone(owner,overrides)}
  get(){const owner=this.readOwner(),path=this.projectPath(),project=path?readObject(path):{};this.prices(owner);return {ok:true as const,owner,project,effective:this.merged(owner,project),applies:SETTINGS_APPLIES}}
+ async setProgramBinary(id:string,binary:string){const path=canonicalPath(this.ownerFile);return withPathLock(path,()=>{const owner=this.readOwner(true,path),saved=orderedClone(owner);saved['programBinary_'+id]=binary;writeJson(path,saved);return binary})}
  // Broken prices must not prevent opening a project or reaching the owner's repair endpoint.
  effective(){const path=this.projectPath();return this.merged(readObject(this.ownerFile),path?readObject(path):{})}
  async patch(scope:unknown,patch:unknown){
  scope=truthy(scope)?String(scope):'owner';if(!['owner','project'].includes(String(scope))||!object(patch)||!Object.keys(patch).length)throw new ProjectError('invalid_settings',SETTINGS_SCOPE);
  const changes=orderedClone(patch);
- for(const key of orderedKeys(changes)){const value=changes[key];if(key==='network')throw new ProjectError('invalid_settings','Выходы меняются через /api/network');if(key==='llmProviders')throw new ProjectError('invalid_settings','Маршруты меняются через /api/llm/providers');if([...key].length>40||!(/^[\p{L}\p{N}]+$/u.test(key.replaceAll('_',''))))throw new ProjectError('invalid_settings','ключ '+repr(key)+' не годится');
+ for(const key of orderedKeys(changes)){const value=changes[key];if(key==='network')throw new ProjectError('invalid_settings','Выходы меняются через /api/network');if(key==='llmProviders')throw new ProjectError('invalid_settings','Маршруты меняются через /api/llm/providers');if(key.startsWith('programBinary_'))throw new ProjectError('invalid_settings','Путь к программе меняется через карточку программы');if([...key].length>40||!(/^[\p{L}\p{N}]+$/u.test(key.replaceAll('_',''))))throw new ProjectError('invalid_settings','ключ '+repr(key)+' не годится');
  if(key==='traceEnabled'||key==='traceMaxMiB'){if(scope!=='owner')throw new ProjectError('invalid_settings',key+': только область owner');if(value!==null&&(key==='traceEnabled'?typeof value!=='boolean':!Number.isSafeInteger(value)||Number(value)<1||Number(value)>128))throw new ProjectError('invalid_settings',key+': нужен флаг или размер от 1 до 128 МиБ')}
  if(key==='priceList'){if(scope!=='owner')throw new ProjectError('invalid_settings','priceList: только область owner');if(value!==null)changes[key]=priceList(value)}
  if(BILLING_KEYS.includes(key as never)){if(scope!=='owner')throw new ProjectError('billing_invalid',key+': только область owner');if(value!==null)billingConfig({[key]:value})}

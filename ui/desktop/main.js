@@ -98,6 +98,13 @@ ipcMain.handle('harnessy:pick-folder',async(event,options={})=>{
     defaultPath:options.defaultPath&&fs.existsSync(options.defaultPath)?options.defaultPath:os.homedir(),properties:['openDirectory','createDirectory']});
   return result.canceled||!result.filePaths.length?null:result.filePaths[0];
 });
+ipcMain.handle('harnessy:pick-file',async(event,options={})=>{
+  const win=BrowserWindow.fromWebContents(event.sender);
+  if(!win||!trustedUpdateOrigin(event.sender.getURL(),currentOrigin))throw Error('Окно не подтверждено');
+  const result=await dialog.showOpenDialog(win,{title:'Выберите файл программы',buttonLabel:'Указать программу',
+    defaultPath:os.homedir(),properties:['openFile']});
+  return result.canceled||!result.filePaths.length?null:result.filePaths[0];
+});
 
 function updateSender(event){
   return !!BrowserWindow.fromWebContents(event.sender)&&trustedUpdateOrigin(event.sender.getURL(),currentOrigin);
