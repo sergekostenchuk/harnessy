@@ -22,9 +22,40 @@ function publishSelection() {
 document.addEventListener('selectionchange', publishSelection, true);
 document.addEventListener('mouseup', () => setTimeout(publishSelection, 0), true);
 
+const updateListeners=new Set();
+let updateState=null;
+function renderUpdateBanner(){
+  if(!document.body)return;
+  let banner=document.querySelector('[data-desktop-update-banner]');
+  if(!updateState?.readyVersion){banner?.remove();return}
+  if(!banner){
+    banner=document.createElement('div');banner.className='desktop-update-banner';banner.setAttribute('data-desktop-update-banner','');banner.setAttribute('role','status');
+    const copy=document.createElement('div'),title=document.createElement('b'),description=document.createElement('small'),button=document.createElement('button');
+    title.textContent='Обновление готово';description.textContent='Новая версия установится после перезапуска приложения.';
+    button.type='button';button.className='btn p';button.textContent='Перезапустить';
+    button.addEventListener('click',async()=>{button.disabled=true;try{await ipcRenderer.invoke('harnessy:update-install')}catch{description.textContent='Не удалось перезапустить. Повторите действие.';button.disabled=false}});
+    copy.appendChild(title);copy.appendChild(description);banner.appendChild(copy);banner.appendChild(button);document.body.appendChild(banner);
+  }
+  const button=banner.querySelector('button');if(button)button.disabled=updateState.installing===true;
+}
+function publishUpdateState(state){
+  if(!state||typeof state!=='object')return;
+  updateState=state;renderUpdateBanner();
+  for(const listener of updateListeners)listener(state);
+}
+ipcRenderer.on('harnessy:update-state',(_event,state)=>publishUpdateState(state));
+document.addEventListener('DOMContentLoaded',renderUpdateBanner,{once:true});
+Promise.resolve(ipcRenderer.invoke('harnessy:update-state')).then(publishUpdateState).catch(()=>{});
+
 contextBridge.exposeInMainWorld('harnessy', {
   desktop: true,
   pickFolder: o => ipcRenderer.invoke('harnessy:pick-folder', o || {}),   // → абсолютный путь папки или null (отмена)
+  updates: Object.freeze({
+    getState:()=>ipcRenderer.invoke('harnessy:update-state'),
+    setChannel:channel=>ipcRenderer.invoke('harnessy:update-channel',channel),
+    install:()=>ipcRenderer.invoke('harnessy:update-install'),
+    onState:callback=>{if(typeof callback!=='function')return ()=>{};updateListeners.add(callback);if(updateState)callback(updateState);return ()=>updateListeners.delete(callback)},
+  }),
   onQuote: callback => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, text) => { if (typeof text === 'string' && text.trim()) callback(text); };

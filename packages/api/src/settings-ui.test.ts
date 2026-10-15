@@ -8,13 +8,13 @@ import {fixture,call,deferred,until} from './test-helpers.ts';
 const read=(path:string)=>readFileSync(new URL('../../../'+path,import.meta.url),'utf8');
 const live=read('ui/deploy/live.js'),set=read('ui/deploy/set.js');
 function part(source:string,start:string,end:string){const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return source.slice(a,b)}
-function settingsUi(fetch?:(path:string,body?:any)=>Promise<any>,project='/projects/p1'){
+function settingsUi(fetch?:(path:string,body?:any)=>Promise<any>,project='/projects/p1',desktopUpdates?:any){
  const d=dom('<div class="frame cur"><div class="main"><div class="top"><span class="st"></span><div class="r"></div></div><div class="set"></div></div></div>'),storage=new Map<string,string>(),writes:string[]=[],toasts:string[]=[],logs:any[]=[],requests:any[]=[],hooks:any[]=[];let pending=0;
  Object.assign(d.document,{documentElement:d.html,body:d.body});
  const H:any={on:true,project,panes:[{id:'worker',model:'w1',role:'executor',mode:'read',label:'воркер'}],modes:[{id:'read',label:'Чтение'},{id:'edit',label:'Правка'}],roleCatalog:[],models:{claude:[{id:'w1'}]}};
  const responses=(path:string)=>path==='/api/status'?{project:H.project,policy:{path:'policy'},team:{path:'team'}}:path==='/api/settings'?{ok:true,owner:{},project:{},effective:{defaultMode:'read'}}:{ok:true,providers:[]};
  const L:any={H,esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),toast:(s:string)=>toasts.push(s),log:(...a:any[])=>logs.push(a),paneName:(p:any)=>p.label,refreshStatus:async()=>{},api:async(path:string,body?:any)=>{requests.push({path,body});pending++;try{return await (fetch?fetch(path,body):responses(path))}finally{pending--}}};
- const context:any={LIVE:L,H,S:{ui:{set:{t:[0,0,0,0,0,0],s:[1,1,1]}},chat:[]},PAGE:'set',document:d.document,location:{pathname:'/06-settings.html',host:'127.0.0.1:3794',hash:'',href:''},history:{pushState(_a:any,_b:any,hash:string){context.location.hash=hash}},
+ const context:any={LIVE:L,H,harnessy:desktopUpdates?{updates:desktopUpdates}:undefined,S:{ui:{set:{t:[0,0,0,0,0,0],s:[1,1,1]}},chat:[]},PAGE:'set',document:d.document,location:{pathname:'/06-settings.html',host:'127.0.0.1:3794',hash:'',href:''},history:{pushState(_a:any,_b:any,hash:string){context.location.hash=hash}},
   localStorage:{getItem:(k:string)=>storage.get(k)??null,setItem(k:string,v:string){storage.set(k,v);writes.push(k)}},save(){writes.push('live-state')},log:L.log,toast:L.toast,esc:L.esc,hooks,stop(){requests.push({path:'stop'})},now:()=>1,hhmm:()=>'',
   addEventListener:d.window.addEventListener.bind(d.window),setTimeout:(fn:()=>void)=>{fn();return 1},requestAnimationFrame:(fn:()=>void)=>fn(),clearTimeout(){}};
  context.window=context;const vm=createContext(context);runInContext(read('ui/sketches/disarto/app.js'),vm);
@@ -189,4 +189,14 @@ test('248: transfer settings DOM → HTTP validates owner keys, persists only ed
 });
 test('248: failed save retains draft and never issues a success receipt',async()=>{
  const v=settingsUi(async(path,body)=>body?{ok:false,error:'write_failed'}:path==='/api/status'?{project:'/projects/p1'}:path==='/api/settings'?{ok:true,owner:{},effective:{}}:{ok:true,providers:[]});await v.ready();await v.go('contextTransfer');const n=v.find('[data-transfer-key="contextTransferMessages"]');n.value='5';await n.emit('input');await v.find('[data-transfer-save]').emit('click');assert.equal(v.find('[data-transfer-key="contextTransferMessages"]').value,'5');assert.match(v.find('[role="alert"]').textContent,/write_failed/);assert.doesNotMatch(v.find('.pane').textContent,/Сохранено/);
+});
+
+test('TS-31: About switches the desktop update channel without changing project settings',async()=>{
+ let state={channel:'latest',configured:false,packaged:true,readyVersion:null},listener:(value:any)=>void=()=>{};
+ const updates={getState:async()=>state,onState:(callback:(value:any)=>void)=>{listener=callback;return ()=>{}},setChannel:async(channel:string)=>{state={...state,channel};listener(state);return state}};
+ const v=settingsUi(undefined,'/projects/p1',updates);await v.ready();await v.go('about');
+ assert.match(v.find('.pane').textContent,/Репозиторий релизов ещё не подтверждён/);
+ const button=v.find('[data-update-channel="beta"]');await button.emit('click');
+ assert.equal(state.channel,'beta');assert.equal(v.find('[data-update-channel="beta"]').getAttribute('aria-pressed'),'true');
+ assert.equal(v.requests.filter(r=>r.body?.scope==='project').length,0);
 });

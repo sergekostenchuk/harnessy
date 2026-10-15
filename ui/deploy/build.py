@@ -224,8 +224,9 @@ def build_proto():
     boot = (HERE / "proto.js").read_text(encoding="utf-8").split("/* LIVE_BOOT_END */", 1)[0]
     release = json.loads((ROOT / "desktop" / "package.json").read_text(encoding="utf-8"))
     version = str(release.get("version", ""))
-    assert re.fullmatch(r"0\.1\.\d+-alpha(?:\.\d+)?", version), "desktop version: ожидается 0.1.x-alpha"
-    release_script = '<script>globalThis.HARNESS_RELEASE=Object.freeze('+json.dumps({"channel":"alpha","version":version,"label":"alpha · "+version.split("-",1)[0]}, ensure_ascii=False, separators=(",",":"))+')</script>\n<script src="release.js"></script>\n'
+    assert re.fullmatch(r"\d+\.\d+\.\d+(?:-(?:alpha|beta)(?:\.\d+)?)?", version), "desktop version: ожидается semver, alpha или beta"
+    channel = "alpha" if "-alpha" in version else "beta" if "-beta" in version else "latest"
+    release_script = '<script>globalThis.HARNESS_RELEASE=Object.freeze('+json.dumps({"channel":channel,"version":version,"label":channel+" · "+version.split("-",1)[0]}, ensure_ascii=False, separators=(",",":"))+')</script>\n<script src="release.js"></script>\n'
     for stem, title in PROTO_PAGES.items():
         t = (src / f"{PROTO_SRC.get(stem, stem)}.html").read_text(encoding="utf-8")
         t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto>')
