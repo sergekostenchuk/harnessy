@@ -13,10 +13,10 @@ const part=(a:string,b:string)=>{const start=live.indexOf(a),end=live.indexOf(b,
 async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body:any)=>Promise<void>,saved:Record<string,any>={},transform?:(path:string,response:any)=>any){
  const d=dom(sketch.slice(sketch.indexOf('<div class="frame"'),sketch.indexOf('<script>')));Object.assign(d.document,{documentElement:d.html,body:d.body});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page','first');d.document.querySelector('.frame')!.classList.add('cur');
  const H:any={on:true,panes:[],active:{},project:h.dir},S:any={ui:{pane:'room'},chat:[],cx:{noFolder:false},...saved},requests:any[]=[],toasts:string[]=[],pending=new Set<Promise<any>>(),streams:any[]=[];
- const c:any={H,S,PAGE:'first',document:d.document,window:null,location:{href:'',pathname:'/19-first-run.html'},save(){},log(){},now:Date.now,setTimeout(){},clearTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),removeEventListener:d.window.removeEventListener.bind(d.window),
+ const c:any={H,S,PAGE:'first',document:d.document,window:null,location:{href:'',pathname:'/19-first-run.html'},AbortController,save(){},log(){},now:Date.now,setTimeout(){},clearTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),removeEventListener:d.window.removeEventListener.bind(d.window),
   esc:(v:any)=>String(v??'').replace(/[&<>"]/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[x]!)),toast:(v:string)=>toasts.push(v),paneName:(p:any)=>p.label,modelName:(id:string)=>id||'модель не выбрана',knowledgeReset(){},hStatus(){},render(){},drawLive(){},scrollEnd(){},cols:()=>d.document.querySelectorAll('.feed .col'),
   pickPane(){H.pane=H.panes.find((p:any)=>p.id===S.ui.pane)||null},async loadChat(){},
-  api(path:string,body?:any){requests.push({path,body});const job=(async()=>{await pause?.(path,body);const response=(await call(h.api,path,body?{body}:{})).body;return transform?transform(path,response):response})();pending.add(job);job.then(()=>pending.delete(job),()=>pending.delete(job));return job},
+  api(path:string,body?:any,operation?:any){requests.push({path,body});const job=(async()=>{await pause?.(path,body);if(operation?.signal?.aborted)throw Object.assign(Error('aborted'),{name:'AbortError'});const response=(await call(h.api,path,body?{body}:{})).body;return transform?transform(path,response):response})();pending.add(job);job.then(()=>pending.delete(job),()=>pending.delete(job));return job},
   async refreshStatus(){const status=await c.api('/api/status');if(H.project!==status.project)H.confirmedProjectGeneration=(H.confirmedProjectGeneration||0)+1;Object.assign(H,{project:status.project,panes:status.panes,models:status.models,turnModes:status.turnModes,active:status.activeChats,liveStatus:status,noProject:status.noProject});const list=h.runtime.chatsList(OWNER);H.chatList=list.chats;c.pickPane();return status},laMenu(){},KN:{data:null}
   ,subscribeLiveEvents(onmessage:any){const stream={onmessage,closed:false,close(){this.closed=true}};streams.push(stream);return stream}
  };
@@ -119,6 +119,15 @@ test('TS-34: connection failure names the reason and keeps Back plus Simple chat
 for(const change of ['project','pagehide'])test('TS-34: delayed room configuration cannot advance after '+change,async t=>{
  const h=await fixture(t,{seats:'  {}'}),entered=deferred(),gate=deferred(),v=await ui(h,async path=>{if(path==='/api/room'){entered.resolve();await gate.promise}});v.f.go(2);const work=v.find('[data-first-connect]').emit('click');await entered.promise;
  if(change==='project')v.H.project='/other';else await v.window.emit('pagehide');gate.resolve();await work;await v.settle();assert.equal(v.find('.st[data-s="3"]').classList.contains('on'),false);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,0);assert.equal(h.provider.calls.length,0);
+});
+
+for(const held of ['/api/room','/api/chats/new'])for(const exit of ['back','simple'])test('TS-34 r2: '+exit+' exits immediately while '+held+' is pending and ignores its late reply',async t=>{
+ const h=await fixture(t,{seats:'  {}'}),entered=deferred(),gate=deferred(),v=await ui(h,async path=>{if(path===held){entered.resolve();await gate.promise}});v.f.go(2);if(held==='/api/chats/new'){v.H.active.room=null;v.f.invalidate()}
+ const beforeChats=h.runtime.chatsList(OWNER).chats.length,beforeRoom=h.runtime.registry.get('room')?.settings();
+ const work=v.find('[data-first-connect]').emit('click');await entered.promise;assert.equal(v.f.state.busy,true);
+ if(exit==='back'){await v.find('.st[data-s="2"] [data-go="1"]').emit('click');assert.equal(v.find('.st[data-s="1"]').classList.contains('on'),true)}else {await v.find('.st[data-s="2"] [data-first-simple]').emit('click');assert.equal(v.c.location.href,'10-new-chat.html')}
+ assert.equal(v.f.state.busy,false);const operation=v.f.state.operation;gate.resolve();await work;await v.settle();assert.equal(v.f.state.operation,operation);assert.equal(v.f.state.busy,false);assert.equal(v.document.querySelector('.first-failure'),null);
+ if(exit==='back')assert.equal(v.find('.st[data-s="1"]').classList.contains('on'),true);else assert.equal(v.c.location.href,'10-new-chat.html');if(held==='/api/chats/new'){assert.equal(v.S.firstRoomCreations?.[h.dir],undefined);assert.equal(h.runtime.chatsList(OWNER).chats.length,beforeChats)}else assert.deepEqual(h.runtime.registry.get('room')?.settings(),beforeRoom);assert.equal(h.provider.calls.length,0);
 });
 
 test('TS-34: first question runs in the room and never promotes it',async t=>{
