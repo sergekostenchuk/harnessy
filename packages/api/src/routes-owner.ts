@@ -18,7 +18,7 @@ export function ownerRoutes(r:Runtime):Route[]{return [
  {method:'GET',path:'/api/pins',handle:()=>json(r.pinsGet(OWNER))},
  {method:'POST',path:'/api/pins',handle:async({body})=>{if(body.project!==undefined&&body.project!==r.project.dir)throw new RuntimeError('project_changed','проект сменился',409);return json(await r.pinSet(body,OWNER))}},
  {method:'GET',path:'/api/settings',handle:()=>json(r.settingsGet(OWNER))},
- {method:'POST',path:'/api/settings',handle:async({body})=>json(await r.settingsPatch(body.scope,body.patch,OWNER))},
+ {method:'POST',path:'/api/settings',handle:async({request,body})=>{providerOwner(request);return json(await r.settingsPatch(body.scope,body.patch,OWNER))}},
  {method:'GET',path:'/api/context/:id',handle:({params})=>r.registry.get(params.id!)?json(r.context(params.id!)):json({ok:false,error:'нет такого места'},404)},
  {method:'POST',path:'/api/halt',handle:async({body})=>json(await r.halt(body.on===undefined||pyTruthy(body.on),OWNER))},
  {method:'POST',path:'/api/room',handle:async({body})=>json(await r.roomSet(body,OWNER))},

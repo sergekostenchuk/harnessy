@@ -43,10 +43,10 @@ test('259: process output/time bounds and UTF-8 failures terminate instead of re
 });
 
 test('TS-30 r2: packaged generic CLI bridge inherits Electron Node mode',async t=>{
- const before=process.env.ELECTRON_RUN_AS_NODE;process.env.ELECTRON_RUN_AS_NODE='1';
- t.after(()=>{if(before===undefined)delete process.env.ELECTRON_RUN_AS_NODE;else process.env.ELECTRON_RUN_AS_NODE=before});
+ const before=process.env.ELECTRON_RUN_AS_NODE,logging=process.env.ELECTRON_ENABLE_LOGGING;process.env.ELECTRON_RUN_AS_NODE='1';process.env.ELECTRON_ENABLE_LOGGING='1';
+ t.after(()=>{if(before===undefined)delete process.env.ELECTRON_RUN_AS_NODE;else process.env.ELECTRON_RUN_AS_NODE=before;if(logging===undefined)delete process.env.ELECTRON_ENABLE_LOGGING;else process.env.ELECTRON_ENABLE_LOGGING=logging});
  const f=await cliFixture(t);await f.provider.runTurn(f.seat,'hello',f.ctx);
- assert.equal(f.capture().find(row=>row.configPath)!.runAsNode,'1');
+ const rows=f.capture();for(const row of rows.filter(row=>row.action))assert.deepEqual(row.electronEnv,[]);assert.equal(rows.find(row=>row.configPath)!.runAsNode,'1');
 });
 
 test('259: all mode is an explicit flag choice, metadata nonzero exit is refused unless descriptor declares it',async t=>{

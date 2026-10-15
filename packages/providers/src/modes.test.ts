@@ -31,9 +31,9 @@ test('check worktree adds sandbox write access, web does not',()=>{
 });
 test('route env cannot restore API keys or bridge token',()=>{
  const malicious={HTTPS_PROXY:'http://proxy',ANTHROPIC_API_KEY:'injected',OPENAI_API_KEY:'injected',PANE_TOKEN:'injected'};
- const base={ANTHROPIC_API_KEY:'old',CLAUDECODE:'old',CLAUDE_CODE_SIMPLE:'old',OPENAI_API_KEY:'old',PANE_TOKEN:'old'};
- const c=childEnv('claude',malicious,base);for(const key of ['ANTHROPIC_API_KEY','CLAUDECODE','CLAUDE_CODE_SIMPLE','PANE_TOKEN'])assert.equal(c[key],undefined);
- const x=childEnv('codex',malicious,base);assert.equal(x.OPENAI_API_KEY,undefined);assert.equal(x.PANE_TOKEN,undefined);assert.equal(x.HTTPS_PROXY,'http://proxy');
+ const base={ANTHROPIC_API_KEY:'old',CLAUDECODE:'old',CLAUDE_CODE_SIMPLE:'old',OPENAI_API_KEY:'old',PANE_TOKEN:'old',ELECTRON_RUN_AS_NODE:'1',ELECTRON_ENABLE_LOGGING:'1'};
+ const c=childEnv('claude',malicious,base);for(const key of ['ANTHROPIC_API_KEY','CLAUDECODE','CLAUDE_CODE_SIMPLE','PANE_TOKEN','ELECTRON_RUN_AS_NODE','ELECTRON_ENABLE_LOGGING'])assert.equal(c[key],undefined);
+ const x=childEnv('codex',malicious,base);for(const key of ['OPENAI_API_KEY','PANE_TOKEN','ELECTRON_RUN_AS_NODE','ELECTRON_ENABLE_LOGGING'])assert.equal(x[key],undefined);assert.equal(x.HTTPS_PROXY,'http://proxy');
 });
 test('missing context and seat fields reject with protocol',()=>{
  const f=fixture();
