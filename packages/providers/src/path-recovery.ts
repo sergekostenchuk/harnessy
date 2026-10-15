@@ -10,7 +10,7 @@ export function recoverProgramPath(env:NodeJS.ProcessEnv=process.env,run=spawnSy
  let shellPaths:string[]=[];
  if(bare){
   const shell=env.SHELL&&isAbsolute(env.SHELL)?env.SHELL:'/bin/zsh';
-  try{const result=run(shell,['-lc','printf %s "$PATH"'],{env,encoding:'utf8',timeout:3000,maxBuffer:32768,stdio:['ignore','pipe','ignore']});if(result.status===0&&typeof result.stdout==='string'&&!/[\r\n]/.test(result.stdout))shellPaths=clean(result.stdout)}catch{}
+  try{const result=run(shell,['-lc','printf %s "$PATH"'],{env,encoding:'utf8',timeout:3000,killSignal:'SIGKILL',maxBuffer:32768,stdio:['ignore','pipe','ignore']});if(result.status===0&&typeof result.stdout==='string'&&!/[\r\n]/.test(result.stdout))shellPaths=clean(result.stdout)}catch{}
  }
  const known=home?[join(home,'.local/bin'),'/opt/homebrew/bin','/usr/local/bin',join(home,'.npm-global/bin'),join(home,'.volta/bin'),join(home,'.cargo/bin'),join(home,'.hermes/node/bin'),...(env.NVM_BIN&&isAbsolute(env.NVM_BIN)?[env.NVM_BIN]:[]),join(home,'.nvm/current/bin')]:['/opt/homebrew/bin','/usr/local/bin'];
  const searched=[...new Set([...shellPaths,...original,...known])];

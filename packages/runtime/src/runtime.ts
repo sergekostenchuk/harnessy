@@ -11,7 +11,7 @@ import {ProviderCatalog,catalogCacheDirectory,LoginTerminal,builtinEntries,CLI_D
 import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
 import {propose,proposals,confirm,create,createOwnerSeat,restoreProposals,type ProposalInput,type ProposalRef,type OwnerSeatInput} from './proposals.ts';
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
-import {basename,isAbsolute,join,relative,sep} from 'node:path';
+import {basename,dirname,isAbsolute,join,relative,resolve,sep} from 'node:path';
 import {AttachmentStore,expandUser,initProject,projectsRoot} from '@harnessy/projects';
 import {pyTruthy} from '@harnessy/team';
 import {askDeliveryDepth} from './action-state.ts';
@@ -23,8 +23,8 @@ import {chatsList,chatGet,chatsNew,chatsOpen,meta,transferSnapshot} from './chat
 import {handoff} from './handoff.ts';
 import {chat} from './owner-chat.ts';
 import {execFileSync} from 'node:child_process';
-import {chmodSync,mkdtempSync,realpathSync,rmSync,writeFileSync,constants} from 'node:fs';
-import {access,stat} from 'node:fs/promises';
+import {chmodSync,lstatSync,mkdtempSync,realpathSync,rmSync,writeFileSync,constants} from 'node:fs';
+import {access,realpath,stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {ensureLineLocked,withPathLock,loadTeam,instructionsFor,canonicalPath,type Vendor} from '@harnessy/team';
@@ -43,6 +43,22 @@ import {RuntimeError,message,slice,deepFreeze,object} from './errors.ts';
 import {systemClock,type RuntimeDeps,type RuntimeActions,type ProjectState,type TurnScope,type ActiveTurn,type ActionContext,type RuntimeEvent,type TurnRecords,type BridgeSendArgs,type BridgeFailure,type SendResult,type ReadPaneResult,type AskResult,type MergeResult,type AssignRoleResult} from './types.ts';
 const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Initiator & {trust:'harness'}={seat:'harness',trust:'harness'};
 const attachmentExtension:Record<TurnAttachment['mime'],string>={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif'};
+function programBinaryTarget(id:string,file:string):boolean{
+ const name=basename(file);
+ if(name===id)return true;
+ // The official launchers are links to these differently named installed files.
+ if(id==='codex'&&name==='codex.js'&&file.endsWith(`${sep}@openai${sep}codex${sep}bin${sep}codex.js`))return true;
+ return id==='claude'&&/^\d+\.\d+\.\d+$/.test(name)&&file.includes(`${sep}.local${sep}share${sep}claude${sep}versions${sep}`);
+}
+function programBinaryInProject(file:string,project:string):boolean{
+ const full=resolve(file),inside=relative(project,full);
+ if(inside===''||inside!=='..'&&!inside.startsWith('..'+sep)&&!isAbsolute(inside))return true;
+ for(let dir=dirname(full);;dir=dirname(dir)){
+  for(const marker of ['.git','.harness'])try{lstatSync(join(dir,marker));return true}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}
+  if(dirname(dir)===dir)break;
+ }
+ return false;
+}
 function providerAttachments(source:TurnAttachment[],vendor:string,projectDir:string):{attachments:TurnAttachment[];cleanup:()=>void}{
  if(vendor!=='codex'||!source.length)return {attachments:source,cleanup:()=>{}};let directory:string|undefined;
  try{directory=mkdtempSync(join(realpathSync(tmpdir()),'harnessy-turn-attachments-'));chmodSync(directory,0o700);const fromProject=relative(realpathSync(projectDir),directory),inside=fromProject===''||!isAbsolute(fromProject)&&fromProject!=='..'&&!fromProject.startsWith('..'+sep);if(inside)throw new RuntimeError('attachment_invalid','приватный снимок вложения оказался внутри проекта',400);
@@ -577,18 +593,24 @@ export class Runtime {
  const result=await this.settings.patch(scope,patch);this.traceSettings();return result}
  async setProgramBinary(id:string,path:unknown,initiator:Initiator){
   this.requireOwner(initiator);
+  const project=this.project;
   const previous=this.programBinaryJobs.get(id),job=(previous??Promise.resolve()).catch(()=>{}).then(async()=>{
+  this.same(project);
   const entry=this.providerOperations.catalog.get(id);
   if(typeof path!=='string'||!isAbsolute(path)||path.length>1024||path.includes('\0')||basename(path)!==id)throw new RuntimeError('program_binary_invalid','Это не '+id+'. Выберите файл программы '+id+'.',400);
-  try{const file=await stat(path);if(!file.isFile())throw Error('not file');await access(path,constants.X_OK);
-   const candidate=entry.withBinary?.(path);if(!candidate)throw new RuntimeError('program_binary_invalid','Путь к этой программе не настраивается',400);
+  let canonical:string;
+  try{canonical=await realpath(path);const projectRoot=await realpath(project.dir);
+   if(!programBinaryTarget(id,canonical)||programBinaryInProject(path,projectRoot)||programBinaryInProject(canonical,projectRoot))throw Error('not an installed program');
+   const file=await stat(canonical);if(!file.isFile())throw Error('not file');await access(canonical,constants.X_OK);
+   const candidate=entry.withBinary?.(canonical);if(!candidate)throw new RuntimeError('program_binary_invalid','Путь к этой программе не настраивается',400);
    const version=await candidate.version(AbortSignal.timeout(5000));
    if(typeof version!=='string'||!version.trim()||id==='claude'&&!/Claude Code/i.test(version)||id==='codex'&&!/^codex(?:-cli)?\b/i.test(version))throw Error('wrong program');
+   this.same(project);if(await realpath(path)!==canonical)throw Error('program link changed');
   }catch(e){if(e instanceof RuntimeError)throw e;throw new RuntimeError('program_binary_invalid','Это не '+id+'. Выберите файл программы '+id+'.',400)}
-  if([...this.project.active.values()].some(active=>active.pane.vendor===id))throw new RuntimeError('provider_busy','Программа отвечает; дождитесь завершения хода',409);
-  await this.settings.setProgramBinary(id,path);
-  if(id==='claude'||id==='codex'){process.env[id==='claude'?'CLAUDE_BIN':'CODEX_BIN']=path;await this.deps.providers[id]?.reset()}
-  const read=await this.providerOperations.catalog.setBinary(id,path);
+  if([...project.active.values()].some(active=>active.pane.vendor===id))throw new RuntimeError('provider_busy','Программа отвечает; дождитесь завершения хода',409);
+  await this.settings.setProgramBinary(id,canonical);
+  if(id==='claude'||id==='codex'){process.env[id==='claude'?'CLAUDE_BIN':'CODEX_BIN']=canonical;await this.deps.providers[id]?.reset()}
+  const read=await this.providerOperations.catalog.setBinary(id,canonical);
   return {ok:true,provider:read.row};
   });this.programBinaryJobs.set(id,job);
   try{return await job}finally{if(this.programBinaryJobs.get(id)===job)this.programBinaryJobs.delete(id)}

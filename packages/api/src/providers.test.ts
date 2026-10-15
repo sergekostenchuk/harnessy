@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,readFileSync,statSync,mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {existsSync,readFileSync,realpathSync,statSync,mkdtempSync,mkdirSync,writeFileSync,symlinkSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {ProviderCatalog,cliEntry,LoginTerminal,ProviderError,type CatalogEntry,type CliSeat,type CliContext} from '@harnessy/providers';
@@ -19,7 +19,7 @@ async function waitProbe(h:{stream:Awaited<ReturnType<typeof sse>>},predicate:(e
 const result=(h:{stream:Awaited<ReturnType<typeof sse>>},status:string)=>waitProbe(h,e=>e.status===status);
 
 test('TS-33: selected executable is validated, saved for owner and replaces the catalog entry',async t=>{
- const dir=mkdtempSync(join(tmpdir(),'harnessy-program-')),path=join(dir,'fixture'),wrong=join(dir,'another');t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-program-'))),path=join(dir,'fixture'),wrong=join(dir,'another');t.after(()=>rmSync(dir,{recursive:true,force:true}));
  writeFileSync(path,'#!/bin/sh\nexit 0\n',{mode:0o755});writeFileSync(wrong,'#!/bin/sh\nexit 0\n',{mode:0o755});
  const make=(binary:string):CatalogEntry=>({id:'fixture',title:'Fixture',binary,login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,resume:false,mcp:false,limits:false},withBinary:make,version:async()=>binary===path?'fixture 1.0':Promise.reject(new ProviderError('no_binary','missing')),auth:async()=>({loggedIn:false}),models:async()=>[],runTurn:async()=>({text:'',sessionId:null})});
  const catalog=new ProviderCatalog([make('fixture')]),h=await fixture(t,{deps:{providerCatalog:catalog}});
@@ -30,8 +30,44 @@ test('TS-33: selected executable is validated, saved for owner and replaces the 
  assert.equal((await call(h.api,'/api/providers/catalog')).body.providers.find((p:any)=>p.id==='fixture').binary,path);
 });
 
+test('TS-33: project links, foreign project binaries and disguised target names are rejected before execution',async t=>{
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-program-target-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ let versionCalls=0;const make=(binary:string):CatalogEntry=>({id:'fixture',title:'Fixture',binary,login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,resume:false,mcp:false,limits:false},withBinary:make,
+  version:async()=>{versionCalls++;return 'fixture 1.0'},auth:async()=>({loggedIn:false}),models:async()=>[],runTurn:async()=>({text:'',sessionId:null})});
+ const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([make('fixture')])}}),baseline=versionCalls,safe=join(dir,'safe'),foreign=join(dir,'foreign'),links=join(dir,'links');
+ for(const folder of [safe,foreign,links,join(foreign,'.git')])mkdirSync(folder);
+ const valid=join(safe,'fixture'),other=join(safe,'other-tool'),foreignFile=join(foreign,'fixture');
+ for(const file of [valid,other,foreignFile])writeFileSync(file,'#!/bin/sh\nexit 0\n',{mode:0o700});
+ const inProject=join(h.dir,'fixture');symlinkSync(valid,inProject);
+ const outside=await call(h.api,'/api/providers/fixture/binary',{body:{path:inProject}});assert.equal(outside.status,400);
+ const foreignDirect=await call(h.api,'/api/providers/fixture/binary',{body:{path:foreignFile}});assert.equal(foreignDirect.status,400);
+ const foreignLink=join(links,'fixture');symlinkSync(foreignFile,foreignLink);
+ assert.equal((await call(h.api,'/api/providers/fixture/binary',{body:{path:foreignLink}})).status,400);
+ const wrongTarget=join(dir,'fixture');symlinkSync(other,wrongTarget);
+ assert.equal((await call(h.api,'/api/providers/fixture/binary',{body:{path:wrongTarget}})).status,400);
+ assert.equal(versionCalls,baseline);assert.equal(h.runtime.settings.get().owner.programBinary_fixture,undefined);
+ const safeLink=join(safe,'launcher','fixture');mkdirSync(join(safe,'launcher'));symlinkSync(valid,safeLink);
+ const saved=await call(h.api,'/api/providers/fixture/binary',{body:{path:safeLink}});
+ assert.equal(saved.status,200);assert.equal(saved.body.provider.binary,valid);assert.equal(h.runtime.settings.get().owner.programBinary_fixture,valid);
+});
+
+test('TS-33: canonical targets of installed Codex and Claude launchers remain selectable',async t=>{
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-program-launchers-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const previous={codex:process.env.CODEX_BIN,claude:process.env.CLAUDE_BIN};t.after(()=>{for(const [id,value] of Object.entries(previous)){const key=id==='codex'?'CODEX_BIN':'CLAUDE_BIN';if(value===undefined)delete process.env[key];else process.env[key]=value}});
+ const entries:CatalogEntry[]=[],choices:[string,string,string][]=[
+  ['codex',join(dir,'.local','bin','codex'),join(dir,'.local','lib','node_modules','@openai','codex','bin','codex.js')],
+  ['claude',join(dir,'.local','bin','claude'),join(dir,'.local','share','claude','versions','2.1.270')],
+ ];
+ for(const [id,link,target] of choices){mkdirSync(target.slice(0,target.lastIndexOf('/')),{recursive:true});mkdirSync(link.slice(0,link.lastIndexOf('/')),{recursive:true});writeFileSync(target,'#!/bin/sh\nexit 0\n',{mode:0o700});symlinkSync(target,link);
+  const make=(binary:string):CatalogEntry=>({id,title:id,binary,login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,resume:false,mcp:false,limits:false},withBinary:make,
+   version:async()=>id==='codex'?'codex-cli 1.0':'Claude Code 2.1.270',auth:async()=>({loggedIn:false}),models:async()=>[],runTurn:async()=>({text:'',sessionId:null})});entries.push(make(id));
+ }
+ const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog(entries)}});
+ for(const [id,link,target] of choices){const response=await call(h.api,'/api/providers/'+id+'/binary',{body:{path:link}});assert.equal(response.status,200,id+': '+response.text);assert.equal(response.body.provider.binary,target);assert.equal(h.runtime.settings.get().owner['programBinary_'+id],target)}
+});
+
 test('TS-33: concurrent path changes leave the last selection in settings and catalog',async t=>{
- const dir=mkdtempSync(join(tmpdir(),'harnessy-program-race-')),a=join(dir,'a','fixture'),b=join(dir,'b','fixture');t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-program-race-'))),a=join(dir,'a','fixture'),b=join(dir,'b','fixture');t.after(()=>rmSync(dir,{recursive:true,force:true}));
  for(const path of [a,b]){const parent=path.slice(0,path.lastIndexOf('/'));mkdirSync(parent);writeFileSync(path,'#!/bin/sh\nexit 0\n',{mode:0o755})}
  const started=deferred(),release=deferred();let delayed=false;
  const make=(binary:string):CatalogEntry=>({id:'fixture',title:'Fixture',binary,login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,resume:false,mcp:false,limits:false},withBinary:make,
