@@ -41,8 +41,7 @@ const { contextMenuTemplate } = require('./context-menu.js');
 const contextMeta = new WeakMap();
 ipcMain.on('harnessy:context-meta', (event, value) => {
   const text = value && typeof value.text === 'string' ? value.text.slice(0, 100000) : '';
-  contextMeta.set(event.sender, { quote: value && value.quote === true, image: value && value.image === true, text });
-  event.returnValue = true;
+  contextMeta.set(event.sender, { quote: value && value.quote === true, text });
 });
 
 async function createWindow() {
@@ -56,10 +55,12 @@ async function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { if (!url.startsWith(ORIGIN)) { shell.openExternal(url); return { action: 'deny' }; } return { action: 'allow' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(ORIGIN) && !url.startsWith('data:')) { e.preventDefault(); shell.openExternal(url); } });
   win.webContents.on('page-title-updated', e => e.preventDefault());     // в заголовке окна всегда «Harnessy»
+  win.webContents.on('did-start-navigation', () => contextMeta.delete(win.webContents));
   win.webContents.on('context-menu', (event, params) => {
     event.preventDefault();
     const template = contextMenuTemplate(params, contextMeta.get(win.webContents), {
       quote: text => win.webContents.send('harnessy:quote-selection', text),
+      transfer: text => win.webContents.send('harnessy:transfer-selection', text),
       copyImage: () => win.webContents.copyImageAt(params.x, params.y),
     });
     Menu.buildFromTemplate(template).popup({ window: win });

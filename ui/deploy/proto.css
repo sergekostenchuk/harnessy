@@ -333,8 +333,12 @@ html[data-m] .cx-pop { position:fixed; left:12px !important; right:12px; width:a
 .live-msg:hover .live-acts,.live-msg:focus-within .live-acts,.live-msg.live-last .live-acts { opacity:1; pointer-events:auto; }
 .me.live-msg .live-acts { justify-content:flex-end; }
 .live-acts time { text-transform:none; letter-spacing:0; cursor:default; }
-.live-quote-selection { position:fixed; z-index:120; padding:5px 9px; border:1px solid var(--line2); border-radius:7px; background:var(--raised); color:var(--ink); box-shadow:0 8px 26px rgba(0,0,0,.5); font:11.5px var(--font); cursor:pointer; }
+.live-quote-selection { position:fixed; z-index:120; display:flex; border:1px solid var(--line2); border-radius:7px; background:var(--raised); color:var(--ink); box-shadow:0 8px 26px rgba(0,0,0,.5); font:11.5px var(--font); }
 .live-quote-selection:hover { border-color:var(--accent); }
+.live-quote-selection>button { padding:5px 9px; border:0; border-right:1px solid var(--line2); background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.live-quote-selection>button:last-of-type { border-right:0; }
+.live-quote-selection>button:hover { background:var(--accent-soft); }
+.live-quote-selection>.live-menu { left:0; right:auto; top:calc(100% + 6px); min-width:300px; }
 .live-menu.la { left:0; right:auto; top:calc(100% + 6px); min-width:260px; text-transform:none; letter-spacing:0; font:12.5px var(--font); } .live-menu.la .h { font:10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); padding:6px 10px 4px; }
 .live-menu.la div.dis { color:var(--ink3); cursor:default; } .live-menu.la small { color:var(--ink3); font:10px var(--mono); margin-left:8px; } .live-menu.la .live-f { height:32px; margin:4px 4px 6px; width:calc(100% - 8px); }
 .cx-chip.empty { border-style:dashed; } .cx-chip.empty b { color:var(--ink2); font-weight:400; }
@@ -353,6 +357,11 @@ html[data-proto][data-page="chat"] .live-selbar { width:auto; max-width:760px; m
 .live-sel-list input { accent-color:var(--accent); flex:none; margin-top:3px; }
 .live-sel-list label > span { min-width:0; display:grid; gap:3px; font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; }
 .live-sel-list b { font:10px var(--mono); color:var(--ink3); }
+.live-sel-quotes { max-height:260px; overflow:auto; display:grid; gap:8px; }
+.live-sel-quotes>div { padding:8px; border-radius:8px; background:var(--panel); display:grid; gap:6px; }
+.live-sel-quotes pre { margin:0; color:var(--ink2); white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.55 var(--font); }
+.live-sel-quotes textarea { min-height:54px; resize:vertical; border:1px solid var(--line2); border-radius:7px; padding:7px 8px; background:var(--raised); color:var(--ink); font:12px/1.45 var(--font); }
+.live-sel-quotes small { color:var(--ink3); }
 .live-selbar .btn:disabled { opacity:.45; cursor:default; }
 .live-hint { font-size:12px; color:var(--ink3); margin:4px 0 0; }
 /* чаты мест и прямое обращение */

@@ -51,8 +51,8 @@
   .message-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:7px;font:10px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink3)}
   .message-actions button{padding:0;border:0;background:none;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}.message-actions button:hover{color:var(--ink)}
   .message-actions i{font-style:normal;color:var(--line2)}.message-actions time{text-transform:none;letter-spacing:0}
-  .message-selection{background:rgba(194,122,52,.24);border-radius:2px}.message-reply-float{position:absolute;left:34px;top:52px;padding:5px 8px;border:1px solid var(--line2);border-radius:7px;background:var(--raised);color:var(--ink);font:11px var(--font);box-shadow:0 8px 24px #0008}
-  .message-quote-composer{margin-top:14px;padding:12px 14px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);font:13px/1.55 var(--font);white-space:pre-wrap}.message-quote-composer b{font-weight:400;color:var(--ink2)}
+  .message-selection{background:rgba(194,122,52,.24);border-radius:2px}.message-selection-actions{position:absolute;left:34px;top:52px;display:flex;overflow:hidden;border:1px solid var(--line2);border-radius:7px;background:var(--raised);box-shadow:0 8px 24px #0008}.message-selection-actions button{padding:5px 8px;border:0;border-right:1px solid var(--line2);background:transparent;color:var(--ink);font:11px var(--font)}.message-selection-actions button:last-child{border-right:0}.message-selection-actions button:hover{background:var(--accent-soft)}
+  .message-quote-composer{margin-top:14px;padding:12px 14px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);font:13px/1.55 var(--font);white-space:pre-wrap}.message-quote-composer b{font-weight:400;color:var(--ink2)}.message-transfer-demo{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.message-transfer-demo small{display:block;margin-top:5px;color:var(--ink3)}
 
 /* TS-09b4: saved operation progress in the design-code palette. */
 [data-live-operations] { margin:16px 0; flex:none; }
@@ -706,12 +706,16 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
           </div>
           <p class="conn-note">Строка видна при наведении и у последнего сообщения. Если запись не содержит времени, дата не показывается.</p>
         </div>
-        <div class="box"><div class="cap2">Выделение → ответить цитатой</div>
-          <div class="message-action-demo"><article class="ai">Во втором состоянии <span class="message-selection">кнопка остаётся доступной</span>.<button class="message-reply-float" type="button">Ответить</button></article></div>
-          <div class="message-quote-composer"><b>&gt; кнопка остаётся доступной</b>
+        <div class="box"><div class="cap2">Выделение → ответить или передать</div>
+          <div class="message-action-demo"><article class="ai">Во втором состоянии <span class="message-selection">кнопка остаётся доступной</span>.<span class="message-selection-actions"><button type="button">Ответить</button><button type="button">Передать</button></span></article></div>
+          <div class="message-quote-composer"><b>[1] &gt; кнопка остаётся доступной</b>
+Комментарий к первой цитате.
+
+<b>[2] &gt; вторая выбранная строка</b>
 
 Уже набранный текст и картинки остаются в черновике.</div>
-          <p class="conn-note">Кнопка появляется только для выделения внутри одного вопроса или ответа. Меню правой кнопки даёт то же действие.</p>
+          <div class="message-transfer-demo"><b>Передать цитату → Ревьюер</b><br>[1] &gt; кнопка остаётся доступной<br><textarea aria-label="Комментарий к цитате" placeholder="Добавить комментарий"></textarea><small>Источник: из ответа Воркера, 15.10.2026 08:20. Другие сообщения не выбираются автоматически.</small></div>
+          <p class="conn-note">Кнопки появляются только для выделения внутри одного вопроса или ответа. При отправке оставшиеся цитаты перенумеровываются. Меню правой кнопки даёт те же действия.</p>
         </div>
       </div>
     </section>

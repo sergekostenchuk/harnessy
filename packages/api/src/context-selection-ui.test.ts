@@ -12,7 +12,7 @@ function ui(send?:(body:Data)=>Promise<Data>){
  const d=dom('<div class="frame cur"><div class="main"><div class="feed"></div><div class="box"><div class="in"></div><div class="bar2"></div></div></div></div>');Object.assign(d.document,{body:d.body,documentElement:d.html});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page','chat');
  const H:Data={on:true,project:'/a',pane:{id:'worker',label:'Воркер',vendor:'claude',model:'w1',mode:'read'},panes:[{id:'worker',label:'Воркер'},{id:'reviewer',label:'Ревьюер'}],active:{worker:'chat-a'}},S:Data={ui:{pane:'worker'},chat:messages(),cx:{folder:'',modes:{},att:[],conn:{},noFolder:false}},requests:Data[]=[],toasts:string[]=[],notices:Data[]=[];
  const ctx:Data={document:d.document,PAGE:'chat',H,S,setTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),esc:(s:unknown)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),fmtN:String,paneName:(p:Data)=>p.label,
-  modelName:String,warningEvent:()=>false,now:()=>1,laMulti:(_anchor:any,_title:any,_items:any,_label:any,choose:any)=>{ctx.choose=choose},toast:(s:string)=>toasts.push(s),save(){},log(){},hStatus(){},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)},loadChat:async()=>{},noteHandoff:(r:Data)=>notices.push(r),
+  quoteBlock:(text:string,index=1)=>text.split('\n').map((line,i)=>(i?'':'['+index+'] ') +'> '+line).join('\n'),modelName:String,warningEvent:()=>false,now:()=>1,laMulti:(_anchor:any,_title:any,_items:any,_label:any,choose:any)=>{ctx.choose=choose},toast:(s:string)=>toasts.push(s),save(){},log(){},hStatus(){},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)},loadChat:async()=>{},noteHandoff:(r:Data)=>notices.push(r),
   api:async(path:string,body:Data)=>{assert.equal(path,'/api/handoff');requests.push(JSON.parse(JSON.stringify(body)));return send?send(body):{ok:true,seq:1}},
   render(){d.document.querySelector('.feed')!.innerHTML=S.chat.map((m:Data,i:number)=>ctx.selection.ckBox(m,i)).join('');ctx.selection.selBar()}};
  ctx.window=ctx;const context=createContext(ctx);
@@ -38,6 +38,12 @@ test('259: selecting two sends exactly those two through HTTP; the next dialog i
  const count=[...messages()[0]!.text,...messages()[3]!.text].length;assert.equal(v.find('.live-selbar .ch').textContent,count+' знаков');assert.match(v.find('.live-selbar .n').textContent,/2 из 3/);assert.equal(v.find('[data-sel="go"]').disabled,false);
  await v.find('[data-sel="go"]').emit('click');await h.runtime.idle();assert.equal(v.requests.length,1);assert.deepEqual(v.requests[0]!.seqs,[1,4]);assert.equal(Object.hasOwn(v.requests[0]!,'text'),false);assert.doesNotMatch(h.runtime.journal.get(1)!.text,/Ответ модели|Служебная/);assert.match(h.runtime.journal.get(1)!.text,/Третье <img src=x> сообщение/);assert.equal(h.provider.calls.length,1);assert.match(h.provider.calls[0]!.message,/Первое сообщение/);assert.equal(v.document.querySelector('.live-selbar'),null);
  v.start();assert.equal(v.find('[data-sel="go"]').disabled,true);assert.equal(v.document.querySelectorAll('[data-ck][checked]').length,0);
+});
+
+test('TS-27: selected quote sends no whole messages and cancellation sends nothing',async()=>{
+ const v=ui();v.ctx.selection.selStart('reviewer',{sw:false,quotes:[{seq:3,text:'Ответ модели',comment:'',source:'из ответа Модель, 15.10.2026 08:20'}]});assert.equal(v.document.querySelectorAll('.live-sel-list').length,0);assert.match(v.find('.live-sel-quotes pre').textContent,/\[1\] > Ответ модели/);
+ const comment:any=v.find('[data-quote-comment]');comment.value='Проверить вывод';await comment.emit('input');await v.find('[data-sel="go"]').emit('click');assert.equal(v.requests.length,1);assert.deepEqual(v.requests[0]!.quotes,[{seq:3,text:'Ответ модели',comment:'Проверить вывод'}]);assert.equal(v.requests[0]!.prompt,'');assert.equal(Object.hasOwn(v.requests[0]!,'seqs'),false);
+ const cancelled=ui();cancelled.ctx.selection.selStart('reviewer',{sw:false,quotes:[{seq:3,text:'Ответ модели',comment:'',source:'из ответа Модель'}]});await cancelled.find('[data-sel="cancel"]').emit('click');assert.equal(cancelled.requests.length,0);assert.equal(cancelled.document.querySelector('.live-selbar'),null);
 });
 
 test('259: Select all is explicit; unchecking one sends all except that message',async()=>{
