@@ -26,6 +26,15 @@ test('1/19: golden pins/settings/project/dir/halt/room forms via actual HTTP por
  assert.equal((await call(h.api,'/api/context/worker')).body.ok,true);
 });
 
+test('TS-30 r3: agent identities cannot write owner or project settings',async t=>{
+ const h=await fixture(t);
+ for(const headers of [{'x-pane-token':'forged'},{'x-harness-pane':'worker'}])for(const scope of ['owner','project']){
+  const response=await call(h.api,'/api/settings',{headers,body:{scope,patch:{releaseUnderstood_0_1_0_alpha:true}}});
+  assert.equal(response.status,403);assert.equal(response.body.code,'owner_only');
+ }
+ const settings=(await call(h.api,'/api/settings')).body;assert.deepEqual(settings.owner,{});assert.deepEqual(settings.project,{});
+});
+
 test('1/19/68: chat direct and handoff selection forms, journal, chats and transcript use real delivered histories',async t=>{
  const h=await fixture(t,{seats});
  const direct=await call(h.api,'/api/chat',{body:{pane:'worker',message:'задача'}});assert.equal(direct.status,409);assert.deepEqual(direct.body,{ok:false,needDirect:true,error:'«воркер» — не оркестратор: обращение напрямую требует явного подтверждения'});

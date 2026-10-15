@@ -12,7 +12,7 @@ export interface CliProcessResult {stdout:string;stderr:string;code:number|null;
 export type CliExecutor=(request:CliProcessRequest,signal:AbortSignal,hooks?:{stdout?(text:string):void;started?():void})=>Promise<CliProcessResult>;
 export interface CliProbe<T> {command:CliCommand;privateConfig?:boolean;exitCodes?:readonly number[];parse(result:CliProcessResult):T}
 export type CliAuthProbe=CliProbe<CliAuth>|{file(env:NodeJS.ProcessEnv):string;parse(text:string|null):CliAuth}|{unavailableReason:string};
-export interface CliMcpServer {command:string;args:string[];env:{PANE_ID:string;APP_URL:string;PANE_TOKEN:string;SEATS:string}}
+export interface CliMcpServer {command:string;args:string[];env:NodeJS.ProcessEnv&{PANE_ID:string;APP_URL:string;PANE_TOKEN:string;SEATS:string}}
 export interface CliTurnInput {seat:CliSeat;message:string;roleNote:string;peers:CliContext['peers'];writableRoots:string[]}
 export type CliEvent=
  | {type:'session';id:string}

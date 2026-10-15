@@ -1,8 +1,7 @@
 import {DatabaseSync} from 'node:sqlite';
 import {mkdirSync,lstatSync,chmodSync} from 'node:fs';
 import {dirname} from 'node:path';
-import type {NetworkExit,Settings} from '@harnessy/projects';
-import {validProviderId} from '../../projects/src/network-config.ts';
+import {validProviderId,type NetworkExit,type Settings} from '@harnessy/projects';
 import {validRoute} from '@harnessy/llm';
 import {RuntimeError} from './errors.ts';
 export const PERIODS={today:0,hour:3600000,day:86400000,week:604800000,month:2592000000} as const;

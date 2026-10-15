@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {parse,stringify} from 'smol-toml';
 import {schemas} from '../schemas.ts';
 import {ProviderError,type Seat,type TurnContext,record} from '../types.ts';
+import {nodeChildEnv} from '../node-child.ts';
 export const BASE_OVERRIDES=['features.hooks=false','features.multi_agent=false','features.apps=false','features.memories=false','features.plugins=false','features.browser_use=false','features.computer_use=false','project_doc_max_bytes=0','notify=[]'];
 export function tomlValue(value:unknown):string{
  if(record(value))return '{'+Object.entries(value).map(([key,v])=>JSON.stringify(key)+'='+tomlValue(v)).join(',')+'}';
@@ -28,7 +29,7 @@ export async function sparkRouter():Promise<string[]|null>{
 export function tomlKey(name:string):string{return /^[A-Za-z0-9_-]+$/.test(name)?name:JSON.stringify(name)}
 export function overrides(seat:Seat,ctx:Pick<TurnContext,'appUrl'|'peers'|'writableRoots'>,token:string,servers:string[],router:string[]|null=null):string[]{
  const bridge=fileURLToPath(new URL('../../bin/pane-mcp.mjs',import.meta.url));
- const env={PANE_ID:seat.id,APP_URL:ctx.appUrl,SEATS:ctx.peers.map(p=>p.id+':'+p.label).join(';').replaceAll('"',''),PANE_TOKEN:token};
+ const env=nodeChildEnv({PANE_ID:seat.id,APP_URL:ctx.appUrl,SEATS:ctx.peers.map(p=>p.id+':'+p.label).join(';').replaceAll('"',''),PANE_TOKEN:token});
  const out=[...BASE_OVERRIDES,...servers.filter(n=>n!=='panes'&&n!=='sol-spark-router').map(n=>'mcp_servers.'+tomlKey(n)+'.enabled=false'),
  'mcp_servers.panes.enabled=true','mcp_servers.panes.command='+tomlValue(process.execPath),'mcp_servers.panes.args='+tomlValue([bridge]),'mcp_servers.panes.env='+tomlValue(env)];
  // Codex 0.160: MCP 'auto' requires approval for missing/destructive hints; 'never' then rejects before elicitation.

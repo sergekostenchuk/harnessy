@@ -6,8 +6,12 @@ __pycache__/
 ui/deploy/out/
 ui/data/
 ui/desktop/logs/
+ui/desktop/.engine-compiled/
+ui/desktop/engine/
+ui/desktop/release/
 ui/sketches/disarto-shots/ref-composer-menus/
 # новое ядро (TypeScript)
+/node_modules
 node_modules/
 packages/*/dist/
 

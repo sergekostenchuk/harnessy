@@ -5,36 +5,61 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import {runInNewContext} from 'node:vm';
 import {createRequire} from 'node:module';
+import {EventEmitter} from 'node:events';
 
-// Run the shipped startup handler with Electron/process doubles; no desktop or owner server is started.
 const main=fs.readFileSync(new URL('../../../ui/desktop/main.js',import.meta.url),'utf8');
 const preload=fs.readFileSync(new URL('../../../ui/desktop/preload.js',import.meta.url),'utf8');
-const requireFromTest=createRequire(import.meta.url),{contextMenuTemplate}=requireFromTest('../../../ui/desktop/context-menu.js');
-function desktop(t:import('node:test').TestContext,override=false,ready=false){
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'harnessy-desktop-')),bundled=path.join(root,'ui/desktop'),custom=path.join(root,'custom launcher'),directory=override?custom:bundled;
- fs.mkdirSync(directory,{recursive:true});t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
- const launches:{file:string;options:any;detached:boolean}[]=[],descriptors:number[]=[],messages:string[]=[];
- t.after(()=>{for(const fd of descriptors)fs.closeSync(fd)});
- const context:any={__dirname:bundled,process:{env:override?{HARNESS_DIR:custom}:{}},URL,AbortSignal,setTimeout:(fn:()=>void)=>fn(),
-  fetch:async()=>({ok:ready||launches.length>0}),require:(name:string)=>{
-   if(name==='electron')return {app:{setName(){},requestSingleInstanceLock:()=>true},nativeTheme:{}};
-   if(name==='child_process')return {spawn:(file:string,_args:string[],options:any)=>{const launch={file,options,detached:false};launches.push(launch);return {unref(){launch.detached=true}}}};
-   if(name==='fs')return {...fs,openSync:(file:string,flags:fs.OpenMode)=>{const fd=fs.openSync(file,flags);descriptors.push(fd);return fd}};
-   if(name==='path')return path;if(name==='os')return os;if(name==='./trace.js')return {reportDesktopTrace:async()=>false};throw Error('unexpected module '+name);
-  }};
- runInNewContext(main.slice(0,main.indexOf('const offline ='))+'\nglobalThis.start=ensureHarness;',context);
- return {directory,launches,messages,start:()=>context.start((message:string)=>messages.push(message))};
+const requireFromTest=createRequire(import.meta.url),{contextMenuTemplate}=requireFromTest('../../../ui/desktop/context-menu.js'),{EngineManager,defaultPaths}=requireFromTest('../../../ui/desktop/engine.js');
+
+class Child extends EventEmitter {
+ exitCode:number|null=null;signalCode:string|null=null;kills:string[]=[];
+ kill(signal:string){this.kills.push(signal);this.signalCode=signal;queueMicrotask(()=>this.emit('exit',null,signal));return true}
 }
-for(const override of [false,true])test('179: Electron starts the relocated engine with a fresh log directory'+(override?' and HARNESS_DIR override':''),async t=>{
- const d=desktop(t,override),launcher=path.join(d.directory,'run.sh');fs.writeFileSync(launcher,'#!/bin/sh\n',{mode:0o755});
- assert.equal(await d.start(),true);assert.equal(d.launches.length,1);assert.equal(d.launches[0]!.file,launcher);assert.equal(d.launches[0]!.options.cwd,d.directory);assert.equal(d.launches[0]!.detached,true);
- assert.equal(fs.existsSync(path.join(d.directory,'logs/server-desktop.log')),true);
-});
-test('179: existing engine needs no launcher; missing launcher reports failure without spawn or log writes',async t=>{
- const ready=desktop(t,false,true);assert.equal(await ready.start(),true);assert.equal(ready.launches.length,0);assert.equal(fs.existsSync(path.join(ready.directory,'logs')),false);
- const absent=desktop(t);assert.equal(await absent.start(),false);assert.equal(absent.launches.length,0);assert.equal(fs.existsSync(path.join(absent.directory,'logs')),false);assert.match(absent.messages[0]!,/нет .*run\.sh/);
+
+test('TS-30: packaged engine uses Electron Node, skips an occupied port and stops the managed child',async t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'harnessy-desktop-')),engineRoot=path.join(root,'engine'),entry=path.join(engineRoot,'api.js'),site=path.join(root,'site'),logs=path.join(root,'home','.harnessy');
+ fs.mkdirSync(engineRoot,{recursive:true});fs.mkdirSync(site,{recursive:true});fs.writeFileSync(entry,'');t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const launches:{file:string;args:string[];options:any;child:Child}[]=[];
+ const manager=new EngineManager({paths:{engineRoot,entry,site},execPath:'/Applications/Harnessy-alpha.app/Contents/MacOS/Harnessy-alpha',env:{PATH:'/usr/bin:/bin'},logDirectory:logs,
+  portAvailable:async(port:number)=>port!==3777,fetch:async()=>({ok:launches.length>0}),spawn:(file:string,args:string[],options:any)=>{const child=new Child();launches.push({file,args,options,child});return child}});
+ const result=await manager.start();assert.equal(result.port,3778);assert.equal(result.url,'http://127.0.0.1:3778/sketches/proto/10-new-chat.html');assert.equal(launches.length,1);
+ const launch=launches[0]!;assert.equal(launch.file,'/Applications/Harnessy-alpha.app/Contents/MacOS/Harnessy-alpha');assert.deepEqual(launch.args,[entry]);assert.equal(launch.options.detached,false);assert.equal(launch.options.shell,false);assert.equal(launch.options.env.ELECTRON_RUN_AS_NODE,'1');assert.equal(launch.options.env.PORT,'3778');assert.equal(launch.options.env.HARNESSY_SITE,site);assert.equal(launch.options.stdio[3],'ipc');assert.equal(fs.statSync(path.join(logs,'server-desktop.log')).mode&0o777,0o600);
+ const restarted=await manager.restart();assert.equal(restarted.port,3778);assert.equal(launches.length,2);assert.deepEqual(launch.child.kills,['SIGTERM']);
+ await manager.stop();assert.deepEqual(launches[1]!.child.kills,['SIGTERM']);
 });
 
+test('TS-30: external development URL does not start a child and packaged paths stay inside Resources',async()=>{
+ let spawned=false;const manager=new EngineManager({externalUrl:'http://127.0.0.1:4555/custom',fetch:async()=>({ok:true}),spawn:()=>{spawned=true;throw Error('unexpected')}});
+ assert.deepEqual(await manager.start(),{origin:'http://127.0.0.1:4555',url:'http://127.0.0.1:4555/custom',managed:false});assert.equal(spawned,false);
+ const packaged=defaultPaths('/app.asar','/Bundle/Contents/Resources',true),development=defaultPaths('/repo/ui/desktop','/unused',false);
+ assert.equal(packaged.entry,'/Bundle/Contents/Resources/engine/node_modules/@harnessy/api/dist/bin/harnessy.js');assert.equal(packaged.site,'/Bundle/Contents/Resources/site/sketches');assert.equal(development.site,'/repo/ui/deploy/out/site/sketches');
+});
+
+test('TS-30: stop during readiness cancels that launch without spawning a replacement',async t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'harnessy-desktop-stop-')),engineRoot=path.join(root,'engine'),entry=path.join(engineRoot,'api.js');fs.mkdirSync(engineRoot,{recursive:true});fs.writeFileSync(entry,'');t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const children:Child[]=[];const manager=new EngineManager({paths:{engineRoot,entry,site:root},logDirectory:path.join(root,'logs'),readyAttempts:50,readyWaitMs:1,portAvailable:async()=>true,fetch:async()=>({ok:false}),spawn:()=>{const child=new Child();children.push(child);return child}});
+ const start=manager.start(),rejected=assert.rejects(start,/запуск движка отменён/);while(children.length===0)await new Promise(resolve=>setTimeout(resolve,0));await manager.stop();await rejected;await new Promise(resolve=>setTimeout(resolve,5));
+ assert.equal(children.length,1);assert.deepEqual(children[0]!.kills,['SIGTERM']);
+});
+
+test('TS-30: desktop shutdown owns the child and clean first launch keeps the TS-19 path',()=>{
+ const engine=fs.readFileSync(new URL('../../../ui/desktop/engine.js',import.meta.url),'utf8'),entry=fs.readFileSync(new URL('../bin/harnessy.ts',import.meta.url),'utf8');
+ assert.doesNotMatch(main,/run\.sh|detached:\s*true|\.unref\(\)/);assert.match(main,/app\.on\('before-quit'/);assert.match(main,/19-first-run\.html/);assert.match(main,/\.harness-projects\.json/);
+ assert.match(engine,/ELECTRON_RUN_AS_NODE:'1'/);assert.match(engine,/stdio:\['ignore',output,output,'ipc'\]/);assert.match(entry,/process\.once\('disconnect',stop\)/);
+});
+
+test('TS-30 r2: alpha acknowledgement is exact-version owner state independent of runtime port',async()=>{
+ const release=requireFromTest('../../../ui/deploy/release.js'),settings:Record<string,unknown>={},calls:{origin:string;path:string;method:string}[]=[];
+ const request=(origin:string)=>async(pathname:string,options:any={})=>{const method=options.method??'GET';calls.push({origin,path:pathname,method});if(method==='POST'){const body=JSON.parse(options.body);Object.assign(settings,body.patch);return {ok:true,json:async()=>({ok:true,saved:{...settings}})}}return {ok:true,json:async()=>({ok:true,owner:{...settings}})}};
+ const a={channel:'alpha',version:'0.1.0-alpha',label:'alpha · 0.1.0'},b={channel:'alpha',version:'0.1.1-alpha',label:'alpha · 0.1.1'};
+ assert.equal(await release.accepted(request('http://127.0.0.1:3778'),a),false);assert.equal(await release.remember(request('http://127.0.0.1:3778'),a),true);
+ assert.equal(await release.accepted(request('http://127.0.0.1:3779'),a),true);assert.equal(await release.accepted(request('http://127.0.0.1:3779'),b),false);
+ assert.deepEqual(calls.map(c=>[c.origin,c.path,c.method]),[['http://127.0.0.1:3778','/api/settings','GET'],['http://127.0.0.1:3778','/api/settings','POST'],['http://127.0.0.1:3779','/api/settings','GET'],['http://127.0.0.1:3779','/api/settings','GET']]);
+ assert.equal(release.acceptanceKey(a),'releaseUnderstood_0_1_0_alpha');assert.equal(release.releaseValue({channel:'beta',version:'0.1.0-alpha'}),null);assert.doesNotMatch(fs.readFileSync(new URL('../../../ui/deploy/release.js',import.meta.url),'utf8'),/localStorage/);
+ const desktop=JSON.parse(fs.readFileSync(new URL('../../../ui/desktop/package.json',import.meta.url),'utf8')),builder=fs.readFileSync(new URL('../../../ui/desktop/electron-builder.yml',import.meta.url),'utf8'),build=fs.readFileSync(new URL('../../../ui/desktop/build-engine.mjs',import.meta.url),'utf8'),testers=fs.readFileSync(new URL('../../../ui/desktop/TESTERS.md',import.meta.url),'utf8');
+ assert.match(desktop.version,/^0\.1\.\d+-alpha/);assert.equal(desktop.productName,'Harnessy-alpha');assert.match(desktop.scripts.dist,/electron-builder --mac --arm64/);assert.match(builder,/asar: true/);assert.match(builder,/target: dmg/);assert.match(builder,/target: zip/);assert.match(builder,/from: engine\/node_modules[\s\S]*to: engine\/node_modules/);assert.match(builder,/from: engine[\s\S]*from: \.\.\/deploy\/out\/site/);assert.match(builder,/Harnessy-alpha-/);
+ assert.match(build,/rewriteRelativeImportExtensions|tsconfig\.engine/);assert.match(build,/unsafeFiles/);assert.match(testers,/Node\.js не нужен/);assert.match(testers,/связке ключей macOS/);assert.match(testers,/server-desktop\.log/);
+});
 test('TS-25: desktop menu follows edit state and keeps quote/image actions on their exact context',()=>{
  const editable=contextMenuTemplate({isEditable:true,editFlags:{canCut:false,canCopy:true,canPaste:true,canSelectAll:false}},{},{});
  assert.deepEqual(editable.map((item:any)=>[item.label,item.role,item.enabled]),[['Вырезать','cut',false],['Копировать','copy',true],['Вставить','paste',true],['Выделить всё','selectAll',false]]);

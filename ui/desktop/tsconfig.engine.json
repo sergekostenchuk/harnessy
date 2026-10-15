@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false,
+    "declaration": false,
+    "sourceMap": false,
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": "../..",
+    "outDir": ".engine-compiled",
+    "types": ["node"]
+  },
+  "include": [
+    "../../packages/*/src/**/*",
+    "../../packages/*/bin/**/*"
+  ],
+  "exclude": [
+    "../../packages/**/*.test.ts",
+    "../../packages/**/*test*.ts",
+    "../../packages/**/fixtures/**"
+  ]
+}

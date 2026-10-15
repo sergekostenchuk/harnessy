@@ -1,5 +1,7 @@
 import {safeDiagnostic} from '../diagnostic.ts';
 import {limitsReason} from '../limits-reason.ts';
+import {nodeChildEnv} from '../node-child.ts';
+import {stripElectronServiceEnv} from '../env.ts';
 import {mkdtemp,writeFile,rm,open} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -47,7 +49,7 @@ export class CliProvider {
   this.d=descriptor(description);this.vendor=this.d.id;this.deps={execute:executeCli,env:{...process.env},cwd:process.cwd(),temporaryDirectory:tmpdir(),probeTimeoutMs:15000,loginTimeoutMs:60000,turnTimeoutMs:3600000,maxBytes:16*1024*1024,...deps};
   this.deps.env={...this.deps.env};for(const k of ['probeTimeoutMs','loginTimeoutMs','turnTimeoutMs','maxBytes'] as const)if(!Number.isSafeInteger(this.deps[k])||this.deps[k]<=0)throw protocol('неверный предел '+k);
  }
- private environment(route:CliContext['env']={}){const env:NodeJS.ProcessEnv={...this.deps.env,...route};for(const key of [...this.d.forbiddenEnv,'PANE_TOKEN','PANE_ID','APP_URL','SEATS'])delete env[key];return env}
+ private environment(route:NodeJS.ProcessEnv={}){const env:NodeJS.ProcessEnv={...this.deps.env,...route};for(const key of [...this.d.forbiddenEnv,'PANE_TOKEN','PANE_ID','APP_URL','SEATS'])delete env[key];return stripElectronServiceEnv(env)}
  private async query<T>(p:CliProbe<T>,signal:AbortSignal=AbortSignal.timeout(this.deps.probeTimeoutMs),cwd=this.deps.cwd,stateArgs?:string[],route:CliContext['env']={},timeoutMs=this.deps.probeTimeoutMs):Promise<T>{
   let temporary='';try{const args=stateArgs??(p.privateConfig?['--config-dir',temporary=await mkdtemp(join(this.deps.temporaryDirectory,'harnessy-cli-metadata-'))]:[]);
   const cmd=command(p.command),r=await waitWithSignal(()=>this.deps.execute({...cmd,args:[...cmd.args,...args],binary:this.d.binary,cwd,env:this.environment(route),timeoutMs,maxBytes:1024*1024},signal),signal);
@@ -136,7 +138,7 @@ export class CliProvider {
    if(this.d.mcp){
     token=randomBytes(32).toString('hex');ctx.registerProcessToken(token);registered=true;
     directory=await mkdtemp(join(this.deps.temporaryDirectory,'harnessy-cli-'));const path=join(directory,'mcp.json');
-    const server:CliMcpServer={command:process.execPath,args:[fileURLToPath(new URL('../../bin/pane-mcp.mjs',import.meta.url))],env:{PANE_ID:seat.id,APP_URL:ctx.appUrl,PANE_TOKEN:token,SEATS:input.peers.map(p=>p.id+':'+p.label.replace(/[;\r\n]/g,' ')).join(';')}};
+    const server:CliMcpServer={command:process.execPath,args:[fileURLToPath(new URL('../../bin/pane-mcp.mjs',import.meta.url))],env:nodeChildEnv({PANE_ID:seat.id,APP_URL:ctx.appUrl,PANE_TOKEN:token,SEATS:input.peers.map(p=>p.id+':'+p.label.replace(/[;\r\n]/g,' ')).join(';')})};
     const config=this.d.mcp.serialize(server,input);mcpArgs=this.d.mcp.args(path,server,input);configEnv=this.d.mcp.env?.(path)??{};
     if(!text(config)||!config||!strings(mcpArgs))throw protocol('нет конфигурации MCP');
     await writeFile(path,config,{encoding:'utf8',mode:0o600,flag:'wx'});
@@ -152,7 +154,7 @@ export class CliProvider {
    if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),signal);
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    lease?.validate(); // No await between the final path check and process creation.
-   const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...stateArgs,...mcpArgs,...sessionArgs],cwd:seat.cwd,env:{...this.environment(ctx.env),...configEnv},timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:stream,started:()=>ctx.modelStarted?.()});
+   const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...stateArgs,...mcpArgs,...sessionArgs],cwd:seat.cwd,env:this.environment({...ctx.env,...configEnv}),timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:stream,started:()=>ctx.modelStarted?.()});
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    if(exit.code!==0||exit.signal){const failure=this.d.failure?.(exit);throw new ProviderError(failure?.code??'transport_lost',clean(failure?.text??('CLI: процесс завершился '+(exit.signal?'по сигналу '+exit.signal:'с кодом '+exit.code)+(exit.stderr.trim()?': '+safeDiagnostic(clean(exit.stderr)):' · stderr пуст'))),sessionId)}
    if(sessionFile){

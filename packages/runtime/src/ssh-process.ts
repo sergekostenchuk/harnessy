@@ -1,6 +1,7 @@
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {processOwner,saveOwnership,type SshOwnership} from './ssh-ownership.ts';
+import {nodeChildEnv} from '@harnessy/providers';
 
 export interface SshCommand {binary:string;args:string[];cwd:string;env:NodeJS.ProcessEnv;cleanupDirectory?:string;ownership?:SshOwnership}
 export interface SshExit {code:number|null;stderr:string;error?:'missing'|'spawn'|'overflow'}
@@ -10,7 +11,8 @@ const active=new Set<()=>void>();const engineExit=()=>{for(const stop of active)
 
 /** Private diagnostics only; no shell, inherited proxy settings or unbounded output. */
 export const spawnSsh:SshSpawn=command=>{
- const child=spawn(process.execPath,[fileURLToPath(new URL('./ssh-guardian.ts',import.meta.url))],{cwd:command.cwd,env:command.env,stdio:['pipe','ignore','inherit','ipc'],shell:false,detached:true});
+ const guardian=import.meta.url.endsWith('.ts')?'./ssh-guardian.ts':'./ssh-guardian.js';
+ const child=spawn(process.execPath,[fileURLToPath(new URL(guardian,import.meta.url))],{cwd:command.cwd,env:nodeChildEnv(command.env),stdio:['pipe','ignore','inherit','ipc'],shell:false,detached:true});
  let error:SshExit['error'],result:SshExit|undefined;
  const exit=()=>child.stdin!.destroy();if(!active.size)process.once('exit',engineExit);active.add(exit);
  const done=new Promise<SshExit>(resolve=>{

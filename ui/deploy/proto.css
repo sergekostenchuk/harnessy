@@ -169,6 +169,16 @@ html[data-m][data-page="set"] .row .seg { max-width:100%; overflow-x:auto; }
 
 /* ===== РАБОЧИЙ СЛОЙ (live.js): поле ввода, разговор, всплывающая строка, поиск ⌘K ===== */
 .live-in { display:block; width:100%; min-height:22px; border:0; outline:0; resize:none; background:transparent; color:var(--ink); font:inherit; line-height:1.5; padding:0; }
+.release-badge { display:inline-flex; align-items:center; flex:none; min-height:22px; padding:2px 8px; border:1px solid rgba(194,122,52,.45); border-radius:999px; color:var(--accent); background:rgba(194,122,52,.08); font:9.5px/1 var(--mono); letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
+.frame .top > .release-badge { margin-left:10px; }
+.release-gate { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:24px; background:rgba(7,7,9,.86); backdrop-filter:blur(8px); }
+.release-card { width:min(520px,calc(100vw - 32px)); padding:30px; border:1px solid var(--line2); border-radius:16px; background:var(--panel); box-shadow:0 28px 90px rgba(0,0,0,.62); }
+.release-card h1 { margin:18px 0 8px; color:var(--ink); font:500 22px/1.2 var(--font); letter-spacing:-.01em; }
+.release-card > p { margin:0; color:var(--ink2); font:13.5px/1.55 var(--font); }
+.release-card dl { margin:20px 0; border:1px solid var(--line2); border-radius:11px; overflow:hidden; }
+.release-card dl > div { display:grid; grid-template-columns:150px 1fr; gap:14px; padding:11px 13px; border-bottom:1px solid var(--line); }
+.release-card dl > div:last-child { border-bottom:0; }.release-card dt { color:var(--ink); font:500 12.5px var(--font); }.release-card dd { margin:0; color:var(--ink3); font:12px/1.4 var(--font); }
+@media(max-width:700px){.release-gate{padding:12px}.release-card{padding:22px}.release-card dl>div{grid-template-columns:1fr;gap:3px}.frame .top>.release-badge{margin-left:auto}}
 .live-in::placeholder { color:var(--ink3); }
 .live-attachments { display:none; margin:0 0 10px; }
 .live-attachment-strip { display:flex; align-items:flex-start; flex-wrap:wrap; gap:8px; }

@@ -69,10 +69,10 @@
     BILL.saving=true;BILL.error=null;BILL.generation++;loadGeneration++;render();
     try{const r=flag?await api('/api/settings',{scope:'owner',patch}):await api('/api/billing',{changes});if(!r||!r.ok||r.scope!=='owner'||(flag?(!r.saved||r.saved[flag]!==patch[flag]):!r.config)){if(r&&r.code==='billing_conflict')await billingLoad();throw Error(r&&r.error||'Нет подтверждения настроек подписки')}loadGeneration++;BILL.generation++;if(!flag){BILL.dirty=false;BILL.draft=null}BILL.receipt='Сохранено · личная область · '+hhmm(r.ts);await billingLoad()}catch(error){BILL.error=error.message}finally{BILL.saving=false;render()}
   },true);
-  const NAV=[['Личное',[['profile','Профиль и входы'],['notif','Уведомления'],['look','Облик'],['keys','Клавиши'],['priceList','Прайс-лист'],['contextTransfer','Перенос контекста'],['trace','Трассировка'],['subscriptions','Подписки и платежи']]],
+  const NAV=[['Личное',[['profile','Профиль и входы'],['notif','Уведомления'],['look','Облик'],['keys','Клавиши'],['priceList','Прайс-лист'],['contextTransfer','Перенос контекста'],['trace','Трассировка'],['subscriptions','Подписки и платежи'],['about','О программе']]],
              ['Проект',[['rights','Разрешения и стоп-случаи'],['budget','Бюджет и выключатель'],['memory','Память и правила','16-memory.html'],['roles','Роли и места']]],
              ['Подключения',[['conn','Провайдеры и маршруты','11-connections.html'],['social','Входы и ключи','11-connections.html#v=keys'],['dev','Разработчик']]]];
-  const SCOPE={trace:'везде · файл владельца',contextTransfer:'везде · файл владельца',subscriptions:'везде · файл владельца',priceList:'везде · файл владельца',profile:'везде · локальное окно',notif:'везде · файл владельца',look:'это окно',keys:'это окно',rights:'проект',budget:'проект',roles:'проект',dev:'движок'};
+  const SCOPE={about:'эта сборка',trace:'везде · файл владельца',contextTransfer:'везде · файл владельца',subscriptions:'везде · файл владельца',priceList:'везде · файл владельца',profile:'везде · локальное окно',notif:'везде · файл владельца',look:'это окно',keys:'это окно',rights:'проект',budget:'проект',roles:'проект',dev:'движок'};
   const row=(t,s,ctl,o)=>{ const disabled=o&&o.off?' data-set-disabled title="'+esc(o.reason||'настройка пока не исполняется движком')+'" aria-disabled="true" style="cursor:default"':'';
     return '<div class="row'+(o&&o.off?' off':'')+(o&&o.click?' click':'')+'"'+disabled+(o&&o.attr?' '+o.attr:'')+'><div><b>'+t+'</b>'+(s?'<small>'+s+'</small>':'')+'</div>'+(disabled?(ctl||'').replace(/<(span|button)\b/g,'<$1'+disabled):(ctl||''))+'</div>'; };
   const seg=(items,on,attr)=>'<span class="seg" '+(attr||'')+'>'+items.map(([v,t])=>'<span data-v="'+v+'"'+(v===on?' class="on"':'')+'>'+t+'</span>').join('')+'</span>';
@@ -86,6 +86,7 @@
     if(k==='subscriptions')return billingHTML();
     if(k==='priceList')return priceHTML();
     if(k==='contextTransfer')return transferHTML();if(k==='trace')return traceSettingsHTML();
+    if(k==='about'){const release=globalThis.HARNESS_RELEASE||{version:'неизвестно',label:'alpha'};return head('О программе','Эта сборка предназначена для внутренней пробы. Канал alpha остаётся видимым до перехода проекта в beta.')+'<div class="rows">'+row('Harnessy','локальное приложение для работы с командой моделей','<span class="release-badge">'+esc(release.label||'alpha')+'</span>')+row('Версия',esc(release.version),'')+row('Данные проектов','лежат в ваших папках и в git','')+row('Ключи','хранятся в связке ключей macOS','')+'</div>';}
     if(k==='profile'){ const maskMail=m=>String(m||'').replace(/^(.)[^@]*(@.*)$/,'$1•••$2'); const cl=CONN?CONN.find(p=>p.id==='claude'):null, cx=CONN?CONN.find(p=>p.id==='codex'):null; const a=cl&&cl.auth||{}, b=cx&&cx.auth||{};
       return head('Профиль и входы','Локальное окно Harnessy работает без входа. Входы провайдеров — это ваши подписки; сайт harnessy.ai имеет свои входы (Telegram, GitHub, Google) и к окну не относится.')+
         '<div class="rows">'+row('Это окно','локально · '+esc(L.H.project||'проект не открыт'),'<span class="pill ok">без входа</span>')+

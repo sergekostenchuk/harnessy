@@ -13,7 +13,7 @@ import {readFileSync,appendFileSync,statSync} from 'node:fs';
 import {spawn} from 'node:child_process';
 const args=process.argv.slice(2),get=k=>args[args.indexOf(k)+1],scenario=process.env.CLI_SCENARIO;
 const log=data=>appendFileSync(process.env.CLI_CAPTURE,JSON.stringify(data)+'\n');
-log({action:args[0],args,tokenInEnv:!!process.env.PANE_TOKEN,apiKeyInEnv:!!process.env.TEST_API_KEY,proxy:process.env.HTTPS_PROXY});
+log({action:args[0],args,tokenInEnv:!!process.env.PANE_TOKEN,apiKeyInEnv:!!process.env.TEST_API_KEY,proxy:process.env.HTTPS_PROXY,electronEnv:Object.keys(process.env).filter(key=>key.startsWith('ELECTRON_')).sort()});
 const output=value=>process.stdout.write(JSON.stringify(value)+'\n');
 if(args[0]==='version')console.log('test-cli 1.0');
 else if(args[0]==='auth'){if(scenario==='bad-auth')console.log('bad');else output({loggedIn:scenario!=='logged-out',email:'fixture@example.test',secret:'should-not-return'})}
@@ -23,7 +23,7 @@ else if(args[0]==='sessions')output([{id:'session-1',title:'fixture',updated:1}]
 else if(args[0]==='history')output([{role:'ai',text:'fixture answer'}]);
 else if(args[0]==='turn'){
  let raw='';for await(const chunk of process.stdin)raw+=chunk;const input=JSON.parse(raw),path=get('--mcp-config'),server=JSON.parse(readFileSync(path,'utf8')).mcpServers.panes;
- log({configPath:path,mode:statSync(path).mode&511,directoryMode:statSync(new URL('.', 'file://'+path)).mode&511,input,serverCommand:server.command,serverArgs:server.args,tokenPresent:!!server.env.PANE_TOKEN});
+ log({configPath:path,mode:statSync(path).mode&511,directoryMode:statSync(new URL('.', 'file://'+path)).mode&511,input,serverCommand:server.command,serverArgs:server.args,tokenPresent:!!server.env.PANE_TOKEN,runAsNode:server.env.ELECTRON_RUN_AS_NODE??null});
  const format=get('--format'),emit=e=>{if(format==='stream-json')output(e)};
  if(scenario==='hang'){setInterval(()=>{},1000)}else if(scenario==='denied'){console.error('fixture permission denied');process.exitCode=23}
  else if(scenario==='crash'){console.error('fixture crash');process.exitCode=7}
@@ -50,7 +50,7 @@ export async function cliFixture(t:TestContext,scenario:Scenario='ok',format:'js
  const description:CliDescriptor={id:'test-cli',name:'Fixture CLI',binary:process.execPath,login:command('login'),version:{command:command('version'),parse:r=>r.stdout.trim()},auth:{command:command('auth'),parse},models:{command:command('models'),parse},forbiddenEnv:['TEST_API_KEY'],
  modes:{read:()=>['--sandbox','read-only'],edit:i=>['--sandbox','workspace-write','--roots',JSON.stringify(i.writableRoots)],all:()=>['--sandbox','all']},
  turn:{format,command:i=>({args:[file,'turn','--format',format,'--model',i.seat.model],input:JSON.stringify({message:i.message,role:i.roleNote})}),decode:v=>Array.isArray(v)?v as CliEvent[]:[v as CliEvent]},resume:id=>['--resume',id],
- mcp:{serialize:panes=>JSON.stringify({mcpServers:{panes}}),args:path=>['--mcp-config',path]},limits:{command:command('limits'),parse},sessions:{list:()=>({command:command('sessions'),parse}),messages:()=>({command:command('history'),parse})},failure:r=>({code:r.code===23?'permission_denied':'transport_lost',text:r.stderr||'CLI failed'})};
+ mcp:{serialize:panes=>JSON.stringify({mcpServers:{panes}}),args:path=>['--mcp-config',path],env:()=>({ELECTRON_RUN_AS_NODE:'forged',ELECTRON_ENABLE_LOGGING:'1'})},limits:{command:command('limits'),parse},sessions:{list:()=>({command:command('sessions'),parse}),messages:()=>({command:command('history'),parse})},failure:r=>({code:r.code===23?'permission_denied':'transport_lost',text:r.stderr||'CLI failed'})};
  const env={...process.env,CLI_SCENARIO:scenario,CLI_CAPTURE:capture,TEST_API_KEY:'fake-api-secret',PANE_TOKEN:'foreign-parent-token'};
  const provider=new CliProvider(description,{env,cwd:dir,temporaryDirectory:dir,probeTimeoutMs:5000,turnTimeoutMs:5000}),controller=new AbortController();let handle:TurnHandle|null=null,starts=0,started!:()=>void;const startedPromise=new Promise<void>(r=>{started=r});
  const seat:CliSeat={id:'worker',vendor:description.id,label:'Worker',model:'test-model',mode:'read',cwd:dir,sessionId:null,writePaths:[],worktree:null};
