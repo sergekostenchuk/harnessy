@@ -55,7 +55,8 @@ export function createApi(options:ApiOptions){
  const span:TraceContext=samplePoll?{store,traceId:randomUUID(),spanId:randomUUID(),parentSpanId:null,chat:null,pane:null,turnInstanceId:null}:store.record('http.request',requestInput,source);
  res.setHeader('X-Harness-Trace-Id',span.traceId);res.setHeader('X-Harness-Span-Id',span.spanId);
  res.once('finish',()=>{const duration=r.clock.now()-start;if(samplePoll&&res.statusCode<400&&duration<2000){poll(store,routeTemplate,r.clock.now());return}if(samplePoll)store.record('http.request',{...requestInput,traceId:span.traceId,spanId:span.spanId},source);
-  const responseIds=res.statusCode<400&&request.method==='POST'&&routeTemplate.endsWith('/save')?pathIdentity(routeTemplate,path,project):ids;
+  const publishesIdentity=request.method==='POST'&&['/api/network/exits/:id/save','/api/llm/providers/:id/save','/api/llm/providers/:id'].includes(routeTemplate);
+  const responseIds=res.statusCode<400&&publishesIdentity?pathIdentity(routeTemplate,path,project):ids;
   store.end(span,'http.response',{actor:'engine',outcome:res.statusCode<400?'ok':res.statusCode<500?'rejected':'failed',reason:res.statusCode<400?{code:'none',text:''}:responseReasons.get(res)??traceReason(res.getHeader('X-Harness-Reason')??(res.statusCode<500?'validation':'internal'),'HTTP '+res.statusCode),durationMs:duration,data:{method:request.method,route:routeTemplate,status:res.statusCode,...responseIds}})});
  return store.run(span,async()=>{try{await dispatch(request,res)}catch(e){responseReasons.set(res,traceReason((e as {code?:string}).code,e instanceof Error?e.message:''));res.setHeader('X-Harness-Reason',responseReasons.get(res)!.code);throw e}});
  }

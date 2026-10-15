@@ -18,6 +18,19 @@ test('TS-28: HTTP spans carry only typed path identities; a forged credential in
  assert.equal(records.text.includes(bareToken),false);
 });
 
+test('TS-28: both published exit and provider routes gain their identity only in a successful response',async t=>{
+ const h=await fixture(t);
+ const cases=[
+  {path:'/api/network/exits/new-exit/save',body:{config:{id:'new-exit',label:'Fixture',type:'direct'},revision:null},key:'exit',id:'new-exit'},
+  {path:'/api/llm/providers/new-route',body:{config:{api:'openai-completions',baseURL:'http://127.0.0.1:1/v1',models:[{id:'fixture-model'}]},revision:null},key:'routeId',id:'new-route'}
+ ];
+ for(const item of cases){
+  const response=await call(h.api,item.path,{body:item.body});assert.equal(response.status,200,item.path);
+  const rows=(await h.runtime.project.trace.read({traceId:String(response.headers['x-harness-trace-id'])})).filter(row=>row.kind==='http.request'||row.kind==='http.response');
+  assert.deepEqual(rows.map(row=>(row.data as Record<string,unknown>)[item.key]),['[неизвестный id]',item.id],item.path);
+ }
+});
+
 test('TS-28: healthy background reads aggregate; bound, rejected and slow reads retain individual spans',async t=>{
  const h=await fixture(t);for(let i=0;i<31;i++)assert.equal((await call(h.api,'/api/status')).status,200);
  let rows=await h.runtime.project.trace.read();assert.ok(rows.some(row=>row.kind==='http.poll'&&(row.data as any).route==='/api/status'&&(row.data as any).count===30));assert.equal(rows.filter(row=>['http.request','http.response'].includes(row.kind)&&(row.data as any).route==='/api/status').length,0);
