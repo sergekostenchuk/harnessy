@@ -20,7 +20,7 @@ function desktop(t:import('node:test').TestContext,override=false,ready=false){
    if(name==='electron')return {app:{setName(){},requestSingleInstanceLock:()=>true},nativeTheme:{}};
    if(name==='child_process')return {spawn:(file:string,_args:string[],options:any)=>{const launch={file,options,detached:false};launches.push(launch);return {unref(){launch.detached=true}}}};
    if(name==='fs')return {...fs,openSync:(file:string,flags:fs.OpenMode)=>{const fd=fs.openSync(file,flags);descriptors.push(fd);return fd}};
-   if(name==='path')return path;if(name==='os')return os;throw Error('unexpected module '+name);
+   if(name==='path')return path;if(name==='os')return os;if(name==='./trace.js')return {reportDesktopTrace:async()=>false};throw Error('unexpected module '+name);
   }};
  runInNewContext(main.slice(0,main.indexOf('const offline ='))+'\nglobalThis.start=ensureHarness;',context);
  return {directory,launches,messages,start:()=>context.start((message:string)=>messages.push(message))};

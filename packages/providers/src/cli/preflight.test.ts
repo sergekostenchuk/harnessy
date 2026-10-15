@@ -21,4 +21,6 @@ for(const behavior of ['slow-then-ok','both-slow','lost-then-ok','logged-out','l
  if(['slow-then-ok','lost-then-ok'].includes(behavior)){assert.equal((await p.runTurn(f.seat,'тест',f.ctx)).text,'готово');assert.equal(reads,2);assert.equal(runs,1)}
  else{await assert.rejects(p.runTurn(f.seat,'тест',f.ctx),behavior==='both-slow'?{code:'login_timeout',message:'Devin не ответил на проверку входа'}:{code:behavior==='cancel'?'cancelled':behavior==='login-changed'?'login_changed':'not_logged_in'});assert.equal(runs,0);assert.equal(reads,behavior==='both-slow'?2:1)}
  assert.ok(limits.every(n=>n===20));if(behavior.includes('slow'))assert.equal(aborts,behavior==='both-slow'?2:1);assert.equal(f.starts,runs);
+ assert.equal(f.traces.filter(row=>row.name==='login.retry').length,['slow-then-ok','both-slow','lost-then-ok'].includes(behavior)?1:0);
+ if(behavior==='lost-then-ok')assert.equal(f.traces.find(row=>row.name==='login.retry')?.reason,'transport_lost');
 });
