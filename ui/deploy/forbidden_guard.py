@@ -25,7 +25,6 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 GZIP_SIGNATURE = b"\x1f\x8b"
 UTF16_LE_ASCII = re.compile(rb"(?:[\x09\x0a\x0d\x20-\x7e]\x00){4}")
 UTF16_BE_ASCII = re.compile(rb"(?:\x00[\x09\x0a\x0d\x20-\x7e]){4}")
-UTF16_ASCII_BYTES = frozenset(b"\t\n\r" + bytes(range(32, 127)))
 UNKNOWN_CONTAINER_SUFFIXES = {".7z", ".br", ".bz2", ".rar", ".xz", ".zip", ".zst"}
 UNKNOWN_CONTAINER_MAGICS = (
     b"PK\x03\x04",
@@ -123,26 +122,47 @@ def _scan_utf16(
     findings: set[tuple[str, int]],
     budget: ScanBudget,
 ) -> bool:
+    def record(decoded: str) -> bool:
+        encoded = decoded.encode("utf-8")
+        budget.add_expanded(len(encoded), display)
+        return _record_markers(encoded, display, markers, findings)
+
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        if len(data) > MAX_UTF16_RUN:
+            raise _container_error(display, "UTF-16 превышает предел размера")
+        try:
+            return record(data.decode("utf-16", errors="strict"))
+        except UnicodeDecodeError as error:
+            raise _container_error(display, "повреждённый UTF-16 с BOM") from error
+
+    def text_unit(pair: bytes, encoding: str) -> bool:
+        value = int.from_bytes(pair, "little" if encoding == "utf-16le" else "big")
+        if value in {0x09, 0x0A, 0x0D} or 0xD800 <= value <= 0xDFFF:
+            return True
+        return value != 0 and chr(value).isprintable()
+
     found = False
-    for encoding, pattern, pair_ok in (
-        ("utf-16le", UTF16_LE_ASCII, lambda pair: pair[1] == 0 and pair[0] in UTF16_ASCII_BYTES),
-        ("utf-16be", UTF16_BE_ASCII, lambda pair: pair[0] == 0 and pair[1] in UTF16_ASCII_BYTES),
+    for encoding, pattern in (
+        ("utf-16le", UTF16_LE_ASCII),
+        ("utf-16be", UTF16_BE_ASCII),
     ):
         scanned_until = -1
         for match in pattern.finditer(data):
             if match.start() < scanned_until:
                 continue
             start, end = match.start(), match.end()
-            while start >= 2 and pair_ok(data[start - 2 : start]):
+            while start >= 2 and text_unit(data[start - 2 : start], encoding):
                 start -= 2
-            while end + 2 <= len(data) and pair_ok(data[end : end + 2]):
+            while end + 2 <= len(data) and text_unit(data[end : end + 2], encoding):
                 end += 2
             scanned_until = end
             if end - start > MAX_UTF16_RUN:
                 raise _container_error(display, "UTF-16 превышает предел размера")
-            decoded = data[start:end].decode(encoding, errors="strict").encode("utf-8")
-            budget.add_expanded(len(decoded), display)
-            found = _record_markers(decoded, display, markers, findings) or found
+            try:
+                decoded = data[start:end].decode(encoding, errors="strict")
+            except UnicodeDecodeError:
+                continue
+            found = record(decoded) or found
     return found
 
 
