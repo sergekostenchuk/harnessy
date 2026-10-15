@@ -211,6 +211,9 @@ def build_proto():
     i = app_js.index("const IC={")
     ic = app_js[i:app_js.index("const TOP=", i)].rstrip()          # значки рейки — те же, что в скетчах
     shutil.copy(HERE / "proto.css", dst / "proto.css")
+    markdown = (HERE.parent.parent / "packages" / "context" / "src" / "markdown.js").read_text(encoding="utf-8")
+    markdown = re.sub(r"^export\s+", "", markdown, flags=re.MULTILINE)
+    (dst / "markdown.js").write_text(markdown + "\nglobalThis.HARNESS_MARKDOWN={renderMarkdown,markdownVisible};\n", encoding="utf-8")
     shutil.copy(HERE / "live.js", dst / "live.js")                    # рабочий слой: состояние, решения, чат, поиск
     shutil.copy(HERE / "cx.js", dst / "cx.js")                        # поле ввода C′: папка · роль · режимы / ＋ · права · модель · усилие · ⓘ
     for extra in ("ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js"):                      # модули экранов: контекст чата, настройки, подключения (08.10.2026)
@@ -223,7 +226,7 @@ def build_proto():
         t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto>')
         t = rep(t, "<head>", "<head><script>" + boot + "</script>")
         t = rep(t, "</head>", '<link rel="stylesheet" href="proto.css"></head>')
-        t = rep(t, "</body>", '<script src="proto.js"></script>\n<script src="live.js"></script>\n<script src="llm.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="network-stats.js"></script>\n<script src="network-add.js"></script>\n<script src="network-recovery.js"></script>\n<script src="network.js"></script>\n<script src="conn.js"></script>\n</body>')
+        t = rep(t, "</body>", '<script src="proto.js"></script>\n<script src="markdown.js"></script>\n<script src="live.js"></script>\n<script src="llm.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="network-stats.js"></script>\n<script src="network-add.js"></script>\n<script src="network-recovery.js"></script>\n<script src="network.js"></script>\n<script src="conn.js"></script>\n</body>')
         t = re.sub(r"<title>.*?</title>", f"<title>Harnessy · {title}</title>", t, count=1, flags=re.S)
         (dst / f"{stem}.html").write_text(t, encoding="utf-8")
     gallery = (src / "index.html").read_text(encoding="utf-8")

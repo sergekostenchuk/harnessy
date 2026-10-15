@@ -45,7 +45,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  const bubble=','  const cols=')+
   '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
-  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelectionText,quoteBlock,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw};',context);
+  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw};',context);
  const functions=(context as Data).testing as Data;
  function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
  function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
@@ -69,7 +69,22 @@ test('TS-25: quote insertion keeps typed text, caret and image draft intact',()=
  const view=ui(),key=view.functions.attachmentKey(),image=imageRef();view.S.attachmentDrafts={[key]:[image]};let caret:number[]=[];
  const ta:Data={value:'Уже набранный текст',selectionStart:19,selectionEnd:19,scrollHeight:48,style:{},focus(){},setSelectionRange(a:number,b:number){caret=[a,b]},dispatchEvent(){}};
  view.sandbox.document.querySelector=(selector:string)=>selector.includes('.live-in')?ta:null;
- assert.equal(view.functions.insertQuote('первая строка\nвторая строка'),true);assert.equal(ta.value,'Уже набранный текст\n> первая строка\n> вторая строка\n\n');assert.deepEqual(caret,[ta.value.length,ta.value.length]);assert.deepEqual(plain(view.functions.attachmentRefs(key)),[image]);assert.equal(view.S.draft,ta.value);
+ assert.equal(view.functions.insertQuote('первая строка\nвторая строка'),true);assert.equal(ta.value,'Уже набранный текст\n[1] > первая строка\n> вторая строка\n\n');assert.deepEqual(caret,[ta.value.length,ta.value.length]);assert.deepEqual(plain(view.functions.attachmentRefs(key)),[image]);assert.equal(view.S.draft,ta.value);
+ ta.selectionStart=ta.selectionEnd=ta.value.length;assert.equal(view.functions.insertQuote('ещё одна'),true);assert.match(ta.value,/\[2\] > ещё одна\n\n$/);assert.equal(view.functions.renumberQuotes('[4] > первая\nкомментарий\n\n[9] > вторая'),'[1] > первая\nкомментарий\n\n[2] > вторая');
+});
+
+test('TS-27: real mousedown, mouseup and click keep the same reply control alive',async()=>{
+ const d=dom('<div class="frame cur"><div class="live-msg" data-message-index="0"><span class="live-message-text">выделенная цитата</span></div><textarea class="live-in"></textarea></div>');Object.assign(d.document,{body:d.body});const content=d.document.querySelector('.live-message-text')!,ta:any=d.document.querySelector('.live-in')!;ta.value='Комментарий';ta.scrollHeight=40;let collapsed=false;
+ const selection:any={isCollapsed:false,rangeCount:1,anchorNode:content.firstChild,focusNode:content.firstChild,toString:()=>collapsed?'':'выделенная цитата',getRangeAt:()=>({getBoundingClientRect:()=>({left:20,right:130,bottom:60})}),removeAllRanges(){collapsed=true;this.isCollapsed=true}};
+ let choose:(picked:Data[])=>void=()=>assert.fail('chooser not opened'),transferred:Data|null=null;const sandbox:Data={document:d.document,window:{},S:{chat:[{seq:1,role:'ai',src:'live',who:'Воркер',text:'выделенная цитата',t:1791500000000}],draft:null},H:{on:true,pane:{id:'worker',label:'Воркер'},panes:[{id:'worker',label:'Воркер'},{id:'reviewer',label:'Ревьюер'}]},getSelection:()=>selection,innerWidth:1440,innerHeight:920,setTimeout:(fn:Function)=>fn(),addEventListener:d.window.addEventListener.bind(d.window),Event:class {},save(){},paneName:(p:Data)=>p.label,fullMessageTime:()=>'',toast(){},modelName:String,esc:String,sendBinding:()=>({}),laMulti:(_a:any,_b:any,_c:any,_d:any,next:(picked:Data[])=>void)=>choose=next,bindingCurrent:()=>true,leftPage:false,selStart:(to:string[],opts:Data)=>transferred={to,opts}};sandbox.globalThis=sandbox;const context=createContext(sandbox);
+ runInContext(part(live,'  const selectionElement=','  const cols=')+'\nglobalThis.quoteUi={messageSelectionText,insertQuote};',context);await d.document.emit('selectionchange');const actions=d.document.querySelector('.live-quote-selection')!,reply=actions.querySelector('[data-selection-reply]')!;
+ const transfer=actions.querySelector('[data-selection-transfer]')!;await transfer.emit('mousedown');await transfer.emit('mouseup');assert.equal(d.document.querySelector('.live-quote-selection'),actions);await transfer.emit('click');choose([{id:'reviewer'}]);assert.deepEqual(plain(transferred),{to:['reviewer'],opts:{sw:false,quotes:[{seq:1,text:'выделенная цитата',comment:'',source:'из ответа Воркер'}]}});
+ await reply.emit('mousedown');await reply.emit('mouseup');assert.equal(d.document.querySelector('.live-quote-selection'),actions);assert.equal(actions.isConnected,true);await reply.emit('click');assert.equal(ta.value,'Комментарий\n[1] > выделенная цитата\n\n');assert.equal(d.document.querySelector('.live-quote-selection'),null);
+});
+
+test('TS-27: send renumbers remaining quotes before the model sees them',async t=>{
+ const h=await fixture(t),view=ui({fetch:async(path,body)=>(await call(h.api,path,{...(body?{body}:{})})).body}),text='[4] > первая\nкомментарий\n\n[9] > вторая';view.ta.value=text;
+ assert.equal(await view.functions.onSend(text,view.ta),true);await h.runtime.idle();assert.equal(h.provider.calls[0]!.message,'[1] > первая\nкомментарий\n\n[2] > вторая');
 });
 
 test('TS-25: reply selection accepts text inside one message and rejects cross-message or outside selection',()=>{

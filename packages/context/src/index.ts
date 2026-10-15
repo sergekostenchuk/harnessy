@@ -9,3 +9,4 @@ export {estTokens,contextWindow,CONTEXT_WINDOWS} from './tokens.ts';
 export {contextCard} from './card.ts';
 export {conversationTransfer,transferSettings,transferLabel,TRANSFER_DEFAULTS,type ConversationSnapshot,type ConversationTransfer} from './session.ts';
 export {teamMemberState,roleKnowledgeText,teamKnowledgeChanges,isTeamSnapshot,type TeamMemberKnowledge,type RoleKnowledge} from './team-knowledge.ts';
+export {renderMarkdown,markdownVisible,type MarkdownHooks,type MarkdownView} from './markdown.js';

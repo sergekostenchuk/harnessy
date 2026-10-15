@@ -12,10 +12,15 @@ function chatSelection() {
   const text = String(selection.toString() || '').replace(/\r\n?/g, '\n').trim();
   return { quote: !!text && !!first && first === last && !!start && !!end && start.closest('.live-msg') === first && end.closest('.live-msg') === first, text };
 }
-document.addEventListener('contextmenu', event => {
-  const target = element(event.target), selected = chatSelection();
-  ipcRenderer.sendSync('harnessy:context-meta', { ...selected, image: !!(target && target.closest && target.closest('.live-message-images img')) });
-}, true);
+let lastSelection = '';
+function publishSelection() {
+  const selected = chatSelection(), next = JSON.stringify(selected);
+  if (next === lastSelection) return;
+  lastSelection = next;
+  ipcRenderer.send('harnessy:context-meta', selected);
+}
+document.addEventListener('selectionchange', publishSelection, true);
+document.addEventListener('mouseup', () => setTimeout(publishSelection, 0), true);
 
 contextBridge.exposeInMainWorld('harnessy', {
   desktop: true,
@@ -25,5 +30,11 @@ contextBridge.exposeInMainWorld('harnessy', {
     const listener = (_event, text) => { if (typeof text === 'string' && text.trim()) callback(text); };
     ipcRenderer.on('harnessy:quote-selection', listener);
     return () => ipcRenderer.removeListener('harnessy:quote-selection', listener);
+  },
+  onTransfer: callback => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, text) => { if (typeof text === 'string' && text.trim()) callback(text); };
+    ipcRenderer.on('harnessy:transfer-selection', listener);
+    return () => ipcRenderer.removeListener('harnessy:transfer-selection', listener);
   },
 });

@@ -562,7 +562,7 @@ export class Runtime {
  chatGet(id:string,initiator:Initiator){return chatGet(this,id,initiator)}
  chatsNew(input:{pane?:unknown;carry?:unknown},initiator:Initiator){return chatsNew(this,input,initiator)}
  chatsOpen(input:{chat?:unknown;carry?:unknown},initiator:Initiator){return chatsOpen(this,input,initiator)}
- handoff(input:{to?:unknown;from?:unknown;kind?:unknown;chat?:unknown;seqs?:unknown;prompt?:unknown;text?:unknown},initiator:Initiator){return handoff(this,input,initiator)}
+ handoff(input:{to?:unknown;from?:unknown;kind?:unknown;chat?:unknown;seqs?:unknown;quotes?:unknown;prompt?:unknown;text?:unknown},initiator:Initiator){return handoff(this,input,initiator)}
  chat(input:Record<string,unknown>,initiator:Initiator){return chat(this,input,initiator)}
  pinsGet(initiator:Initiator){this.requireOwner(initiator);return this.pins.get()}
  async pinSet(input:Parameters<Pins['set']>[0],initiator:Initiator){this.requireOwner(initiator);return this.pins.set(input)}
