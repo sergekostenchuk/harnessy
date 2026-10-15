@@ -573,6 +573,19 @@ html[data-page="spend"] .sp-policy button:not(:disabled){cursor:pointer}
 
 aside.side.ps .limits { cursor:pointer; }
 aside.side.ps .limits:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+aside.side.ps .limits .cap { margin-bottom:6px; }
+aside.side.ps .limits .limit-provider .row { align-items:baseline; margin-bottom:3px; }
+aside.side.ps .limits .limit-provider.dim .row,aside.side.ps .limits .limit-provider.dim .row b { color:var(--ink3); }
+aside.side.ps .limits .limit-period { margin-left:5px; color:var(--ink3); font:9.5px var(--mono); }
+aside.side.ps .limits .limit-provider .ticks { margin:0 0 7px; }
+aside.side.ps .limits .limit-provider:last-child .ticks { margin-bottom:0; }
+.limits-dialog { width:min(880px,calc(100vw - 32px)); }
+.limits-dialog .limits-cards { grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); }
+.limits-dialog .sp-limit { margin:0; }
+.limits-dialog .sp-limit-title small { margin:0; text-align:right; }
+.limits-dialog .sp-limit-missing b { color:var(--ink3); font:500 28px var(--mono); }
+.limits-dialog .sp-limit-missing p { color:var(--ink3); margin:5px 0; }
+.limits-dialog .sp-limit-renewal { margin:8px 0; color:var(--ink2); }
 .limits-dialog .sp-limit-window { margin:14px 0; }
 .limits-dialog .sp-limit-window .sp-value { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
 .limits-dialog .sp-limit-window .sp-value b { font-size:28px; font-weight:500; }

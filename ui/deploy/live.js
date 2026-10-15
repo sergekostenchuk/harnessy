@@ -1111,7 +1111,7 @@
   // TS-14b: spend blocks stay in their sketch positions; only their data and actions change.
   const spendPeriod=()=>{try{const p=new URLSearchParams(location.search||'').get('period');return ['7','30','90','all'].includes(p)?p:'all'}catch(e){return 'all'}};
   const SP={period:spendPeriod(),group:'byPane',project:null,generation:0,data:null,loading:false,error:null,alive:true,history:[],next:null,historyError:null,historyLoading:false,historyGeneration:0,vendor:'',model:'',card:null,mutation:false};
-  const LIM={generation:0,project:null,providers:[],limits:[],activity:[],error:null,loading:false,updatedAt:null,revision:null};
+  const LIM={generation:0,project:null,providers:[],disconnected:new Set(),limits:[],activity:[],error:null,loading:false,updatedAt:null,revision:null};
   const spendGroups={byPane:'по местам',byChat:'по чатам',byModel:'по моделям',byVendor:'по провайдерам',byModelVendor:'модель и провайдер',byDay:'по дням UTC'};
   const spButton=(text,attr,disabled=false)=>'<button type="button" class="btn sm ghost" '+attr+(disabled?' disabled':'')+'>'+esc(text)+'</button>';
   const spMock=(title,reason,actions=[])=>'<div class="sp-mock"><b>'+esc(title)+'</b><span class="pill">макет</span><p>'+esc(reason)+'</p>'+actions.map(t=>spButton(t,'data-spend-unavailable title="'+esc(reason)+'"',true)).join(' ')+'</div>';
@@ -1153,18 +1153,47 @@
       return '<section class="sp-limit-window"><div class="row sp-value"><b'+(tone?' class="'+tone+'"':'')+'>'+percent+' %</b><span>'+esc(label)+'</span></div><div class="ticks'+(tone?' '+tone:'')+'" role="meter" aria-label="'+esc((info.mock?'макет · ':'')+name+' · '+label)+'" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+w.percentUsed+'">'+Array.from({length:40},(_,i)=>'<i'+(i<Math.round(w.percentUsed/100*40)?' class="on"':'')+'></i>').join('')+'</div><small>остаток '+Math.max(0,100-w.percentUsed).toLocaleString('ru-RU',{maximumFractionDigits:1})+' % · сброс '+esc(reset)+(all&&!info.mock&&typeof w.resetsAt==='number'?' · '+esc(spDate(w.resetsAt)):'')+'</small></section>';
     }).join('')+(p.id==='codex'?spLimitCreditHTML(info.found):'')+(all&&p.id==='claude'?'<p class="sp-limit-extra">доплата: '+(info.mock?'выкл · макет':info.found&&typeof info.found.extraUsageEnabled==='boolean'?(info.found.extraUsageEnabled?'вкл':'выкл'):'нет данных')+'</p>':'')+spLimitRetryHTML(info.found,!info.unavailable)+(!info.mock?'<small>'+(info.stale?'устаревшие данные · '+esc(limitAge(info))+' · ':'')+(info.updatedAt?'данные за '+esc(spDate(info.updatedAt)):'время данных не сохранено')+' · '+esc(info.found&&info.found.source||'источник уточняется')+'</small>':'')+'</div>';
   }
-  function sidebarLimitHTML(p){const info=spWindow(p),name=limitName(p),w=p.id==='claude'?info.windows.find(w=>limitWeek(w)&&!/·/.test(w.label)):p.id==='codex'?info.windows.find(limitFive)||info.windows.find(limitWeek):info.primary;
-    const label=name+(limitApi(p)?' · ключ API':'')+' · '+(p.id==='claude'?'неделя':w&&limitFive(w)?'5 часов':w&&limitWeek(w)?'неделя':w&&limitMonth(w)?'месяц':w?w.label:'лимиты'),reason=info.reason;
-    if(info.unlimited)return '<div class="limit-provider'+(info.stale?' stale':'')+'" data-limit-vendor="'+esc(p.id)+'" title="'+esc(reason)+'"><div class="row"><span class="limit-label">'+esc(name)+'</span><b>безлимит</b></div>'+(info.stale&&info.updatedAt?'<small class="limit-note">'+esc(limitAge(info))+'</small>':'')+spLimitRetryHTML(info.found)+'</div>';
-    if(!w)return '<div class="limit-provider unavailable" data-limit-vendor="'+esc(p.id)+'" title="'+esc(reason)+'"><div class="row"><span class="limit-label">'+esc(label)+'</span></div><small class="limit-reason">нет данных · '+esc(reason)+'</small></div>';
-    const tone=w.percentUsed>=95?'bad':w.percentUsed>=80?'warn':'',reset=info.mock?w.sampleReset:typeof w.resetsAt==='number'?limitCountdown(w.resetsAt-Date.now()/1000):'время уточняется',title=(info.mock?'макет · ':'')+label+' · остаток '+Math.max(0,100-w.percentUsed).toLocaleString('ru-RU',{maximumFractionDigits:1})+' % · сброс '+reset+(info.updatedAt?' · данные за '+spDate(info.updatedAt):'')+(info.found&&info.found.reason?' · '+info.found.reason:'');
-    return '<div class="limit-provider'+(info.stale&&!info.mock?' stale':'')+'" data-limit-vendor="'+esc(p.id)+'"><div class="limit-window" title="'+esc(title)+'"><div class="row"><span class="limit-label">'+esc(label)+'</span><b'+(tone?' class="'+tone+'"':'')+'>'+w.percentUsed.toLocaleString('ru-RU',{maximumFractionDigits:1})+' %</b></div><div class="ticks'+(tone?' '+tone:'')+'" role="meter" aria-label="'+esc((info.mock?'макет · ':'')+label)+'" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+w.percentUsed+'">'+Array.from({length:24},(_,i)=>'<i'+(i<Math.round(w.percentUsed/100*24)?' class="on"':'')+'></i>').join('')+'</div></div>'+(info.stale&&!info.mock&&info.updatedAt?'<small class="limit-note">'+esc(limitAge(info))+'</small>':'')+(info.failed?'<small class="limit-reason">'+esc(reason)+'</small>':'')+'</div>';
+  const limitActivity=id=>{const row=LIM.activity.find(item=>item.vendor===id);return Number.isSafeInteger(row?.turns)&&row.turns>0?row.turns:0};
+  function widgetProviders(extra=1){
+    const basics=['claude','codex'].flatMap(id=>{const p=LIM.providers.find(item=>item.id===id);return p?[p]:[]});
+    const others=LIM.activity.filter(row=>typeof row.vendor==='string'&&/^[a-z][a-z0-9_:-]{0,63}$/.test(row.vendor)&&!['claude','codex','router'].includes(row.vendor)&&Number.isSafeInteger(row.turns)&&row.turns>0&&!LIM.disconnected.has(row.vendor))
+      .sort((a,b)=>b.turns-a.turns||a.vendor.localeCompare(b.vendor)).slice(0,extra)
+      .map(row=>LIM.providers.find(p=>p.id===row.vendor)||{id:row.vendor,name:LIM.limits.find(p=>p.vendor===row.vendor)?.label||row.vendor[0].toUpperCase()+row.vendor.slice(1)});
+    return basics.concat(others);
+  }
+  const widgetWeek=w=>limitWeek(w)||/(?:^|·)\s*(?:неделя|week)(?:$|\s)/i.test(w.label);
+  const claudeCommonWeek=w=>widgetWeek(w)&&(!/·/.test(w.label)||/остальные/i.test(w.label));
+  const widgetTone=remaining=>remaining<10?'bad':remaining<25?'warn':'';
+  const limitRemaining=w=>Math.max(0,Math.min(100,Math.round((100-w.percentUsed)*10)/10));
+  const widgetTicks=(remaining,tone,count)=>'<div class="ticks'+(tone?' '+tone:'')+'" role="meter" aria-label="Осталось '+remaining.toLocaleString('ru-RU',{maximumFractionDigits:1})+' %" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+remaining+'">'+Array.from({length:count},(_,i)=>'<i'+(i<Math.round(remaining/100*count)?' class="on"':'')+'></i>').join('')+'</div>';
+  function widgetWindow(p){
+    const info=spWindow(p),wins=info.mock||info.failed||info.unavailable||info.unlimited?[]:info.windows;
+    const week=wins.find(p.id==='claude'?claudeCommonWeek:widgetWeek);
+    const w=week||wins.find(limitMonth)||wins.find(limitFive);
+    return {w,period:w?(widgetWeek(w)?'W':limitMonth(w)?'M':'5h'):'—',info};
+  }
+  function sidebarLimitHTML(p){const {w,period}=widgetWindow(p),remaining=w?limitRemaining(w):100,tone=w?widgetTone(remaining):'',name=limitName(p);
+    return '<div class="limit-provider'+(w?'':' dim')+'" data-limit-vendor="'+esc(p.id)+'"><div class="row"><span class="limit-label">'+esc(name)+'</span><span><b'+(tone?' class="'+tone+'"':'')+'>'+remaining.toLocaleString('ru-RU',{maximumFractionDigits:1})+' %</b><span class="limit-period">'+period+'</span></span></div>'+(w?widgetTicks(remaining,tone,24):'<div class="ticks empty" aria-hidden="true">'+Array.from({length:24},()=>'<i></i>').join('')+'</div>')+'</div>';
+  }
+  function popupWindows(p,info){const wins=info.mock?[]:info.windows;
+    if(p.id==='claude')return [[wins.find(w=>widgetWeek(w)&&/fable/i.test(w.label)),'Fable · неделя'],[wins.find(claudeCommonWeek),'остальные · неделя'],[wins.find(limitFive),'5 ч']].filter(([w])=>w).map(([w,label])=>({w,label}));
+    if(p.id==='codex'){const week=wins.find(widgetWeek);const w=week||wins.find(limitFive);return w?[{w,label:week?'неделя':'5 ч'}]:[]}
+    return limitDetailWindows(p,wins);
+  }
+  function popupRenewal(found){const raw=found?.renewalAt,at=typeof raw==='number'?raw:typeof raw==='string'?Date.parse(raw)/1000:NaN;if(!Number.isFinite(at)||at<=Date.now()/1000)return '';
+    const days=Math.ceil((at-Date.now()/1000)/86400);return '<p class="sp-limit-renewal">продление через '+days+' д · '+esc(spDate(at))+'</p>';
+  }
+  function popupLimitHTML(p){const info=spWindow(p),windows=popupWindows(p,info),name=limitName(p),turns=limitActivity(p.id),extra=p.id!=='claude'&&p.id!=='codex';
+    const rows=windows.map(({w,label})=>{const remaining=limitRemaining(w),tone=widgetTone(remaining),reset=typeof w.resetsAt==='number'?limitCountdown(w.resetsAt-Date.now()/1000):typeof w.resetsIn==='number'?limitCountdown(w.resetsIn):'время уточняется';
+      return '<section class="sp-limit-window"><div class="row sp-value"><b'+(tone?' class="'+tone+'"':'')+'>'+remaining.toLocaleString('ru-RU',{maximumFractionDigits:1})+' %</b><span>остаток · '+esc(label)+'</span></div>'+widgetTicks(remaining,tone,40)+'<small>сброс '+esc(reset)+(typeof w.resetsAt==='number'?' · '+esc(spDate(w.resetsAt)):'')+'</small></section>'}).join('');
+    const missing=!windows.length?'<div class="sp-limit-missing"><b>100 %</b><p>'+(info.failed||info.unavailable||!extra?'нет данных · '+esc(info.reason):'лимит программой не отдаётся · считаем 100 %')+'</p></div>':'';
+    const turnWord=turns%10===1&&turns%100!==11?'ход':turns%10>=2&&turns%10<=4&&(turns%100<12||turns%100>14)?'хода':'ходов';
+    return '<div class="sp-limit'+(info.stale?' stale':'')+'"><div class="sp-limit-title"><b>'+esc(name+(info.found?.plan?' '+info.found.plan:''))+'</b>'+(extra?'<small>'+turns+' '+turnWord+' за 7 дней</small>':'')+'</div>'+rows+missing+(p.id==='codex'?spLimitCreditHTML(info.found):'')+(p.id==='claude'&&typeof info.found?.extraUsageEnabled==='boolean'?'<p class="sp-limit-extra">доплата: '+(info.found.extraUsageEnabled?'вкл':'выкл')+'</p>':'')+((p.id==='claude'||p.id==='codex')?popupRenewal(info.found):'')+spLimitRetryHTML(info.found,!info.unavailable)+(info.found&&info.updatedAt?'<small>'+(info.stale?'устаревшие данные · ':'')+esc(limitAge(info))+' · данные за '+esc(spDate(info.updatedAt))+' · '+esc(info.found.source||'источник не указан')+'</small>':'')+'</div>';
   }
   function limitsDraw(){if(PAGE==='spend'&&!limitProviders().some(limitApi))document.querySelectorAll('[data-c="qwen"]').forEach(card=>{card.hidden=true;card.innerHTML='' });document.querySelectorAll('aside.side.ps .limits').forEach(el=>{
-    el.removeAttribute('data-go');el.title='Все лимиты';el.setAttribute('role','group');el.setAttribute('tabindex','0');el.setAttribute('aria-label','Все лимиты');el.setAttribute('aria-haspopup','dialog');
-    const providers=limitProviders(),unavailable=providers.filter(p=>spWindow(p).unavailable),ranked=providers.filter(p=>(p.id==='claude'||p.id==='codex'||limitSubscription(p)||limitApi(p))&&!spWindow(p).unavailable).map((p,i)=>({p,i,n:(LIM.activity.find(g=>g.vendor===p.id)||{}).turns||0})).sort((a,b)=>b.n-a.n||a.i-b.i),visible=ranked.slice(0,Math.max(0,3-unavailable.length)).map(r=>r.p).concat(unavailable).slice(0,3),infos=visible.map(spWindow),dates=infos.map(info=>info.updatedAt).filter(t=>typeof t==='number'&&Number.isFinite(t)),stamp=dates.length?Math.min(...dates):null,meta=[infos.some(info=>info.mock)?'макет':'',infos.some(info=>!info.mock&&info.stale)?'устаревшие':'',stamp?'данные за '+new Date(stamp*1000).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):''].filter(Boolean).join(' · ');
-    el.innerHTML='<div class="cap">ИСПОЛЬЗОВАНО</div>'+visible.map(sidebarLimitHTML).join('')+(!visible.length?'<p>'+esc(LIM.loading?'Читаю подключения…':LIM.error||(providers.length?'Окна подписок — в подробностях':'Нет подключённых провайдеров'))+'</p>':'')+(meta?'<small class="limit-note">'+esc(meta)+'</small>':'')+spButton('подробнее','data-spend-limits')+'<a class="sp-link" href="05-spend.html?period='+SP.period+'">Расход и лимиты →</a>';
-  });if(limitsDialog&&limitsDialog.hasAttribute('open'))limitsDialog.querySelector('.limits-cards').innerHTML=limitProviders().map(p=>spLimitHTML(p,true)).join('');if(PAGE==='conn'&&window.LIVE?.onProviderLimits)window.LIVE.onProviderLimits(H.project);}
+    el.removeAttribute('data-go');el.title='Все лимиты';el.setAttribute('role','button');el.setAttribute('tabindex','0');el.setAttribute('aria-label','Все лимиты');el.setAttribute('aria-haspopup','dialog');
+    el.innerHTML='<div class="cap">Осталось</div>'+widgetProviders().map(sidebarLimitHTML).join('');
+  });if(limitsDialog&&limitsDialog.hasAttribute('open'))limitsDialog.querySelector('.limits-cards').innerHTML=widgetProviders(3).map(popupLimitHTML).join('');if(PAGE==='conn'&&window.LIVE?.onProviderLimits)window.LIVE.onProviderLimits(H.project);}
   function limitsApply(data){
     if(!data||typeof data.ok!=='boolean'||data.project!==H.project||!Array.isArray(data.providers)||!Number.isSafeInteger(data.revision)||data.revision<0)return false;
     if(!data.ok&&(!data.providers.length||!data.providers.every(p=>p&&typeof p.vendor==='string'&&Array.isArray(p.windows)&&typeof p.ok==='boolean'&&(p.ok||typeof p.code==='string'&&typeof p.reason==='string'))))return false;
@@ -1173,10 +1202,10 @@
   }
   function limitsEvent(data){if(!H.on||H.snapshotOnly||!SP.alive||!limitsApply(data))return;LIM.error=null;limitsDraw();if(PAGE==='spend'){spendDraw();void spendWindows()}}
   function limitsRestart(){if(!SP.alive||!H.on||H.snapshotOnly)return;LIM.generation++;LIM.revision=null;return limitsFetch();}
-  async function limitsFetch(){if(!H.on||H.snapshotOnly||!SP.alive)return false;const project=H.project,generation=++LIM.generation;LIM.loading=true;if(LIM.project!==project){LIM.providers=[];LIM.limits=[];LIM.activity=[];LIM.updatedAt=null;LIM.revision=null;LIM.project=project}limitsDraw();
+  async function limitsFetch(){if(!H.on||H.snapshotOnly||!SP.alive)return false;const project=H.project,generation=++LIM.generation;LIM.loading=true;if(LIM.project!==project){LIM.providers=[];LIM.disconnected=new Set();LIM.limits=[];LIM.activity=[];LIM.updatedAt=null;LIM.revision=null;LIM.project=project}limitsDraw();
     const [connections,limits,activity]=await Promise.allSettled([api('/api/connections'),api('/api/limits'),api('/api/spend?period=7')]);if(!SP.alive||project!==H.project||generation!==LIM.generation)return false;
     const c=connections.status==='fulfilled'?connections.value:null,l=limits.status==='fulfilled'?limits.value:null,a=activity.status==='fulfilled'?activity.value:null;
-    LIM.error=null;if(c&&c.ok&&Array.isArray(c.providers))LIM.providers=c.providers.filter(p=>p&&typeof p.id==='string'&&p.auth&&p.auth.loggedIn===true);
+    LIM.error=null;if(c&&c.ok&&Array.isArray(c.providers)){LIM.providers=c.providers.filter(p=>p&&typeof p.id==='string'&&p.auth&&p.auth.loggedIn===true);LIM.disconnected=new Set(c.providers.filter(p=>p&&typeof p.id==='string'&&p.auth?.loggedIn===false).map(p=>p.id))}
     if(!c||!c.ok||!Array.isArray(c.providers))LIM.error=c&&c.error||'Подключения не прочитаны';
     if(!limitsApply(l)){LIM.error=LIM.error||'Лимиты временно недоступны';LIM.limits=LIM.limits.map(p=>({...p,stale:true}))}
     LIM.activity=a&&a.ok&&a.project===project&&a.period==='7'&&Array.isArray(a.byVendor)?a.byVendor:[];LIM.loading=false;limitsDraw();spendDraw();if(PAGE==='spend'){void spendBilling();await spendWindows()}return true;
@@ -1285,7 +1314,7 @@
   function openLimits(el){
     if(!limitsDialog){limitsDialog=document.createElement('dialog');limitsDialog.className='limits-dialog';limitsDialog.setAttribute('aria-label','Все лимиты подписок');document.body.appendChild(limitsDialog);limitsDialog.addEventListener('cancel',event=>{event.preventDefault();closeLimits()});limitsDialog.addEventListener('click',event=>{if(event.target===limitsDialog)closeLimits()});}
     limitsOpener=el.closest('aside.side.ps .limits')||el;limitsDialogProject=H.project;
-    limitsDialog.innerHTML='<h3>Все лимиты</h3><div class="limits-cards">'+limitProviders().map(p=>spLimitHTML(p,true)).join('')+'</div><div class="sp-actions"><a href="05-spend.html?period='+SP.period+'">Расход и лимиты →</a>'+spButton('Закрыть','data-spend-close')+'</div>';
+    limitsDialog.innerHTML='<h3>Все лимиты</h3><div class="limits-cards">'+widgetProviders(3).map(popupLimitHTML).join('')+'</div><div class="sp-actions"><a href="05-spend.html?period='+SP.period+'">Расход и лимиты →</a>'+spButton('Закрыть','data-spend-close')+'</div>';
     limitsDialog.showModal();limitsDialog.querySelector('[data-spend-close]').focus();
   }
   addEventListener('keydown',event=>{if(event.key==='Escape'&&limitsDialog&&limitsDialog.hasAttribute('open')){event.preventDefault();closeLimits()}});
