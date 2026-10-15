@@ -63,12 +63,13 @@ export class CliProvider {
   return {loggedIn:value.loggedIn,...(value.state==='unknown'?{state:'unknown' as const,reason:String(value.reason??'вход не проверен')}:{}),...(value.email!==undefined?{email:value.email as string|null}:{}),...(value.plan!==undefined?{plan:value.plan as string|null}:{})};
  }
  // Login before a turn has its own budget; catalog reads keep their short deadline.
- private async turnAuth(signal:AbortSignal,route:CliContext['env']):Promise<CliAuth>{
+ private async turnAuth(signal:AbortSignal,route:CliContext['env'],warning?:(code:string)=>void):Promise<CliAuth>{
   for(let attempt=0;attempt<2;attempt++){
    const deadline=new AbortController(),timer=setTimeout(()=>deadline.abort(),this.deps.loginTimeoutMs);
    try{return await waitWithSignal(()=>this.auth(AbortSignal.any([signal,deadline.signal]),route,this.deps.loginTimeoutMs),AbortSignal.any([signal,deadline.signal]))}
    catch(e){if(signal.aborted)throw new ProviderError('cancelled','ход отменён');
     if(!deadline.signal.aborted&&!(e instanceof ProviderError&&e.code==='transport_lost'))throw e;
+    if(attempt===0)warning?.(deadline.signal.aborted?'login_timeout':e instanceof ProviderError?e.code:'login_timeout');
     if(attempt===1)throw new ProviderError('login_timeout',this.d.name+' не ответил на проверку входа');
    }finally{clearTimeout(timer)}
   }throw protocol('проверка входа не завершена');
@@ -126,7 +127,7 @@ export class CliProvider {
    const permissions=mode(input);if(!strings(permissions)||!permissions.length)throw protocol('нет флагов разрешений');
    if(seat.sessionId&&!this.d.resume)throw new ProviderError('capability_unsupported','CLI не поддерживает возобновление',sessionId);
    const resume=seat.sessionId?this.d.resume!(seat.sessionId):[];if(!strings(resume))throw protocol('неверное возобновление');
-   const auth=await this.turnAuth(signal,ctx.env);if(!auth.loggedIn&&!(this.d.allowUnverifiedLogin&&auth.state==='unknown'))throw new ProviderError('not_logged_in',this.d.name+': выполните вход через программу',sessionId);
+   const auth=await this.turnAuth(signal,ctx.env,code=>ctx.traceEvent?.({id:'login-retry',name:'login.retry',phase:'warning',reason:code,error:'Первая проверка входа не ответила; повторяем'}));if(!auth.loggedIn&&!(this.d.allowUnverifiedLogin&&auth.state==='unknown'))throw new ProviderError('not_logged_in',this.d.name+': выполните вход через программу',sessionId);
    const models=await waitWithSignal(()=>this.models(signal,ctx.env),signal);if(!models.some(m=>m.id===seat.model))throw new ProviderError('model_unsupported','CLI: модель отсутствует в каталоге',sessionId);
    const state=this.d.state;if(state){const project=ctx.stateProjectDir??ctx.projectDir;if(!project)throw protocol('нет привязки проекта для состояния CLI');lease=new CliStateStore(state.namespace,this.deps.stateRoot).acquire(project,seat.id)}
    const stateArgs=lease?state!.args(lease.path):[];if(!strings(stateArgs))throw protocol('неверные флаги состояния');

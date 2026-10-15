@@ -65,6 +65,11 @@
     const body={action:ctx.action,page:PAGE||'new',binding:ctx.binding,traceId:ctx.traceId,spanId:kind==='ui.action'?ctx.spanId:traceUUID(),parentSpanId:kind==='ui.action'?null:parent||ctx.spanId,kind,...(kind==='ui.outcome'?{outcome,reason,error}:{})};
     void fetch('/api/trace',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),keepalive:true}).catch(()=>{});
   }
+  const traceFailures=[];
+  function traceWindowFailure(action){const binding=traceBinding();if(!binding){if(traceFailures.length<10)traceFailures.push(action);return}const ctx={action,at:Date.now(),traceId:traceUUID(),spanId:traceUUID(),binding};tracePost(ctx,'ui.outcome','failed','internal',action)}
+  addEventListener('error',()=>traceWindowFailure('Ошибка окна'));
+  addEventListener('unhandledrejection',()=>traceWindowFailure('Необработанный отказ окна'));
+  addEventListener('live:status',()=>{if(!traceBinding())return;for(const action of traceFailures.splice(0))traceWindowFailure(action)});
   function traceAction(action,element){if(!TRACE.alive)return null;const binding=traceBinding();if(!binding)return null;const label=String(action).replace(/[\x00-\x1f<>]/g,'').trim().slice(0,100)||'Открыть',last=element&&TRACE.last.get(element);if(last&&last.ctx.action===label&&Date.now()-last.at<500&&traceSame(last.ctx.binding)){TRACE.current=last.ctx;setTimeout(()=>{if(TRACE.current===last.ctx)TRACE.current=null},0);return last.ctx}
     const ctx={at:Date.now(),traceId:traceUUID(),spanId:traceUUID(),binding,action:label};TRACE.current=ctx;if(element)TRACE.last.set(element,{ctx,at:Date.now()});tracePost(ctx);setTimeout(()=>{if(TRACE.current===ctx)TRACE.current=null},0);return ctx;
   }

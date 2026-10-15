@@ -3,6 +3,7 @@
 const { app, BrowserWindow, shell, nativeTheme, ipcMain, dialog, Menu } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs'), os = require('os'), path = require('path');
+const { reportDesktopTrace } = require('./trace.js');
 
 const START = process.env.HARNESSY_URL || 'http://localhost:3777/sketches/proto/10-new-chat.html';
 const ORIGIN = new URL(START).origin;
@@ -51,6 +52,10 @@ async function createWindow() {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false, preload: path.join(__dirname, 'preload.js') },   // preload: только выбор папки (Finder)
   });
   const log = m => console.log('[harnessy] ' + m);
+  const nativeFailure = action => void reportDesktopTrace(ORIGIN, action);
+  win.webContents.on('render-process-gone', () => nativeFailure('render-process-gone'));
+  win.webContents.on('did-fail-load', (_event, code) => { if (code !== -3) nativeFailure('did-fail-load'); });
+  win.on('unresponsive', () => nativeFailure('unresponsive'));
   win.once('ready-to-show', () => win.show());
   // всё, что не наш адрес, — во внешний браузер
   win.webContents.setWindowOpenHandler(({ url }) => { if (!url.startsWith(ORIGIN)) { shell.openExternal(url); return { action: 'deny' }; } return { action: 'allow' }; });
@@ -79,5 +84,6 @@ ipcMain.handle('harnessy:pick-folder', async (e, o) => {
   return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
 });
 app.whenReady().then(createWindow);
+process.on('uncaughtExceptionMonitor', () => { void reportDesktopTrace(ORIGIN, 'uncaught-exception'); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 app.on('window-all-closed', () => app.quit());

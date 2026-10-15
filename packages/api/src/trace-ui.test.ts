@@ -23,6 +23,11 @@ test('236 UI: chain renders red rejection with reason and refs, copies link, rej
 
 test('236 UI: boot cache does not consume a deep link before the engine confirms its binding',async()=>{const v=ui('events'),id=randomUUID();v.context.location.hash='#trace='+id;v.H.snapshotOnly=true;await v.window.emit('live:status');assert.equal(v.f.state.instance,null);v.H.snapshotOnly=false;await v.window.emit('live:status');assert.ok(v.requests.some(r=>r.url.includes('/api/trace?traceId='+id)));});
 
+test('TS-28 UI: errors and rejected promises use fixed diagnostics, including errors before binding',async()=>{
+ const v=ui('chat'),secret='sk_test_syntheticsecret1234567890';v.H.on=false;await v.window.emit('error',{message:secret});assert.equal(v.requests.length,0);
+ v.H.on=true;await v.window.emit('live:status');await v.window.emit('unhandledrejection',{reason:secret});const outcomes=v.requests.filter(r=>r.body?.kind==='ui.outcome');assert.equal(outcomes.length,2);assert.ok(outcomes.every(r=>r.body.outcome==='failed'&&r.body.reason==='internal'));assert.equal(JSON.stringify(outcomes).includes(secret),false);
+});
+
 for(const label of ['wrapped','for','aria','labelledby','explicit'] as const)test('365 UI: '+label+' select traces only its field and selected option, including rapid reselection',async()=>{
  const attributes=label==='aria'?'aria-label="Провайдер"':label==='labelledby'?'aria-labelledby="provider-label"':label==='explicit'?'data-action="Провайдер"':'',select='<select id="provider" '+attributes+'><option value="">Свой адрес</option><option value="deepseek" label="DeepSeek">Alternative text</option><option value="anthropic">Anthropic</option></select>';
  const html=label==='wrapped'?'<label><span>Провайдер</span>'+select+'</label>':label==='for'?'<label for="provider">Провайдер</label>'+select:label==='labelledby'?'<span id="provider-label">Провайдер</span>'+select:select;

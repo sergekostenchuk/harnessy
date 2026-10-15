@@ -40,6 +40,22 @@ test('22c: failed first proxy selects next; password stays in upstream auth, nev
  const check=h.runtime.networkChecks.snapshot.bind(h.runtime.networkChecks);h.runtime.networkChecks.snapshot=(id,revision)=>['dead','good'].includes(id)?{revision,checkedAt:1,ok:true,ip:'192.0.2.1',country:'Germany',state:'checked',durationMs:1}:check(id,revision);
  const env=await h.runtime.networkRelay.environment('claude',signal());assert.doesNotMatch(JSON.stringify(env),/ProxySecretFixture|alice/);const value=await h.runtime.networkRelay.fetch('claude')('http://origin.invalid/',{headers:{Authorization:'Bearer ModelKeyFixture'}});assert.equal(await value.text(),'ok');assert.equal(p.connects[0]!.headers.authorization,undefined);assert.equal(requests[0]!.authorization,'Bearer ModelKeyFixture');assert.equal(requests[0]!['proxy-authorization'],undefined);
  await h.runtime.project.trace.flush();assert.doesNotMatch((await call(h.api,'/api/trace')).text,/ProxySecretFixture|ModelKeyFixture|alice|Basic/);assert.ok(h.runtime.networkRelay.stats().find(row=>row.exit==='dead')!.errors>0);
+ const rows=await h.runtime.project.trace.read();assert.ok(rows.some(row=>row.kind==='network.exit_failed'&&(row.data as any).exit==='dead'));assert.ok(rows.some(row=>row.kind==='network.failover'&&(row.data as any).from==='dead'&&(row.data as any).to==='good'));
+});
+
+test('TS-28: explicit one-time direct connection and SSH state transitions enter trace without addresses',async t=>{
+ let listener:((value:any)=>void)|undefined;const h=await fixture(t,{deps:{sshTunnels:{ensure:async()=>{throw Error('unused')},get:()=>null,subscribe:callback=>{listener=callback;return()=>false},snapshots:()=>[],stop:async()=>{},close:async()=>{}}}});
+ const turn=h.runtime.networkRelay.begin('claude','trace-direct',signal(),undefined,true);await turn.ready();await turn.close();
+ listener?.({id:'myexit',state:'starting',url:null,generation:1,code:null,reason:null,retryAt:null});listener?.({id:'myexit',state:'up',url:'socks5h://127.0.0.1:41234',generation:1,code:null,reason:null,retryAt:null});listener?.({id:'myexit',state:'down',url:null,generation:1,code:'ssh_connect_failed',reason:'сбой',retryAt:123});listener?.({id:'myexit',state:'starting',url:null,generation:2,code:null,reason:null,retryAt:null});
+ const rows=await h.runtime.project.trace.read();assert.ok(rows.some(row=>row.kind==='network.direct_once'));assert.deepEqual(rows.filter(row=>row.kind==='network.tunnel').map(row=>(row.data as any).action),['starting','up','down','restart']);assert.equal(JSON.stringify(rows).includes('41234'),false);
+});
+
+test('TS-28: scheduled rotation records the previous and next exit with a typed reason',opts,async t=>{
+ let now=1000000;const h=await fixture(t,{deps:{networkKeys:new MemoryKeys(),networkRelayOptions:{timeoutMs:1000,now:()=>now}}}),target=http.createServer((_req,res)=>res.end('ok')),port=await listen(t,target),first=await proxy(t,port),second=await proxy(t,port);
+ await save(h,'one',first.url);await save(h,'two',second.url);await h.runtime.settings.changeNetwork(async config=>{config.migrated=true;config.chains.claude=['one','two'];config.policies??={};config.policies.claude={mode:'rotation',rotationMinutes:1,silenceSeconds:60};return {result:undefined}});
+ const original=h.runtime.networkChecks.snapshot.bind(h.runtime.networkChecks);h.runtime.networkChecks.snapshot=(id,revision)=>['one','two'].includes(id)?{revision,checkedAt:1,ok:true,ip:'192.0.2.1',country:'Germany',state:'checked',durationMs:1}:original(id,revision);
+ const a=h.runtime.networkRelay.begin('claude','rotation-a',signal());await a.ready();await a.close();now+=61000;const b=h.runtime.networkRelay.begin('claude','rotation-b',signal());await b.ready();await b.close();
+ const rows=await h.runtime.project.trace.read();assert.ok(rows.some(row=>row.kind==='network.rotation'&&(row.data as any).from==='one'&&(row.data as any).to==='two'&&(row.data as any).reason==='rotation'));
 });
 
 test('22c: changed settings during password await refuse old connection; SSH port uses declared tunnel interface',opts,async t=>{
