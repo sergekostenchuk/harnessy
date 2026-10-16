@@ -8,6 +8,7 @@ const {autoUpdater}=require('electron-updater');
 const {reportDesktopTrace}=require('./trace.js');
 
 const DARK='#0a0a0b';
+const HIDDEN_TEST_WINDOW=process.env.HARNESSY_TEST_WINDOW==='hidden';
 const PRIMARY=app.requestSingleInstanceLock();
 app.setName('Harnessy-alpha');
 nativeTheme.themeSource='dark';
@@ -63,7 +64,7 @@ async function createWindow(){
   try{launch=await engine.start();currentOrigin=launch.origin}catch(error){failure=error instanceof Error?error.message:String(error)}
   const start=launch?(firstRun?launch.origin+'/sketches/proto/19-first-run.html':launch.url):offline(failure||'неизвестная ошибка запуска');
   const win=new BrowserWindow({
-    width:1440,height:920,minWidth:900,minHeight:600,title:'Harnessy-alpha',backgroundColor:DARK,show:false,
+    width:1440,height:920,minWidth:900,minHeight:600,title:'Harnessy-alpha',backgroundColor:DARK,show:false,focusable:!HIDDEN_TEST_WINDOW,
     webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true,spellcheck:false,preload:path.join(__dirname,'preload.js')},
   });
   const log=message=>console.log('[harnessy] '+message);
@@ -71,7 +72,7 @@ async function createWindow(){
   win.webContents.on('render-process-gone',()=>nativeFailure('render-process-gone'));
   win.webContents.on('did-fail-load',(_event,code)=>{if(code!==-3)nativeFailure('did-fail-load')});
   win.on('unresponsive',()=>nativeFailure('unresponsive'));
-  win.once('ready-to-show',()=>win.show());
+  win.once('ready-to-show',()=>{if(!HIDDEN_TEST_WINDOW)win.show()});
   win.webContents.setWindowOpenHandler(({url})=>{if(!sameOrigin(url,currentOrigin)){void shell.openExternal(url);return {action:'deny'}}return {action:'allow'}});
   win.webContents.on('will-navigate',(event,url)=>{if(!url.startsWith('data:')&&!sameOrigin(url,currentOrigin)){event.preventDefault();void shell.openExternal(url)}});
   win.webContents.on('page-title-updated',event=>event.preventDefault());
@@ -98,6 +99,13 @@ ipcMain.handle('harnessy:pick-folder',async(event,options={})=>{
     defaultPath:options.defaultPath&&fs.existsSync(options.defaultPath)?options.defaultPath:os.homedir(),properties:['openDirectory','createDirectory']});
   return result.canceled||!result.filePaths.length?null:result.filePaths[0];
 });
+ipcMain.handle('harnessy:pick-file',async(event,options={})=>{
+  const win=BrowserWindow.fromWebContents(event.sender);
+  if(!win||!trustedUpdateOrigin(event.sender.getURL(),currentOrigin))throw Error('Окно не подтверждено');
+  const result=await dialog.showOpenDialog(win,{title:'Выберите файл программы',buttonLabel:'Указать программу',
+    defaultPath:os.homedir(),properties:['openFile']});
+  return result.canceled||!result.filePaths.length?null:result.filePaths[0];
+});
 
 function updateSender(event){
   return !!BrowserWindow.fromWebContents(event.sender)&&trustedUpdateOrigin(event.sender.getURL(),currentOrigin);
@@ -116,6 +124,9 @@ app.on('before-quit',event=>{
 });
 process.once('exit',()=>engine.killNow());
 process.on('uncaughtExceptionMonitor',()=>{if(currentOrigin)void reportDesktopTrace(currentOrigin,'uncaught-exception')});
-if(PRIMARY)app.whenReady().then(async()=>{await createWindow();updates.start()});
-app.on('activate',()=>{if(PRIMARY&&BrowserWindow.getAllWindows().length===0)void createWindow()});
+if(PRIMARY)app.whenReady().then(async()=>{
+  if(HIDDEN_TEST_WINDOW){app.setActivationPolicy?.('prohibited');app.dock?.hide()}
+  await createWindow();updates.start();
+});
+app.on('activate',()=>{if(!HIDDEN_TEST_WINDOW&&PRIMARY&&BrowserWindow.getAllWindows().length===0)void createWindow()});
 app.on('window-all-closed',()=>app.quit());

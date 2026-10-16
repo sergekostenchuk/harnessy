@@ -50,6 +50,7 @@ Promise.resolve(ipcRenderer.invoke('harnessy:update-state')).then(publishUpdateS
 contextBridge.exposeInMainWorld('harnessy', {
   desktop: true,
   pickFolder: o => ipcRenderer.invoke('harnessy:pick-folder', o || {}),   // → абсолютный путь папки или null (отмена)
+  pickFile: o => ipcRenderer.invoke('harnessy:pick-file', o || {}),
   updates: Object.freeze({
     getState:()=>ipcRenderer.invoke('harnessy:update-state'),
     setChannel:channel=>ipcRenderer.invoke('harnessy:update-channel',channel),

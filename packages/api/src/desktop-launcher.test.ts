@@ -10,6 +10,51 @@ import {EventEmitter} from 'node:events';
 const main=fs.readFileSync(new URL('../../../ui/desktop/main.js',import.meta.url),'utf8');
 const preload=fs.readFileSync(new URL('../../../ui/desktop/preload.js',import.meta.url),'utf8');
 const requireFromTest=createRequire(import.meta.url),{contextMenuTemplate}=requireFromTest('../../../ui/desktop/context-menu.js'),{EngineManager,defaultPaths}=requireFromTest('../../../ui/desktop/engine.js');
+const {recoverProgramPath}=requireFromTest('../../../ui/desktop/path-recovery.js');
+
+test('TS-33: packaged shell PATH is restored before the engine child starts',()=>{
+ let calls=0;const pathValue=recoverProgramPath({HOME:'/test/home',PATH:'/usr/bin:/bin',SHELL:'/bin/zsh'},()=>{calls++;return {status:0,stdout:'/test/home/.local/bin:/usr/bin'}});
+ assert.equal(calls,1);assert.equal(pathValue.searched[0],'/test/home/.local/bin');assert.equal(pathValue.source,'login-shell');
+});
+
+test('TS-33: hidden test window never shows or activates the packaged shell',async()=>{
+ async function launch(hidden:boolean){
+  const windows:Window[]=[];let policy='',dockHides=0;
+  class Window extends EventEmitter {
+   options:any;webContents:any;showCalls=0;
+   constructor(options:any){super();this.options=options;this.webContents=Object.assign(new EventEmitter(),{setWindowOpenHandler(){}});windows.push(this)}
+   loadURL(){return Promise.resolve()}
+   show(){this.showCalls++}
+   static getAllWindows(){return windows}
+  }
+  const app=Object.assign(new EventEmitter(),{
+   isPackaged:true,dock:{hide(){dockHides++}},requestSingleInstanceLock:()=>true,setName(){},getPath:()=>'/tmp',
+   setActivationPolicy(value:string){policy=value},whenReady:()=>Promise.resolve(),quit(){},
+  });
+  const ipcMain={on(){},handle(){}};
+  const electron={app,BrowserWindow:Window,shell:{openExternal(){}},nativeTheme:{},ipcMain,dialog:{},Menu:{buildFromTemplate(){return {popup(){}}}}};
+  const requireMock=(id:string):any=>{
+   if(id==='electron')return electron;
+   if(id==='electron-updater')return {autoUpdater:{}};
+   if(id==='./engine.js')return {EngineManager:class {start(){return Promise.resolve({origin:'http://127.0.0.1:38888',url:'http://127.0.0.1:38888/sketches/proto/10-new-chat.html'})}},defaultPaths(){return {}}};
+   if(id==='./updates.js')return {DesktopUpdates:class {start(){}},trustedUpdateOrigin(){return true}};
+   if(id==='./trace.js')return {reportDesktopTrace(){}};
+   if(id==='./context-menu.js')return {contextMenuTemplate(){return []}};
+   return requireFromTest(id);
+  };
+  runInNewContext(main,{require:requireMock,__dirname:'/app',process:{env:{HARNESS_PROJECTS_FILE:'/etc/hosts',HARNESSY_TEST_WINDOW:hidden?'hidden':''},resourcesPath:'/app',once(){},on(){}},console:{log(){}},URL});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(windows.length,1);
+  windows[0]!.emit('ready-to-show');
+  return {window:windows[0]!,policy,dockHides};
+ }
+ const hidden=await launch(true);
+ assert.equal(hidden.window.options.show,false);assert.equal(hidden.window.options.focusable,false);assert.equal(hidden.window.showCalls,0);
+ assert.equal(hidden.policy,'prohibited');assert.equal(hidden.dockHides,1);
+ const normal=await launch(false);
+ assert.equal(normal.window.options.focusable,true);assert.equal(normal.window.showCalls,1);
+ assert.equal(normal.policy,'');assert.equal(normal.dockHides,0);
+});
 
 class Child extends EventEmitter {
  exitCode:number|null=null;signalCode:string|null=null;kills:string[]=[];

@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync,readFileSync,statSync} from 'node:fs';
+import {existsSync,readFileSync,realpathSync,statSync,mkdtempSync,mkdirSync,writeFileSync,symlinkSync,rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {Runtime} from '../../runtime/src/runtime.ts';
+import {completedActions} from '../../runtime/src/test-helpers.ts';
 import {ProviderCatalog,cliEntry,LoginTerminal,ProviderError,type CatalogEntry,type CliSeat,type CliContext} from '@harnessy/providers';
 import {fixture,call,sse,deferred,until,OWNER} from './test-helpers.ts';
 import {cliFixture} from '../../providers/src/cli/test-support.ts';
@@ -15,6 +19,81 @@ async function setup(t:TestContext,platform='darwin',openedGate?:()=>Promise<voi
 const probeEvents=(h:{stream:Awaited<ReturnType<typeof sse>>})=>h.stream.raw.split('\n\n').flatMap(block=>{try{const event=JSON.parse(block.replace(/^data: /,''));return event.type==='providers'&&event.event==='probe'?[event]:[]}catch{return []}});
 async function waitProbe(h:{stream:Awaited<ReturnType<typeof sse>>},predicate:(e:any)=>boolean){const found=probeEvents(h).find(predicate);if(found)return found;return new Promise<any>((resolve,reject)=>{const finish=(error?:Error,value?:any)=>{clearTimeout(timer);h.stream.response.off('data',check);error?reject(error):resolve(value)},check=()=>{const value=probeEvents(h).find(predicate);if(value)finish(undefined,value)},timer=setTimeout(()=>finish(Error('probe event timeout: '+JSON.stringify(probeEvents(h)))),5000);h.stream.response.on('data',check);check()})}
 const result=(h:{stream:Awaited<ReturnType<typeof sse>>},status:string)=>waitProbe(h,e=>e.status===status);
+
+test('TS-33: selected executable is validated, saved for owner and replaces the catalog entry',async t=>{
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-program-'))),path=join(dir,'fixture'),wrong=join(dir,'another');t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ writeFileSync(path,'#!/bin/sh\nexit 0\n',{mode:0o755});writeFileSync(wrong,'#!/bin/sh\nexit 0\n',{mode:0o755});
+ const make=(binary:string):CatalogEntry=>({id:'fixture',title:'Fixture',binary,login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,resume:false,mcp:false,limits:false},withBinary:make,version:async()=>binary===path?'fixture 1.0':Promise.reject(new ProviderError('no_binary','missing')),auth:async()=>({loggedIn:false}),models:async()=>[],runTurn:async()=>({text:'',sessionId:null})});
+ const catalog=new ProviderCatalog([make('fixture')]),h=await fixture(t,{deps:{providerCatalog:catalog}});
+ const bad=await call(h.api,'/api/providers/fixture/binary',{body:{path:wrong}});assert.equal(bad.status,400);assert.match(bad.body.error,/Это не fixture/);assert.equal(h.runtime.settings.get().owner.programBinary_fixture,undefined);
+ const forged=await call(h.api,'/api/providers/fixture/binary',{body:{path,command:'touch /tmp/forged'}});assert.equal(forged.status,400);
+ const agent=await call(h.api,'/api/providers/fixture/binary',{body:{path},headers:{'X-Pane-Token':'fake'}});assert.equal(agent.status,403);
+ const saved=await call(h.api,'/api/providers/fixture/binary',{body:{path}});assert.equal(saved.status,200);assert.equal(saved.body.provider.binary,path);assert.equal(h.runtime.settings.get().owner.programBinary_fixture,path);
+ assert.equal((await call(h.api,'/api/providers/catalog')).body.providers.find((p:any)=>p.id==='fixture').binary,path);
+});
+
+test('TS-33: project links, foreign project binaries and disguised target names are rejected before execution',async t=>{
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-program-target-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ let versionCalls=0;const make=(binary:string):CatalogEntry=>({id:'fixture',title:'Fixture',binary,login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,resume:false,mcp:false,limits:false},withBinary:make,
+  version:async()=>{versionCalls++;return 'fixture 1.0'},auth:async()=>({loggedIn:false}),models:async()=>[],runTurn:async()=>({text:'',sessionId:null})});
+ const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([make('fixture')])}}),baseline=versionCalls,safe=join(dir,'safe'),foreign=join(dir,'foreign'),links=join(dir,'links');
+ for(const folder of [safe,foreign,links,join(foreign,'.git')])mkdirSync(folder);
+ const valid=join(safe,'fixture'),other=join(safe,'other-tool'),foreignFile=join(foreign,'fixture');
+ for(const file of [valid,other,foreignFile])writeFileSync(file,'#!/bin/sh\nexit 0\n',{mode:0o700});
+ const inProject=join(h.dir,'fixture');symlinkSync(valid,inProject);
+ const outside=await call(h.api,'/api/providers/fixture/binary',{body:{path:inProject}});assert.equal(outside.status,400);
+ const foreignDirect=await call(h.api,'/api/providers/fixture/binary',{body:{path:foreignFile}});assert.equal(foreignDirect.status,400);
+ const foreignLink=join(links,'fixture');symlinkSync(foreignFile,foreignLink);
+ assert.equal((await call(h.api,'/api/providers/fixture/binary',{body:{path:foreignLink}})).status,400);
+ const wrongTarget=join(dir,'fixture');symlinkSync(other,wrongTarget);
+ assert.equal((await call(h.api,'/api/providers/fixture/binary',{body:{path:wrongTarget}})).status,400);
+ assert.equal(versionCalls,baseline);assert.equal(h.runtime.settings.get().owner.programBinary_fixture,undefined);
+ const safeLink=join(safe,'launcher','fixture');mkdirSync(join(safe,'launcher'));symlinkSync(valid,safeLink);
+ const saved=await call(h.api,'/api/providers/fixture/binary',{body:{path:safeLink}});
+ assert.equal(saved.status,200);assert.equal(saved.body.provider.binary,valid);assert.equal(h.runtime.settings.get().owner.programBinary_fixture,valid);
+});
+
+test('TS-33: canonical targets of installed Codex and Claude launchers remain selectable',async t=>{
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-program-launchers-')));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const previous={codex:process.env.CODEX_BIN,claude:process.env.CLAUDE_BIN};t.after(()=>{for(const [id,value] of Object.entries(previous)){const key=id==='codex'?'CODEX_BIN':'CLAUDE_BIN';if(value===undefined)delete process.env[key];else process.env[key]=value}});
+ const entries:CatalogEntry[]=[],choices:[string,string,string][]=[
+  ['codex',join(dir,'.local','bin','codex'),join(dir,'.local','lib','node_modules','@openai','codex','bin','codex.js')],
+  ['claude',join(dir,'.local','bin','claude'),join(dir,'.local','share','claude','versions','2.1.270')],
+ ];
+ for(const [id,link,target] of choices){mkdirSync(target.slice(0,target.lastIndexOf('/')),{recursive:true});mkdirSync(link.slice(0,link.lastIndexOf('/')),{recursive:true});writeFileSync(target,'#!/bin/sh\nexit 0\n',{mode:0o700});symlinkSync(target,link);
+  const make=(binary:string):CatalogEntry=>({id,title:id,binary,login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,resume:false,mcp:false,limits:false},withBinary:make,
+   version:async()=>id==='codex'?'codex-cli 1.0':'Claude Code 2.1.270',auth:async()=>({loggedIn:false}),models:async()=>[],runTurn:async()=>({text:'',sessionId:null})});entries.push(make(id));
+ }
+ const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog(entries)}});
+ for(const [id,link,target] of choices){const response=await call(h.api,'/api/providers/'+id+'/binary',{body:{path:link}});assert.equal(response.status,200,id+': '+response.text);assert.equal(response.body.provider.binary,target);assert.equal(h.runtime.settings.get().owner['programBinary_'+id],target)}
+ delete process.env.CODEX_BIN;delete process.env.CLAUDE_BIN;
+ const {providerCatalog:unusedCatalog,...restartDeps}=h.deps;void unusedCatalog;
+ const restarted=new Runtime({...restartDeps,catalogCacheDir:join(dir,'restart-cache'),networkStatsPath:join(dir,'restart.sqlite')},completedActions);
+ for(const [id,,target] of choices)assert.equal(restarted.providerOperations.catalog.get(id).binary,target,id+' must restore the saved canonical executable');
+ await restarted.close();
+ // A target replaced after selection must not become an executable in another project.
+ const codexTarget=choices[0]![2],foreign=join(dir,'foreign-project');mkdirSync(foreign);mkdirSync(join(foreign,'.git'));
+ const other=join(foreign,'other-tool');writeFileSync(other,'#!/bin/sh\nexit 0\n',{mode:0o700});rmSync(codexTarget);symlinkSync(other,codexTarget);
+ delete process.env.CODEX_BIN;delete process.env.CLAUDE_BIN;
+ const unsafe=new Runtime({...restartDeps,catalogCacheDir:join(dir,'unsafe-cache'),networkStatsPath:join(dir,'unsafe.sqlite')},completedActions);
+ assert.equal(unsafe.providerOperations.catalog.get('codex').binary,'codex');
+ await unsafe.close();
+});
+
+test('TS-33: concurrent path changes leave the last selection in settings and catalog',async t=>{
+ const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-program-race-'))),a=join(dir,'a','fixture'),b=join(dir,'b','fixture');t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ for(const path of [a,b]){const parent=path.slice(0,path.lastIndexOf('/'));mkdirSync(parent);writeFileSync(path,'#!/bin/sh\nexit 0\n',{mode:0o755})}
+ const started=deferred(),release=deferred();let delayed=false;
+ const make=(binary:string):CatalogEntry=>({id:'fixture',title:'Fixture',binary,login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,resume:false,mcp:false,limits:false},withBinary:make,
+  version:async()=>{if(binary===a&&!delayed){delayed=true;started.resolve();await release.promise}return 'fixture 1.0'},auth:async()=>({loggedIn:false}),models:async()=>[],runTurn:async()=>({text:'',sessionId:null})});
+ const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([make('fixture')])}});
+ const first=call(h.api,'/api/providers/fixture/binary',{body:{path:a}});await started.promise;
+ const firstJob=(h.runtime as any).programBinaryJobs.get('fixture');
+ const second=call(h.api,'/api/providers/fixture/binary',{body:{path:b}});await until(()=>(h.runtime as any).programBinaryJobs.get('fixture')!==firstJob);release.resolve();
+ const replies=await Promise.all([first,second]);assert.deepEqual(replies.map(r=>r.status),[200,200]);
+ assert.equal(h.runtime.settings.get().owner.programBinary_fixture,b);
+ assert.equal((await call(h.api,'/api/providers/catalog')).body.providers.find((p:any)=>p.id==='fixture').binary,b);
+});
 
 test('268: public catalog/check use only metadata, mask account and publish providers on change',async t=>{
  const h=await setup(t),r=await call(h.api,'/api/providers/catalog');assert.equal(r.status,200);const p=r.body.providers[0];assert.equal(p.id,'fixture');assert.equal(p.kind,'subscription');assert.equal(p.installed,true);assert.equal(p.version,'1.2.3');assert.equal(p.login.state,'ok');assert.equal(p.login.account,'a•••@example.test');assert.deepEqual(p.models,[{id:'m1',label:'Model 1'}]);assert.equal(p.capabilities.mcp,true);assert.equal(h.calls.length,0);assert.equal(h.opened.length,0);assert.equal(JSON.stringify(r.body).includes('alice'),false);

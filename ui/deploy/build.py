@@ -218,7 +218,7 @@ def build_proto():
     shutil.copy(HERE / "live.js", dst / "live.js")                    # рабочий слой: состояние, решения, чат, поиск
     shutil.copy(HERE / "release.js", dst / "release.js")              # канал/версия, постоянный бейдж и дисклеймер alpha
     shutil.copy(HERE / "cx.js", dst / "cx.js")                        # поле ввода C′: папка · роль · режимы / ＋ · права · модель · усилие · ⓘ
-    for extra in ("ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js"):                      # модули экранов: контекст чата, настройки, подключения (08.10.2026)
+    for extra in ("ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "program-missing.js", "network.js"):                      # модули экранов: контекст чата, настройки, подключения (08.10.2026)
         if (HERE / extra).exists():
             shutil.copy(HERE / extra, dst / extra)
     (dst / "proto.js").write_text(rep((HERE / "proto.js").read_text(encoding="utf-8"), "/*IC*/", ic), encoding="utf-8")
@@ -233,7 +233,7 @@ def build_proto():
         t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto>')
         t = rep(t, "<head>", "<head><script>" + boot + "</script>")
         t = rep(t, "</head>", '<link rel="stylesheet" href="proto.css"></head>')
-        t = rep(t, "</body>", release_script+'<script src="proto.js"></script>\n<script src="markdown.js"></script>\n<script src="live.js"></script>\n<script src="llm.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="network-stats.js"></script>\n<script src="network-add.js"></script>\n<script src="network-recovery.js"></script>\n<script src="network.js"></script>\n<script src="conn.js"></script>\n</body>')
+        t = rep(t, "</body>", release_script+'<script src="proto.js"></script>\n<script src="markdown.js"></script>\n<script src="live.js"></script>\n<script src="llm.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="network-stats.js"></script>\n<script src="network-add.js"></script>\n<script src="network-recovery.js"></script>\n<script src="program-missing.js"></script>\n<script src="network.js"></script>\n<script src="conn.js"></script>\n</body>')
         t = re.sub(r"<title>.*?</title>", f"<title>Harnessy · {title}</title>", t, count=1, flags=re.S)
         (dst / f"{stem}.html").write_text(t, encoding="utf-8")
     gallery = (src / "index.html").read_text(encoding="utf-8")

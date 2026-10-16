@@ -11,7 +11,7 @@ import {ProviderCatalog,catalogCacheDirectory,LoginTerminal,builtinEntries,CLI_D
 import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
 import {propose,proposals,confirm,create,createOwnerSeat,restoreProposals,type ProposalInput,type ProposalRef,type OwnerSeatInput} from './proposals.ts';
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
-import {isAbsolute,join,relative,sep} from 'node:path';
+import {basename,dirname,isAbsolute,join,relative,resolve,sep} from 'node:path';
 import {AttachmentStore,expandUser,initProject,projectsRoot} from '@harnessy/projects';
 import {pyTruthy} from '@harnessy/team';
 import {askDeliveryDepth} from './action-state.ts';
@@ -23,7 +23,8 @@ import {chatsList,chatGet,chatsNew,chatsOpen,meta,transferSnapshot} from './chat
 import {handoff} from './handoff.ts';
 import {chat} from './owner-chat.ts';
 import {execFileSync} from 'node:child_process';
-import {chmodSync,mkdtempSync,realpathSync,rmSync,writeFileSync} from 'node:fs';
+import {accessSync,chmodSync,lstatSync,mkdtempSync,realpathSync,rmSync,writeFileSync,constants} from 'node:fs';
+import {access,realpath,stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {ensureLineLocked,withPathLock,loadTeam,instructionsFor,canonicalPath,type Vendor} from '@harnessy/team';
@@ -42,6 +43,22 @@ import {RuntimeError,message,slice,deepFreeze,object} from './errors.ts';
 import {systemClock,type RuntimeDeps,type RuntimeActions,type ProjectState,type TurnScope,type ActiveTurn,type ActionContext,type RuntimeEvent,type TurnRecords,type BridgeSendArgs,type BridgeFailure,type SendResult,type ReadPaneResult,type AskResult,type MergeResult,type AssignRoleResult} from './types.ts';
 const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Initiator & {trust:'harness'}={seat:'harness',trust:'harness'};
 const attachmentExtension:Record<TurnAttachment['mime'],string>={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif'};
+function programBinaryTarget(id:string,file:string):boolean{
+ const name=basename(file);
+ if(name===id)return true;
+ // The official launchers are links to these differently named installed files.
+ if(id==='codex'&&name==='codex.js'&&file.endsWith(`${sep}@openai${sep}codex${sep}bin${sep}codex.js`))return true;
+ return id==='claude'&&/^\d+\.\d+\.\d+$/.test(name)&&file.includes(`${sep}.local${sep}share${sep}claude${sep}versions${sep}`);
+}
+function programBinaryInProject(file:string,project:string):boolean{
+ const full=resolve(file),inside=relative(project,full);
+ if(inside===''||inside!=='..'&&!inside.startsWith('..'+sep)&&!isAbsolute(inside))return true;
+ for(let dir=dirname(full);;dir=dirname(dir)){
+  for(const marker of ['.git','.harness'])try{lstatSync(join(dir,marker));return true}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}
+  if(dirname(dir)===dir)break;
+ }
+ return false;
+}
 function providerAttachments(source:TurnAttachment[],vendor:string,projectDir:string):{attachments:TurnAttachment[];cleanup:()=>void}{
  if(vendor!=='codex'||!source.length)return {attachments:source,cleanup:()=>{}};let directory:string|undefined;
  try{directory=mkdtempSync(join(realpathSync(tmpdir()),'harnessy-turn-attachments-'));chmodSync(directory,0o700);const fromProject=relative(realpathSync(projectDir),directory),inside=fromProject===''||!isAbsolute(fromProject)&&fromProject!=='..'&&!fromProject.startsWith('..'+sep);if(inside)throw new RuntimeError('attachment_invalid','приватный снимок вложения оказался внутри проекта',400);
@@ -60,15 +77,27 @@ export class Runtime {
  private modelService(routes:LlmDependencies['routes'],subscribeRoutes:NonNullable<LlmDependencies['subscribeRoutes']>,p=this.project,vendorPrefix='api:'){return createLlmService({routes,resolveKey:(ref,generation)=>this.llmKeys.resolveKey(keySlot(ref,generation)),subscribeRoutes,providerFetch:id=>this.routedFetch(vendorPrefix+id),trace:event=>{p.trace.record(event.kind,{outcome:event.outcome,reason:traceReason(event.code??'none'),durationMs:event.durationMs,data:{id:event.requestId,vendor:event.provider,model:event.model,code:event.code,...event.usage}})}})}
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
  private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();private cliQuotas=new WeakMap<ProjectState,ProviderLimitsStore>();
+ private programBinaryJobs=new Map<string,Promise<unknown>>();
  readonly deps:RuntimeDeps;readonly actions:RuntimeActions;
  constructor(deps:RuntimeDeps,actions:RuntimeActions){this.deps=deps;this.actions=actions;this.llmKeys=deps.llmKeys??new MacKeyStore();this.sshTunnels=deps.sshTunnels??new SshTunnels();
  if(!actions||['ask','merge','assignRole','afterTurn','restorePendingAcks','cancelAsks'].some(k=>typeof (actions as unknown as Record<string,unknown>)[k]!=='function'))throw new RuntimeError('actions_required','порт действий обязателен',500);
  this.clock=deps.clock??systemClock;this.connections=deps.connections??new Connections();this.projectRegistry=deps.projectRegistry??new ProjectRegistry();this.defaultDir=canonicalPath(deps.defaultDir??process.env.CHAT_WORK_DIR??'/Users/Shared/simple-claude-chat');
  const current=()=>this.current&&!this.current.closed?this.current.dir:null;
  this.settings=typeof deps.settings==='function'?deps.settings(current):deps.settings??new Settings(undefined,current);
+ let savedPrograms:Record<string,unknown>={};try{savedPrograms=this.settings.get().owner}catch{}
+ const programBinary=(id:string,standard:string)=>{
+  const value=savedPrograms['programBinary_'+id];
+  if(typeof value!=='string'||!isAbsolute(value)||value.length>1024||value.includes('\0'))return standard;
+  try{
+   const canonical=realpathSync(value),project=canonicalPath(deps.projectDir??this.defaultDir);
+   if(!programBinaryTarget(id,canonical)||programBinaryInProject(value,project)||programBinaryInProject(canonical,project)||!lstatSync(canonical).isFile())return standard;
+   accessSync(canonical,constants.X_OK);return canonical;
+  }catch{return standard}
+ };
+ for(const id of ['claude','codex'] as const){const path=programBinary(id,id);if(path!==id)process.env[id==='claude'?'CLAUDE_BIN':'CODEX_BIN']=path}
  this.unsubscribeLlm=this.settings.onLlmRoutesChanged(()=>{const p=this.current;if(p&&!p.closed){this.syncApiModels(p);p.bus.publish('owner',{type:'llm.routes',providers:Object.keys(this.settings.llmProviders())})}});
  this.pins=typeof deps.pins==='function'?deps.pins(current,id=>this.chatMeta(id)):deps.pins??new Pins(undefined,current,id=>this.chatMeta(id));this.traceSettings();
- this.providerOperations=new ProviderOperations(this,deps.providerCatalog??new ProviderCatalog([...builtinEntries(deps.providers,deps.models??{}),...CLI_DESCRIPTORS.map(d=>cliEntry(d)),ollamaEntry()],undefined,{cacheDir:deps.catalogCacheDir??catalogCacheDirectory()}),deps.loginTerminal??new LoginTerminal());
+ this.providerOperations=new ProviderOperations(this,deps.providerCatalog??new ProviderCatalog([...builtinEntries(deps.providers,deps.models??{}),...CLI_DESCRIPTORS.map(d=>cliEntry({...d,binary:programBinary(d.id,d.binary)})),ollamaEntry()],undefined,{cacheDir:deps.catalogCacheDir??catalogCacheDirectory()}),deps.loginTerminal??new LoginTerminal());
  this.network=new NetworkSettings(this.settings,deps.networkKeys??new MacKeyStore({purpose:'proxy-password'}),this.connections,()=>this.providerOperations.catalog.ids());
  this.networkProviderChecks=new NetworkProviderChecks(this);this.networkChecks=new NetworkChecks(this.settings,this.network,{...deps.networkCheckOptions,tunnels:this.sshTunnels});
  this.networkStats=new NetworkStats(this.settings,deps.networkStatsPath??this.settings.networkStatsPath());const stopChecks=this.networkChecks.subscribe((id,check)=>this.networkStats.identity(id,check));const stopTunnels=this.sshTunnels.subscribe(value=>{this.networkStats.tunnel(value);const p=this.current;if(!p||p.closed)return;const previous=this.tunnelTrace.get(value.id),action=value.state==='starting'&&previous!==undefined&&previous!==value.generation?'restart':value.state;this.tunnelTrace.set(value.id,value.generation);p.trace.record('network.tunnel',{outcome:value.state==='down'?'failed':'ok',reason:value.code?traceReason(value.code,value.reason??''):{code:'none',text:''},data:{exit:value.id,action,state:value.state,code:value.code,retryAt:value.retryAt,generation:value.generation}})});this.unsubscribeNetworkStats=()=>{stopChecks();stopTunnels?.()};this.networkRelay=new NetworkRelay(this.settings,this.network,{...deps.networkRelayOptions,tunnels:()=>this.sshTunnels,check:(id,revision)=>this.networkChecks.snapshot(id,revision),authFailure:provider=>{const p=this.current;if(p&&!p.closed)p.trace.record('network.auth_failed',{outcome:'failed',reason:traceReason('proxy_auth_required','Доступ к ретранслятору отклонён'),data:{vendor:provider,code:'proxy_auth_required'}});deps.networkRelayOptions?.authFailure?.(provider)},measurement:sample=>{this.networkStats.connection(sample);deps.networkRelayOptions?.measurement?.(sample)},httpStatus:(provider,exit,status)=>{this.networkStats.http(provider,exit,status);deps.networkRelayOptions?.httpStatus?.(provider,exit,status)},event:value=>{const p=this.current;if(p&&!p.closed)p.trace.record(value.kind,{outcome:value.kind==='network.exit_failed'?'failed':'ok',reason:value.code?traceReason(value.code):{code:'none',text:''},data:{vendor:value.provider,exit:value.exit,from:value.from,to:value.to,reason:value.reason,code:value.code}});deps.networkRelayOptions?.event?.(value)},trace:value=>{this.networkStats.relay([value]);const p=this.current,{provider,exit,outcome,...counters}=value;if(p&&!p.closed)p.trace.record('network.connection',{outcome,data:{vendor:provider,id:exit,...counters}});deps.networkRelayOptions?.trace?.(value)}});this.networkStats.watchRelay(()=>this.networkRelay.stats())
@@ -570,6 +599,30 @@ export class Runtime {
  async settingsPatch(scope:unknown,patch:unknown,initiator:Initiator){this.requireOwner(initiator);
  if(object(patch)&&Object.keys(TRANSFER_DEFAULTS).some(key=>Object.hasOwn(patch,key))){if(scope&&scope!=='owner')throw new RuntimeError('context_settings_invalid','настройки переноса: только область owner',400);try{transferSettings(patch)}catch(e){throw new RuntimeError('context_settings_invalid',message(e),400)}}
  const result=await this.settings.patch(scope,patch);this.traceSettings();return result}
+ async setProgramBinary(id:string,path:unknown,initiator:Initiator){
+  this.requireOwner(initiator);
+  const project=this.project;
+  const previous=this.programBinaryJobs.get(id),job=(previous??Promise.resolve()).catch(()=>{}).then(async()=>{
+  this.same(project);
+  const entry=this.providerOperations.catalog.get(id);
+  if(typeof path!=='string'||!isAbsolute(path)||path.length>1024||path.includes('\0')||basename(path)!==id)throw new RuntimeError('program_binary_invalid','Это не '+id+'. Выберите файл программы '+id+'.',400);
+  let canonical:string;
+  try{canonical=await realpath(path);const projectRoot=await realpath(project.dir);
+   if(!programBinaryTarget(id,canonical)||programBinaryInProject(path,projectRoot)||programBinaryInProject(canonical,projectRoot))throw Error('not an installed program');
+   const file=await stat(canonical);if(!file.isFile())throw Error('not file');await access(canonical,constants.X_OK);
+   const candidate=entry.withBinary?.(canonical);if(!candidate)throw new RuntimeError('program_binary_invalid','Путь к этой программе не настраивается',400);
+   const version=await candidate.version(AbortSignal.timeout(5000));
+   if(typeof version!=='string'||!version.trim()||id==='claude'&&!/Claude Code/i.test(version)||id==='codex'&&!/^codex(?:-cli)?\b/i.test(version))throw Error('wrong program');
+   this.same(project);if(await realpath(path)!==canonical)throw Error('program link changed');
+  }catch(e){if(e instanceof RuntimeError)throw e;throw new RuntimeError('program_binary_invalid','Это не '+id+'. Выберите файл программы '+id+'.',400)}
+  if([...project.active.values()].some(active=>active.pane.vendor===id))throw new RuntimeError('provider_busy','Программа отвечает; дождитесь завершения хода',409);
+  await this.settings.setProgramBinary(id,canonical);
+  if(id==='claude'||id==='codex'){process.env[id==='claude'?'CLAUDE_BIN':'CODEX_BIN']=canonical;await this.deps.providers[id]?.reset()}
+  const read=await this.providerOperations.catalog.setBinary(id,canonical);
+  return {ok:true,provider:read.row};
+  });this.programBinaryJobs.set(id,job);
+  try{return await job}finally{if(this.programBinaryJobs.get(id)===job)this.programBinaryJobs.delete(id)}
+ }
  async close(){this.unsubscribeLlm();const tunnels=this.sshTunnels.close();try{await this.closeProject()}finally{await tunnels;await this.providerOperations.close();await this.networkRelay.close();this.unsubscribeNetworkStats();this.networkStats.close();await Promise.all([...this.traces].map(t=>t.close()))}}
 }
 export async function createRuntime(deps:RuntimeDeps,actions:RuntimeActions):Promise<Runtime>{const runtime=new Runtime(deps,actions);await runtime.openProject(deps.projectDir);return runtime}
