@@ -23,7 +23,7 @@ import {chatsList,chatGet,chatsNew,chatsOpen,meta,transferSnapshot} from './chat
 import {handoff} from './handoff.ts';
 import {chat} from './owner-chat.ts';
 import {execFileSync} from 'node:child_process';
-import {chmodSync,lstatSync,mkdtempSync,realpathSync,rmSync,writeFileSync,constants} from 'node:fs';
+import {accessSync,chmodSync,lstatSync,mkdtempSync,realpathSync,rmSync,writeFileSync,constants} from 'node:fs';
 import {access,realpath,stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
@@ -85,7 +85,15 @@ export class Runtime {
  const current=()=>this.current&&!this.current.closed?this.current.dir:null;
  this.settings=typeof deps.settings==='function'?deps.settings(current):deps.settings??new Settings(undefined,current);
  let savedPrograms:Record<string,unknown>={};try{savedPrograms=this.settings.get().owner}catch{}
- const programBinary=(id:string,standard:string)=>{const value=savedPrograms['programBinary_'+id];return typeof value==='string'&&isAbsolute(value)&&basename(value)===standard&&value.length<=1024?value:standard};
+ const programBinary=(id:string,standard:string)=>{
+  const value=savedPrograms['programBinary_'+id];
+  if(typeof value!=='string'||!isAbsolute(value)||value.length>1024||value.includes('\0'))return standard;
+  try{
+   const canonical=realpathSync(value),project=canonicalPath(deps.projectDir??this.defaultDir);
+   if(!programBinaryTarget(id,canonical)||programBinaryInProject(value,project)||programBinaryInProject(canonical,project)||!lstatSync(canonical).isFile())return standard;
+   accessSync(canonical,constants.X_OK);return canonical;
+  }catch{return standard}
+ };
  for(const id of ['claude','codex'] as const){const path=programBinary(id,id);if(path!==id)process.env[id==='claude'?'CLAUDE_BIN':'CODEX_BIN']=path}
  this.unsubscribeLlm=this.settings.onLlmRoutesChanged(()=>{const p=this.current;if(p&&!p.closed){this.syncApiModels(p);p.bus.publish('owner',{type:'llm.routes',providers:Object.keys(this.settings.llmProviders())})}});
  this.pins=typeof deps.pins==='function'?deps.pins(current,id=>this.chatMeta(id)):deps.pins??new Pins(undefined,current,id=>this.chatMeta(id));this.traceSettings();

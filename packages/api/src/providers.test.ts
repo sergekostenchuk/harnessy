@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {existsSync,readFileSync,realpathSync,statSync,mkdtempSync,mkdirSync,writeFileSync,symlinkSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import {Runtime} from '../../runtime/src/runtime.ts';
+import {completedActions} from '../../runtime/src/test-helpers.ts';
 import {ProviderCatalog,cliEntry,LoginTerminal,ProviderError,type CatalogEntry,type CliSeat,type CliContext} from '@harnessy/providers';
 import {fixture,call,sse,deferred,until,OWNER} from './test-helpers.ts';
 import {cliFixture} from '../../providers/src/cli/test-support.ts';
@@ -64,6 +66,18 @@ test('TS-33: canonical targets of installed Codex and Claude launchers remain se
  }
  const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog(entries)}});
  for(const [id,link,target] of choices){const response=await call(h.api,'/api/providers/'+id+'/binary',{body:{path:link}});assert.equal(response.status,200,id+': '+response.text);assert.equal(response.body.provider.binary,target);assert.equal(h.runtime.settings.get().owner['programBinary_'+id],target)}
+ delete process.env.CODEX_BIN;delete process.env.CLAUDE_BIN;
+ const {providerCatalog:unusedCatalog,...restartDeps}=h.deps;void unusedCatalog;
+ const restarted=new Runtime({...restartDeps,catalogCacheDir:join(dir,'restart-cache'),networkStatsPath:join(dir,'restart.sqlite')},completedActions);
+ for(const [id,,target] of choices)assert.equal(restarted.providerOperations.catalog.get(id).binary,target,id+' must restore the saved canonical executable');
+ await restarted.close();
+ // A target replaced after selection must not become an executable in another project.
+ const codexTarget=choices[0]![2],foreign=join(dir,'foreign-project');mkdirSync(foreign);mkdirSync(join(foreign,'.git'));
+ const other=join(foreign,'other-tool');writeFileSync(other,'#!/bin/sh\nexit 0\n',{mode:0o700});rmSync(codexTarget);symlinkSync(other,codexTarget);
+ delete process.env.CODEX_BIN;delete process.env.CLAUDE_BIN;
+ const unsafe=new Runtime({...restartDeps,catalogCacheDir:join(dir,'unsafe-cache'),networkStatsPath:join(dir,'unsafe.sqlite')},completedActions);
+ assert.equal(unsafe.providerOperations.catalog.get('codex').binary,'codex');
+ await unsafe.close();
 });
 
 test('TS-33: concurrent path changes leave the last selection in settings and catalog',async t=>{
