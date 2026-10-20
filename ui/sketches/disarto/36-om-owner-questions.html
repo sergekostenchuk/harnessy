@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 36 · Проход OM · вопросы владельцу и решения</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../proto/proto.css"><link rel="stylesheet" href="path.css">
+<style>.toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);padding:8px 14px;border:1px solid var(--line2);border-radius:999px;background:var(--raised);box-shadow:0 12px 30px rgba(0,0,0,.5);font-size:12.5px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s;z-index:30}.toast.on{opacity:1}</style></head>
+<body class="pt-page"><div class="sheet">
+  <h1>Harnessy · скетч 36 · проход OM · вопросы владельцу и решения</h1>
+  <p class="sub">Живая точка пути: очередь вопросов прохода OM, карточка вопроса поверх с <b>предответами</b> (владелец выбирает из предответов — слово владельца 08.10), история решений. Очередь, карточка и запись решения — <span class="tag live">есть</span>. Вопрос раннера Discovery (пауза) показывается — <span class="tag off">есть в коде, выключено</span>, кнопка ответа на него — <span class="tag mock">макет</span>. Счётчик «ждёт вас» — <span class="tag multi">собрано из нескольких чтений</span>. <span class="tag ex">пример</span>: учёт ресурсов строительной компании. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame" data-demo><div class="app" data-side="none"><aside class="side ps" data-pt-side></aside><section class="main">
+    <div class="top"><b>План · карта · Стройучёт</b><span class="st"><i></i>проход OM · ждёт вашего решения</span><div class="r"><span class="tag live">есть</span><span class="mono" style="font-size:10px">последний вызов модели · 4 мин назад</span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
+    <div class="body"><div class="pt-body">
+      <div><div data-pt-tabs="path"></div><div class="pt-stages" data-pt-ribbon></div><div class="pt-crumbs" style="margin-top:8px"><a href="28-path.html">Путь</a><i>›</i><span>Проход OM</span><i>›</i><span>Вопросы и решения</span><span style="flex:1"></span><span class="pt-note">блок 3 из 8 · «Сверка остатков с 1С»</span></div></div>
+      <div class="pt-two">
+        <div class="pt-col pt-scroll">
+          <div class="pt-head"><h3>Очередь вопросов</h3><span class="pill acc">2</span><span class="sp"></span><span class="pt-note">ждёт вас <span class="tag multi">собрано из двух чтений</span></span></div>
+          <div class="lst" id="queue" style="margin-bottom:12px"></div>
+          <div class="pt-head"><h3>Как это работает</h3></div>
+          <div class="two eq" style="margin-bottom:12px">
+            <div class="blk"><div class="t"><span>вопрос</span></div><p>Движок сам закрывает, что может — кодом или исследованием; к вам приходит только то, где нужен ваш выбор. У каждого вопроса: откуда (блок карты), что держит, предответы.</p></div>
+            <div class="blk"><div class="t"><span>решение</span></div><p>Выбор из предответов или свой — полномочная запись на точную редакцию вопроса. Повтор того же — ничего не меняет; ответ на переизданный вопрос — адресный отказ, не тихая запись.</p></div>
+          </div>
+          <div class="note-bar" style="margin-bottom:4px"><span>проход ждёт, пока открыт вопрос, держащий текущий блок · остальные блоки идут</span><span>список докручивается</span></div>
+        </div>
+        <div class="pt-col pt-scroll">
+          <div class="blk"><div class="t"><span>история решений</span><span class="tag live">есть</span></div>
+            <div class="lst2" id="hist"></div></div>
+          <div class="blk" id="state" style="cursor:pointer"><div class="t"><span>состояние прохода</span><span class="tag live">есть</span></div>
+            <div class="kv"><span>блок</span><b>3 из 8 · «Сверка остатков с 1С»</b><span>ждёт</span><b>вашего решения · 1 вопрос держит блок</b><span>расход</span><b>1,9 M за проход · блок 0,6 M</b><span>пауза</span><b>нет</b></div>
+            <div class="acts" style="margin-top:8px"><span class="btn sm ghost">Остановить проход</span><span class="btn sm">Продолжить</span></div></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="toast" id="toast"></div>
+  </section></div></div>
+  <div class="cap"><span>36 · проход OM · очередь вопросов → карточка с предответами → решение записано · история решений</span><span>1280 × 860 · телефон 390</span></div>
+  <div class="hint-bar"><span>клик по вопросу — карточка с предответами · «записать решение» — запись и «отвечен» в очереди · повтор — «уже записано» · esc — закрыть</span></div>
+</div>
+<script src="app.js"></script>
+<script src="path.js"></script>
+<script>
+(function(){
+  PT.boot({cur:'om-g2',curText:'ждёт вас',done:['discovery','concept','operation-map','specification','features'],need:{'om-g2':2}});
+  const T=PT.tag;
+  const toast=document.getElementById('toast'); let tt; const say=m=>{ toast.textContent=m; toast.classList.add('on'); clearTimeout(tt); tt=setTimeout(()=>toast.classList.remove('on'),2200); };
+  /* вопрос: {cls, q, from, who, n, st, pre, close, open, note, ans} */
+  const Q=[
+    {cls:'blk',q:'При расхождении остатков по объекту — что считать истиной?',from:'блок «Сверка остатков с 1С» · держит проход',who:'om',n:3,st:'acc:ждёт вас',pre:['остаток в 1С — истина, прораб подтверждает расхождение','фото и накладные прораба — истина, бухгалтер сверяет','ручная сверка бухгалтером в спорных случаях'],close:['способ сверки в блоке «Сверка остатков»','условие приёмки работы «журнал расхождений»'],open:['если «фото прораба» — блок «Приём накладной» получает требование обязательного фото (уже есть решением 19.10)'],note:'Ни один вариант не закрыть кодом или исследованием: это правило компании.'},
+    {cls:'',q:'Два прораба внесли одну накладную офлайн — что делать при слиянии?',from:'блок «Приём накладной с телефона» · не держит',who:'om',n:3,st:'acc:ждёт вас',pre:['оставить первую по времени, вторую пометить дублем','оставить обе до проверки снабженцем','запретить: одна накладная — один прораб'],close:['правило слияния офлайн-записей','условие приёмки «дубли»'],open:[],note:'Блок идёт дальше без этого ответа; нужен к старту задачи «слияние».'},
+    {cls:'stale',q:'Нужен ли доступ субподряду к остаткам?',from:'план изменился — вопрос переиздан · откройте новую редакцию',who:'om',n:0,st:'warn:переиздан',pre:[],close:[],open:[],note:'Ответ на старую редакцию — адресный отказ. Новая редакция появится в очереди после пересборки блока.'},
+    {cls:'',q:'Какой бюджет на создание и содержание?',from:'ось 07 · пауза раннера Discovery · показан из сводки стадии',who:'ds',n:3,st:'warn:пауза',pre:['до 1 млн ₽ в год','1–3 млн ₽','больше 3 млн ₽'],close:['ось 07 · окупаемость'],open:['ось 09 · кто ведёт после выпуска'],note:'Вопрос нового Discovery: показ — из сводки стадии; ответ на него через этот экран пока не записывается.',ds:true},
+    {cls:'done',q:'Фото с геометкой обязательны при приёмке?',from:'ответ: да · 19.10 · блок «Приём накладной с телефона»',who:'om',n:0,st:'ok:отвечен',pre:[],close:[],open:[],note:'Записано как решение владельца; повтор ничего не меняет.',ans:'да'}];
+  const H=[['20.10','Внутренний продукт для одной компании','ось 09 · предответ 1 из 3'],['19.10','Фото с геометкой обязательны при приёмке','блок «Приём накладной с телефона» · предответ 2 из 3'],['18.10','Режим проекта: вопросы владельцу, не обход','команда владельца'],['17.10','Запуск прохода OM','команда владельца · бюджет 20 M']];
+  function render(){ document.getElementById('queue').innerHTML=Q.map((q,i)=>{ const [st,txt]=q.st.split(':'); return '<div class="pt-q '+q.cls+'" data-q="'+i+'"><p><b>'+q.q+'</b><small>'+q.from+'</small></p><span class="pre-n">'+(q.n?'<b>'+q.n+'</b> предответа':'—')+'</span><span class="who '+q.who+'">'+(q.who==='om'?'проход OM':'Discovery')+'</span><span class="pill '+st+'">'+txt+'</span></div>'; }).join('');
+    document.getElementById('hist').innerHTML=H.map((h,i)=>'<div class="pt-dec" data-h="'+i+'"><span>'+h[0]+'</span><p><b>'+h[1]+'</b><small>'+h[2]+'</small></p><span class="pill acc">решение владельца</span></div>').join('');
+    HX.bind('[data-q]',el=>card(+el.dataset.q),{w:780,h:540}); HX.bind('[data-h]',el=>hist(+el.dataset.h),{w:640,h:360}); }
+  function card(i){ const q=Q[i], [st,txt]=q.st.split(':'), live=q.ds?T('off'):T('live');
+    return '<div class="from">'+(q.who==='om'?'вопрос прохода OM':'вопрос раннера Discovery')+' · '+(q.cls==='blk'?'держит блок · ':'')+live+'</div><div class="ch"><h3>'+q.q+'</h3><div class="r"><span class="pill '+st+'">'+txt+'</span></div></div><div class="csub">'+q.note+'</div>'+
+      (q.pre.length?'<div class="pt-oq'+(q.cls==='done'?' done':'')+'" style="cursor:default;margin-bottom:12px"><div class="from2">предответы · выберите один или дайте свой'+(q.ds?' '+T('mock'):'')+'</div><div class="pre">'+q.pre.map(p=>'<span data-pick-pre>'+p+'</span>').join('')+'<span class="own" data-pick-pre>свой ответ…</span></div></div>':'')+
+      (q.ans?'<div class="pt-oq done" style="margin-bottom:12px"><div class="from2">записано · 19.10 · решение владельца</div><b>Ответ: '+q.ans+'</b></div>':'')+
+      (q.close.length||q.open.length?'<div class="two">'+HX.blk('что закроет',q.close.length?'<ul>'+q.close.map(x=>'<li>'+x+'</li>').join('')+'</ul>':'<p>—</p>')+HX.blk('что откроет',q.open.length?'<ul>'+q.open.map(x=>'<li>'+x+'</li>').join('')+'</ul>':'<p>ничего — блок идёт дальше</p>')+'</div>':'')+
+      HX.acts(q.cls==='done'?[['уже записано','done'],['Закрыть','ghost','data-close']]:q.cls==='stale'?[['Открыть новую редакцию','p'],['Закрыть','ghost','data-close']]:q.ds?[['Ответить <span class="tag mock" style="margin-left:4px">макет</span>','p'],['Открыть ход исследования →','','data-href="30-discovery-progress.html"'],['Позже','ghost','data-close']]:[['Записать решение','p','data-write="'+i+'"'],['Позже','ghost','data-close']]); }
+  function hist(i){ const h=H[i]; return '<div class="from">решение владельца · '+h[0]+' · '+T('live')+'</div><div class="ch"><h3>'+h[1]+'</h3></div><div class="csub">Полномочная запись на точную редакцию вопроса; смысл меняет только новая редакция решения.</div>'+HX.kv([['откуда',h[2]],['записано',h[0]],['кто читает','проход OM · компиляция · исполнение'],['повтор','ничего не меняет']])+HX.acts([['Закрыть','ghost','data-close']]); }
+  HX.bind('#state',()=>'<div class="from">состояние прохода OM · '+T('live')+'</div><div class="ch"><h3>Блок 3 из 8 · ждёт вашего решения</h3></div><div class="csub">Проход идёт сам; пауза — только когда открыт вопрос, держащий текущий блок, или кончился бюджет.</div>'+HX.tl([['d','17.10','проход запущен','бюджет 20 M · режим: вопросы владельцу'],['d','18.10','блоки 1–2 пройдены','пробелы закрыты кодом и исследованием'],['c','сейчас','блок 3 · сверка остатков','1 вопрос держит · 1 не держит'],['','потом','блоки 4–8','компиляция плана после прохода']])+HX.acts([['Остановить проход','ghost'],['Продолжить','p'],['Закрыть','ghost','data-close']]),{w:720,h:460});
+  document.addEventListener('click',e=>{ const p=e.target.closest('[data-pick-pre]'); if(p){ p.parentElement.querySelectorAll('[data-pick-pre]').forEach(x=>x.classList.toggle('on',x===p)); return; }
+    const w=e.target.closest('[data-write]'); if(w){ const i=+w.dataset.write, on=document.querySelector('.panel [data-pick-pre].on'); if(!on){ say('выберите предответ или дайте свой'); return; } const q=Q[i]; q.cls='done'; q.st='ok:отвечен'; q.n=0; q.ans=on.textContent; q.from='ответ: '+on.textContent+' · сейчас'; H.unshift(['сейчас',q.q,'предответ · '+on.textContent]); HX.close(); setTimeout(render,360); say('решение записано · очередь обновлена'); return; }
+    const h=e.target.closest('[data-href]'); if(h) location.href=h.dataset.href; });
+  render();
+  HX.passport({title:'Проход OM · вопросы владельцу и решения',where:'Путь › Проход OM',what:'очередь вопросов; карточка вопроса с предответами; история решений; состояние прохода',why:'единственное место, где проход ждёт владельца — ответ из предответов за минуту',when:'пока идёт проход OM и при паузе',expect:'владелец видит, какой вопрос держит блок, и записывает решение одной кнопкой',risk:'вопросы раннера Discovery показываются, но ответ на них здесь не записывается',ok:'очередь пуста — проход идёт сам',fail:'владелец не понимает, что держит блок'});
+})();
+</script>
+</body></html>

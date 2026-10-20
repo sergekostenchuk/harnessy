@@ -2,7 +2,7 @@
    Данные-заглушки — один пример везде: учёт ресурсов строительной компании. Команды движка на экранах не называются. */
 window.PT=(function(){
   const STAGES=[['discovery','Discovery'],['concept','Концепция'],['operation-map','Операционная карта'],['specification','Спецификация'],['features','Фичи'],['om-g2','Проход OM'],['compilation','Компиляция'],['execution','Исполнение']];
-  const TAG={mock:'макет',off:'есть в коде, выключено',multi:'собрано из нескольких чтений',none:'нет в движке',ex:'пример'};
+  const TAG={mock:'макет',off:'есть в коде, выключено',multi:'собрано из нескольких чтений',none:'нет в движке',live:'есть',ex:'пример'};
   const tag=k=>'<span class="tag '+k+'">'+TAG[k]+'</span>';
   const pillSt=s=>s==='есть'?'<span class="pill ok">есть</span>':s==='частично'?'<span class="pill warn">частично</span>':tag('mock');
   /* точки владельца по стадиям — из карты прохода (статус в карте), не выдумывать сверх */
@@ -15,25 +15,27 @@ window.PT=(function(){
     'compilation':[['Сборка плана из карты','есть']],
     'execution':[['Запуск исполнения','есть'],['Решение владельца','есть'],['Поставка · слияние','есть'],['Обратный путь к планировщику','нет в движке']]
   };
+  /* экран обзора для каждой стадии после Discovery */
+  const SCREEN={'concept':'35-concept-to-features.html','operation-map':'35-concept-to-features.html','specification':'35-concept-to-features.html','features':'35-concept-to-features.html','om-g2':'36-om-owner-questions.html','compilation':'37-execution-review.html','execution':'37-execution-review.html'};
   /* пример: Discovery текущая, остальные впереди; счётчик «ждёт вас» на текущей */
   function ribbon(el,o){ o=o||{}; const cur=o.cur||'discovery', need=o.need||{}, done=o.done||[];
-    el.innerHTML=STAGES.map(([k,n],i)=>{ const cls=done.includes(k)?'d':k===cur?'c':''; const st=cls==='d'?'принята':cls==='c'?(o.curText||'идёт'):''; const nm=k==='operation-map'?'Опер. карта':n;
+    el.classList.toggle('many',done.length>=4); el.innerHTML=STAGES.map(([k,n],i)=>{ const cls=done.includes(k)?'d':k===cur?'c':''; const st=cls==='d'?'принята':cls==='c'?(o.curText||'идёт'):''; const nm=k==='operation-map'?'Опер. карта':n;
       return '<div class="pt-stage '+cls+'" data-stage="'+k+'" title="'+n+'"><i>'+(cls==='d'?'✓':i+1)+'</i><div><b>'+nm+'</b><small>'+k+'</small></div>'+(st?'<em>'+st+'</em>':'')+(need[k]?'<span class="n">'+need[k]+'</span>':'')+'</div>'; }).join('');
     el.querySelectorAll('[data-stage]').forEach(s=>s.addEventListener('click',()=>HX.open(s,stageCard(s.dataset.stage,o),{w:720,h:520,hide:false})));
   }
   function stageCard(k,o){ const n=STAGES.find(s=>s[0]===k)[1]; const cur=o.cur||'discovery';
-    if(k==='discovery'){ const pts=[['1','Рамка','как поняли поручение: тип продукта, домены, глубина осей, бюджет','принята · 14.10','29-discovery-frame.html','этап B'],
+    if(k==='discovery'){ const pts=[['1','Рамка','как поняли поручение: тип продукта, домены, глубина осей, бюджет','принята · 14.10','29-discovery-frame.html','открыть →'],
         ['2','Ход исследования','вопросы по осям, что блокирует, движение, бюджет','идёт · 2 ждут вас','30-discovery-progress.html','открыть →'],
-        ['3','Досье','12 разделов, утверждения с видом и источником, противоречия','18 из 31 вопросов','31-discovery-dossier.html','этап B'],
+        ['3','Досье','12 разделов, утверждения с видом и источником, противоречия','18 из 31 вопросов','31-discovery-dossier.html','открыть →'],
         ['4','Варианты','сравнение по критериям, почему рекомендован, выбор одного или отклонить все','ждёт вашего выбора · В1 рекомендован','32-discovery-variants.html','открыть →'],
-        ['5','Итог','что строим, первый результат, критерий успеха, не-цели; принять или поправка','впереди','33-discovery-outcome.html','этап B'],
-        ['6','Неизвестные и условия','что нужно от вас или мира; какое условие чем закрывается','1 блокирует стадию','34-discovery-unknowns.html','этап B']];
-      return '<div class="from">стадия 1 из 8 · discovery · '+tag('off')+'</div><div class="ch"><h3>Discovery · где вы нужны</h3></div><div class="csub">Шесть точек касания. Открыты на этом этапе — ход исследования и варианты; остальные рисуются следом.</div>'+
+        ['5','Итог','что строим, первый результат, критерий успеха, не-цели; принять или поправка','впереди · макет','33-discovery-summary.html','открыть →'],
+        ['6','Неизвестные и условия','что нужно от вас или мира; какое условие чем закрывается','2 ждут вас','34-discovery-unknowns.html','открыть →']];
+      return '<div class="from">стадия 1 из 8 · discovery · '+tag('off')+'</div><div class="ch"><h3>Discovery · где вы нужны</h3></div><div class="csub">Шесть точек касания владельца; главные места решений — ход исследования и варианты.</div>'+
         '<div class="lst2">'+pts.map(p=>'<div class="pt-unk'+(p[5]==='открыть →'?' blk':'')+'"><p><b>'+p[0]+' · '+p[1]+'</b><small>'+p[2]+'</small></p><span class="when">'+p[3]+'</span>'+(p[5]==='открыть →'?'<a class="btn sm p" href="'+p[4]+'" style="text-decoration:none">'+p[5]+'</a>':'<span class="btn sm ghost" style="opacity:.6">'+p[5]+'</span>')+'</div>').join('')+'</div>'; }
     const pts=POINTS[k]||[]; const ahead=STAGES.findIndex(s=>s[0]===k)>STAGES.findIndex(s=>s[0]===cur);
     return '<div class="from">стадия '+(STAGES.findIndex(s=>s[0]===k)+1)+' из 8 · '+k+'</div><div class="ch"><h3>'+n+'</h3></div><div class="csub">'+(ahead?'Впереди — откроется после принятия предыдущей стадии. ':'')+'Точки, где владелец смотрит или решает, и что из этого уже в движке.</div>'+
       HX.blk('точки владельца','<div class="lst2">'+(pts.length?pts.map(p=>'<div class="pt-unk"><p><b>'+p[0]+'</b></p>'+(p[1]==='нет в движке'?tag('none'):pillSt(p[1]))+'</div>').join(''):'<div class="pt-unk empty">точек владельца на этой стадии нет</div>')+'</div>')+
-      '<p class="conn-note" style="margin-top:10px">Экран стадии — этап B (скетч 35–38).</p>'; }
+      '<div class="acts" style="margin-top:12px"><a class="btn sm p" href="'+SCREEN[k]+'" style="text-decoration:none">Открыть обзор →</a></div>'; }
   /* боковая панель живого окна — та же разметка, что в прототипе (скетч 27) */
   const F='<svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"></path></svg>';
   function side(el){ el.innerHTML='<div class="ps-head"><span class="logo"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"></path></svg></span><b class="ps-proj">Стройучёт <i>▾</i></b><span class="col">⟨</span></div><div class="newbtn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>Новый чат<kbd>⌘N</kbd></div><div class="search"><svg viewBox="0 0 24 24"><path d="M20 20l-4.5-4.5M11 17a6 6 0 100-12 6 6 0 000 12z"></path></svg>Найти…<kbd>⌘K</kbd></div>'+
