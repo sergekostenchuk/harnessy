@@ -1,7 +1,7 @@
 /* Путь проекта (скетчи 28, 30, 32): лента стадий из восьми стадий кода, боковая панель живого окна, карточки стадий поверх.
    Данные-заглушки — один пример везде: учёт ресурсов строительной компании. Команды движка на экранах не называются. */
 window.PT=(function(){
-  const STAGES=[['discovery','Discovery'],['concept','Концепция'],['operation-map','Операционная карта'],['specification','Спецификация'],['features','Фичи'],['om-g2','Проход OM'],['compilation','Компиляция'],['execution','Исполнение']];
+  const STAGES=[['discovery','Discovery'],['concept','Концеп­ция'],['operation-map','Операционная карта'],['specification','Специ­фикация'],['features','Фичи'],['om-g2','Проход OM'],['compilation','Компи­ляция'],['execution','Испол­нение']];
   const TAG={mock:'макет',off:'есть в коде, выключено',multi:'собрано из нескольких чтений',none:'нет в движке',live:'есть',ex:'пример'};
   const tag=k=>'<span class="tag '+k+'">'+TAG[k]+'</span>';
   const pillSt=s=>s==='есть'?'<span class="pill ok">есть</span>':s==='частично'?'<span class="pill warn">частично</span>':tag('mock');
@@ -19,7 +19,7 @@ window.PT=(function(){
   const SCREEN={'concept':'35-concept-to-features.html','operation-map':'35-concept-to-features.html','specification':'35-concept-to-features.html','features':'35-concept-to-features.html','om-g2':'36-om-owner-questions.html','compilation':'37-execution-review.html','execution':'37-execution-review.html'};
   /* пример: Discovery текущая, остальные впереди; счётчик «ждёт вас» на текущей */
   function ribbon(el,o){ o=o||{}; const cur=o.cur||'discovery', need=o.need||{}, done=o.done||[];
-    el.classList.toggle('many',done.length>=4); el.innerHTML=STAGES.map(([k,n],i)=>{ const cls=done.includes(k)?'d':k===cur?'c':''; const st=cls==='d'?'принята':cls==='c'?(o.curText||'идёт'):''; const nm=k==='operation-map'?'Опер. карта':n;
+    el.innerHTML=STAGES.map(([k,n],i)=>{ const cls=done.includes(k)?'d':k===cur?'c':''; const st=cls==='d'?'принята':cls==='c'?(o.curText||'идёт'):''; const nm=k==='operation-map'?'Опер. карта':n;
       return '<div class="pt-stage '+cls+'" data-stage="'+k+'" title="'+n+'"><i>'+(cls==='d'?'✓':i+1)+'</i><div><b>'+nm+'</b><small>'+k+'</small></div>'+(st?'<em>'+st+'</em>':'')+(need[k]?'<span class="n">'+need[k]+'</span>':'')+'</div>'; }).join('');
     el.querySelectorAll('[data-stage]').forEach(s=>s.addEventListener('click',()=>HX.open(s,stageCard(s.dataset.stage,o),{w:720,h:520,hide:false})));
   }

@@ -15,10 +15,10 @@
 .pt-stage{flex:1 1 0;min-width:96px;display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink3);cursor:pointer;position:relative;transition:border-color .15s,background .15s}
 .pt-stage:hover{border-color:var(--line2);background:var(--raised)}
 .pt-stage i{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center;font:600 9.5px var(--mono);color:var(--ink3);flex:none;font-style:normal}
-.pt-stage>div{min-width:0}.pt-stage b{display:block;font-weight:500;font-size:12px;color:var(--ink2);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pt-stage>div{min-width:0;flex:1}.pt-stage b{display:block;font-weight:500;font-size:12px;color:var(--ink2);line-height:1.15;white-space:normal;overflow-wrap:normal;hyphens:manual}
 .pt-stage small{display:block;font:8.5px var(--mono);letter-spacing:.04em;color:var(--ink3);margin-top:1px}
-.pt-stage em{margin-left:auto;font:9px var(--mono);color:var(--ink3);font-style:normal;white-space:nowrap}
-.pt-stage.d i{background:var(--ok);border-color:var(--ok);color:#fff}.pt-stage.d b{color:var(--ink2)}.pt-stages.many .pt-stage.d em{display:none}
+.pt-stage em{margin-left:auto;font:9px var(--mono);color:var(--ink3);font-style:normal;white-space:nowrap;flex:none}.pt-stage.c{flex:1.8 1 0}
+.pt-stage.d i{background:var(--ok);border-color:var(--ok);color:#fff}.pt-stage.d b{color:var(--ink2)}.pt-stage.d em{display:none}
 .pt-stage.c{border-color:var(--accent);background:var(--raised)}.pt-stage.c i{background:var(--accent);border-color:var(--accent);color:#1a1a1a}.pt-stage.c b{color:var(--ink)}.pt-stage.c em{color:var(--accent)}
 .pt-stage .n{position:absolute;top:-7px;right:8px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#1a0e04;font:500 10px/18px var(--mono);text-align:center;padding:0 5px;box-shadow:0 0 0 3px var(--bg)}
 .pt-stage.blk{border-color:rgba(224,178,60,.6)}.pt-stage.blk i{border-color:var(--warn);color:var(--warn)}.pt-stage.blk em{color:var(--warn)}
