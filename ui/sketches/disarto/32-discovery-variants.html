@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 32 · Discovery · варианты</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../proto/proto.css"><link rel="stylesheet" href="path.css">
+<style>
+  .pt-vars{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px}
+  .toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);padding:8px 14px;border:1px solid var(--line2);border-radius:999px;background:var(--raised);box-shadow:0 12px 30px rgba(0,0,0,.5);font-size:12.5px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s;z-index:30}.toast.on{opacity:1}
+</style></head>
+<body class="pt-page"><div class="sheet">
+  <h1>Harnessy · скетч 32 · discovery · варианты</h1>
+  <p class="sub">Точка 4. Один–три обоснованных варианта по одной шкале: ценность · кто платит · стоимость и срок · риск · верность поручению. <b>Почему рекомендован — видно сразу</b>, без клика. Выбор одного кнопкой ИЛИ «отклонить все»; повтор выбора идемпотентен — карточка показывает «уже выбран», записи не будет. Клик по названию — карточка поверх: критерии · почему · основания · покрытие. Варианты и выбор в движке — <span class="tag mock">макет</span>. <span class="tag ex">пример</span>: учёт ресурсов строительной компании. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame" data-demo><div class="app" data-side="none"><aside class="side ps" data-pt-side></aside><section class="main">
+    <div class="top"><b>План · карта · Стройучёт</b><span class="st"><i></i>ждёт вашего выбора</span><div class="r"><span class="tag mock">макет</span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
+    <div class="body"><div class="pt-body">
+      <div><div data-pt-tabs="path"></div><div class="pt-stages" data-pt-ribbon></div><div class="pt-crumbs" style="margin-top:8px"><a href="28-path.html">Путь</a><i>›</i><a href="28-path.html">Discovery</a><i>›</i><span>Варианты</span><span style="flex:1"></span><span class="pt-note">точка 4 · после широкого прохода · до глубокого</span></div></div>
+      <div class="pt-scroll">
+        <div class="pt-choice" id="choice" style="margin-bottom:12px"><span id="ch-text"><b>Выберите один вариант</b> или отклоните все · три обоснованных по шкале из пяти критериев</span><span class="sp"></span><span class="btn sm ghost" id="rejall">Отклонить все</span><span class="btn sm ghost" id="reset" style="display:none">Пересмотреть выбор</span></div>
+        <div class="pt-vars" id="vars">
+          <div class="pt-var rec" data-v="1"><div class="meta"><span class="n">В1</span><span class="pill acc">рекомендован</span><span class="tag ex" style="margin-left:auto">пример</span></div><h4 data-open="1">Приход и расход материалов по одному объекту</h4>
+            <div class="kv"><span>ценность</span><b>−20 % списаний за квартал · прямые деньги</b><span>кто платит</span><b>директор · бюджет компании</b><span>срок · стоимость</span><b>3–4 мес · офлайн-клиент + сервер + обмен с 1С</b><span>риск</span><b>средний · зависит от выгрузки 1С</b><span>верность</span><b>полная · материалы — ядро поручения</b></div>
+            <div class="why"><div class="lbl">почему рекомендован</div>Самая большая боль — <b>потери материалов, 6 % закупок</b> (ось 02); первый результат измерим <b>за квартал</b> (ось 12); одна внешняя зависимость — выгрузка 1С (ось 10); сметы и техника — следующими выпусками.</div>
+            <div class="cov"><span>покрытие</span><div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div><b>72 %</b></div>
+            <div class="ft2"><span class="btn sm p" data-choose="1">Выбрать</span><span class="btn sm ghost" data-open="1">Подробнее</span></div></div>
+          <div class="pt-var" data-v="2"><div class="meta"><span class="n">В2</span></div><h4 data-open="2">Учёт техники и простоев</h4>
+            <div class="kv"><span>ценность</span><b>меньше простоев техники</b><span>кто платит</span><b>директор</b><span>срок · стоимость</span><b>2–3 мес · мобильный журнал + отчёт</b><span>риск</span><b>низкий</b><span>верность</span><b>частичная · техника — часть ресурсов</b></div>
+            <div class="why no"><div class="lbl">почему не рекомендован</div>Боль меньше: простои техники не названы владельцем главной потерей (ось 02); часть техники в аренде у субподряда — простои не наши (гипотеза, ось 02).</div>
+            <div class="cov"><span>покрытие</span><div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></div><b>40 %</b></div>
+            <div class="ft2"><span class="btn sm" data-choose="2">Выбрать</span><span class="btn sm ghost" data-open="2">Подробнее</span></div></div>
+          <div class="pt-var" data-v="3"><div class="meta"><span class="n">В3</span></div><h4 data-open="3">Полный учёт ресурсов со сметами и КС-2</h4>
+            <div class="kv"><span>ценность</span><b>высокая, но через год</b><span>кто платит</span><b>директор + заказчики по КС-2</b><span>срок · стоимость</span><b>9–12 мес · сметы, ЭДО, обмен 1С</b><span>риск</span><b>высокий · ЭДО, 152-ФЗ, СРО</b><span>верность</span><b>полная · шире первого результата</b></div>
+            <div class="why no"><div class="lbl">почему не рекомендован</div>Первый полезный результат отодвигается на год; три внешние зависимости (ЭДО, 1С, нормы); противоречит не-цели «без смет в первом выпуске» (ось 12).</div>
+            <div class="cov"><span>покрытие</span><div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><b>35 %</b></div>
+            <div class="ft2"><span class="btn sm" data-choose="3">Выбрать</span><span class="btn sm ghost" data-open="3">Подробнее</span></div></div>
+        </div>
+        <div class="pt-head"><h3>Сравнение по критериям</h3><span class="sp"></span><span class="pt-note">лучший по критерию подсвечен · одна шкала для всех</span></div>
+        <div class="card pt-cmp-wrap" style="padding:4px 6px;margin-bottom:12px"><table class="tbl pt-cmp"><thead><tr><th>критерий</th><th class="on">В1 материалы</th><th>В2 техника</th><th>В3 полный учёт</th></tr></thead><tbody>
+          <tr><td>ценность</td><td class="best">прямые деньги: −20 % списаний за квартал</td><td>меньше простоев; часть техники не наша</td><td>всё, но первый результат через год</td></tr>
+          <tr><td>кто платит</td><td>директор</td><td>директор</td><td>директор + заказчики</td></tr>
+          <tr><td>стоимость и срок</td><td>3–4 мес</td><td class="best">2–3 мес</td><td>9–12 мес</td></tr>
+          <tr><td>риск</td><td><span class="pill warn">средний</span> · выгрузка 1С</td><td class="best"><span class="pill ok">низкий</span></td><td><span class="pill bad">высокий</span> · ЭДО, нормы</td></tr>
+          <tr><td>верность поручению</td><td class="best">полная</td><td>частичная</td><td class="best">полная</td></tr>
+          <tr><td>покрытие</td><td class="best">72 %</td><td>40 %</td><td>35 %</td></tr>
+          <tr><td>рекомендация</td><td class="best"><span class="pill acc">рекомендован</span></td><td>—</td><td>—</td></tr>
+        </tbody></table></div>
+        <div class="note-bar"><span>выбор — решение владельца на точный набор вариантов · повтор того же решения ничего не меняет · устаревший набор — адресный отказ</span><span class="tag mock">макет</span></div>
+      </div>
+    </div></div>
+    <div class="toast" id="toast"></div>
+  </section></div></div>
+  <div class="cap"><span>32 · discovery · варианты · почему рекомендован видно сразу · выбрать одного или отклонить все · «уже выбран»</span><span>1280 × 860 · телефон 390</span></div>
+  <div class="hint-bar"><span>«выбрать» — состояние «выбран», повтор — «уже выбран» · «отклонить все» — итог без проекции · «подробнее» — карточка поверх</span></div>
+</div>
+<script src="app.js"></script>
+<script src="path.js"></script>
+<script>
+(function(){
+  PT.boot({cur:'discovery',curText:'идёт · ждёт вас',need:{discovery:3}});
+  const T=PT.tag, K=(k,t)=>'<span class="kind '+k+'">'+t+'</span>';
+  const V={1:{n:'В1',t:'Приход и расход материалов по одному объекту',why:'<div class="why"><div class="lbl">почему рекомендован</div>Самая большая боль — <b>потери материалов, 6 % закупок</b> (ось 02); первый результат измерим <b>за квартал</b> (ось 12); одна внешняя зависимость — выгрузка 1С (ось 10); сметы и техника — следующими выпусками.</div>',
+      kv:[['ценность','−20 % списаний за квартал · прямые деньги'],['кто платит','директор · бюджет компании'],['стоимость и срок','3–4 мес · офлайн-клиент + сервер + обмен с 1С'],['риск','средний · зависит от выгрузки 1С'],['верность поручению','полная · материалы — ядро поручения'],['первый результат','приход и расход по одному объекту'],['не-цели','без смет в первом выпуске']],
+      s:[['fact','Потери материалов за 2025 — около 6 % закупок.','ось 02 · интервью директора · 15.10'],['fact','Приход фиксируют по М-29 в день поставки.','ось 02 · положение, стр. 4'],['infer','Окупается снижением потерь: цель −20 % списаний за квартал.','ось 07 · из фактов выше'],['hypo','Прораб будет вносить приход с телефона офлайн.','ось 03 · проверка: пилот на одном объекте'],['unk','Формат выгрузки из 1С','ось 08 · ждёт вас · материал']],cov:[['02 мир «как есть»',1],['03 люди',.7],['07 деньги',.5],['08 данные',.5],['11 реализуемость',.5],['12 результат',0]]},
+    2:{n:'В2',t:'Учёт техники и простоев',why:'<div class="why no"><div class="lbl">почему не рекомендован</div>Боль меньше: простои техники не названы главной потерей (ось 02); часть техники в аренде у субподряда — простои не наши (гипотеза).</div>',
+      kv:[['ценность','меньше простоев техники'],['кто платит','директор'],['стоимость и срок','2–3 мес · мобильный журнал + отчёт'],['риск','низкий'],['верность поручению','частичная · техника — часть ресурсов']],
+      s:[['fact','Простои техники в интервью упомянуты вторыми, без суммы.','ось 02 · интервью директора'],['hypo','Часть техники в аренде у субподряда — простои не наши.','ось 02 · проверка: договоры субподряда']],cov:[['02 мир «как есть»',.7],['03 люди',.5],['07 деньги',.5],['11 реализуемость',.3]]},
+    3:{n:'В3',t:'Полный учёт ресурсов со сметами и КС-2',why:'<div class="why no"><div class="lbl">почему не рекомендован</div>Первый результат через год; три внешние зависимости (ЭДО, 1С, нормы); противоречит не-цели «без смет в первом выпуске» (ось 12).</div>',
+      kv:[['ценность','высокая, но через год'],['кто платит','директор + заказчики по КС-2'],['стоимость и срок','9–12 мес · сметы, ЭДО, обмен 1С'],['риск','высокий · ЭДО, 152-ФЗ, СРО'],['верность поручению','полная · шире первого результата']],
+      s:[['fact','КС-2 и КС-3 обязательны при расчётах с заказчиком.','ось 04 · справочник форм'],['fact','ЭДО и 152-ФЗ применимы к первичке и данным работников.','ось 05 · закон'],['unk','Требования заказчиков к хранению документов.','ось 05 · мир · реализуемость']],cov:[['02 мир «как есть»',.7],['04 язык',1],['05 правила',.3],['11 реализуемость',.3]]}};
+  let chosen=null, rejected=false;
+  const toast=document.getElementById('toast'); let tt; const say=m=>{ toast.textContent=m; toast.classList.add('on'); clearTimeout(tt); tt=setTimeout(()=>toast.classList.remove('on'),2200); };
+  function render(){ const ch=document.getElementById('choice'), tx=document.getElementById('ch-text');
+    ch.classList.toggle('on',!!chosen); ch.classList.toggle('rej',rejected);
+    document.getElementById('rejall').style.display=(chosen||rejected)?'none':''; document.getElementById('reset').style.display=(chosen||rejected)?'':'none';
+    tx.innerHTML=chosen?'<b>Выбран '+V[chosen].n+'</b> · '+V[chosen].t+' · 20.10, 11:42 · повтор выбора ничего не меняет':rejected?'<b>Все отклонены</b> · итог: отказ без проекции и конституции, концепция не откроется · сводка — всё равно':'<b>Выберите один вариант</b> или отклоните все · три обоснованных по шкале из пяти критериев';
+    document.querySelectorAll('[data-v]').forEach(c=>{ const k=c.dataset.v; c.classList.toggle('on',chosen===k); c.classList.toggle('rej',rejected||(chosen&&chosen!==k)); const b=c.querySelector('[data-choose]');
+      if(chosen===k){ b.className='btn sm done'; b.textContent='уже выбран'; } else if(rejected){ b.className='btn sm ghost'; b.textContent='отклонён вами'; } else { b.className='btn sm'+(k==='1'?' p':''); b.textContent='Выбрать'; }
+      const pill=c.querySelector('.meta .pill'); if(pill&&k==='1'){ pill.className='pill '+(chosen==='1'?'ok':rejected?'':'acc'); pill.textContent=chosen==='1'?'выбран':rejected?'отклонён':'рекомендован'; } }); }
+  document.addEventListener('click',e=>{ const b=e.target.closest('[data-choose]'); if(b){ const k=b.dataset.choose; if(rejected){ say('все отклонены — сначала «пересмотреть выбор»'); return; } if(chosen===k){ say('уже выбран — записи не будет'); return; } if(chosen){ say('выбран '+V[chosen].n+' — смена выбора = новая редакция решения'); return; } chosen=k; render(); say('выбран '+V[k].n+' · записано как решение владельца'); return; }
+    if(e.target.closest('#rejall')){ rejected=true; render(); say('все отклонены · итог: отказ'); return; }
+    if(e.target.closest('#reset')){ chosen=null; rejected=false; render(); say('новая редакция выбора · пересчёт только зависимого'); return; } });
+  function card(k){ const v=V[k]; return '<div class="from">вариант '+v.n+' из 3 · точка 4 · '+T('mock')+'</div><div class="ch"><h3>'+v.n+' · '+v.t+'</h3><div class="r">'+(k==='1'?'<span class="pill acc">рекомендован</span>':'')+'</div></div><div class="csub">Вариант — ценность, пользователь, границы продукта; технические способы — основания, не проект вместо карты.</div>'+
+    '<div class="ctabs"><span class="on" data-ct="k">Критерии</span><span data-ct="w">Почему</span><span data-ct="s">Основания <b style="font:500 10px var(--mono);color:var(--ink3)">'+v.s.length+'</b></span><span data-ct="c">Покрытие</span></div>'+
+    '<div class="pt-card" data-cp="k">'+HX.kv(v.kv)+'</div><div class="pt-card" data-cp="w">'+v.why+'<p class="conn-note" style="margin-top:10px">рекомендацию даёт модель, оценщик проверяет обоснованность; выбор — только ваш</p></div>'+
+    '<div class="pt-card" data-cp="s"><div class="lst2">'+v.s.map(s=>'<div class="pt-stm">'+K(s[0],{fact:'факт',infer:'вывод',hypo:'гипотеза',unk:'неизвестное',own:'решение владельца'}[s[0]])+'<p>'+s[1]+'</p><span class="m"><span>'+s[2]+'</span></span></div>').join('')+'</div></div>'+
+    '<div class="pt-card" data-cp="c"><div class="pt-prog">'+v.cov.map(c=>'<div class="row"><span>'+c[0]+'</span><b>'+Math.round(c[1]*100)+' %</b></div><div class="ticks">'+[0,1,2,3,4].map(i=>'<i'+(c[1]>i/5?' class="on"':'')+'></i>').join('')+'</div>').join('')+'</div><p class="conn-note" style="margin-top:10px">после выбора доисследуется только недостающее по выбранному варианту '+T('mock')+'</p></div>'+
+    HX.acts(chosen===k?[['уже выбран','done']]:rejected?[['отклонён вами','ghost']]:[['Выбрать '+v.n,'p','data-choose="'+k+'" data-close'],['Закрыть','ghost','data-close']]); }
+  HX.bind('[data-open]',el=>card(el.dataset.open),{w:800,h:580});
+  HX.passport({title:'Discovery · варианты',where:'Путь › Discovery › точка 4',what:'1–3 обоснованных варианта по одной шкале; почему рекомендован — сразу; выбор одного или отклонить все',why:'решение владельца, после которого идёт глубокий проход только по выбранному',when:'после широкого прохода',expect:'владелец видит, ПОЧЕМУ вариант рекомендован, и выбирает одной кнопкой',risk:'вариантов и записи выбора в движке нет — макет',ok:'выбор или отказ за одну минуту без чтения досье',fail:'владелец не понимает, чем варианты отличаются'});
+})();
+</script>
+</body></html>

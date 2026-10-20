@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 28 · Путь · лента стадий и обзор проекта</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../proto/proto.css"><link rel="stylesheet" href="path.css">
+<style>
+  .wait{display:flex;flex-direction:column;gap:8px}
+  .lnk{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--raised);font-size:12.5px;color:var(--ink);text-decoration:none}.lnk:hover{border-color:var(--accent)}.lnk small{display:block;color:var(--ink3);font-size:11px}.lnk i{font-style:normal;color:var(--ink3)}
+</style></head>
+<body class="pt-page"><div class="sheet">
+  <h1>Harnessy · скетч 28 · путь · лента стадий и обзор проекта</h1>
+  <p class="sub">Вкладка проекта «Путь» рядом с «План пользователя» (02) и «Карта проекта» (26). Сверху — восемь стадий из кода; ниже четыре цифры: что ждёт владельца, стадия и шаг, бюджет стадии, статус движка. Клик по стадии — её обзор; клик по цифре или строке — карточка поверх. Одной команды «состояние проекта на пути» нет — обзор <span class="tag multi">собрано из нескольких чтений</span>. Данные — <span class="tag ex">пример</span>: учёт ресурсов строительной компании. <a href="index.html">← все скетчи</a></p>
+
+  <div class="frame" data-demo><div class="app" data-side="none"><aside class="side ps" data-pt-side></aside><section class="main">
+    <div class="top"><b>План · карта · Стройучёт</b><span class="st"><i></i>подключено</span><div class="r"><span class="tag multi">собрано из нескольких чтений</span><span class="mono" style="font-size:10px">обновлено 12 мин назад</span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
+    <div class="body"><div class="pt-body">
+      <div><div data-pt-tabs="path"></div><div class="pt-stages" data-pt-ribbon></div></div>
+      <div class="pt-scroll">
+        <div class="pt-grid" style="margin-bottom:12px">
+          <div class="pt-kpi" id="k-wait"><div class="cap2">ждёт вас</div><div class="big acc">3</div><div class="sub2">2 вопроса · 1 выбор варианта</div></div>
+          <div class="pt-kpi" id="k-stage"><div class="cap2">стадия · 1 из 8</div><div class="big">Discovery</div><div class="sub2">шаг: <b>варианты и выбор</b> · рамка и план приняты</div></div>
+          <div class="pt-kpi" id="k-budget"><div class="cap2">бюджет стадии <span class="tag off">есть в коде, выключено</span></div><div class="big">7,4 M</div><div class="sub2">из 20 M · 37 % · резерв на завершение 2,5 M</div></div>
+          <div class="pt-kpi" id="k-engine"><div class="cap2">движок <span class="tag off">есть в коде, выключено</span></div><div class="big ok">идёт</div><div class="sub2">ход исследования · последняя попытка 12 мин назад</div></div>
+        </div>
+        <div class="pt-two">
+          <div class="pt-col">
+            <div class="pt-head"><h3>Ждёт вас</h3><span class="pill acc">3</span><span class="sp"></span><span class="pt-note">вопросы и решения стадии</span></div>
+            <div class="wait">
+              <div class="pt-oq" data-w="money"><div class="from2">вопрос · ось 07 · деньги · блокирующий <span class="tag mock">макет</span></div><b>Какой бюджет на создание и содержание?</b><p>Без ответа не считается окупаемость и не выбирается срок варианта.</p><div class="pre"><span>до 1 млн ₽ в год</span><span>1–3 млн ₽</span><span>больше 3 млн ₽</span><span class="own">свой ответ…</span></div></div>
+              <div class="pt-oq material" data-w="file"><div class="from2">нужен материал · ось 08 · данные и связи · блокирующий <span class="tag mock">макет</span></div><b>Нужен образец выгрузки из 1С</b><p>Закроет условие «формат обмена»; переоткроет сверку остатков (ось 11).</p><div class="pre"><span>＋ приложить файл</span><span>＋ ссылка</span><span class="own">«выгрузки нет» — ответить</span></div></div>
+              <div class="pt-oq" data-w="variant"><div class="from2">выбор · точка 4 · варианты <span class="tag mock">макет</span></div><b>Выберите вариант продукта или отклоните все</b><p>Три варианта, <strong>В1 рекомендован</strong>: приход и расход материалов по одному объекту.</p><div class="pre"><span>В1 · материалы</span><span>В2 · техника</span><span>В3 · полный учёт</span><span class="own">отклонить все</span></div></div>
+            </div>
+            <div class="pt-head" style="margin-top:6px"><h3>Другие вкладки проекта</h3></div>
+            <div class="two eq"><a class="lnk" href="02-plan.html"><div>План пользователя<small>задачи и этапы · граф и список</small></div><i>→</i></a><a class="lnk" href="26-om-map.html"><div>Карта проекта<small>как формируется проект: блоки → работы → задачи</small></div><i>→</i></a></div>
+          </div>
+          <div class="pt-col">
+            <div class="blk" style="cursor:pointer" id="b-prog"><div class="t"><span>движение стадии</span><span class="tag off">есть в коде, выключено</span></div>
+              <div class="pt-prog"><div class="row"><span>закрыто вопросов плана</span><b>18 / 31</b></div><div class="ticks"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="row"><span>блокирующих открыто</span><b class="acc" style="color:var(--accent)">3 · 2 ждут вас</b></div><div class="row"><span>принятых оснований</span><b>47</b></div><div class="row"><span>застой</span><b style="color:var(--warn)">1 вопрос · ось 06</b></div></div></div>
+            <div class="blk" style="cursor:pointer" id="b-budget"><div class="t"><span>бюджет стадии</span><span class="tag off">есть в коде, выключено</span></div>
+              <div class="pt-budget"><div class="tn2">7,4 M<small>из 20 M</small></div><div class="bar2"><i class="sp" style="width:37%"></i><i class="rs" style="width:12%;margin-left:auto"></i></div><div class="leg"><span><i></i>расход 37 %</span><span><i class="rs"></i>резерв 2,5 M</span><span class="pill" style="height:16px;font-size:8.5px">идёт</span></div></div></div>
+            <div class="blk" style="cursor:pointer" id="b-engine"><div class="t"><span>статус движка</span><span class="tag off">есть в коде, выключено</span></div>
+              <div class="kv"><span>стадия</span><b>Discovery · идёт</b><span>шаг</span><b>варианты и выбор · ждёт вашего решения</b><span>исследование</span><b>попытка по оси 11 · 12 мин назад</b><span>пауза</span><b>нет · бюджет в норме</b></div>
+              <div class="acts"><span class="btn sm">Остановить</span><span class="btn sm ghost">Продолжить</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </section></div></div>
+  <div class="cap"><span>28 · путь · лента стадий · ждёт вас · бюджет · движок · клик по стадии и по карточке — поверх</span><span>1280 × 860 · телефон 390</span></div>
+  <div class="hint-bar"><span>клик по стадии — её обзор · клик по цифре или строке — карточка поверх · esc — закрыть</span></div>
+</div>
+<script src="app.js"></script>
+<script src="path.js"></script>
+<script>
+(function(){
+  PT.boot({cur:'discovery',curText:'идёт · ждёт вас',need:{discovery:3}});
+  const T=PT.tag;
+  const waitCard={
+    money:'<div class="from">вопрос владельцу · ось 07 · деньги · блокирующий · '+T('mock')+'</div><div class="ch"><h3>Какой бюджет на создание и содержание?</h3></div><div class="csub">Запишется как <b>решение владельца</b>. Пока открыт — вердикт стадии будет «при условиях».</div>'+
+      '<div class="two">'+HX.blk('что закроет','<ul><li>ось 07 · окупаемость и модель оплаты</li><li>срок варианта В1 (3–4 мес или дольше)</li></ul>')+HX.blk('что переоткроет','<ul><li>ось 09 · ресурсы владельца — кто ведёт после выпуска</li></ul>')+'</div>'+
+      '<div class="pt-oq" style="margin-top:12px;cursor:default"><div class="from2">предответы</div><div class="pre"><span data-pick-pre>до 1 млн ₽ в год</span><span data-pick-pre>1–3 млн ₽</span><span data-pick-pre>больше 3 млн ₽</span><span class="own" data-pick-pre>свой ответ…</span></div></div>'+
+      HX.acts([['Записать ответ','p'],['Открыть ход исследования →','','data-href="30-discovery-progress.html"'],['Позже','ghost','data-close']]),
+    file:'<div class="from">нужен материал · ось 08 · данные и связи · '+T('mock')+'</div><div class="ch"><h3>Нужен образец выгрузки из 1С</h3></div><div class="csub">Условие «формат обмена» закрывается только материалом — решением его не обойти.</div>'+
+      '<div class="two">'+HX.blk('что закроет','<ul><li>ось 08 · формат обмена с 1С</li><li>ось 11 · путь сборки · модуль обмена</li></ul>')+HX.blk('что переоткроет','<ul><li>ось 11 · сверка остатков — если в выгрузке нет остатков по объектам</li></ul>')+'</div>'+
+      HX.acts([['＋ Приложить файл','p'],['＋ Ссылка'],['«Выгрузки нет» — ответить','ghost'],['Позже','ghost','data-close']]),
+    variant:'<div class="from">выбор владельца · точка 4 · варианты · '+T('mock')+'</div><div class="ch"><h3>Выберите вариант продукта</h3></div><div class="csub">Один вариант кнопкой или «отклонить все». Повтор выбора ничего не меняет.</div>'+
+      '<div class="lst2"><div class="pt-unk blk"><p><b>В1 · Приход и расход материалов по одному объекту</b><small>рекомендован · −20 % списаний за квартал · 3–4 мес · средний риск</small></p><span class="pill acc">рекомендован</span></div><div class="pt-unk"><p><b>В2 · Учёт техники и простоев</b><small>2–3 мес · низкий риск · верность поручению частичная</small></p><span class="fl"></span></div><div class="pt-unk"><p><b>В3 · Полный учёт ресурсов со сметами и КС-2</b><small>9–12 мес · высокий риск</small></p><span class="fl"></span></div></div>'+
+      HX.acts([['Открыть варианты →','p','data-href="32-discovery-variants.html"'],['Позже','ghost','data-close']])
+  };
+  HX.bind('[data-w]',el=>waitCard[el.dataset.w],{w:760,h:520});
+  const stageCard=()=>PT.stageCard('discovery',{cur:'discovery'});
+  HX.bind('#k-stage',stageCard,{w:720,h:520});
+  HX.bind('#k-wait',()=>'<div class="from">ждёт вас · 3 · '+T('multi')+'</div><div class="ch"><h3>Что ждёт вашего ответа</h3></div><div class="csub">Собрано из сводки стадии и решений: два блокирующих вопроса и один выбор.</div><div class="lst2">'+
+    '<div class="pt-unk blk"><p><b>Какой бюджет на создание и содержание?</b><small>ось 07 · предответы</small></p><span class="who owner">решение</span><span class="when">сейчас</span><span class="fl">блокирует</span></div>'+
+    '<div class="pt-unk blk"><p><b>Нужен образец выгрузки из 1С</b><small>ось 08 · приложить файл или ссылку</small></p><span class="who owner">материал</span><span class="when">сейчас</span><span class="fl">блокирует</span></div>'+
+    '<div class="pt-unk blk"><p><b>Выбрать вариант продукта</b><small>точка 4 · В1 рекомендован</small></p><span class="who owner">выбор</span><span class="when">сейчас</span><span class="fl">держит переход</span></div></div>'+
+    HX.acts([['Открыть ход исследования →','p','data-href="30-discovery-progress.html"'],['Варианты →','','data-href="32-discovery-variants.html"']]),{w:760,h:460});
+  const budget=()=>'<div class="from">бюджет стадии · Discovery · '+T('off')+'</div><div class="ch"><h3>7,4 M из 20 M · идёт</h3></div><div class="csub">Движение — принятые основания, не вызовы. Резерв на завершение не тратится на исследование; при нехватке на оценку движок встаёт на паузу сам.</div>'+
+    '<div class="pt-budget" style="margin-bottom:14px"><div class="bar2"><i class="sp" style="width:37%"></i><i class="rs" style="width:12%;margin-left:auto"></i></div><div class="leg"><span><i></i>расход 7,4 M</span><span><i class="rs"></i>резерв 2,5 M</span><span>остаток на исследование 10,1 M</span></div></div>'+
+    '<div class="two">'+HX.blk('по осям · ориентир '+T('mock'),'<div class="kv"><span>02 мир «как есть»</span><b>1,6 M</b><span>03 люди</span><b>1,1 M</b><span>06 рынок</span><b>1,4 M · застой</b><span>08 данные</span><b>0,9 M</b><span>11 реализуемость</span><b>1,2 M</b><span>прочие</span><b>1,2 M</b></div>')+HX.blk('правила','<ul><li>новый запуск расход не обнуляет</li><li>повышает только владелец</li><li>повтор без нового основания не оплачивается</li></ul>')+'</div>'+
+    HX.acts([['Увеличить бюджет','p'],['Остановить с итогом','ghost'],['Закрыть','ghost','data-close']]);
+  HX.bind('#k-budget',budget,{w:760,h:520}); HX.bind('#b-budget',budget,{w:760,h:520});
+  const engine=()=>'<div class="from">статус движка · '+T('off')+' · '+T('multi')+'</div><div class="ch"><h3>Discovery · идёт</h3></div><div class="csub">Discovery сделан на 38 % и выключен до включения; в коде есть рамка, план, попытки и раннер, бюджет с паузой, оценка попыток. Вариантов, досье, итога и сводки ещё нет.</div>'+
+    '<div class="two">'+HX.blk('что читаем','<ul><li>проект и его стадии</li><li>сводка стадии Discovery</li><li>состояние и решения прохода</li><li>расход и использование моделей</li></ul>')+HX.blk('управление','<p>Остановить и продолжить — общий механизм раннера. <b>Остановка</b> сохраняет попытку целиком, половины не бывает.</p><div class="acts"><span class="btn sm">Остановить</span><span class="btn sm ghost">Продолжить</span></div>')+'</div>'+
+    HX.tl([['d','14.10','рамка принята','тип: внутренний продукт · 12 осей · бюджет 20 M'],['d','15.10','план принят','31 вопрос · 9 блокирующих'],['c','сейчас','широкий проход и варианты','18 закрыто · 3 блокирующих открыто · В1 рекомендован'],['','','глубокий проход','после выбора варианта']]);
+  HX.bind('#k-engine',engine,{w:760,h:560}); HX.bind('#b-engine',engine,{w:760,h:560});
+  HX.bind('#b-prog',()=>'<div class="from">движение стадии · '+T('off')+'</div><div class="ch"><h3>18 из 31 вопросов закрыты</h3></div><div class="csub">Процент — только по поддерживающим; блокирующие держат переход, пока закрыты или «неизвестно» с последствием.</div>'+
+    '<div class="pt-card"><div class="stat"><div><b>9</b><small>блокирующих · 6 закрыты</small></div><div><b>22</b><small>поддерживающих · 12 закрыты</small></div><div><b>47</b><small>принятых оснований</small></div></div></div>'+
+    HX.blk('блокирующие открытые','<div class="lst2"><div class="pt-unk blk"><p><b>Какой бюджет на создание и содержание?</b><small>ось 07</small></p><span class="who owner">владелец</span></div><div class="pt-unk blk"><p><b>Формат выгрузки из 1С</b><small>ось 08</small></p><span class="who owner">владелец · материал</span></div><div class="pt-unk"><p><b>Лимиты и формат обмена 1С</b><small>ось 11 · исследуется · зависит от оси 08</small></p><span class="who world">мир</span></div></div>')+
+    HX.acts([['Открыть ход исследования →','p','data-href="30-discovery-progress.html"']]),{w:760,h:520});
+  document.addEventListener('click',e=>{ const h=e.target.closest('[data-href]'); if(h) location.href=h.dataset.href; const p=e.target.closest('[data-pick-pre]'); if(p){ p.parentElement.querySelectorAll('[data-pick-pre]').forEach(x=>x.classList.toggle('on',x===p)); } });
+  HX.passport({title:'Путь · лента стадий и обзор проекта',where:'вкладка проекта «Путь» рядом с «План пользователя» и «Карта проекта»',what:'где проект на восьми стадиях; что ждёт владельца; бюджет стадии; статус движка',why:'одна точка входа в путь: сразу видно, где нужен владелец',when:'при открытии проекта и по возвращении',expect:'за один взгляд — стадия, счётчик «ждёт вас», бюджет и статус',risk:'одной команды «состояние на пути» нет — собрано из нескольких чтений; Discovery выключен',ok:'владелец за 5 секунд понимает, что ему делать',fail:'цифры расходятся с движком'});
+})();
+</script>
+</body></html>
