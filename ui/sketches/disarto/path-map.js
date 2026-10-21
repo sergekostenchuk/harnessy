@@ -41,6 +41,8 @@ window.PM=(function(){
   const ownerCount=s=>s.nodes.filter(n=>n.who).length;
   /* плашка честности по статусу выгрузки: есть · частично (Discovery: есть в коде, выключено) · макет · пример */
   const stTag=(st,stage)=>st==='yes'?T('live'):st==='part'?(stage==='discovery'?T('off'):'<span class="pill warn">частично</span>'):st==='ex'?T('ex'):T('mock');
+  /* плашка стадии: Discovery целиком — «есть в коде, выключено» (как на 28); «макет» — только у узлов со статусом «нет» */
+  const stageTag=s=>s.code==='discovery'?T('off'):stTag(s.st,s.code);
   const stName=st=>({yes:'есть',part:'частично',no:'нет',ex:'пример'})[st]||st;
   const statePill=s=>s.state==='d'?'<span class="pill ok">'+esc(s.stText)+'</span>':s.state==='c'?'<span class="pill acc">'+esc(s.stText)+'</span>':'<span class="pill">'+esc(s.stText)+'</span>';
 
@@ -146,8 +148,8 @@ window.PM=(function(){
     function stageHTML(s){ const oc=ownerCount(s), wait=s.wait;
       return '<div class="pm-stage '+s.state+(s.code==='in'?' in':'')+'" data-key="stage:'+s.code+'" data-who="'+(oc?1:0)+'"><div class="meta">'+statePill(s)+'<small>'+esc(s.code==='in'?'не стадия':s.code)+'</small></div>'+(wait?'<span class="n">'+wait+'</span>':'')+
         '<div class="t">'+esc(s.name)+'</div><div class="io"><span>вход</span><b title="'+esc(s.io[0])+'">'+esc(s.io[0])+'</b><span>дело</span><b class="act" title="'+esc(s.act)+'">'+esc(s.act)+'</b><span>выход</span><b title="'+esc(s.io[1])+'">'+esc(s.io[1])+'</b></div>'+
-        '<div class="ft"><span class="own">● '+(oc?plural(oc,'точка','точки','точек')+' владельца':'без точек владельца')+'</span>'+(wait?'<span class="wait">ждёт вас '+wait+'</span>':'')+stTag(s.st,s.code)+'<span class="open" data-open="'+s.code+'">раскрыть ▸</span></div></div>'; }
-    function frameHTML(s){ return '<div class="pm-frame '+s.state+(s.code==='in'?' in':'')+'" data-key="stage:'+s.code+'" data-frame="'+s.code+'"><div class="hd"><i>'+(s.state==='d'?'✓':esc(s.num))+'</i><b>'+esc(s.name)+'</b><small>'+esc(s.code==='in'?'не стадия':s.code)+'</small>'+statePill(s)+stTag(s.st,s.code)+(s.wait?'<span class="pill acc">ждёт вас '+s.wait+'</span>':'')+'<span class="sp"></span><span class="x" data-collapse="'+s.code+'">свернуть ✕</span></div><span class="lbl">вход слева → выход справа · полосы змейкой · '+plural(s.nodes.length,'узел','узла','узлов')+'</span></div>'; }
+        '<div class="ft"><span class="own">● '+(oc?plural(oc,'точка','точки','точек')+' владельца':'без точек владельца')+'</span>'+(wait?'<span class="wait">ждёт вас '+wait+'</span>':'')+stageTag(s)+'<span class="open" data-open="'+s.code+'">раскрыть ▸</span></div></div>'; }
+    function frameHTML(s){ return '<div class="pm-frame '+s.state+(s.code==='in'?' in':'')+'" data-key="stage:'+s.code+'" data-frame="'+s.code+'"><div class="hd"><i>'+(s.state==='d'?'✓':esc(s.num))+'</i><b>'+esc(s.name)+'</b><small>'+esc(s.code==='in'?'не стадия':s.code)+'</small>'+statePill(s)+stageTag(s)+(s.wait?'<span class="pill acc">ждёт вас '+s.wait+'</span>':'')+'<span class="sp"></span><span class="x" data-collapse="'+s.code+'">свернуть ✕</span></div><span class="lbl">вход слева → выход справа · полосы змейкой · '+plural(s.nodes.length,'узел','узла','узлов')+'</span></div>'; }
     function nodeHTML(s,n){ return '<div class="pm-node'+(n.who?' owner':'')+(n.st==='ex'?' ex':'')+'" data-key="'+key(s.code,n.id)+'" data-who="'+(n.who?1:0)+'"><div class="meta">'+stTag(n.st,s.code)+(n.who?'<span class="own">владелец</span>':'')+'</div><div class="t">'+esc(n.t)+'</div><div class="io"><b>вход</b> '+esc(n.io[0])+'<i>→</i><b>выход</b> '+esc(n.io[1])+'</div></div>'; }
     function render(o2){ o2=o2||{}; G={rects:{},items:[],stageEdges:[],inner:[]};
       const W=canvas.clientWidth||932;
@@ -223,7 +225,7 @@ window.PM=(function(){
     /* ---- карточка поверх ---- */
     const io2=io=>'<div class="io2"><span>вход</span><b>'+esc(io[0])+'</b><i>→</i><span>выход</span><b>'+esc(io[1])+'</b></div>';
     function stageCard(s){ const pts=s.nodes.filter(n=>n.who); const cnt={}; s.nodes.forEach(n=>cnt[n.st]=(cnt[n.st]||0)+1);
-      return '<div class="hd"><div class="from">'+(s.code==='in'?'вход · не стадия':'стадия '+esc(s.num)+' из 8 · '+esc(s.code))+statePill(s)+stTag(s.st,s.code)+'</div><h3>'+esc(s.name)+'</h3>'+io2(s.io)+'<span class="x" data-close>×</span></div><div class="bd">'+
+      return '<div class="hd"><div class="from">'+(s.code==='in'?'вход · не стадия':'стадия '+esc(s.num)+' из 8 · '+esc(s.code))+statePill(s)+stageTag(s)+'</div><h3>'+esc(s.name)+'</h3>'+io2(s.io)+'<span class="x" data-close>×</span></div><div class="bd">'+
         '<div class="csub"><b>Дело стадии:</b> '+esc(s.act)+'.'+(s.wait?' Ждёт вас: <b>'+s.wait+'</b> '+T('multi'):' Вопросов к вам нет.')+'</div>'+
         blk('точки владельца · '+pts.length,pts.length?'<div class="lst2">'+pts.map(n=>'<div class="pt-unk" data-sel="'+key(s.code,n.id)+'" style="cursor:pointer"><p><b>'+esc(n.t)+'</b><small>'+esc(n.io[0])+' → '+esc(n.io[1])+'</small></p>'+stTag(n.st,s.code)+'</div>').join('')+'</div>':'<div class="pt-unk empty">точек владельца на этой стадии нет</div>')+
         blk('узлы по статусу выгрузки',kv(Object.keys(cnt).map(k=>[stName(k),plural(cnt[k],'узел','узла','узлов')])))+
