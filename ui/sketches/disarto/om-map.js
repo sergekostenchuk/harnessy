@@ -1,3 +1,69 @@
+/* OMCORE — общий механизм карт (скетчи 26 и 39): экранирование, слойка по связям, геометрия связей, масштаб · панорама · перетаскивание.
+   Отрисовка карт лежит в своих файлах (ниже — карта проекта, path-map.js — карта пути); здесь нет данных ни одного проекта. */
+window.OMCORE=(function(){
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const plural=(n,a,b,c)=>{ const m=n%10,h=n%100; return n+' '+(h>=11&&h<=14?c:m===1?a:m>=2&&m<=4?b:c); };
+  /* слойка по связям: самый длинный путь по прямым связям; узел, в который ведут только отказы, сидит в колонке своего источника, ниже него */
+  function layer(ids,edges){
+    const set=new Set(ids), out={}, inc={}, L={}, state={}, back=new Set();
+    ids.forEach(id=>{ out[id]=[]; inc[id]=[]; });
+    const idx={}; ids.forEach((id,i)=>idx[id]=i);
+    const E=edges.filter(e=>set.has(e.s)&&set.has(e.t)&&e.s!==e.t);
+    /* назад — связь к узлу, который в данных стоит раньше (порядок данных = путь по продукту); остаток циклов ловит обход */
+    E.forEach(e=>{ if(idx[e.t]<idx[e.s]) back.add(e); else out[e.s].push(e); });
+    function dfs(u){ state[u]=1; out[u].forEach(e=>{ if(state[e.t]===1) back.add(e); else if(!state[e.t]) dfs(e.t); }); state[u]=2; }
+    ids.forEach(id=>{ if(!state[id]) dfs(id); });
+    const fwd=E.filter(e=>!back.has(e)); fwd.forEach(e=>inc[e.t].push(e));
+    const onlyFail={};
+    function lay(id){ if(L[id]!=null) return L[id]; L[id]=0; const es=inc[id]; if(!es.length) return 0; onlyFail[id]=es.every(e=>e.k==='fail'); let m=0; es.forEach(e=>{ m=Math.max(m,lay(e.s)+(onlyFail[id]?0:1)); }); L[id]=m; return m; }
+    ids.forEach(lay);
+    return {L,back,inc,onlyFail};
+  }
+  /* геометрия связей: кубические кривые, середина — для подписи артефакта */
+  const cubic=(a,b,c,d,e,f,g,h)=>'M'+a+' '+b+' C'+c+' '+d+','+e+' '+f+','+g+' '+h;
+  const midOf=(a,b,c,d,e,f,g,h)=>[.125*a+.375*c+.375*e+.125*g,.125*b+.375*d+.375*f+.125*h];
+  function fwdPath(a,b){ const sx=a.x+a.w,sy=a.y+a.h/2,tx=b.x,ty=b.y+b.h/2; const o=Math.max(40,Math.min(110,Math.abs(tx-sx)/2)); return {d:cubic(sx,sy,sx+o,sy,tx-o,ty,tx,ty),m:midOf(sx,sy,sx+o,sy,tx-o,ty,tx,ty)}; }
+  function backPath(a,b){ const sx=a.x+a.w/2,tx=b.x+b.w/2;
+    if(a.y>b.y+b.h){ const sy=a.y+a.h/2, tb=b.y+b.h; return {d:cubic(a.x,sy,a.x-70,sy,tx,tb+70,tx,tb),m:midOf(a.x,sy,a.x-70,sy,tx,tb+70,tx,tb)}; }
+    let lane=Math.min(a.y,b.y)-34; if(lane<14) lane=14; return {d:cubic(sx,a.y,sx,lane,tx,lane,tx,b.y),m:midOf(sx,a.y,sx,lane,tx,lane,tx,b.y)}; }
+  function sidePath(a,b){ const sy=a.y+a.h/2,ty=b.y+b.h/2,ax=a.x+a.w,bx=b.x+b.w; return {d:cubic(ax,sy,ax+40,sy,bx+40,ty,bx,ty),m:midOf(ax,sy,ax+40,sy,bx+40,ty,bx,ty)}; }
+  function retPath(a,b){ const sy=a.y+a.h/2,ty=b.y+b.h/2; return {d:cubic(a.x,sy,a.x-36,sy,b.x-36,ty,b.x,ty),m:midOf(a.x,sy,a.x-36,sy,b.x-36,ty,b.x,ty)}; }
+  /* вид полотна: масштаб колесом (с ctrl/cmd) и кнопками, панорама в границах содержимого, перетаскивание карточек (чистый JS, без библиотек).
+     o.box() — границы содержимого; o.items(target) — что тащим (массив {el,r,key}) или null; o.blank() — элементы, за которые панорамируют;
+     o.onMove(items) — перерисовать связи; o.onEnd(items) — запомнить координаты; o.onView(V) — показать масштаб. takeSuppress() — клик после перетаскивания не считается. */
+  function viewport(canvas,view,o){ o=o||{}; const KMIN=o.kmin||.3, KMAX=o.kmax||2, PAD=o.pad==null?24:o.pad;
+    const V={k:1,tx:0,ty:0}; let drag=null, suppress=false;
+    const cw=()=>canvas.clientWidth||932, chh=()=>canvas.clientHeight||698;
+    function applyView(){ view.style.transform='translate('+V.tx+'px,'+V.ty+'px) scale('+V.k+')'; if(o.onView) o.onView(V); }
+    function clampPan(){ const b=o.box(), W=cw(), H=chh(), k=V.k;
+      const lo=Math.min(W-PAD-k*b.x1, PAD-k*b.x0), hi=Math.max(W-PAD-k*b.x1, PAD-k*b.x0); V.tx=Math.max(lo,Math.min(hi,V.tx));
+      const lo2=Math.min(H-PAD-k*b.y1, PAD-k*b.y0), hi2=Math.max(H-PAD-k*b.y1, PAD-k*b.y0); V.ty=Math.max(lo2,Math.min(hi2,V.ty)); }
+    function fit(bx){ const b=bx||o.box(), W=cw(), H=chh(), bw=b.x1-b.x0, bh=b.y1-b.y0;
+      V.k=Math.max(KMIN,Math.min(1,(W-2*PAD)/bw,(H-2*PAD)/bh)); V.tx=(W-V.k*bw)/2-V.k*b.x0; V.ty=(H-V.k*bh)/2-V.k*b.y0; clampPan(); applyView(); }
+    function zoomAt(cx,cy,f){ const k2=Math.max(KMIN,Math.min(KMAX,V.k*f)); const r=k2/V.k; V.tx=cx-(cx-V.tx)*r; V.ty=cy-(cy-V.ty)*r; V.k=k2; clampPan(); applyView(); }
+    const frameScale=()=>{ const r=canvas.getBoundingClientRect(); return (r.width/canvas.offsetWidth)||1; };
+    const local=e=>{ const r=canvas.getBoundingClientRect(), s=frameScale(); return [(e.clientX-r.left)/s,(e.clientY-r.top)/s]; };
+    const isBlank=t=>t===canvas||t===view||(o.blank?o.blank():[]).includes(t);
+    canvas.addEventListener('wheel',e=>{ e.preventDefault(); const [cx,cy]=local(e);
+      if(e.ctrlKey||e.metaKey) zoomAt(cx,cy,Math.exp(-e.deltaY*0.01)); else { V.tx-=e.deltaX; V.ty-=e.deltaY; clampPan(); applyView(); } },{passive:false});
+    /* перетаскивание: карточка (со своей стопкой) или пустое место — панорама */
+    canvas.addEventListener('pointerdown',e=>{ if(e.button!==0||e.target.closest(o.ignore||'[data-zoom],[data-note]')) return; const s=frameScale(); const items=o.items?o.items(e.target):null;
+      if(items){ if(!items.length||!items[0].r) return; drag={kind:'card',items:items.map(it=>({el:it.el,r:it.r,key:it.key,x0:it.r.x,y0:it.r.y})),sx:e.clientX,sy:e.clientY,s:s,moved:false}; }
+      else if(isBlank(e.target)){ drag={kind:'pan',sx:e.clientX,sy:e.clientY,tx0:V.tx,ty0:V.ty,s:s,moved:false}; canvas.classList.add('panning'); }
+      else return;
+      drag.pid=e.pointerId; });
+    /* захват указателя — только когда жест стал перетаскиванием: при захвате с pointerdown клик уходит полотну, а не карточке */
+    canvas.addEventListener('pointermove',e=>{ if(!drag) return; const dx=(e.clientX-drag.sx)/drag.s, dy=(e.clientY-drag.sy)/drag.s; if(!drag.moved&&Math.hypot(dx,dy)<3) return; if(!drag.moved){ drag.moved=true; try{ canvas.setPointerCapture(drag.pid); }catch(x){} }
+      if(drag.kind==='pan'){ V.tx=drag.tx0+dx; V.ty=drag.ty0+dy; clampPan(); applyView(); return; }
+      drag.items.forEach(it=>{ it.r.x=it.x0+dx/V.k; it.r.y=it.y0+dy/V.k; it.el.style.left=it.r.x+'px'; it.el.style.top=it.r.y+'px'; }); if(o.onMove) o.onMove(drag.items); });
+    const endDrag=()=>{ if(!drag) return; if(drag.kind==='card'&&drag.moved){ if(o.onEnd) o.onEnd(drag.items); suppress=true; clampPan(); applyView(); }
+      if(drag.kind==='pan'&&drag.moved) suppress=true; canvas.classList.remove('panning'); drag=null; };
+    canvas.addEventListener('pointerup',endDrag); canvas.addEventListener('pointercancel',endDrag);
+    return {V,applyView,clampPan,fit,zoomAt,cw,chh,takeSuppress:()=>{ const s=suppress; suppress=false; return s; }};
+  }
+  return {esc,plural,layer,cubic,midOf,fwdPath,backPath,sidePath,retPath,viewport};
+})();
+
 /* Данные примера: «простой харнесс с подключением двух моделей». Отрисовка ниже читает только этот объект — число блоков, подблоков, работ и задач нигде в коде не зашито. */
 const PROJECT={
   title:'Простой харнесс с двумя моделями',
@@ -92,8 +158,7 @@ const PROJECT={
   const GRAPH={block:1,sub:1};
   const CW=172, GW=130, GGAP=24, RM=44;
   const TST={done:['готово','ok'],run:['в работе','acc'],back:['вернулась в план','bad'],plan:['в плане','']};
-  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-  const plural=(n,a,b,c)=>{ const m=n%10,h=n%100; return n+' '+(h>=11&&h<=14?c:m===1?a:m>=2&&m<=4?b:c); };
+  const esc=OMCORE.esc, plural=OMCORE.plural, layer=OMCORE.layer;
   const desc=id=>{ const out=[]; (KIDS[id]||[]).forEach(k=>{ out.push(k); out.push.apply(out,desc(k)); }); return out; };
   const worksOf=id=>desc(id).filter(k=>N[k].k==='work');
   const tasksOf=id=>desc(id).filter(k=>N[k].k==='task');
@@ -103,27 +168,11 @@ const PROJECT={
   const kindName={block:'блок',sub:'подблок',work:'работа',task:'задача',req:'требование',idea:'идея',text:'концепция'};
   const stageOfKind={block:2,sub:5,work:5,task:6};
 
-  /* слойка по связям: самый длинный путь по прямым связям; узел, в который ведут только отказы, сидит в колонке своего источника, ниже него */
-  function layer(ids,edges){
-    const set=new Set(ids), out={}, inc={}, L={}, state={}, back=new Set();
-    ids.forEach(id=>{ out[id]=[]; inc[id]=[]; });
-    const idx={}; ids.forEach((id,i)=>idx[id]=i);
-    const E=edges.filter(e=>set.has(e.s)&&set.has(e.t)&&e.s!==e.t);
-    /* назад — связь к узлу, который в данных стоит раньше (порядок данных = путь по продукту); остаток циклов ловит обход */
-    E.forEach(e=>{ if(idx[e.t]<idx[e.s]) back.add(e); else out[e.s].push(e); });
-    function dfs(u){ state[u]=1; out[u].forEach(e=>{ if(state[e.t]===1) back.add(e); else if(!state[e.t]) dfs(e.t); }); state[u]=2; }
-    ids.forEach(id=>{ if(!state[id]) dfs(id); });
-    const fwd=E.filter(e=>!back.has(e)); fwd.forEach(e=>inc[e.t].push(e));
-    const onlyFail={};
-    function lay(id){ if(L[id]!=null) return L[id]; L[id]=0; const es=inc[id]; if(!es.length) return 0; onlyFail[id]=es.every(e=>e.k==='fail'); let m=0; es.forEach(e=>{ m=Math.max(m,lay(e.s)+(onlyFail[id]?0:1)); }); L[id]=m; return m; }
-    ids.forEach(lay);
-    return {L,back,inc,onlyFail};
-  }
 
   function mount(app,o){
     o=o||{}; const live=!!o.live; const uid='m'+Math.random().toString(36).slice(2,7);
     const S={stage:o.stage==null?LAST:o.stage,path:o.path||[],sel:o.sel||null,noWorks:!!o.noWorks,newKind:o.newKind||''};
-    const V={k:1,tx:0,ty:0}, POS={};   /* вид полотна (масштаб, сдвиг) и перетащенные карточки — на сеанс, по уровням */
+    const POS={};   /* перетащенные карточки — на сеанс, по уровням; вид полотна (масштаб, сдвиг) — в VP ниже */
     app.innerHTML='<aside class="side" data-rail="plan"></aside><section class="main"><div class="top"><b>'+(o.app?'План · карта':'План · карта проекта')+'</b><span class="st">'+(o.app?'<i></i>':'')+'пример · '+esc(P.title)+'</span><div class="om-crumbs" data-crumbs></div>'+
       '<div class="r"><span class="mono" style="font-size:10px" data-stagen></span>'+(live?'<span class="btn sm ghost" data-passport>ⓘ Паспорт</span>':'')+'</div></div>'+
       '<div class="body" style="height:100%"><div class="om-wrap"><div class="om-left"><div class="om-canvas" data-canvas><div class="om-view" data-view><svg class="om-under" data-under></svg><svg class="om-edges" data-edges><defs><marker id="'+uid+'-ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#585860"/></marker><marker id="'+uid+'-ah-on" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#c27a34"/></marker><marker id="'+uid+'-ah-bad" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#a3304b"/></marker></defs></svg><div data-nodes></div></div><div class="om-note" data-note></div>'+(live?'<div class="om-zoom" data-zoom><span data-z="out" title="Уменьшить">−</span><b data-zpct>100 %</b><span data-z="in" title="Увеличить">+</span><span class="fit" data-z="fit" title="Вписать карту">вписать</span></div>':'')+'</div>'+
@@ -183,15 +232,8 @@ const PROJECT={
     function ghostHTML(g,i){ const n=N[g.id], gaps=S.stage>=5?(GAPS[g.id]||[]):[]; const lbl=g.inc?(g.e.k==='fail'?'← при отказе от':'← пришло от'):(g.e.k==='fail'?'→ при отказе':'→ уходит в');
       return '<div class="om-ghost" data-ghost="'+i+'" data-gid="'+g.id+'">'+(gaps.length?'<span class="om-mark closed">✓</span>':'')+'<small>'+lbl+'</small><b>'+esc(n.t)+'</b><em>'+esc(g.e.a)+'</em></div>'; }
 
-    /* ---- геометрия ---- */
-    const cubic=(a,b,c,d,e,f,g,h)=>'M'+a+' '+b+' C'+c+' '+d+','+e+' '+f+','+g+' '+h;
-    const midOf=(a,b,c,d,e,f,g,h)=>[.125*a+.375*c+.375*e+.125*g,.125*b+.375*d+.375*f+.125*h];
-    function fwdPath(a,b){ const sx=a.x+a.w,sy=a.y+a.h/2,tx=b.x,ty=b.y+b.h/2; const o=Math.max(40,Math.min(110,Math.abs(tx-sx)/2)); return {d:cubic(sx,sy,sx+o,sy,tx-o,ty,tx,ty),m:midOf(sx,sy,sx+o,sy,tx-o,ty,tx,ty)}; }
-    function backPath(a,b){ const sx=a.x+a.w/2,tx=b.x+b.w/2;
-      if(a.y>b.y+b.h){ const sy=a.y+a.h/2, tb=b.y+b.h; return {d:cubic(a.x,sy,a.x-70,sy,tx,tb+70,tx,tb),m:midOf(a.x,sy,a.x-70,sy,tx,tb+70,tx,tb)}; }
-      let lane=Math.min(a.y,b.y)-34; if(lane<14) lane=14; return {d:cubic(sx,a.y,sx,lane,tx,lane,tx,b.y),m:midOf(sx,a.y,sx,lane,tx,lane,tx,b.y)}; }
-    function sidePath(a,b){ const sy=a.y+a.h/2,ty=b.y+b.h/2,ax=a.x+a.w,bx=b.x+b.w; return {d:cubic(ax,sy,ax+40,sy,bx+40,ty,bx,ty),m:midOf(ax,sy,ax+40,sy,bx+40,ty,bx,ty)}; }
-    function retPath(a,b){ const sy=a.y+a.h/2,ty=b.y+b.h/2; return {d:cubic(a.x,sy,a.x-36,sy,b.x-36,ty,b.x,ty),m:midOf(a.x,sy,a.x-36,sy,b.x-36,ty,b.x,ty)}; }
+    /* ---- геометрия — общая, OMCORE ---- */
+    const fwdPath=OMCORE.fwdPath, backPath=OMCORE.backPath, sidePath=OMCORE.sidePath, retPath=OMCORE.retPath;
 
     /* ---- раскладка и отрисовка ---- */
     let G={rects:{},edges:[],ghosts:[],C:null};
@@ -311,7 +353,7 @@ const PROJECT={
       if(JSON.stringify(p)!==JSON.stringify(S.path)){ S.path=p; S.sel=id; render(); } else select(id); }
     function setStage(t){ S.stage=Math.max(0,Math.min(LAST,t)); if(S.stage<5) S.path=[]; if(S.sel&&N[S.sel]&&!visibleKind(N[S.sel].k)&&(S.stage>=2)) S.sel=null; if(S.stage<2||(S.stage>=2&&S.sel&&!N[S.sel])) S.sel=null; if(S.stage>=2&&S.sel&&P.concept.nodes.some(n=>n.id===S.sel)) S.sel=null; render(); }
     if(live){
-      app.addEventListener('click',e=>{ const t=e.target; if(t.closest('aside.side')) return; if(suppressClick){ suppressClick=false; return; }
+      app.addEventListener('click',e=>{ const t=e.target; if(t.closest('aside.side')) return; if(VP&&VP.takeSuppress()) return;
         const lv=t.closest('[data-go-level]'); if(lv){ goLevel(+lv.dataset.goLevel); return; }
         const st=t.closest('[data-stage]'); if(st&&!t.closest('[data-range]')){ setStage(+st.dataset.stage); return; }
         if(t.closest('[data-close]')){ S.sel=null; highlight(); renderSide(); return; }
@@ -326,44 +368,23 @@ const PROJECT={
       if(window.HX&&HX.passport) HX.passport({title:'План · карта проекта',where:'Проект › План › карта',what:'как любой проект формируется по восьми стадиям: идея → концепция → схема блоков → поведение и фичи → подблоки, пробелы и работы → задачи → исполнение; по карте можно походить: блок → подблоки → работы → задачи',why:'видеть, как всё строится, что из чего выходит и куда идёт — не читая документов стадий',when:'карта растёт с каждой принятой стадией; таймлайн внизу показывает её на любой стадии',expect:'та же отрисовка работает на любом проекте — число блоков, подблоков, работ и задач берётся из данных, слойка строится по связям',risk:'большой проект — много блоков на одном уровне; лечится раскрытием по уровням и горизонтом',ok:'на карте видно, что реализовано, что вернулось в план и почему',fail:'человек не находит, где его пробел или вернувшаяся задача'});
     }
     function levelKey(){ return S.stage<2?'s'+S.stage:S.path.join('>'); }
-    /* ---- вид полотна: масштаб и панорама (чистый JS, без библиотек) ---- */
-    const KMIN=.3, KMAX=2, PAD=24;
+    /* ---- вид полотна: масштаб · панорама · перетаскивание — общий механизм OMCORE.viewport (его же использует карта пути, скетч 39) ---- */
     function cw(){ return canvas.clientWidth||932; } function chh(){ return canvas.clientHeight||698; }
     function contentBox(){ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9, any=false; const add=r=>{ if(!r) return; any=true; x0=Math.min(x0,r.x); y0=Math.min(y0,r.y); x1=Math.max(x1,r.x+r.w); y1=Math.max(y1,r.y+r.h); };
       Object.keys(G.rects).forEach(id=>add(G.rects[id])); (G.C&&G.C.ghosts||[]).forEach(g=>add(g.r));
       if(!any){ const ch=layerEl.querySelector('.om-chat,.om-card'); if(ch) add({x:ch.offsetLeft,y:ch.offsetTop,w:ch.offsetWidth,h:ch.offsetHeight}); const c2=layerEl.querySelector('.om-card.idea'); if(c2) add({x:c2.offsetLeft,y:c2.offsetTop,w:c2.offsetWidth,h:c2.offsetHeight}); }
       if(!any) return {x0:0,y0:0,x1:cw(),y1:chh()}; return {x0:x0-16,y0:y0-40,x1:x1+16,y1:y1+16}; }
-    function applyView(){ view.style.transform='translate('+V.tx+'px,'+V.ty+'px) scale('+V.k+')'; const z=app.querySelector('[data-zpct]'); if(z) z.textContent=Math.round(V.k*100)+' %'; }
-    function clampPan(){ const b=contentBox(), W=cw(), H=chh(), k=V.k;
-      const lo=Math.min(W-PAD-k*b.x1, PAD-k*b.x0), hi=Math.max(W-PAD-k*b.x1, PAD-k*b.x0); V.tx=Math.max(lo,Math.min(hi,V.tx));
-      const lo2=Math.min(H-PAD-k*b.y1, PAD-k*b.y0), hi2=Math.max(H-PAD-k*b.y1, PAD-k*b.y0); V.ty=Math.max(lo2,Math.min(hi2,V.ty)); }
-    function fitView(){ if(!live) return; const b=contentBox(), W=cw(), H=chh(), bw=b.x1-b.x0, bh=b.y1-b.y0;
-      V.k=Math.max(KMIN,Math.min(1,(W-2*PAD)/bw,(H-2*PAD)/bh)); V.tx=(W-V.k*bw)/2-V.k*b.x0; V.ty=(H-V.k*bh)/2-V.k*b.y0; clampPan(); applyView(); }
-    function zoomAt(cx,cy,f){ const k2=Math.max(KMIN,Math.min(KMAX,V.k*f)); const r=k2/V.k; V.tx=cx-(cx-V.tx)*r; V.ty=cy-(cy-V.ty)*r; V.k=k2; clampPan(); applyView(); }
-    const frameScale=()=>{ const r=canvas.getBoundingClientRect(); return (r.width/canvas.offsetWidth)||1; };
-    const local=e=>{ const r=canvas.getBoundingClientRect(), s=frameScale(); return [(e.clientX-r.left)/s,(e.clientY-r.top)/s]; };
-    let suppressClick=false;
+    const VP=live?OMCORE.viewport(canvas,view,{box:contentBox,blank:()=>[canvas,view,svg,under,layerEl],
+      /* что тащим: призрак — один; карточка — вместе со стопкой работ/задач под ней */
+      items:t=>{ const el=t.closest('[data-id],[data-ghost]'); if(!el||!el.closest('[data-nodes]')) return null; const C=G.C;
+        if(el.dataset.ghost!=null){ const g=C.ghosts[+el.dataset.ghost]; return [{el:el,r:g.r,key:'ghost:'+el.dataset.ghost}]; }
+        const id=el.dataset.id, items=[{el:el,r:G.rects[id],key:id}]; (C.stack[id]||[]).forEach(st=>{ const ch=layerEl.querySelector('[data-id="'+st.id+'"]'); if(ch&&G.rects[st.id]) items.push({el:ch,r:G.rects[st.id],key:st.id}); }); return items; },
+      onMove:()=>{ drawEdges(); highlight(); },
+      onEnd:items=>{ const key=levelKey(); POS[key]=POS[key]||{}; items.forEach(it=>{ POS[key][it.key]={x:it.r.x,y:it.r.y}; }); },
+      onView:V=>{ const z=app.querySelector('[data-zpct]'); if(z) z.textContent=Math.round(V.k*100)+' %'; }}):null;
+    function fitView(){ if(VP) VP.fit(); }
     if(live){
-      canvas.addEventListener('wheel',e=>{ e.preventDefault(); const [cx,cy]=local(e);
-        if(e.ctrlKey||e.metaKey) zoomAt(cx,cy,Math.exp(-e.deltaY*0.01)); else { V.tx-=e.deltaX; V.ty-=e.deltaY; clampPan(); applyView(); } },{passive:false});
-      app.addEventListener('click',e=>{ const z=e.target.closest('[data-z]'); if(!z) return; const W=cw(),H=chh(); if(z.dataset.z==='fit') fitView(); else zoomAt(W/2,H/2,z.dataset.z==='in'?1.25:.8); });
-      /* перетаскивание: карточка (с её стопкой работ/задач) или пустое место — панорама */
-      let drag=null;
-      canvas.addEventListener('pointerdown',e=>{ if(e.button!==0||e.target.closest('[data-zoom],[data-note]')) return; const s=frameScale(); const el=e.target.closest('[data-id],[data-ghost]');
-        if(el&&el.closest('[data-nodes]')){ const C=G.C; let items=[];
-          if(el.dataset.ghost!=null){ const g=C.ghosts[+el.dataset.ghost]; items=[{el:el,r:g.r,key:'ghost:'+el.dataset.ghost}]; }
-          else { const id=el.dataset.id; items=[{el:el,r:G.rects[id],key:id}]; (C.stack[id]||[]).forEach(st=>{ const ch=layerEl.querySelector('[data-id="'+st.id+'"]'); if(ch&&G.rects[st.id]) items.push({el:ch,r:G.rects[st.id],key:st.id}); }); }
-          if(!items[0].r) return; drag={kind:'card',items:items.map(it=>({el:it.el,r:it.r,key:it.key,x0:it.r.x,y0:it.r.y})),sx:e.clientX,sy:e.clientY,s:s,moved:false}; }
-        else if(e.target===canvas||e.target===view||e.target===svg||e.target===under||e.target===layerEl){ drag={kind:'pan',sx:e.clientX,sy:e.clientY,tx0:V.tx,ty0:V.ty,s:s,moved:false}; canvas.classList.add('panning'); }
-        else return;
-        drag.pid=e.pointerId; });
-      /* захват указателя — только когда жест стал перетаскиванием: при захвате с pointerdown клик уходит полотну, а не карточке */
-      canvas.addEventListener('pointermove',e=>{ if(!drag) return; const dx=(e.clientX-drag.sx)/drag.s, dy=(e.clientY-drag.sy)/drag.s; if(!drag.moved&&Math.hypot(dx,dy)<3) return; if(!drag.moved){ drag.moved=true; try{ canvas.setPointerCapture(drag.pid); }catch(x){} }
-        if(drag.kind==='pan'){ V.tx=drag.tx0+dx; V.ty=drag.ty0+dy; clampPan(); applyView(); return; }
-        drag.items.forEach(it=>{ it.r.x=it.x0+dx/V.k; it.r.y=it.y0+dy/V.k; it.el.style.left=it.r.x+'px'; it.el.style.top=it.r.y+'px'; }); drawEdges(); highlight(); });
-      const endDrag=e=>{ if(!drag) return; if(drag.kind==='card'&&drag.moved){ const key=levelKey(); POS[key]=POS[key]||{}; drag.items.forEach(it=>{ POS[key][it.key]={x:it.r.x,y:it.r.y}; }); suppressClick=true; clampPan(); applyView(); }
-        if(drag.kind==='pan'&&drag.moved) suppressClick=true; canvas.classList.remove('panning'); drag=null; };
-      canvas.addEventListener('pointerup',endDrag); canvas.addEventListener('pointercancel',endDrag);
+      app.addEventListener('click',e=>{ const z=e.target.closest('[data-z]'); if(!z) return; const W=cw(),H=chh(); if(z.dataset.z==='fit') VP.fit(); else VP.zoomAt(W/2,H/2,z.dataset.z==='in'?1.25:.8); });
       /* размер полотна меняется (прототип растягивает окно) — перерисовать и вписать */
       if(window.ResizeObserver){ let w0=0,h0=0,raf=0; new ResizeObserver(()=>{ const w=canvas.clientWidth,h=canvas.clientHeight; if(w===w0&&h===h0) return; w0=w; h0=h; cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>render()); }).observe(canvas); }
     }

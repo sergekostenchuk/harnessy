@@ -1,0 +1,106 @@
+/* ── Путь · карта (скетч 39) · на движке карты 26 (om-map.css + OMCORE из om-map.js) · дизайн-код 00 · раздел path-spec ──
+   Карта пути: узел «Вход» + восемь стадий из кода → стадия раскрывается в рамку с внутренними узлами (вход → выход сверху вниз) →
+   клик по узлу подсвечивает его связи и открывает карточку поверх справа. Плашки честности — .tag из path.css. */
+.pm-wrap{position:relative;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:10px;height:100%;min-height:0}
+.pm-wrap .om-canvas{min-height:0}
+/* панель управления над картой: раскрыть / свернуть / сбросить · только точки владельца · весь поток / развилки */
+.pm-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.pm-bar .btn{cursor:pointer}.pm-bar .sep{width:1px;height:18px;background:var(--line2);margin:0 4px}
+.pm-bar .tg{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);cursor:pointer;user-select:none;-webkit-user-select:none}.pm-bar .tg.on{color:var(--ink)}
+.pm-bar .seg span{cursor:pointer}
+.pm-bar .ex{margin-left:auto;display:flex;gap:8px;align-items:center;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+/* легенда под картой: статусы · бейдж владельца · виды стрелок */
+.pm-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);padding:0 2px}
+.pm-legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.pm-legend i{display:inline-block;width:22px;height:0;border-top:1.5px solid #6a6a74}.pm-legend i.cond{border-top-style:dotted;border-top-width:2px}.pm-legend i.ret{border-top-style:dashed;border-top-color:#a3304b}.pm-legend i.on{border-top-color:var(--accent);border-top-width:2px}
+.pm-legend .tag{height:16px;font-size:8px;padding:0 5px}
+.pm-legend .ownb{display:inline-flex;align-items:center;gap:4px;height:15px;padding:0 5px;border-radius:5px;font:500 8px var(--mono);color:var(--accent);background:var(--accent-soft)}.pm-legend .ownb::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
+/* карточка стадии (свёрнута): статус · кодовое имя мелко · имя · вход → действие → выход · точки владельца · ждёт вас · плашка честности · раскрыть */
+.pm-stage{position:absolute;width:200px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:8px 11px 8px;box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:pointer;transition:border-color .15s,opacity .2s,transform .15s}
+.pm-stage:hover{transform:translateY(-2px);border-color:#4a4a52}
+.pm-stage .meta{display:flex;align-items:center;gap:6px;margin-bottom:4px;min-height:18px}
+.pm-stage .meta small{font:9px var(--mono);letter-spacing:.04em;color:var(--ink3);margin-left:auto;white-space:nowrap}
+.pm-stage .meta .pill{height:17px;padding:0 6px;font-size:8.5px;white-space:nowrap}
+.pm-stage .n{position:absolute;top:-8px;right:10px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#1a0e04;font:500 10px/18px var(--mono);text-align:center;padding:0 5px;box-shadow:0 0 0 3px var(--panel)}
+.pm-stage .t{font-weight:500;font-size:13px;line-height:1.25;margin-bottom:5px}
+.pm-stage .io{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font:10px var(--mono);line-height:1.45;color:var(--ink2)}
+.pm-stage .io span{color:var(--ink3);letter-spacing:.04em;text-transform:uppercase;font-size:9px;padding-top:1px}.pm-stage .io b{font-weight:400;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pm-stage .io b.act{color:var(--ink)}
+.pm-stage .ft{display:flex;align-items:center;gap:6px;margin-top:7px;padding-top:6px;border-top:1px dashed var(--line2);font:10px var(--mono);color:var(--ink3);flex-wrap:wrap}
+.pm-stage .ft .own{color:var(--accent);white-space:nowrap}.pm-stage .ft .wait{color:var(--ink2);white-space:nowrap}.pm-stage .ft .tag{height:16px;font-size:8px;padding:0 5px}
+.pm-stage .ft .open{margin-left:auto;color:var(--ink2);cursor:pointer;white-space:nowrap}.pm-stage .ft .open:hover{color:var(--accent)}
+.pm-stage.c{border-color:var(--accent)}.pm-stage.d .t{color:var(--ink2)}.pm-stage.ahead{opacity:.8}.pm-stage.ahead .t{color:var(--ink2)}
+.pm-stage.in{width:132px;border-style:dashed;background:rgba(20,20,22,.7)}.pm-stage.in .t{font-size:12px}
+.pm-stage.blk{border-color:rgba(224,178,60,.6)}.pm-stage.blk .meta .pill{color:var(--warn)}
+.pm-stage.err{border-color:rgba(163,48,75,.7)}
+.pm-stage.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),0 10px 30px rgba(0,0,0,.35);opacity:1}
+.pm-stage.near{border-color:rgba(194,122,52,.6);opacity:1}.pm-stage.dim{opacity:.28}
+.pm-stage.muted{opacity:.3}
+.pm-stage.skel{pointer-events:none}.pm-stage.skel .t,.pm-stage.skel .io b,.pm-stage.skel .ft{color:transparent;background:var(--line);border-radius:4px}.pm-stage.skel .ft{border-top:0}
+.pm-stage.empty{border-style:dashed;display:grid;place-items:center;color:var(--ink3);font-size:12px;min-height:120px;text-align:center;cursor:default;padding:12px}
+/* стадия раскрыта в рамку: заголовок · внутренняя карта узлов сверху вниз · подпись «вход сверху → выход снизу» */
+.pm-frame{position:absolute;border:1px solid rgba(194,122,52,.45);border-radius:14px;background:rgba(16,16,18,.72);transition:border-color .15s,opacity .2s}
+.pm-frame .hd{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border-bottom:1px dashed rgba(194,122,52,.35);cursor:pointer;white-space:nowrap;overflow:hidden}
+.pm-frame .hd i{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line2);display:grid;place-items:center;font:600 9.5px var(--mono);color:var(--ink3);font-style:normal;flex:none}
+.pm-frame.c .hd i{background:var(--accent);border-color:var(--accent);color:#1a1a1a}.pm-frame.d .hd i{background:var(--ok);border-color:var(--ok);color:#fff}
+.pm-frame .hd b{font-weight:500;font-size:13px}.pm-frame .hd small{font:9px var(--mono);letter-spacing:.04em;color:var(--ink3)}
+.pm-frame .hd .pill{height:17px;padding:0 6px;font-size:8.5px}.pm-frame .hd .tag{height:16px;font-size:8px;padding:0 5px}
+.pm-frame .hd .sp{flex:1}.pm-frame .hd .x{color:var(--ink3);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;cursor:pointer}.pm-frame .hd .x:hover{color:var(--accent)}
+.pm-frame .lbl{position:absolute;left:12px;bottom:7px;font:9px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.pm-frame.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}.pm-frame.near{border-color:rgba(194,122,52,.7)}.pm-frame.dim{opacity:.4}
+.pm-frame.ahead{border-color:rgba(100,100,110,.55)}.pm-frame.ahead .hd{border-bottom-color:rgba(100,100,110,.4)}
+.pm-frame.in{border-style:dashed}
+/* узел внутренней карты: плашка статуса · бейдж «владелец» · имя · вход → выход; подробности — в карточке поверх */
+.pm-node{position:absolute;width:160px;border:1px solid var(--line2);border-radius:10px;background:var(--raised);padding:6px 9px 7px;cursor:pointer;font-size:11px;color:var(--ink2);box-shadow:0 6px 18px rgba(0,0,0,.3);transition:border-color .15s,opacity .2s,transform .15s}
+.pm-node:hover{transform:translateY(-1px);border-color:#4a4a52}
+.pm-node .meta{display:flex;align-items:center;gap:4px;margin-bottom:3px;min-height:16px}
+.pm-node .meta .tag{height:15px;font-size:7.5px;padding:0 4px;letter-spacing:.04em}.pm-node .meta .pill{height:15px;padding:0 5px;font-size:7.5px;white-space:nowrap}
+.pm-node .own{margin-left:auto;display:inline-flex;align-items:center;gap:4px;height:15px;padding:0 5px;border-radius:5px;font:500 8px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);white-space:nowrap}
+.pm-node .own::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.pm-node .t{font-weight:500;font-size:11.5px;line-height:1.25;color:var(--ink);margin-bottom:3px}
+.pm-node .io{font:9.5px var(--mono);color:var(--ink3);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pm-node .io b{color:var(--ink2);font-weight:500}.pm-node .io i{color:var(--accent);font-style:normal;margin:0 3px}
+.pm-node.owner{border-left:3px solid var(--accent)}
+.pm-node.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),0 6px 18px rgba(0,0,0,.3)}.pm-node.near{border-color:rgba(194,122,52,.6)}.pm-node.dim{opacity:.28}
+.pm-node.muted{opacity:.3}.pm-node.muted.on,.pm-node.muted.near{opacity:1}
+.pm-node.ex{border-style:dashed}
+.pm-node.skel .t,.pm-node.skel .io{color:transparent;background:var(--line);border-radius:4px}
+/* связи: стадия → стадия (подпись — артефакт); внутри стадии: успех (сплошная) · условие (точки) · возврат (пунктир бордо); режим «развилки» приглушает успех */
+.pm .om-edges path.stg{stroke:#6a6a74;stroke-width:1.8}
+.pm .om-edges path.cond{stroke-dasharray:2 4}
+.pm .om-edges path.ret{stroke:#8a4452;stroke-dasharray:5 4}
+.pm .om-edges path.faint{opacity:.12}
+.pm .om-lbl.ret{color:#c97a8c;border-color:rgba(163,48,75,.5);border-style:dashed}.pm .om-lbl.cond{border-style:dotted}.pm .om-lbl.stg{color:var(--ink);background:var(--raised);white-space:normal;max-width:104px;text-align:center;line-height:1.3;padding:2px 6px}
+.pm .om-lbl{white-space:normal;max-width:132px;text-align:center;line-height:1.3;padding:2px 6px}
+.pm .om-lbl.faint{opacity:.12}
+/* панель-карточка поверх узла: справа ~520 px, карту не перекрывает; закрывается крестиком и esc; на телефоне — во весь экран */
+.pm-card{position:absolute;top:0;right:0;bottom:0;width:520px;max-width:100%;border:1px solid var(--line2);border-left-color:rgba(194,122,52,.45);border-radius:14px;background:var(--panel);box-shadow:-24px 0 60px rgba(0,0,0,.55);display:flex;flex-direction:column;z-index:12;transform:translateX(16px);opacity:0;pointer-events:none;transition:transform .22s,opacity .22s}
+.pm-card.on{transform:none;opacity:1;pointer-events:auto}
+.pm-card .hd{padding:14px 44px 10px 18px;border-bottom:1px solid var(--line);position:relative;flex:none}
+.pm-card .hd .from{margin-bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pm-card .hd h3{margin:0 0 6px;font-size:16px;font-weight:500;line-height:1.25}
+.pm-card .io2{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font:10px var(--mono);color:var(--ink3)}.pm-card .io2 b{color:var(--ink2);font-weight:500}.pm-card .io2 i{color:var(--accent);font-style:normal}
+.pm-card .x{position:absolute;right:10px;top:10px;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--ink3);cursor:pointer;font-size:16px}.pm-card .x:hover{background:var(--raised);color:var(--ink)}
+.pm-card .bd{padding:12px 18px 14px;overflow:auto;flex:1;min-height:0;font-size:12.5px;color:var(--ink2);scrollbar-width:thin}
+.pm-card .bd .csub{margin-bottom:12px}.pm-card .bd .blk+.blk{margin-top:10px}.pm-card .bd .lst{margin-bottom:10px}.pm-card .bd .blk .lst2{display:flex;flex-direction:column}
+.pm-card .ft{padding:10px 18px;border-top:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap;flex:none}.pm-card .ft .btn{cursor:pointer;text-decoration:none}
+.pm-card .two{grid-template-columns:1fr 1fr}
+.pm-card .pt-unk,.pm-card .pt-cond,.pm-card .pt-q{grid-template-columns:1fr auto}.pm-card .pt-unk .when,.pm-card .pt-cond .when,.pm-card .pt-cond .how,.pm-card .pt-q .pre-n{display:none}
+.pm-card .pt-axis{grid-template-columns:26px 1fr auto}.pm-card .pt-axis .cov,.pm-card .pt-axis .chev,.pm-card .pt-axis .qs{display:none}
+.pm-card .pt-depth{grid-template-columns:26px 1fr auto}.pm-card .pt-depth .ticks,.pm-card .pt-depth .amt{display:none}
+.pm-card .pt-sec{grid-template-columns:26px 1fr}.pm-card .pt-sec .kinds,.pm-card .pt-sec .iss,.pm-card .pt-sec .chev{display:none}
+.pm-card .pt-exec{grid-template-columns:1fr 70px auto}
+.pm-card.loading .bd{color:var(--ink3)}.pm-card.err .hd{border-bottom-color:rgba(163,48,75,.6)}.pm-card.empty .bd{display:grid;place-items:center;color:var(--ink3)}
+/* статичные образцы в дизайн-коде */
+.pm-static .pm-stage,.pm-static .pm-node,.pm-static .pm-frame,.pm-static .om-lbl{position:relative;left:auto;top:auto;right:auto;bottom:auto;transform:none}
+.pm-static .pm-frame{width:380px;height:150px;flex:none}.pm-static .pm-card{position:relative;width:360px;height:320px;transform:none;opacity:1;pointer-events:auto;box-shadow:none;flex:none}
+.pm-static svg.pm-arr{width:150px;height:34px;overflow:visible;flex:none}.pm-static svg.pm-arr path{fill:none;stroke:#585860;stroke-width:1.5}
+.pm-static svg.pm-arr path.stg{stroke:#6a6a74;stroke-width:1.8}.pm-static svg.pm-arr path.cond{stroke-dasharray:2 4}.pm-static svg.pm-arr path.ret{stroke:#8a4452;stroke-dasharray:5 4}.pm-static svg.pm-arr path.on{stroke:var(--accent);stroke-width:2}
+/* телефон: карта во всю ширину, боковая панель спрятана (path.css), карточка поверх — во весь экран */
+@media (max-width:760px){
+  .pt-page.pm .pt-body{display:flex;flex-direction:column;height:auto}
+  .pt-page.pm .pm-wrap{height:auto}.pt-page.pm .om-canvas{height:68vh;min-height:420px}
+  .pt-page.pm .pm-card{position:fixed;inset:0;width:auto;border-radius:0;max-width:none}
+  .pt-page.pm .pm-bar .ex{margin-left:0;width:100%}
+  .pt-page.pm .pm-legend{gap:10px}
+}
