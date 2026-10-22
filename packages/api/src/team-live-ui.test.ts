@@ -7,6 +7,7 @@ import {dom} from './ui-dom-test-helpers.ts';
 const read=(path:string)=>readFileSync(new URL('../../../'+path,import.meta.url),'utf8');
 const canvas=read('ui/sketches/disarto/team-canvas.js');
 const live=read('ui/deploy/team-live.js');
+const legacy=read('ui/deploy/live.js');
 const proto=read('ui/deploy/proto.js');
 const part=(source:string,start:string,end:string)=>source.slice(source.indexOf(start),source.indexOf(end,source.indexOf(start)));
 const escape=(value:unknown)=>String(value??'').replace(/[&<>"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char]!));
@@ -20,7 +21,7 @@ const record=(seq=1,from='worker',to=['orch'])=>({seq,ts:'2026-10-23T12:00:00.00
 const pane=(id:string,kind:string|null,chat:string|null)=>({id,label:id==='orch'?'Оркестратор':id==='worker'?'Воркер':'Роль',role:kind||'worker',kind,vendor:'claude',model:id==='worker'?'worker-model':'orch-model',mode:'read',status:'idle',busy:id==='worker',pendingApprovals:0,pending:0,waiting:null,turn:null,chat,instructionPath:id==='worker'?'.harness/roles/worker.md':null,queue:[],context:{used:170,window:200000,pct:0.1,measured:true,last:{input:100,output:20,cacheRead:30},turns:1}});
 const snapshot=(project='/project-a',panes:any[]=[pane('orch','orchestrator','chat-orch'),pane('worker','worker','chat-worker')])=>({ok:true,project,generatedAt:Date.now(),halted:false,team:{path:project+'/.harness/team.yaml',integrationBranch:'main'},journal:{records:[record()],total:1,lastSeq:1},panes});
 const chat=(id:string,paneId:string,text='Последняя живая реплика')=>({chat:{id,pane:paneId,revision:7,documents:[{project:'/project-a',path:'README.md'}]},messages:[{role:'me',text:'Вопрос владельца',ts:Date.now()-2000},{role:'assistant',text,ts:Date.now()-1000}]});
-const settingsBinding=(id:string)=>({project:'/project-a',instanceId:'instance-a',pane:id,chat:'chat-'+id,revision:1,mode:'read',networkGeneration:null});
+const settingsBinding=(id:string,project='/project-a')=>({project,instanceId:project.endsWith('-b')?'instance-b':'instance-a',pane:id,chat:'chat-'+id,revision:1,mode:'read',networkGeneration:null});
 
 type ApiHandler=(path:string,body:unknown)=>unknown|Promise<unknown>;
 function teamUi(mode:'work'|'constructor'|'queue',handler?:ApiHandler,options:any={}){
@@ -64,6 +65,14 @@ test('36D: a page without a historical top bar keeps the SPEC banner inside main
  const banner=d.document.querySelector('.spec-banner')!,main=d.document.querySelector('.main')!,app=d.document.querySelector('.app')!;assert.equal(banner.parentElement,main);assert.equal(app.children.includes(banner),false);
 });
 
+test('36D: clean live team boot never enters the historical swarm overlay controller',()=>{
+ const d=dom('<div class="frame"><section class="main" data-team-live="work"></section></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});let overlayQueries=0;
+ const query=d.document.querySelector.bind(d.document);d.document.querySelector=(selector:string)=>{if(selector.includes('#ovl'))overlayQueries++;return query(selector)};
+ const sandbox:any={PAGE:'swarm',document:d.document,H:{on:true,snapshotOnly:false,project:'/project-a',projectRequestGeneration:0,confirmedProjectGeneration:0}};sandbox.window=sandbox;
+ const context=createContext(sandbox);runInContext(part(legacy,'  const swarmRoot=','  const swCount=')+'\nglobalThis.historicalSwarmRoot=swarmRoot;',context);
+ assert.equal(context.historicalSwarmRoot(),null);assert.equal(overlayQueries,0,'new live DOM must not query the missing historical overlay');
+});
+
 test('36D: + role uses the confirmed room receipt and never invents a door for unavailable roles',async()=>{
  const requests:Array<{path:string;body:unknown}>=[];
  const v=teamUi('work',async(path,body)=>{requests.push({path,body});if(path==='/api/swarm')return snapshot('/project-a',[pane('worker','worker','chat-worker')]);if(path==='/api/chats/chat-worker')return chat('chat-worker','worker');if(path==='/api/chats/room-chat')return chat('room-chat','room');if(path==='/api/assign')return {ok:true};throw Error('unexpected '+path)});await v.settle();
@@ -81,12 +90,24 @@ test('36D: + role refuses an incomplete or forged room receipt before /api/assig
 test('36D: constructor reads the project instruction and saves only the existing model and mode fields',async()=>{
  const mutations:Array<{path:string;body:unknown}>=[];
  const data=snapshot();data.panes[1]!.busy=false;const v=teamUi('constructor',async(path,body)=>{if(path==='/api/swarm')return data;if(path==='/api/chats/chat-orch')return chat('chat-orch','orch');if(path==='/api/chats/chat-worker')return chat('chat-worker','worker');if(path.startsWith('/api/project/file?'))return {ok:true,project:'/project-a',path:'.harness/roles/worker.md',text:'# Настоящая инструкция роли'};if(path.startsWith('/api/panes/')){mutations.push({path,body});return {ok:true,pane:{id:'worker',vendor:'codex',model:'new-model',mode:'all',settingsBinding:settingsBinding('worker')}}}throw Error('unexpected '+path)});await v.settle();
+ assert.equal(v.find('[data-team-count]').textContent,'2 ролей');assert.equal(v.find('[data-team-link]').textContent,'подключено');
  await v.find('[data-team-instruction-open="worker"]').emit('click');await v.settle();assert.match(v.find('[data-team-instruction]').textContent,/Настоящая инструкция роли/);assert.match(v.find('[data-team-instruction]').textContent,/нет API записи/);
  for(const select of v.root.querySelectorAll('[data-team-model],[data-team-mode]'))select.value=select.dataset.original!;
  const worker=v.find('[data-team-pane="worker"]'),model=worker.querySelector('[data-team-model]')!,mode=worker.querySelector('[data-team-mode]')!;model.value='codex/new-model';mode.value='all';
+ await model.emit('change');await v.context.TEAM_LIVE.refresh(true);await v.settle();const redrawnModel=v.find('[data-team-pane="worker"] [data-team-model]'),redrawnMode=v.find('[data-team-pane="worker"] [data-team-mode]');assert.notEqual(redrawnModel,model);assert.equal(redrawnModel.value,'codex/new-model');assert.equal(redrawnMode.value,'all','unsaved draft survives a live redraw');
  await v.find('[data-team-save]').emit('click');await v.settle();assert.deepEqual(plain(mutations),[{path:'/api/panes/worker',body:{vendor:'codex',model:'new-model',mode:'all',binding:settingsBinding('worker')}}]);
  assert.equal(v.requests.some(row=>/instruction|role/.test(row.path)&&!row.path.startsWith('/api/project/file?')),false,'there is no invented instruction-write endpoint');
- v.H.panes.find((row:any)=>row.id==='worker').settingsBinding=undefined;for(const select of v.root.querySelectorAll('[data-team-model],[data-team-mode]'))select.value=select.dataset.original!;v.find('[data-team-pane="worker"] [data-team-model]').value='codex/new-model';await v.find('[data-team-save]').emit('click');await v.settle();assert.equal(mutations.length,1);assert.match(v.find('.tc-live-error').textContent,/подтвердить настройки места/);
+ v.H.panes.find((row:any)=>row.id==='worker').settingsBinding=undefined;await v.context.TEAM_LIVE.refresh(true);await v.settle();for(const select of v.root.querySelectorAll('[data-team-model],[data-team-mode]'))select.value=select.dataset.original!;v.find('[data-team-pane="worker"] [data-team-model]').value='codex/new-model';await v.find('[data-team-save]').emit('click');await v.settle();assert.equal(mutations.length,1);assert.match(v.find('.tc-live-error').textContent,/подтвердить настройки места/);
+});
+
+test('36D: an A constructor cannot save through a B receipt while the B snapshot is pending',async()=>{
+ const mutations:Array<{path:string;body:unknown}>=[],b=deferred<any>();let project='/project-a',bReads=0;
+ const aPane={...pane('worker','worker',null),label:'A воркер',busy:false},bPane={...pane('worker','worker',null),label:'B воркер',busy:false,model:'b-model'};
+ const v=teamUi('constructor',async(path,body)=>{if(path==='/api/swarm'){if(project==='/project-a')return snapshot('/project-a',[aPane]);bReads++;return b.promise}if(path.startsWith('/api/panes/')){mutations.push({path,body});return {ok:true}}throw Error('unexpected '+path)});await v.settle();
+ const model=v.find('[data-team-pane="worker"] [data-team-model]');model.value='codex/new-model';await model.emit('change');project=v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;v.H.panes=[{id:'worker',busy:false,settingsBinding:settingsBinding('worker','/project-b')}];
+ await v.find('[data-team-save]').emit('click');await v.settle();assert.equal(mutations.length,0);assert.match(v.find('.tc-live-error').textContent,/Проект изменился/);
+ await v.window.emit('live:status');await until(()=>bReads===1);assert.equal(v.find('[data-team-save]').disabled,false);assert.match(v.root.textContent,/A воркер/);assert.match(v.find('.tc-live-error').textContent,/Дождитесь состава нового проекта/);assert.equal(mutations.length,0);
+ b.resolve(snapshot('/project-b',[bPane]));await v.settle();assert.match(v.root.textContent,/B воркер/);assert.equal(v.find('[data-team-pane="worker"] [data-team-model]').value,'claude/b-model','A draft never becomes a B draft');assert.equal(v.find('[data-team-save]').disabled,false);
 });
 
 test('36D: an A → B → A project change during /api/swarm discards the old response and drains the queued refresh',async()=>{

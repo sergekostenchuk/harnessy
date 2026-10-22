@@ -852,7 +852,7 @@
 
   // TS-15b: project-bound swarm snapshots; demo actions never mutate the live team.
   const SWARM={project:null,generation:0,request:0,confirmed:0,alive:true,data:null,error:null,loading:false,queued:false,checking:null,refreshQueued:false,es:null,selected:null,view:'board',tools:new Map(),proposals:null,proposalError:null};
-  const swarmRoot=()=>PAGE==='swarm'?document.querySelector('.frame .main'):null;
+  const swarmRoot=()=>PAGE==='swarm'&&!document.querySelector('[data-team-live]')?document.querySelector('.frame .main'):null;
   const swCount=n=>Number.isSafeInteger(n)&&n>=0;
   const swNumber=n=>typeof n==='number'&&Number.isFinite(n)&&n>=0;
   const swRecord=x=>x&&swCount(x.seq)&&x.seq>0&&typeof x.ts==='string'&&Number.isFinite(Date.parse(x.ts))&&['from','kind','text'].every(k=>typeof x[k]==='string')&&Array.isArray(x.to)&&x.to.every(id=>typeof id==='string')&&(x.thread===null||typeof x.thread==='string');
