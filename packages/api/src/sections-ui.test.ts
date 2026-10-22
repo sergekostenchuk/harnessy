@@ -79,9 +79,9 @@ test('137/136: template memory and truncation have distinct, honest captions',as
 });
 
 test('87/139: sidebar, rail, mobile and palette all route Documents to the same real screen, including cold reload',async()=>{
- const d=dom('<aside class="side"><div data-go="doc">Документы проекта</div></aside>'),location={href:''},context:any={document:d.document,window:{},location,KEY:'chat',PAGES:{doc:'17-doc.html'},frames:[],cur:0,show(){},toggleSide(){}};
- runInContext(part(proto,"  document.addEventListener('click',e=>{ const a=e.target.closest('aside.side');",'  // ── навигация телефона'),createContext({...context,addEventListener(){}}));await d.document.querySelector('[data-go="doc"]')!.emit('click');assert.equal(location.href,'17-doc.html');
- assert.match(proto,/\['doc','Документы проекта'\]/);assert.match(proto,/item\('doc','Документы проекта'\)/);assert.match(live,/\['Документы проекта','17-doc.html'\]/);assert.doesNotMatch(proto,/Документ стадии/);
+ const d=dom('<aside class="side"><div data-go="doc">Документы проекта</div></aside>'),location={href:''},context:any={document:d.document,window:{},location,KEY:'chat',PAGES:{doc:'17-doc.html'},frames:[],cur:0,show(){},renderSide(){},renderWorkspaceHeader(){}};
+ runInContext(part(proto,"  document.addEventListener('click',e=>{const mode=e.target.closest('[data-ps2-action-mode]');",'  // ── навигация телефона'),createContext({...context,addEventListener(){}}));await d.document.querySelector('[data-go="doc"]')!.emit('click');assert.equal(location.href,'17-doc.html');
+ assert.match(proto,/\['doc','Документы',count\(project,'docs'\)\]/);assert.match(proto,/item\('doc','Документы проекта'\)/);assert.match(live,/\['Документы проекта','17-doc.html'\]/);assert.doesNotMatch(proto,/Документ стадии/);
  const cold=view('doc',async()=>data('doc'));await cold.functions.fetch();assert.match(cold.document.title,/Документы проекта · a/);assert.equal(cold.find('[data-project-section]').dataset.projectSection,'docs');
 });
 
@@ -130,7 +130,7 @@ test('152: resume waits for current status, reads its new project, and ignores a
  await v.functions.fetch();const pending=v.functions.refreshStatus();await v.window.emit('pagehide',{persisted:true});const count=v.requests.length,restored=v.window.emit('pageshow',{persisted:true});
  assert.equal(v.H.snapshotOnly,true);assert.equal(v.requests.slice(count).some(r=>r.path==='/api/project/sections/research'),false);assert.equal(v.document.querySelector('[data-section-request]'),null);
  fresh.resolve(status('/projects/b'));await restored;old.resolve(status('/projects/a'));assert.equal(await pending,null);await v.settle();
- assert.equal(v.H.project,'/projects/b');assert.equal(v.functions.PS.data.project,'/projects/b');assert.match(v.document.title,/Ресёрч · b/);assert.equal(v.storage.get('harnessy-live-project-v1'),'/projects/b');
+ assert.equal(v.H.project,'/projects/b');assert.equal(v.functions.PS.data.project,'/projects/b');assert.match(v.document.title,/Исследования · b/);assert.equal(v.storage.get('harnessy-live-project-v1'),'/projects/b');
 });
 
 for(const failure of [null,{ok:false,error:'offline'},{project:'/projects/a'},'network'])test('152: failed resume stays read-only, explains the failure and can retry through Refresh, '+JSON.stringify(failure),async()=>{

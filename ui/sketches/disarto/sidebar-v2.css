@@ -284,7 +284,7 @@
 .ps2-root .ps2-grpbody{display:flex;flex-direction:column;gap:1px}
 /* ── «Новый чат» с выбором: .ps2-newwrap > .newbtn (+ .dd ▾) + .ps2-newpick: в проекте <текущий> / без проекта ── */
 .ps2-root .ps2-newwrap{position:relative}
-.ps2-root aside.side.ps .newbtn .dd{margin-left:6px;height:20px;padding-left:7px;border-left:1px solid var(--line2);display:grid;place-items:center;color:var(--ink3);font-size:10px;font-style:normal;cursor:pointer}.ps2-root aside.side.ps .newbtn .dd:hover,.ps2-root .ps2-newwrap.open .newbtn .dd{color:var(--ink)}
+.ps2-root .ps2-newwrap .newbtn .dd{margin-left:6px;height:20px;padding-left:7px;border-left:1px solid var(--line2);display:grid;place-items:center;color:var(--ink3);font-size:10px;font-style:normal;cursor:pointer}.ps2-root .ps2-newwrap .newbtn .dd:hover,.ps2-root .ps2-newwrap.open .newbtn .dd{color:var(--ink)}
 .ps2-root .ps2-newpick{position:absolute;left:0;right:0;top:36px;z-index:41;padding:6px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);box-shadow:0 18px 50px rgba(0,0,0,.55);display:none;flex-direction:column;gap:1px}
 .ps2-root .ps2-newwrap.open .ps2-newpick,.ps2-root .ps2-newpick.static{display:flex}.ps2-root .ps2-newpick.static{position:static;box-shadow:none;width:240px}
 .ps2-root .ps2-newpick .hd{padding:5px 8px 4px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
@@ -332,7 +332,11 @@ html.ps2-root[data-ps2-panel="closed"]:not([data-m]) .frame>.stage{grid-template
 .ps2-root .rail>.ps-foot .ps2-menu{bottom:52px;left:8px;width:256px}
 .ps2-root .ps2-menu a.it{text-decoration:none}
 .ps2-root .ps2-mode .ps2-newwrap{margin:8px 10px 0}
-.ps2-root .ps2-mode>.search{margin:6px 10px 0}
+.ps2-root .ps2-mode .newbtn{display:flex;align-items:center;gap:8px;width:100%;height:34px;box-sizing:border-box;padding:0 10px;border-radius:var(--rs,9px);background:var(--raised);border:1px solid var(--line2);color:var(--ink);font-weight:500;font-size:13px;margin:0 0 6px;cursor:pointer}
+.ps2-root .ps2-mode .newbtn:hover{border-color:rgba(194,122,52,.5)}
+.ps2-root .ps2-mode .newbtn svg,.ps2-root .ps2-mode>.search svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ps2-root .ps2-mode kbd{margin-left:auto;font:10px var(--mono);color:var(--ink3);border:1px solid var(--line2);border-radius:4px;padding:1px 5px}
+.ps2-root .ps2-mode>.search{display:flex;align-items:center;gap:8px;height:32px;box-sizing:border-box;padding:0 10px;border:1px solid var(--line2);border-radius:var(--rs,9px);color:var(--ink3);background:var(--bg);margin:6px 10px 0;font-size:12.5px;cursor:pointer}
 .ps2-root .ps2-mode .ps2-inbox .b2{font:10px var(--mono);color:var(--ink3);margin-left:-3px}
 .ps2-root .tag.mock{display:inline-flex;align-items:center;height:16px;padding:0 5px;border:1px dashed var(--line2);border-radius:5px;color:var(--ink3);font:8.5px var(--mono);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
 .ps2-root .ps-chat.ps2-prow>svg,.ps2-root .ps2-others-list .ps-chat>svg{position:absolute;left:9px;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.6;color:var(--ink3)}
@@ -346,6 +350,8 @@ html.ps2-root[data-ps2-panel="closed"]:not([data-m]) .frame>.stage{grid-template
 .ps2-root .ps2-top+.top,.ps2-root .ps2-tabs+.top{border-top:0}
 .ps2-root[data-page="new"] .main>.top,.ps2-root[data-page="chat"] .main>.top{display:none}
 .ps2-root .ps2-top .r>span:last-child{white-space:nowrap}
+.ps2-root .ps2-top .r>span:last-child i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px}
+.ps2-root .ps2-top .r>span.off i,.ps2-root .ps2-tabs .r.off i{background:var(--ink3)}
 .ps2-root .ps2-mode .ps2-pcard+.grp{padding-top:8px}
 @media(max-width:759px){
   html.ps2-root[data-m] .frame>.app,html.ps2-root[data-m] .frame>.stage{grid-template-columns:minmax(0,1fr)!important;max-width:100vw}

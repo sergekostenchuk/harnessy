@@ -68,6 +68,12 @@ test('TS-32: sidebar profile uses only a confirmed engine account and otherwise 
  assert.deepEqual(profiles.map(plain),[{name:'Мария',email:'owner@example.test'},{name:'Владелец',email:''}]);assert.doesNotMatch(proto,/9616166@gmail\.com|>Serge</);assert.match(proto,/data-ps2-profile/);
 });
 
+test('TS-36A: offline badges never pass demo decisions off as live Inbox data',()=>{
+ let inbox:Data|null=null;const sandbox:Data={DEC:{m0:'demo one',limit:'demo two'},waiting:()=>['m0','limit'],window:{LIVE:{H:{on:false,panes:[]}},PS2:{setInbox:(value:Data)=>inbox=value}},document:{querySelectorAll:()=>[]},paneName:(pane:Data)=>pane.label};sandbox.globalThis=sandbox;
+ const context=createContext(sandbox);runInContext(part(live,'  function waitList()','  // ── «Сейчас»')+'\nglobalThis.badges=badges;',context);sandbox.badges();assert.deepEqual(plain(inbox),{need:0,info:0,unavailable:true});
+ sandbox.window.LIVE.H={on:true,panes:[{id:'worker',label:'воркер',waiting:true,pendingApprovals:0}]};sandbox.badges();assert.deepEqual(plain(inbox),{need:1,info:0});
+});
+
 test('TS-25: question and answer share copy and relative time; undated messages invent nothing',()=>{
  const view=ui(),nowAt=1791500000125,at=new Date(2026,9,15,10,0,0).getTime();view.S.chat=[{role:'me',text:'Исходный вопрос',t:nowAt-120000},{role:'ai',src:'live',text:'Исходный ответ',html:'<div class="md-body">Исходный ответ</div>',who:'воркер',model:'w1',pane:'worker',t:nowAt}];
  const question=view.functions.bubble(view.S.chat[0],0),answer=view.functions.bubble(view.S.chat[1],1),legacy=view.functions.bubble({role:'me',text:'Старый вопрос'},0);
