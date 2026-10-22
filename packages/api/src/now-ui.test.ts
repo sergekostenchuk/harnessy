@@ -108,7 +108,7 @@ test('167/190: late successful HTTP decision cannot close another project overla
 });
 
 test('167: empty read is explicit, long history loads more, all three views keep their sketch containers',async()=>{
- let records:any[]=[];const v=nowUI(async path=>path==='/api/status'?status():journal('/a',records));await v.start();assert.match(v.find('#v-turn .lst').textContent,/никто не ждёт/);assert.match(v.find('#v-away .lst').textContent,/событий нет/);
+ let records:any[]=[];const v=nowUI(async path=>path==='/api/status'?status():journal('/a',records));await v.start();assert.match(v.find('#v-turn .lst').textContent,/Во Входящих нет открытых подтверждений и вопросов владельцу/);assert.match(v.find('#v-away .lst').textContent,/событий нет/);
  records=Array.from({length:130},(_,i)=>record(i+1,'event '+(i+1)));await v.functions.fetch();assert.equal(v.document.querySelectorAll('[data-now-record]').length,100);await v.find('[data-now-more]').emit('click');assert.equal(v.document.querySelectorAll('[data-now-record]').length,130);assert.equal(v.document.querySelector('[data-now-more]'),null);
  await v.find('[data-now-record="1"]').emit('click');assert.match(v.find('.ovl').textContent,/event 1/);await v.window.emit('keydown',{key:'Escape',target:v.body});assert.equal(v.find('.ovl').classList.contains('on'),false);
 });

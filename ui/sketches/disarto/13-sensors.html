@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 13 · Датчики · живой</title>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 13 · Дашборд · живой</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
 <style>
   .sil{display:flex;gap:2px;align-items:flex-end;height:26px;margin:6px 0 6px}.sil i{flex:1;height:100%;border-radius:1.5px;background:var(--ok)}.sil i.q{background:var(--line2);height:30%}.sil i.b{background:var(--bad-fill,#a3304b)}.sil i.w{background:var(--warn);height:60%}
@@ -13,8 +13,8 @@
   <div class="frame" data-demo><div class="app">
     <aside class="side" data-rail="sens"></aside>
     <section class="main">
-      <div class="top"><b>Датчики · OMG</b><span class="st"><i></i>12 датчиков · 1 без связи · 1 молчит</span>
-        <div class="r"><span class="seg" id="seg"><span class="on" data-v="all">Датчики</span><span data-v="fail">Сбои за 24 ч · 4</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span><span class="btn sm" id="add1" style="cursor:pointer">＋ сторож</span><span class="btn sm" id="add2" style="cursor:pointer">＋ вахта</span></div></div>
+      <div class="top"><b>Дашборд · OMG</b><span class="st"><i></i>12 датчиков · 1 без связи · 1 молчит</span>
+        <div class="r"><span class="seg" id="seg"><span class="on" data-v="all">Дашборд</span><span data-v="fail">Сбои за 24 ч · 4</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span><span class="btn sm" id="add1" style="cursor:pointer">＋ сторож</span><span class="btn sm" id="add2" style="cursor:pointer">＋ вахта</span></div></div>
       <div class="views">
         <div class="view on" id="v-all"><div class="wrap">
           <div class="nums n3"><div><b>0,06 %</b><small>цена наблюдения в день · недели claude</small></div><div><b class="bad">4</b><small>сбоя за 24 часа</small></div><div><b class="acc">2</b><small>требуют взгляда · нет связи · молчит</small></div></div>
@@ -75,7 +75,7 @@
     blk('когда срабатывать',kv([['порог','молчание > 30 мин'],['кому сообщать','оркестратору · вам при повторе'],['цена','≈ 0,01 % недели в день']]))+acts([['Добавить','p','data-close'],['Отмена','ghost','data-close']]);
   HX.bind('#add1',()=>add('сторож','следит за одним источником и срабатывает по порогу'),{w:600,h:520,hide:false});
   HX.bind('#add2',()=>add('вахта','смотрит на несколько источников и пересказывает по расписанию'),{w:600,h:520,hide:false});
-  HX.passport({title:'Датчики',where:'OMG › Команда › Датчики',what:'Сторожа, вахты и хуки: что система видит о себе, когда сигналили и сколько это стоит',why:'Заметить молчание и сбой раньше, чем встанет работа',when:'Сигналы живые; лента — за 24 часа',expect:'Все датчики сигналят в срок; цена наблюдения < 0,1 % в день',risk:'Датчик молчит, и это принимают за «всё хорошо»',ok:'Сбоев 0, молчащих 0',fail:'Место без связи дольше порога, а датчик не сработал'});
+  HX.passport({title:'Дашборд',where:'OMG › Команда › Дашборд',what:'Сторожа, вахты и хуки: что система видит о себе, когда сигналили и сколько это стоит',why:'Заметить молчание и сбой раньше, чем встанет работа',when:'Сигналы живые; лента — за 24 часа',expect:'Все датчики сигналят в срок; цена наблюдения < 0,1 % в день',risk:'Датчик молчит, и это принимают за «всё хорошо»',ok:'Сбоев 0, молчащих 0',fail:'Место без связи дольше порога, а датчик не сработал'});
 })();
 </script>
 </body></html>

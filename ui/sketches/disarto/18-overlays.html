@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 18 · Оверлеи: Уйти · Показать окно · ⌘K · Паспорт</title>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 18 · Оверлеи: Автопилот · Показать окно · ⌘K · Паспорт</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
 <style>
   .main{grid-template-rows:auto 1fr auto}
@@ -23,14 +23,14 @@
 </style></head>
 <body><div class="sheet">
   <h1>Harnessy · скетч 18 · оверлеи</h1>
-  <p class="sub">Четыре «экрана» прототипа были действиями, а не местами. Теперь они открываются <b>поверх того экрана, где вы находитесь</b> — здесь это чат: «☾ Уйти» (поток в три шага + прошлые ночи), «Показать окно» (выбор из чипа композера), «⌘K» (палитра поиска), «ⓘ Паспорт». Контекст под карточкой остаётся виден. <a href="index.html">← все скетчи</a></p>
+  <p class="sub">Четыре «экрана» прототипа были действиями, а не местами. Теперь они открываются <b>поверх того экрана, где вы находитесь</b> — здесь это чат: «☾ Автопилот» (поток в три шага + прошлые ночи), «Показать окно» (выбор из чипа композера), «⌘K» (палитра поиска), «ⓘ Паспорт». Контекст под карточкой остаётся виден. <a href="index.html">← все скетчи</a></p>
 
   <div class="frame" data-demo><div class="app">
     <aside class="side" data-rail="chat"></aside>
     <section class="main">
-      <div class="top"><span class="orb"></span><b>Уйти</b><span class="st">условия ухода движок пока не исполняет</span>
-        <div class="r"><span class="btn sm ghost" id="k">⌘K Найти</span><span class="btn sm ghost" id="leave">☾ Уйти</span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
-      <div class="feed"><div class="away-intro"><p>Настройте период отсутствия и заместителя в мастере «Уйти». Разговоры команды открываются в списке чатов проекта.</p></div></div>
+      <div class="top"><span class="orb"></span><b>Автопилот</b><span class="st">условия Автопилота движок пока не исполняет</span>
+        <div class="r"><span class="btn sm ghost" id="k">⌘K Найти</span><span class="btn sm ghost" id="leave">☾ Автопилот</span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
+      <div class="feed"><div class="away-intro"><p>Настройте период отсутствия и заместителя в мастере «Автопилот». Разговоры команды открываются в списке чатов проекта.</p></div></div>
     </section>
   </div>
   <div class="cap"><span>18 · оверлеи поверх чата · уйти / показать окно / ⌘K / паспорт</span><span>1280 × 860</span></div>
@@ -42,17 +42,17 @@
 (function(){
   const {kv,blk,acts,tl}=HX;
   // ── Уйти: поток в три шага + прошлые ночи
-  HX.bind('#leave',()=>'<div class="from">уйти · делегировать · шаг <span data-stepn>1</span> из 3</div><div class="steps"><i class="on"></i><i></i><i></i></div>'+
-    '<div data-step="1" class="fh"><h4>Настройка ухода</h4><p>На следующем экране вы выберете период отсутствия и заместителя. Затем сможете проверить условия.</p>'+
-      blk('исполнение','<p>условия ухода движок пока не исполняет</p>')+
+  HX.bind('#leave',()=>'<div class="from">Автопилот · делегировать · шаг <span data-stepn>1</span> из 3</div><div class="steps"><i class="on"></i><i></i><i></i></div>'+
+    '<div data-step="1" class="fh"><h4>Настройка Автопилота</h4><p>На следующем экране вы выберете период отсутствия и заместителя. Затем сможете проверить условия.</p>'+
+      blk('исполнение','<p>условия Автопилота движок пока не исполняет</p>')+
       '<div class="ft"><span class="btn ghost" data-close>Отмена</span><span class="btn p" data-go="2" style="margin-left:auto">Дальше</span></div></div>'+
     '<div data-step="2" class="fh"><h4>На сколько и кто решает за вас</h4><p>Стоп-случаи ждут вас всегда — их заместитель не закрывает.</p>'+
       blk('окно отсутствия','<div class="opt"><div>До какого времени<small>после — заместитель перестаёт решать</small></div><span class="seg"><span data-pick class="on">до 09:00</span><span data-pick>до 13:00</span><span data-pick>пока не вернусь</span></span></div><div class="opt"><div>Заместитель<small>кто отвечает на вопросы команды</small></div><span class="seg"><span data-pick class="on">Fable</span><span data-pick>никому — всё ждёт меня</span></span></div>')+
       blk('что заместитель может','<div class="opt"><div>Подтверждать стадии, принятые хранителем</div><span class="tog on"></span></div><div class="opt"><div>Переключать модель при лимите</div><span class="tog on"></span></div><div class="opt"><div>Отвечать на «чьё это» и возвращать задачи</div><span class="tog on"></span></div><div class="opt"><div>Запускать живой проход</div><span class="tog"></span></div>')+
       '<div class="ft"><span class="btn ghost" data-go="1">Назад</span><span class="btn p" data-go="3" style="margin-left:auto">Дальше</span></div></div>'+
-    '<div data-step="3" class="fh"><h4>Подписать уход</h4><p>Утром — раздел «Сейчас · Пока вас не было»: что сделано, что решил заместитель, что ждёт вас.</p>'+
+    '<div data-step="3" class="fh"><h4>Включить Автопилот</h4><p>Утром — раздел «Входящие · Пока вас не было»: что сделано, что решил заместитель, что ждёт вас.</p>'+
       blk('итог',kv([['вас не будет','до 09:00 · 14 ч'],['заместитель','Fable · три права из четырёх'],['будить вас','только стоп-случаи: снос данных, расход > 5 %, секреты'],['не двинется без вас','подпись M0 · живой проход']]))+
-      '<p>условия ухода движок пока не исполняет</p><div class="ft"><span class="btn ghost" data-go="2">Назад</span><span class="btn ghost" data-close>Отмена</span><button type="button" class="btn p" disabled title="условия ухода движок пока не исполняет" style="margin-left:auto">Подписать уход</button></div></div>',{w:720,h:640,hide:false});
+      '<p>условия Автопилота движок пока не исполняет</p><div class="ft"><span class="btn ghost" data-go="2">Назад</span><span class="btn ghost" data-close>Отмена</span><button type="button" class="btn p" disabled title="условия Автопилота движок пока не исполняет" style="margin-left:auto">Включить Автопилот</button></div></div>',{w:720,h:640,hide:false});
   // ── Показать окно
   HX.bind('#win',()=>'<div class="from">показать окно агенту</div><div class="ch"><h3>Какое окно показать оркестратору</h3></div><div class="csub">снимок уйдёт в этот разговор; агент скажет, что видит, и сверит со своими данными</div>'+
     '<div class="wins">'+[['Workbench · OM-VIEW','карта проекта · выбрано',1],['Терминал · прогон H1.5','шаг 4/7'],['Браузер · harness.autoiflow.com','вход'],['Codex · ревьюер','круг 2'],['Finder · REPORTS','отчёты'],['Экран целиком','все окна']].map(([a,b,on])=>'<div class="win'+(on?' on':'')+'" data-pick><div class="thumb">'+a.split(' · ')[0]+'</div><b>'+a+'</b>'+b+'</div>').join('')+'</div>'+

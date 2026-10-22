@@ -185,11 +185,16 @@ def build_sketches():
     print(f"скетчи: {n} файлов + audit.html → {dst}")
 
 
-PROTO_PAGES = {"01-chat": "Чат", "02-plan": "План", "04-swarm": "Стая", "05-spend": "Расход и лимиты", "06-settings": "Настройки", "09-events": "Плашки и события",
-               "10-new-chat": "Новый чат", "11-connections": "Подключения", "12-research": "Ресёрч", "13-sensors": "Датчики", "14-now": "Сейчас",
-               "15-artifacts": "Артефакты", "16-memory": "Память проекта", "17-doc": "Документ стадии", "18-overlays": "Уйти · окно · поиск",
+PROTO_PAGES = {"01-chat": "Чат", "02-plan": "План", "04-swarm": "Команда агентов", "05-spend": "Расход и лимиты", "06-settings": "Настройки", "09-events": "Плашки и события",
+               "10-new-chat": "Новый чат", "11-connections": "Подключения", "12-research": "Исследования", "13-sensors": "Дашборд", "14-now": "Входящие",
+               "15-artifacts": "Артефакты", "16-memory": "Память проекта", "17-doc": "Документ стадии", "18-overlays": "Автопилот · окно · поиск",
                "19-first-run": "Первый запуск", "20-login-pour": "Вход", "21-journal": "Журнал"}
 PROTO_PAGES["02-om-map"] = "План · карта проекта"   # вкладка «Карта проекта» экрана «План · карта»: живая карта (скетч 26); «План пользователя» — прежний 02-plan
+PROTO_PAGES.update({"28-path": "Путь", "29-discovery-frame": "Путь · рамка Discovery", "30-discovery-progress": "Путь · ход Discovery",
+                    "31-discovery-dossier": "Путь · досье", "32-discovery-variants": "Путь · варианты", "33-discovery-summary": "Путь · итог Discovery",
+                    "34-discovery-unknowns": "Путь · неизвестные", "35-concept-to-features": "Путь · концепция и функции",
+                    "36-om-owner-questions": "Путь · вопросы владельца", "37-execution-review": "Путь · ревью исполнения",
+                    "38-project-result": "Путь · результат проекта"})
 PROTO_SRC = {"02-om-map": "26-om-map-app"}   # экран прототипа, собираемый из другого исходника
 PROTO_START = "/sketches/proto/10-new-chat.html"
 CLASSIC = "/sketches/harness-classic.html"
@@ -204,12 +209,12 @@ def build_proto():
     """Прототип из новых экранов: копия скетчей в режиме прототипа (proto.css + proto.js) → out/site/sketches/proto.
     Исходники в sketches/disarto остаются листами с пояснениями; прототип всегда выводится из них."""
     src = ROOT / "sketches" / "disarto"
-    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "release.js", "proto.js", "responsive.js") if (HERE / n).exists()] + [src / "om-map.js"])
+    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "release.js", "proto.js", "responsive.js") if (HERE / n).exists()] + [src / n for n in ("om-map.js", "path.js", "path-map.js")])
     dst = OUT / "sketches" / "proto"
     if dst.exists():
         shutil.rmtree(dst)
     dst.mkdir(parents=True)
-    for name in ("style.css", "app.js", "pour-scene.js", "om-map.js", "om-map.css"):   # om-map.* — общий код карты проекта (скетч 26 и экран «План · карта»)
+    for name in ("style.css", "app.js", "pour-scene.js", "om-map.js", "om-map.css", "path.css", "path.js", "path-map.css", "path-map.js", "sidebar-v2.css"):
         shutil.copy(src / name, dst / name)
     app_js = (src / "app.js").read_text(encoding="utf-8")
     i = app_js.index("const IC={")
@@ -233,9 +238,9 @@ def build_proto():
     release_script = '<script>globalThis.HARNESS_RELEASE=Object.freeze('+json.dumps({"channel":channel,"version":version,"label":channel+" · "+version.split("-",1)[0]}, ensure_ascii=False, separators=(",",":"))+')</script>\n<script src="release.js"></script>\n'
     for stem, title in PROTO_PAGES.items():
         t = (src / f"{PROTO_SRC.get(stem, stem)}.html").read_text(encoding="utf-8")
-        t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto>')
+        t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto class="ps2-root">')
         t = rep(t, "<head>", "<head><script>" + boot + "</script>")
-        t = rep(t, "</head>", '<link rel="stylesheet" href="proto.css"></head>')
+        t = rep(t, "</head>", '<link rel="stylesheet" href="proto.css"><link rel="stylesheet" href="sidebar-v2.css"></head>')
         t = rep(t, "</body>", release_script+'<script src="proto.js"></script>\n<script src="markdown.js"></script>\n<script src="live.js"></script>\n<script src="llm.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="network-stats.js"></script>\n<script src="network-add.js"></script>\n<script src="network-recovery.js"></script>\n<script src="program-missing.js"></script>\n<script src="network.js"></script>\n<script src="conn.js"></script>\n</body>')
         t = re.sub(r"<title>.*?</title>", f"<title>Harnessy · {title}</title>", t, count=1, flags=re.S)
         (dst / f"{stem}.html").write_text(t, encoding="utf-8")

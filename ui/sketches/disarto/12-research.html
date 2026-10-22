@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 12 · Ресёрч · живой</title>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 12 · Исследования · живой</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
 <style>
   .rh{display:flex;align-items:center;gap:14px;border:1px solid var(--line2);border-radius:14px;background:var(--panel);padding:14px 16px;margin:6px 0 16px}
@@ -18,7 +18,7 @@
   <div class="frame" data-demo><div class="app">
     <aside class="side" data-rail="res"></aside>
     <section class="main">
-      <div class="top"><b>Ресёрч · OMG</b><span class="st"><i></i>идёт · 6 из 12 источников</span>
+      <div class="top"><b>Исследования · OMG</b><span class="st"><i></i>идёт · 6 из 12 источников</span>
         <div class="r"><span class="seg" id="seg"><span class="on" data-v="cur">Это исследование</span><span data-v="past">Прошлые · 14</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
       <div class="views">
         <div class="view on" id="v-cur"><div class="wrap">
@@ -78,7 +78,7 @@
   HX.views('#seg');
   HX.bind('.li[data-q]',el=>card(el.dataset.q),{w:820,h:560});
   HX.bind('.li[data-p]',el=>'<div class="from">раскрытая карточка · прошлое исследование</div><div class="ch"><h3>'+el.querySelector('b').textContent+'</h3></div><div class="csub">'+el.querySelector('small').textContent+'</div>'+blk('итог',kv([['вопросов',el.children[2].textContent],['применено',el.children[3].textContent],['где лежит','~/REPORTS/workbench-design/research/'],['кто вёл','ресёрчеры · Sonnet']]))+acts([['Открыть отчёт','p'],'Продолжить это исследование','Сравнить с текущим']),{w:640,h:380});
-  HX.passport({title:'Ресёрч',where:'OMG › Ресёрч',what:'Одно исследование: вопросы, источники, ответы и их версии',why:'Отвечать на вопросы проекта по первичным источникам, а не по памяти модели',when:'Идёт в фоне; готовые ответы ждут «применить»',expect:'У каждого ответа — источники и уверенность',risk:'Инструменты поиска расходятся — тогда «свести», а не верить одному',ok:'Ответ применён к проекту и лежит в «Что исследовано»',fail:'Ответ без источников или применён при расхождении'});
+  HX.passport({title:'Исследования',where:'OMG › Исследования',what:'Одно исследование: вопросы, источники, ответы и их версии',why:'Отвечать на вопросы проекта по первичным источникам, а не по памяти модели',when:'Идёт в фоне; готовые ответы ждут «применить»',expect:'У каждого ответа — источники и уверенность',risk:'Инструменты поиска расходятся — тогда «свести», а не верить одному',ok:'Ответ применён к проекту и лежит в «Что исследовано»',fail:'Ответ без источников или применён при расхождении'});
 })();
 </script>
 </body></html>
