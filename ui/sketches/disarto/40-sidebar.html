@@ -7,6 +7,13 @@
   .cap{max-width:1440px}
   .tbl{max-width:1440px;margin:0 0 36px}.tbl td{font-size:12.5px;color:var(--ink2)}
   .ps2-root .box.q{width:auto;max-width:1440px;margin:0 0 40px}.ps2-root .box.q::before{display:none}
+  /* режим одного кадра: #shot=<id> — только этот кадр, без полей и подписей (вход из демо) */
+  body.shot{background:var(--bg);background-image:none}
+  body.shot .sheet{max-width:none;padding:0;margin:0}
+  body.shot .sheet>*:not(.shot-on){display:none!important}
+  body.shot .fr{margin:0;transform:none!important}
+  body.shot .fr .app{transform:none!important;margin:0!important;box-shadow:none}
+  body.shot .fhead,body.shot .cap{display:none!important}
 </style></head>
 <body><div class="sheet ps2-root">
   <h1>Harnessy · скетч 40 · боковая панель · варианты A1 · A2 · A3</h1>
@@ -286,4 +293,5 @@
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeAll(); });
 })();
 </script>
+<script>(function(){const q=new URLSearchParams(location.hash.replace(/^#/,''));const id=q.get('shot');if(!id)return;const el=document.getElementById(id);if(!el)return;document.body.classList.add('shot');el.classList.add('shot-on');})();</script>
 </body></html>
