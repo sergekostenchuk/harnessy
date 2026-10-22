@@ -1,0 +1,38 @@
+<template>
+  <style>
+    #root{position:absolute;inset:0;pointer-events:none}
+    #badge-tag{position:absolute;right:64px;bottom:34px;display:inline-flex;align-items:center;height:46px;padding:0 16px;border-radius:10px;font:500 28px "JetBrains Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:#c27a34;background:rgba(16,16,18,.85);border:1px solid rgba(194,122,52,.45)}
+    /* метка времени — приём «момент из жизни»: часы и слово (вечер · ночь · утро) слева внизу полосы подписей */
+    #clock{position:absolute;left:64px;bottom:30px;display:flex;align-items:baseline;gap:14px;font-family:"Inter",sans-serif}
+    #clock .tm,#clock .wd{display:inline-grid;white-space:nowrap}
+    #clock .tm>span,#clock .wd>span{grid-area:1/1;display:inline-block}
+    #clock .tm>span{font:600 40px/1 "Inter",sans-serif;letter-spacing:-.01em;color:#ececee;font-variant-numeric:tabular-nums}
+    #clock .wd>span{font:500 28px/1 "JetBrains Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:#88888f}
+    #clock .tm>span+span,#clock .wd>span+span{opacity:0}
+  </style>
+  <div data-hf-id="hf-viiq" id="root" data-composition-id="badge" data-width="1920" data-height="1080" data-composition-variables='[{"id":"badge","type":"string","label":"badge","default":"alpha"},{"id":"ck_eve","type":"string","label":"ck_eve","default":"вечер"},{"id":"ck_night","type":"string","label":"ck_night","default":"ночь"},{"id":"ck_morn","type":"string","label":"ck_morn","default":"утро"}]'>
+    <div data-hf-id="hf-7n7x" id="badge-tag" class="clip" data-start="0" data-duration="22.1"><span data-hf-id="hf-u4pu" data-var-text="badge">alpha</span></div>
+    <div data-hf-id="hf-qnax" id="clock" class="clip" data-start="0" data-duration="22.1">
+      <span data-hf-id="hf-6b9w" class="tm"><span data-hf-id="hf-mgrx" class="t0">22:40</span><span data-hf-id="hf-bf6k" class="t1">23:52</span><span data-hf-id="hf-js8l" class="t2">01:12</span><span data-hf-id="hf-tog3" class="t3">03:40</span><span data-hf-id="hf-0n6u" class="t4">07:00</span></span>
+      <span data-hf-id="hf-azb8" class="wd"><span data-hf-id="hf-qsrr" class="w0" data-var-text="ck_eve">вечер</span><span data-hf-id="hf-6wiv" class="w1" data-var-text="ck_night">ночь</span><span data-hf-id="hf-wv4f" class="w2" data-var-text="ck_morn">утро</span></span>
+    </div>
+  </div>
+  <script>
+    (function(){
+      const tl=gsap.timeline({paused:true});
+      tl.fromTo('#badge-tag > span',{opacity:0},{opacity:1,duration:.3,ease:'power2.out'},0.15);
+      tl.fromTo('#clock',{opacity:0},{opacity:1,duration:.3,ease:'power2.out'},0.15);
+      function sw(group,cls,t){
+        document.querySelectorAll(group+' > span').forEach(sp=>{
+          if(sp.classList.contains(cls)) tl.fromTo(sp,{opacity:0,filter:'blur(6px)'},{immediateRender:false,opacity:1,filter:'blur(0px)',duration:.15,ease:'power2.out'},t+.1);
+          else tl.to(sp,{opacity:0,filter:'blur(6px)',duration:.13,ease:'power2.in'},t);
+        });
+      }
+      sw('#clock .tm','t1',8.3); sw('#clock .wd','w1',8.3);
+      sw('#clock .tm','t2',11.8);
+      sw('#clock .tm','t3',13.6);
+      sw('#clock .tm','t4',16.7); sw('#clock .wd','w2',16.7);
+      window.__timelines['badge']=tl;
+    })();
+  </script>
+</template>

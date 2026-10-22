@@ -1,0 +1,42 @@
+<template>
+  <style>
+    #root{position:absolute;inset:0;font-family:"Inter",sans-serif;pointer-events:none}
+    .cap{position:absolute;left:0;right:0;top:922px;height:120px;display:flex;align-items:center;justify-content:center;overflow:visible}
+    .cap .line{font:600 52px/1.2 "Inter",sans-serif;letter-spacing:-.01em;color:#ececee;white-space:nowrap;text-align:center}
+    .cap .w{display:inline-block;white-space:pre}
+    .cap .acc{color:#c27a34}
+    .src{display:none}
+  </style>
+  <div data-hf-id="hf-v8lf" id="root" data-composition-id="caps" data-width="1920" data-height="1080" data-composition-variables='[{"id":"cap1","type":"string","label":"cap1","default":"Вечер. Два вопроса *ждут* вас"},{"id":"cap2","type":"string","label":"cap2","default":"Уходите — *помощник* решит за вас"},{"id":"cap3","type":"string","label":"cap3","default":"Ночью помощник и проверяющий *советуются*"},{"id":"cap4","type":"string","label":"cap4","default":"У каждого решения есть *почему*"},{"id":"cap5","type":"string","label":"cap5","default":"Утром видно всё. Можно *отменить*"}]'>
+    <div data-hf-id="hf-0v29" id="cap1" class="clip cap" data-start="0.3" data-duration="3.0" data-beat="evening"><span data-hf-id="hf-fdi0" class="src" data-var-text="cap1">Вечер. Два вопроса *ждут* вас</span><div data-hf-id="hf-np12" class="line"></div></div>
+    <div data-hf-id="hf-0vi2" id="cap2" class="clip cap" data-start="5.5" data-duration="2.5" data-beat="autopilot-on"><span data-hf-id="hf-hkkn" class="src" data-var-text="cap2">Уходите — *помощник* решит за вас</span><div data-hf-id="hf-sogq" class="line"></div></div>
+    <div data-hf-id="hf-n3fx" id="cap3" class="clip cap" data-start="8.9" data-duration="2.8" data-beat="night-consult"><span data-hf-id="hf-sfk4" class="src" data-var-text="cap3">Ночью помощник и проверяющий *советуются*</span><div data-hf-id="hf-t2rr" class="line"></div></div>
+    <div data-hf-id="hf-tlhd" id="cap4" class="clip cap" data-start="12.3" data-duration="3.6" data-beat="decisions-why"><span data-hf-id="hf-phvm" class="src" data-var-text="cap4">У каждого решения есть *почему*</span><div data-hf-id="hf-th2s" class="line"></div></div>
+    <div data-hf-id="hf-yp2y" id="cap5" class="clip cap" data-start="18.9" data-duration="2.6" data-beat="morning-undo"><span data-hf-id="hf-b75i" class="src" data-var-text="cap5">Утром видно всё. Можно *отменить*</span><div data-hf-id="hf-tvdt" class="line"></div></div>
+  </div>
+  <script>
+    (function(){
+      const V=(window.__hyperframes&&window.__hyperframes.getVariables)?(window.__hyperframes.getVariables()||{}):{};
+      const tl=gsap.timeline({paused:true});
+      document.querySelectorAll('#root .cap').forEach(g=>{
+        const src=g.querySelector('.src'); const id=src.getAttribute('data-var-text');
+        const text=(V[id]||src.textContent||'').trim();
+        const line=g.querySelector('.line'); line.innerHTML='';
+        let acc=false;
+        text.split(' ').forEach((w,i)=>{
+          let t=w;
+          const open=t.startsWith('*'), close=t.endsWith('*')||/\*[^\w]*$/.test(t);
+          if(open){acc=true;t=t.slice(1);}
+          const span=document.createElement('span'); span.className='w'+(acc?' acc':'');
+          if(close){acc=false;t=t.replace('*','');}
+          span.textContent=(i?' ':'')+t; line.appendChild(span);
+        });
+        const s=parseFloat(g.getAttribute('data-start')), d=parseFloat(g.getAttribute('data-duration'));
+        const words=line.querySelectorAll('.w');
+        tl.fromTo(words,{opacity:0,filter:'blur(6px)'},{opacity:1,filter:'blur(0px)',duration:.13,stagger:.067,ease:'power2.out'},s);
+        tl.fromTo(line,{opacity:1,filter:'blur(0px)'},{opacity:0,filter:'blur(6px)',duration:.15,ease:'power2.in'},s+d-.15);
+      });
+      window.__timelines['caps']=tl;
+    })();
+  </script>
+</template>

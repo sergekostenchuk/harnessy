@@ -1,0 +1,33 @@
+<template>
+  <style>
+    #root{position:absolute;inset:0;overflow:hidden;background:#0a0a0b;background-image:radial-gradient(circle at 1px 1px,#1a1a1d 1px,transparent 1px);background-size:24px 24px;font-family:"Inter",sans-serif}
+    #end-lockup{position:absolute;left:0;top:0;width:1920px;height:1080px;display:flex;align-items:center;justify-content:center;gap:44px}
+    #end-mark{width:200px;height:200px;flex:none}
+    #end-mark img{display:block;width:200px;height:200px;border-radius:44px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+    #end-text{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+    #end-name-c{overflow:hidden}
+    #end-name{font:600 128px/1 "Inter",sans-serif;letter-spacing:-.03em;color:#ececee;white-space:nowrap}
+    #end-row{display:flex;align-items:center;gap:16px}
+    #end-badge{display:inline-flex;align-items:center;height:48px;padding:0 18px;border-radius:10px;font:500 28px "JetBrains Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:#c27a34;background:rgba(194,122,52,.14);border:1px solid rgba(194,122,52,.45);transform-origin:0 50%}
+    #end-sub{font:400 30px "Inter",sans-serif;color:#9a9aa2;letter-spacing:.01em}
+  </style>
+  <div data-hf-id="hf-ajg2" id="root" data-composition-id="end" data-width="1920" data-height="1080" data-composition-variables='[{"id":"end_name","type":"string","label":"end_name","default":"Harnessy"},{"id":"end_badge","type":"string","label":"end_badge","default":"alpha"},{"id":"end_sub","type":"string","label":"end_sub","default":"автопилот"}]'>
+    <div data-hf-id="hf-dw7r" id="end-lockup" class="clip" data-start="0" data-duration="2.7" data-beat="end-card">
+      <div data-hf-id="hf-d956" id="end-mark"><img data-hf-id="hf-lzr6" src="assets/img/harnessy-icon.png" alt=""></div>
+      <div data-hf-id="hf-yk7o" id="end-text">
+        <div data-hf-id="hf-8kmk" id="end-name-c"><div data-hf-id="hf-r1of" id="end-name" data-var-text="end_name">Harnessy</div></div>
+        <div data-hf-id="hf-4zhn" id="end-row"><span data-hf-id="hf-q41p" id="end-badge" data-var-text="end_badge">alpha</span><span data-hf-id="hf-z5wp" id="end-sub" data-var-text="end_sub">автопилот</span></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function(){
+      const tl=gsap.timeline({paused:true});
+      tl.fromTo('#end-mark',{scale:1.6,opacity:0,filter:'blur(10px)'},{scale:1,opacity:1,filter:'blur(0px)',duration:.5,ease:'power4.out'},0);
+      tl.fromTo('#end-name',{clipPath:'inset(0 100% 0 0)',x:-24},{clipPath:'inset(0 0% 0 0)',x:0,duration:.38,ease:'power3.out'},.22);
+      tl.fromTo('#end-badge',{scale:.6,opacity:0},{scale:1,opacity:1,duration:.26,ease:'back.out(1.4)'},.62);
+      tl.fromTo('#end-sub',{opacity:0,filter:'blur(6px)'},{opacity:1,filter:'blur(0px)',duration:.2,ease:'power2.out'},.55);
+      window.__timelines['end']=tl;
+    })();
+  </script>
+</template>
