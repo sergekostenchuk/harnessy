@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdirSync} from 'node:fs';
+import {mkdirSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {fixture,call,deferred,until,OWNER} from './test-helpers.ts';
 
 test('166: swarm reads real seats, pending channel records and context without starting models',async t=>{
- const h=await fixture(t),pane=h.runtime.registry.get('worker')!;pane.tokens={input:100,output:20,cacheRead:50};
+ const h=await fixture(t,{before:dir=>{mkdirSync(join(dir,'.harness','roles'),{recursive:true});writeFileSync(join(dir,'.harness','roles','executor.md'),'Живая инструкция роли.')}}),pane=h.runtime.registry.get('worker')!;pane.tokens={input:100,output:20,cacheRead:50};
  const record=h.runtime.journal.append({sender:'owner',to:'worker',kind:'task',text:'actual queue',thread:'current'});
  const result=await call(h.api,'/api/swarm');assert.equal(result.status,200);assert.equal(result.body.project,h.dir);assert.equal(result.body.panes.length,1);const row=result.body.panes[0];
- assert.equal(row.id,'worker');assert.equal(row.model,pane.model);assert.equal(row.busy,false);assert.equal(row.pending,1);assert.equal(row.queue[0].seq,record.seq);assert.equal(row.queue[0].text,'actual queue');assert.equal(row.turn,null);assert.equal(row.context.used,170);assert.equal(row.context.measured,true);assert.equal(result.body.team.path,join(h.dir,'.harness/team.yaml'));assert.equal(result.body.journal.total,1);assert.equal(h.provider.calls.length,0);
+ assert.equal(row.id,'worker');assert.equal(row.model,pane.model);assert.equal(typeof row.chat,'string');assert.equal(row.instructionPath,'.harness/roles/executor.md');assert.equal(row.busy,false);assert.equal(row.pending,1);assert.equal(row.queue[0].seq,record.seq);assert.equal(row.queue[0].text,'actual queue');assert.equal(row.turn,null);assert.equal(row.context.used,170);assert.equal(row.context.measured,true);assert.equal(result.body.team.path,join(h.dir,'.harness/team.yaml'));assert.equal(result.body.journal.total,1);assert.equal(h.provider.calls.length,0);
  const other=join(h.dir,'other');mkdirSync(other);await h.runtime.projectSet(other,{},OWNER);const next=(await call(h.api,'/api/swarm')).body;assert.equal(next.project,other);assert.deepEqual(next.panes,[]);assert.deepEqual(next.journal.records,[]);
 });
 
@@ -22,4 +22,9 @@ test('166: current turn and pending approval are a snapshot, and disappear on co
 
 test('166: queued records are separate from the active turn records',async t=>{
  const h=await fixture(t),gate=deferred<{text:string;sessionId:null}>();h.provider.onRun=async()=>gate.promise;t.after(()=>gate.resolve({text:'done',sessionId:null}));await call(h.api,'/api/chat',{body:{pane:'worker',message:'in flight',direct:true}});await until(()=>h.provider.calls.length===1);const queued=h.runtime.journal.append({sender:'owner',to:'worker',kind:'task',text:'next'});const row=(await call(h.api,'/api/swarm')).body.panes[0];assert.equal(row.pending,1);assert.deepEqual(row.queue.map((r:any)=>r.seq),[queued.seq]);assert.equal(row.turn.records.some((r:any)=>r.seq===queued.seq),false);gate.resolve({text:'done',sessionId:null});
+});
+
+test('36D: swarm never exposes an instruction path outside the current project',async t=>{
+ const h=await fixture(t,{seats:'  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read, digest: false, instructions: /tmp/foreign-role.md}'}),row=(await call(h.api,'/api/swarm')).body.panes[0];
+ assert.equal(row.instructionPath,null);assert.equal(h.provider.calls.length,0);
 });

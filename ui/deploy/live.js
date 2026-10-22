@@ -923,7 +923,7 @@
     }
     if(refresh||!SWARM.data)return swarmFetch();
   }
-  if(PAGE==='swarm'){
+  if(PAGE==='swarm'&&!document.querySelector('[data-team-live]')){
     const root=swarmRoot(),comparison=root.querySelector('#v-cmp .wrap');const comparisonNote=document.createElement('div');comparisonNote.innerHTML=swMock('движок не связывает принятые задачи, круги ревью и A/B-испытания с исполнителем.');comparison.insertBefore(comparisonNote,comparison.firstChild);comparison.setAttribute('data-swarm-mock','');
     root.querySelector('#seg').setAttribute('role','tablist');root.querySelectorAll('#seg [data-v]').forEach(node=>{node.setAttribute('role','tab');node.setAttribute('tabindex','0')});root.querySelector('#x').setAttribute('role','button');root.querySelector('#x').setAttribute('tabindex','0');root.querySelector('#x').setAttribute('aria-label','Закрыть');
     swarmDraw();addEventListener('live:status',()=>swarmSync());addEventListener('pagehide',()=>{SWARM.alive=false;swarmReset()});addEventListener('pageshow',e=>{if(e.persisted){SWARM.alive=true;swarmReset()}});addEventListener('focus',()=>swarmRefresh());

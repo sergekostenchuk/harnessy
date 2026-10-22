@@ -32,6 +32,7 @@ export class DomNode {
  appendChild(n:DomNode){n.parentElement=this;this.children.push(n);return n}
  insertBefore(n:DomNode,anchor:DomNode|null){if(!anchor)return this.appendChild(n);const at=this.children.indexOf(anchor);if(at<0)throw Error('missing anchor');n.remove();n.parentElement=this;this.children.splice(at,0,n);return n}
  before(n:DomNode){this.parentElement?.insertBefore(n,this)}
+ after(n:DomNode){const parent=this.parentElement;if(!parent)return;const at=parent.children.indexOf(this);n.remove();n.parentElement=parent;parent.children.splice(at+1,0,n)}
  replaceWith(n:DomNode){this.before(n);this.remove()}
  remove(){if(this.parentElement)this.parentElement.children=this.parentElement.children.filter(n=>n!==this);this.parentElement=null}
  contains(n:DomNode):boolean{return n===this||this.children.some(c=>c.contains(n))}

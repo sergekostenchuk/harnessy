@@ -38,15 +38,15 @@
   if(!document.documentElement.hasAttribute('data-proto')) return;
   /*IC*/
   const FILE=location.pathname.split('/').pop()||'10-new-chat.html';
-  const PAGES={new:'10-new-chat.html',now:'14-now.html',chat:'01-chat.html',plan:'02-plan.html',path:'28-path.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',events:'09-events.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
-  const TIP={now:'Входящие',chat:'Чат',plan:'План · карта',path:'Путь',res:'Исследования',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Команда агентов',sens:'Дашборд',spend:'Расход и лимиты',events:'События',log:'Журнал'};
+  const PAGES={new:'10-new-chat.html',now:'14-now.html',chat:'01-chat.html',plan:'02-plan.html',path:'28-path.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',teamcons:'41-team-constructor.html',teamqueue:'41-team-queue.html',sens:'13-sensors.html',spend:'05-spend.html',events:'09-events.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
+  const TIP={now:'Входящие',chat:'Чат',plan:'План · карта',path:'Путь',res:'Исследования',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Команда агентов',teamcons:'Конструктор команды',teamqueue:'Очередь задач',sens:'Дашборд',spend:'Расход и лимиты',events:'События',log:'Журнал'};
   const TOP=['now','chat','plan','path','res','doc','art','mem','swarm','sens','spend','events','log'];
   const PATH_FILES=['28-path.html','29-discovery-frame.html','30-discovery-progress.html','31-discovery-dossier.html','32-discovery-variants.html','33-discovery-summary.html','34-discovery-unknowns.html','35-concept-to-features.html','36-om-owner-questions.html','37-execution-review.html','38-project-result.html'];
   /* экран «План · карта» сохраняет обе прежние вкладки и добавляет «Путь» */
   const PLAN_TABS=[['om','Карта проекта','02-om-map.html'],['user','План пользователя','02-plan.html'],['path','Путь','28-path.html']], PLAN_KEY='harnessy-plan-tab';
   const planTab=()=>{ let t='om'; try{ t=localStorage.getItem(PLAN_KEY)||'om'; }catch(e){} return PLAN_TABS.find(x=>x[0]===t)||PLAN_TABS[0]; };
   const planPage=()=>{ const t=planTab(); return t[2]+'#'+t[0]; };
-  const SKETCH={'02-om-map.html':'26-om-map.html'};   /* лист с пояснениями для экрана, собранного из другого скетча */
+  const SKETCH={'02-om-map.html':'26-om-map.html','04-swarm.html':'41-team-canvas.html','41-team-constructor.html':'41-team-canvas.html','41-team-queue.html':'41-team-canvas.html'};   /* лист с пояснениями для экрана, собранного из другого скетча */
   const KEY=Object.keys(PAGES).find(k=>PAGES[k]===FILE)||(PATH_FILES.includes(FILE)?'path':PLAN_TABS.some(t=>t[2]===FILE)?'plan':'');
   document.documentElement.dataset.page=KEY;
   if(KEY==='plan'||KEY==='path'){ const cur=KEY==='path'?PLAN_TABS[2]:(PLAN_TABS.find(t=>t[2]===FILE)||PLAN_TABS[1]); try{ localStorage.setItem(PLAN_KEY,cur[0]); }catch(e){} if(!location.hash) history.replaceState(null,'','#'+cur[0]);
@@ -62,7 +62,9 @@
     doc:['частично','Документы и разделы читаются из проекта; история версий и переходы между стадиями — макет.'],
     plan:['макет','План, задачи и показатели пока показаны на примере: движок не отдаёт карту работ.'],
     path:['макет','Путь и его стадии показаны на примере: движок Harnessy пока не подключён к OMG.'],
-    swarm:['частично','Состав, состояния и канал читаются из текущего проекта. Сравнение, цена простоя и неподключённые показатели отмечены на блоках.'],
+    swarm:['частично','Состав, состояния, разговор оркестратора и канал читаются из текущего проекта. Очередь отмечена как макет.'],
+    teamcons:['частично','Модели, права и инструкции читаются из проекта; связи и применение без перезапуска отмечены как макет.'],
+    teamqueue:['макет','Очереди задач в движке нет: данные примера и взаимодействия показаны как макет.'],
     sens:['макет','Дашборд и пороги — пример; движок пока не отдаёт эти измерения.'],
     now:['частично','Решения и подтверждения приходят от движка; остальные показатели и прогнозы пока демонстрационные.'],
     events:['частично','Лента читается из журнала текущего проекта. Соседние блоки — примеры уведомлений и состояний.'],
@@ -76,7 +78,7 @@
       const banner=document.createElement('div');banner.className='spec-banner';banner.setAttribute('role','note');
       banner.textContent='Макет · образец данных · страница: '+spec[0]+'. '+spec[1];
       const main=app.querySelector('.main'),top=main&&main.querySelector('.top');
-      if(top){const heading=document.createElement('div');heading.className='spec-heading';top.before(heading);heading.appendChild(banner);top.remove();heading.appendChild(top)}else app.insertBefore(banner,app.firstChild);
+      if(top){const heading=document.createElement('div');heading.className='spec-heading';top.before(heading);heading.appendChild(banner);top.remove();heading.appendChild(top)}else if(main)main.insertBefore(banner,main.firstChild);else app.insertBefore(banner,app.firstChild);
     });
     const partial={now:'#v-turn .nums, #v-away .nums, #v-week .nums',away:'.leave-policy'};
     if(partial[KEY])document.querySelectorAll(partial[KEY]).forEach(block=>block.setAttribute('data-spec-mock',spec[1]));

@@ -194,8 +194,9 @@ PROTO_PAGES.update({"28-path": "Путь", "29-discovery-frame": "Путь · р
                     "31-discovery-dossier": "Путь · досье", "32-discovery-variants": "Путь · варианты", "33-discovery-summary": "Путь · итог Discovery",
                     "34-discovery-unknowns": "Путь · неизвестные", "35-concept-to-features": "Путь · концепция и функции",
                     "36-om-owner-questions": "Путь · вопросы владельца", "37-execution-review": "Путь · ревью исполнения",
-                    "38-project-result": "Путь · результат проекта"})
-PROTO_SRC = {"02-om-map": "26-om-map-app"}   # экран прототипа, собираемый из другого исходника
+                    "38-project-result": "Путь · результат проекта",
+                    "41-team-constructor": "Команда агентов · конструктор", "41-team-queue": "Команда агентов · очередь"})
+PROTO_SRC = {"02-om-map": "26-om-map-app", "04-swarm": "41-team-live-work"}   # экран прототипа, собираемый из другого исходника
 PROTO_START = "/sketches/proto/10-new-chat.html"
 CLASSIC = "/sketches/harness-classic.html"
 LAUNCH = ('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Harnessy</title>'
@@ -209,12 +210,12 @@ def build_proto():
     """Прототип из новых экранов: копия скетчей в режиме прототипа (proto.css + proto.js) → out/site/sketches/proto.
     Исходники в sketches/disarto остаются листами с пояснениями; прототип всегда выводится из них."""
     src = ROOT / "sketches" / "disarto"
-    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "release.js", "proto.js", "responsive.js") if (HERE / n).exists()] + [src / n for n in ("om-map.js", "path.js", "path-map.js")])
+    check_eaten_code([HERE / n for n in ("live.js", "team-live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "release.js", "proto.js", "responsive.js") if (HERE / n).exists()] + [src / n for n in ("om-map.js", "path.js", "path-map.js", "team-canvas.js")])
     dst = OUT / "sketches" / "proto"
     if dst.exists():
         shutil.rmtree(dst)
     dst.mkdir(parents=True)
-    for name in ("style.css", "app.js", "pour-scene.js", "om-map.js", "om-map.css", "path.css", "path.js", "path-map.css", "path-map.js", "sidebar-v2.css"):
+    for name in ("style.css", "app.js", "pour-scene.js", "om-map.js", "om-map.css", "path.css", "path.js", "path-map.css", "path-map.js", "sidebar-v2.css", "team-canvas.css", "team-canvas.js"):
         shutil.copy(src / name, dst / name)
     app_js = (src / "app.js").read_text(encoding="utf-8")
     i = app_js.index("const IC={")
@@ -226,7 +227,7 @@ def build_proto():
     shutil.copy(HERE / "live.js", dst / "live.js")                    # рабочий слой: состояние, решения, чат, поиск
     shutil.copy(HERE / "release.js", dst / "release.js")              # канал/версия, постоянный бейдж и дисклеймер alpha
     shutil.copy(HERE / "cx.js", dst / "cx.js")                        # поле ввода C′: папка · роль · режимы / ＋ · права · модель · усилие · ⓘ
-    for extra in ("ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "program-missing.js", "network.js"):                      # модули экранов: контекст чата, настройки, подключения (08.10.2026)
+    for extra in ("team-live.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "program-missing.js", "network.js"):                      # модули экранов: контекст чата, настройки, подключения (08.10.2026)
         if (HERE / extra).exists():
             shutil.copy(HERE / extra, dst / extra)
     (dst / "proto.js").write_text(rep((HERE / "proto.js").read_text(encoding="utf-8"), "/*IC*/", ic), encoding="utf-8")
@@ -241,7 +242,7 @@ def build_proto():
         t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto class="ps2-root">')
         t = rep(t, "<head>", "<head><script>" + boot + "</script>")
         t = rep(t, "</head>", '<link rel="stylesheet" href="proto.css"><link rel="stylesheet" href="sidebar-v2.css"></head>')
-        t = rep(t, "</body>", release_script+'<script src="proto.js"></script>\n<script src="markdown.js"></script>\n<script src="live.js"></script>\n<script src="llm.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="network-stats.js"></script>\n<script src="network-add.js"></script>\n<script src="network-recovery.js"></script>\n<script src="program-missing.js"></script>\n<script src="network.js"></script>\n<script src="conn.js"></script>\n</body>')
+        t = rep(t, "</body>", release_script+'<script src="proto.js"></script>\n<script src="markdown.js"></script>\n<script src="live.js"></script>\n<script src="team-live.js"></script>\n<script src="llm.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="network-stats.js"></script>\n<script src="network-add.js"></script>\n<script src="network-recovery.js"></script>\n<script src="program-missing.js"></script>\n<script src="network.js"></script>\n<script src="conn.js"></script>\n</body>')
         t = re.sub(r"<title>.*?</title>", f"<title>Harnessy · {title}</title>", t, count=1, flags=re.S)
         (dst / f"{stem}.html").write_text(t, encoding="utf-8")
     gallery = (src / "index.html").read_text(encoding="utf-8")
