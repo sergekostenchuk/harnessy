@@ -55,7 +55,7 @@
   function paintBadges(){const n=counts();document.querySelectorAll('aside.side .ps2-inbox').forEach(row=>{
     const action=row.querySelector('.b'),info=row.querySelector('.b2');if(action){action.textContent=n.need;action.hidden=!n.need;action.style.display=n.need?'':'none'}if(info){info.textContent=n.info;info.hidden=!n.info;info.style.display=n.info?'':'none'}
   });document.querySelectorAll('.m-drawer a[href="44-inbox.html"] small').forEach(el=>el.textContent=n.need?String(n.need):'');}
-  function signal(){paintBadges();dispatchEvent(new CustomEvent('inbox:changed',{detail:{project:state.project,counts:counts()}}))}
+  function signal(){const value=counts();window.PS2?.setInbox?.(value);paintBadges();dispatchEvent(new CustomEvent('inbox:changed',{detail:{project:state.project,counts:value}}))}
   const current=()=>L?.H?.on&&!L.H.snapshotOnly&&!!L.H.project;
   const binding=()=>({project:L.H.project,generation:L.H.confirmedProjectGeneration||0});
   const same=b=>current()&&L.H.project===b.project&&(L.H.confirmedProjectGeneration||0)===b.generation;
@@ -101,6 +101,9 @@
   function card(x){const cls=(x.need?' need':'')+(x.read?' read':' new')+(x.done?' done':'')+(x.failed?' err':'');const error=state.actionErrors.get(x.id),reply=x.type==='question'&&state.replyOpen.has(x.id)&&!x.done;
     return '<article class="ps2-ib'+cls+'" data-inbox-id="'+esc(x.id)+'" tabindex="0" aria-label="'+esc(x.kind+': '+x.title)+'"><span class="ic" aria-hidden="true">'+(icon[x.type]||'•')+'</span><div class="bd"><div class="k"><b>'+esc(x.kind)+'</b><i>'+esc(ago(x.ts))+'</i></div><div class="t">'+esc(x.title)+'</div><div class="f">'+esc(x.detail||'')+'</div>'+(reply?'<div class="ps2-ib-reply"><label for="inbox-reply-'+x.record.seq+'">Ответ владельца на вопрос №'+x.record.seq+'</label><textarea id="inbox-reply-'+x.record.seq+'" data-inbox-reply rows="3" placeholder="Напишите решение…">'+esc(state.replyDrafts.get(x.id)||'')+'</textarea><button class="btn sm p" data-inbox-action="send"'+(state.pending.has(x.id)||state.error?' disabled':'')+'>Отправить ответ</button></div>':'')+(error?'<div class="ps2-ib-action-error" role="status">'+esc(error)+'</div>':'')+'</div><div class="act">'+actions(x)+'</div></article>'}
   function draw(){if(PAGE!=='inbox')return;const feed=document.querySelector('[data-inbox-feed]');if(!feed)return;
+    const active=document.activeElement,activeRow=feed.contains(active)?active?.closest('[data-inbox-id]'):null,activeId=active?.matches('[data-inbox-reply]')?activeRow?.dataset.inboxId:null;
+    const editor=activeId&&state.replyOpen.has(activeId)?{id:activeId,value:active.value,start:active.selectionStart,end:active.selectionEnd,direction:active.selectionDirection,scrollTop:active.scrollTop}:null;
+    if(editor)state.replyDrafts.set(editor.id,editor.value);
     const n=counts(),shown=state.filter==='need'?state.items.filter(x=>x.need&&!x.done):state.filter==='info'?state.items.filter(x=>!x.need):state.items;
     for(const [key,value] of Object.entries({all:n.all,need:n.need,info:n.info})){const el=document.querySelector('[data-inbox-'+(key==='all'?'total':key)+']');if(el)el.textContent=state.project?value:'—'}
     document.querySelectorAll('[data-inbox-filter]').forEach(b=>{const active=b.dataset.inboxFilter===state.filter;b.classList.toggle('on',active);b.setAttribute('aria-selected',String(active))});
@@ -113,6 +116,7 @@
     feed.innerHTML=unavailable+(need.length?'<div class="ps2-ibgrp"><b>требует действия · '+need.length+'</b></div>'+need.map(card).join(''):'')+
       (info.length?'<div class="ps2-ibgrp">к сведению · '+info.length+'</div>'+info.map(card).join(''):'')+
       (done.length?'<div class="ps2-ibgrp">выполнено · '+done.length+'</div>'+done.map(card).join(''):'');
+    if(editor){const row=[...feed.querySelectorAll('[data-inbox-id]')].find(x=>x.dataset.inboxId===editor.id),field=row?.querySelector('[data-inbox-reply]');if(field){field.focus({preventScroll:true});if(Number.isSafeInteger(editor.start)&&Number.isSafeInteger(editor.end))field.setSelectionRange(editor.start,editor.end,editor.direction);field.scrollTop=editor.scrollTop}}
   }
   async function open(x){if(x.type==='network')location.href='11-connections.html';else if(x.type==='limit')location.href='05-spend.html';else if(x.type==='update')location.href='06-settings.html#p=about';else if(x.type==='verdict'||!x.pane)location.href='21-journal.html';else{
       const b=binding(),S=L.S;if(x.chat&&L.H.active?.[x.pane]!==x.chat){const r=await L.api('/api/chats/open',{chat:x.chat,carry:'none'});if(!same(b)||!r?.ok)throw Error(r?.error||'Чат не открылся')}

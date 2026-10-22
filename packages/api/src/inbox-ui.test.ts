@@ -19,7 +19,7 @@ const trace={ok:true,project:'/a',records:[{seq:9,kind:'network.failover',ts:sta
 const limits={ok:true,project:'/a',providers:[{vendor:'claude',label:'Claude',sourceConnected:true,fetchedAt:Math.floor(now/1000),windows:[{label:'неделя',percentUsed:83,resetsAt:Math.floor(now/1000)+86400}]}]};
 function view(owner:Record<string,unknown>={}){
   const d=dom(sketch.slice(sketch.indexOf('<body>')+6,sketch.lastIndexOf('</body>')));Object.assign(d.document,{documentElement:d.html,body:d.body});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page','inbox');
-  const calls:{path:string;body?:any}[]=[],H={on:true,snapshotOnly:false,project:'/a',confirmedProjectGeneration:1,active:{worker:'chat-a'}},S={ui:{pane:'room',fresh:false,switched:false}},events:{onmessage?:Function}[]=[];
+  const calls:{path:string;body?:any}[]=[],panelCounts:any[]=[],H={on:true,snapshotOnly:false,project:'/a',confirmedProjectGeneration:1,active:{worker:'chat-a'}},S={ui:{pane:'room',fresh:false,switched:false}},events:{onmessage?:Function}[]=[];
   const api=async(path:string,body?:any)=>{calls.push({path,body});if(path==='/api/status')return status;if(path==='/api/journal?limit=0')return journal;
     if(path==='/api/chats')return {chats:[chat.chat]};if(path==='/api/chats/chat-a')return chat;if(path.startsWith('/api/trace?'))return trace;
     if(path==='/api/limits')return limits;if(path==='/api/settings'&&!body)return {ok:true,owner};
@@ -27,7 +27,7 @@ function view(owner:Record<string,unknown>={}){
     if(path==='/api/approve'||path==='/api/chat')return {ok:true};throw Error('unexpected '+path)};
   const context:any={window:null,document:d.document,location:{href:''},Date,Set,Map,Number,Array,JSON,Promise,encodeURIComponent,CustomEvent:class{type:string;init:any;constructor(type:string,init:any){this.type=type;this.init=init}},dispatchEvent(){},addEventListener:d.window.addEventListener.bind(d.window),
     LIVE:{H,S,api,esc:(v:any)=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),save(){},subscribeLiveEvents:()=>{const item={};events.push(item);return item}}};context.window=context;
-  runInContext(source,createContext(context));return {d,H,S,owner,calls,context,events,async refresh(){await new Promise(resolve=>setImmediate(resolve));await context.HARNESS_INBOX.refresh();await new Promise(resolve=>setImmediate(resolve))},async settle(){await new Promise(resolve=>setImmediate(resolve))}};
+  context.PS2={setInbox:(value:any)=>panelCounts.push({...value})};runInContext(source,createContext(context));return {d,H,S,owner,calls,panelCounts,context,events,async refresh(){await new Promise(resolve=>setImmediate(resolve));await context.HARNESS_INBOX.refresh();await new Promise(resolve=>setImmediate(resolve))},async settle(){await new Promise(resolve=>setImmediate(resolve))}};
 }
 
 test('TS-36B: six live source kinds, deduplicated approval/question, and one count function for page and rail',()=>{
@@ -103,4 +103,14 @@ test('TS-36B r2: a malformed successful-looking source is unavailable, not an em
   await v.refresh();const feed=v.d.document.querySelector('[data-inbox-feed]')!;
   assert.match(feed.textContent,/События подключения недоступны/);assert.match(feed.textContent,/История чатов недоступна/);
   assert.doesNotMatch(v.d.document.querySelector('[data-inbox-connection]')!.textContent,/^Подключено$/);
+});
+
+test('TS-36B r3: live refresh keeps the active reply, selection, and the sidebar count',async()=>{
+  const v=view();await v.refresh();
+  const open=v.d.document.querySelectorAll('[data-inbox-action="open"]').find(node=>node.textContent==='Ответить')!;await open.emit('click');await v.settle();
+  const before=v.d.document.querySelector('[data-inbox-reply]')!;before.value='Продолжить проверку';await before.emit('input');before.focus();before.setSelectionRange(5,8);
+  await v.refresh();const after=v.d.document.querySelector('[data-inbox-reply]')!;
+  assert.notEqual(after,before);assert.equal(v.d.document.activeElement,after);assert.equal(after.value,'Продолжить проверку');
+  assert.deepEqual([after.selectionStart,after.selectionEnd],[5,8]);
+  assert.deepEqual(v.panelCounts.at(-1),{...v.context.HARNESS_INBOX.current.counts});
 });

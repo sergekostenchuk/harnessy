@@ -6,8 +6,9 @@ const decode=(s:string)=>s.replace(/&(amp|lt|gt|quot);/g,(_,v)=>({amp:'&',lt:'<'
 const encode=(s:string)=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!));
 const key=(s:string)=>s.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
 export class DomNode {
- tagName:string;attributes:Record<string,string>={};dataset:Record<string,string>={};style:Record<string,string>={};children:DomNode[]=[];parentElement:DomNode|null=null;value='';text='';listeners=new Map<string,Listener[]>();owner:DomNode;activeElement:DomNode|null=null;defaultView:any=null;HARNESS_MARKDOWN:any=null;
+ tagName:string;attributes:Record<string,string>={};dataset:Record<string,string>={};style:Record<string,string>={};children:DomNode[]=[];parentElement:DomNode|null=null;private _value='';text='';selectionStart=0;selectionEnd=0;selectionDirection='none';scrollTop=0;listeners=new Map<string,Listener[]>();owner:DomNode;activeElement:DomNode|null=null;defaultView:any=null;HARNESS_MARKDOWN:any=null;
  constructor(tag='div',owner?:DomNode){this.tagName=tag.toUpperCase();this.owner=owner??this}
+ get value(){return this._value}set value(v:string){this._value=String(v);this.selectionStart=this.selectionEnd=this._value.length}
  get className(){return this.attributes.class??''}set className(v:string){this.attributes.class=v}
  get id(){return this.attributes.id??''}set id(v:string){this.attributes.id=v}
  get title(){return this.attributes.title??''}set title(v:string){this.attributes.title=v}
@@ -21,7 +22,7 @@ export class DomNode {
  get textContent():string{return this.tagName==='#TEXT'?this.text:this.children.map(n=>n.textContent).join('')}
  set textContent(v:string){this.children=[];const n=new DomNode('#text',this.owner);n.text=v;this.appendChild(n)}
  get innerHTML():string{return this.children.map(n=>n.outerHTML).join('')}
- set innerHTML(html:string){for(const n of this.children)n.parentElement=null;this.children=[];const stack:DomNode[]=[this];for(const token of html.match(/<[^>]*>|[^<]+/g)??[]){if(token.startsWith('<!--'))continue;if(token.startsWith('</')){stack.pop();continue}const parent=stack.at(-1)??this;
+ set innerHTML(html:string){for(const n of this.children)n.parentElement=null;this.children=[];const stack:DomNode[]=[this];for(const token of html.match(/<[^>]*>|[^<]+/g)??[]){if(token.startsWith('<!--'))continue;if(token.startsWith('</')){const closed=stack.pop();if(closed?.tagName==='TEXTAREA')closed.value=closed.textContent;continue}const parent=stack.at(-1)??this;
   if(token.startsWith('<')){const tag=token.match(/^<([\w-]+)/)?.[1];if(!tag)continue;const n=new DomNode(tag,this.owner);for(const a of token.slice(tag.length+1).matchAll(/([\w:-]+)(?:="([^"]*)"|='([^']*)'|=([^\s>]+))?/g)){if(a[1]==='/')continue;n.setAttribute(a[1]!,decode(a[2]??a[3]??a[4]??''))}n.value=n.attributes.value??'';parent.appendChild(n);if(!/\/$/.test(token.slice(0,-1))&&!/^(input|br|hr|img|meta|link)$/i.test(tag))stack.push(n)}
   else {const n=new DomNode('#text',this.owner);n.text=decode(token);parent.appendChild(n)}}}
  get outerHTML():string{if(this.tagName==='#TEXT')return encode(this.text);const tag=this.tagName.toLowerCase();return '<'+tag+Object.entries(this.attributes).map(([k,v])=>' '+k+'="'+encode(v)+'"').join('')+'>'+this.innerHTML+(/^(input|br|hr|img|meta|link)$/.test(tag)?'':'</'+tag+'>')}
@@ -44,7 +45,7 @@ export class DomNode {
  createElement(tag:string){return new DomNode(tag,this.owner)}
  getElementById(id:string){return this.querySelector('#'+id)}
  insertAdjacentHTML(where:string,html:string){const temp=new DomNode('div',this.owner);temp.innerHTML=html;for(const n of [...temp.children]){if(where==='beforeend')this.appendChild(n);else throw Error('unsupported position '+where)}}
- focus(){this.owner.activeElement=this}setSelectionRange(_start:number,_end:number){}
+ focus(){this.owner.activeElement=this}setSelectionRange(start:number,end:number,direction='none'){this.selectionStart=start;this.selectionEnd=end;this.selectionDirection=direction}
  showModal(){this.setAttribute('open','')}close(){this.removeAttribute('open')}
  offsetWidth=1000;offsetHeight=800;
  getBoundingClientRect(){return {left:0,top:0,width:this.offsetWidth,height:this.offsetHeight}}
