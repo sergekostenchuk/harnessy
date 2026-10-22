@@ -1,0 +1,44 @@
+<template>
+  <style>
+    #root{position:absolute;inset:0;font-family:"Inter",sans-serif;pointer-events:none}
+    .cap{position:absolute;left:0;right:0;top:922px;height:120px;display:flex;align-items:center;justify-content:center;overflow:visible}
+    .cap .line{font:600 52px/1.2 "Inter",sans-serif;letter-spacing:-.01em;color:#ececee;white-space:nowrap;text-align:center}
+    .cap .w{display:inline-block;white-space:pre}
+    .cap .acc{color:#c27a34}
+    .src{display:none}
+  </style>
+  <div data-hf-id="hf-2721" id="root" data-composition-id="caps" data-width="1920" data-height="1080" data-composition-variables='[{"id":"cap1","type":"string","label":"cap1","default":"В команде нет *Тестера*"},{"id":"cap2","type":"string","label":"cap2","default":"Соберите команду как *схему*"},{"id":"cap3","type":"string","label":"cap3","default":"Красная подсказка: выберите *модель*"},{"id":"cap4","type":"string","label":"cap4","default":"У каждого помощника — *модель* и права"},{"id":"cap5","type":"string","label":"cap5","default":"Стрелка — кому *сдавать* отчёт"},{"id":"cap6","type":"string","label":"cap6","default":"Сохранить и *применить* к проекту"},{"id":"cap7","type":"string","label":"cap7","default":"Применили — команда в *работе*"}]'>
+    <div data-hf-id="hf-qy0a" id="cap1" class="clip cap" data-start="0.3" data-duration="2.4" data-beat="work-canvas"><span data-hf-id="hf-lvcg" class="src" data-var-text="cap1">В команде нет *Тестера*</span><div data-hf-id="hf-np12" class="line"></div></div>
+    <div data-hf-id="hf-tpib" id="cap2" class="clip cap" data-start="3.4" data-duration="2.5" data-beat="drag-role"><span data-hf-id="hf-qgpm" class="src" data-var-text="cap2">Соберите команду как *схему*</span><div data-hf-id="hf-sogq" class="line"></div></div>
+    <div data-hf-id="hf-tklz" id="cap3" class="clip cap" data-start="6.3" data-duration="2.2" data-beat="no-model"><span data-hf-id="hf-fzkb" class="src" data-var-text="cap3">Красная подсказка: выберите *модель*</span><div data-hf-id="hf-t2rr" class="line"></div></div>
+    <div data-hf-id="hf-z82w" id="cap4" class="clip cap" data-start="8.8" data-duration="2.5" data-beat="rights"><span data-hf-id="hf-pbmi" class="src" data-var-text="cap4">У каждого помощника — *модель* и права</span><div data-hf-id="hf-th2s" class="line"></div></div>
+    <div data-hf-id="hf-oaku" id="cap5" class="clip cap" data-start="12.0" data-duration="2.4" data-beat="connect"><span data-hf-id="hf-0xd0" class="src" data-var-text="cap5">Стрелка — кому *сдавать* отчёт</span><div data-hf-id="hf-tvdt" class="line"></div></div>
+    <div data-hf-id="hf-3by3" id="cap6" class="clip cap" data-start="14.6" data-duration="2.0" data-beat="save-apply"><span data-hf-id="hf-ud2j" class="src" data-var-text="cap6">Сохранить и *применить* к проекту</span><div data-hf-id="hf-u9ou" class="line"></div></div>
+    <div data-hf-id="hf-bg3d" id="cap7" class="clip cap" data-start="17.4" data-duration="2.5" data-beat="team-at-work"><span data-hf-id="hf-2l4c" class="src" data-var-text="cap7">Применили — команда в *работе*</span><div data-hf-id="hf-unzv" class="line"></div></div>
+  </div>
+  <script>
+    (function(){
+      const V=(window.__hyperframes&&window.__hyperframes.getVariables)?(window.__hyperframes.getVariables()||{}):{};
+      const tl=gsap.timeline({paused:true});
+      document.querySelectorAll('#root .cap').forEach(g=>{
+        const src=g.querySelector('.src'); const id=src.getAttribute('data-var-text');
+        const text=(V[id]||src.textContent||'').trim();
+        const line=g.querySelector('.line'); line.innerHTML='';
+        let acc=false;
+        text.split(' ').forEach((w,i)=>{
+          let t=w;
+          const open=t.startsWith('*'), close=t.endsWith('*')||/\*[^\w]*$/.test(t);
+          if(open){acc=true;t=t.slice(1);}
+          const span=document.createElement('span'); span.className='w'+(acc?' acc':'');
+          if(close){acc=false;t=t.replace('*','');}
+          span.textContent=(i?' ':'')+t; line.appendChild(span);
+        });
+        const s=parseFloat(g.getAttribute('data-start')), d=parseFloat(g.getAttribute('data-duration'));
+        const words=line.querySelectorAll('.w');
+        tl.fromTo(words,{opacity:0,filter:'blur(6px)'},{opacity:1,filter:'blur(0px)',duration:.13,stagger:.067,ease:'power2.out'},s);
+        tl.fromTo(line,{opacity:1,filter:'blur(0px)'},{opacity:0,filter:'blur(6px)',duration:.15,ease:'power2.in'},s+d-.15);
+      });
+      window.__timelines['caps']=tl;
+    })();
+  </script>
+</template>
