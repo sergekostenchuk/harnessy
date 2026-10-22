@@ -1,0 +1,281 @@
+/* ── Команда агентов · работа и конструктор (скетч 41) · дизайн-код 00 · раздел team-canvas-spec ──
+   Полотно — OMCORE из om-map.js (om-map.css: .om-canvas · .om-view · .om-edges · .om-zoom · .om-lbl); панель и полоска вкладок — разметка скетча 40 (sidebar-v2.css, .ps2-root);
+   карточки ролей — прообраз 04-swarm. Новые классы — .tc-*. Графит + коньяк; зелёный/бордо — только по смыслу. 22.10.2026. */
+
+/* ── рабочая область «Работа команды»: полотно сверху, очередь снизу ── */
+.tc-main{display:flex;flex-direction:column;min-height:0;min-width:0}
+.tc-work{display:grid;grid-template-rows:minmax(0,1fr) auto;gap:10px;padding:12px 14px 12px;min-height:0;flex:1}
+.tc-work .om-canvas{min-height:0;height:100%}
+.tc-root .ps2-tbar .r .btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tc-root .ps2-tbar{overflow:hidden}.tc-root .ps2-tbar .tag{height:16px;font-size:8px;padding:0 5px}
+.tc-root .ps2-tbar .pill{height:18px;font-size:8.5px;padding:0 7px}
+.tc-root .ps2-tbar .st{display:inline-flex;align-items:center;gap:6px;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.tc-root .ps2-tbar .st i{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block}
+
+/* ── точка состояния члена команды: думает · пишет · ждёт решения · ждёт соседа · молчит · ошибка · свободно ── */
+.tc-o{width:10px;height:10px;border-radius:50%;flex:none;background:var(--line2);position:relative;box-sizing:border-box}
+.tc-o.think{background:conic-gradient(var(--accent) 0 30%,var(--line2) 30% 100%);animation:tc-spin 1.1s linear infinite}
+.tc-o.write{background:var(--accent);box-shadow:0 0 0 3px rgba(194,122,52,.18);animation:ps2-pulse 1.6s ease-in-out infinite}
+.tc-o.decide{background:var(--accent);box-shadow:0 0 0 2px var(--raised),0 0 0 3.5px var(--accent)}
+.tc-o.peer{background:transparent;border:2px solid var(--ink3)}
+.tc-o.quiet{background:var(--ink3)}
+.tc-o.err{background:var(--bad-fill,#a3304b);box-shadow:0 0 0 3px rgba(163,48,75,.22)}
+.tc-o.free{background:transparent;border:1.5px dashed var(--ink3)}
+.tc-o.done{background:var(--ok)}
+@keyframes tc-spin{to{transform:rotate(360deg)}}
+
+/* ── карточка члена команды · 4 строки: роль · модель | состояние | последняя строка из чата | расход за ход ── */
+.tc-card{position:absolute;width:204px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:9px 11px 8px;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.35);transition:border-color .15s,opacity .2s,transform .15s,box-shadow .15s;font-size:11.5px;color:var(--ink2);box-sizing:border-box}
+.tc-card:hover{transform:translateY(-2px);border-color:#4a4a52}
+.tc-card .l1{display:flex;align-items:center;gap:7px;margin-bottom:5px;white-space:nowrap;min-width:0}
+.tc-card .l1 b{font-weight:500;font-size:13px;color:var(--ink)}
+.tc-card .l1 .md{margin-left:auto;font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tc-card .l2{font:10.5px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink2);margin-bottom:5px;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-card .l3{font-size:11.5px;line-height:1.4;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px}
+.tc-card .l3::before{content:"«";color:var(--ink3)}.tc-card .l3::after{content:"»";color:var(--ink3)}
+.tc-card .l4{display:flex;align-items:center;gap:6px;font:10px var(--mono);color:var(--ink3);padding-top:6px;border-top:1px dashed var(--line2);white-space:nowrap}
+.tc-card .l4 b{color:var(--ink2);font-weight:500}.tc-card .l4 i{margin-left:auto;font-style:normal}
+.tc-card.decide{border-color:rgba(194,122,52,.6)}.tc-card.decide .l2{color:var(--accent)}
+.tc-card.write .l2{color:var(--ink)}
+.tc-card.err{border-color:rgba(163,48,75,.7)}.tc-card.err .l2{color:var(--bad)}
+.tc-card.quiet .l2,.tc-card.peer .l2{color:var(--ink3)}
+.tc-card.free{border-style:dashed}.tc-card.free .l3{color:var(--ink3)}.tc-card.free .l3::before,.tc-card.free .l3::after{content:""}
+.tc-card.skel{pointer-events:none}.tc-card.skel .l1 b,.tc-card.skel .l1 .md,.tc-card.skel .l2,.tc-card.skel .l3,.tc-card.skel .l4{color:transparent;background:var(--line);border-radius:4px}.tc-card.skel .l3::before,.tc-card.skel .l3::after{content:""}.tc-card.skel .l4{border-top:0}
+.tc-card.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),0 10px 30px rgba(0,0,0,.35);opacity:1}
+.tc-card.near{border-color:rgba(194,122,52,.6);opacity:1}.tc-card.dim{opacity:.3}
+.tc-card.drop{border-color:var(--accent);border-style:dashed;background:var(--accent-soft)}
+.tc-card .drophint{display:none;position:absolute;left:8px;right:8px;bottom:-12px;height:22px;border-radius:7px;background:var(--accent);color:#1a0e04;font:500 9.5px/22px var(--mono);letter-spacing:.06em;text-transform:uppercase;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px}
+.tc-card.drop .drophint{display:block}
+.tc-card.got{animation:tc-got 1.2s ease-out}
+@keyframes tc-got{0%{box-shadow:0 0 0 0 rgba(194,122,52,.6)}100%{box-shadow:0 0 0 14px rgba(194,122,52,0)}}
+
+/* ── крупная карточка оркестратора — тот же чат оркестратора, встроенный ── */
+.tc-orch{position:absolute;width:600px;border:1px solid rgba(194,122,52,.45);border-radius:14px;background:var(--raised);box-shadow:0 14px 40px rgba(0,0,0,.45);cursor:pointer;transition:border-color .15s,opacity .2s,box-shadow .15s;box-sizing:border-box;color:var(--ink2)}
+.tc-orch .hd{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.tc-orch .hd .orb{width:22px;height:22px}
+.tc-orch .hd>div{line-height:1.2;min-width:0}.tc-orch .hd b{font-weight:500;font-size:13.5px;color:var(--ink);display:block}.tc-orch .hd small{font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink3);white-space:nowrap}
+.tc-orch .hd .st{margin-left:auto;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);display:flex;align-items:center;gap:7px;white-space:nowrap}
+.tc-orch .hd .tag{height:16px;font-size:8px;padding:0 5px}
+.tc-orch .hd .open{color:var(--ink3);font-size:11.5px;cursor:pointer;white-space:nowrap}.tc-orch .hd .open:hover{color:var(--accent)}
+.tc-orch .chat{padding:10px 14px 4px;display:flex;flex-direction:column;gap:7px;font-size:12.5px;line-height:1.45;max-height:138px;overflow:hidden;cursor:default}
+.tc-orch .chat .me{align-self:flex-end;max-width:78%;background:var(--tile);border:1px solid var(--line2);border-radius:12px 12px 4px 12px;padding:6px 10px;color:var(--ink)}
+.tc-orch .chat .ai{display:grid;grid-template-columns:14px 1fr;gap:8px;color:var(--ink2)}.tc-orch .chat .ai>div{min-width:0}.tc-orch.wait .chat{max-height:210px}
+.tc-orch .chat .ai::before{content:"";width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#e2b47c,#c27a34 55%,#7a3414);margin-top:3px}
+.tc-orch .chat .ai b{color:var(--ink);font-weight:500}.tc-orch .chat .ai p{margin:0}
+.tc-orch .chat .ai.typing{color:var(--ink3);font:11px var(--mono);align-items:center}.tc-orch .chat .ai.typing::before{animation:ps2-pulse 1.6s ease-in-out infinite;box-shadow:0 0 0 3px rgba(194,122,52,.18)}
+.tc-orch .chat .ai .decide{margin-top:6px}.tc-orch .chat .ai .decide .act{display:flex;gap:6px;margin-top:6px}.tc-orch .chat .ai .decide .btn{height:24px;font-size:11.5px;cursor:pointer}
+.tc-orch .in{margin:6px 14px 0;display:flex;align-items:center;gap:8px;height:36px;padding:0 6px 0 12px;border:1px solid var(--line2);border-radius:10px;background:var(--bg);color:var(--ink3);font-size:12.5px;cursor:text}
+.tc-orch .in .go{margin-left:auto;width:24px;height:24px;border-radius:50%;box-shadow:inset 0 0 0 1px var(--line2);display:grid;place-items:center;color:var(--line2)}.tc-orch .in .go svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tc-orch .ft{display:flex;gap:14px;padding:8px 14px 10px;font:10px var(--mono);letter-spacing:.04em;color:var(--ink3);white-space:nowrap}.tc-orch .ft b{color:var(--ink2);font-weight:500}.tc-orch .ft .r{margin-left:auto}
+.tc-orch.wait{border-color:var(--accent)}.tc-orch.wait .hd .st{color:var(--accent)}
+.tc-orch.compact .chat,.tc-orch.compact .in,.tc-orch.compact .ft,.tc-orch.compact .tag,.tc-orch.compact .open{display:none}.tc-orch.compact .hd .st{flex:none}.tc-orch.compact .hd{border-bottom:0}
+.tc-orch.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),0 14px 40px rgba(0,0,0,.45);opacity:1}
+.tc-orch.near{border-color:rgba(194,122,52,.7);opacity:1}.tc-orch.dim{opacity:.3}
+.tc-orch.drop{border-style:dashed;background:var(--accent-soft)}
+.tc-orch .drophint{display:none;position:absolute;left:14px;right:14px;bottom:-12px;height:22px;border-radius:7px;background:var(--accent);color:#1a0e04;font:500 9.5px/22px var(--mono);letter-spacing:.06em;text-transform:uppercase;text-align:center}.tc-orch.drop .drophint{display:block}
+
+/* ── стрелки: оргсхема серым (кто кому подчинён) · живое сообщение коньяком поверх · выбранные · приглушённые ── */
+.tc.om-canvas .om-edges path.org{stroke:#4a4a52;stroke-width:1.5}
+.tc.om-canvas .om-edges path.live{stroke:var(--accent);stroke-width:2;stroke-dasharray:6 5;animation:tc-ants 1.1s linear infinite}
+.tc.om-canvas .om-edges path.ret{stroke:#8a4452;stroke-dasharray:5 4}
+.tc.om-canvas .om-edges path.new{stroke:#6a6a74;stroke-dasharray:3 4}
+.tc.om-canvas .om-edges path.on{stroke:var(--accent);stroke-width:2;opacity:1}
+.tc.om-canvas .om-edges path.dim{opacity:.08}
+@keyframes tc-ants{to{stroke-dashoffset:-22}}
+.tc.om-canvas .om-lbl{white-space:nowrap}
+.tc.om-canvas .om-lbl.org{color:var(--ink3)}
+.tc.om-canvas .om-lbl.live{color:var(--accent);border-color:rgba(194,122,52,.6);background:var(--raised);font-weight:500;padding:2px 8px}
+.tc.om-canvas .om-lbl.ret{color:#c97a8c;border-color:rgba(163,48,75,.5);border-style:dashed}
+.tc.om-canvas .om-lbl.new{border-style:dotted}
+.tc-legend{position:absolute;left:12px;bottom:12px;max-width:calc(100% - 220px);display:flex;gap:12px;flex-wrap:wrap;align-items:center;font:9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);background:rgba(16,16,18,.72);border:1px solid var(--line2);border-radius:999px;padding:5px 12px;z-index:3;pointer-events:none}
+.tc-legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.tc-legend i{display:inline-block;width:20px;height:0;border-top:1.5px solid #4a4a52}.tc-legend i.live{border-top:2px dashed var(--accent)}.tc-legend i.on{border-top:2px solid var(--accent)}.tc-legend i.ret{border-top:1.5px dashed #8a4452}
+.tc-legend .tag{height:15px;font-size:7.5px;padding:0 4px}
+/* статичные образцы стрелок в дизайн-коде */
+.tc-arr{width:170px;height:40px;overflow:visible;flex:none}.tc-arr path{fill:none;stroke:#4a4a52;stroke-width:1.5}
+.tc-arr path.live{stroke:var(--accent);stroke-width:2;stroke-dasharray:6 5;animation:tc-ants 1.1s linear infinite}.tc-arr path.on{stroke:var(--accent);stroke-width:2}.tc-arr path.dim{opacity:.12}.tc-arr path.ret{stroke:#8a4452;stroke-dasharray:5 4}.tc-arr path.new{stroke:#6a6a74;stroke-dasharray:3 4}
+
+/* ── «+» → меню ролей (назначить из библиотеки) + «Открыть конструктор» ── */
+.tc-plus{position:relative;display:inline-flex}
+.tc-plus .btn{cursor:pointer}.tc-plus.open>.btn{border-color:rgba(194,122,52,.6);color:var(--ink)}
+.tc-pmenu{position:absolute;right:0;top:calc(100% + 6px);width:262px;padding:6px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);box-shadow:0 18px 50px rgba(0,0,0,.55);z-index:30;display:none;flex-direction:column;gap:1px;text-align:left;white-space:nowrap;cursor:default}
+.tc-plus.open .tc-pmenu,.tc-pmenu.static{display:flex;animation:ps2-rise .14s ease-out}
+.tc-pmenu.static{position:static;box-shadow:none;animation:none}
+.tc-pmenu .hd{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:6px 8px 6px;display:flex;gap:8px;align-items:center}
+.tc-pmenu .hd .tag{margin-left:auto;height:15px;font-size:7.5px;padding:0 4px}
+.tc-pmenu .it{display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;border-radius:8px;font-size:12.5px;color:var(--ink);cursor:pointer}
+.tc-pmenu .it:hover,.tc-pmenu .it.hov{background:var(--tile)}
+.tc-pmenu .it svg{width:14px;height:14px;stroke:var(--ink2);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.tc-pmenu .it .m{margin-left:auto;font:9.5px var(--mono);color:var(--ink3)}
+.tc-pmenu .it.acc{color:var(--accent)}.tc-pmenu .it.acc svg{stroke:var(--accent)}
+.tc-pmenu .it.dis{color:var(--ink3);cursor:default}.tc-pmenu .it.dis:hover{background:none}.tc-pmenu .it.dis svg{stroke:var(--ink3)}
+.tc-pmenu hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+.tc-pmenu .ft{font:10px var(--mono);color:var(--ink3);padding:6px 8px 4px;white-space:normal;line-height:1.4}
+
+/* ── очередь задач: № · краткое имя · кому · состояние; строка перетаскивается на карточку роли ── */
+.tc-queue{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:8px 12px 10px;flex:none;position:relative}
+.tc-queue .hd{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12.5px;white-space:nowrap}.tc-queue .hd b{font-weight:500;color:var(--ink)}.tc-queue .hd .m{font:10px var(--mono);color:var(--ink3);letter-spacing:.04em}.tc-queue .hd .tag{height:16px;font-size:8px;padding:0 5px}.tc-queue .hd .r{margin-left:auto;display:flex;gap:6px;align-items:center}
+.tc-queue .hd .r .btn{cursor:pointer}
+.tc-queue .rows{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px}
+.tc-queue .rows.one{grid-template-columns:1fr;gap:4px}
+.tc-task{display:grid;grid-template-columns:36px minmax(0,1fr) 92px 108px 14px;align-items:center;gap:8px;height:28px;padding:0 6px 0 8px;border-radius:8px;border:1px solid transparent;font-size:12px;color:var(--ink2);cursor:grab;user-select:none;-webkit-user-select:none;background:var(--panel)}
+.tc-task:hover{background:var(--raised);border-color:var(--line2)}
+.tc-task .n{font:500 10.5px var(--mono);color:var(--ink3)}.tc-task .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.tc-task .who{font:10px var(--mono);letter-spacing:.04em;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tc-task .who.none{color:var(--line2)}
+.tc-task .st{display:inline-flex;align-items:center;gap:5px;height:18px;padding:0 7px;border-radius:999px;font:500 9px var(--mono);letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line2);color:var(--ink3);white-space:nowrap;justify-self:start;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.tc-task .st::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+.tc-task.work .st{color:var(--accent);border-color:transparent;background:var(--accent-soft)}
+.tc-task.rev .st{color:var(--ink);border-color:var(--ink3)}
+.tc-task.done .st{color:var(--ok);border-color:transparent;background:var(--ok-soft)}.tc-task.done .t{color:var(--ink2)}
+.tc-task.err .st{color:var(--bad);border-color:transparent;background:var(--bad-soft)}
+.tc-task .grip{color:var(--line2);font:12px var(--mono);letter-spacing:-2px;text-align:right}.tc-task:hover .grip{color:var(--ink3)}
+.tc-task.drag{background:var(--raised);border-color:var(--accent);box-shadow:0 14px 34px rgba(0,0,0,.55);transform:rotate(-1deg) scale(1.02);cursor:grabbing;position:relative;z-index:5}
+.tc-task.ghost{opacity:.35;border-style:dashed;border-color:var(--line2)}
+.tc-task.big{height:40px;font-size:13px;grid-template-columns:48px minmax(0,1fr) 150px 150px 20px;padding:0 10px 0 12px}
+.tc-task.big .n{font-size:11.5px}.tc-task.big .st{height:20px;font-size:9.5px}.tc-task.big .who{font-size:11px}
+.tc-queue .src{display:flex;align-items:center;gap:8px;margin-top:8px;font:10px var(--mono);letter-spacing:.04em;color:var(--ink3);white-space:nowrap}
+.tc-queue .src b{color:var(--ink2);font-weight:500}.tc-queue .src .tag{height:15px;font-size:7.5px;padding:0 4px}
+.tc-queue .empty{padding:14px;border:1px dashed var(--line2);border-radius:10px;color:var(--ink3);font-size:12px;text-align:center}
+/* кадр «Очередь задач» крупно: список слева, роли-цели справа */
+.tc-qbig{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;padding:12px 14px;min-height:0;flex:1}
+.tc-qbig .tc-queue{padding:10px 14px 12px;min-height:0;overflow:auto}
+.tc-qbig .targets{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto;padding:2px}
+.tc-qbig .targets .tc-card,.tc-qbig .targets .tc-orch{position:relative;width:auto}
+.tc-qbig .targets .lbl{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:0 2px}
+.tc-qbig .filt{display:flex;gap:6px;margin:0 0 8px;align-items:center}.tc-qbig .filt .chip{cursor:pointer}.tc-qbig .filt .chip.on{color:var(--ink);border-color:#4a4a52}.tc-qbig .filt .sp{flex:1}
+.tc-task .hint{position:absolute;left:50%;top:-34px;transform:translateX(-50%);padding:6px 12px;border-radius:999px;background:var(--accent);color:#1a0e04;font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;z-index:6;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+
+/* ── конструктор команды (стиль n8n): библиотека ролей слева, холст с карточками-портами, связи «пишет / сдаёт» ── */
+.tc-cons{display:grid;grid-template-columns:236px minmax(0,1fr);gap:12px;padding:12px 14px;min-height:0;flex:1}
+.tc-cons .om-canvas{min-height:0;height:100%}
+.tc-lib{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:10px;display:flex;flex-direction:column;gap:3px;min-height:0;overflow:auto;scrollbar-width:none}
+.tc-lib .hd{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:2px 4px 6px;display:flex;justify-content:space-between;align-items:center}
+.tc-lib .hd+.hd{padding-top:10px}
+.tc-lib .srch{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid var(--line2);border-radius:9px;color:var(--ink3);font-size:12px;background:var(--bg);margin-bottom:6px}.tc-lib .srch svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round}
+.tc-lib .it{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 8px;border-radius:10px;border:1px solid transparent;cursor:grab;color:var(--ink2);font-size:12.5px;user-select:none;-webkit-user-select:none}
+.tc-lib .it:hover{background:var(--raised);border-color:var(--line2)}
+.tc-lib .it .ic{width:28px;height:28px;border-radius:8px;background:var(--raised);border:1px solid var(--line2);display:grid;place-items:center}.tc-lib .it .ic svg{width:14px;height:14px;stroke:var(--ink2);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tc-lib .it b{display:block;font-weight:500;color:var(--ink);font-size:12.5px;white-space:nowrap}.tc-lib .it small{display:block;font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-lib .it .m{font:9.5px var(--mono);color:var(--ink3);white-space:nowrap}.tc-lib .it.used .m{color:var(--accent)}
+.tc-lib .it.own{border:1px dashed var(--line2);color:var(--ink3)}.tc-lib .it.own .ic{border-style:dashed;background:transparent}.tc-lib .it.own b{color:var(--ink2)}
+.tc-lib .it.drag{opacity:.45;border-style:dashed}
+.tc-lib .ft{margin-top:auto;padding:8px 4px 0;font-size:11px;color:var(--ink3);line-height:1.45}
+/* карточка роли на холсте: порты слева (получает) и справа (пишет) · модель ▾ · права · инструкция роли */
+.tc-node{position:absolute;width:236px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);box-shadow:0 10px 30px rgba(0,0,0,.35);cursor:pointer;transition:border-color .15s,opacity .2s,box-shadow .15s;font-size:11.5px;color:var(--ink2);box-sizing:border-box}
+.tc-node:hover{border-color:#4a4a52}
+.tc-node .hd{display:flex;align-items:center;gap:8px;padding:8px 10px 7px;border-bottom:1px solid var(--line)}
+.tc-node .hd .ic{width:26px;height:26px;border-radius:7px;background:var(--panel);border:1px solid var(--line2);display:grid;place-items:center;flex:none}.tc-node .hd .ic svg{width:13px;height:13px;stroke:var(--ink2);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tc-node .hd>div{min-width:0;line-height:1.2}.tc-node .hd b{font-weight:500;font-size:13px;color:var(--ink);display:block;white-space:nowrap}.tc-node .hd small{font:9px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);display:block;white-space:nowrap}
+.tc-node .hd .x{margin-left:auto;color:var(--ink3);cursor:pointer;font-size:14px;width:20px;height:20px;display:grid;place-items:center;border-radius:6px;flex:none}.tc-node .hd .x:hover{background:var(--tile);color:var(--ink)}
+.tc-node .rows{padding:5px 0 6px}
+.tc-node .row{display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px;align-items:center;padding:3px 10px;font-size:11.5px}
+.tc-node .row>span{font:9px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.tc-node .row .v{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border:1px solid var(--line2);border-radius:7px;background:var(--panel);color:var(--ink);font-size:11.5px;white-space:nowrap;overflow:hidden;min-width:0;cursor:pointer}
+.tc-node .row .v>em{font-style:normal;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tc-node .row .v i{font-style:normal;color:var(--ink3);font-size:10px;margin-left:auto;flex:none}
+.tc-node .row .v svg{width:12px;height:12px;stroke:var(--ink3);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.tc-node .row .v.file{font:11px var(--mono);color:var(--ink2)}
+.tc-node .row .v.none{color:var(--bad);border-color:rgba(163,48,75,.6);border-style:dashed}
+.tc-node .row .v.acc{border-color:rgba(194,122,52,.5)}.tc-node .row .v.acc svg{stroke:var(--accent)}
+.tc-node .ft{display:flex;gap:8px;align-items:center;padding:0 10px 8px;font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink3);white-space:nowrap}.tc-node .ft .acc{color:var(--accent)}.tc-node .ft .bad{color:var(--bad)}
+.tc-node .pi,.tc-node .po{position:absolute;top:50%;width:11px;height:11px;border-radius:50%;background:var(--panel);border:2px solid var(--ink3);transform:translateY(-50%);z-index:2;box-sizing:border-box}
+.tc-node .pi{left:-6px}.tc-node .po{right:-6px}
+.tc-node .pi::after,.tc-node .po::after{content:attr(data-l);position:absolute;top:10px;font:8px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);white-space:nowrap;display:none}
+.tc-node .pi::after{left:-4px}.tc-node .po::after{right:-4px}
+.tc-node.on .pi::after,.tc-node.on .po::after{display:block}
+.tc-node.on .pi,.tc-node.on .po,.tc-node.near .po{border-color:var(--accent)}
+.tc-node.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),0 10px 30px rgba(0,0,0,.35);opacity:1}
+.tc-node.near{border-color:rgba(194,122,52,.6);opacity:1}.tc-node.dim{opacity:.3}
+.tc-node.neu{border-style:dashed}
+.tc-node.chg .hd b::after{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:2px}
+.tc-node.err{border-color:rgba(163,48,75,.7)}.tc-node.err .hd small{color:var(--bad)}
+.tc-node.empty{border-style:dashed;background:rgba(20,20,22,.6);display:grid;place-items:center;min-height:120px;color:var(--ink3);text-align:center;padding:16px;font-size:12px;cursor:default;line-height:1.45;box-shadow:none}
+.tc-node.empty b{display:block;color:var(--ink2);font-weight:500;margin-bottom:4px}
+/* панель конструктора: состояние команды · несохранённые изменения · ошибка · сохранить / применить */
+.tc-root .ps2-tbar .pill.chg{color:var(--accent);background:var(--accent-soft);border-color:transparent}
+.tc-root .ps2-tbar .btn .dot{width:6px;height:6px;border-radius:50%;background:#1a0e04;display:inline-block;margin-left:2px}
+.tc-root .ps2-tbar .btn.p.dis{opacity:.5;cursor:default}
+
+/* ── над композером: «Режим общения» и «Полотно команды» — элементы трёх вариантов ── */
+.tc-tg{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px 0 6px;border:1px solid var(--line2);border-radius:999px;background:var(--panel);color:var(--ink2);font-size:12px;cursor:pointer;white-space:nowrap;position:relative}
+.tc-tg .tog{width:26px;height:16px;border-radius:8px}.tc-tg .tog::after{width:10px;height:10px;top:3px;left:3px}.tc-tg .tog.on::after{left:13px}
+.tc-tg svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tc-tg.on{color:var(--ink);border-color:rgba(194,122,52,.5)}.tc-tg.on svg{stroke:var(--accent)}
+.tc-tg:hover{border-color:var(--ink3)}
+.tc-tg .b{min-width:14px;height:14px;border-radius:7px;background:var(--accent);color:#1a0e04;font:500 9px/14px var(--mono);text-align:center;padding:0 3px}
+.tc-seg{display:inline-flex;align-items:center;border:1px solid var(--line2);border-radius:999px;background:var(--bg);padding:2px;height:26px;box-sizing:border-box;position:relative}
+.tc-seg span{height:20px;padding:0 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.tc-seg span.on{background:var(--raised);color:var(--ink)}.tc-seg span svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tc-seg span b{min-width:14px;height:14px;border-radius:7px;background:var(--accent);color:#1a0e04;font:500 9px/14px var(--mono);text-align:center;padding:0 3px}
+.tc-cvbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:26px;min-width:26px;padding:0 6px;border:1px solid var(--line2);border-radius:999px;background:var(--panel);color:var(--ink2);cursor:pointer;position:relative;font-size:12px;white-space:nowrap;box-sizing:border-box}
+.tc-cvbtn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tc-cvbtn:hover{border-color:var(--ink3);color:var(--ink)}
+.tc-cvbtn.on{color:var(--accent);border-color:rgba(194,122,52,.5);background:var(--accent-soft)}
+.tc-cvbtn .b{position:absolute;top:-6px;right:-6px;min-width:14px;height:14px;border-radius:7px;background:var(--accent);color:#1a0e04;font:500 9px/14px var(--mono);text-align:center;padding:0 3px}
+.tc-cvbtn.lbl{padding:0 10px 0 8px}
+.tc-cvbtn.dis{color:var(--ink3);border-style:dashed;cursor:default}
+/* меню прав с первым пунктом «Только обсуждение» (вариант а) — раскрывается вверх от чипа */
+.tc-rchip{position:relative}
+.tc-rights{position:absolute;left:0;bottom:calc(100% + 112px);width:286px;padding:6px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);box-shadow:0 18px 50px rgba(0,0,0,.55);z-index:30;display:none;flex-direction:column;gap:1px;text-align:left;white-space:nowrap;cursor:default}
+.tc-rchip.open .tc-rights,.tc-rights.static{display:flex}
+.tc-rights.static{position:static;box-shadow:none}
+.tc-rights .hd{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:6px 8px 6px;display:flex;align-items:center;gap:8px}
+.tc-rights .it{display:flex;align-items:center;gap:9px;min-height:30px;padding:4px 8px;border-radius:8px;font-size:12.5px;color:var(--ink);cursor:pointer;line-height:1.25}
+.tc-rights .it:hover,.tc-rights .it.hov{background:var(--tile)}
+.tc-rights .it svg{width:14px;height:14px;stroke:var(--ink2);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.tc-rights .it>div{min-width:0}.tc-rights .it small{display:block;font-size:10px;color:var(--ink3);white-space:normal}
+.tc-rights .it .chk{margin-left:auto;color:var(--accent);font-size:12px;flex:none}
+.tc-rights .it.on{color:var(--accent)}.tc-rights .it.on svg{stroke:var(--accent)}
+.tc-rights hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+/* пины-подписи на кадре (номер → легенда под кадром) */
+.tc-pin{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--accent);color:#1a0e04;font:600 9.5px/1 var(--mono);flex:none;vertical-align:middle;box-shadow:0 0 0 2px var(--panel);margin-right:2px}
+.tc-pin.abs{position:absolute;z-index:8}
+/* композер (классы cx-* прототипа): запасные правила для листа 00, где proto.css не подключён; в скетче 41 совпадают с proto.css */
+.tc-cx .cx-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;width:min(760px,100%);margin:0 0 8px}
+.tc-cx .cx-bot{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.tc-cx .cx-sp{flex:1}
+.tc-cx .cx-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border:1px solid var(--line2);border-radius:999px;background:var(--panel);color:var(--ink2);font-size:12px;white-space:nowrap;cursor:pointer;max-width:280px}
+.tc-cx .cx-chip b{color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis}.tc-cx .cx-chip i{font-style:normal;color:var(--ink3);font-size:10px}
+.tc-cx .cx-chip svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.tc-cx .cx-chip.acc{border-color:rgba(194,122,52,.5)}.tc-cx .cx-chip.acc svg{stroke:var(--accent)}.tc-cx .cx-chip.dim{opacity:.55}.tc-cx .cx-chip.open{border-color:rgba(194,122,52,.6);color:var(--ink)}
+.tc-cx .cx-plus{width:30px;height:30px;border-radius:9px;border:1px solid var(--line2);display:grid;place-items:center;color:var(--ink2);background:var(--raised);font-size:16px;cursor:pointer;flex:none}
+.tc-cx .cx-info{width:26px;height:26px;border-radius:50%;border:1px solid var(--line2);display:grid;place-items:center;color:var(--ink3);font:500 11px var(--mono);cursor:pointer;flex:none}
+.tc-cx .cx-go{width:32px;height:32px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;cursor:pointer;flex:none}
+.tc-cx .cx-go.off{background:transparent;color:var(--line2);box-shadow:inset 0 0 0 1px var(--line2);cursor:default}
+.tc-cx .cx-go svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tc-cx .box{width:min(760px,100%);border:1px solid var(--line2);border-radius:16px;background:var(--panel);padding:14px 14px 10px;position:relative}
+.tc-cx .box .in{color:var(--ink3);font-size:15px;line-height:1.5;min-height:50px;padding:2px 4px 10px}
+.tc-cx.mini .box{width:auto}.tc-cx.mini .cx-top{width:auto}.tc-cx.mini .box .in{min-height:30px;font-size:13px}
+/* кадр композера, обрезанный до низа (сводный снимок трёх вариантов) */
+.tc-cut{position:relative;height:420px;overflow:hidden;border-radius:0 0 18px 18px}
+.tc-cut .app{position:absolute;left:0;bottom:0}
+.tc-cut-lbl{display:flex;align-items:center;gap:12px;height:34px;padding:0 4px;font:11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.tc-cut-lbl b{color:var(--accent);font-size:14px}
+
+/* ── телефон 390: карточки в колонку, стрелки упрощены — одна линия подчинения, живое сообщение полосой ── */
+.tc-phone .ph-body{padding:12px 12px 96px;overflow:auto;display:flex;flex-direction:column;gap:10px;height:calc(100% - 52px);scrollbar-width:none}
+.tc-phone .tc-orch,.tc-phone .tc-card{position:relative;width:auto;left:auto;top:auto}
+.tc-phone .tc-orch .chat{max-height:110px}
+.tc-phone .spine{position:relative;padding-left:16px;display:flex;flex-direction:column;gap:9px;margin-top:4px}
+.tc-phone .spine::before{content:"";position:absolute;left:5px;top:-12px;bottom:14px;width:1.5px;background:#4a4a52}
+.tc-phone .spine .tc-card::before{content:"";position:absolute;left:-11px;top:17px;width:8px;height:1.5px;background:#4a4a52}
+.tc-phone .spine .lbl{font:9px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:0 2px}
+.tc-phone .livemsg{display:flex;align-items:center;gap:8px;margin:-2px 0 0;padding:5px 10px;border-radius:8px;border:1px dashed rgba(194,122,52,.6);background:var(--accent-soft);color:var(--accent);font:500 10px var(--mono);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-phone .livemsg i{width:16px;height:0;border-top:2px dashed var(--accent);flex:none;animation:none}
+.tc-phone .ph-comp{position:absolute;left:0;right:0;bottom:0;padding:16px 12px 16px;background:linear-gradient(transparent,var(--bg) 35%)}
+.tc-phone .ph-comp .box{width:auto;padding:10px 12px 8px}.tc-phone .ph-comp .box .in{min-height:0;font-size:13px;padding:0 2px 6px}
+.tc-phone .ph-comp .cx-bot{gap:4px}.tc-phone .ph-top .r{margin-left:auto;display:flex;gap:6px}
+.tc-phone .tc-queue{padding:8px 10px 10px}.tc-phone .tc-task{grid-template-columns:30px minmax(0,1fr) auto;height:30px}.tc-phone .tc-task .who,.tc-phone .tc-task .grip{display:none}
+
+/* ── статичные образцы в дизайн-коде 00 ── */
+.tc-static{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+.tc-static .tc-card,.tc-static .tc-orch,.tc-static .tc-node{position:relative;left:auto;top:auto;flex:none}
+.tc-static .tc-orch{width:520px}
+.tc-static .tc-node.empty{width:236px}
+.tc-static .tc-lib{width:236px;height:auto;flex:none}
+.tc-static .tc-queue{width:100%}
+.tc-static .lbl{font:9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);width:100%;margin:4px 0 -6px}
+.tc-static>div.col{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.tc-static>div.col .lbl{margin:0}
+.tc-honest{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.tc-honest>div{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--ink2);line-height:1.45;background:var(--raised)}
+.tc-honest>div b{display:block;color:var(--ink);font-weight:500;margin-bottom:4px;display:flex;gap:8px;align-items:center}
