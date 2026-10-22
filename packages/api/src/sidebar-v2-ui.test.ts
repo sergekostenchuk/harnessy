@@ -31,9 +31,13 @@ test('TS-36A: persistent mode rail releases, restores and keeps its selected mod
  let accepted=0;const release=first.document.createElement('button');release.className='release-gate';release.addEventListener('click',()=>accepted++);first.body.appendChild(release);await release.emit('click');assert.equal(accepted,1);assert.equal(first.html.dataset.ps2Mode,'chats');assert.equal(first.html.dataset.ps2Panel,'open');assert.equal(release.closest('[data-ps2-action-mode]'),null);
  await first.find('.rail [data-ps2-mode="team"]').emit('click');assert.equal(first.html.dataset.ps2Mode,'team');assert.equal(first.html.dataset.ps2Panel,'open');assert.equal(storage.get('harnessy-side-mode-v2'),'team');
  await first.find('[data-ps2-release]').emit('click');assert.equal(first.html.dataset.ps2Panel,'closed');assert.equal(storage.get('harnessy-side-panel-v2'),'closed');
- await first.find('.rail [data-ps2-profile]').emit('click');assert.equal(first.find('.rail>.ps-foot').classList.contains('open'),true);assert.match(first.find('.rail .ps2-menu').textContent,/Профиль.*Подключения.*Автопилот.*Журнал.*Клавиши/);
+ first.context.PS2.setProfile({name:'Тест',email:'',configured:true});await first.find('.rail [data-ps2-profile]').emit('click');assert.equal(first.find('.rail>.ps-foot').classList.contains('open'),true);assert.match(first.find('.rail .ps2-menu').textContent,/Профиль.*Подключения.*Автопилот.*Журнал.*Клавиши/);
  const restored=view('01-chat.html',storage);assert.equal(restored.html.dataset.ps2Mode,'team');assert.equal(restored.html.dataset.ps2Panel,'closed');
  await restored.find('.rail [data-ps2-mode="team"]').emit('click');assert.equal(restored.html.dataset.ps2Panel,'open');assert.match(restored.find('.ps2-mode').textContent,/Команда агентов/);
+});
+
+test('TS-36E: absent owner name links the sidebar card directly to profile settings',async()=>{
+ const v=view();assert.match(v.find('.ps2-mode .ps2-prof').textContent,/Без имени/);await v.find('.ps2-mode [data-ps2-profile]').emit('click');assert.equal(v.location.href,'06-settings.html#p=profile');assert.equal(v.document.querySelector('.ps-foot.open'),null);
 });
 
 test('TS-36A: live sidebar exposes honest current counts, states and missing foreign-project data',async()=>{

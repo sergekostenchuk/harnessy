@@ -291,6 +291,15 @@ html[data-m] .live-kbd { display:none; }
 html[data-proto][data-page="chat"] .cx-top { width:auto; max-width:760px; margin:0 auto 8px; }   /* над полем, по его ширине и центру (.box: max-width 760, margin auto) */
 .cx-att { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 8px; }
 .cx-bot { display:flex; align-items:center; gap:6px; flex-wrap:wrap; } .cx-sp { flex:1; }
+.cx-view { display:inline-flex; align-items:center; padding:2px; border:1px solid var(--line2); border-radius:9px; background:var(--raised); flex:none; }
+.cx-view button { border:0; border-radius:7px; background:transparent; color:var(--ink2); padding:4px 10px; font:500 12px/1.2 var(--font); cursor:pointer; }
+.cx-view button.on { background:var(--panel); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.12); cursor:default; }
+.cx-view button:not(.on):hover { color:var(--accent); }
+.cx-discussion { height:26px; padding:0 10px; border:1px solid var(--line2); border-radius:999px; background:var(--panel); color:var(--ink2); font-size:12px; cursor:pointer; }
+.cx-discussion.on { color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
+.cx-discussion:disabled { opacity:.5; cursor:default; }
+.cx-discussion-state { color:var(--ink2); font-size:11px; white-space:nowrap; }
+.live-discussion-label { display:inline-block; margin-left:8px; padding:1px 6px; border-radius:999px; color:var(--accent); background:var(--accent-soft); font:500 10px var(--mono); }
 .cx-chip { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 9px; border:1px solid var(--line2); border-radius:999px; background:var(--panel); color:var(--ink2); font-size:12px; white-space:nowrap; cursor:pointer; max-width:280px; }
 .cx-chip b { color:var(--ink); font-weight:500; overflow:hidden; text-overflow:ellipsis; } .cx-chip i { font-style:normal; color:var(--ink3); font-size:10px; } .cx-chip i.x { font-size:12px; margin-left:2px; } .cx-chip i.x:hover { color:var(--ink); }
 .cx-chip svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex:none; }

@@ -23,21 +23,21 @@ export class Approval {
  detach():void {if(this.ended)return;this.ended=true;this.clock.clearTimeout(this.timer);this.pane.approvals.delete(this.id);this.resolve(false)}
  event():RuntimeEvent{return {type:'approval',id:this.id,title:this.title,detail:this.detail,...(this.trace?{traceId:this.trace.traceId,spanId:this.trace.spanId,project:this.trace.store.project}:{})}}
 }
-export interface PaneInit {id:string;vendor:Vendor|'human';label:string;model:string;mode?:Mode;cwd:string;role?:string;kind?:SeatKind;writePaths?:string[];digest?:boolean}
+export interface PaneInit {id:string;vendor:Vendor|'human';label:string;model:string;mode?:Mode;cwd:string;role?:string;kind?:SeatKind;writePaths?:string[];digest?:boolean;folderless?:boolean}
 export class Pane {
- id:string;vendor:Vendor|'human';label:string;model:string;mode:Mode;cwd:string;role:string;writePaths:string[];digest:boolean;
+ id:string;vendor:Vendor|'human';label:string;model:string;mode:Mode;cwd:string;role:string;writePaths:string[];digest:boolean;folderless:boolean;
  readonly kind:SeatKind|null;
  worktree:string|null=null;branch:string|null=null;sessionId:string|null=null;sessionEpoch=0;busy=false;touched=false;revision=0;
  readonly uncommitted=new Set<TranscriptMessage>();transcript:TranscriptMessage[]=[];transcriptSeq=0;seen:Record<string,number>={};carry='';tokens:Usage|null=null;handle:TurnHandle|null=null;
  recoveryNote:string|null=null;recoveryError:RuntimeEvent|null=null;uncertainNote:string|null=null;status:'idle'|'recovering'|'uncertain'='idle';readonly approvals=new Map<string,Approval>();
  private bus:EventBus;private clock:Clock;
- constructor(init:PaneInit,bus:EventBus,clock:Clock=systemClock){this.bus=bus;this.clock=clock;this.id=init.id;this.vendor=init.vendor;this.label=init.label;this.model=init.model;this.mode=init.mode??'chat';this.cwd=init.cwd;this.role=init.role??'';this.kind=init.kind===undefined?legacyKind(init.role):seatKind(init.kind);this.writePaths=[...(init.writePaths??[])];this.digest=init.digest??false}
+ constructor(init:PaneInit,bus:EventBus,clock:Clock=systemClock){this.bus=bus;this.clock=clock;this.id=init.id;this.vendor=init.vendor;this.label=init.label;this.model=init.model;this.mode=init.mode??'chat';this.cwd=init.cwd;this.role=init.role??'';this.kind=init.kind===undefined?legacyKind(init.role):seatKind(init.kind);this.writePaths=[...(init.writePaths??[])];this.digest=init.digest??false;this.folderless=init.folderless??false}
  publish(event:RuntimeEvent):void{this.bus.publish(this.id,event)}
  append(message:TranscriptMessage):void {const next=numberTranscript(this)+1;if(!Number.isSafeInteger(next))throw new RuntimeError('chat_invalid','номера реплик исчерпаны',409);message.seq=next;this.transcriptSeq=next;this.transcript.push(message)}
  record(role:string,text:string):void{if(pythonTrim(text))this.append(timestampMessage(role,text,this.clock.now()))}
  settings(){const last=[...this.transcript].reverse().find(m=>m.contextTransfer),transfer=last?.contextTransfer as (import('@harnessy/context').ConversationTransfer&{turnInstanceId:string})|undefined;
  return {id:this.id,vendor:this.vendor,label:this.label,role:this.role,model:this.model,mode:this.mode,cwd:this.cwd,sessionId:this.sessionId,digest:this.digest,busy:this.busy,writePaths:[...this.writePaths],worktree:this.worktree,branch:this.branch,touched:this.touched,pendingApprovals:this.approvals.size,kind:this.kind,...(transfer?{contextTransfer:{project:transfer.project,chat:transfer.chat,turnInstanceId:transfer.turnInstanceId,messages:transfer.messages,verbatim:transfer.verbatim,tokens:transfer.tokens,compressed:transfer.compressed,enabled:transfer.enabled,...(transfer.failure?{failure:{...transfer.failure}}:{})}}:{})}}
- persist(){return {model:this.model||null,mode:this.mode,sessionId:this.sessionId,digest:this.digest,vendor:this.vendor}}
+ persist(){return {model:this.model||null,mode:this.mode,sessionId:this.sessionId,digest:this.digest,vendor:this.vendor,...(this.id==='room'?{folderless:this.folderless}:{})}}
  providerSeat():Seat{if(this.vendor==='human')throw new RuntimeError('no_provider','нет провайдера: human');return {id:this.id,vendor:this.vendor,label:this.label,model:this.model,mode:this.mode,cwd:this.cwd,sessionId:this.sessionId,writePaths:[...this.writePaths],worktree:this.worktree}}
  askApproval(title:string,detail:string,timeout=APPROVAL_TIMEOUT_MS):Promise<boolean>{let id:string;do{id=randomBytes(6).toString('hex')}while(this.approvals.has(id));const a=new Approval(id,this,title,detail,timeout,this.clock);this.approvals.set(id,a);this.publish(a.event());return a.future}
  resolveApproval(id:string,allow:boolean):boolean{return this.approvals.get(id)?.finish(allow?'allow':'deny')??false}

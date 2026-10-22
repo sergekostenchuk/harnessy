@@ -33,7 +33,7 @@ function ui(options:{apiRoutes?:Data[];page?:string;room?:boolean;statusFetch?:(
  pane.settingsBinding={project:H.project,instanceId:'project-instance',pane:pane.id,chat:H.active[pane.id],revision:0,mode:pane.mode};
  const S:Data={ui:{pane:pane.id},cx:{folder:'',noFolder:false,modes:{},att:[],conn:{}},chat:[]},requests:{path:string;body?:Data}[]=[],toasts:string[]=[],waiting:Data[]=[],listeners=new Set<Data>();
  let snapshot:Data=catalogue(),lastPane:Data|null=null,serverModels:Data|null=null;
- const ctx:Data={document:d.document,H,S,PAGE:options.page??'chat',esc,toast:(s:string)=>toasts.push(s),setTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),
+ const ctx:Data={document:d.document,H,S,PAGE:options.page??'chat',location:{href:''},esc,toast:(s:string)=>toasts.push(s),setTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),
   showWaiting:(p:Data,info:Data,project:string)=>waiting.push({pane:p.id,info,project}),showRestore(){},badges(){},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)},renderWaiting(){},save(){},
   fetch:async(path:string,opts?:{body?:string})=>{const body=opts?.body?JSON.parse(opts.body):undefined;requests.push({path,body});
    const result=path==='/api/status'?(options.statusFetch?await options.statusFetch():{project:H.project,panes:H.panes,models:serverModels??H.models,turnModes:H.turnModes}):options.fetch?await options.fetch(path,body):path==='/api/providers/catalog'?snapshot:{ok:true,pane:{...H.pane,...body}};
@@ -64,6 +64,18 @@ for(const page of ['chat','new','first'])test('305/306: '+page+' lists every cat
  assert.equal(v.requests.filter(r=>r.body).length,0);await v.select('codex','shared').emit('click');
  assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{vendor:'codex',model:'shared'}}]);assert.equal(v.H.pane.vendor,'codex');assert.equal(v.find('[data-cx="model"] b').textContent,'Codex model');
  assert.equal(v.requests.some(r=>r.path==='/api/chat'),false);
+});
+
+test('TS-36E: chat and rights menu choose the same discussion mode; leaving restores prior rights',async()=>{
+ const v=ui();assert.ok(v.find('[data-cx-team-view]'));assert.equal(v.document.querySelector('[data-cx="folder"]'),null);
+ assert.equal(v.find('[data-cx-discussion]').getAttribute('aria-checked'),'false');await v.find('[data-cx-discussion]').emit('click');
+ assert.equal(v.H.pane.mode,'chat');assert.equal(v.find('[data-cx-discussion]').getAttribute('aria-checked'),'true');assert.match(v.find('.cx-discussion-state').textContent,/проект не меняется/);
+ assert.deepEqual(v.requests.filter(r=>r.body).map(r=>r.body?.mode),['chat']);
+ await v.find('[data-cx="rights"]').emit('click');assert.equal(v.find('[data-cx-mode]').dataset.cxMode,'chat');assert.match(v.find('[data-cx-mode]').textContent,/Только обсуждение/);
+ await v.find('[data-cx-discussion]').emit('click');assert.equal(v.H.pane.mode,'read');await v.find('[data-cx="rights"]').emit('click');
+ await v.find('[data-cx-mode="chat"]').emit('click');assert.equal(v.H.pane.mode,'chat');
+ assert.deepEqual(v.requests.filter(r=>r.body).map(r=>r.body?.mode),['chat','read','chat']);
+ await v.find('[data-cx-team-view]').emit('click');assert.equal(v.ctx.location.href,'04-swarm.html');
 });
 
 for(const page of ['chat','new'])for(const room of [false,true])test('351: '+page+' '+(room?'room':'seat')+' requires explicit full-access confirmation, then selects the program separately',async()=>{

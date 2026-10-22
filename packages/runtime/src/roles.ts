@@ -68,7 +68,7 @@ function specialization(raw:unknown):{title:string;text:string} {
  return {title:raw.title,text:raw.text};
 }
 export function noProject(runtime:Runtime,p=runtime.project):boolean{return p.dir===runtime.defaultDir}
-export function roomWithoutProject(runtime:Runtime,p=runtime.project){return noProject(runtime,p)||p.registry.get('room')?.mode==='chat'}
+export function roomWithoutProject(runtime:Runtime,p=runtime.project){return noProject(runtime,p)||p.registry.get('room')?.folderless===true}
 export function hasOrchestrator(p:ProjectState){return [...p.registry.panes.values()].some(x=>x.kind==='orchestrator')}
 export function roleCatalog(runtime:Runtime){const p=runtime.project,orch=hasOrchestrator(p);return ROLE_CATALOG.map(c=>({...c,kind:seatKind(undefined,c.role),available:c.role==='orchestrator'&&!orch,reason:c.role==='orchestrator'&&!orch?null:c.role==='orchestrator'?'В проекте уже есть оркестратор':'участников создаёт оркестратор по подтверждённому предложению'}))}
 function input(runtime:Runtime,p:ProjectState,args:CreateSeatInput,existing?:Seat):SeatInput {

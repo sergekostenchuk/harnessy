@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {createActions} from '@harnessy/runtime';
 import {GitOps,execute} from '@harnessy/projects';
 import {ProviderError} from '@harnessy/providers';
+import {MODES as PROVIDER_MODES} from '../../providers/src/modes.ts';
 import {fixture,call,deferred,until,OWNER} from './test-helpers.ts';
 const seats='  orch: {role: orchestrator, vendor: claude, label: оркестратор, model: w1, mode: read}\n  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read}';
 const keys=(object:object)=>Object.keys(object).sort();
@@ -33,6 +34,31 @@ test('TS-30 r3: agent identities cannot write owner or project settings',async t
   assert.equal(response.status,403);assert.equal(response.body.code,'owner_only');
  }
  const settings=(await call(h.api,'/api/settings')).body;assert.deepEqual(settings.owner,{});assert.deepEqual(settings.project,{});
+});
+
+test('TS-36E: owner profile name is validated, scoped to owner and returned by status',async t=>{
+ const h=await fixture(t);assert.deepEqual((await call(h.api,'/api/status')).body.profile,{name:null});
+ const saved=await call(h.api,'/api/settings',{body:{scope:'owner',patch:{profileName:'  Мария Ветрова  '}}});assert.equal(saved.status,200);assert.equal(saved.body.saved.profileName,'Мария Ветрова');assert.deepEqual((await call(h.api,'/api/status')).body.profile,{name:'Мария Ветрова'});
+ for(const value of ['', ' '.repeat(3),'a'.repeat(81),'подмена\nстроки',7]){const rejected=await call(h.api,'/api/settings',{body:{scope:'owner',patch:{profileName:value}}});assert.equal(rejected.status,400);assert.equal(rejected.body.ok,false);assert.match(rejected.body.error,/Имя:/)}
+ assert.equal((await call(h.api,'/api/settings',{body:{scope:'project',patch:{profileName:'Чужое имя'}}})).status,400);assert.deepEqual((await call(h.api,'/api/status')).body.profile,{name:'Мария Ветрова'});
+ assert.equal((await call(h.api,'/api/settings',{body:{scope:'owner',patch:{profileName:null}}})).status,200);assert.deepEqual((await call(h.api,'/api/status')).body.profile,{name:null});
+});
+
+test('TS-36E: a discussion turn has no program tools and keeps its mode on the saved reply',async t=>{
+ const h=await fixture(t),pane=h.runtime.registry.get('worker')!;assert.deepEqual(PROVIDER_MODES.chat.tools,[]);
+ const mode=await call(h.api,'/api/panes/worker',{body:{mode:'chat',binding:h.runtime.paneBinding('worker')}});assert.equal(mode.status,200);assert.equal(pane.mode,'chat');
+ const sent=await call(h.api,'/api/chat',{body:{pane:'worker',message:'Давай обсудим',direct:true}});assert.equal(sent.status,200);await h.runtime.idle();
+ assert.equal(h.provider.calls[0]!.seat.mode,'chat');const id=h.runtime.chatsList(OWNER).active.worker;const messages=(await call(h.api,'/api/chats/'+id)).body.messages;assert.equal(messages.find((m:{role:string})=>m.role==='ai').mode,'chat');
+});
+
+test('TS-36E: discussion rights do not change whether the room has a project',async t=>{
+ const h=await fixture(t);
+ assert.equal((await call(h.api,'/api/room',{body:{model:'w1',folder:h.dir}})).status,200);
+ const projectRoom=await call(h.api,'/api/panes/room',{body:{mode:'chat',binding:h.runtime.paneBinding('room')}});
+ assert.equal(projectRoom.status,200);assert.equal((await call(h.api,'/api/status')).body.noProject,false);
+ assert.equal((await call(h.api,'/api/room',{body:{model:'w1',folder:false}})).status,200);
+ const folderlessRoom=await call(h.api,'/api/panes/room',{body:{mode:'read',binding:h.runtime.paneBinding('room')}});
+ assert.equal(folderlessRoom.status,200);assert.equal((await call(h.api,'/api/status')).body.noProject,true);
 });
 
 test('1/19/68: chat direct and handoff selection forms, journal, chats and transcript use real delivered histories',async t=>{
