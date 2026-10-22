@@ -69,7 +69,7 @@
     spend:['частично','Журнал ходов и расчёты имеют источник; неподключённые подписки, лимиты и прогнозы отмечены на блоках.'],
     first:['частично','Модель, оркестратор и состав — из движка; прогноза цены первого хода пока нет.'],
     login:['макет','Серверный вход и перенос данных пока показаны на примере.'],
-    away:['частично','Чат и выбор условий доступны; исполнение условий ухода движком пока не поддерживается.']
+    away:['частично','Выбор срока и условий Автопилота доступен; движок пока не исполняет Автопилот.']
   };
   function specificationLabels(){const spec=SPEC[KEY];if(!spec)return;document.documentElement.setAttribute('data-spec-state',spec[0]);
     document.querySelectorAll('.frame').forEach(frame=>{const app=frame.querySelector('.app,.stage');if(!app||app.querySelector('.spec-banner'))return;
@@ -132,7 +132,7 @@
     const link=(href,icon,label,tail='')=>'<a class="it" href="'+href+'">'+ico(icon)+label+tail+'</a>';
     return '<div class="ps2-menu"><div class="hd"><span class="av">'+html(initial)+'<i></i></span><div>'+name+(email?'<small>'+email+'</small>':'')+'</div><span class="bd">'+(state.live?'alpha':'макет')+'</span></div>'+
       link('06-settings.html#p=look','set','Облик','<span class="tgl">графит</span>')+'<hr>'+link('06-settings.html#p=profile','user','Профиль')+link('11-connections.html','conn','Подключения')+link('06-settings.html','set','Настройки','<kbd>⌘,</kbd>')+
-      '<hr><div class="it ap dis">'+ico('auto')+'<div>Автопилот<span class="st">позже</span><small>появится в части C</small></div><span class="ps2-tg"></span></div><hr>'+link('21-journal.html','log','Журнал')+'<div class="it dis">'+ico('help')+'Справка'+tag('нет в движке')+'</div>'+link('06-settings.html#p=keys','keys','Клавиши','<kbd>⌘/</kbd>')+
+      '<hr><a class="it ap" data-go="away" href="18-overlays.html#leave" title="Выбрать условия Автопилота">'+ico('auto')+'<div>Автопилот<span class="st">выкл</span><small>до утра / до ответа · исполнение пока недоступно</small></div><span class="ps2-tg" aria-hidden="true"></span></a><hr>'+link('21-journal.html','log','Журнал')+'<div class="it dis">'+ico('help')+'Справка'+tag('нет в движке')+'</div>'+link('06-settings.html#p=keys','keys','Клавиши','<kbd>⌘/</kbd>')+
       (email?'<hr><div class="it bad dis">'+ico('logout')+'Выйти'+tag('нет действия')+'</div>':'')+'<div class="ft"><span>'+(globalThis.HARNESS_RELEASE?html(globalThis.HARNESS_RELEASE.label):'alpha')+'</span></div></div>';
   }
   function profile(){const p=state.profile||{},name=html(p.name||'Владелец'),email=html(p.email||''),initial=Array.from(p.name||'Владелец')[0]||'В';return profileMenu()+'<div class="ps2-prof" data-ps2-profile><span class="av">'+html(initial)+'<i></i></span><div>'+name+(email?'<small>'+email+'</small>':'<small>локально</small>')+'</div><span class="chev">▾</span></div>'}

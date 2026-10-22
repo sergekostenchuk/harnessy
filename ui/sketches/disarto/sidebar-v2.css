@@ -101,7 +101,7 @@
 .ps2-root .ps2-menu .ft{display:flex;justify-content:space-between;padding:6px 8px 2px;font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink3);cursor:default}.ps2-root .ps2-menu .ft a{color:var(--ink3);text-decoration:none;cursor:pointer}.ps2-root .ps2-menu .ft a:hover{color:var(--ink2)}
 
 /* ── рейка (как proto.css .rail, скоуп) ── */
-.ps2-root aside.side.ps.rail{align-items:center;padding:12px 8px}
+.ps2-root aside.side.ps.rail{align-items:center;padding:12px 8px;overflow:visible}
 .ps2-root aside.side.ps.rail .ps-head{padding:0 0 6px;flex-direction:column;gap:6px}.ps2-root aside.side.ps.rail .col{margin:0}
 .ps2-root aside.side.ps.rail .nav,.ps2-root aside.side.ps.rail .ps2-inbox,.ps2-root aside.side.ps.rail .newbtn,.ps2-root aside.side.ps.rail .search{width:40px;height:40px;justify-content:center;padding:0;gap:0;margin:0;border:0;background:transparent;border-radius:10px}
 .ps2-root aside.side.ps.rail .newbtn{border:1px solid rgba(194,122,52,.5);background:var(--raised)}.ps2-root aside.side.ps.rail .nav:hover,.ps2-root aside.side.ps.rail .ps2-inbox:hover,.ps2-root aside.side.ps.rail .search:hover{background:var(--raised)}
