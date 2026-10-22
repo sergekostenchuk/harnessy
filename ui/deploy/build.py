@@ -188,7 +188,7 @@ def build_sketches():
 PROTO_PAGES = {"01-chat": "Чат", "02-plan": "План", "04-swarm": "Стая", "05-spend": "Расход и лимиты", "06-settings": "Настройки", "09-events": "Плашки и события",
                "10-new-chat": "Новый чат", "11-connections": "Подключения", "12-research": "Ресёрч", "13-sensors": "Датчики", "14-now": "Сейчас",
                "15-artifacts": "Артефакты", "16-memory": "Память проекта", "17-doc": "Документ стадии", "18-overlays": "Уйти · окно · поиск",
-               "19-first-run": "Первый запуск", "20-login-pour": "Вход", "21-journal": "Журнал"}
+               "19-first-run": "Первый запуск", "20-login-pour": "Вход", "21-journal": "Журнал", "22-inbox": "Входящие"}
 PROTO_PAGES["02-om-map"] = "План · карта проекта"   # вкладка «Карта проекта» экрана «План · карта»: живая карта (скетч 26); «План пользователя» — прежний 02-plan
 PROTO_SRC = {"02-om-map": "26-om-map-app"}   # экран прототипа, собираемый из другого исходника
 PROTO_START = "/sketches/proto/10-new-chat.html"
@@ -204,12 +204,12 @@ def build_proto():
     """Прототип из новых экранов: копия скетчей в режиме прототипа (proto.css + proto.js) → out/site/sketches/proto.
     Исходники в sketches/disarto остаются листами с пояснениями; прототип всегда выводится из них."""
     src = ROOT / "sketches" / "disarto"
-    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "release.js", "proto.js", "responsive.js") if (HERE / n).exists()] + [src / "om-map.js"])
+    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "inbox.js", "release.js", "proto.js", "responsive.js") if (HERE / n).exists()] + [src / "om-map.js"])
     dst = OUT / "sketches" / "proto"
     if dst.exists():
         shutil.rmtree(dst)
     dst.mkdir(parents=True)
-    for name in ("style.css", "app.js", "pour-scene.js", "om-map.js", "om-map.css"):   # om-map.* — общий код карты проекта (скетч 26 и экран «План · карта»)
+    for name in ("style.css", "app.js", "pour-scene.js", "om-map.js", "om-map.css", "sidebar-v2.css"):   # om-map.* — общий код карты проекта (скетч 26 и экран «План · карта»)
         shutil.copy(src / name, dst / name)
     app_js = (src / "app.js").read_text(encoding="utf-8")
     i = app_js.index("const IC={")
@@ -221,7 +221,7 @@ def build_proto():
     shutil.copy(HERE / "live.js", dst / "live.js")                    # рабочий слой: состояние, решения, чат, поиск
     shutil.copy(HERE / "release.js", dst / "release.js")              # канал/версия, постоянный бейдж и дисклеймер alpha
     shutil.copy(HERE / "cx.js", dst / "cx.js")                        # поле ввода C′: папка · роль · режимы / ＋ · права · модель · усилие · ⓘ
-    for extra in ("ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "program-missing.js", "network.js"):                      # модули экранов: контекст чата, настройки, подключения (08.10.2026)
+    for extra in ("ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "program-missing.js", "network.js", "inbox.js"):                      # модули экранов: контекст чата, настройки, подключения (08.10.2026)
         if (HERE / extra).exists():
             shutil.copy(HERE / extra, dst / extra)
     (dst / "proto.js").write_text(rep((HERE / "proto.js").read_text(encoding="utf-8"), "/*IC*/", ic), encoding="utf-8")
@@ -236,7 +236,7 @@ def build_proto():
         t = rep(t, '<html lang="ru">', '<html lang="ru" data-proto>')
         t = rep(t, "<head>", "<head><script>" + boot + "</script>")
         t = rep(t, "</head>", '<link rel="stylesheet" href="proto.css"></head>')
-        t = rep(t, "</body>", release_script+'<script src="proto.js"></script>\n<script src="markdown.js"></script>\n<script src="live.js"></script>\n<script src="llm.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="network-stats.js"></script>\n<script src="network-add.js"></script>\n<script src="network-recovery.js"></script>\n<script src="program-missing.js"></script>\n<script src="network.js"></script>\n<script src="conn.js"></script>\n</body>')
+        t = rep(t, "</body>", release_script+'<script src="proto.js"></script>\n<script src="markdown.js"></script>\n<script src="live.js"></script>\n<script src="llm.js"></script>\n<script src="cx.js"></script>\n<script src="ctx.js"></script>\n<script src="set.js"></script>\n<script src="network-stats.js"></script>\n<script src="network-add.js"></script>\n<script src="network-recovery.js"></script>\n<script src="program-missing.js"></script>\n<script src="network.js"></script>\n<script src="conn.js"></script>\n<script src="inbox.js"></script>\n</body>')
         t = re.sub(r"<title>.*?</title>", f"<title>Harnessy · {title}</title>", t, count=1, flags=re.S)
         (dst / f"{stem}.html").write_text(t, encoding="utf-8")
     gallery = (src / "index.html").read_text(encoding="utf-8")

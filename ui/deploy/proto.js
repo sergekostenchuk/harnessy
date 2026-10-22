@@ -38,8 +38,8 @@
   if(!document.documentElement.hasAttribute('data-proto')) return;
   /*IC*/
   const FILE=location.pathname.split('/').pop()||'10-new-chat.html';
-  const PAGES={new:'10-new-chat.html',now:'14-now.html',chat:'01-chat.html',plan:'02-plan.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',events:'09-events.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
-  const TIP={now:'Сейчас',chat:'Чат',plan:'План · карта',res:'Ресёрч',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Стая агентов',sens:'Датчики',spend:'Расход и лимиты',events:'События',log:'Журнал'};
+  const PAGES={new:'10-new-chat.html',now:'14-now.html',inbox:'22-inbox.html',chat:'01-chat.html',plan:'02-plan.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',events:'09-events.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
+  const TIP={now:'Сейчас',inbox:'Входящие',chat:'Чат',plan:'План · карта',res:'Ресёрч',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Стая агентов',sens:'Датчики',spend:'Расход и лимиты',events:'События',log:'Журнал'};
   const TOP=['now','chat','plan','res','doc','art','mem','swarm','sens','spend','events','log'];
   /* экран «План · карта» — две вкладки: «Карта проекта» (02-om-map.html#om, по умолчанию) и «План пользователя» (02-plan.html#user); выбранная вкладка запоминается */
   const PLAN_TABS=[['om','Карта проекта','02-om-map.html'],['user','План пользователя','02-plan.html']], PLAN_KEY='harnessy-plan-tab';
@@ -115,7 +115,7 @@
     const item=([k,t,m,badge])=>'<div class="nav'+(k===KEY?' on':'')+'" data-go="'+k+'" title="'+t+'">'+ico(k)+(rail?'':'<span class="t">'+t+'</span>'+(m?'<span class="m">'+m+'</span>':''))+(badge?'<span class="b">2</span>':'')+'</div>';
     const head='<div class="ps-head"><span class="logo" data-go="new" title="Новый чат"><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></span>'+(rail?'':'<b class="ps-proj" title="Проект">Harnessy <i>▾</i></b>')+
       '<span class="col" data-col title="'+(rail?'Развернуть панель':'Свернуть панель')+'">'+(rail?'⟩':'⟨')+'</span></div>';
-    const top=rail?'<div class="nav search" title="Найти · ⌘K">'+ico('find')+'</div>':'<div class="newbtn'+(KEY==='new'?' on':'')+'" data-go="new">'+ico('new')+'Новый чат<kbd>⌘N</kbd></div><div class="search">'+ico('find')+'Найти…<kbd>⌘K</kbd></div>';
+    const top=rail?'<div class="nav search" title="Найти · ⌘K">'+ico('find')+'</div><div class="nav ps2-inbox'+(KEY==='inbox'?' on':'')+'" data-go="inbox" title="Входящие">'+ico('now')+'<span class="b" hidden>0</span></div>':'<div class="newbtn'+(KEY==='new'?' on':'')+'" data-go="new">'+ico('new')+'Новый чат<kbd>⌘N</kbd></div><div class="search">'+ico('find')+'Найти…<kbd>⌘K</kbd></div><div class="nav ps2-inbox'+(KEY==='inbox'?' on':'')+'" data-go="inbox" title="Входящие">'+ico('now')+'<span class="t">Входящие</span><span class="b" hidden>0</span><span class="b2" hidden>0</span></div>';
     // порядок владельца (08.10): новый чат → закреплённые → папки (раскрываются: 4 пункта проекта + чаты) → журнал; низ: уйти, настройки, использовано → расход, профиль
     const work=(rail?'<i class="ps-sep"></i>':'<div class="grp">работа</div>')+WORK.map(item).join('');
     const pins=rail?'':'<div class="grp">закреплённые</div><div class="ps-pins"><div class="ps-chat more">закреплённых пока нет</div></div>';
@@ -135,7 +135,7 @@
     document.querySelectorAll('aside.side.ps .ps-proj').forEach(b=>{ b.innerHTML='OMG <i>▾</i>'; b.title='Демонстрация: проект'; }); }
   setTimeout(demoSide,1300); addEventListener('resize',()=>setTimeout(demoSide,50));
   function renderSide(){ document.querySelectorAll('aside.side').forEach(a=>{ const ob=a.querySelector('.nav[data-go="now"] .b'), keep=ob?{t:ob.textContent,d:ob.style.display}:null;   // счётчик «ждут вас» ведёт рабочий слой — не терять при перерисовке
-      a.classList.add('ps'); a.classList.toggle('rail',side==='rail'); a.innerHTML=sideHTML(); if(keep){ const nb=a.querySelector('.nav[data-go="now"] .b'); nb.textContent=keep.t; nb.style.display=keep.d; } }); if(window.LIVE&&typeof window.LIVE.profileDraw==='function')window.LIVE.profileDraw(); }
+      a.classList.add('ps'); a.classList.toggle('rail',side==='rail'); a.innerHTML=sideHTML(); if(keep){ const nb=a.querySelector('.nav[data-go="now"] .b'); nb.textContent=keep.t; nb.style.display=keep.d; } }); if(window.LIVE&&typeof window.LIVE.profileDraw==='function')window.LIVE.profileDraw();window.HARNESS_INBOX?.paintBadges(); }
   function toggleSide(){ side=side==='rail'?'wide':'rail'; try{ localStorage.setItem(SIDE_KEY,side); }catch(e){} document.documentElement.dataset.side=side; renderSide(); fit(); dispatchEvent(new Event('resize')); }
   renderSide();
   document.addEventListener('click',e=>{ const a=e.target.closest('aside.side'); if(!a) return;
@@ -151,13 +151,13 @@
 
   // ── навигация телефона: кнопка ☰ и выдвижная панель со всеми экранами
   function mobileNav(){ if(document.querySelector('.m-btn')) return;
-    const X={new:'<path d="M12 5v14M5 12h14"/>',conn:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',away:'<path d="M20 14.5A8 8 0 1 1 9.500 4a6.500 6.500 0 0 0 10.500 10.500z"/>'};
+    const X={new:'<path d="M12 5v14M5 12h14"/>',inbox:'<path d="M4 6h16v10H9l-5 4z"/>',conn:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',away:'<path d="M20 14.5A8 8 0 1 1 9.500 4a6.500 6.500 0 0 0 10.500 10.500z"/>'};
     const item=(k,tx,extra)=>'<a class="m-i'+(k===KEY?' on':'')+(extra==='p'?' p':'')+'" href="'+(k==='plan'?planPage():PAGES[k]+(k==='away'?'#leave':''))+'"><svg viewBox="0 0 24 24">'+(IC[k]||X[k]||'')+'</svg>'+tx+(extra&&extra!=='p'?'<small>'+extra+'</small>':'')+'</a>';
     const btn=document.createElement('button'); btn.className='m-btn'; btn.setAttribute('aria-label','Меню'); btn.textContent='☰';
     const bg=document.createElement('div'); bg.className='m-bg';
     const dr=document.createElement('nav'); dr.className='m-drawer';
     dr.innerHTML='<div class="m-h"><i><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></i>Harnessy<span data-mx>×</span></div>'+item('new','Новый чат','p')+
-      '<div class="m-g">работа</div>'+item('now','Сейчас','2')+item('chat','Чат')+item('plan','План · карта')+item('doc','Документы проекта')+item('art','Артефакты')+item('mem','Память проекта')+item('res','Ресёрч')+
+      '<div class="m-g">работа</div>'+item('inbox','Входящие')+item('now','Сейчас','2')+item('chat','Чат')+item('plan','План · карта')+item('doc','Документы проекта')+item('art','Артефакты')+item('mem','Память проекта')+item('res','Ресёрч')+
       '<div class="m-g">команда</div>'+item('swarm','Стая агентов')+item('sens','Датчики')+item('spend','Расход и лимиты')+item('conn','Подключения и лимиты')+
       '<div class="m-g">прочее</div>'+item('events','События')+item('log','Журнал')+item('set','Настройки')+item('away','Уйти')+
       '<div class="m-f"><a href="../disarto/'+(SKETCH[FILE]||FILE)+'">этот экран листом, с пояснениями ↗</a><a href="../disarto/index.html">все скетчи ↗</a></div>';
