@@ -1,0 +1,43 @@
+<template>
+  <style>
+    #root{position:absolute;inset:0;font-family:"Inter",sans-serif;pointer-events:none}
+    .cap{position:absolute;left:0;right:0;top:922px;height:120px;display:flex;align-items:center;justify-content:center;overflow:visible}
+    .cap .line{font:600 52px/1.2 "Inter",sans-serif;letter-spacing:-.01em;color:#ececee;white-space:nowrap;text-align:center}
+    .cap .w{display:inline-block;white-space:pre}
+    .cap .acc{color:#c27a34}
+    .src{display:none}
+  </style>
+  <div data-hf-id="hf-s04l" id="root" data-composition-id="caps" data-width="1920" data-height="1080" data-composition-variables='[{"id":"cap1","type":"string","label":"cap1","default":"Узкая *рейка* — всё под рукой"},{"id":"cap2","type":"string","label":"cap2","default":"Нажмите — *откроется* нужное"},{"id":"cap3","type":"string","label":"cap3","default":"*Проект:* документы, память, команда"},{"id":"cap4","type":"string","label":"cap4","default":"*Команда:* кто чем занят"},{"id":"cap5","type":"string","label":"cap5","default":"Отпустили — осталась *рейка*"},{"id":"cap6","type":"string","label":"cap6","default":"Нажали — панель *вернулась*"}]'>
+    <div data-hf-id="hf-4r1f" id="cap1" class="clip cap" data-start="0.3" data-duration="2.1" data-beat="hook"><span data-hf-id="hf-me8g" class="src" data-var-text="cap1">Узкая *рейка* — всё под рукой</span><div data-hf-id="hf-np12" class="line"></div></div>
+    <div data-hf-id="hf-brco" id="cap2" class="clip cap" data-start="3.2" data-duration="2.0" data-beat="inbox"><span data-hf-id="hf-iz0y" class="src" data-var-text="cap2">Нажмите — *откроется* нужное</span><div data-hf-id="hf-sogq" class="line"></div></div>
+    <div data-hf-id="hf-hqil" id="cap3" class="clip cap" data-start="6.7" data-duration="1.9" data-beat="project"><span data-hf-id="hf-rp2g" class="src" data-var-text="cap3">*Проект:* документы, память, команда</span><div data-hf-id="hf-t2rr" class="line"></div></div>
+    <div data-hf-id="hf-1w1e" id="cap4" class="clip cap" data-start="10.0" data-duration="1.9" data-beat="team"><span data-hf-id="hf-kpgq" class="src" data-var-text="cap4">*Команда:* кто чем занят</span><div data-hf-id="hf-th2s" class="line"></div></div>
+    <div data-hf-id="hf-4ews" id="cap5" class="clip cap" data-start="13.5" data-duration="1.9" data-beat="release"><span data-hf-id="hf-25n3" class="src" data-var-text="cap5">Отпустили — осталась *рейка*</span><div data-hf-id="hf-tvdt" class="line"></div></div>
+    <div data-hf-id="hf-6c2p" id="cap6" class="clip cap" data-start="16.6" data-duration="1.7" data-beat="return"><span data-hf-id="hf-9d1k" class="src" data-var-text="cap6">Нажали — панель *вернулась*</span><div data-hf-id="hf-ab7v" class="line"></div></div>
+  </div>
+  <script>
+    (function(){
+      const V=(window.__hyperframes&&window.__hyperframes.getVariables)?(window.__hyperframes.getVariables()||{}):{};
+      const tl=gsap.timeline({paused:true});
+      document.querySelectorAll('#root .cap').forEach(g=>{
+        const src=g.querySelector('.src'); const id=src.getAttribute('data-var-text');
+        const text=(V[id]||src.textContent||'').trim();
+        const line=g.querySelector('.line'); line.innerHTML='';
+        let acc=false;
+        text.split(' ').forEach((w,i)=>{
+          let t=w;
+          const open=t.startsWith('*'), close=t.endsWith('*')||/\*[^\w]*$/.test(t);
+          if(open){acc=true;t=t.slice(1);}
+          const span=document.createElement('span'); span.className='w'+(acc?' acc':'');
+          if(close){acc=false;t=t.replace('*','');}
+          span.textContent=(i?' ':'')+t; line.appendChild(span);
+        });
+        const s=parseFloat(g.getAttribute('data-start')), d=parseFloat(g.getAttribute('data-duration'));
+        const words=line.querySelectorAll('.w');
+        tl.fromTo(words,{opacity:0,filter:'blur(6px)'},{opacity:1,filter:'blur(0px)',duration:.13,stagger:.067,ease:'power2.out'},s);
+        tl.fromTo(line,{opacity:1,filter:'blur(0px)'},{opacity:0,filter:'blur(6px)',duration:.15,ease:'power2.in'},s+d-.15);
+      });
+      window.__timelines['caps']=tl;
+    })();
+  </script>
+</template>
