@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root{--ground:#0a0a0b;--ink:#ececee;--accent:#c27a34;--font-display:"Inter",sans-serif}
+      *{margin:0;padding:0;box-sizing:border-box}
+      html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:var(--ground)}
+      #root{width:100%;height:100%;position:relative;background:var(--ground)}
+      #ui,#caps,#end,#badge{position:absolute;inset:0}
+      #ui{z-index:1}#end{z-index:2}#caps{z-index:3}#badge{z-index:4}
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-oeg9" id="root" data-composition-id="main" data-start="0" data-duration="21.6" data-width="1920" data-height="1080" data-fps="30">
+      <div data-hf-id="hf-fq62" id="ui" data-composition-id="ui" data-composition-src="compositions/ui.html" data-start="0" data-duration="18.85" data-track-index="0" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div data-hf-id="hf-dbd7" id="end" data-composition-id="end" data-composition-src="compositions/end.html" data-start="18.85" data-duration="2.75" data-track-index="0" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <div data-hf-id="hf-4p14" id="caps" data-composition-id="caps" data-composition-src="compositions/caps.html" data-start="0" data-duration="18.85" data-track-index="1" data-track-kind="captions" data-width="1920" data-height="1080"></div>
+      <div data-hf-id="hf-5ecd" id="badge" data-composition-id="badge" data-composition-src="compositions/badge.html" data-start="0" data-duration="18.85" data-track-index="2" data-track-kind="graphics" data-width="1920" data-height="1080"></div>
+      <!-- UI-звуки: библиотека Pixabay (assets/sfx/CREDITS.md), музыки нет. Дорожка 3 — клики, дорожка 4 — «поп» / «вшух» / удар -->
+      <audio data-hf-id="hf-s3py" id="sfx-click1" class="clip" src="assets/sfx/click-soft.mp3" data-start="1.7" data-duration="0.37" data-track-index="3" data-volume="0.38"></audio>
+      <audio data-hf-id="hf-rkl2" id="sfx-whoosh1" class="clip" src="assets/sfx/whoosh-short.mp3" data-start="1.78" data-duration="0.58" data-track-index="4" data-volume="0.34"></audio>
+      <audio data-hf-id="hf-h86y" id="sfx-pop1" class="clip" src="assets/sfx/pop.mp3" data-start="7.6" data-duration="0.72" data-track-index="4" data-volume="0.3"></audio>
+      <audio data-hf-id="hf-r26k" id="sfx-click2" class="clip" src="assets/sfx/click-soft.mp3" data-start="11.3" data-duration="0.37" data-track-index="3" data-volume="0.38"></audio>
+      <audio data-hf-id="hf-b5qh" id="sfx-pop2" class="clip" src="assets/sfx/pop.mp3" data-start="11.4" data-duration="0.72" data-track-index="4" data-volume="0.22"></audio>
+      <audio data-hf-id="hf-0rbp" id="sfx-click3" class="clip" src="assets/sfx/click.mp3" data-start="13.2" data-duration="0.37" data-track-index="3" data-volume="0.5"></audio>
+      <audio data-hf-id="hf-jrpw" id="sfx-whoosh2" class="clip" src="assets/sfx/whoosh-short.mp3" data-start="13.5" data-duration="0.58" data-track-index="4" data-volume="0.34"></audio>
+      <audio data-hf-id="hf-bpbi" id="sfx-pop3" class="clip" src="assets/sfx/pop.mp3" data-start="13.8" data-duration="0.72" data-track-index="5" data-volume="0.3"></audio>
+      <audio data-hf-id="hf-x5o8" id="sfx-click4" class="clip" src="assets/sfx/click.mp3" data-start="18.45" data-duration="0.37" data-track-index="3" data-volume="0.5"></audio>
+      <audio data-hf-id="hf-1p51" id="sfx-impact" class="clip" src="assets/sfx/impact-bass-1.mp3" data-start="18.82" data-duration="2.12" data-track-index="4" data-volume="0.38"></audio>
+    </div>
+    <script>
+      /* Язык: node tools/vars.mjs en|ru прописывает/снимает data-variable-values у хостов сцен (статически, до компиляции рендера). */
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
