@@ -14,6 +14,7 @@ const style=readFileSync(new URL('../../../ui/deploy/proto.css',import.meta.url)
 const away=readFileSync(new URL('../../../ui/sketches/disarto/18-overlays.html',import.meta.url),'utf8');
 process.env.TZ='Europe/Istanbul';
 function part(source:string,start:string,end:string){const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return source.slice(a,b)}
+function builtProtoPages(build:string){const a=build.indexOf('PROTO_PAGES ='),b=build.indexOf('PROTO_SRC =',a);assert.ok(a>=0&&b>a);const block=build.slice(a,b);return [...new Set([...block.matchAll(/"([0-9][^"]+)"\s*:/g),...block.matchAll(/PROTO_PAGES\["([0-9][^"]+)"\]/g)].map(match=>match[1]!))]}
 const plain=(value:unknown)=>JSON.parse(JSON.stringify(value));
 type Data=Record<string,any>;
 const imageRef=(hex='a')=>({id:hex.repeat(64),mime:'image/png',size:4,w:1,h:1});
@@ -60,11 +61,11 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
 
 
 test('TS-32: sidebar profile uses only a confirmed engine account and otherwise stays anonymous',()=>{
- const view=ui(),avatar={firstChild:{nodeValue:''},textContent:''},name={textContent:''},email={textContent:'',hidden:true,removeAttribute(key:string){if(key==='hidden')this.hidden=false},setAttribute(key:string){if(key==='hidden')this.hidden=true}},row={title:'',querySelector(selector:string){return selector==='[data-owner-avatar]'?avatar:selector==='[data-owner-name]'?name:selector==='[data-owner-email]'?email:null}};
+ const view=ui(),profiles:any[]=[],avatar={firstChild:{nodeValue:''},textContent:''},name={textContent:''},email={textContent:'',hidden:true,removeAttribute(key:string){if(key==='hidden')this.hidden=false},setAttribute(key:string){if(key==='hidden')this.hidden=true}},row={title:'',querySelector(selector:string){return selector==='[data-owner-avatar]'?avatar:selector==='[data-owner-name]'?name:selector==='[data-owner-email]'?email:null}};view.sandbox.window.PS2={setProfile:(profile:any)=>profiles.push(profile)};
  const query=view.sandbox.document.querySelectorAll;view.sandbox.document.querySelectorAll=(selector:string)=>selector==='aside.side.ps [data-owner-profile]'?[row]:query(selector);
  assert.deepEqual(plain(view.functions.profileDraw({auth:{claude:{loggedIn:true,email:'owner@example.test',name:'Мария'},codex:{loggedIn:true,email:'other@example.test'}}})),{name:'Мария',email:'owner@example.test'});assert.equal(avatar.firstChild.nodeValue,'М');assert.equal(name.textContent,'Мария');assert.equal(email.textContent,'owner@example.test');assert.equal(email.hidden,false);
  assert.deepEqual(plain(view.functions.profileDraw({auth:{claude:{loggedIn:false,email:'forged@example.test'},codex:{loggedIn:true,email:'invalid'}}})),{name:'Владелец',email:''});assert.equal(avatar.firstChild.nodeValue,'В');assert.equal(name.textContent,'Владелец');assert.equal(email.textContent,'');assert.equal(email.hidden,true);
- assert.doesNotMatch(proto,/9616166@gmail\.com|>Serge</);assert.match(proto,/data-owner-profile/);
+ assert.deepEqual(profiles.map(plain),[{name:'Мария',email:'owner@example.test'},{name:'Владелец',email:''}]);assert.doesNotMatch(proto,/9616166@gmail\.com|>Serge</);assert.match(proto,/data-ps2-profile/);
 });
 
 test('TS-25: question and answer share copy and relative time; undated messages invent nothing',()=>{
@@ -361,12 +362,12 @@ test('78/106: arrows never switch projects; state is keyed by full path and surv
 
 test('82/105: wide/rail and mobile open the existing master; native confirmation is disabled and legacy cannot sign',()=>{
  const listeners:((e:Data)=>void)[]=[],location={href:''};let reopened=0;const document={addEventListener(_t:string,fn:(e:Data)=>void){listeners.push(fn)},getElementById:()=>({click(){reopened++}})};
- const context=createContext({document,location,KEY:'chat',PAGES:{away:'18-overlays.html'},window:{}});runInContext(part(proto,"  document.addEventListener('click',e=>{ const a=","  addEventListener('keydown'"),context);
+ const context=createContext({document,location,KEY:'chat',PAGES:{away:'18-overlays.html'},window:{}});runInContext(part(proto,"  document.addEventListener('click',e=>{const mode=","  document.addEventListener('click',e=>{if(!e.target.closest('.ps-foot'))"),context);
  const target={closest:(selector:string)=>selector==='aside.side'?{}:selector==='[data-go]'?{dataset:{go:'away'}}:null};
  for(const side of ['wide','rail']){listeners[0]!({target,preventDefault(){},stopPropagation(){}});assert.equal(location.href,'18-overlays.html#leave',side)}
  (context as Data).KEY='away';listeners[0]!({target,preventDefault(){},stopPropagation(){}});assert.equal(reopened,1);
  const templates:string[]=[];runInContext(part(away,"  HX.bind('#leave'",'  // ── Показать окно'),createContext({HX:{bind(_s:string,fn:()=>string){templates.push(fn())}},blk:(_label:string,html:string)=>html,kv:()=>''}));
- assert.match(templates[0]!,/<button[^>]+disabled[^>]+title="условия ухода движок пока не исполняет"[^>]*>Подписать уход<\/button>/);assert.doesNotMatch(templates[0]!,/Сначала подписать M0|Прошлые ночи/);
+ assert.match(templates[0]!,/<button[^>]+disabled[^>]+title="условия Автопилота движок пока не исполняет"[^>]*>Включить Автопилот<\/button>/);assert.doesNotMatch(templates[0]!,/Сначала подписать M0|Прошлые ночи/);
  assert.match(proto,/PAGES\[k\]\+\(k==='away'\?'#leave':''\)/);assert.doesNotMatch(away,/<div class="comp"|<div class="col"><div class="me"/);
  const view=ui();view.S.away={deputy:'fake'};const callbacks:(()=>void)[]=[];view.sandbox.setTimeout=(fn:()=>void)=>callbacks.push(fn);
  runInContext(part(live,"  if(PAGE==='away'){",'  // ── боковая панель'),Object.assign(view.context,{PAGE:'away'}));const sign=view.clicks.at(-1)!;let stopped=false;
@@ -414,13 +415,14 @@ test('141–143: every PROTO_PAGES page hides demo before delayed status; succes
  const directory=new URL('../../../ui/deploy/out/site/sketches/proto/',import.meta.url);
  execFileSync('python3',['ui/deploy/build.py'],{cwd:new URL('../../../',import.meta.url),stdio:'pipe'});
  const build=readFileSync(new URL('../../../ui/deploy/build.py',import.meta.url),'utf8');
- const pages=[...build.match(/PROTO_PAGES\s*=\s*\{([\s\S]*?)\}/)![1]!.matchAll(/"([0-9][^"]+)"\s*:/g)].map(m=>m[1]!);
- assert.equal(pages.length,18);assert.ok(readdirSync(directory).includes('01-chat.html'));
+ const pages=builtProtoPages(build);
+ assert.equal(pages.length,30);assert.ok(readdirSync(directory).includes('01-chat.html'));assert.ok(readdirSync(directory).includes('38-project-result.html'));
  const css=readFileSync(new URL('../../../ui/deploy/proto.css',import.meta.url),'utf8');assert.match(css,/html\[data-live-pending\] \[data-demo\]\{visibility:hidden!important\}/);
  for(const page of pages){
   const html=readFileSync(new URL(page+'.html',directory),'utf8'),frames=html.match(/<div class="frame[^"]*"[^>]*>/g)||[];
   assert.ok(frames.length,page);assert.ok(frames.every(tag=>/data-demo(?:[ >])/.test(tag)),page+': all frames marked before scripts');
-  const mapping=runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data,key=Object.keys(mapping).find(key=>mapping[key]===page+'.html')||'';
+  const mapping=runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data,key=Object.keys(mapping).find(key=>mapping[key]===page+'.html')||(/^(?:2[89]|3[0-8])-/.test(page)?'path':'');
+  if(key==='path'){assert.match(html,/path\.css\?v=/,page);assert.match(html,/path\.js\?v=/,page);assert.match(html,/sidebar-v2\.css\?v=/,page);assert.match(html,/<html lang="ru" data-proto class="ps2-root">/,page)}
   const v=firstPaint(html,new Map(),key);assert.equal(v.demoVisible(),false,page);assert.equal(v.paint.restore(),false);
   const connecting=v.paint.connect().finally(()=>{v.sandbox.render();v.paint.ready()});await until(()=>v.requests.some(r=>r.path==='/api/status'));
   assert.equal(v.demoVisible(),false,page+': waiting for status');v.status.resolve(realStatus());await connecting;
@@ -512,10 +514,10 @@ test('TS-11 r2: rejected startup response leaves a cached preview read-only unti
 });
 
 test('152: all PROTO_PAGES share history return, invalidate old bindings/status, and confirm before accepting writes',async()=>{
- const build=readFileSync(new URL('../../../ui/deploy/build.py',import.meta.url),'utf8'),pages=[...build.match(/PROTO_PAGES\s*=\s*\{([\s\S]*?)\}/)![1]!.matchAll(/"([0-9][^"]+)"\s*:/g)].map(m=>m[1]!);
- const mapping=runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data;assert.equal(pages.length,18);
+ const build=readFileSync(new URL('../../../ui/deploy/build.py',import.meta.url),'utf8'),pages=builtProtoPages(build);
+ const mapping=runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data;assert.equal(pages.length,30);
  for(const page of pages){
-  const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/'+page+'.html',import.meta.url),'utf8'),key=Object.keys(mapping).find(k=>mapping[k]===page+'.html')||'',v=firstPaint(html,new Map(),key);
+  const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/'+page+'.html',import.meta.url),'utf8'),key=Object.keys(mapping).find(k=>mapping[k]===page+'.html')||(/^(?:2[89]|3[0-8])-/.test(page)?'path':''),v=firstPaint(html,new Map(),key);
   const body=html.match(/<body[^>]*>([\s\S]*?)<script\b/)![1]!,d=historyDOM(v,body),columns=d.document.querySelectorAll('.feed .col');
   v.paint.apply(realStatus(),v.boot.capture(),true);await immediate();v.S.chat=[{role:'ai',src:'live',text:'CACHED ANSWER FROM A',html:'CACHED ANSWER FROM A'}];for(const column of columns)column.innerHTML='<div class="ai live-msg">CACHED ANSWER FROM A</div>';
   v.S.ui.openChat='old-pinned-chat';v.S.pending={text:'unsent draft from A'};v.H.cur={text:'OLD STREAM',tools:[]};v.H.asks={old:{text:'OLD QUESTION'}};

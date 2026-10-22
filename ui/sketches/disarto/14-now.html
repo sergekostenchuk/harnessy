@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 14 · Сейчас · живой</title>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 14 · Входящие · живой</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
 <style>
   .kind{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:6px;font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;background:var(--raised);border:1px solid var(--line2);color:var(--ink2);white-space:nowrap}
@@ -22,7 +22,7 @@
       <div class="foot"><div class="nav"><span class="ring"><i></i></span></div><div class="nav"><span class="av">S<i></i></span></div></div>
     </aside>
     <section class="main">
-      <div class="top"><b>Сейчас</b><span class="st"><i style="background:var(--accent)"></i>2 ждут вас · самый долгий 40 мин</span>
+      <div class="top"><b>Входящие</b><span class="st"><i style="background:var(--accent)"></i>2 ждут вас · самый долгий 40 мин</span>
         <div class="r"><span class="seg" id="seg"><span class="on" data-v="turn">Чей ход</span><span data-v="week">Решения</span><span data-v="away">Пока вас не было</span></span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
       <div class="views">
 
@@ -117,7 +117,7 @@
   HX.bind('#idle',()=>'<div class="from">раскрытая карточка · прогноз</div><div class="ch"><h3>Что будет, если ничего не делать</h3></div><div class="csub">прогноз на ближайшие 12 часов по текущим правилам делегирования</div>'+
     blk('по порядку',tl([['c','18:40','H1.5 дойдёт до слияния и встанет','ждёт подпись M0'],['','19:58','Сбросится лимит Codex','воркер 2 вернётся на Codex, если подтвердите'],['','20:15','Вернётся отложенное решение о дефектах',''],['','09:00','Истечёт окно делегирования','заместитель перестанет решать за вас']]))+
     '<div class="decide"><div class="lbl">самое дорогое</div>Подпись M0 — за ней слияние H1.5 и рубеж.'+acts([['Решать по порядку','p','data-close'],['Только подпись M0','','data-close']])+'</div>',{h:480,hide:false});
-  HX.passport({title:'Сейчас',where:'Раздел «Сейчас» · три вкладки',what:'Решения, которые ждут вас, решены за неделю и случились в ваше отсутствие',why:'Самый дорогой простой команды — ваш ответ; экран показывает только то, что без вас не двинется',when:'Обновляется при каждом новом вопросе; счётчик в рейке',expect:'Одно нажатие на строке — и команда идёт дальше',risk:'Решить не глядя — последствия «если да / если нет» в карточке',ok:'Очередь «ждут вас» пуста, простой < 15 мин',fail:'Решение висит дольше часа и держит слияние'});
+  HX.passport({title:'Входящие',where:'Раздел «Входящие» · три вкладки',what:'Решения, которые ждут вас, решены за неделю и случились в ваше отсутствие',why:'Самый дорогой простой команды — ваш ответ; экран показывает только то, что без вас не двинется',when:'Обновляется при каждом новом вопросе; счётчик в рейке',expect:'Одно нажатие на строке — и команда идёт дальше',risk:'Решить не глядя — последствия «если да / если нет» в карточке',ok:'Очередь «ждут вас» пуста, простой < 15 мин',fail:'Решение висит дольше часа и держит слияние'});
 })();
 </script>
 </body></html>
