@@ -51,11 +51,17 @@
     rows.sort((a,b)=>Number(a.done)-Number(b.done)||Number(a.read)-Number(b.read)||Number(b.need)-Number(a.need)||(b.ts||0)-(a.ts||0));return rows;
   }
   function counts(rows=state.items){return {all:rows.length,need:rows.filter(x=>x.need&&!x.done).length,info:rows.filter(x=>!x.need&&!x.done&&!x.read).length}}
+  function panelCounts(){const H=L?.H;if(!H?.on||H.snapshotOnly||!H.project||state.project!==H.project||state.generation!==(H.confirmedProjectGeneration||0))return {all:0,need:0,info:0,unavailable:true};return counts()}
+  function bindPanelCounts(){const panel=window.PS2;if(!panel)return;
+    panel.inboxSource=panelCounts;if(panel.inboxSourceInstalled)return;panel.inboxSourceInstalled=true;
+    if(typeof panel.setInbox==='function'){const setInbox=panel.setInbox;panel.setInbox=function(){return setInbox.call(this,panel.inboxSource())}}
+    if(typeof panel.setData==='function'){const setData=panel.setData;panel.setData=function(data){return setData.call(this,data&&Object.prototype.hasOwnProperty.call(data,'inbox')?{...data,inbox:panel.inboxSource()}:data)}}
+  }
   function keepCompleted(rows,previous){const byId=new Map(rows.map(x=>[x.id,x]));for(const old of previous){if(!old.need)continue;const next=byId.get(old.id);if(next){if(old.done){next.done=true;next.read=true}}else if(rows.filter(x=>x.done).length<50){const completed={...old,done:true,read:true};rows.push(completed);byId.set(old.id,completed)}}rows.sort((a,b)=>Number(a.done)-Number(b.done)||Number(a.read)-Number(b.read)||Number(b.need)-Number(a.need)||(b.ts||0)-(a.ts||0));return rows}
-  function paintBadges(){const n=counts();document.querySelectorAll('aside.side .ps2-inbox').forEach(row=>{
+  function paintBadges(){const n=panelCounts();document.querySelectorAll('aside.side .ps2-inbox').forEach(row=>{
     const action=row.querySelector('.b'),info=row.querySelector('.b2');if(action){action.textContent=n.need;action.hidden=!n.need;action.style.display=n.need?'':'none'}if(info){info.textContent=n.info;info.hidden=!n.info;info.style.display=n.info?'':'none'}
   });document.querySelectorAll('.m-drawer a[href="44-inbox.html"] small').forEach(el=>el.textContent=n.need?String(n.need):'');}
-  function signal(){const value=counts();window.PS2?.setInbox?.(value);paintBadges();dispatchEvent(new CustomEvent('inbox:changed',{detail:{project:state.project,counts:value}}))}
+  function signal(){const value=panelCounts();window.PS2?.setInbox?.(value);paintBadges();dispatchEvent(new CustomEvent('inbox:changed',{detail:{project:state.project,counts:value}}))}
   const current=()=>L?.H?.on&&!L.H.snapshotOnly&&!!L.H.project;
   const binding=()=>({project:L.H.project,generation:L.H.confirmedProjectGeneration||0});
   const same=b=>current()&&L.H.project===b.project&&(L.H.confirmedProjectGeneration||0)===b.generation;
@@ -141,7 +147,8 @@
   });
   document.addEventListener('input',e=>{const field=e.target.closest('[data-inbox-reply]'),row=e.target.closest('[data-inbox-id]');if(field&&row&&state.items.some(x=>x.id===row.dataset.inboxId))state.replyDrafts.set(row.dataset.inboxId,field.value)});
   document.addEventListener('keydown',e=>{if(PAGE!=='inbox'||!['Enter',' '].includes(e.key)||!e.target.matches('[data-inbox-id]'))return;e.preventDefault();const x=state.items.find(i=>i.id===e.target.dataset.inboxId);void action(x,'open')});
-  const api=window.HARNESS_INBOX={collect,counts,refresh,paintBadges,get current(){return {project:state.project,items:state.items,counts:counts()}}};
+  const api=window.HARNESS_INBOX={collect,counts,panelCounts,refresh,paintBadges,get current(){return {project:state.project,items:state.items,counts:counts()}}};
+  bindPanelCounts();
   addEventListener('live:status',()=>{if(current())void refresh()});
   addEventListener('pageshow',event=>{if(event.persisted&&current())void refresh()});
   addEventListener('pagehide',()=>{state.request++;state.project=null;state.items=[]});

@@ -27,7 +27,7 @@ function view(owner:Record<string,unknown>={}){
     if(path==='/api/approve'||path==='/api/chat')return {ok:true};throw Error('unexpected '+path)};
   const context:any={window:null,document:d.document,location:{href:''},Date,Set,Map,Number,Array,JSON,Promise,encodeURIComponent,CustomEvent:class{type:string;init:any;constructor(type:string,init:any){this.type=type;this.init=init}},dispatchEvent(){},addEventListener:d.window.addEventListener.bind(d.window),
     LIVE:{H,S,api,esc:(v:any)=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),save(){},subscribeLiveEvents:()=>{const item={};events.push(item);return item}}};context.window=context;
-  context.PS2={setInbox:(value:any)=>panelCounts.push({...value})};runInContext(source,createContext(context));return {d,H,S,owner,calls,panelCounts,context,events,async refresh(){await new Promise(resolve=>setImmediate(resolve));await context.HARNESS_INBOX.refresh();await new Promise(resolve=>setImmediate(resolve))},async settle(){await new Promise(resolve=>setImmediate(resolve))}};
+  context.PS2={setInbox:(value:any)=>panelCounts.push({...value}),setData:(value:any)=>{if(value.inbox)panelCounts.push({...value.inbox})}};runInContext(source,createContext(context));return {d,H,S,owner,calls,panelCounts,context,events,async refresh(){await new Promise(resolve=>setImmediate(resolve));await context.HARNESS_INBOX.refresh();await new Promise(resolve=>setImmediate(resolve))},async settle(){await new Promise(resolve=>setImmediate(resolve))}};
 }
 
 test('TS-36B: six live source kinds, deduplicated approval/question, and one count function for page and rail',()=>{
@@ -113,4 +113,18 @@ test('TS-36B r3: live refresh keeps the active reply, selection, and the sidebar
   assert.notEqual(after,before);assert.equal(v.d.document.activeElement,after);assert.equal(after.value,'Продолжить проверку');
   assert.deepEqual([after.selectionStart,after.selectionEnd],[5,8]);
   assert.deepEqual(v.panelCounts.at(-1),{...v.context.HARNESS_INBOX.current.counts});
+});
+
+test('TS-36B r4: panel badge and chat-list updates use the bound inbox count after resize',async()=>{
+  const v=view();await v.refresh();const current=v.context.HARNESS_INBOX.current.counts;
+  v.context.PS2.setInbox({need:0,info:0}); // panel A badges() on resize
+  assert.deepEqual(v.panelCounts.at(-1),{...current});
+  v.context.PS2.setData({live:true,inbox:{need:0,info:0}}); // panel A sideChats()
+  assert.deepEqual(v.panelCounts.at(-1),{...current});
+  v.H.project='/b';v.H.confirmedProjectGeneration++;
+  v.context.PS2.setInbox({need:current.need,info:current.info});
+  assert.deepEqual(v.panelCounts.at(-1),{all:0,need:0,info:0,unavailable:true});
+  v.H.project='/a';v.H.confirmedProjectGeneration++;
+  v.context.PS2.setData({inbox:{need:current.need,info:current.info}});
+  assert.deepEqual(v.panelCounts.at(-1),{all:0,need:0,info:0,unavailable:true});
 });
