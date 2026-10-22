@@ -17,3 +17,6 @@ packages/*/dist/
 
 # пустой каталог: рабочая папка старых чатов Codex (ревьюер, воркер 1); код Python удалён в TS-16, история — тег mvp-python
 /core/
+ui/video/*/.hyperframes/
+ui/video/*/node_modules/
+ui/video/*/renders/
