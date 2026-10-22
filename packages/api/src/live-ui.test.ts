@@ -353,8 +353,8 @@ test('79/107: failed and delayed pages retain loaded data, including project-awa
 });
 
 test('79/82: journal reset after project opening cannot change another screen title',()=>{
- const view=ui(),title={textContent:'Уйти'},get=view.sandbox.document.getElementById;view.sandbox.document.getElementById=(id:string)=>id==='jrows'?null:get(id);view.sandbox.document.querySelector=(selector:string)=>selector==='.frame .top > b'?title:null;
- const journal=view.journal();journal.reset('/new-project');assert.equal(title.textContent,'Уйти');assert.equal(view.requests.length,0);
+ const view=ui(),title={textContent:'Автопилот'},get=view.sandbox.document.getElementById;view.sandbox.document.getElementById=(id:string)=>id==='jrows'?null:get(id);view.sandbox.document.querySelector=(selector:string)=>selector==='.frame .top > b'?title:null;
+ const journal=view.journal();journal.reset('/new-project');assert.equal(title.textContent,'Автопилот');assert.equal(view.requests.length,0);
 });
 
 test('78/106: arrows never switch projects; state is keyed by full path and survives redraw/restart',async()=>{
@@ -366,20 +366,31 @@ test('78/106: arrows never switch projects; state is keyed by full path and surv
  const restarted=ui({storage:view.storage}),next=restarted.sidebar();assert.equal(next.expanded(a),false);assert.equal(next.expanded(b),true);await click({path:a.path});assert.equal(opened,a.path);
 });
 
-test('82/105: wide/rail and mobile open the existing master; native confirmation is disabled and legacy cannot sign',()=>{
+test('TS-36C: profile entry opens the Autopilot master; until morning/answer stay preview-only',()=>{
  const listeners:((e:Data)=>void)[]=[],location={href:''};let reopened=0;const document={addEventListener(_t:string,fn:(e:Data)=>void){listeners.push(fn)},getElementById:()=>({click(){reopened++}})};
  const context=createContext({document,location,KEY:'chat',PAGES:{away:'18-overlays.html'},window:{}});runInContext(part(proto,"  document.addEventListener('click',e=>{const mode=","  document.addEventListener('click',e=>{if(!e.target.closest('.ps-foot'))"),context);
  const target={closest:(selector:string)=>selector==='aside.side'?{}:selector==='[data-go]'?{dataset:{go:'away'}}:null};
  for(const side of ['wide','rail']){listeners[0]!({target,preventDefault(){},stopPropagation(){}});assert.equal(location.href,'18-overlays.html#leave',side)}
  (context as Data).KEY='away';listeners[0]!({target,preventDefault(){},stopPropagation(){}});assert.equal(reopened,1);
  const templates:string[]=[];runInContext(part(away,"  HX.bind('#leave'",'  // ── Показать окно'),createContext({HX:{bind(_s:string,fn:()=>string){templates.push(fn())}},blk:(_label:string,html:string)=>html,kv:()=>''}));
- assert.match(templates[0]!,/<button[^>]+disabled[^>]+title="условия Автопилота движок пока не исполняет"[^>]*>Включить Автопилот<\/button>/);assert.doesNotMatch(templates[0]!,/Сначала подписать M0|Прошлые ночи/);
+ assert.match(proto,/class="it ap" data-go="away" href="18-overlays\.html#leave"/);
+ assert.match(templates[0]!,/до утра · 07:00/);assert.match(templates[0]!,/до ответа/);
+ assert.match(templates[0]!,/<button[^>]+disabled[^>]+title="движок пока не исполняет Автопилот"[^>]*>Включить Автопилот<\/button>/);assert.doesNotMatch(templates[0]!,/Сначала подписать M0|Прошлые ночи/);
  assert.match(proto,/PAGES\[k\]\+\(k==='away'\?'#leave':''\)/);assert.doesNotMatch(away,/<div class="comp"|<div class="col"><div class="me"/);
  const view=ui();view.S.away={deputy:'fake'};const callbacks:(()=>void)[]=[];view.sandbox.setTimeout=(fn:()=>void)=>callbacks.push(fn);
  runInContext(part(live,"  if(PAGE==='away'){",'  // ── боковая панель'),Object.assign(view.context,{PAGE:'away'}));const sign=view.clicks.at(-1)!;let stopped=false;
- sign({target:{closest:(selector:string)=>selector==='.panel .btn'?{textContent:'Подписать уход',dataset:{},closest:()=>null}:null},preventDefault(){},stopImmediatePropagation(){stopped=true}});assert.equal(stopped,true);assert.equal(view.S.away.deputy,'fake');assert.match(view.toasts.at(-1)!,/условия ухода движок пока не исполняет/);
+ sign({target:{closest:(selector:string)=>selector==='.panel .btn'?{textContent:'Включить Автопилот',dataset:{},closest:()=>null}:null},preventDefault(){},stopImmediatePropagation(){stopped=true}});assert.equal(stopped,true);assert.equal(view.S.away.deputy,'fake');assert.match(view.toasts.at(-1)!,/движок пока не исполняет Автопилот/);
  const cleaned=createContext({KEY:'k',localStorage:{getItem:()=>JSON.stringify({...view.S,v:1})}});runInContext(part(live,'  let S;','  const now=')+'load();globalThis.cleaned=S;',cleaned);assert.equal(Object.hasOwn((cleaned as Data).cleaned,'away'),false);
 });
+
+test('TS-36C: orchestrator chat offers the same master without claiming Autopilot is active',()=>{
+ const view=ui(),d=dom('<div class="frame cur"><div class="main"><div class="feed"><div class="col"></div></div></div></div>');view.sandbox.document=d.document;
+ view.functions.chatGuidanceDraw();const card=d.document.querySelector('[data-autopilot-guidance]');assert.ok(card);
+ assert.match(card.textContent,/Движок пока не исполняет Автопилот/);assert.equal(card.querySelector('a')?.getAttribute('href'),'18-overlays.html#leave');
+ assert.equal(view.requests.length,0);assert.doesNotMatch(d.body.innerHTML,/автопилот · до 07:00|Автопилот решил/);
+ view.H.snapshotOnly=true;view.functions.chatGuidanceDraw();assert.equal(d.document.querySelector('[data-autopilot-guidance]'),null);
+});
+
 
 
 // Delayed status used to expose the original OMG sketch on every full-page navigation.
