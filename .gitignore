@@ -21,3 +21,4 @@ ui/video/*/.hyperframes/
 ui/video/*/node_modules/
 ui/video/*/renders/
 ui/video/*/frames/
+ui/video/*/renders/frames/

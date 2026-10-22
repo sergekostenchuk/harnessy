@@ -1,0 +1,42 @@
+<template>
+  <style>
+    #root{position:absolute;inset:0;font-family:"Inter",sans-serif;pointer-events:none}
+    .cap{position:absolute;left:0;right:0;top:922px;height:120px;display:flex;align-items:center;justify-content:center;overflow:visible}
+    .cap .line{font:600 52px/1.2 "Inter",sans-serif;letter-spacing:-.01em;color:#ececee;white-space:nowrap;text-align:center}
+    .cap .w{display:inline-block;white-space:pre}
+    .cap .acc{color:#c27a34}
+    .src{display:none}
+  </style>
+  <div data-hf-id="hf-4tdr" id="root" data-composition-id="caps" data-width="1920" data-height="1080" data-composition-variables='[{"id":"cap1","type":"string","label":"cap1","default":"Просто *спросите*. Проект не нужен"},{"id":"cap2","type":"string","label":"cap2","default":"Выросло в дело — добавьте в *проект*"},{"id":"cap3","type":"string","label":"cap3","default":"Любой свой проект — или *новый*"},{"id":"cap4","type":"string","label":"cap4","default":"Чат *переехал*. История на месте"},{"id":"cap5","type":"string","label":"cap5","default":"Теперь рядом *документы*, память, команда"}]'>
+    <div data-hf-id="hf-b950" id="cap1" class="clip cap" data-start="3.3" data-duration="2.4" data-beat="ask"><span data-hf-id="hf-r5m5" class="src" data-var-text="cap1">Просто *спросите*. Проект не нужен</span><div data-hf-id="hf-np12" class="line"></div></div>
+    <div data-hf-id="hf-qe5x" id="cap2" class="clip cap" data-start="8.5" data-duration="2.1" data-beat="grew"><span data-hf-id="hf-7yoj" class="src" data-var-text="cap2">Выросло в дело — добавьте в *проект*</span><div data-hf-id="hf-sogq" class="line"></div></div>
+    <div data-hf-id="hf-1717" id="cap3" class="clip cap" data-start="10.5" data-duration="1.8" data-beat="menu"><span data-hf-id="hf-grg4" class="src" data-var-text="cap3">Любой свой проект — или *новый*</span><div data-hf-id="hf-t2rr" class="line"></div></div>
+    <div data-hf-id="hf-5ql8" id="cap4" class="clip cap" data-start="13.8" data-duration="2.1" data-beat="moved"><span data-hf-id="hf-0i2v" class="src" data-var-text="cap4">Чат *переехал*. История на месте</span><div data-hf-id="hf-th2s" class="line"></div></div>
+    <div data-hf-id="hf-2vgh" id="cap5" class="clip cap" data-start="16.0" data-duration="2.5" data-beat="tabs"><span data-hf-id="hf-97so" class="src" data-var-text="cap5">Теперь рядом *документы*, память, команда</span><div data-hf-id="hf-tvdt" class="line"></div></div>
+  </div>
+  <script>
+    (function(){
+      const V=(window.__hyperframes&&window.__hyperframes.getVariables)?(window.__hyperframes.getVariables()||{}):{};
+      const tl=gsap.timeline({paused:true});
+      document.querySelectorAll('#root .cap').forEach(g=>{
+        const src=g.querySelector('.src'); const id=src.getAttribute('data-var-text');
+        const text=(V[id]||src.textContent||'').trim();
+        const line=g.querySelector('.line'); line.innerHTML='';
+        let acc=false;
+        text.split(' ').forEach((w,i)=>{
+          let t=w;
+          const open=t.startsWith('*'), close=t.endsWith('*')||/\*[^\w]*$/.test(t);
+          if(open){acc=true;t=t.slice(1);}
+          const span=document.createElement('span'); span.className='w'+(acc?' acc':'');
+          if(close){acc=false;t=t.replace('*','');}
+          span.textContent=(i?' ':'')+t; line.appendChild(span);
+        });
+        const s=parseFloat(g.getAttribute('data-start')), d=parseFloat(g.getAttribute('data-duration'));
+        const words=line.querySelectorAll('.w');
+        tl.fromTo(words,{opacity:0,filter:'blur(6px)'},{opacity:1,filter:'blur(0px)',duration:.13,stagger:.067,ease:'power2.out'},s);
+        tl.fromTo(line,{opacity:1,filter:'blur(0px)'},{opacity:0,filter:'blur(6px)',duration:.15,ease:'power2.in'},s+d-.15);
+      });
+      window.__timelines['caps']=tl;
+    })();
+  </script>
+</template>
