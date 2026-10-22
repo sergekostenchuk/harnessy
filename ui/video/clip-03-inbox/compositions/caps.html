@@ -1,0 +1,42 @@
+<template>
+  <style>
+    #root{position:absolute;inset:0;font-family:"Inter",sans-serif;pointer-events:none}
+    .cap{position:absolute;left:0;right:0;top:922px;height:120px;display:flex;align-items:center;justify-content:center;overflow:visible}
+    .cap .line{font:600 52px/1.2 "Inter",sans-serif;letter-spacing:-.01em;color:#ececee;white-space:nowrap;text-align:center}
+    .cap .w{display:inline-block;white-space:pre}
+    .cap .acc{color:#c27a34}
+    .src{display:none}
+  </style>
+  <div data-hf-id="hf-s04l" id="root" data-composition-id="caps" data-width="1920" data-height="1080" data-composition-variables='[{"id":"cap1","type":"string","label":"cap1","default":"Всё, что ждёт вас, — в *одном месте*"},{"id":"cap2","type":"string","label":"cap2","default":"Два ждут *ответа*, четыре — к сведению"},{"id":"cap3","type":"string","label":"cap3","default":"Ответьте *прямо здесь*"},{"id":"cap4","type":"string","label":"cap4","default":"Решили — карточка ушла в *выполненные*"},{"id":"cap5","type":"string","label":"cap5","default":"Осталось *одно*. Остальное — к сведению"}]'>
+    <div data-hf-id="hf-4r1f" id="cap1" class="clip cap" data-start="0.3" data-duration="2.6" data-beat="hook"><span data-hf-id="hf-me8g" class="src" data-var-text="cap1">Всё, что ждёт вас, — в *одном месте*</span><div data-hf-id="hf-np12" class="line"></div></div>
+    <div data-hf-id="hf-brco" id="cap2" class="clip cap" data-start="3.9" data-duration="2.4" data-beat="feed"><span data-hf-id="hf-iz0y" class="src" data-var-text="cap2">Два ждут *ответа*, четыре — к сведению</span><div data-hf-id="hf-sogq" class="line"></div></div>
+    <div data-hf-id="hf-hqil" id="cap3" class="clip cap" data-start="7.7" data-duration="2.2" data-beat="reply"><span data-hf-id="hf-rp2g" class="src" data-var-text="cap3">Ответьте *прямо здесь*</span><div data-hf-id="hf-t2rr" class="line"></div></div>
+    <div data-hf-id="hf-1w1e" id="cap4" class="clip cap" data-start="10.5" data-duration="2.0" data-beat="done"><span data-hf-id="hf-kpgq" class="src" data-var-text="cap4">Решили — карточка ушла в *выполненные*</span><div data-hf-id="hf-th2s" class="line"></div></div>
+    <div data-hf-id="hf-4ews" id="cap5" class="clip cap" data-start="12.6" data-duration="2.6" data-beat="counter"><span data-hf-id="hf-25n3" class="src" data-var-text="cap5">Осталось *одно*. Остальное — к сведению</span><div data-hf-id="hf-tvdt" class="line"></div></div>
+  </div>
+  <script>
+    (function(){
+      const V=(window.__hyperframes&&window.__hyperframes.getVariables)?(window.__hyperframes.getVariables()||{}):{};
+      const tl=gsap.timeline({paused:true});
+      document.querySelectorAll('#root .cap').forEach(g=>{
+        const src=g.querySelector('.src'); const id=src.getAttribute('data-var-text');
+        const text=(V[id]||src.textContent||'').trim();
+        const line=g.querySelector('.line'); line.innerHTML='';
+        let acc=false;
+        text.split(' ').forEach((w,i)=>{
+          let t=w;
+          const open=t.startsWith('*'), close=t.endsWith('*')||/\*[^\w]*$/.test(t);
+          if(open){acc=true;t=t.slice(1);}
+          const span=document.createElement('span'); span.className='w'+(acc?' acc':'');
+          if(close){acc=false;t=t.replace('*','');}
+          span.textContent=(i?' ':'')+t; line.appendChild(span);
+        });
+        const s=parseFloat(g.getAttribute('data-start')), d=parseFloat(g.getAttribute('data-duration'));
+        const words=line.querySelectorAll('.w');
+        tl.fromTo(words,{opacity:0,filter:'blur(6px)'},{opacity:1,filter:'blur(0px)',duration:.13,stagger:.067,ease:'power2.out'},s);
+        tl.fromTo(line,{opacity:1,filter:'blur(0px)'},{opacity:0,filter:'blur(6px)',duration:.15,ease:'power2.in'},s+d-.15);
+      });
+      window.__timelines['caps']=tl;
+    })();
+  </script>
+</template>
