@@ -170,6 +170,9 @@ def build_sketches():
     for f in sorted(src.iterdir()):
         if f.is_file() and f.suffix in (".html", ".css", ".js", ".jpg", ".png", ".webp") and "-before-" not in f.name:   # картинки эскизов (фото-база заставки)
             shutil.copy(f, dst / f.name); n += 1
+    media = src / "media"   # видео серии клипов и постеры (ссылка на ui/video/renders); копируем по ссылкам, вне git
+    if media.exists():
+        shutil.copytree(media, dst / "media", symlinks=False, dirs_exist_ok=True)
     audit = ROOT / "synthesis" / "audit-unload-051026.md"
     if audit.exists():
         (dst / "audit.html").write_text(md_to_html(audit.read_text(encoding="utf-8"), "Аудит разгрузки экранов"), encoding="utf-8")
