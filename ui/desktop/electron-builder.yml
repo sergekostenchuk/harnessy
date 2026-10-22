@@ -49,4 +49,4 @@ generateUpdatesFilesForAllChannels: true
 publish:
   provider: github
   owner: sergekostenchuk
-  repo: OWNER_CONFIRM_RELEASE_REPOSITORY
+  repo: harnessy-releases

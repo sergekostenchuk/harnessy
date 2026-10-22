@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {randomUUID}=require('node:crypto');
 
-const RELEASE_REPOSITORY='OWNER_CONFIRM_RELEASE_REPOSITORY';
+const RELEASE_REPOSITORY='harnessy-releases';
 const CHECK_INTERVAL_MS=6*60*60*1000;
 const validChannel=value=>value==='beta'||value==='latest';
 const repositoryConfigured=()=>RELEASE_REPOSITORY!=='OWNER_CONFIRM_RELEASE_REPOSITORY';
