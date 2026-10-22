@@ -286,10 +286,13 @@ def build_article():
     t = t.replace('href="article.css"', 'href="/sketches/disarto/article.css"').replace('href="style.css"', 'href="/sketches/disarto/style.css"')
     t = t.replace('"media/', '"/media/').replace("'media/", "'/media/")
     (OUT / "article.html").write_text(t, encoding="utf-8")
+    privacy = HERE / "privacy.html"
+    if privacy.exists():
+        shutil.copy(privacy, OUT / "privacy.html")
     media = ROOT / "sketches" / "disarto" / "media"
     if media.exists():
         shutil.copytree(media, OUT / "media", symlinks=False, dirs_exist_ok=True)
-    print(f"статья: {OUT / 'article.html'} + media")
+    print(f"статья: {OUT / 'article.html'} + privacy + media")
 
 
 def main():

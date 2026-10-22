@@ -95,7 +95,23 @@
     <section class="art-try" id="alpha">
       <h2 class="art-h2"><span data-l="ru">Попробовать</span><span data-l="en">Try it</span></h2>
       <p class="art-p" data-l="ru">Запишитесь на альфа-тест, и мы пришлём приглашение. Нужен Mac. Приложение бесплатное на время теста; за работу моделей вы платите своим провайдерам по своим подпискам и ключам, как и сейчас.</p><p class="art-p" data-l="en">Sign up for the alpha and we'll send an invitation. A Mac is required. The app is free during the test; you pay your own model providers under your own subscriptions and keys, as you do now.</p>
-      <div class="art-try-row"><button class="btn p lg" type="button" data-alpha-signup><span data-l="ru">Записаться на альфу</span><span data-l="en">Join the alpha</span></button><small><span data-l="ru">Mac · бесплатно на время теста</span><span data-l="en">Mac · free during the test</span></small></div>
+      <form class="art-alpha-form" data-alpha-form novalidate>
+        <div class="art-form-grid">
+          <label class="art-field" data-alpha-field="name"><span><span data-l="ru">Имя</span><span data-l="en">Name</span></span><input type="text" name="name" maxlength="80" autocomplete="name" required><small class="art-error" data-alpha-error></small></label>
+          <label class="art-field" data-alpha-field="email"><span><span data-l="ru">Почта</span><span data-l="en">Email</span></span><input type="email" name="email" maxlength="254" autocomplete="email" inputmode="email" required><small class="art-error" data-alpha-error></small></label>
+          <label class="art-field full" data-alpha-field="github"><span><span data-l="ru">GitHub · необязательно</span><span data-l="en">GitHub · optional</span></span><input type="text" name="github" maxlength="39" autocomplete="off" placeholder="username"><small class="art-error" data-alpha-error></small></label>
+        </div>
+        <fieldset class="art-choice" data-alpha-field="tools"><legend><span data-l="ru">Чем пользуетесь</span><span data-l="en">What do you use?</span></legend><div class="art-choice-list">
+          <label class="art-check"><input type="checkbox" name="tools" value="claude-code">Claude Code</label><label class="art-check"><input type="checkbox" name="tools" value="codex">Codex</label><label class="art-check"><input type="checkbox" name="tools" value="antigravity">Antigravity</label><label class="art-check"><input type="checkbox" name="tools" value="other"><span data-l="ru">Другое</span><span data-l="en">Other</span></label>
+        </div><small class="art-error" data-alpha-error></small></fieldset>
+        <fieldset class="art-choice" data-alpha-field="mac"><legend><span data-l="ru">Есть Mac с macOS?</span><span data-l="en">Do you have a Mac with macOS?</span></legend><div class="art-choice-list">
+          <label class="art-check"><input type="radio" name="mac" value="yes"><span data-l="ru">Да</span><span data-l="en">Yes</span></label><label class="art-check"><input type="radio" name="mac" value="no"><span data-l="ru">Нет</span><span data-l="en">No</span></label>
+        </div><small class="art-error" data-alpha-error></small></fieldset>
+        <label class="art-consent" data-alpha-field="consent"><input type="checkbox" name="consent" value="yes"><span><span data-l="ru">Согласен с <a href="/terms.html">условиями</a> и <a href="/privacy.html">политикой конфиденциальности</a></span><span data-l="en">I agree to the <a href="/terms.html">terms</a> and <a href="/privacy.html">privacy policy</a></span></span></label><small class="art-error" data-alpha-consent-error></small>
+        <label class="art-hp" aria-hidden="true"><span>Company</span><input type="text" name="company" tabindex="-1" autocomplete="off"></label>
+        <div class="art-form-actions"><button class="btn p lg" type="submit"><span data-l="ru">Записаться</span><span data-l="en">Sign up</span></button><small><span data-l="ru">Ответим на почту после ручного приглашения</span><span data-l="en">We'll email you after a manual invitation</span></small></div>
+        <div class="art-form-status" data-alpha-status aria-live="polite" hidden></div>
+      </form>
     </section>
   </main>
 </div>
@@ -119,9 +135,57 @@
       if(v.getAttribute('src')!==src){v.pause();w.classList.remove('is-playing');v.removeAttribute('controls');v.setAttribute('poster','media/posters/Harnessy-'+n+'-'+lang+'.jpg');v.setAttribute('src',src);v.load();}
       var p=w.querySelector('[data-play]');if(p)p.setAttribute('aria-label',m.play);
     });
+    drawAlphaStatus();
   }
   q('.art-lang button').forEach(function(b){b.addEventListener('click',function(){apply(b.dataset.lang,true);});});
   apply(root.getAttribute('data-lang')==='en'?'en':'ru',false);
+
+  /* запись на альфу: та же форма RU/EN, без сторонних форм и трекеров */
+  var alphaForm=document.querySelector('[data-alpha-form]'),alphaStatus=document.querySelector('[data-alpha-status]'),alphaState=null;
+  var ALPHA_TEXT={
+    ru:{name:'Укажите имя — от 2 до 80 знаков',email:'Проверьте адрес почты',github:'Проверьте логин GitHub',tools:'Выберите хотя бы один вариант',mac:'Выберите «Да» или «Нет»',consent:'Нужно согласие с условиями и политикой',sending:'Отправляем заявку…',received:'Заявка принята. Ответим на почту.',duplicate:'Заявка с этой почтой уже есть. Ответим на почту.',rate:'Слишком много заявок с этого адреса. Попробуйте позже.',server:'Не удалось отправить. Проверьте связь и попробуйте ещё раз.'},
+    en:{name:'Enter a name between 2 and 80 characters',email:'Check the email address',github:'Check the GitHub username',tools:'Choose at least one option',mac:'Choose Yes or No',consent:'Please agree to the terms and privacy policy',sending:'Sending your request…',received:"Request received. We'll reply by email.",duplicate:"A request with this email already exists. We'll reply by email.",rate:'Too many requests from this address. Try again later.',server:'Could not send the request. Check your connection and try again.'}
+  };
+  function alphaText(key){return ALPHA_TEXT[root.getAttribute('data-lang')==='en'?'en':'ru'][key]||key;}
+  function drawAlphaStatus(){
+    if(!alphaStatus||!alphaState)return;
+    alphaStatus.hidden=false;alphaStatus.className='art-form-status is-'+alphaState.kind;
+    alphaStatus.innerHTML=(alphaState.key==='sending'?'<i class="art-form-spinner"></i>':'')+alphaText(alphaState.key);
+  }
+  function setAlphaStatus(kind,key){alphaState={kind:kind,key:key};drawAlphaStatus();}
+  function alphaField(name){return alphaForm&&alphaForm.querySelector('[data-alpha-field="'+name+'"]');}
+  function clearAlphaErrors(){
+    q('[data-alpha-field]',alphaForm).forEach(function(el){el.classList.remove('is-error');var e=el.querySelector('[data-alpha-error]');if(e)e.textContent='';});
+    var c=alphaForm.querySelector('[data-alpha-consent-error]');if(c)c.textContent='';
+  }
+  function alphaError(name,key){var el=alphaField(name),target=name==='consent'?alphaForm.querySelector('[data-alpha-consent-error]'):el&&el.querySelector('[data-alpha-error]');if(el)el.classList.add('is-error');if(target)target.textContent=alphaText(key||name);}
+  function alphaPayload(){
+    var data=new FormData(alphaForm),mac=data.get('mac');
+    return {name:String(data.get('name')||'').trim(),email:String(data.get('email')||'').trim(),github:String(data.get('github')||'').trim(),tools:data.getAll('tools').map(String),mac:mac==='yes'?true:mac==='no'?false:null,consent:data.get('consent')==='yes',company:String(data.get('company')||'')};
+  }
+  function validateAlpha(p){
+    var bad=false,gh=p.github.replace(/^@/,'');clearAlphaErrors();
+    if(p.name.length<2||p.name.length>80){alphaError('name','name');bad=true;}
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(p.email)||p.email.length>254){alphaError('email','email');bad=true;}
+    if(p.github&&!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(gh)){alphaError('github','github');bad=true;}
+    if(!p.tools.length){alphaError('tools','tools');bad=true;}
+    if(p.mac===null){alphaError('mac','mac');bad=true;}
+    if(!p.consent){alphaError('consent','consent');bad=true;}
+    return !bad;
+  }
+  if(alphaForm)alphaForm.addEventListener('submit',async function(ev){
+    ev.preventDefault();var p=alphaPayload();if(!validateAlpha(p))return;
+    var button=alphaForm.querySelector('button[type="submit"]');button.disabled=true;setAlphaStatus('sending','sending');
+    try{
+      var response=await fetch('/auth/alpha',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}),body={};
+      try{body=await response.json();}catch(ignore){}
+      if(response.ok&&body.status==='received'){setAlphaStatus('ok','received');q('input,button',alphaForm).forEach(function(el){el.disabled=true;});return;}
+      if(response.ok&&body.status==='already_received'){setAlphaStatus('repeat','duplicate');q('input,button',alphaForm).forEach(function(el){el.disabled=true;});return;}
+      if(body.fields&&typeof body.fields==='object')Object.keys(body.fields).forEach(function(name){if(alphaField(name))alphaError(name,body.fields[name]);});
+      setAlphaStatus('error',response.status===429?'rate':'server');
+    }catch(ignore){setAlphaStatus('error','server');}
+    button.disabled=false;
+  });
 
   /* видео: ▶ по клику, без автозапуска; одно играет — остальные на паузе */
   q('.art-win[data-v]').forEach(function(w){
