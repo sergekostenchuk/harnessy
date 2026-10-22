@@ -1,0 +1,42 @@
+<template>
+  <style>
+    #root{position:absolute;inset:0;font-family:"Inter",sans-serif;pointer-events:none}
+    .cap{position:absolute;left:0;right:0;top:922px;height:120px;display:flex;align-items:center;justify-content:center;overflow:visible}
+    .cap .line{font:600 52px/1.2 "Inter",sans-serif;letter-spacing:-.01em;color:#ececee;white-space:nowrap;text-align:center}
+    .cap .w{display:inline-block;white-space:pre}
+    .cap .acc{color:#c27a34}
+    .src{display:none}
+  </style>
+  <div data-hf-id="hf-c8r0" id="root" data-composition-id="caps" data-width="1920" data-height="1080" data-composition-variables='[{"id":"cap0","type":"string","label":"cap0","default":"Команда работает. Внизу — *очередь*"},{"id":"cap1","type":"string","label":"cap1","default":"Задачи с *номерами*, по порядку"},{"id":"cap2","type":"string","label":"cap2","default":"Новая — сразу с *номером*"},{"id":"cap3","type":"string","label":"cap3","default":"Перетащите — и она в *работе*"},{"id":"cap4","type":"string","label":"cap4","default":"Видно, у кого *что*"}]'>
+    <div data-hf-id="hf-c8a0" id="cap0" class="clip cap" data-start="0.3" data-duration="2.2" data-beat="canvas"><span data-hf-id="hf-c8a1" class="src" data-var-text="cap0">Команда работает. Внизу — *очередь*</span><div data-hf-id="hf-c8a2" class="line"></div></div>
+    <div data-hf-id="hf-c8b0" id="cap1" class="clip cap" data-start="3.3" data-duration="2.7" data-beat="queue-big"><span data-hf-id="hf-c8b1" class="src" data-var-text="cap1">Задачи с *номерами*, по порядку</span><div data-hf-id="hf-c8b2" class="line"></div></div>
+    <div data-hf-id="hf-c8c0" id="cap2" class="clip cap" data-start="5.9" data-duration="1.7" data-beat="new-task"><span data-hf-id="hf-c8c1" class="src" data-var-text="cap2">Новая — сразу с *номером*</span><div data-hf-id="hf-c8c2" class="line"></div></div>
+    <div data-hf-id="hf-c8d0" id="cap3" class="clip cap" data-start="7.8" data-duration="2.8" data-beat="drag-drop"><span data-hf-id="hf-c8d1" class="src" data-var-text="cap3">Перетащите — и она в *работе*</span><div data-hf-id="hf-c8d2" class="line"></div></div>
+    <div data-hf-id="hf-c8e0" id="cap4" class="clip cap" data-start="12.2" data-duration="2.6" data-beat="who-what"><span data-hf-id="hf-c8e1" class="src" data-var-text="cap4">Видно, у кого *что*</span><div data-hf-id="hf-c8e2" class="line"></div></div>
+  </div>
+  <script>
+    (function(){
+      const V=(window.__hyperframes&&window.__hyperframes.getVariables)?(window.__hyperframes.getVariables()||{}):{};
+      const tl=gsap.timeline({paused:true});
+      document.querySelectorAll('#root .cap').forEach(g=>{
+        const src=g.querySelector('.src'); const id=src.getAttribute('data-var-text');
+        const text=(V[id]||src.textContent||'').trim();
+        const line=g.querySelector('.line'); line.innerHTML='';
+        let acc=false;
+        text.split(' ').forEach((w,i)=>{
+          let t=w;
+          const open=t.startsWith('*'), close=t.endsWith('*')||/\*[^\w]*$/.test(t);
+          if(open){acc=true;t=t.slice(1);}
+          const span=document.createElement('span'); span.className='w'+(acc?' acc':'');
+          if(close){acc=false;t=t.replace('*','');}
+          span.textContent=(i?' ':'')+t; line.appendChild(span);
+        });
+        const s=parseFloat(g.getAttribute('data-start')), d=parseFloat(g.getAttribute('data-duration'));
+        const words=line.querySelectorAll('.w');
+        tl.fromTo(words,{opacity:0,filter:'blur(6px)'},{opacity:1,filter:'blur(0px)',duration:.13,stagger:.067,ease:'power2.out'},s);
+        tl.fromTo(line,{opacity:1,filter:'blur(0px)'},{opacity:0,filter:'blur(6px)',duration:.15,ease:'power2.in'},s+d-.15);
+      });
+      window.__timelines['caps']=tl;
+    })();
+  </script>
+</template>

@@ -1,0 +1,740 @@
+<template>
+  <style>
+    /* Дизайн-код Harnessy (ui/sketches/disarto/style.css :root) */
+    #root{--canvas:#0a0a0b;--bg:#101012;--panel:#141416;--raised:#1b1b1e;--tile:#202024;--line:#242428;--line2:#2d2d32;--ink:#ececee;--ink2:#9a9aa2;--ink3:#88888f;--accent:#c27a34;--accent-hi:#d89c54;--accent-deep:#6a2808;--accent-soft:rgba(194,122,52,.14);--gold:#dcb866;--ok:#3fbf6f;--ok-soft:rgba(63,191,111,.14);--bad:#c9566e;--bad-fill:#a3304b;--bad-soft:rgba(163,48,75,.2);--warn:#e0b23c;--font:"Inter",sans-serif;--mono:"JetBrains Mono",monospace;--r:14px;--rs:9px}
+    #root{position:absolute;inset:0;overflow:hidden;background:#0a0a0b;background-image:radial-gradient(circle at 1px 1px,#1a1a1d 1px,transparent 1px);background-size:24px 24px;color:var(--ink);font:13px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+    #ui-view{position:absolute;left:0;top:0;width:1920px;height:912px;overflow:hidden}
+    #root *{box-sizing:border-box}
+    #ui-cam{position:absolute;left:0;top:0;width:1600px;height:900px;transform-origin:0 0;will-change:transform}
+    #ui-app{position:absolute;left:0;top:0;width:1600px;height:900px;background:var(--bg);overflow:hidden;border:1px solid var(--line);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+    /* правила скетча 40 (sidebar-v2.css): :hover → .hov, анимации и переходы убраны — всё ведёт таймлайн */
+    /* Боковая панель v2 (скетч 40, дизайн-код sidebar-v2-spec). Классы .ps — те же, что в прототипе (proto.js sideHTML / proto.css), новые — .ps2-*.
+       Скоуп .ps2-root: правила .ps скопированы из proto.css, чтобы лист 00 не тянул proto.css целиком. 22.10.2026. */
+    
+    /* ── панель: каркас (копия proto.css, скоуп) ── */
+    .ps2-root aside.side.ps{display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:12px 10px;background:var(--panel);border-right:1px solid var(--line);overflow:hidden;position:relative;z-index:5}
+    .ps2-root aside.side.ps .ps-head{display:flex;align-items:center;gap:8px;padding:2px 4px 10px;position:relative}
+    .ps2-root aside.side.ps .ps-head .logo{width:26px;height:26px;margin:0;display:grid;place-items:center;border-radius:8px;background:var(--raised);border:1px solid var(--line2);cursor:pointer;flex:none}
+    .ps2-root aside.side.ps .ps-head .logo svg{width:14px;height:14px;fill:none;stroke:var(--gold,#dcb866);stroke-width:1.8;stroke-linecap:round}
+    .ps2-root aside.side.ps .ps-proj{font-weight:500;font-size:13px;color:var(--ink);white-space:nowrap;cursor:pointer;overflow:hidden;text-overflow:ellipsis}.ps2-root aside.side.ps .ps-proj i{font-style:normal;color:var(--ink3);font-size:11px;margin-left:3px}
+    .ps2-root aside.side.ps .col{margin-left:auto;color:var(--ink3);cursor:pointer;font:13px var(--mono);padding:2px 6px;border-radius:6px}.ps2-root aside.side.ps .col.hov{color:var(--ink);background:var(--raised)}
+    .ps2-root aside.side.ps .newbtn{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:var(--rs,9px);background:var(--raised);border:1px solid var(--line2);color:var(--ink);font-weight:500;font-size:13px;margin-bottom:6px;cursor:pointer}
+    .ps2-root aside.side.ps .newbtn.on,.ps2-root aside.side.ps .newbtn.hov{border-color:rgba(194,122,52,.5)}
+    .ps2-root aside.side.ps .newbtn svg,.ps2-root aside.side.ps .search svg,.ps2-root aside.side.ps .nav svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+    .ps2-root aside.side.ps kbd{margin-left:auto;font:10px var(--mono);color:var(--ink3);border:1px solid var(--line2);border-radius:4px;padding:1px 5px}
+    .ps2-root aside.side.ps .search{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--rs,9px);color:var(--ink3);background:var(--bg);margin-bottom:4px;font-size:12.5px;cursor:pointer}
+    .ps2-root aside.side.ps .ps-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:1px;scrollbar-width:none}.ps2-root aside.side.ps .ps-scroll::-webkit-scrollbar{display:none}
+    .ps2-root aside.side.ps .grp{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:10px 9px 3px;display:flex;align-items:center}.ps2-root aside.side.ps .grp .m{margin-left:auto;letter-spacing:0;font-size:10px}
+    .ps2-root aside.side.ps .nav{position:relative;width:auto;height:28px;display:flex;align-items:center;gap:9px;padding:0 9px;border-radius:var(--rs,9px);color:var(--ink2);font-size:13px;cursor:pointer;white-space:nowrap;flex:none}
+    .ps2-root aside.side.ps .nav.hov,.ps2-root aside.side.ps .nav.on{background:var(--raised);color:var(--ink)}.ps2-root aside.side.ps .nav.on svg{stroke:var(--accent)}
+    .ps2-root aside.side.ps .nav .t{overflow:hidden;text-overflow:ellipsis}.ps2-root aside.side.ps .nav .m{margin-left:auto;font:10px var(--mono);color:var(--ink3)}
+    .ps2-root aside.side.ps .nav .b{position:static;margin-left:auto;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#1a0e04;font:500 10px/18px var(--mono);text-align:center;padding:0 5px}
+    .ps2-root aside.side.ps .nav .b.bad{background:var(--bad-fill,#a3304b);color:#fff}
+    .ps2-root aside.side.ps .ps-foot{padding-top:8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0;position:relative;margin-top:auto}
+    .ps2-root aside.side.ps .av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#3a3a40,#1b1b1e);border:1px solid var(--line2);display:grid;place-items:center;font:500 11px var(--mono);color:var(--ink);position:relative;flex:none}
+    .ps2-root aside.side.ps .av i{position:absolute;right:-1px;bottom:-1px;width:8px;height:8px;border-radius:50%;background:var(--ok);border:2px solid var(--panel)}
+    /* строка чата (копия .ps-chat из proto.css + метка роли справа) */
+    .ps2-root .ps-chat{display:flex;align-items:center;gap:8px;height:27px;padding:0 9px 0 26px;border-radius:var(--rs,9px);color:var(--ink2);font-size:12.5px;cursor:pointer;white-space:nowrap;position:relative}
+    .ps2-root .ps-chat.hov{background:var(--raised);color:var(--ink)}
+    .ps2-root .ps-chat>i{position:absolute;left:12px;top:50%;margin-top:-3px;width:6px;height:6px;border-radius:50%;background:var(--line2)}
+    .ps2-root .ps-chat .s{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--ink2);font-size:12.5px}.ps2-root .ps-chat.hov .s,.ps2-root .ps-chat.act .s{color:var(--ink)}
+    .ps2-root .ps-chat .m{font:9.5px var(--mono);color:var(--ink3);flex:none;letter-spacing:.02em;max-width:40%;overflow:hidden;text-overflow:ellipsis}
+    .ps2-root .ps-chat.act{background:var(--raised);color:var(--ink)}
+    .ps2-root .ps-chat.busy>i{background:var(--accent);box-shadow:0 0 0 3px rgba(194,122,52,.18);}
+    .ps2-root .ps-chat.wait>i{background:var(--accent);box-shadow:0 0 0 2px var(--panel),0 0 0 3.5px var(--accent)}
+    .ps2-root .ps-chat.err>i{background:var(--bad-fill,#a3304b);box-shadow:0 0 0 3px rgba(163,48,75,.22)}
+    .ps2-root .ps-chat.more{color:var(--ink3);cursor:default;padding-left:12px}.ps2-root .ps-chat.more.hov{background:transparent}
+    .ps2-root .ps-chat.skel .s{display:block;height:9px;width:60%;border-radius:4px;background:var(--line2)}.ps2-root .ps-chat.skel .m{display:block;height:7px;width:18%;border-radius:4px;background:var(--line)}
+    .ps2-root .ps-pin{position:absolute;right:6px;top:50%;margin-top:-8px;width:16px;height:16px;display:grid;place-items:center;color:var(--ink3);border-radius:4px;border:0;padding:0;background:none;opacity:0;cursor:pointer}
+    .ps2-root .ps-pin svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    .ps2-root .ps-chat.hov .ps-pin,.ps2-root .ps-pin.on{opacity:1}.ps2-root .ps-pin.on{color:var(--accent)}.ps2-root .ps-chat.hov .m{visibility:hidden}.ps2-root .ps-chat.pin .m{padding-right:14px}
+    
+    /* ── новое: строка-фильтр «Ждёт вас» ── */
+    .ps2-root .ps2-inbox{display:flex;align-items:center;gap:9px;height:30px;margin:4px 0 2px;padding:0 9px;border-radius:var(--rs,9px);border:1px solid transparent;color:var(--ink2);font-size:13px;cursor:pointer;white-space:nowrap}
+    .ps2-root .ps2-inbox svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+    .ps2-root .ps2-inbox .t{flex:1;overflow:hidden;text-overflow:ellipsis}.ps2-root .ps2-inbox .b{min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#1a0e04;font:500 10px/18px var(--mono);text-align:center;padding:0 5px}
+    .ps2-root .ps2-inbox.has{color:var(--ink);background:var(--accent-soft);border-color:rgba(194,122,52,.35)}.ps2-root .ps2-inbox.has svg{stroke:var(--accent)}
+    .ps2-root .ps2-inbox.hov{background:var(--raised)}.ps2-root .ps2-inbox.has.hov{background:rgba(194,122,52,.2)}
+    .ps2-root .ps2-inbox.zero{color:var(--ink3)}.ps2-root .ps2-inbox.zero .m{font:10px var(--mono);color:var(--ink3)}
+    .ps2-root .ps2-inbox.err .b{background:var(--bad-fill,#a3304b);color:#fff}.ps2-root .ps2-inbox.err{border-color:rgba(163,48,75,.5);background:var(--bad-soft)}.ps2-root .ps2-inbox.err svg{stroke:var(--bad)}
+    .ps2-root .ps2-inbox.on{background:var(--raised);color:var(--ink)}.ps2-root .ps2-inbox.load{color:var(--ink3)}.ps2-root .ps2-inbox.load .b{background:var(--line2);color:var(--ink3)}
+    
+    /* ── новое: «Другие проекты · N» ── */
+    .ps2-root .ps2-others{display:flex;align-items:center;gap:8px;height:28px;margin-top:6px;padding:0 9px;border-radius:var(--rs,9px);color:var(--ink2);font-size:13px;cursor:pointer;white-space:nowrap}
+    .ps2-root .ps2-others.hov{background:var(--raised);color:var(--ink)}.ps2-root .ps2-others svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+    .ps2-root .ps2-others .t{flex:1}.ps2-root .ps2-others .m{font:10px var(--mono);color:var(--ink3)}.ps2-root .ps2-others .chev{color:var(--ink3);font-size:11px;width:10px;text-align:center}
+    .ps2-root .ps2-others.open .chev{transform:rotate(90deg)}
+    .ps2-root .ps2-others-list{display:flex;flex-direction:column;gap:1px;margin:0 0 4px}
+    .ps2-root .ps2-others-list .ps-chat{padding-left:30px}.ps2-root .ps2-others-list .ps-chat>i{display:none}.ps2-root .ps2-others-list .ps-chat svg{position:absolute;left:11px;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;color:var(--ink3)}
+    
+    /* ── новое: лимиты одной строкой ── */
+    .ps2-root .ps2-lim{display:flex;align-items:stretch;gap:0;height:36px;padding:0 9px;border:1px solid var(--line2);border-radius:var(--rs,9px);background:var(--raised);cursor:pointer;font-size:11.5px;color:var(--ink2);white-space:nowrap;overflow:hidden}
+    .ps2-root .ps2-lim.hov,.ps2-root .ps2-lim.on{border-color:rgba(194,122,52,.6)}
+    .ps2-root .ps2-lim .v{display:grid;grid-template-columns:1fr auto auto;grid-template-rows:auto 3px;align-items:center;column-gap:4px;row-gap:3px;flex:1;min-width:0;padding:7px 0 6px}.ps2-root .ps2-lim .v+.v{border-left:1px solid var(--line2);padding-left:9px;margin-left:9px}
+    .ps2-root .ps2-lim .v span{overflow:hidden;text-overflow:ellipsis}.ps2-root .ps2-lim .v b{font:500 11px var(--mono);color:var(--ink)}.ps2-root .ps2-lim .v i{font:9px var(--mono);color:var(--ink3);font-style:normal}
+    .ps2-root .ps2-lim .v u{grid-column:1/-1;display:block;height:3px;border-radius:2px;background:var(--line2);text-decoration:none;position:relative;overflow:hidden}.ps2-root .ps2-lim .v u::after{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--p,50%);background:var(--ok)}
+    .ps2-root .ps2-lim .v.warn b{color:var(--warn,#e0b23c)}.ps2-root .ps2-lim .v.warn u::after{background:var(--warn,#e0b23c)}
+    .ps2-root .ps2-lim .v.bad b{color:var(--bad)}.ps2-root .ps2-lim .v.bad u::after{background:var(--bad-fill,#a3304b)}
+    .ps2-root .ps2-lim .v.dim span,.ps2-root .ps2-lim .v.dim b,.ps2-root .ps2-lim .v.dim i{color:var(--ink3)}.ps2-root .ps2-lim .v.dim u::after{background:var(--line2)}
+    .ps2-root .ps2-lim.load .v b{color:var(--ink3)}.ps2-root .ps2-lim.none{color:var(--ink3);justify-content:center;cursor:default}.ps2-root .ps2-lim.none a{color:var(--accent);margin-left:6px}
+    
+    /* ── новое: профиль и меню ── */
+    /* ── профиль ▾ и меню вверх от карточки (референс disarto, слово владельца 22.10: берём поведение и состав, не копию) ── */
+    .ps2-root .ps2-prof{display:flex;align-items:center;gap:9px;height:40px;padding:0 8px;border:1px solid var(--line2);border-radius:var(--rs,9px);background:var(--raised);cursor:pointer;position:relative;user-select:none}
+    .ps2-root .ps2-prof div{line-height:1.2;font-size:12.5px;color:var(--ink);min-width:0;overflow:hidden}.ps2-root .ps2-prof small{display:block;color:var(--ink3);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ps2-root .ps2-prof .chev{margin-left:auto;color:var(--ink3);font-size:10px}
+    .ps2-root .ps2-prof.hov,.ps2-root .ps2-prof.on{border-color:var(--ink3)}.ps2-root .ps2-prof.on .chev{color:var(--ink)}
+    .ps2-root .ps2-prof .av.load{background:var(--line2);color:transparent}.ps2-root .ps2-prof .av.load i{display:none}
+    /* меню — сосед карточки внутри .ps-foot (position:relative); закрыто по умолчанию, .ps-foot.open показывает; .static — для листа 00.
+       bottom:86px = над строкой лимитов (8 + 36 + 4 + 40 − 2): строка лимитов остаётся видна под приглушением, карточка — поверх (z 31). */
+    .ps2-root .ps-foot.open .ps2-prof,.ps2-root .ps-foot.open>.av{position:relative;z-index:31}
+    .ps2-root .ps2-menu{position:absolute;left:0;right:0;bottom:86px;padding:6px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);box-shadow:0 18px 50px rgba(0,0,0,.55);z-index:30;display:none;flex-direction:column;gap:1px}
+    .ps2-root .ps-foot.open .ps2-menu,.ps2-root .ps2-menu.static{display:flex}
+    .ps2-root .ps-foot.open .ps2-menu{}
+    .ps2-root .ps2-menu::after{content:"";position:absolute;left:-10px;right:-10px;top:100%;height:46px;background:rgba(16,16,18,.72);pointer-events:none}
+    .ps2-root .ps2-menu.static{position:static;box-shadow:none;width:240px}.ps2-root .ps2-menu.static::after{display:none}
+    .ps2-root .ps2-menu .hd{display:flex;align-items:center;gap:9px;padding:6px 8px 8px;cursor:default}
+    .ps2-root .ps2-menu .hd>div{min-width:0;flex:1;line-height:1.2;font-size:12.5px;color:var(--ink);font-weight:500}.ps2-root .ps2-menu .hd small{display:block;color:var(--ink3);font-size:10px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ps2-root .ps2-menu .bd{flex:none;height:16px;line-height:16px;padding:0 6px;border-radius:5px;font:500 9px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);background:var(--panel);border:1px solid var(--line2)}.ps2-root .ps2-menu .bd.acc{color:var(--accent);border-color:rgba(194,122,52,.45);background:var(--accent-soft)}
+    .ps2-root .ps2-menu .hd.skel .av{background:var(--line2);color:transparent}.ps2-root .ps2-menu .hd.skel .av i{display:none}.ps2-root .ps2-menu .hd.skel>div>span{display:block;height:9px;width:54%;border-radius:4px;background:var(--line2)}.ps2-root .ps2-menu .hd.skel small{height:7px;width:72%;border-radius:4px;background:var(--line);margin-top:4px}.ps2-root .ps2-menu .hd.skel .bd{visibility:hidden}
+    .ps2-root .ps2-menu .it{display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;border-radius:8px;font-size:12.5px;color:var(--ink);white-space:nowrap;cursor:pointer}
+    .ps2-root .ps2-menu .it.hov,.ps2-root .ps2-menu .it.hov{background:var(--panel)}
+    .ps2-root .ps2-menu .it svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:var(--ink2);flex:none}
+    .ps2-root .ps2-menu kbd{margin-left:auto;font:10px var(--mono);color:var(--ink3);border:1px solid var(--line2);border-radius:4px;padding:1px 5px}.ps2-root .ps2-menu .it .m{margin-left:auto;font:10px var(--mono);color:var(--ink3)}
+    .ps2-root .ps2-menu .it.bad{color:var(--bad)}.ps2-root .ps2-menu .it.bad svg{color:var(--bad)}.ps2-root .ps2-menu .it.bad.hov,.ps2-root .ps2-menu .it.bad.hov{background:var(--bad-soft)}
+    .ps2-root .ps2-menu .it.dis{color:var(--ink3);cursor:default}.ps2-root .ps2-menu .it.dis svg{color:var(--ink3)}.ps2-root .ps2-menu .it.dis.hov{background:none}
+    .ps2-root .ps2-menu hr{border:0;border-top:1px solid var(--line2);margin:4px 4px}
+    .ps2-root .ps2-menu .it .tgl{font:10px var(--mono);color:var(--ink3);margin-left:auto}
+    .ps2-root .ps2-tg{margin-left:8px;width:28px;height:16px;border-radius:8px;background:var(--line2);position:relative;flex:none;}.ps2-root .ps2-tg::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--ink2);}
+    .ps2-root .ps2-tg.on{background:var(--accent)}.ps2-root .ps2-tg.on::after{background:#1a0e04;transform:translateX(12px)}
+    .ps2-root .ps2-menu .ft{display:flex;justify-content:space-between;padding:6px 8px 2px;font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink3);cursor:default}.ps2-root .ps2-menu .ft a{color:var(--ink3);text-decoration:none;cursor:pointer}.ps2-root .ps2-menu .ft a.hov{color:var(--ink2)}
+    
+    /* ── рейка (как proto.css .rail, скоуп) ── */
+    .ps2-root aside.side.ps.rail{align-items:center;padding:12px 8px}
+    .ps2-root aside.side.ps.rail .ps-head{padding:0 0 6px;flex-direction:column;gap:6px}.ps2-root aside.side.ps.rail .col{margin:0}
+    .ps2-root aside.side.ps.rail .nav,.ps2-root aside.side.ps.rail .ps2-inbox,.ps2-root aside.side.ps.rail .newbtn,.ps2-root aside.side.ps.rail .search{width:40px;height:40px;justify-content:center;padding:0;gap:0;margin:0;border:0;background:transparent;border-radius:10px}
+    .ps2-root aside.side.ps.rail .newbtn{border:1px solid rgba(194,122,52,.5);background:var(--raised)}.ps2-root aside.side.ps.rail .nav.hov,.ps2-root aside.side.ps.rail .ps2-inbox.hov,.ps2-root aside.side.ps.rail .search.hov{background:var(--raised)}
+    .ps2-root aside.side.ps.rail .nav.on,.ps2-root aside.side.ps.rail .ps2-inbox.on{background:var(--raised);color:var(--ink)}.ps2-root aside.side.ps.rail .nav.on svg{stroke:var(--accent)}
+    .ps2-root aside.side.ps.rail .nav svg,.ps2-root aside.side.ps.rail .ps2-inbox svg,.ps2-root aside.side.ps.rail .newbtn svg,.ps2-root aside.side.ps.rail .search svg{width:18px;height:18px}
+    .ps2-root aside.side.ps.rail .ps2-inbox.has{color:var(--accent)}.ps2-root aside.side.ps.rail .ps2-inbox.has svg{stroke:var(--accent)}
+    .ps2-root aside.side.ps.rail .nav .b,.ps2-root aside.side.ps.rail .ps2-inbox .b{position:absolute;top:4px;right:4px;margin:0;min-width:16px;height:16px;font-size:9.5px;line-height:16px;padding:0 4px}
+    .ps2-root aside.side.ps.rail .ps2-inbox{position:relative}
+    .ps2-root aside.side.ps.rail .ps-sep{display:block;width:24px;height:1px;background:var(--line);margin:5px auto;flex:none}
+    .ps2-root aside.side.ps.rail .ps-scroll{align-items:center;overflow:visible}.ps2-root aside.side.ps.rail .ps-foot{align-items:center;gap:6px}
+    /* рейка: то же меню, 240 px вверх от аватара поверх рабочей области; приглушение — только колонка рейки под меню (кольцо лимитов) */
+    .ps2-root aside.side.ps.rail .ps2-menu{left:0;right:auto;width:240px;bottom:64px}.ps2-root aside.side.ps.rail .ps2-menu::after{left:-15px;right:auto;width:56px;height:38px}
+    .ps2-root aside.side.ps.rail .ps-foot.open>.av{border-color:var(--ink3);cursor:pointer}.ps2-root aside.side.ps.rail .ps-foot>.av{cursor:pointer}
+    .ps2-root .ps2-ring{width:26px;height:26px;border-radius:50%;background:conic-gradient(var(--ok) 0 var(--p,60%),var(--line2) var(--p,60%) 100%);display:grid;place-items:center;cursor:pointer;position:relative}.ps2-root .ps2-ring i{width:18px;height:18px;border-radius:50%;background:var(--panel)}
+    .ps2-root .ps2-ring.warn{background:conic-gradient(var(--warn,#e0b23c) 0 var(--p,20%),var(--line2) var(--p,20%) 100%)}.ps2-root .ps2-ring.bad{background:conic-gradient(var(--bad-fill,#a3304b) 0 var(--p,5%),var(--line2) var(--p,5%) 100%)}.ps2-root .ps2-ring.dim{background:var(--line2)}
+    .ps2-root .ps2-ring b{position:absolute;inset:0;display:grid;place-items:center;font:500 8px var(--mono);color:var(--ink2)}
+    .ps2-root .ps2-tip{position:absolute;left:48px;top:50%;transform:translateY(-50%);height:28px;line-height:26px;padding:0 10px;background:var(--tile);border:1px solid var(--line2);border-radius:8px;color:var(--ink);font-size:12.5px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:40;pointer-events:none}
+    .ps2-root .ps2-tip kbd{font:10px var(--mono);color:var(--ink3);margin-left:8px;border:1px solid var(--line2);border-radius:4px;padding:1px 5px}
+    .ps2-root .ps2-tip .b2{display:inline-block;min-width:16px;height:16px;line-height:16px;border-radius:8px;background:var(--accent);color:#1a0e04;font:500 10px/16px var(--mono);text-align:center;padding:0 4px;margin-left:6px;vertical-align:1px}
+    .ps2-root .nav.ps2-hover{background:var(--raised);color:var(--ink)}
+    
+    /* ── A2: панель содержимого режима рядом с рейкой ── */
+    .ps2-root .ps2-mode{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-height:0;overflow:hidden}
+    .ps2-root .ps2-mode .ps2-mh{display:flex;align-items:center;gap:8px;height:50px;padding:0 10px 0 14px;border-bottom:1px solid var(--line);font-weight:500;font-size:13px;color:var(--ink)}
+    .ps2-root .ps2-mode .ps2-mh .ps-proj{font-weight:400;color:var(--ink2);margin-left:auto;font-size:12.5px}.ps2-root .ps2-mode .ps2-mh .ic{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--ink3);cursor:pointer;flex:none}.ps2-root .ps2-mode .ps2-mh .ic.hov{background:var(--raised);color:var(--ink)}
+    .ps2-root .ps2-mode .ps2-mh .ic svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.ps2-root .ps2-mode .ps2-mh .ic.on{color:var(--accent)}
+    .ps2-root .ps2-mode .ps-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:1px;padding:8px 10px;scrollbar-width:none}
+    .ps2-root .ps2-mode .grp{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:10px 9px 3px;display:flex;align-items:center}.ps2-root .ps2-mode .grp .m{margin-left:auto;letter-spacing:0}
+    .ps2-root .ps2-mode .nav{position:relative;height:30px;display:flex;align-items:center;gap:9px;padding:0 9px;border-radius:var(--rs,9px);color:var(--ink2);font-size:13px;cursor:pointer;white-space:nowrap}
+    .ps2-root .ps2-mode .nav.hov,.ps2-root .ps2-mode .nav.on{background:var(--raised);color:var(--ink)}.ps2-root .ps2-mode .nav svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.ps2-root .ps2-mode .nav.on svg{stroke:var(--accent)}
+    .ps2-root .ps2-mode .nav .t{flex:1;overflow:hidden;text-overflow:ellipsis}.ps2-root .ps2-mode .nav .m{font:10px var(--mono);color:var(--ink3)}.ps2-root .ps2-mode .nav .tag{margin-left:auto}
+    .ps2-root .ps2-pcard{margin:2px 0 6px;padding:10px 12px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);font-size:12px;color:var(--ink2)}
+    .ps2-root .ps2-pcard b{display:block;color:var(--ink);font-weight:500;font-size:13px;margin-bottom:3px}.ps2-root .ps2-pcard .m{font:10px var(--mono);color:var(--ink3);display:block;margin-top:5px}
+    .ps2-root .ps2-pcard .wait{color:var(--accent)}
+    
+    /* ── шапка рабочей области: ряд вкладок проекта ── */
+    .ps2-root .ps2-tabs{display:flex;align-items:center;gap:2px;height:46px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--bg);flex:none}
+    .ps2-root .ps2-tabs span{display:flex;align-items:center;gap:6px;height:46px;padding:0 11px;font-size:12.5px;color:var(--ink2);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
+    .ps2-root .ps2-tabs span.hov{color:var(--ink)}.ps2-root .ps2-tabs span.on{color:var(--ink);border-bottom-color:var(--accent)}
+    .ps2-root .ps2-tabs span b{font:500 10px var(--mono);color:var(--ink3);background:var(--raised);border-radius:999px;padding:1px 6px}.ps2-root .ps2-tabs span b.acc{color:#1a0e04;background:var(--accent)}
+    .ps2-root .ps2-tabs span.dim{color:var(--ink3)}.ps2-root .ps2-tabs span .tag{height:15px;font-size:8px;padding:0 4px}
+    .ps2-root .ps2-tabs .r{margin-left:auto;display:flex;align-items:center;gap:10px;font:10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.ps2-root .ps2-tabs .r i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px}
+    .ps2-root .ps2-tabs.empty{color:var(--ink3);font-size:12px;gap:10px}.ps2-root .ps2-tabs.skel span{color:transparent}.ps2-root .ps2-tabs.skel span::before{content:"";width:58px;height:9px;border-radius:4px;background:var(--line2)}
+    
+    /* ── кадры страницы 40 ── */
+    .ps2-root .fr{position:relative;margin:0 0 12px}
+    .ps2-root .fr .app,.ps2-root .fr .ps2-phone{transform-origin:top left}
+    .ps2-a1 .app,.ps2-a2 .app,.ps2-a3 .app{width:1440px;height:900px}
+    .ps2-a1 .app{grid-template-columns:260px minmax(0,1fr)}.ps2-a1.rail .app{grid-template-columns:56px minmax(0,1fr)}.ps2-a1.rail aside.side.ps{overflow:visible}
+    .ps2-a2 .app{grid-template-columns:56px 280px minmax(0,1fr)}.ps2-a2.hid .app{grid-template-columns:56px minmax(0,1fr)}
+    .ps2-a3 .app{grid-template-columns:240px minmax(0,1fr)}.ps2-a3.w1280 .app{width:1280px;height:860px}
+    .ps2-root .app .main{display:flex;flex-direction:column;min-height:0;min-width:0}
+    .ps2-root .nc{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;min-height:0;padding:0 40px 40px;position:relative}
+    .ps2-root .ret{position:absolute;top:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;white-space:nowrap;padding:7px 10px 7px 12px;border:1px solid var(--line2);border-radius:999px;background:var(--panel);font-size:12.5px;color:var(--ink2)}
+    .ps2-root .ret .pill{height:20px}.ps2-root .ret b{color:var(--ink);font-weight:500}.ps2-root .ret .btn{height:24px}
+    .ps2-root .mark{width:48px;height:48px;border-radius:14px;background:linear-gradient(160deg,#2a2a2f,#151517);border:1px solid var(--line2);display:grid;place-items:center;margin-bottom:18px;box-shadow:0 10px 30px rgba(0,0,0,.4)}.ps2-root .mark svg{width:24px;height:24px;stroke:var(--gold);fill:none;stroke-width:2.2;stroke-linecap:round}
+    .ps2-root .nc h2{font:600 28px/1.15 var(--font);letter-spacing:-.015em;margin:0 0 22px}
+    .ps2-root .box{width:min(760px,100%);border:1px solid var(--line2);border-radius:16px;background:var(--panel);padding:14px 14px 10px;position:relative}
+    .ps2-root .box::before{content:"";position:absolute;inset:-1px;border-radius:17px;padding:1px;background:linear-gradient(120deg,rgba(194,122,52,.5),transparent 40%,transparent 60%,rgba(194,122,52,.25));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+    .ps2-root .box .in{color:var(--ink3);font-size:15px;line-height:1.5;min-height:50px;padding:2px 4px 10px}
+    .ps2-root .recent{width:min(760px,100%);margin-top:22px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink3);flex-wrap:wrap}
+    .ps2-root .recent .ps-chat{display:inline-flex;height:26px;padding:0 9px 0 20px;border:1px solid var(--line2);border-radius:7px;background:var(--raised);color:var(--ink2)}.ps2-root .recent .ps-chat>i{left:8px}.ps2-root .recent .ps-chat .m{max-width:none}
+    .ps2-root .status{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:18px;white-space:nowrap;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+    .ps2-root .cx-top{width:min(760px,100%)}
+    /* телефон 390 */
+    .ps2-root .ps2-phone{width:390px;height:844px;border:1px solid var(--line);border-radius:30px;background:var(--bg);overflow:hidden;position:relative;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+    .ps2-root .ps2-phone .ph-top{display:flex;align-items:center;gap:10px;height:54px;padding:0 12px;border-bottom:1px solid var(--line);font-weight:500;font-size:14px}
+    .ps2-root .ps2-phone .ph-top .m-btn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line2);background:var(--raised);color:var(--ink);display:grid;place-items:center;font-size:15px}
+    .ps2-root .ps2-phone .ph-body{padding:60px 16px 0;text-align:center}.ps2-root .ps2-phone .ph-body h2{font:600 22px/1.2 var(--font);margin:14px 0 18px}
+    .ps2-root .ps2-phone .box{padding:12px 12px 8px}.ps2-root .ps2-phone .box .in{font-size:14px;min-height:40px}
+    .ps2-root .ps2-phone .ph-bg{position:absolute;inset:0;background:rgba(6,6,8,.55);z-index:10}
+    .ps2-root .ps2-phone aside.side.ps.ps2-drawer{position:absolute;left:0;top:0;bottom:0;width:300px;z-index:11;border-right:1px solid var(--line2);box-shadow:20px 0 60px rgba(0,0,0,.5)}
+    .ps2-root .ps2-phone aside.side.ps.ps2-drawer .nav,.ps2-root .ps2-phone aside.side.ps.ps2-drawer .ps-chat{height:34px;font-size:14px}.ps2-root .ps2-phone aside.side.ps.ps2-drawer .ps-chat .s{font-size:13.5px}
+    .ps2-root .ps2-phone aside.side.ps.ps2-drawer .newbtn{height:40px;font-size:14px}.ps2-root .ps2-phone aside.side.ps.ps2-drawer .search{height:36px}.ps2-root .ps2-phone aside.side.ps.ps2-drawer .ps2-inbox{height:36px;font-size:14px}
+    .ps2-root .ps2-phone aside.side.ps.ps2-drawer .ps2-others{height:34px;font-size:14px}.ps2-root .ps2-phone aside.side.ps.ps2-drawer .col{font-size:16px}
+    /* подписи к кадрам, мини-схема 1280, сверка */
+    .ps2-root .fcap{display:grid;grid-template-columns:1.3fr 1fr 300px;gap:14px;margin:12px 0 48px}
+    .ps2-root .fcap .box{width:auto;padding:12px 14px}.ps2-root .fcap .box::before{display:none}.ps2-root .box .cap2,.ps2-root .fcap .box .cap2{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px}
+    .ps2-root .fcap p{margin:0;font-size:12.5px;color:var(--ink2);line-height:1.5}.ps2-root .fcap p b{color:var(--ink);font-weight:500}.ps2-root .fcap p+p{margin-top:6px}
+    .ps2-root .fcap .pm{display:grid;gap:6px}.ps2-root .fcap .pm>div{display:grid;grid-template-columns:16px 1fr;gap:8px;font-size:12.5px;color:var(--ink2);line-height:1.45}.ps2-root .fcap .pm>div>div{display:block}.ps2-root .fcap .pm span{font:500 13px var(--mono)}.ps2-root .fcap .pm .p span{color:var(--ok)}.ps2-root .fcap .pm .n span{color:var(--bad)}
+    .ps2-root .sch{display:flex;height:36px;border:1px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--bg);font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink2)}
+    .ps2-root .sch div{display:grid;place-items:center;border-right:1px solid var(--line2);white-space:nowrap;overflow:hidden;position:relative;padding:0 4px}.ps2-root .sch div:last-child{border-right:0}
+    .ps2-root .sch .r{background:var(--raised);color:var(--ink3);min-width:26px}.ps2-root .sch .p{background:var(--panel)}.ps2-root .sch .w{background:var(--bg);place-items:center start;padding-left:8px}.ps2-root .sch .w u{position:absolute;right:6px;top:5px;bottom:5px;border:1px dashed rgba(194,122,52,.6);border-radius:4px;text-decoration:none;display:grid;place-items:center;color:var(--accent);padding:0 6px;background:var(--bg)}
+    .ps2-root .sch-cap{font:10px var(--mono);color:var(--ink3);margin-top:6px;display:flex;justify-content:space-between}.ps2-root .sch-cap b{color:var(--ok);font-weight:500}.ps2-root .sch-cap b.warn{color:var(--warn)}
+    .ps2-root .fhead{display:grid;grid-template-columns:60px 1fr;gap:14px;align-items:baseline;margin:0 0 12px}
+    .ps2-root .fhead .n{font:500 22px/1 var(--mono);color:var(--accent)}.ps2-root .fhead h2{margin:0 0 4px;font-size:16px;font-weight:500;color:var(--ink)}.ps2-root .fhead p{margin:0;color:var(--ink2);font-size:12.5px;max-width:1100px}.ps2-root .fhead .w{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);display:block;margin-bottom:4px}
+    /* кадр «сейчас»: снимок с пометками */
+    .ps2-root .now{display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:start;margin:0 0 48px}
+    .ps2-root .now .shot{position:relative;width:518px;border:1px solid var(--line2);border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 30px 80px rgba(0,0,0,.6)}.ps2-root .now .shot img{display:block;width:100%}
+    .ps2-root .now .pin{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:var(--accent);color:#1a0e04;font:600 10.5px/20px var(--mono);text-align:center;box-shadow:0 0 0 3px rgba(194,122,52,.25),0 4px 12px rgba(0,0,0,.5)}
+    .ps2-root .now .pin.b{background:var(--bad-fill,#a3304b);color:#fff;box-shadow:0 0 0 3px rgba(163,48,75,.25),0 4px 12px rgba(0,0,0,.5)}.ps2-root .now .pin.g{background:var(--ink2);color:var(--bg);box-shadow:0 0 0 3px rgba(154,154,162,.25),0 4px 12px rgba(0,0,0,.5)}.ps2-root .now .pin.w{background:var(--warn);color:#1a1a1a;box-shadow:0 0 0 3px rgba(224,178,60,.25),0 4px 12px rgba(0,0,0,.5)}
+    .ps2-root .now .brace{position:absolute;border:1px dashed rgba(194,122,52,.7);border-radius:6px;pointer-events:none}.ps2-root .now .brace.b{border-color:rgba(201,86,110,.7)}.ps2-root .now .brace.g{border-color:rgba(154,154,162,.6)}.ps2-root .now .brace.w{border-color:rgba(224,178,60,.7)}
+    .ps2-root .now .lg{display:grid;gap:10px;max-width:640px}.ps2-root .now .lg div{display:grid;grid-template-columns:22px 1fr;gap:10px;font-size:12.5px;color:var(--ink2);line-height:1.5;align-items:start}
+    .ps2-root .now .lg b{color:var(--ink);font-weight:500}.ps2-root .now .lg .pin{position:static;margin:2px 0 0}
+    .ps2-root .now .lg .kv{margin-top:8px;padding-top:10px;border-top:1px solid var(--line);font:10.5px var(--mono);color:var(--ink3);grid-template-columns:1fr}
+    /* таблица «блок сейчас → A1/A2/A3» и вопросы */
+    .ps2-root .tbl td b{color:var(--ink);font-weight:500}.ps2-root .tbl td.acc{color:var(--accent)}.ps2-root .tbl td.dim{color:var(--ink3)}
+    .ps2-root .qs{display:grid;gap:8px;font-size:12.5px;color:var(--ink2);counter-reset:q}.ps2-root .qs>div{display:grid;grid-template-columns:24px 1fr;gap:8px;line-height:1.5}.ps2-root .qs>div>div{display:block}.ps2-root .qs>div::before{counter-increment:q;content:counter(q);font:500 12px var(--mono);color:var(--accent)}.ps2-root .qs b{color:var(--ink);font-weight:500}
+    @media (max-width:900px){.ps2-root .fcap{grid-template-columns:1fr !important}.ps2-root .now{grid-template-columns:1fr}.ps2-root .now .shot{width:100%;max-width:518px}.ps2-root .tbl{display:block;overflow-x:auto;max-width:100%}.ps2-root .fhead{grid-template-columns:1fr}.ps2-root .fhead .n{display:none}}
+    
+    /* ══ 22.10 · вторая серия решений владельца: Входящие · меню проекта по наведению · чаты без проекта · Новый чат ▾ · Автопилот · шапка без вкладок с «В проект ▾» · открытый чат ══ */
+    /* ── Входящие (бывшая «Ждёт вас»): .ps2-inbox · два счётчика: .b — требует действия (коньяк), .b2 — к сведению (серый); .cap — подпись вместо второго счётчика ── */
+    .ps2-root .ps2-inbox .b2{min-width:18px;height:18px;border-radius:9px;background:var(--line2);color:var(--ink2);font:500 10px/18px var(--mono);text-align:center;padding:0 5px;margin-left:-5px}
+    .ps2-root .ps2-inbox .cap{font:10px var(--mono);color:var(--ink3);margin-left:-3px}
+    .ps2-root .ps2-inbox.info{color:var(--ink2)}.ps2-root .ps2-inbox.info .b{background:var(--line2);color:var(--ink2)}
+    .ps2-root aside.side.ps.rail .ps2-inbox .b2{display:none}
+    /* ── карточка ленты «Входящих» .ps2-ib · вид: решение · итог хода · возврат ревьюера · подключение · лимит/оплата · обновление · состояния: новое · прочитано · выполнено · требует действия (.need) · ошибка-вид (.err) ── */
+    .ps2-root .ps2-ib{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border:1px solid var(--line2);border-radius:12px;background:var(--panel);position:relative;cursor:pointer;}
+    .ps2-root .ps2-ib.hov{border-color:#4a4a52}
+    .ps2-root .ps2-ib .ic{width:34px;height:34px;border-radius:10px;background:var(--raised);border:1px solid var(--line2);display:grid;place-items:center;color:var(--ink2)}.ps2-root .ps2-ib .ic svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+    .ps2-root .ps2-ib .bd{min-width:0}
+    .ps2-root .ps2-ib .k{display:flex;align-items:center;gap:8px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:3px}.ps2-root .ps2-ib .k b{color:var(--accent);font-weight:500}.ps2-root .ps2-ib .k i{font-style:normal;margin-left:auto;letter-spacing:.04em}
+    .ps2-root .ps2-ib .t{font-size:13.5px;color:var(--ink);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ps2-root .ps2-ib .f{font-size:12px;color:var(--ink2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ps2-root .ps2-ib .f i{font-style:normal;color:var(--ink3)}.ps2-root .ps2-ib .f svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.7;vertical-align:-1px;margin-right:3px;color:var(--ink3)}
+    .ps2-root .ps2-ib .act{display:flex;gap:6px;align-items:center}.ps2-root .ps2-ib .act .btn{cursor:pointer}
+    .ps2-root .ps2-ib.new{border-color:rgba(194,122,52,.4)}.ps2-root .ps2-ib.new::before{content:"";position:absolute;left:-1px;top:14px;bottom:14px;width:2px;border-radius:2px;background:var(--accent)}
+    .ps2-root .ps2-ib.need .ic{color:var(--accent);border-color:rgba(194,122,52,.4);background:var(--accent-soft)}
+    .ps2-root .ps2-ib.read .t{font-weight:400;color:var(--ink2)}
+    .ps2-root .ps2-ib.done{opacity:.62}.ps2-root .ps2-ib.done .t{color:var(--ink3);font-weight:400;text-decoration:line-through}.ps2-root .ps2-ib.done .act .btn{display:none}.ps2-root .ps2-ib .okm{font:10px var(--mono);color:var(--ok);letter-spacing:.04em;text-transform:uppercase}
+    .ps2-root .ps2-ib.err .ic{color:var(--bad);border-color:rgba(163,48,75,.5);background:var(--bad-soft)}.ps2-root .ps2-ib.err .k b{color:var(--bad)}
+    .ps2-root .ps2-ib.skel .t,.ps2-root .ps2-ib.skel .f,.ps2-root .ps2-ib.skel .k{color:transparent}.ps2-root .ps2-ib.skel .t::before{content:"";display:block;height:10px;width:60%;border-radius:4px;background:var(--line2)}.ps2-root .ps2-ib.skel .f::before{content:"";display:block;height:8px;width:38%;border-radius:4px;background:var(--line)}
+    /* экран «Входящие»: шапка с фильтром и лента */
+    .ps2-root .ps2-ibfeed{flex:1;min-height:0;overflow:auto;padding:22px 40px}.ps2-root .ps2-ibcol{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+    .ps2-root .ps2-ibgrp{display:flex;align-items:center;gap:8px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:10px 2px 4px}.ps2-root .ps2-ibgrp b{color:var(--accent);font-weight:500}.ps2-root .ps2-ibgrp .sp{flex:1}.ps2-root .ps2-ibgrp a{color:var(--ink3);cursor:pointer;letter-spacing:.04em}.ps2-root .ps2-ibgrp a.hov{color:var(--ink2)}
+    .ps2-root .ps2-ibempty{padding:40px 0;text-align:center;color:var(--ink3);font-size:13px}.ps2-root .ps2-ibempty b{display:block;color:var(--ink2);font-weight:500;margin-bottom:4px}
+    
+    /* ── шапка рабочей области БЕЗ вкладок (.ps2-top): новый чат и любой самостоятельный чат — ряда разделов нет совсем; справа только «В проект ▾» и статус ── */
+    .ps2-root .ps2-top{display:flex;align-items:center;gap:10px;height:46px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--bg);flex:none;position:relative;z-index:6}
+    .ps2-root .ps2-top .ttl{font-weight:500;font-size:13px;color:var(--ink);white-space:nowrap}.ps2-root .ps2-top .sub{font:10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);white-space:nowrap;margin:0;max-width:none}
+    .ps2-root .ps2-top .fl{display:flex;gap:4px;margin-left:8px}.ps2-root .ps2-top .fl span{height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--line2);font-size:12px;color:var(--ink2);display:inline-flex;align-items:center;gap:6px;cursor:pointer}.ps2-root .ps2-top .fl span.on{color:var(--ink);background:var(--raised);border-color:var(--ink3)}.ps2-root .ps2-top .fl span b{font:500 10px var(--mono);color:var(--ink3)}.ps2-root .ps2-top .fl span.on b{color:var(--accent)}
+    .ps2-root .ps2-top .r{margin-left:auto;display:flex;align-items:center;gap:14px;font:10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.ps2-root .ps2-top .r>i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px}
+    /* «В проект ▾» .ps2-toproj · нет проекта (пунктир) · выбор проекта (.on + меню) · подтверждение (.on + карточка) · перенесено (.done) · ошибка (.err) · идёт перенос (.busy) */
+    .ps2-root .ps2-toproj{position:relative;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px dashed var(--line2);border-radius:8px;color:var(--ink2);font:12.5px var(--font);letter-spacing:0;text-transform:none;cursor:pointer;white-space:nowrap;background:var(--bg)}
+    .ps2-root .ps2-toproj svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}.ps2-root .ps2-toproj>i{font-style:normal;color:var(--ink3);font-size:10px}
+    .ps2-root .ps2-toproj.hov,.ps2-root .ps2-toproj.on{border-style:solid;border-color:var(--ink3);color:var(--ink)}
+    .ps2-root .ps2-toproj.done{border-style:solid;border-color:rgba(63,191,111,.5);color:var(--ok);cursor:default}.ps2-root .ps2-toproj.done svg{stroke:var(--ok)}
+    .ps2-root .ps2-toproj.err{border-style:solid;border-color:rgba(163,48,75,.6);color:var(--bad)}.ps2-root .ps2-toproj.err svg{stroke:var(--bad)}
+    .ps2-root .ps2-toproj.busy{color:var(--ink3);border-style:solid}.ps2-root .ps2-toproj.busy svg{}
+    .ps2-root .ps2-tpmenu,.ps2-root .ps2-tpconf{position:absolute;right:0;top:34px;width:272px;padding:6px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);box-shadow:0 18px 50px rgba(0,0,0,.55);z-index:45;display:none;flex-direction:column;gap:1px;text-transform:none;letter-spacing:0;font:12.5px var(--font);color:var(--ink);cursor:default;text-align:left}
+    .ps2-root .ps2-toproj.on>.ps2-tpmenu,.ps2-root .ps2-toproj.on>.ps2-tpconf,.ps2-root .ps2-tpmenu.static,.ps2-root .ps2-tpconf.static{display:flex}
+    .ps2-root .ps2-tpmenu.static,.ps2-root .ps2-tpconf.static{position:static;box-shadow:none}
+    .ps2-root .ps2-tpmenu .hd{padding:6px 8px 4px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+    .ps2-root .ps2-tpmenu .srch{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border:1px solid var(--line2);border-radius:8px;background:var(--bg);color:var(--ink3);font-size:12px;margin:2px 0 4px}.ps2-root .ps2-tpmenu .srch svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.7}
+    .ps2-root .ps2-tpmenu .it,.ps2-root .ps2-pmenu .it,.ps2-root .ps2-newpick .it{display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;border-radius:8px;font-size:12.5px;color:var(--ink);white-space:nowrap;cursor:pointer}
+    .ps2-root .ps2-tpmenu .it.hov,.ps2-root .ps2-tpmenu .it.hov,.ps2-root .ps2-pmenu .it.hov,.ps2-root .ps2-pmenu .it.hov,.ps2-root .ps2-newpick .it.hov,.ps2-root .ps2-newpick .it.hov{background:var(--panel)}
+    .ps2-root .ps2-tpmenu .it svg,.ps2-root .ps2-pmenu .it svg,.ps2-root .ps2-newpick .it svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:var(--ink2);flex:none}
+    .ps2-root .ps2-tpmenu .it .m,.ps2-root .ps2-pmenu .it .m,.ps2-root .ps2-newpick .it .m{margin-left:auto;font:10px var(--mono);color:var(--ink3);letter-spacing:.02em}.ps2-root .ps2-pmenu .it .m.acc{color:var(--accent)}
+    .ps2-root .ps2-tpmenu .it.acc,.ps2-root .ps2-pmenu .it.acc{color:var(--accent)}.ps2-root .ps2-tpmenu .it.acc svg,.ps2-root .ps2-pmenu .it.acc svg{color:var(--accent)}
+    .ps2-root .ps2-tpmenu .it.dis,.ps2-root .ps2-pmenu .it.dis{color:var(--ink3);cursor:default}.ps2-root .ps2-tpmenu .it.dis svg,.ps2-root .ps2-pmenu .it.dis svg{color:var(--ink3)}.ps2-root .ps2-tpmenu .it.dis.hov,.ps2-root .ps2-pmenu .it.dis.hov{background:none}
+    .ps2-root .ps2-tpmenu hr,.ps2-root .ps2-pmenu hr,.ps2-root .ps2-newpick hr{border:0;border-top:1px solid var(--line2);margin:4px 4px}
+    .ps2-root .ps2-tpconf{padding:12px 14px;gap:0;line-height:1.5;color:var(--ink2)}.ps2-root .ps2-tpconf b{color:var(--ink);font-weight:500}.ps2-root .ps2-tpconf .acts{display:flex;gap:6px;margin-top:10px}.ps2-root .ps2-tpconf .acts .btn{cursor:pointer}
+    .ps2-root .ps2-tpconf .lbl{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+    .ps2-root .ps2-tpconf.bad .lbl{color:var(--bad)}
+    
+    /* ── меню проекта по наведению .ps2-pmenu: строка проекта .ps2-prow (position:relative), меню выезжает вправо от строки; .open — по клику/тапу; .full — телефон, на всю ширину под строкой ── */
+    .ps2-root .ps2-prow{position:relative}
+    .ps2-root .ps2-prow.hov,.ps2-root .ps2-prow.open{background:var(--raised);color:var(--ink)}.ps2-root .ps2-prow.hov .s,.ps2-root .ps2-prow.open .s{color:var(--ink)}
+    .ps2-root .ps2-prow .pm{position:absolute;right:8px;top:50%;margin-top:-7px;font-size:11px;color:var(--ink3);opacity:0}.ps2-root .ps2-prow.hov .pm,.ps2-root .ps2-prow.hov .pm,.ps2-root .ps2-prow.open .pm{opacity:1}
+    .ps2-root .ps2-pmenu{position:absolute;left:calc(100% - 4px);top:-8px;width:244px;padding:6px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);box-shadow:0 18px 50px rgba(0,0,0,.55);z-index:40;display:none;flex-direction:column;gap:1px;text-transform:none;letter-spacing:0;font:12.5px var(--font);color:var(--ink);cursor:default;white-space:nowrap}
+    .ps2-root .ps2-prow.hov>.ps2-pmenu,.ps2-root .ps2-prow.open>.ps2-pmenu,.ps2-root .ps2-pmenu.static{display:flex}
+    .ps2-root .ps2-prow.hov>.ps2-pmenu,.ps2-root .ps2-prow.open>.ps2-pmenu{}
+    .ps2-root .ps2-pmenu::before{content:"";position:absolute;left:-12px;top:0;bottom:0;width:12px}
+    .ps2-root .ps2-pmenu.up{top:auto;bottom:-8px}
+    .ps2-root .ps2-prow.open.mute>.ps2-pmenu{display:none}
+    .ps2-root .ps2-others-list .ps-chat .ps2-pmenu svg{position:static;left:auto;width:14px;height:14px;color:var(--ink2)}.ps2-root .ps2-others-list .ps-chat .ps2-pmenu .it.acc svg{color:var(--accent)}.ps2-root .ps2-others-list .ps-chat .ps2-pmenu .it.dis svg{color:var(--ink3)}
+    .ps2-root .ps2-pmenu.static{position:static;box-shadow:none;width:244px;}
+    .ps2-root .ps2-pmenu.full{position:static;width:auto;margin:2px 0 4px;box-shadow:none;background:var(--bg);display:flex}
+    .ps2-root .ps2-pmenu .hd{padding:6px 8px 7px;font-size:12.5px;color:var(--ink);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ps2-root .ps2-pmenu .hd small{display:block;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-top:2px;font-weight:400}
+    .ps2-root .ps2-pmenu .ft{padding:5px 8px 2px;font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink3);white-space:normal;line-height:1.4}
+    .ps2-root .ps2-pmenu.skel .it .t{display:block;height:9px;width:54%;border-radius:4px;background:var(--line2);color:transparent;overflow:hidden}.ps2-root .ps2-pmenu.skel .it .m{display:block;height:7px;width:14px;border-radius:4px;background:var(--line);color:transparent;overflow:hidden}
+    .ps2-root aside.side.ps .grp.ps2-prow{border-radius:var(--rs,9px);cursor:pointer}.ps2-root aside.side.ps .grp.ps2-prow .pm{position:static;margin:0 0 0 6px;font-size:10px}
+    .ps2-root .ps-chat.ps2-prow.open .m,.ps2-root .ps-chat.ps2-prow.hov .m{visibility:hidden}
+    /* кадры, где меню проекта должно выйти за край панели */
+    .ps2-a1.pm aside.side.ps,.ps2-a1.pm aside.side.ps .ps-scroll{overflow:visible}
+    
+    /* ── «Чаты без проекта»: та же группа .grp (пусто · N · свёрнута) — у чатов нет метки роли; свёртка — шеврон в заголовке ── */
+    .ps2-root aside.side.ps .grp .chev{margin-left:6px;font-size:9px;color:var(--ink3);cursor:pointer;}.ps2-root aside.side.ps .grp.fold .chev{transform:rotate(-90deg)}.ps2-root aside.side.ps .grp.fold+.ps2-grpbody{display:none}
+    .ps2-root .ps2-grpbody{display:flex;flex-direction:column;gap:1px}
+    /* ── «Новый чат» с выбором: .ps2-newwrap > .newbtn (+ .dd ▾) + .ps2-newpick: в проекте <текущий> / без проекта ── */
+    .ps2-root .ps2-newwrap{position:relative}
+    .ps2-root aside.side.ps .newbtn .dd{margin-left:6px;height:20px;padding-left:7px;border-left:1px solid var(--line2);display:grid;place-items:center;color:var(--ink3);font-size:10px;font-style:normal;cursor:pointer}.ps2-root aside.side.ps .newbtn .dd.hov,.ps2-root .ps2-newwrap.open .newbtn .dd{color:var(--ink)}
+    .ps2-root .ps2-newpick{position:absolute;left:0;right:0;top:36px;z-index:41;padding:6px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);box-shadow:0 18px 50px rgba(0,0,0,.55);display:none;flex-direction:column;gap:1px}
+    .ps2-root .ps2-newwrap.open .ps2-newpick,.ps2-root .ps2-newpick.static{display:flex}.ps2-root .ps2-newpick.static{position:static;box-shadow:none;width:240px}
+    .ps2-root .ps2-newpick .hd{padding:5px 8px 4px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+    .ps2-root .ps2-newpick .it kbd{margin-left:auto}
+    
+    /* ── Автопилот — пункт меню профиля отдельной группой: .it.ap · выкл · вкл (до утра · до ответа) · недоступен (нет ревьюера) ── */
+    .ps2-root .ps2-menu .it.ap{height:auto;min-height:44px;padding:6px 8px;align-items:center}
+    .ps2-root .ps2-menu .it.ap>div{flex:1;min-width:0;line-height:1.25}.ps2-root .ps2-menu .it.ap>div small{display:block;font-size:10px;color:var(--ink3);white-space:normal;margin-top:1px;line-height:1.3}
+    .ps2-root .ps2-menu .it.ap .st{font:10px var(--mono);color:var(--ink3);white-space:nowrap;margin-left:8px;letter-spacing:.02em}
+    .ps2-root .ps2-menu .it.ap.on{background:var(--accent-soft)}.ps2-root .ps2-menu .it.ap.on svg{color:var(--accent)}.ps2-root .ps2-menu .it.ap.on .st{color:var(--accent)}
+    .ps2-root .ps2-menu .it.ap.dis{color:var(--ink3);cursor:default}.ps2-root .ps2-menu .it.ap.dis .ps2-tg{opacity:.4}.ps2-root .ps2-menu .it.ap.dis.hov{background:none}
+    .ps2-root .ps2-menu .it.ap .ps2-tg{margin-left:0}
+    
+    /* ── открытый чат проекта: разметка из 01-chat.html (.feed · .me · .ai · карточка · решение), скоуп .ps2-chat; шапка — ряд вкладок .ps2-tabs ── */
+    .ps2-root .ps2-chat .feed{flex:1;min-height:0;overflow:auto;padding:22px 0}
+    .ps2-root .ps2-chat .feed .col{max-width:800px;margin:0 auto;padding:0 20px;display:flex;flex-direction:column;gap:18px}
+    .ps2-root .ps2-chat .me{align-self:flex-end;max-width:70%;background:var(--raised);border:1px solid var(--line2);border-radius:14px 14px 4px 14px;padding:10px 14px;font-size:13.5px}
+    .ps2-root .ps2-chat .ai{display:grid;grid-template-columns:24px 1fr;gap:12px}.ps2-root .ps2-chat .ai .orb{width:20px;height:20px;margin-top:2px}
+    .ps2-root .ps2-chat .thought{display:inline-flex;align-items:center;gap:6px;color:var(--ink3);font-size:12px;margin-bottom:6px;cursor:default}.ps2-root .ps2-chat .thought::before{content:"›";font-size:13px}
+    .ps2-root .ps2-chat .ai p{margin:0 0 10px;font-size:13.5px;line-height:1.55}.ps2-root .ps2-chat .ai p:last-child{margin:0}.ps2-root .ps2-chat .ai p b{font-weight:500;color:var(--ink)}
+    .ps2-root .ps2-chat .cite{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:5px;background:var(--tile);border:1px solid var(--line2);font:10px var(--mono);color:var(--ink2);vertical-align:1px;margin-left:2px}
+    .ps2-root .ps2-chat .card{margin:8px 0 6px;cursor:pointer}.ps2-root .ps2-chat .card .h svg{width:14px;height:14px;stroke:var(--ink2);fill:none;stroke-width:1.7;stroke-linecap:round}.ps2-root .ps2-chat .ticks{margin:10px 0 10px}
+    .ps2-root .ps2-chat .chk{display:flex;flex-direction:column;gap:6px;font-size:12.5px}.ps2-root .ps2-chat .chk div{display:flex;align-items:center;gap:8px;color:var(--ink2)}.ps2-root .ps2-chat .chk div.d{color:var(--ink)}
+    .ps2-root .ps2-chat .chk .ok{width:14px;height:14px;border-radius:50%;background:var(--ok);display:grid;place-items:center;color:#fff;font-size:9px;font-weight:700}.ps2-root .ps2-chat .chk .run{width:14px;height:14px;border-radius:50%;border:2px solid var(--accent);border-right-color:transparent}.ps2-root .ps2-chat .chk .todo{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--line2)}.ps2-root .ps2-chat .chk .t{margin-left:auto;font:10.5px var(--mono);color:var(--ink3)}
+    .ps2-root .ps2-chat .decide .act{display:flex;gap:8px;margin-top:10px}.ps2-root .ps2-chat .decide p{margin:0;font-size:12.5px;line-height:1.5}
+    .ps2-root .ps2-chat .fb{display:flex;gap:4px;margin-top:8px}.ps2-root .ps2-chat .fb span{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--ink3)}.ps2-root .ps2-chat .fb svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round}
+    .ps2-root .ps2-chat .comp{padding:10px 40px 12px;display:flex;flex-direction:column;align-items:center;flex:none}
+    .ps2-root .ps2-chat .comp .status{position:static;transform:none;margin-top:8px}
+    .ps2-root .ps2-chat .cx-top{margin:0 0 8px}
+    /* ── вкладка «Команда агентов» в проектной полоске: N ролей · нет ролей (пунктир) · «назначить» (коньяк) · содержимое — из 04-swarm; действие «Открыть конструктор агентов» (холст сборки, пока макет) ── */
+    .ps2-root .ps2-tabs span b.dim{background:transparent;color:var(--ink3);border:1px dashed var(--line2)}
+    .ps2-root .ps2-tbar{display:flex;align-items:center;gap:10px;height:44px;padding:0 14px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2);flex:none;white-space:nowrap}
+    .ps2-root .ps2-tbar b{color:var(--ink);font-weight:500}.ps2-root .ps2-tbar .m{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}.ps2-root .ps2-tbar .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+    .ps2-root .ps2-tbar .btn{cursor:pointer}.ps2-root .ps2-tbar .btn svg{width:13px;height:13px}.ps2-root .ps2-tbar .btn.dis{color:var(--ink3);cursor:default}
+    /* базовые элементы из style.css / proto.css скетчей */
+    #root .btn{height:30px;padding:0 12px;border-radius:8px;border:1px solid var(--line2);background:var(--raised);color:var(--ink);font:500 12.5px var(--font);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+    #root .btn.sm{height:26px;padding:0 9px;font-size:12px}
+    #root .pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;font:500 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--line2);color:var(--ink2)}
+    #root .pill.acc{color:var(--accent);border-color:transparent;background:var(--accent-soft)}
+    #root .kbd{border:1px solid var(--line2);border-radius:3px;padding:0 4px;font:10px var(--mono);color:var(--ink3)}
+    #root .cx-top{display:flex;align-items:center;gap:6px;width:min(760px,100%);margin:0 0 8px}
+    #root .cx-bot{display:flex;align-items:center;gap:6px}#root .cx-sp{flex:1}
+    #root .cx-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border:1px solid var(--line2);border-radius:999px;background:var(--panel);color:var(--ink2);font-size:12px;white-space:nowrap;max-width:280px}
+    #root .cx-chip b{color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis}#root .cx-chip i{font-style:normal;color:var(--ink3);font-size:10px}
+    #root .cx-chip svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+    #root .cx-chip.acc{border-color:rgba(194,122,52,.5)}#root .cx-chip.acc svg{stroke:var(--accent)}#root .cx-chip.dim{opacity:.55}
+    #root .cx-plus{width:30px;height:30px;border-radius:9px;border:1px solid var(--line2);display:grid;place-items:center;color:var(--ink2);background:var(--raised);font-size:16px;flex:none}
+    #root .cx-info{width:26px;height:26px;border-radius:50%;border:1px solid var(--line2);display:grid;place-items:center;color:var(--ink3);font:500 11px var(--mono);flex:none}
+    #root .cx-go{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;flex:none;background:transparent;color:var(--line2);box-shadow:inset 0 0 0 1px var(--line2)}
+    #root .cx-go svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    /* раскладка приложения в кадре: панель и рейка слева (абсолютно), рабочая область шире кадра на 204 px — сдвиг при сжатии идёт transform-ом */
+    #ui-rail{position:absolute;left:0;top:0;width:56px;height:900px;z-index:2;overflow:visible!important}
+    #ui-panel{position:absolute;left:0;top:0;width:260px;height:900px;z-index:5;overflow:visible!important}
+    #ui-panel .ps-scroll{overflow:visible!important}
+    #ui-panel-in{position:absolute;inset:0;display:flex;flex-direction:column;gap:2px;padding:12px 10px;background:var(--panel);border-right:1px solid var(--line)}
+    #ui-panel.side.ps{padding:0;background:transparent;border:0}
+    #ui-main{position:absolute;left:260px;top:0;width:1340px;height:900px;display:flex;flex-direction:column;background:var(--bg);z-index:1}
+    #ui-topr{position:absolute;right:14px;top:0;height:46px;display:flex;align-items:center;gap:14px;font:10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);z-index:7}
+    #ui-topr>span>i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px}
+    #ui-nc{flex:1;min-height:0}
+    #root .recent .ps-chat .s{max-width:230px}
+    #ui-dim{position:absolute;left:260px;top:0;width:1340px;height:900px;background:#101012;opacity:0;pointer-events:none;z-index:4}
+    /* курсор: стрелка, 47 px в координатах приложения = 56 px экрана при базовом масштабе 1.2 */
+    #ui-cursor{position:absolute;left:0;top:0;width:0;height:0;z-index:100}
+    #ui-cur-in{position:absolute;left:0;top:0;transform-origin:0 0}
+    #ui-cur-s{transform-origin:2px 2px;filter:drop-shadow(0 6px 10px rgba(0,0,0,.6))}
+    #ui-cur-s svg{display:block;width:36px;height:56px;overflow:visible}
+    /* меню и подсказка: обёртки-клипы, сами меню показаны всегда (время задаёт клип) */
+    #ui-pmenu-c,#ui-menu-c,#ui-tip-c{position:absolute;inset:0;pointer-events:none}
+    #ui-pmenu{display:flex!important}
+    #ui-menu{display:flex!important}
+    #ui-tip{display:block;transform:none!important;top:6px}
+    #ui-dip{position:absolute;inset:0;background:#0a0a0b;opacity:0;pointer-events:none;z-index:200}
+    /* ── clip-02: время суток под окном (заливка холста), три вида рабочей области ── */
+    #ui-night,#ui-morn{position:absolute;inset:0;opacity:0;pointer-events:none;background-size:24px 24px}
+    #ui-night{background-color:#050507;background-image:radial-gradient(circle at 1px 1px,#121214 1px,transparent 1px)}
+    #ui-morn{background-color:#121216;background-image:radial-gradient(circle at 1px 1px,#222227 1px,transparent 1px)}
+    #ui-view{z-index:1}
+    #ui-main .view{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0}
+    #ui-main .vin{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;background:var(--bg)}
+    /* состояния-свопы: три надписи в одном месте, таймлайн показывает одну */
+    .sw{display:inline-grid;white-space:nowrap;vertical-align:baseline}.sw>span{grid-area:1/1;display:inline-block}.sw>span+span{opacity:0}
+    .ps2-root .ps2-tg::after{transform:translateX(var(--tgx,0px))}
+    /* ── кадры 01 «Работа команды» и 04 «Очередь задач» скетча 41 (team-canvas.css · om-map.css · style.css · path.css); анимации tc-spin / ps2-pulse / tc-ants выключены — всё ведёт таймлайн ── */
+    .sw{display:inline-grid;white-space:nowrap;vertical-align:top}.sw>span{grid-area:1/1;display:inline-block}.sw>span+span{opacity:0}
+    #root .tag{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:5px;font:500 9px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);border:1px dashed var(--line2);vertical-align:middle;white-space:nowrap}
+    #root .tag.live{color:var(--ok);border-color:rgba(76,160,110,.55);border-style:solid}
+    #root .chip{height:26px;padding:0 9px;border-radius:7px;border:1px solid var(--line2);background:var(--raised);color:var(--ink2);font-size:12px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+    #root .chip.on{color:var(--ink);border-color:#4a4a52}#root .chip b{font:500 10px var(--mono);color:var(--ink3);margin-left:4px}
+    #root .btn.ghost{background:transparent}#root .btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+    #ui-tabs{position:absolute;left:0;top:0;right:0;height:46px;z-index:6}
+    .ps2-root .ps2-tabs span svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+    .ps2-root .ps2-tbar .st{display:inline-flex;align-items:center;gap:6px;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+    .ps2-root .ps2-tbar .st i{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block}
+    .ps2-root .ps2-tbar .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+    #ui-main .view{top:46px}
+    .tc-work{display:grid;grid-template-rows:minmax(0,1fr) auto;gap:10px;padding:12px 14px 12px;min-height:0;flex:1}
+    .tc-work .om-canvas{min-height:0;height:100%}
+    .om-canvas{position:relative;border:1px solid var(--line);border-radius:14px;background:var(--panel);background-image:radial-gradient(circle at 1px 1px,#1f1f23 1px,transparent 1px);background-size:22px 22px;overflow:hidden;min-height:0}
+    .om-view{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:0 0;transform:translate(0,41px)}
+    .om-edges{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+    .om-edges path{fill:none;stroke:#4a4a52;stroke-width:1.5}
+    .om-edges path.live{stroke:var(--accent);stroke-width:2;stroke-dasharray:6 5}
+    .om-lbl{position:absolute;transform:translate(-50%,-50%);font:10px var(--mono);color:var(--ink2);background:var(--panel);border:1px solid var(--line2);border-radius:5px;padding:1px 6px;white-space:nowrap;z-index:2}
+    .om-lbl.live{color:var(--accent);border-color:rgba(194,122,52,.6);background:var(--raised);font-weight:500;padding:2px 8px}
+    .om-zoom{position:absolute;right:12px;bottom:12px;display:flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line2);border-radius:10px;background:var(--raised);z-index:3}
+    .om-zoom span{min-width:26px;height:24px;padding:0 6px;border-radius:7px;display:grid;place-items:center;color:var(--ink2);font:500 14px/1 var(--font)}
+    .om-zoom span.fit{font-size:11.5px}.om-zoom b{font:500 10.5px var(--mono);color:var(--ink3);min-width:44px;text-align:center}
+    .tc-legend{position:absolute;left:12px;bottom:12px;display:flex;gap:12px;align-items:center;font:9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);background:rgba(16,16,18,.72);border:1px solid var(--line2);border-radius:999px;padding:5px 12px;z-index:3;white-space:nowrap}
+    .tc-legend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+    .tc-legend i{display:inline-block;width:20px;height:0;border-top:1.5px solid #4a4a52}.tc-legend i.live{border-top:2px dashed var(--accent)}.tc-legend i.on{border-top:2px solid var(--accent)}
+    .tc-legend .tag{height:15px;font-size:7.5px;padding:0 4px}
+    .tc-o{width:10px;height:10px;border-radius:50%;flex:none;background:var(--line2);position:relative;box-sizing:border-box;display:inline-block}
+    .tc-o.think{background:conic-gradient(var(--accent) 0 30%,var(--line2) 30% 100%)}
+    .tc-o.write{background:var(--accent);box-shadow:0 0 0 3px rgba(194,122,52,.18)}
+    .tc-o.decide{background:var(--accent);box-shadow:0 0 0 2px var(--raised),0 0 0 3.5px var(--accent)}
+    .tc-o.peer{background:transparent;border:2px solid var(--ink3)}
+    .tc-o.quiet{background:var(--ink3)}
+    .tc-o.err{background:#a3304b;box-shadow:0 0 0 3px rgba(163,48,75,.22)}
+    .tc-orch{position:absolute;width:600px;border:1px solid rgba(194,122,52,.45);border-radius:14px;background:var(--raised);box-shadow:0 14px 40px rgba(0,0,0,.45);box-sizing:border-box;color:var(--ink2)}
+    .tc-orch .hd{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+    .tc-orch .hd .orb{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#e2b47c,#c27a34 55%,#7a3414);box-shadow:0 0 0 3px rgba(194,122,52,.15);flex:none}
+    .tc-orch .hd>div{line-height:1.2;min-width:0}.tc-orch .hd b{font-weight:500;font-size:13.5px;color:var(--ink);display:block}.tc-orch .hd small{font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink3);white-space:nowrap}
+    .tc-orch .hd .st{margin-left:auto;font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);display:flex;align-items:center;gap:7px;white-space:nowrap}
+    .tc-orch .hd .tag{height:16px;font-size:8px;padding:0 5px}
+    .tc-orch .hd .open{color:var(--ink3);font-size:11.5px;white-space:nowrap}
+    .tc-orch .chat{padding:10px 14px 4px;display:flex;flex-direction:column;gap:7px;font-size:12.5px;line-height:1.45;max-height:138px;overflow:hidden}
+    .tc-orch .chat .me{align-self:flex-end;max-width:78%;background:var(--tile);border:1px solid var(--line2);border-radius:12px 12px 4px 12px;padding:6px 10px;color:var(--ink)}
+    .tc-orch .chat .ai{display:grid;grid-template-columns:14px 1fr;gap:8px;color:var(--ink2)}.tc-orch .chat .ai>div{min-width:0}
+    .tc-orch .chat .ai::before{content:"";width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#e2b47c,#c27a34 55%,#7a3414);margin-top:3px}
+    .tc-orch .chat .ai b{color:var(--ink);font-weight:500}.tc-orch .chat .ai p{margin:0}
+    .tc-orch .chat .ai.typing{color:var(--ink3);font:11px var(--mono);align-items:center}.tc-orch .chat .ai.typing::before{box-shadow:0 0 0 3px rgba(194,122,52,.18)}
+    .tc-orch .in{margin:6px 14px 0;display:flex;align-items:center;gap:8px;height:36px;padding:0 6px 0 12px;border:1px solid var(--line2);border-radius:10px;background:var(--bg);color:var(--ink3);font-size:12.5px}
+    .tc-orch .in .go{margin-left:auto;width:24px;height:24px;border-radius:50%;box-shadow:inset 0 0 0 1px var(--line2);display:grid;place-items:center;color:var(--line2)}.tc-orch .in .go svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .tc-orch .ft{display:flex;gap:14px;padding:8px 14px 10px;font:10px var(--mono);letter-spacing:.04em;color:var(--ink3);white-space:nowrap}.tc-orch .ft b{color:var(--ink2);font-weight:500}.tc-orch .ft .r{margin-left:auto}
+    .tc-orch.compact .chat,.tc-orch.compact .in,.tc-orch.compact .ft,.tc-orch.compact .tag,.tc-orch.compact .open{display:none}.tc-orch.compact .hd .st{flex:none}.tc-orch.compact .hd{border-bottom:0}
+    .tc-card{position:absolute;width:204px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:9px 11px 8px;box-shadow:0 10px 30px rgba(0,0,0,.35);font-size:11.5px;color:var(--ink2);box-sizing:border-box}
+    .tc-card .l1{display:flex;align-items:center;gap:7px;margin-bottom:5px;white-space:nowrap;min-width:0}
+    .tc-card .l1 b{font-weight:500;font-size:13px;color:var(--ink)}
+    .tc-card .l1 .md{margin-left:auto;font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;min-width:0}
+    .tc-card .l2{font:10.5px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink2);margin-bottom:5px;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tc-card .l3{font-size:11.5px;line-height:1.4;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px}
+    .tc-card .l3::before{content:"«";color:var(--ink3)}.tc-card .l3::after{content:"»";color:var(--ink3)}
+    .tc-card .l4{display:flex;align-items:center;gap:6px;font:10px var(--mono);color:var(--ink3);padding-top:6px;border-top:1px dashed var(--line2);white-space:nowrap}
+    .tc-card .l4 b{color:var(--ink2);font-weight:500}.tc-card .l4 i{margin-left:auto;font-style:normal}
+    .tc-card.decide{border-color:rgba(194,122,52,.6)}.tc-card.decide .l2{color:var(--accent)}
+    .tc-card.write .l2{color:var(--ink)}
+    .tc-card.err{border-color:rgba(163,48,75,.7)}.tc-card.err .l2{color:#d4667e}
+    .tc-card.quiet .l2,.tc-card.peer .l2{color:var(--ink3)}
+    .tc-card .drophint{display:none;position:absolute;left:8px;right:8px;bottom:-12px;height:22px;border-radius:7px;background:var(--accent);color:#1a0e04;font:500 9.5px/22px var(--mono);letter-spacing:.06em;text-transform:uppercase;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px}
+    #ui-w2 .drophint{display:block;opacity:0}
+    #ui-w2 .l2 .sw>span.b{color:var(--ink)}
+    #ui-w2 .l3 .sw{max-width:160px}#ui-w2 .l3 .sw>span{max-width:160px;overflow:hidden;text-overflow:ellipsis}
+    /* очередь */
+    .tc-queue{border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:8px 12px 10px;flex:none;position:relative}
+    .tc-queue .hd{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12.5px;white-space:nowrap}.tc-queue .hd b{font-weight:500;color:var(--ink)}.tc-queue .hd .m{font:10px var(--mono);color:var(--ink3);letter-spacing:.04em}.tc-queue .hd .r{margin-left:auto;display:flex;gap:6px;align-items:center}
+    .tc-queue .rows{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px}
+    .tc-task{display:grid;grid-template-columns:36px minmax(0,1fr) 92px 108px 14px;align-items:center;gap:8px;height:28px;padding:0 6px 0 8px;border-radius:8px;border:1px solid transparent;font-size:12px;color:var(--ink2);background:var(--panel)}
+    .tc-task .n{font:500 10.5px var(--mono);color:var(--ink3)}.tc-task .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+    .tc-task .who{font:10px var(--mono);letter-spacing:.04em;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tc-task .who.none{color:var(--ink3)}
+    .tc-task .st{display:inline-flex;align-items:center;gap:5px;height:18px;padding:0 7px;border-radius:999px;font:500 9px var(--mono);letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line2);color:var(--ink3);white-space:nowrap;justify-self:start;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+    .tc-task .st::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+    .tc-task.work .st{color:var(--accent);border-color:transparent;background:var(--accent-soft)}
+    .tc-task.rev .st{color:var(--ink);border-color:var(--ink3)}
+    .tc-task.done .st{color:var(--ok);border-color:transparent;background:var(--ok-soft)}.tc-task.done .t{color:var(--ink2)}
+    .tc-task .grip{display:flex;justify-content:flex-end}.tc-task .grip svg{width:8px;height:14px;fill:var(--line2);stroke:none;display:block}
+    .tc-task.drag{background:var(--raised);border-color:var(--accent);box-shadow:0 14px 34px rgba(0,0,0,.55);transform:rotate(-1deg) scale(1.02);position:relative;z-index:5}
+    .tc-task.big{height:40px;font-size:13px;grid-template-columns:48px minmax(0,1fr) 150px 150px 20px;padding:0 10px 0 12px}
+    .tc-task.big .n{font-size:11.5px}.tc-task.big .st{height:20px;font-size:9.5px}.tc-task.big .who{font-size:11px}
+    .tc-queue .src{display:flex;align-items:center;gap:8px;margin-top:8px;font:10px var(--mono);letter-spacing:.04em;color:var(--ink3);white-space:nowrap}
+    .tc-queue .src b{color:var(--ink2);font-weight:500}
+    .tc-task .hint{position:absolute;left:50%;top:-34px;transform:translateX(-50%);padding:6px 12px;border-radius:999px;background:var(--accent);color:#1a0e04;font:500 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;z-index:6;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+    .tc-qbig{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:14px;padding:12px 14px;min-height:0;flex:1}
+    .tc-qbig .tc-queue{padding:10px 14px 12px;min-height:0;align-self:stretch}
+    .tc-qbig .targets{display:grid;grid-template-columns:204px 204px;gap:12px;align-content:start;padding:2px}
+    .tc-qbig .targets .lbl{grid-column:1 / -1;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:0 2px}
+    .tc-qbig .targets .tc-orch{grid-column:1 / -1;position:relative;width:auto}
+    .tc-qbig .targets .tc-card{position:relative;width:auto}
+    .tc-qbig .filt{display:flex;gap:6px;margin:0 0 8px;align-items:center}.tc-qbig .filt .sp{flex:1}
+    #ui-rows{position:relative;height:260px}
+    #ui-rows .tc-task{position:absolute;left:0;right:0;top:0}
+    #ui-r14b .st .sw>span.b{color:var(--accent)}
+    #ui-caret{display:inline-block;width:1.5px;height:16px;background:var(--ink);vertical-align:-3px;margin-left:1px}
+    #ui-drag{position:absolute;left:0;top:0;width:878px;z-index:50;opacity:0;pointer-events:none}
+    #ui-drag .tc-task{overflow:visible}
+    #ui-drag .tc-task .t{overflow:hidden}
+    #ui-qtitle{border-bottom:1px solid transparent}
+    .vsrc{display:none}
+  </style>
+  <div data-hf-id="hf-q8r1" id="root" data-composition-id="ui" data-width="1920" data-height="1080" data-composition-variables='[{"id":"proj","type":"string","label":"proj","default":"Alpha-Test"},{"id":"new","type":"string","label":"new","default":"Новый чат"},{"id":"find","type":"string","label":"find","default":"Найти…"},{"id":"inbox","type":"string","label":"inbox","default":"Входящие"},{"id":"g_pinned","type":"string","label":"g_pinned","default":"закреплённые"},{"id":"pin1","type":"string","label":"pin1","default":"как ты будешь решать задачи в этой папке"},{"id":"pin2","type":"string","label":"pin2","default":"какие задачи ты можешь решать в проекте?"},{"id":"g_chats","type":"string","label":"g_chats","default":"чаты · Alpha-Test"},{"id":"chat1","type":"string","label":"chat1","default":"Кто ты? какая ты модель и чем мне можешь помочь?"},{"id":"role_orch","type":"string","label":"role_orch","default":"Оркестратор"},{"id":"chat2","type":"string","label":"chat2","default":"Я — Исполнитель: реализую самодостаточный модуль…"},{"id":"role_exec","type":"string","label":"role_exec","default":"Исполнитель"},{"id":"chat3","type":"string","label":"chat3","default":"ты готов?"},{"id":"g_solo","type":"string","label":"g_solo","default":"чаты без проекта"},{"id":"solo1","type":"string","label":"solo1","default":"как заварить кофе в турке"},{"id":"solo2","type":"string","label":"solo2","default":"перевод письма партнёру"},{"id":"others","type":"string","label":"others","default":"Другие проекты"},{"id":"av3","type":"string","label":"av3","default":"А"},{"id":"user2","type":"string","label":"user2","default":"Анна Ветрова"},{"id":"tb_chat","type":"string","label":"tb_chat","default":"Чат"},{"id":"tb_doc","type":"string","label":"tb_doc","default":"Документы"},{"id":"tb_art","type":"string","label":"tb_art","default":"Артефакты"},{"id":"tb_mem","type":"string","label":"tb_mem","default":"Память"},{"id":"tb_res","type":"string","label":"tb_res","default":"Исследования"},{"id":"tb_plan","type":"string","label":"tb_plan","default":"План · карта"},{"id":"tb_path","type":"string","label":"tb_path","default":"Путь"},{"id":"tb_team","type":"string","label":"tb_team","default":"Команда агентов"},{"id":"tb_roles","type":"string","label":"tb_roles","default":"6 ролей"},{"id":"tb_conn","type":"string","label":"tb_conn","default":"подключено"},{"id":"tb1_ttl","type":"string","label":"tb1_ttl","default":"Команда агентов"},{"id":"tb1_sub","type":"string","label":"tb1_sub","default":"Alpha-Test · 6 ролей"},{"id":"tb1_st","type":"string","label":"tb1_st","default":"канал в норме · 1 сообщение в пути"},{"id":"tb1_pill","type":"string","label":"tb1_pill","default":"ждёт вас · 1"},{"id":"tb1_role","type":"string","label":"tb1_role","default":"роль"},{"id":"tb1_cons","type":"string","label":"tb1_cons","default":"Открыть конструктор"},{"id":"tb1_chat","type":"string","label":"tb1_chat","default":"В чат"},{"id":"o_name","type":"string","label":"o_name","default":"Оркестратор"},{"id":"o_sub","type":"string","label":"o_sub","default":"Opus 5.5 · усилие высокое · ведёт ход"},{"id":"o_st","type":"string","label":"o_st","default":"думает · 2 с"},{"id":"o_tag","type":"string","label":"o_tag","default":"тот же чат"},{"id":"o_open","type":"string","label":"o_open","default":"⤢ чат"},{"id":"o_me","type":"string","label":"o_me","default":"Что ждёт меня после сдачи TS-35?"},{"id":"o_a1","type":"string","label":"o_a1","default":"Воркер 1"},{"id":"o_a2","type":"string","label":"o_a2","default":"сдал TS-35 ревьюеру 2 мин назад."},{"id":"o_a3","type":"string","label":"o_a3","default":"Ревьюер"},{"id":"o_a4","type":"string","label":"o_a4","default":"всё ещё ждёт вашу подпись M0 по D8.4d — это держит TS-34 воркера 2."},{"id":"o_typing","type":"string","label":"o_typing","default":"думает 2 с… собирает сдачу TS-35 для ревью"},{"id":"o_in","type":"string","label":"o_in","default":"Написать оркестратору…"},{"id":"o_f1a","type":"string","label":"o_f1a","default":"ход ·"},{"id":"o_f1b","type":"string","label":"o_f1b","default":"2,4 % W"},{"id":"o_f1c","type":"string","label":"o_f1c","default":"· 71 k ток"},{"id":"o_f2a","type":"string","label":"o_f2a","default":"прогон H1.5 ·"},{"id":"o_f3","type":"string","label":"o_f3","default":"последний ход · 23:12"},{"id":"rev_name","type":"string","label":"rev_name","default":"Ревьюер"},{"id":"rev_st","type":"string","label":"rev_st","default":"ждёт решения · 40 мин"},{"id":"rev_last","type":"string","label":"rev_last","default":"Нужна подпись M0 по D8.4d — круг 2 прочитан"},{"id":"rev_hod","type":"string","label":"rev_hod","default":"ход"},{"id":"rev_sp","type":"string","label":"rev_sp","default":"0,6 % W"},{"id":"rev_tk","type":"string","label":"rev_tk","default":"18 k ток · 23:10"},{"id":"w1_name","type":"string","label":"w1_name","default":"Воркер 1"},{"id":"w1_st","type":"string","label":"w1_st","default":"пишет"},{"id":"w1_last","type":"string","label":"w1_last","default":"Сдаю TS-35: 14 тестов зелёные, опись в канале"},{"id":"w1_hod","type":"string","label":"w1_hod","default":"ход"},{"id":"w1_sp","type":"string","label":"w1_sp","default":"1,1 % W"},{"id":"w1_tk","type":"string","label":"w1_tk","default":"31 k ток · сейчас"},{"id":"w2_name","type":"string","label":"w2_name","default":"Воркер 2"},{"id":"w2_st","type":"string","label":"w2_st","default":"ждёт соседа · ревьюера"},{"id":"w2_last","type":"string","label":"w2_last","default":"TS-34 сдан, жду круг 1"},{"id":"w2_hod","type":"string","label":"w2_hod","default":"ход"},{"id":"w2_sp","type":"string","label":"w2_sp","default":"0,3 % W"},{"id":"w2_tk","type":"string","label":"w2_tk","default":"9 k ток · 22:48"},{"id":"res_name","type":"string","label":"res_name","default":"Ресёрчер"},{"id":"res_st","type":"string","label":"res_st","default":"молчит 14 мин"},{"id":"res_last","type":"string","label":"res_last","default":"Опись источников по RS5 готова"},{"id":"res_hod","type":"string","label":"res_hod","default":"ход"},{"id":"res_sp","type":"string","label":"res_sp","default":"0,1 % W"},{"id":"res_tk","type":"string","label":"res_tk","default":"4 k ток · 22:54"},{"id":"test_name","type":"string","label":"test_name","default":"Тестер"},{"id":"test_st","type":"string","label":"test_st","default":"ошибка · прогон упал"},{"id":"test_last","type":"string","label":"test_last","default":"check:backend: typecheck упал в 2 файлах"},{"id":"test_hod","type":"string","label":"test_hod","default":"ход"},{"id":"test_sp","type":"string","label":"test_sp","default":"0,2 % W"},{"id":"test_tk","type":"string","label":"test_tk","default":"6 k ток · 23:06"},{"id":"live_lbl","type":"string","label":"live_lbl","default":"Воркер 1 → Ревьюер · сдача TS-35 · 2 мин"},{"id":"zm_fit","type":"string","label":"zm_fit","default":"вписать"},{"id":"lg1","type":"string","label":"lg1","default":"оргсхема"},{"id":"lg2","type":"string","label":"lg2","default":"живое сообщение"},{"id":"lg3","type":"string","label":"lg3","default":"выбранные"},{"id":"lg_tag","type":"string","label":"lg_tag","default":"есть"},{"id":"lg4","type":"string","label":"lg4","default":"роли · статусы · канал"},{"id":"q_ttl","type":"string","label":"q_ttl","default":"Очередь задач"},{"id":"q_m","type":"string","label":"q_m","default":"6 · открыто 5"},{"id":"q_add","type":"string","label":"q_add","default":"задача"},{"id":"n14a","type":"string","label":"n14a","default":"№14"},{"id":"t14a","type":"string","label":"t14a","default":"TS-37 · перетаскивание задачи на роль"},{"id":"w14a","type":"string","label":"w14a","default":"— не назначена"},{"id":"s14a","type":"string","label":"s14a","default":"в очереди"},{"id":"n15a","type":"string","label":"n15a","default":"№15"},{"id":"t15a","type":"string","label":"t15a","default":"RS-6 · источники по конструктору команд"},{"id":"w15a","type":"string","label":"w15a","default":"Ресёрчер"},{"id":"s15a","type":"string","label":"s15a","default":"в очереди"},{"id":"n16a","type":"string","label":"n16a","default":"№16"},{"id":"t16a","type":"string","label":"t16a","default":"TS-38 · конструктор команды"},{"id":"w16a","type":"string","label":"w16a","default":"— не назначена"},{"id":"s16a","type":"string","label":"s16a","default":"в очереди"},{"id":"n13a","type":"string","label":"n13a","default":"№13"},{"id":"t13a","type":"string","label":"t13a","default":"TS-36 · карточка роли на полотне"},{"id":"w13a","type":"string","label":"w13a","default":"Воркер 2"},{"id":"s13a","type":"string","label":"s13a","default":"у воркера 2"},{"id":"n12a","type":"string","label":"n12a","default":"№12"},{"id":"t12a","type":"string","label":"t12a","default":"TS-35 · очередь задач в движке"},{"id":"w12a","type":"string","label":"w12a","default":"Воркер 1"},{"id":"s12a","type":"string","label":"s12a","default":"на ревью"},{"id":"n11a","type":"string","label":"n11a","default":"№11"},{"id":"t11a","type":"string","label":"t11a","default":"TS-33 · виджет лимитов в панели"},{"id":"w11a","type":"string","label":"w11a","default":"Воркер 2"},{"id":"s11a","type":"string","label":"s11a","default":"готово"},{"id":"q_src1","type":"string","label":"q_src1","default":"источник:"},{"id":"q_src2","type":"string","label":"q_src2","default":"план · компиляция"},{"id":"q_src3","type":"string","label":"q_src3","default":"(когда живое) или"},{"id":"q_src4","type":"string","label":"q_src4","default":"оркестратор"},{"id":"q_src5","type":"string","label":"q_src5","default":"· перетащите строку на карточку роли — задача уйдёт ей в канал"},{"id":"tb2_ttl","type":"string","label":"tb2_ttl","default":"Команда агентов · очередь"},{"id":"tb2_proj","type":"string","label":"tb2_proj","default":"Alpha-Test ·"},{"id":"tb2_open","type":"string","label":"tb2_open","default":"открытых"},{"id":"tb2_pill","type":"string","label":"tb2_pill","default":"ждёт вас · 1"},{"id":"tb2_back","type":"string","label":"tb2_back","default":"К полотну"},{"id":"f_all","type":"string","label":"f_all","default":"Все"},{"id":"f_q","type":"string","label":"f_q","default":"В очереди"},{"id":"f_work","type":"string","label":"f_work","default":"В работе"},{"id":"f_rev","type":"string","label":"f_rev","default":"На ревью"},{"id":"f_done","type":"string","label":"f_done","default":"Готово"},{"id":"q2_ttl","type":"string","label":"q2_ttl","default":"Очередь задач"},{"id":"q2_m","type":"string","label":"q2_m","default":"№ · краткое имя · кому · состояние"},{"id":"q2_add","type":"string","label":"q2_add","default":"задача"},{"id":"q2_plan","type":"string","label":"q2_plan","default":"из плана ↓"},{"id":"n14","type":"string","label":"n14","default":"№14"},{"id":"t14","type":"string","label":"t14","default":"TS-37 · перетаскивание задачи на роль"},{"id":"w14","type":"string","label":"w14","default":"— не назначена"},{"id":"w14n","type":"string","label":"w14n","default":"Воркер 2"},{"id":"s14","type":"string","label":"s14","default":"в очереди"},{"id":"s14n","type":"string","label":"s14n","default":"у воркера 2"},{"id":"n15","type":"string","label":"n15","default":"№15"},{"id":"t15","type":"string","label":"t15","default":"RS-6 · источники по конструктору команд"},{"id":"w15","type":"string","label":"w15","default":"Ресёрчер"},{"id":"s15","type":"string","label":"s15","default":"в очереди"},{"id":"n16","type":"string","label":"n16","default":"№16"},{"id":"t16","type":"string","label":"t16","default":"TS-38 · конструктор команды"},{"id":"w16","type":"string","label":"w16","default":"— не назначена"},{"id":"s16","type":"string","label":"s16","default":"в очереди"},{"id":"n17","type":"string","label":"n17","default":"№17"},{"id":"t17","type":"string","label":"t17","default":"TS-39 · карта команды"},{"id":"w17","type":"string","label":"w17","default":"— не назначена"},{"id":"s17","type":"string","label":"s17","default":"в очереди"},{"id":"n13","type":"string","label":"n13","default":"№13"},{"id":"t13","type":"string","label":"t13","default":"TS-36 · карточка роли на полотне"},{"id":"w13","type":"string","label":"w13","default":"Воркер 2"},{"id":"s13","type":"string","label":"s13","default":"у воркера 2"},{"id":"n12","type":"string","label":"n12","default":"№12"},{"id":"t12","type":"string","label":"t12","default":"TS-35 · очередь задач в движке"},{"id":"w12","type":"string","label":"w12","default":"Воркер 1"},{"id":"s12","type":"string","label":"s12","default":"на ревью"},{"id":"n11","type":"string","label":"n11","default":"№11"},{"id":"t11","type":"string","label":"t11","default":"TS-33 · виджет лимитов в панели"},{"id":"w11","type":"string","label":"w11","default":"Воркер 2"},{"id":"s11","type":"string","label":"s11","default":"готово"},{"id":"q2_src1","type":"string","label":"q2_src1","default":"источник:"},{"id":"q2_src2","type":"string","label":"q2_src2","default":"план · компиляция"},{"id":"q2_src3","type":"string","label":"q2_src3","default":"(когда живое) или"},{"id":"q2_src4","type":"string","label":"q2_src4","default":"оркестратор"},{"id":"q2_src5","type":"string","label":"q2_src5","default":"· строка тянется на карточку роли справа"},{"id":"tg_lbl","type":"string","label":"tg_lbl","default":"цели · карточки ролей"},{"id":"o2_name","type":"string","label":"o2_name","default":"Оркестратор"},{"id":"o2_sub","type":"string","label":"o2_sub","default":"Opus 5.5 · усилие высокое · ведёт ход"},{"id":"o2_st","type":"string","label":"o2_st","default":"думает · 2 с"},{"id":"rev2_name","type":"string","label":"rev2_name","default":"Ревьюер"},{"id":"rev2_st","type":"string","label":"rev2_st","default":"ждёт решения · 40 мин"},{"id":"rev2_last","type":"string","label":"rev2_last","default":"Нужна подпись M0 по D8.4d — круг 2 прочитан"},{"id":"rev2_hod","type":"string","label":"rev2_hod","default":"ход"},{"id":"rev2_sp","type":"string","label":"rev2_sp","default":"0,6 % W"},{"id":"rev2_tk","type":"string","label":"rev2_tk","default":"18 k ток · 23:10"},{"id":"w12_name","type":"string","label":"w12_name","default":"Воркер 1"},{"id":"w12_st","type":"string","label":"w12_st","default":"пишет"},{"id":"w12_last","type":"string","label":"w12_last","default":"Сдаю TS-35: 14 тестов зелёные, опись в канале"},{"id":"w12_hod","type":"string","label":"w12_hod","default":"ход"},{"id":"w12_sp","type":"string","label":"w12_sp","default":"1,1 % W"},{"id":"w12_tk","type":"string","label":"w12_tk","default":"31 k ток · сейчас"},{"id":"w22_name","type":"string","label":"w22_name","default":"Воркер 2"},{"id":"w22_st","type":"string","label":"w22_st","default":"ждёт соседа · ревьюера"},{"id":"w22_st2","type":"string","label":"w22_st2","default":"пишет · №14"},{"id":"w22_last","type":"string","label":"w22_last","default":"TS-34 сдан, жду круг 1"},{"id":"w22_last2","type":"string","label":"w22_last2","default":"№14 назначена: TS-37 · перетаскивание задачи на роль"},{"id":"w22_hod","type":"string","label":"w22_hod","default":"ход"},{"id":"w22_sp","type":"string","label":"w22_sp","default":"0,3 % W"},{"id":"w22_tk","type":"string","label":"w22_tk","default":"9 k ток · 22:48"},{"id":"w2_drop","type":"string","label":"w2_drop","default":"назначить воркера 2"},{"id":"res2_name","type":"string","label":"res2_name","default":"Ресёрчер"},{"id":"res2_st","type":"string","label":"res2_st","default":"молчит 14 мин"},{"id":"res2_last","type":"string","label":"res2_last","default":"Опись источников по RS5 готова"},{"id":"res2_hod","type":"string","label":"res2_hod","default":"ход"},{"id":"res2_sp","type":"string","label":"res2_sp","default":"0,1 % W"},{"id":"res2_tk","type":"string","label":"res2_tk","default":"4 k ток · 22:54"},{"id":"test2_name","type":"string","label":"test2_name","default":"Тестер"},{"id":"test2_st","type":"string","label":"test2_st","default":"ошибка · прогон упал"},{"id":"test2_last","type":"string","label":"test2_last","default":"check:backend: typecheck упал в 2 файлах"},{"id":"test2_hod","type":"string","label":"test2_hod","default":"ход"},{"id":"test2_sp","type":"string","label":"test2_sp","default":"0,2 % W"},{"id":"test2_tk","type":"string","label":"test2_tk","default":"6 k ток · 23:06"},{"id":"nd","type":"string","label":"nd","default":"№14"},{"id":"td","type":"string","label":"td","default":"TS-37 · перетаскивание задачи на роль"},{"id":"wd","type":"string","label":"wd","default":"— не назначена"},{"id":"sd","type":"string","label":"sd","default":"в очереди"},{"id":"hint","type":"string","label":"hint","default":"тяните на роль → задача уйдёт ей в канал"}]'>
+    <div data-hf-id="hf-q8v1" id="ui-view" data-layout-allow-overflow><div data-hf-id="hf-q8c1" id="ui-cam">
+      <div data-hf-id="hf-q8a1" id="ui-app" class="ps2-root">
+
+        <!-- панель 260 px (кадр A1 скетча 40; как в clip-01/02) -->
+        <aside data-hf-id="hf-q8p1" id="ui-panel" class="side ps" data-layout-allow-occlusion>
+          <div data-hf-id="hf-q8p2" id="ui-panel-in" data-layout-allow-occlusion>
+            <div data-hf-id="hf-q8p3" class="ps-head"><span data-hf-id="hf-q8p4" class="logo" id="ui-logo"><s data-hf-id="hf-q8p5" data-i="logo"></s></span><b data-hf-id="hf-q8p6" class="ps-proj"><span data-hf-id="hf-q8p7" data-var-text="proj">Alpha-Test</span> <i data-hf-id="hf-q8p8">▾</i></b><span data-hf-id="hf-q8p9" class="col" id="ui-col">⟨</span></div>
+            <div data-hf-id="hf-q8pa" class="ps2-newwrap"><div data-hf-id="hf-q8pb" class="newbtn on"><s data-hf-id="hf-q8pc" data-i="new"></s><span data-hf-id="hf-q8pd" data-var-text="new">Новый чат</span><kbd data-hf-id="hf-q8pe">⌘N</kbd><span data-hf-id="hf-q8pf" class="dd">▾</span></div></div>
+            <div data-hf-id="hf-q8pg" class="search"><s data-hf-id="hf-q8ph" data-i="find"></s><span data-hf-id="hf-q8pi" data-var-text="find">Найти…</span><kbd data-hf-id="hf-q8pj">⌘K</kbd></div>
+            <div data-hf-id="hf-q8pk" data-layout-allow-overlap class="ps-scroll">
+              <div data-hf-id="hf-q8pl" class="ps2-inbox has" id="ui-inbox"><s data-hf-id="hf-q8pm" data-i="inbox"></s><span data-hf-id="hf-q8pn" class="t" data-var-text="inbox">Входящие</span><span data-hf-id="hf-q8po" class="b">2</span><span data-hf-id="hf-q8pp" class="b2">4</span></div>
+              <div data-hf-id="hf-q8pq" class="grp"><span data-hf-id="hf-q8pr" data-var-text="g_pinned">закреплённые</span></div>
+              <div data-hf-id="hf-q8ps" class="ps-chat pin" data-layout-allow-overflow><i data-hf-id="hf-q8pt"></i><span data-hf-id="hf-q8pu" class="s" data-var-text="pin1" data-layout-bleed="true" data-layout-allow-occlusion>как ты будешь решать задачи в этой папке</span><span data-hf-id="hf-q8pv" class="m">harnessy-test</span><button data-hf-id="hf-q8pw" type="button" class="ps-pin on"><s data-hf-id="hf-q8px" data-i="pin"></s></button></div>
+              <div data-hf-id="hf-q8py" class="ps-chat pin" data-layout-allow-overflow><i data-hf-id="hf-q8pz"></i><span data-hf-id="hf-q8q0" class="s" data-var-text="pin2" data-layout-bleed="true" data-layout-allow-occlusion>какие задачи ты можешь решать в проекте?</span><span data-hf-id="hf-q8q1" class="m">harnessy-test</span><button data-hf-id="hf-q8q2" type="button" class="ps-pin on"><s data-hf-id="hf-q8q3" data-i="pin"></s></button></div>
+              <div data-hf-id="hf-q8q4" class="grp ps2-prow"><span data-hf-id="hf-q8q5" data-var-text="g_chats">чаты · Alpha-Test</span><span data-hf-id="hf-q8q6" class="m">3</span><span data-hf-id="hf-q8q7" class="pm">›</span></div>
+              <div data-hf-id="hf-q8q8" class="ps-chat busy act" data-layout-allow-overflow><i data-hf-id="hf-q8q9"></i><span data-hf-id="hf-q8qa" class="s" data-var-text="chat1" data-layout-bleed="true" data-layout-allow-occlusion>Кто ты? какая ты модель и чем мне можешь помочь?</span><span data-hf-id="hf-q8qb" class="m" data-var-text="role_orch">Оркестратор</span></div>
+              <div data-hf-id="hf-q8qc" class="ps-chat wait" data-layout-allow-overflow><i data-hf-id="hf-q8qd"></i><span data-hf-id="hf-q8qe" class="s" data-var-text="chat2" data-layout-bleed="true" data-layout-allow-occlusion>Я — Исполнитель: реализую самодостаточный модуль…</span><span data-hf-id="hf-q8qf" class="m" data-var-text="role_exec">Исполнитель</span></div>
+              <div data-hf-id="hf-q8qg" class="ps-chat"><i data-hf-id="hf-q8qh"></i><span data-hf-id="hf-q8qi" class="s" data-var-text="chat3">ты готов?</span></div>
+              <div data-hf-id="hf-q8qj" class="grp"><span data-hf-id="hf-q8qk" data-var-text="g_solo">чаты без проекта</span><span data-hf-id="hf-q8ql" class="chev">▾</span><span data-hf-id="hf-q8qm" class="m">2</span></div>
+              <div data-hf-id="hf-q8qn" class="ps2-grpbody">
+                <div data-hf-id="hf-q8qo" class="ps-chat"><i data-hf-id="hf-q8qp"></i><span data-hf-id="hf-q8qq" class="s" data-var-text="solo1">как заварить кофе в турке</span></div>
+                <div data-hf-id="hf-q8qr" class="ps-chat busy" data-layout-allow-overflow><i data-hf-id="hf-q8qs"></i><span data-hf-id="hf-q8qt" class="s" data-var-text="solo2">перевод письма партнёру</span></div>
+              </div>
+              <div data-hf-id="hf-q8qu" class="ps2-others" id="ui-others"><s data-hf-id="hf-q8qv" data-i="folder"></s><span data-hf-id="hf-q8qw" class="t" data-var-text="others">Другие проекты</span><span data-hf-id="hf-q8qx" class="m">9</span><span data-hf-id="hf-q8qy" class="chev">›</span></div>
+            </div>
+            <div data-hf-id="hf-q8qz" class="ps-foot open" id="ui-foot">
+              <div data-hf-id="hf-q8r0" class="ps2-lim"><span data-hf-id="hf-q8r2" class="v" style="--p:64%"><span data-hf-id="hf-q8r3">Claude</span><b data-hf-id="hf-q8r4">64 %</b><i data-hf-id="hf-q8r5">W</i><u data-hf-id="hf-q8r6"></u></span><span data-hf-id="hf-q8r7" class="v" style="--p:91%"><span data-hf-id="hf-q8r8">Codex</span><b data-hf-id="hf-q8r9">91 %</b><i data-hf-id="hf-q8ra">W</i><u data-hf-id="hf-q8rb"></u></span></div>
+              <div data-hf-id="hf-q8rc" class="ps2-prof" id="ui-prof"><span data-hf-id="hf-q8rd" class="av"><span data-hf-id="hf-q8re" data-var-text="av3">А</span><i data-hf-id="hf-q8rf"></i></span><div data-hf-id="hf-q8rg"><span data-hf-id="hf-q8rh" data-var-text="user2">Анна Ветрова</span><small data-hf-id="hf-q8ri">you@example.com</small></div><span data-hf-id="hf-q8rj" class="chev">▾</span></div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- рабочая область: полоска вкладок (общая) + два вида на одной сцене — кадр 01 «Работа команды» · кадр 04 «Очередь задач» -->
+        <section data-hf-id="hf-q8m1" id="ui-main" class="main" data-layout-allow-overlap>
+          <div data-hf-id="hf-q8t0" id="ui-tabs" class="ps2-tabs"><span data-hf-id="hf-q8t1"><svg data-hf-id="hf-ulu9" viewBox="0 0 24 24"><path data-hf-id="hf-2dr8" d="M4 6h16v10H9l-5 4z"/></svg><span data-hf-id="hf-q8t2" data-var-text="tb_chat">Чат</span><b data-hf-id="hf-q8t3">3</b></span><span data-hf-id="hf-q8t4"><svg data-hf-id="hf-1tol" viewBox="0 0 24 24"><path data-hf-id="hf-saxa" d="M7 3h7l4 4v14H7z"/><path data-hf-id="hf-4bhh" d="M14 3v4h4M10 12h5M10 16h5"/></svg><span data-hf-id="hf-q8t5" data-var-text="tb_doc">Документы</span></span><span data-hf-id="hf-q8t6"><svg data-hf-id="hf-30lo" viewBox="0 0 24 24"><path data-hf-id="hf-dsad" d="M6 4h12v16H6z"/><path data-hf-id="hf-t6t5" d="M9 8h6M9 12h6M9 16h3"/></svg><span data-hf-id="hf-q8t7" data-var-text="tb_art">Артефакты</span><b data-hf-id="hf-q8t8" class="acc">3</b></span><span data-hf-id="hf-q8t9"><svg data-hf-id="hf-2man" viewBox="0 0 24 24"><path data-hf-id="hf-2u2q" d="M5 6c0-1.7 3-3 7-3s7 1.3 7 3v12c0 1.7-3 3-7 3s-7-1.3-7-3z"/><path data-hf-id="hf-fqdn" d="M5 6c0 1.7 3 3 7 3s7-1.3 7-3M5 12c0 1.7 3 3 7 3s7-1.3 7-3"/></svg><span data-hf-id="hf-q8ta" data-var-text="tb_mem">Память</span></span><span data-hf-id="hf-q8tb"><svg data-hf-id="hf-3t7q" viewBox="0 0 24 24"><circle data-hf-id="hf-r9ft" cx="11" cy="11" r="7"/><path data-hf-id="hf-ptyr" d="M20 20l-3.5-3.5M8 11h6M11 8v6"/></svg><span data-hf-id="hf-q8tc" data-var-text="tb_res">Исследования</span></span><span data-hf-id="hf-q8td"><svg data-hf-id="hf-3ewp" viewBox="0 0 24 24"><path data-hf-id="hf-vvdj" d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path data-hf-id="hf-grik" d="M9 4v13M15 7v13"/></svg><span data-hf-id="hf-q8te" data-var-text="tb_plan">План · карта</span></span><span data-hf-id="hf-q8tf"><svg data-hf-id="hf-4lts" viewBox="0 0 24 24"><circle data-hf-id="hf-p6xq" cx="6" cy="6" r="2"/><circle data-hf-id="hf-2rsw" cx="18" cy="18" r="2"/><path data-hf-id="hf-rb1p" d="M8 6h6a4 4 0 010 8H10a4 4 0 000 8h6"/></svg><span data-hf-id="hf-q8tg" data-var-text="tb_path">Путь</span></span><span data-hf-id="hf-q8th" class="on"><svg data-hf-id="hf-47ir" viewBox="0 0 24 24"><circle data-hf-id="hf-g2og" cx="9" cy="8" r="3"/><circle data-hf-id="hf-yzas" cx="17" cy="9" r="2.5"/><path data-hf-id="hf-uvuy" d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg><span data-hf-id="hf-q8ti" data-var-text="tb_team">Команда агентов</span><b data-hf-id="hf-q8tj" data-var-text="tb_roles">6 ролей</b></span><span data-hf-id="hf-q8tk" class="r"><i data-hf-id="hf-q8tl"></i><span data-hf-id="hf-q8tm" data-var-text="tb_conn">подключено</span></span></div>
+
+          <!-- кадр 01: работа команды -->
+          <div data-hf-id="hf-q8w0" id="ui-v-work" class="clip view" data-start="0" data-duration="2.75"><div data-hf-id="hf-q8w1" class="vin" id="ui-v-work-in">
+            <div data-hf-id="hf-q8w2" class="ps2-tbar"><b data-hf-id="hf-q8w3" data-var-text="tb1_ttl">Команда агентов</b><span data-hf-id="hf-q8w4" class="m" data-var-text="tb1_sub">Alpha-Test · 6 ролей</span><span data-hf-id="hf-q8w5" class="st"><i data-hf-id="hf-q8w6"></i><span data-hf-id="hf-q8w7" data-var-text="tb1_st">канал в норме · 1 сообщение в пути</span></span><span data-hf-id="hf-q8w8" class="pill acc" data-var-text="tb1_pill">ждёт вас · 1</span><span data-hf-id="hf-q8w9" class="r"><span data-hf-id="hf-q8wa" class="btn sm"><svg data-hf-id="hf-z1je" viewBox="0 0 24 24"><path data-hf-id="hf-1zsu" d="M12 5v14M5 12h14"/></svg><span data-hf-id="hf-q8wb" data-var-text="tb1_role">роль</span></span><span data-hf-id="hf-q8wc" class="btn sm ghost"><svg data-hf-id="hf-yn8d" viewBox="0 0 24 24"><rect data-hf-id="hf-v7xe" x="3" y="5" width="7" height="6" rx="1.5"/><rect data-hf-id="hf-2kxp" x="14" y="13" width="7" height="6" rx="1.5"/><path data-hf-id="hf-q04k" d="M10 8h2a2 2 0 012 2v4"/></svg><span data-hf-id="hf-q8wd" data-var-text="tb1_cons">Открыть конструктор</span></span><span data-hf-id="hf-q8we" class="btn sm ghost"><svg data-hf-id="hf-lxbj" viewBox="0 0 24 24"><path data-hf-id="hf-i1uk" d="M4 6h16v10H9l-5 4z"/></svg><span data-hf-id="hf-q8wf" data-var-text="tb1_chat">В чат</span></span></span></div>
+            <div data-hf-id="hf-q8wg" class="tc-work">
+              <div data-hf-id="hf-q8wh" class="om-canvas tc" data-layout-allow-overlap><div data-hf-id="hf-q8wi" class="om-view"><svg data-hf-id="hf-q8wj" class="om-edges" data-layout-ignore><defs data-hf-id="hf-mh0t"><marker data-hf-id="hf-s8uk" id="ui-ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path data-hf-id="hf-yuyv" d="M0 0L8 4L0 8z" fill="#4a4a52"/></marker><marker data-hf-id="hf-yg4i" id="ui-ah-on" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path data-hf-id="hf-r61c" d="M0 0L8 4L0 8z" fill="#c27a34"/></marker></defs><path data-hf-id="hf-3izy" d="M390 269 C390 312,166 312,166 355" marker-end="url(#ui-ah)"/><path data-hf-id="hf-l5dw" d="M410 269 C410 312,410 312,410 355" marker-end="url(#ui-ah)"/><path data-hf-id="hf-nhzg" d="M654 269 C654 312,654 312,654 355" marker-end="url(#ui-ah)"/><path data-hf-id="hf-5nd8" d="M898 269 C898 312,898 312,898 355" marker-end="url(#ui-ah)"/><path data-hf-id="hf-ue26" d="M918 269 C918 312,1142 312,1142 355" marker-end="url(#ui-ah)"/><path data-hf-id="hf-2ooy" class="live" d="M410 455 C410 510,166 510,166 458" marker-end="url(#ui-ah-on)"/></svg>
+                <div data-hf-id="hf-q8o0" class="tc-orch think" id="ui-orch" style="left:354px;top:16px"><div data-hf-id="hf-q8o1" class="hd"><span data-hf-id="hf-q8o2" class="orb"></span><div data-hf-id="hf-q8o3"><b data-hf-id="hf-q8o4" data-var-text="o_name">Оркестратор</b><small data-hf-id="hf-q8o5" data-var-text="o_sub">Opus 5.5 · усилие высокое · ведёт ход</small></div><span data-hf-id="hf-q8o6" class="st"><span data-hf-id="hf-q8o7" class="tc-o think"></span><span data-hf-id="hf-q8o8" data-var-text="o_st">думает · 2 с</span></span><span data-hf-id="hf-q8o9" class="tag live" data-var-text="o_tag">тот же чат</span><span data-hf-id="hf-q8oa" class="open" data-var-text="o_open">⤢ чат</span></div><div data-hf-id="hf-q8ob" class="chat"><div data-hf-id="hf-q8oc" class="me" data-var-text="o_me">Что ждёт меня после сдачи TS-35?</div><div data-hf-id="hf-q8od" class="ai"><div data-hf-id="hf-q8oe"><p data-hf-id="hf-q8of"><b data-hf-id="hf-q8og" data-var-text="o_a1">Воркер 1</b> <span data-hf-id="hf-q8oh" data-var-text="o_a2">сдал TS-35 ревьюеру 2 мин назад.</span> <b data-hf-id="hf-q8oi" data-var-text="o_a3">Ревьюер</b> <span data-hf-id="hf-q8oj" data-var-text="o_a4">всё ещё ждёт вашу подпись M0 по D8.4d — это держит TS-34 воркера 2.</span></p></div></div><div data-hf-id="hf-q8ok" class="ai typing" data-var-text="o_typing">думает 2 с… собирает сдачу TS-35 для ревью</div></div><div data-hf-id="hf-q8ol" class="in"><span data-hf-id="hf-q8om" data-var-text="o_in">Написать оркестратору…</span><span data-hf-id="hf-q8on" class="go"><svg data-hf-id="hf-mbmk" viewBox="0 0 24 24"><path data-hf-id="hf-frf7" d="M12 19V5M6 11l6-6 6 6"/></svg></span></div><div data-hf-id="hf-q8oo" class="ft"><span data-hf-id="hf-q8op"><span data-hf-id="hf-q8oq" data-var-text="o_f1a">ход ·</span> <b data-hf-id="hf-q8or" data-var-text="o_f1b">2,4 % W</b> <span data-hf-id="hf-q8os" data-var-text="o_f1c">· 71 k ток</span></span><span data-hf-id="hf-q8ot"><span data-hf-id="hf-q8ou" data-var-text="o_f2a">прогон H1.5 ·</span> <b data-hf-id="hf-q8ov">3/7</b></span><span data-hf-id="hf-q8ow" class="r" data-var-text="o_f3">последний ход · 23:12</span></div></div>
+                <div data-hf-id="hf-q8k0" class="tc-card decide" style="left:64px;top:355px"><div data-hf-id="hf-q8k1" class="l1"><span data-hf-id="hf-q8k2" class="tc-o decide"></span><b data-hf-id="hf-q8k3" data-var-text="rev_name">Ревьюер</b><span data-hf-id="hf-q8k4" class="md">Astra · Codex</span></div><div data-hf-id="hf-q8k5" class="l2" data-var-text="rev_st">ждёт решения · 40 мин</div><div data-hf-id="hf-q8k6" class="l3" data-layout-allow-occlusion data-var-text="rev_last">Нужна подпись M0 по D8.4d — круг 2 прочитан</div><div data-hf-id="hf-q8k7" class="l4"><span data-hf-id="hf-q8k8" data-var-text="rev_hod">ход</span><b data-hf-id="hf-q8k9" data-var-text="rev_sp">0,6 % W</b><i data-hf-id="hf-q8ka" data-var-text="rev_tk">18 k ток · 23:10</i></div></div>
+                <div data-hf-id="hf-q8kb" class="tc-card write" style="left:308px;top:355px"><div data-hf-id="hf-q8kc" class="l1"><span data-hf-id="hf-q8kd" class="tc-o write"></span><b data-hf-id="hf-q8ke" data-var-text="w1_name">Воркер 1</b><span data-hf-id="hf-q8kf" class="md">Opus 5.5</span></div><div data-hf-id="hf-q8kg" class="l2" data-var-text="w1_st">пишет</div><div data-hf-id="hf-q8kh" class="l3" data-layout-allow-occlusion data-var-text="w1_last">Сдаю TS-35: 14 тестов зелёные, опись в канале</div><div data-hf-id="hf-q8ki" class="l4"><span data-hf-id="hf-q8kj" data-var-text="w1_hod">ход</span><b data-hf-id="hf-q8kk" data-var-text="w1_sp">1,1 % W</b><i data-hf-id="hf-q8kl" data-var-text="w1_tk">31 k ток · сейчас</i></div></div>
+                <div data-hf-id="hf-q8km" class="tc-card peer" style="left:552px;top:355px"><div data-hf-id="hf-q8kn" class="l1"><span data-hf-id="hf-q8ko" class="tc-o peer"></span><b data-hf-id="hf-q8kp" data-var-text="w2_name">Воркер 2</b><span data-hf-id="hf-q8kq" class="md">Sonnet 5.5</span></div><div data-hf-id="hf-q8kr" class="l2" data-var-text="w2_st">ждёт соседа · ревьюера</div><div data-hf-id="hf-q8ks" class="l3" data-layout-allow-occlusion data-var-text="w2_last">TS-34 сдан, жду круг 1</div><div data-hf-id="hf-q8kt" class="l4"><span data-hf-id="hf-q8ku" data-var-text="w2_hod">ход</span><b data-hf-id="hf-q8kv" data-var-text="w2_sp">0,3 % W</b><i data-hf-id="hf-q8kw" data-var-text="w2_tk">9 k ток · 22:48</i></div></div>
+                <div data-hf-id="hf-q8kx" class="tc-card quiet" style="left:796px;top:355px"><div data-hf-id="hf-q8ky" class="l1"><span data-hf-id="hf-q8kz" class="tc-o quiet"></span><b data-hf-id="hf-q8l0" data-var-text="res_name">Ресёрчер</b><span data-hf-id="hf-q8l1" class="md">Qwen 3 Coder</span></div><div data-hf-id="hf-q8l2" class="l2" data-var-text="res_st">молчит 14 мин</div><div data-hf-id="hf-q8l3" class="l3" data-layout-allow-occlusion data-var-text="res_last">Опись источников по RS5 готова</div><div data-hf-id="hf-q8l4" class="l4"><span data-hf-id="hf-q8l5" data-var-text="res_hod">ход</span><b data-hf-id="hf-q8l6" data-var-text="res_sp">0,1 % W</b><i data-hf-id="hf-q8l7" data-var-text="res_tk">4 k ток · 22:54</i></div></div>
+                <div data-hf-id="hf-q8l8" class="tc-card err" style="left:1040px;top:355px"><div data-hf-id="hf-q8l9" class="l1"><span data-hf-id="hf-q8la" class="tc-o err"></span><b data-hf-id="hf-q8lb" data-var-text="test_name">Тестер</b><span data-hf-id="hf-q8lc" class="md">Sol · Codex</span></div><div data-hf-id="hf-q8ld" class="l2" data-var-text="test_st">ошибка · прогон упал</div><div data-hf-id="hf-q8le" class="l3" data-layout-allow-occlusion data-var-text="test_last">check:backend: typecheck упал в 2 файлах</div><div data-hf-id="hf-q8lf" class="l4"><span data-hf-id="hf-q8lg" data-var-text="test_hod">ход</span><b data-hf-id="hf-q8lh" data-var-text="test_sp">0,2 % W</b><i data-hf-id="hf-q8li" data-var-text="test_tk">6 k ток · 23:06</i></div></div>
+                <span data-hf-id="hf-q8lj" class="om-lbl live" style="left:288px;top:496px" data-var-text="live_lbl">Воркер 1 → Ревьюер · сдача TS-35 · 2 мин</span>
+              </div>
+              <div data-hf-id="hf-q8lk" class="om-zoom"><span data-hf-id="hf-q8ll">−</span><b data-hf-id="hf-q8lm">100 %</b><span data-hf-id="hf-q8ln">+</span><span data-hf-id="hf-q8lo" class="fit" data-var-text="zm_fit">вписать</span></div>
+              <div data-hf-id="hf-q8lp" class="tc-legend"><span data-hf-id="hf-q8lq"><i data-hf-id="hf-q8lr"></i><span data-hf-id="hf-q8ls" data-var-text="lg1">оргсхема</span></span><span data-hf-id="hf-q8lt"><i data-hf-id="hf-q8lu" class="live"></i><span data-hf-id="hf-q8lv" data-var-text="lg2">живое сообщение</span></span><span data-hf-id="hf-q8lw"><i data-hf-id="hf-q8lx" class="on"></i><span data-hf-id="hf-q8ly" data-var-text="lg3">выбранные</span></span><span data-hf-id="hf-q8lz">·</span><span data-hf-id="hf-q8m0" class="tag live" data-var-text="lg_tag">есть</span><span data-hf-id="hf-q8m2" data-var-text="lg4">роли · статусы · канал</span></div>
+              </div>
+              <div data-hf-id="hf-q8n0" class="tc-queue" id="ui-q1"><div data-hf-id="hf-q8n1" class="hd"><b data-hf-id="hf-q8n2" id="ui-qtitle" data-var-text="q_ttl">Очередь задач</b><span data-hf-id="hf-q8n3" class="m" data-var-text="q_m">6 · открыто 5</span><span data-hf-id="hf-q8n4" class="r"><span data-hf-id="hf-q8n5" class="btn sm ghost"><svg data-hf-id="hf-l4ph" viewBox="0 0 24 24"><path data-hf-id="hf-4b4y" d="M12 5v14M5 12h14"/></svg><span data-hf-id="hf-q8n6" data-var-text="q_add">задача</span></span></span></div>
+                <div data-hf-id="hf-q8n7" class="rows">
+                  <div data-hf-id="hf-q8n8" class="tc-task q"><span data-hf-id="hf-q8n9" class="n" data-var-text="n14a">№14</span><span data-hf-id="hf-q8na" class="t" data-var-text="t14a">TS-37 · перетаскивание задачи на роль</span><span data-hf-id="hf-q8nb" class="who none" data-var-text="w14a">— не назначена</span><span data-hf-id="hf-q8nc" class="st" data-var-text="s14a">в очереди</span><span data-hf-id="hf-q8nd" class="grip"><svg data-hf-id="hf-8vpw" viewBox="0 0 8 14"><circle data-hf-id="hf-g4ru" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-nwln" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-vkqk" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-9qih" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-pksq" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-d0qx" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                  <div data-hf-id="hf-q8ne" class="tc-task q"><span data-hf-id="hf-q8nf" class="n" data-var-text="n15a">№15</span><span data-hf-id="hf-q8ng" class="t" data-var-text="t15a">RS-6 · источники по конструктору команд</span><span data-hf-id="hf-q8nh" class="who" data-var-text="w15a">Ресёрчер</span><span data-hf-id="hf-q8ni" class="st" data-var-text="s15a">в очереди</span><span data-hf-id="hf-q8nj" class="grip"><svg data-hf-id="hf-cbl8" viewBox="0 0 8 14"><circle data-hf-id="hf-tur2" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-xvzf" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-o20k" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-e4b1" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-v32m" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-1lod" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                  <div data-hf-id="hf-q8nk" class="tc-task q"><span data-hf-id="hf-q8nl" class="n" data-var-text="n16a">№16</span><span data-hf-id="hf-q8nm" class="t" data-var-text="t16a">TS-38 · конструктор команды</span><span data-hf-id="hf-q8nn" class="who none" data-var-text="w16a">— не назначена</span><span data-hf-id="hf-q8no" class="st" data-var-text="s16a">в очереди</span><span data-hf-id="hf-q8np" class="grip"><svg data-hf-id="hf-b4o5" viewBox="0 0 8 14"><circle data-hf-id="hf-u923" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-xhoe" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-mv3h" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-fb84" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-vhdn" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-2slg" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                  <div data-hf-id="hf-q8nq" class="tc-task work"><span data-hf-id="hf-q8nr" class="n" data-var-text="n13a">№13</span><span data-hf-id="hf-q8ns" class="t" data-var-text="t13a">TS-36 · карточка роли на полотне</span><span data-hf-id="hf-q8nt" class="who" data-var-text="w13a">Воркер 2</span><span data-hf-id="hf-q8nu" class="st" data-var-text="s13a">у воркера 2</span><span data-hf-id="hf-q8nv" class="grip"><svg data-hf-id="hf-biz6" viewBox="0 0 8 14"><circle data-hf-id="hf-und4" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-x3dd" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-n9ei" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-ewx3" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-vvoo" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-2eaf" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                  <div data-hf-id="hf-q8nw" class="tc-task rev"><span data-hf-id="hf-q8nx" class="n" data-var-text="n12a">№12</span><span data-hf-id="hf-q8ny" class="t" data-var-text="t12a">TS-35 · очередь задач в движке</span><span data-hf-id="hf-q8nz" class="who" data-var-text="w12a">Воркер 1</span><span data-hf-id="hf-q8oA" class="st" data-var-text="s12a">на ревью</span><span data-hf-id="hf-q8oB" class="grip"><svg data-hf-id="hf-diib" viewBox="0 0 8 14"><circle data-hf-id="hf-rv7x" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-wp2c" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-p8xn" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-k5ta" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-t3jh" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-3l7i" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                  <div data-hf-id="hf-q8oC" class="tc-task done"><span data-hf-id="hf-q8oD" class="n" data-var-text="n11a">№11</span><span data-hf-id="hf-q8oE" class="t" data-var-text="t11a">TS-33 · виджет лимитов в панели</span><span data-hf-id="hf-q8oF" class="who" data-var-text="w11a">Воркер 2</span><span data-hf-id="hf-q8oG" class="st" data-var-text="s11a">готово</span><span data-hf-id="hf-q8oH" class="grip"><svg data-hf-id="hf-dwtc" viewBox="0 0 8 14"><circle data-hf-id="hf-s9iy" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-warb" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-pn8o" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-jri9" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-thui" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-36wh" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                </div>
+                <div data-hf-id="hf-q8oI" class="src"><span data-hf-id="hf-q8oJ" data-var-text="q_src1">источник:</span><b data-hf-id="hf-q8oK" data-var-text="q_src2">план · компиляция</b><span data-hf-id="hf-q8oL" data-var-text="q_src3">(когда живое) или</span><b data-hf-id="hf-q8oM" data-var-text="q_src4">оркестратор</b><span data-hf-id="hf-q8oN" data-var-text="q_src5">· перетащите строку на карточку роли — задача уйдёт ей в канал</span></div>
+              </div>
+            </div>
+          </div></div>
+
+          <!-- кадр 04: очередь задач крупно -->
+          <div data-hf-id="hf-q8x0" id="ui-v-queue" class="clip view" data-start="2.45" data-duration="13.7"><div data-hf-id="hf-q8x1" class="vin" id="ui-v-queue-in">
+            <div data-hf-id="hf-q8x2" class="ps2-tbar"><b data-hf-id="hf-q8x3" data-var-text="tb2_ttl">Команда агентов · очередь</b><span data-hf-id="hf-q8x4" class="m"><span data-hf-id="hf-q8x5" data-var-text="tb2_proj">Alpha-Test ·</span> <span data-hf-id="hf-q8x6" id="ui-open-n">5</span> <span data-hf-id="hf-q8x7" data-var-text="tb2_open">открытых</span></span><span data-hf-id="hf-q8x8" class="pill acc" data-var-text="tb2_pill">ждёт вас · 1</span><span data-hf-id="hf-q8x9" class="r"><span data-hf-id="hf-q8xa" class="btn sm ghost"><svg data-hf-id="hf-lj0i" viewBox="0 0 24 24"><circle data-hf-id="hf-hx0o" cx="9" cy="8" r="3"/><circle data-hf-id="hf-d4y4" cx="17" cy="9" r="2.5"/><path data-hf-id="hf-f9fy" d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/></svg><span data-hf-id="hf-q8xb" data-var-text="tb2_back">К полотну</span></span></span></div>
+            <div data-hf-id="hf-q8xc" class="tc-qbig">
+              <div data-hf-id="hf-q8xd" class="tc-queue" id="ui-q2" data-layout-allow-overlap>
+                <div data-hf-id="hf-q8xe" class="filt"><span data-hf-id="hf-q8xf" class="chip on"><span data-hf-id="hf-q8xg" data-var-text="f_all">Все</span><b data-hf-id="hf-q8xh" id="ui-cnt-all">6</b></span><span data-hf-id="hf-q8xi" class="chip" data-var-text="f_q">В очереди</span><span data-hf-id="hf-q8xj" class="chip" data-var-text="f_work">В работе</span><span data-hf-id="hf-q8xk" class="chip" data-var-text="f_rev">На ревью</span><span data-hf-id="hf-q8xl" class="chip" data-var-text="f_done">Готово</span><span data-hf-id="hf-q8xm" class="sp"></span></div>
+                <div data-hf-id="hf-q8xn" class="hd"><b data-hf-id="hf-q8xo" data-var-text="q2_ttl">Очередь задач</b><span data-hf-id="hf-q8xp" class="m" data-var-text="q2_m">№ · краткое имя · кому · состояние</span><span data-hf-id="hf-q8xq" class="r"><span data-hf-id="hf-q8xr" class="btn sm ghost" id="ui-add"><svg data-hf-id="hf-nijn" viewBox="0 0 24 24"><path data-hf-id="hf-4pfz" d="M12 5v14M5 12h14"/></svg><span data-hf-id="hf-q8xs" data-var-text="q2_add">задача</span></span><span data-hf-id="hf-q8xt" class="btn sm ghost" data-var-text="q2_plan">из плана ↓</span></span></div>
+                <div data-hf-id="hf-q8xu" id="ui-rows" data-layout-allow-overlap>
+                  <div data-hf-id="hf-q8y0" class="tc-task q big" id="ui-r14b"><span data-hf-id="hf-q8y1" class="n" data-var-text="n14">№14</span><span data-hf-id="hf-q8y2" class="t" data-var-text="t14">TS-37 · перетаскивание задачи на роль</span><span data-hf-id="hf-q8y3" class="who"><span data-hf-id="hf-q8y4" class="sw"><span data-hf-id="hf-q8y5" class="a none" data-var-text="w14">— не назначена</span><span data-hf-id="hf-q8y6" class="b" data-var-text="w14n">Воркер 2</span></span></span><span data-hf-id="hf-q8y7" class="st" id="ui-r14st"><span data-hf-id="hf-q8y8" class="sw"><span data-hf-id="hf-q8y9" class="a" data-var-text="s14">в очереди</span><span data-hf-id="hf-q8ya" class="b" data-var-text="s14n">у воркера 2</span></span></span><span data-hf-id="hf-q8yb" class="grip"><svg data-hf-id="hf-cpw9" viewBox="0 0 8 14"><circle data-hf-id="hf-sntz" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-vwga" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-ogbl" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-kyfc" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-tw5j" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-4dtk" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                  <div data-hf-id="hf-q8yc" class="tc-task q big" id="ui-r15b"><span data-hf-id="hf-q8yd" class="n" data-var-text="n15">№15</span><span data-hf-id="hf-q8ye" class="t" data-var-text="t15">RS-6 · источники по конструктору команд</span><span data-hf-id="hf-q8yf" class="who" data-var-text="w15">Ресёрчер</span><span data-hf-id="hf-q8yg" class="st" data-var-text="s15">в очереди</span><span data-hf-id="hf-q8yh" class="grip"><svg data-hf-id="hf-d47a" viewBox="0 0 8 14"><circle data-hf-id="hf-t250" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-vi59" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-oumm" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-kk4b" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-uagk" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-3zij" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                  <div data-hf-id="hf-q8yi" class="tc-task q big" id="ui-r16b"><span data-hf-id="hf-q8yj" class="n" data-var-text="n16">№16</span><span data-hf-id="hf-q8yk" class="t" data-var-text="t16">TS-38 · конструктор команды</span><span data-hf-id="hf-q8yl" class="who none" data-var-text="w16">— не назначена</span><span data-hf-id="hf-q8ym" class="st" data-var-text="s16">в очереди</span><span data-hf-id="hf-q8yn" class="grip"><svg data-hf-id="hf-8qtz" viewBox="0 0 8 14"><circle data-hf-id="hf-wmw9" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-1gqo" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-qu5r" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-lr1e" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-xv7t" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-56fm" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                  <div data-hf-id="hf-q8yo" class="tc-task q big" id="ui-r17b"><span data-hf-id="hf-q8yp" class="n" data-var-text="n17">№17</span><span data-hf-id="hf-q8yq" class="t"><span data-hf-id="hf-q8yr" id="ui-t17"></span><i data-hf-id="hf-q8ys" id="ui-caret"></i><span data-hf-id="hf-q8yt" class="vsrc" data-var-text="t17">TS-39 · карта команды</span></span><span data-hf-id="hf-q8yu" class="who none" data-var-text="w17">— не назначена</span><span data-hf-id="hf-q8yv" class="st" data-var-text="s17">в очереди</span><span data-hf-id="hf-q8yw" class="grip"><svg data-hf-id="hf-9550" viewBox="0 0 8 14"><circle data-hf-id="hf-x17a" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-12fn" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-r8gs" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-lcqd" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-y9iu" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-4s4l" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                  <div data-hf-id="hf-q8yx" class="tc-task work big" id="ui-r13b"><span data-hf-id="hf-q8yy" class="n" data-var-text="n13">№13</span><span data-hf-id="hf-q8yz" class="t" data-var-text="t13">TS-36 · карточка роли на полотне</span><span data-hf-id="hf-q8z0" class="who" data-var-text="w13">Воркер 2</span><span data-hf-id="hf-q8z1" class="st" data-var-text="s13">у воркера 2</span><span data-hf-id="hf-q8z2" class="grip"><svg data-hf-id="hf-w68k" viewBox="0 0 8 14"><circle data-hf-id="hf-5e9m" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-xlkx" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-mouk" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-3lc7" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-510a" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-xhvb" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                  <div data-hf-id="hf-q8z3" class="tc-task rev big" id="ui-r12b"><span data-hf-id="hf-q8z4" class="n" data-var-text="n12">№12</span><span data-hf-id="hf-q8z5" class="t" data-var-text="t12">TS-35 · очередь задач в движке</span><span data-hf-id="hf-q8z6" class="who" data-var-text="w12">Воркер 1</span><span data-hf-id="hf-q8z7" class="st" data-var-text="s12">на ревью</span><span data-hf-id="hf-q8z8" class="grip"><svg data-hf-id="hf-vrxj" viewBox="0 0 8 14"><circle data-hf-id="hf-4zyl" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-xzvy" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-majj" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-3zn8" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-4mp9" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-xw6c" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                  <div data-hf-id="hf-q8z9" class="tc-task done big" id="ui-r11b"><span data-hf-id="hf-q8za" class="n" data-var-text="n11">№11</span><span data-hf-id="hf-q8zb" class="t" data-var-text="t11">TS-33 · виджет лимитов в панели</span><span data-hf-id="hf-q8zc" class="who" data-var-text="w11">Воркер 2</span><span data-hf-id="hf-q8zd" class="st" data-var-text="s11">готово</span><span data-hf-id="hf-q8ze" class="grip"><svg data-hf-id="hf-vdmi" viewBox="0 0 8 14"><circle data-hf-id="hf-66vo" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-ye6z" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-lw8i" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-2sq5" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-5tmc" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-wp99" cx="5.5" cy="11.5" r="1.3"/></svg></span></div>
+                </div>
+                <div data-hf-id="hf-q8zf" class="src"><span data-hf-id="hf-q8zg" data-var-text="q2_src1">источник:</span><b data-hf-id="hf-q8zh" data-var-text="q2_src2">план · компиляция</b><span data-hf-id="hf-q8zi" data-var-text="q2_src3">(когда живое) или</span><b data-hf-id="hf-q8zj" data-var-text="q2_src4">оркестратор</b><span data-hf-id="hf-q8zk" data-var-text="q2_src5">· строка тянется на карточку роли справа</span></div>
+              </div>
+              <div data-hf-id="hf-q8g0" class="targets"><span data-hf-id="hf-q8g1" class="lbl" data-var-text="tg_lbl">цели · карточки ролей</span>
+                <div data-hf-id="hf-q8g2" class="tc-orch think compact"><div data-hf-id="hf-q8g3" class="hd"><span data-hf-id="hf-q8g4" class="orb"></span><div data-hf-id="hf-q8g5"><b data-hf-id="hf-q8g6" data-var-text="o2_name">Оркестратор</b><small data-hf-id="hf-q8g7" data-var-text="o2_sub">Opus 5.5 · усилие высокое · ведёт ход</small></div><span data-hf-id="hf-q8g8" class="st"><span data-hf-id="hf-q8g9" class="tc-o think"></span><span data-hf-id="hf-q8ga" data-var-text="o2_st">думает · 2 с</span></span></div></div>
+                <div data-hf-id="hf-q8gb" class="tc-card decide"><div data-hf-id="hf-q8gc" class="l1"><span data-hf-id="hf-q8gd" class="tc-o decide"></span><b data-hf-id="hf-q8ge" data-var-text="rev2_name">Ревьюер</b><span data-hf-id="hf-q8gf" class="md">Astra · Codex</span></div><div data-hf-id="hf-q8gg" class="l2" data-var-text="rev2_st">ждёт решения · 40 мин</div><div data-hf-id="hf-q8gh" class="l3" data-layout-allow-occlusion data-var-text="rev2_last">Нужна подпись M0 по D8.4d — круг 2 прочитан</div><div data-hf-id="hf-q8gi" class="l4"><span data-hf-id="hf-q8gj" data-var-text="rev2_hod">ход</span><b data-hf-id="hf-q8gk" data-var-text="rev2_sp">0,6 % W</b><i data-hf-id="hf-q8gl" data-var-text="rev2_tk">18 k ток · 23:10</i></div></div>
+                <div data-hf-id="hf-q8gm" class="tc-card write"><div data-hf-id="hf-q8gn" class="l1"><span data-hf-id="hf-q8go" class="tc-o write"></span><b data-hf-id="hf-q8gp" data-var-text="w12_name">Воркер 1</b><span data-hf-id="hf-q8gq" class="md">Opus 5.5</span></div><div data-hf-id="hf-q8gr" class="l2" data-var-text="w12_st">пишет</div><div data-hf-id="hf-q8gs" class="l3" data-layout-allow-occlusion data-var-text="w12_last">Сдаю TS-35: 14 тестов зелёные, опись в канале</div><div data-hf-id="hf-q8gt" class="l4"><span data-hf-id="hf-q8gu" data-var-text="w12_hod">ход</span><b data-hf-id="hf-q8gv" data-var-text="w12_sp">1,1 % W</b><i data-hf-id="hf-q8gw" data-var-text="w12_tk">31 k ток · сейчас</i></div></div>
+                <div data-hf-id="hf-q8gx" class="tc-card peer" id="ui-w2"><div data-hf-id="hf-q8gy" class="l1"><span data-hf-id="hf-q8gz" class="tc-o peer" id="ui-w2-dot"></span><b data-hf-id="hf-q8h0" data-var-text="w22_name">Воркер 2</b><span data-hf-id="hf-q8h1" class="md">Sonnet 5.5</span></div><div data-hf-id="hf-q8h2" class="l2"><span data-hf-id="hf-q8h3" class="sw"><span data-hf-id="hf-q8h4" class="a" data-var-text="w22_st">ждёт соседа · ревьюера</span><span data-hf-id="hf-q8h5" class="b" data-var-text="w22_st2">пишет · №14</span></span></div><div data-hf-id="hf-q8h6" class="l3" data-layout-allow-occlusion><span data-hf-id="hf-q8h7" class="sw"><span data-hf-id="hf-q8h8" class="a" data-layout-allow-occlusion data-var-text="w22_last">TS-34 сдан, жду круг 1</span><span data-hf-id="hf-q8h9" class="b" data-layout-allow-occlusion data-var-text="w22_last2">№14 назначена: TS-37 · перетаскивание задачи на роль</span></span></div><div data-hf-id="hf-q8ha" class="l4"><span data-hf-id="hf-q8hb" data-var-text="w22_hod">ход</span><b data-hf-id="hf-q8hc" data-var-text="w22_sp">0,3 % W</b><i data-hf-id="hf-q8hd" data-var-text="w22_tk">9 k ток · 22:48</i></div><span data-hf-id="hf-q8he" class="drophint" id="ui-w2-hint" data-var-text="w2_drop">назначить воркера 2</span></div>
+                <div data-hf-id="hf-q8hf" class="tc-card quiet"><div data-hf-id="hf-q8hg" class="l1"><span data-hf-id="hf-q8hh" class="tc-o quiet"></span><b data-hf-id="hf-q8hi" data-var-text="res2_name">Ресёрчер</b><span data-hf-id="hf-q8hj" class="md">Qwen 3 Coder</span></div><div data-hf-id="hf-q8hk" class="l2" data-var-text="res2_st">молчит 14 мин</div><div data-hf-id="hf-q8hl" class="l3" data-layout-allow-occlusion data-var-text="res2_last">Опись источников по RS5 готова</div><div data-hf-id="hf-q8hm" class="l4"><span data-hf-id="hf-q8hn" data-var-text="res2_hod">ход</span><b data-hf-id="hf-q8ho" data-var-text="res2_sp">0,1 % W</b><i data-hf-id="hf-q8hp" data-var-text="res2_tk">4 k ток · 22:54</i></div></div>
+                <div data-hf-id="hf-q8hq" class="tc-card err"><div data-hf-id="hf-q8hr" class="l1"><span data-hf-id="hf-q8hs" class="tc-o err"></span><b data-hf-id="hf-q8ht" data-var-text="test2_name">Тестер</b><span data-hf-id="hf-q8hu" class="md">Sol · Codex</span></div><div data-hf-id="hf-q8hv" class="l2" data-var-text="test2_st">ошибка · прогон упал</div><div data-hf-id="hf-q8hw" class="l3" data-layout-allow-occlusion data-var-text="test2_last">check:backend: typecheck упал в 2 файлах</div><div data-hf-id="hf-q8hx" class="l4"><span data-hf-id="hf-q8hy" data-var-text="test2_hod">ход</span><b data-hf-id="hf-q8hz" data-var-text="test2_sp">0,2 % W</b><i data-hf-id="hf-q8i0" data-var-text="test2_tk">6 k ток · 23:06</i></div></div>
+              </div>
+            </div>
+          </div></div>
+
+          <!-- поднятая строка №14 (клон; оригинал в списке становится пунктиром) -->
+          <div data-hf-id="hf-q8d0" id="ui-drag" data-layout-ignore><div data-hf-id="hf-q8d1" class="tc-task q big drag" id="ui-drag-in"><span data-hf-id="hf-q8d2" class="n" data-var-text="nd">№14</span><span data-hf-id="hf-q8d3" class="t" data-var-text="td">TS-37 · перетаскивание задачи на роль</span><span data-hf-id="hf-q8d4" class="who none" data-var-text="wd">— не назначена</span><span data-hf-id="hf-q8d5" class="st" data-var-text="sd">в очереди</span><span data-hf-id="hf-q8d6" class="grip"><svg data-hf-id="hf-uzbh" viewBox="0 0 8 14"><circle data-hf-id="hf-5skn" cx="2.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-ysi0" cx="5.5" cy="2.5" r="1.3"/><circle data-hf-id="hf-lhxh" cx="2.5" cy="7" r="1.3"/><circle data-hf-id="hf-3716" cx="5.5" cy="7" r="1.3"/><circle data-hf-id="hf-5fbb" cx="2.5" cy="11.5" r="1.3"/><circle data-hf-id="hf-x3ka" cx="5.5" cy="11.5" r="1.3"/></svg></span><span data-hf-id="hf-q8d7" class="hint" id="ui-hint" data-var-text="hint">тяните на роль → задача уйдёт ей в канал</span></div></div>
+        </section>
+      </div>
+
+      <!-- курсор (в координатах приложения; размер компенсирует масштаб камеры) -->
+      <div data-hf-id="hf-q8u0" id="ui-cursor" class="clip" data-start="1.0" data-duration="15.15">
+        <div data-hf-id="hf-q8u1" id="ui-cur-in"><div data-hf-id="hf-q8u2" id="ui-cur-s"><svg data-hf-id="hf-q8u3" viewBox="0 0 12 19"><path data-hf-id="hf-q8u4" d="M0.5 0.8 L0.5 15.2 L4.1 11.9 L6.6 17.9 L9.2 16.8 L6.7 10.9 L11.6 10.9 Z" fill="#ececee" stroke="#101012" stroke-width="1.1" stroke-linejoin="round"/></svg></div></div>
+      </div>
+    </div>
+    </div>
+    <div data-hf-id="hf-q8u5" id="ui-dip" data-layout-ignore></div>
+  </div>
+  <script>
+    (function(){
+      /* иконки панели — из скетчей 40/41 */
+      const I={new:'<path d="M12 5v14M5 12h14"/>',find:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',inbox:'<path d="M3 13l2-8h14l2 8v6H3z"/><path d="M3 13h5l1 2h6l1-2h5"/>',pin:'<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/>',folder:'<path d="M3 7h6l2 2h10v10H3z"/>',logo:'<path d="M5 15c2-9 7 2 9-7M14 8l5 5"/>'};
+      document.querySelectorAll('#root s[data-i]').forEach(s=>{ const k=s.getAttribute('data-i'); s.outerHTML='<svg viewBox="0 0 24 24">'+(I[k]||'')+'</svg>'; });
+      const V=(window.__hyperframes&&window.__hyperframes.getVariables)?(window.__hyperframes.getVariables()||{}):{};
+
+      /* ── камера и курсор в координатах приложения (1600×900); базовый масштаб 1.0 = окно целиком ── */
+      const BASE=1.0;
+      const tl=gsap.timeline({paused:true});
+      let cam={s:BASE,rx:-160,ry:-6};
+      function camTo(t,dur,s,rx,ry,ease){
+        ease=ease||'power2.inOut';
+        tl.fromTo('#ui-cam',{scale:cam.s,x:-cam.rx*cam.s,y:-cam.ry*cam.s},{immediateRender:false,scale:s,x:-rx*s,y:-ry*s,duration:dur,ease},t);
+        tl.fromTo('#ui-cur-in',{scale:BASE/cam.s},{immediateRender:false,scale:BASE/s,duration:dur,ease},t);
+        tl.fromTo('#ui-cam',{filter:'blur(0px)'},{immediateRender:false,filter:'blur(4px)',duration:dur*.5,ease:'power1.in'},t);
+        tl.to('#ui-cam',{filter:'blur(0px)',duration:dur*.5,ease:'power1.out'},t+dur*.5);
+        cam={s,rx,ry};
+      }
+      const cur={x:1700,y:520};
+      function moveTo(t,dur,x,y,ease){
+        tl.fromTo('#ui-cur-in',{x:cur.x,y:cur.y},{immediateRender:false,x,y,duration:dur,ease:ease||'power3.inOut'},t);
+        cur.x=x;cur.y=y;
+      }
+      function click(t){
+        tl.fromTo('#ui-cur-s',{scale:1},{immediateRender:false,scale:.86,duration:.06,ease:'power2.out'},t);
+        tl.to('#ui-cur-s',{scale:1,duration:.1,ease:'power2.out'},t+.06);
+      }
+      /* своп надписи .sw: показать span.k, спрятать остальные (blur-swap .15 с) */
+      function swap(root,k,t){
+        document.querySelectorAll(root+' .sw > span').forEach(sp=>{
+          const on=sp.classList.contains(k);
+          if(on) tl.fromTo(sp,{opacity:0,filter:'blur(6px)'},{immediateRender:false,opacity:1,filter:'blur(0px)',duration:.15,ease:'power2.out'},t+.08);
+          else tl.to(sp,{opacity:0,filter:'blur(6px)',duration:.13,ease:'power2.in'},t);
+        });
+      }
+      /* положение центра элемента в координатах приложения (измеряется при сборке, масштаб 1.0) */
+      const app=document.getElementById('ui-app');
+      function P(sel,fx,fy,dx,dy){
+        const el=document.querySelector(sel), ar=app.getBoundingClientRect(), k=ar.width/1600||1;
+        if(!el) return {x:fx,y:fy};
+        const r=el.getBoundingClientRect();
+        if(!r.width||!r.height) return {x:fx,y:fy};
+        return {x:(r.left-ar.left)/k+r.width/k/2+(dx||0),y:(r.top-ar.top)/k+r.height/k/2+(dy||0)};
+      }
+      function TL(sel,fx,fy){ /* левый верхний угол */
+        const el=document.querySelector(sel), ar=app.getBoundingClientRect(), k=ar.width/1600||1;
+        if(!el) return {x:fx,y:fy,w:878};
+        const r=el.getBoundingClientRect(); if(!r.width) return {x:fx,y:fy,w:878};
+        return {x:(r.left-ar.left)/k,y:(r.top-ar.top)/k,w:r.width/k};
+      }
+
+      /* слоты строк крупной очереди: шаг 44 px; порядок очереди 14 · 15 · 16 · [17] · 13 · 12 · 11 */
+      const SLOT=44;
+      const rows={r14b:0,r15b:1,r16b:2,r17b:3,r13b:3,r12b:4,r11b:5};
+      Object.keys(rows).forEach(k=>gsap.set('#ui-'+k,{y:rows[k]*SLOT}));
+      gsap.set('#ui-r17b',{opacity:0});
+      gsap.set('#ui-t17',{textContent:''});
+      gsap.set('#ui-cam',{scale:BASE,x:160,y:6});
+      gsap.set('#ui-cur-in',{x:1700,y:520,scale:1});
+      gsap.set('#ui-drag',{opacity:0});
+
+      const pTitle=P('#ui-qtitle',330,745), pAdd=P('#ui-add',1105,152), pLogo=P('#ui-logo',24,26);
+      const pRow=P('#ui-r14b .t',560,323), pW2=P('#ui-w2',1268,392,0,-4);
+      const rowTL=TL('#ui-r14b',274,304);
+      const w2TL=TL('#ui-w2',1166,332);
+      gsap.set('#ui-drag',{x:-3000,y:rowTL.y,width:rowTL.w}); /* клон живёт в рабочей области: x считается от её левого края (260) */
+
+      /* сцена 1 · 0–2.5: полотно команды целиком; курсор въезжает, идёт к заголовку очереди, клик */
+      moveTo(1.0,.6,980,700,'power3.out');
+      moveTo(1.7,.45,pTitle.x+6,pTitle.y+4);
+      tl.fromTo('#ui-qtitle',{color:'#ececee',borderBottomColor:'rgba(236,236,238,0)'},{immediateRender:false,color:'#ffffff',borderBottomColor:'rgba(236,236,238,.8)',duration:.12},2.15);
+      click(2.35);
+
+      /* сцена 2 · 2.45–6.2: blur-swap полотно → очередь крупно; камера 2.0× на список; «+ задача» → строка №17, имя печатается, Enter */
+      tl.fromTo('#ui-v-work-in',{opacity:1,filter:'blur(0px)'},{immediateRender:false,opacity:0,filter:'blur(8px)',duration:.2,ease:'power2.in'},2.45);
+      tl.fromTo('#ui-v-queue-in',{opacity:0,filter:'blur(8px)'},{immediateRender:false,opacity:1,filter:'blur(0px)',duration:.15,ease:'power2.out'},2.6);
+      camTo(2.5,.6,2.0,262,92);
+      moveTo(3.4,.5,pAdd.x,pAdd.y);
+      tl.fromTo('#ui-add',{borderColor:'#2d2d32'},{immediateRender:false,borderColor:'#4a4a52',duration:.1},3.85);
+      click(4.0);
+      tl.to('#ui-add',{borderColor:'#2d2d32',duration:.15},4.2);
+      tl.to('#ui-r13b',{y:4*SLOT,duration:.3,ease:'power3.out'},4.08);
+      tl.to('#ui-r12b',{y:5*SLOT,duration:.3,ease:'power3.out'},4.08);
+      tl.to('#ui-r11b',{y:6*SLOT,duration:.3,ease:'power3.out'},4.08);
+      tl.to('#ui-rows',{height:7*SLOT-4,duration:.3,ease:'power3.out'},4.08);
+      tl.fromTo('#ui-r17b',{opacity:0,filter:'blur(6px)'},{immediateRender:false,opacity:1,filter:'blur(0px)',duration:.2,ease:'power2.out'},4.12);
+      tl.fromTo('#ui-r17b',{backgroundColor:'rgba(194,122,52,.14)',borderColor:'rgba(194,122,52,.5)'},{immediateRender:false,backgroundColor:'rgba(20,20,22,1)',borderColor:'rgba(20,20,22,0)',duration:.5,ease:'power2.out'},5.8);
+      const full=(V.t17||document.querySelector('#ui-r17b .vsrc').textContent||'').trim();
+      const step=1.3/Math.max(1,full.length);
+      for(let i=0;i<full.length;i++) tl.set('#ui-t17',{textContent:full.slice(0,i+1)},4.3+i*step);
+      tl.to('#ui-caret',{opacity:0,duration:.08},5.75);
+      tl.set('#ui-cnt-all',{textContent:'7'},5.75);
+      tl.set('#ui-open-n',{textContent:'6'},5.75);
+
+      /* сцена 3 · 6.3–9.2: строка №14 поднята, клон → билет, перенос к Воркеру 2, камера следом, цель подсвечена, сброс, перестановка */
+      moveTo(6.3,.5,pRow.x,pRow.y);
+      click(6.95);
+      tl.to('#ui-r14b',{opacity:.35,duration:.12},6.95);
+      tl.set('#ui-r14b',{borderStyle:'dashed',borderColor:'#2d2d32'},6.95);
+      tl.set('#ui-drag',{x:rowTL.x-260},6.95);
+      tl.fromTo('#ui-drag',{opacity:0},{immediateRender:false,opacity:1,duration:.12,ease:'power2.out'},6.95);
+      tl.to('#ui-drag-in .who, #ui-drag-in .st, #ui-drag-in .grip',{opacity:0,duration:.2,ease:'power2.in'},7.05);
+      tl.set('#ui-drag-in',{gridTemplateColumns:'48px minmax(0,1fr)'},7.25);
+      tl.to('#ui-drag',{width:380,duration:.35,ease:'power3.out'},7.1);
+      const dx=pW2.x-pRow.x, dy=pW2.y-pRow.y;
+      moveTo(7.05,1.25,pW2.x,pW2.y,'power2.inOut');
+      tl.to('#ui-drag',{x:pW2.x-260-190,y:pW2.y-24,duration:1.25,ease:'power2.inOut'},7.05); /* билет 380 px ложится по центру карточки */
+      camTo(7.15,.6,2.0,640,92);
+      tl.set('#ui-w2',{borderStyle:'dashed'},8.0);
+      tl.fromTo('#ui-w2',{borderColor:'#2d2d32',backgroundColor:'#1b1b1e'},{immediateRender:false,borderColor:'#c27a34',backgroundColor:'rgba(194,122,52,.14)',duration:.15},8.0);
+      tl.fromTo('#ui-w2-hint',{opacity:0},{immediateRender:false,opacity:1,duration:.15,ease:'power2.out'},8.0);
+      click(8.35);
+      tl.to('#ui-drag',{scale:.6,opacity:0,duration:.25,ease:'power3.in'},8.35);
+      tl.to('#ui-w2-hint',{opacity:0,duration:.12,ease:'power2.in'},8.4);
+      tl.set('#ui-drag',{x:-3000},8.65);
+      tl.set('#ui-w2',{borderStyle:'solid'},8.45);
+      tl.to('#ui-w2',{borderColor:'#2d2d32',backgroundColor:'#1b1b1e',duration:.2},8.45);
+      tl.fromTo('#ui-w2',{boxShadow:'0 0 0 0 rgba(194,122,52,.6), 0 10px 30px rgba(0,0,0,.35)'},{immediateRender:false,boxShadow:'0 0 0 14px rgba(194,122,52,0), 0 10px 30px rgba(0,0,0,.35)',duration:1.2,ease:'power2.out'},8.45);
+      swap('#ui-w2 .l3','b',8.5);
+      swap('#ui-r14b .who','b',8.55);
+      swap('#ui-r14b .st','b',8.55);
+      tl.to('#ui-r14b',{opacity:1,duration:.2},8.55);
+      tl.set('#ui-r14b',{borderStyle:'solid',borderColor:'rgba(20,20,22,0)'},8.55);
+      tl.to('#ui-r14st',{color:'#c27a34',backgroundColor:'rgba(194,122,52,.14)',borderColor:'rgba(0,0,0,0)',duration:.2},8.55);
+      tl.to('#ui-r14b',{y:3*SLOT,duration:.45,ease:'power3.inOut'},8.7);
+      tl.to('#ui-r15b',{y:0,duration:.45,ease:'power3.inOut'},8.7);
+      tl.to('#ui-r16b',{y:1*SLOT,duration:.45,ease:'power3.inOut'},8.7);
+      tl.to('#ui-r17b',{y:2*SLOT,duration:.45,ease:'power3.inOut'},8.7);
+      moveTo(8.5,.4,pW2.x+40,pW2.y+70);
+
+      /* сцена 4 · 9.6–14.8: камера 1.0×, курсор отходит; Воркер 2 → «пишет · №14» */
+      camTo(9.6,.6,BASE,-160,-6);
+      moveTo(9.6,.6,1480,820,'power3.inOut');
+      tl.to('#ui-w2-dot',{backgroundColor:'#c27a34',borderColor:'#c27a34',boxShadow:'0 0 0 3px rgba(194,122,52,.18)',duration:.15},12.6);
+      swap('#ui-w2 .l2','b',12.6);
+
+      /* сцена 5 · 15.0–16.15: курсор к знаку, клик, камера летит в знак, затемнение → финальная карточка */
+      moveTo(15.0,.6,pLogo.x,pLogo.y);
+      click(15.75);
+      tl.fromTo('#ui-logo',{borderColor:'#2d2d32'},{immediateRender:false,borderColor:'#c27a34',duration:.1},15.75);
+      camTo(15.8,.35,7.5,pLogo.x-960/7.5,pLogo.y-456/7.5,'power3.in');
+      tl.to('#ui-cam',{filter:'blur(10px)',duration:.2,ease:'power2.in'},15.95);
+      tl.fromTo('#ui-dip',{opacity:0},{immediateRender:false,opacity:.7,duration:.2,ease:'power2.in'},15.95);
+
+      window.__timelines['ui']=tl;
+    })();
+  </script>
+</template>
