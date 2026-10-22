@@ -1,0 +1,180 @@
+/* Боковая панель v2 (скетч 40, дизайн-код sidebar-v2-spec). Классы .ps — те же, что в прототипе (proto.js sideHTML / proto.css), новые — .ps2-*.
+   Скоуп .ps2-root: правила .ps скопированы из proto.css, чтобы лист 00 не тянул proto.css целиком. 22.10.2026. */
+
+/* ── панель: каркас (копия proto.css, скоуп) ── */
+.ps2-root aside.side.ps{display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:12px 10px;background:var(--panel);border-right:1px solid var(--line);overflow:hidden;position:relative;z-index:5}
+.ps2-root aside.side.ps .ps-head{display:flex;align-items:center;gap:8px;padding:2px 4px 10px;position:relative}
+.ps2-root aside.side.ps .ps-head .logo{width:26px;height:26px;margin:0;display:grid;place-items:center;border-radius:8px;background:var(--raised);border:1px solid var(--line2);cursor:pointer;flex:none}
+.ps2-root aside.side.ps .ps-head .logo svg{width:14px;height:14px;fill:none;stroke:var(--gold,#dcb866);stroke-width:1.8;stroke-linecap:round}
+.ps2-root aside.side.ps .ps-proj{font-weight:500;font-size:13px;color:var(--ink);white-space:nowrap;cursor:pointer;overflow:hidden;text-overflow:ellipsis}.ps2-root aside.side.ps .ps-proj i{font-style:normal;color:var(--ink3);font-size:11px;margin-left:3px}
+.ps2-root aside.side.ps .col{margin-left:auto;color:var(--ink3);cursor:pointer;font:13px var(--mono);padding:2px 6px;border-radius:6px}.ps2-root aside.side.ps .col:hover{color:var(--ink);background:var(--raised)}
+.ps2-root aside.side.ps .newbtn{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:var(--rs,9px);background:var(--raised);border:1px solid var(--line2);color:var(--ink);font-weight:500;font-size:13px;margin-bottom:6px;cursor:pointer}
+.ps2-root aside.side.ps .newbtn.on,.ps2-root aside.side.ps .newbtn:hover{border-color:rgba(194,122,52,.5)}
+.ps2-root aside.side.ps .newbtn svg,.ps2-root aside.side.ps .search svg,.ps2-root aside.side.ps .nav svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ps2-root aside.side.ps kbd{margin-left:auto;font:10px var(--mono);color:var(--ink3);border:1px solid var(--line2);border-radius:4px;padding:1px 5px}
+.ps2-root aside.side.ps .search{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--line2);border-radius:var(--rs,9px);color:var(--ink3);background:var(--bg);margin-bottom:4px;font-size:12.5px;cursor:pointer}
+.ps2-root aside.side.ps .ps-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:1px;scrollbar-width:none}.ps2-root aside.side.ps .ps-scroll::-webkit-scrollbar{display:none}
+.ps2-root aside.side.ps .grp{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:10px 9px 3px;display:flex;align-items:center}.ps2-root aside.side.ps .grp .m{margin-left:auto;letter-spacing:0;font-size:10px}
+.ps2-root aside.side.ps .nav{position:relative;width:auto;height:28px;display:flex;align-items:center;gap:9px;padding:0 9px;border-radius:var(--rs,9px);color:var(--ink2);font-size:13px;cursor:pointer;white-space:nowrap;flex:none}
+.ps2-root aside.side.ps .nav:hover,.ps2-root aside.side.ps .nav.on{background:var(--raised);color:var(--ink)}.ps2-root aside.side.ps .nav.on svg{stroke:var(--accent)}
+.ps2-root aside.side.ps .nav .t{overflow:hidden;text-overflow:ellipsis}.ps2-root aside.side.ps .nav .m{margin-left:auto;font:10px var(--mono);color:var(--ink3)}
+.ps2-root aside.side.ps .nav .b{position:static;margin-left:auto;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#1a0e04;font:500 10px/18px var(--mono);text-align:center;padding:0 5px}
+.ps2-root aside.side.ps .nav .b.bad{background:var(--bad-fill,#a3304b);color:#fff}
+.ps2-root aside.side.ps .ps-foot{padding-top:8px;display:flex;flex-direction:column;gap:4px;flex-shrink:0;position:relative;margin-top:auto}
+.ps2-root aside.side.ps .av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#3a3a40,#1b1b1e);border:1px solid var(--line2);display:grid;place-items:center;font:500 11px var(--mono);color:var(--ink);position:relative;flex:none}
+.ps2-root aside.side.ps .av i{position:absolute;right:-1px;bottom:-1px;width:8px;height:8px;border-radius:50%;background:var(--ok);border:2px solid var(--panel)}
+/* строка чата (копия .ps-chat из proto.css + метка роли справа) */
+.ps2-root .ps-chat{display:flex;align-items:center;gap:8px;height:27px;padding:0 9px 0 26px;border-radius:var(--rs,9px);color:var(--ink2);font-size:12.5px;cursor:pointer;white-space:nowrap;position:relative}
+.ps2-root .ps-chat:hover{background:var(--raised);color:var(--ink)}
+.ps2-root .ps-chat>i{position:absolute;left:12px;top:50%;margin-top:-3px;width:6px;height:6px;border-radius:50%;background:var(--line2)}
+.ps2-root .ps-chat .s{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--ink2);font-size:12.5px}.ps2-root .ps-chat:hover .s,.ps2-root .ps-chat.act .s{color:var(--ink)}
+.ps2-root .ps-chat .m{font:9.5px var(--mono);color:var(--ink3);flex:none;letter-spacing:.02em;max-width:40%;overflow:hidden;text-overflow:ellipsis}
+.ps2-root .ps-chat.act{background:var(--raised);color:var(--ink)}
+.ps2-root .ps-chat.busy>i{background:var(--accent);box-shadow:0 0 0 3px rgba(194,122,52,.18);animation:ps2-pulse 1.6s ease-in-out infinite}
+.ps2-root .ps-chat.wait>i{background:var(--accent);box-shadow:0 0 0 2px var(--panel),0 0 0 3.5px var(--accent)}
+.ps2-root .ps-chat.err>i{background:var(--bad-fill,#a3304b);box-shadow:0 0 0 3px rgba(163,48,75,.22)}
+.ps2-root .ps-chat.more{color:var(--ink3);cursor:default;padding-left:12px}.ps2-root .ps-chat.more:hover{background:transparent}
+.ps2-root .ps-chat.skel .s{display:block;height:9px;width:60%;border-radius:4px;background:var(--line2)}.ps2-root .ps-chat.skel .m{display:block;height:7px;width:18%;border-radius:4px;background:var(--line)}
+@keyframes ps2-pulse{0%,100%{box-shadow:0 0 0 3px rgba(194,122,52,.18)}50%{box-shadow:0 0 0 5px rgba(194,122,52,.08)}}
+.ps2-root .ps-pin{position:absolute;right:6px;top:50%;margin-top:-8px;width:16px;height:16px;display:grid;place-items:center;color:var(--ink3);border-radius:4px;border:0;padding:0;background:none;opacity:0;cursor:pointer}
+.ps2-root .ps-pin svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ps2-root .ps-chat:hover .ps-pin,.ps2-root .ps-pin.on{opacity:1}.ps2-root .ps-pin.on{color:var(--accent)}.ps2-root .ps-chat:hover .m{visibility:hidden}.ps2-root .ps-chat.pin .m{padding-right:14px}
+
+/* ── новое: строка-фильтр «Ждёт вас» ── */
+.ps2-root .ps2-wait{display:flex;align-items:center;gap:9px;height:30px;margin:4px 0 2px;padding:0 9px;border-radius:var(--rs,9px);border:1px solid transparent;color:var(--ink2);font-size:13px;cursor:pointer;white-space:nowrap}
+.ps2-root .ps2-wait svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ps2-root .ps2-wait .t{flex:1;overflow:hidden;text-overflow:ellipsis}.ps2-root .ps2-wait .b{min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#1a0e04;font:500 10px/18px var(--mono);text-align:center;padding:0 5px}
+.ps2-root .ps2-wait.has{color:var(--ink);background:var(--accent-soft);border-color:rgba(194,122,52,.35)}.ps2-root .ps2-wait.has svg{stroke:var(--accent)}
+.ps2-root .ps2-wait:hover{background:var(--raised)}.ps2-root .ps2-wait.has:hover{background:rgba(194,122,52,.2)}
+.ps2-root .ps2-wait.zero{color:var(--ink3)}.ps2-root .ps2-wait.zero .m{font:10px var(--mono);color:var(--ink3)}
+.ps2-root .ps2-wait.err .b{background:var(--bad-fill,#a3304b);color:#fff}.ps2-root .ps2-wait.err{border-color:rgba(163,48,75,.5);background:var(--bad-soft)}.ps2-root .ps2-wait.err svg{stroke:var(--bad)}
+.ps2-root .ps2-wait.on{background:var(--raised);color:var(--ink)}.ps2-root .ps2-wait.load{color:var(--ink3)}.ps2-root .ps2-wait.load .b{background:var(--line2);color:var(--ink3)}
+
+/* ── новое: «Другие проекты · N» ── */
+.ps2-root .ps2-others{display:flex;align-items:center;gap:8px;height:28px;margin-top:6px;padding:0 9px;border-radius:var(--rs,9px);color:var(--ink2);font-size:13px;cursor:pointer;white-space:nowrap}
+.ps2-root .ps2-others:hover{background:var(--raised);color:var(--ink)}.ps2-root .ps2-others svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ps2-root .ps2-others .t{flex:1}.ps2-root .ps2-others .m{font:10px var(--mono);color:var(--ink3)}.ps2-root .ps2-others .chev{color:var(--ink3);font-size:11px;width:10px;text-align:center}
+.ps2-root .ps2-others.open .chev{transform:rotate(90deg)}
+.ps2-root .ps2-others-list{display:flex;flex-direction:column;gap:1px;margin:0 0 4px}
+.ps2-root .ps2-others-list .ps-chat{padding-left:30px}.ps2-root .ps2-others-list .ps-chat>i{display:none}.ps2-root .ps2-others-list .ps-chat svg{position:absolute;left:11px;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;color:var(--ink3)}
+
+/* ── новое: лимиты одной строкой ── */
+.ps2-root .ps2-lim{display:flex;align-items:stretch;gap:0;height:36px;padding:0 9px;border:1px solid var(--line2);border-radius:var(--rs,9px);background:var(--raised);cursor:pointer;font-size:11.5px;color:var(--ink2);white-space:nowrap;overflow:hidden}
+.ps2-root .ps2-lim:hover,.ps2-root .ps2-lim.on{border-color:rgba(194,122,52,.6)}
+.ps2-root .ps2-lim .v{display:grid;grid-template-columns:1fr auto auto;grid-template-rows:auto 3px;align-items:center;column-gap:4px;row-gap:3px;flex:1;min-width:0;padding:7px 0 6px}.ps2-root .ps2-lim .v+.v{border-left:1px solid var(--line2);padding-left:9px;margin-left:9px}
+.ps2-root .ps2-lim .v span{overflow:hidden;text-overflow:ellipsis}.ps2-root .ps2-lim .v b{font:500 11px var(--mono);color:var(--ink)}.ps2-root .ps2-lim .v i{font:9px var(--mono);color:var(--ink3);font-style:normal}
+.ps2-root .ps2-lim .v u{grid-column:1/-1;display:block;height:3px;border-radius:2px;background:var(--line2);text-decoration:none;position:relative;overflow:hidden}.ps2-root .ps2-lim .v u::after{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--p,50%);background:var(--ok)}
+.ps2-root .ps2-lim .v.warn b{color:var(--warn,#e0b23c)}.ps2-root .ps2-lim .v.warn u::after{background:var(--warn,#e0b23c)}
+.ps2-root .ps2-lim .v.bad b{color:var(--bad)}.ps2-root .ps2-lim .v.bad u::after{background:var(--bad-fill,#a3304b)}
+.ps2-root .ps2-lim .v.dim span,.ps2-root .ps2-lim .v.dim b,.ps2-root .ps2-lim .v.dim i{color:var(--ink3)}.ps2-root .ps2-lim .v.dim u::after{background:var(--line2)}
+.ps2-root .ps2-lim.load .v b{color:var(--ink3)}.ps2-root .ps2-lim.none{color:var(--ink3);justify-content:center;cursor:default}.ps2-root .ps2-lim.none a{color:var(--accent);margin-left:6px}
+
+/* ── новое: профиль и меню ── */
+.ps2-root .ps2-prof{display:flex;align-items:center;gap:9px;height:40px;padding:0 8px;border:1px solid var(--line2);border-radius:var(--rs,9px);background:var(--raised);cursor:pointer;position:relative}
+.ps2-root .ps2-prof div{line-height:1.2;font-size:12.5px;color:var(--ink);min-width:0;overflow:hidden}.ps2-root .ps2-prof small{display:block;color:var(--ink3);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ps2-root .ps2-prof .chev{margin-left:auto;color:var(--ink3);font-size:11px}
+.ps2-root .ps2-prof:hover,.ps2-root .ps2-prof.on{border-color:var(--ink3)}
+.ps2-root .ps2-menu{position:absolute;left:0;right:0;bottom:calc(100% + 6px);padding:6px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);box-shadow:0 18px 50px rgba(0,0,0,.55);z-index:30;display:flex;flex-direction:column;gap:1px}
+.ps2-root .ps2-menu div{display:flex;align-items:center;gap:9px;height:30px;padding:0 10px;border-radius:8px;font-size:12.5px;color:var(--ink);white-space:nowrap}.ps2-root .ps2-menu div:hover{background:var(--panel)}
+.ps2-root .ps2-menu div svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;color:var(--ink2);flex:none}
+.ps2-root .ps2-menu div kbd{margin-left:auto}.ps2-root .ps2-menu div .m{margin-left:auto;font:10px var(--mono);color:var(--ink3)}.ps2-root .ps2-menu hr{border:0;border-top:1px solid var(--line2);margin:4px 6px}
+.ps2-root .ps2-menu .hd{height:auto;padding:6px 10px 8px;flex-direction:column;align-items:flex-start;gap:1px;cursor:default}.ps2-root .ps2-menu .hd:hover{background:none}.ps2-root .ps2-menu .hd small{color:var(--ink3);font-size:10.5px}
+.ps2-root .ps2-menu.static{position:static;box-shadow:none;width:228px}
+
+/* ── рейка (как proto.css .rail, скоуп) ── */
+.ps2-root aside.side.ps.rail{align-items:center;padding:12px 8px}
+.ps2-root aside.side.ps.rail .ps-head{padding:0 0 6px;flex-direction:column;gap:6px}.ps2-root aside.side.ps.rail .col{margin:0}
+.ps2-root aside.side.ps.rail .nav,.ps2-root aside.side.ps.rail .ps2-wait,.ps2-root aside.side.ps.rail .newbtn,.ps2-root aside.side.ps.rail .search{width:40px;height:40px;justify-content:center;padding:0;gap:0;margin:0;border:0;background:transparent;border-radius:10px}
+.ps2-root aside.side.ps.rail .newbtn{border:1px solid rgba(194,122,52,.5);background:var(--raised)}.ps2-root aside.side.ps.rail .nav:hover,.ps2-root aside.side.ps.rail .ps2-wait:hover,.ps2-root aside.side.ps.rail .search:hover{background:var(--raised)}
+.ps2-root aside.side.ps.rail .nav.on,.ps2-root aside.side.ps.rail .ps2-wait.on{background:var(--raised);color:var(--ink)}.ps2-root aside.side.ps.rail .nav.on svg{stroke:var(--accent)}
+.ps2-root aside.side.ps.rail .nav svg,.ps2-root aside.side.ps.rail .ps2-wait svg,.ps2-root aside.side.ps.rail .newbtn svg,.ps2-root aside.side.ps.rail .search svg{width:18px;height:18px}
+.ps2-root aside.side.ps.rail .ps2-wait.has{color:var(--accent)}.ps2-root aside.side.ps.rail .ps2-wait.has svg{stroke:var(--accent)}
+.ps2-root aside.side.ps.rail .nav .b,.ps2-root aside.side.ps.rail .ps2-wait .b{position:absolute;top:4px;right:4px;margin:0;min-width:16px;height:16px;font-size:9.5px;line-height:16px;padding:0 4px}
+.ps2-root aside.side.ps.rail .ps2-wait{position:relative}
+.ps2-root aside.side.ps.rail .ps-sep{display:block;width:24px;height:1px;background:var(--line);margin:5px auto;flex:none}
+.ps2-root aside.side.ps.rail .ps-scroll{align-items:center;overflow:visible}.ps2-root aside.side.ps.rail .ps-foot{align-items:center;gap:6px}
+.ps2-root .ps2-ring{width:26px;height:26px;border-radius:50%;background:conic-gradient(var(--ok) 0 var(--p,60%),var(--line2) var(--p,60%) 100%);display:grid;place-items:center;cursor:pointer;position:relative}.ps2-root .ps2-ring i{width:18px;height:18px;border-radius:50%;background:var(--panel)}
+.ps2-root .ps2-ring.warn{background:conic-gradient(var(--warn,#e0b23c) 0 var(--p,20%),var(--line2) var(--p,20%) 100%)}.ps2-root .ps2-ring.bad{background:conic-gradient(var(--bad-fill,#a3304b) 0 var(--p,5%),var(--line2) var(--p,5%) 100%)}.ps2-root .ps2-ring.dim{background:var(--line2)}
+.ps2-root .ps2-ring b{position:absolute;inset:0;display:grid;place-items:center;font:500 8px var(--mono);color:var(--ink2)}
+.ps2-root .ps2-tip{position:absolute;left:48px;top:50%;transform:translateY(-50%);height:28px;line-height:26px;padding:0 10px;background:var(--tile);border:1px solid var(--line2);border-radius:8px;color:var(--ink);font-size:12.5px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:40;pointer-events:none}
+.ps2-root .ps2-tip kbd{font:10px var(--mono);color:var(--ink3);margin-left:8px;border:1px solid var(--line2);border-radius:4px;padding:1px 5px}
+.ps2-root .ps2-tip .b2{display:inline-block;min-width:16px;height:16px;line-height:16px;border-radius:8px;background:var(--accent);color:#1a0e04;font:500 10px/16px var(--mono);text-align:center;padding:0 4px;margin-left:6px;vertical-align:1px}
+.ps2-root .nav.ps2-hover{background:var(--raised);color:var(--ink)}
+
+/* ── A2: панель содержимого режима рядом с рейкой ── */
+.ps2-root .ps2-mode{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--line);min-height:0;overflow:hidden}
+.ps2-root .ps2-mode .ps2-mh{display:flex;align-items:center;gap:8px;height:50px;padding:0 10px 0 14px;border-bottom:1px solid var(--line);font-weight:500;font-size:13px;color:var(--ink)}
+.ps2-root .ps2-mode .ps2-mh .ps-proj{font-weight:400;color:var(--ink2);margin-left:auto;font-size:12.5px}.ps2-root .ps2-mode .ps2-mh .ic{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--ink3);cursor:pointer;flex:none}.ps2-root .ps2-mode .ps2-mh .ic:hover{background:var(--raised);color:var(--ink)}
+.ps2-root .ps2-mode .ps2-mh .ic svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.ps2-root .ps2-mode .ps2-mh .ic.on{color:var(--accent)}
+.ps2-root .ps2-mode .ps-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:1px;padding:8px 10px;scrollbar-width:none}
+.ps2-root .ps2-mode .grp{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:10px 9px 3px;display:flex;align-items:center}.ps2-root .ps2-mode .grp .m{margin-left:auto;letter-spacing:0}
+.ps2-root .ps2-mode .nav{position:relative;height:30px;display:flex;align-items:center;gap:9px;padding:0 9px;border-radius:var(--rs,9px);color:var(--ink2);font-size:13px;cursor:pointer;white-space:nowrap}
+.ps2-root .ps2-mode .nav:hover,.ps2-root .ps2-mode .nav.on{background:var(--raised);color:var(--ink)}.ps2-root .ps2-mode .nav svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.ps2-root .ps2-mode .nav.on svg{stroke:var(--accent)}
+.ps2-root .ps2-mode .nav .t{flex:1;overflow:hidden;text-overflow:ellipsis}.ps2-root .ps2-mode .nav .m{font:10px var(--mono);color:var(--ink3)}.ps2-root .ps2-mode .nav .tag{margin-left:auto}
+.ps2-root .ps2-pcard{margin:2px 0 6px;padding:10px 12px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);font-size:12px;color:var(--ink2)}
+.ps2-root .ps2-pcard b{display:block;color:var(--ink);font-weight:500;font-size:13px;margin-bottom:3px}.ps2-root .ps2-pcard .m{font:10px var(--mono);color:var(--ink3);display:block;margin-top:5px}
+.ps2-root .ps2-pcard .wait{color:var(--accent)}
+
+/* ── шапка рабочей области: ряд вкладок проекта ── */
+.ps2-root .ps2-tabs{display:flex;align-items:center;gap:2px;height:46px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--bg);flex:none}
+.ps2-root .ps2-tabs span{display:flex;align-items:center;gap:6px;height:46px;padding:0 11px;font-size:12.5px;color:var(--ink2);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
+.ps2-root .ps2-tabs span:hover{color:var(--ink)}.ps2-root .ps2-tabs span.on{color:var(--ink);border-bottom-color:var(--accent)}
+.ps2-root .ps2-tabs span b{font:500 10px var(--mono);color:var(--ink3);background:var(--raised);border-radius:999px;padding:1px 6px}.ps2-root .ps2-tabs span b.acc{color:#1a0e04;background:var(--accent)}
+.ps2-root .ps2-tabs span.dim{color:var(--ink3)}.ps2-root .ps2-tabs span .tag{height:15px;font-size:8px;padding:0 4px}
+.ps2-root .ps2-tabs .r{margin-left:auto;display:flex;align-items:center;gap:10px;font:10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}.ps2-root .ps2-tabs .r i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px}
+.ps2-root .ps2-tabs.empty{color:var(--ink3);font-size:12px;gap:10px}.ps2-root .ps2-tabs.skel span{color:transparent}.ps2-root .ps2-tabs.skel span::before{content:"";width:58px;height:9px;border-radius:4px;background:var(--line2)}
+
+/* ── кадры страницы 40 ── */
+.ps2-root .fr{position:relative;margin:0 0 12px}
+.ps2-root .fr .app,.ps2-root .fr .ps2-phone{transform-origin:top left}
+.ps2-a1 .app,.ps2-a2 .app,.ps2-a3 .app{width:1440px;height:900px}
+.ps2-a1 .app{grid-template-columns:260px minmax(0,1fr)}.ps2-a1.rail .app{grid-template-columns:56px minmax(0,1fr)}.ps2-a1.rail aside.side.ps{overflow:visible}
+.ps2-a2 .app{grid-template-columns:56px 280px minmax(0,1fr)}.ps2-a2.hid .app{grid-template-columns:56px minmax(0,1fr)}
+.ps2-a3 .app{grid-template-columns:240px minmax(0,1fr)}.ps2-a3.w1280 .app{width:1280px;height:860px}
+.ps2-root .app .main{display:flex;flex-direction:column;min-height:0;min-width:0}
+.ps2-root .nc{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;min-height:0;padding:0 40px 40px;position:relative}
+.ps2-root .ret{position:absolute;top:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;white-space:nowrap;padding:7px 10px 7px 12px;border:1px solid var(--line2);border-radius:999px;background:var(--panel);font-size:12.5px;color:var(--ink2)}
+.ps2-root .ret .pill{height:20px}.ps2-root .ret b{color:var(--ink);font-weight:500}.ps2-root .ret .btn{height:24px}
+.ps2-root .mark{width:48px;height:48px;border-radius:14px;background:linear-gradient(160deg,#2a2a2f,#151517);border:1px solid var(--line2);display:grid;place-items:center;margin-bottom:18px;box-shadow:0 10px 30px rgba(0,0,0,.4)}.ps2-root .mark svg{width:24px;height:24px;stroke:var(--gold);fill:none;stroke-width:2.2;stroke-linecap:round}
+.ps2-root .nc h2{font:600 28px/1.15 var(--font);letter-spacing:-.015em;margin:0 0 22px}
+.ps2-root .box{width:min(760px,100%);border:1px solid var(--line2);border-radius:16px;background:var(--panel);padding:14px 14px 10px;position:relative}
+.ps2-root .box::before{content:"";position:absolute;inset:-1px;border-radius:17px;padding:1px;background:linear-gradient(120deg,rgba(194,122,52,.5),transparent 40%,transparent 60%,rgba(194,122,52,.25));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.ps2-root .box .in{color:var(--ink3);font-size:15px;line-height:1.5;min-height:50px;padding:2px 4px 10px}
+.ps2-root .recent{width:min(760px,100%);margin-top:22px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink3);flex-wrap:wrap}
+.ps2-root .recent .ps-chat{display:inline-flex;height:26px;padding:0 9px 0 20px;border:1px solid var(--line2);border-radius:7px;background:var(--raised);color:var(--ink2)}.ps2-root .recent .ps-chat>i{left:8px}.ps2-root .recent .ps-chat .m{max-width:none}
+.ps2-root .status{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:18px;white-space:nowrap;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.ps2-root .cx-top{width:min(760px,100%)}
+/* телефон 390 */
+.ps2-root .ps2-phone{width:390px;height:844px;border:1px solid var(--line);border-radius:30px;background:var(--bg);overflow:hidden;position:relative;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.ps2-root .ps2-phone .ph-top{display:flex;align-items:center;gap:10px;height:54px;padding:0 12px;border-bottom:1px solid var(--line);font-weight:500;font-size:14px}
+.ps2-root .ps2-phone .ph-top .m-btn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line2);background:var(--raised);color:var(--ink);display:grid;place-items:center;font-size:15px}
+.ps2-root .ps2-phone .ph-body{padding:60px 16px 0;text-align:center}.ps2-root .ps2-phone .ph-body h2{font:600 22px/1.2 var(--font);margin:14px 0 18px}
+.ps2-root .ps2-phone .box{padding:12px 12px 8px}.ps2-root .ps2-phone .box .in{font-size:14px;min-height:40px}
+.ps2-root .ps2-phone .ph-bg{position:absolute;inset:0;background:rgba(6,6,8,.55);z-index:10}
+.ps2-root .ps2-phone aside.side.ps.ps2-drawer{position:absolute;left:0;top:0;bottom:0;width:300px;z-index:11;border-right:1px solid var(--line2);box-shadow:20px 0 60px rgba(0,0,0,.5)}
+.ps2-root .ps2-phone aside.side.ps.ps2-drawer .nav,.ps2-root .ps2-phone aside.side.ps.ps2-drawer .ps-chat{height:34px;font-size:14px}.ps2-root .ps2-phone aside.side.ps.ps2-drawer .ps-chat .s{font-size:13.5px}
+.ps2-root .ps2-phone aside.side.ps.ps2-drawer .newbtn{height:40px;font-size:14px}.ps2-root .ps2-phone aside.side.ps.ps2-drawer .search{height:36px}.ps2-root .ps2-phone aside.side.ps.ps2-drawer .ps2-wait{height:36px;font-size:14px}
+.ps2-root .ps2-phone aside.side.ps.ps2-drawer .ps2-others{height:34px;font-size:14px}.ps2-root .ps2-phone aside.side.ps.ps2-drawer .col{font-size:16px}
+/* подписи к кадрам, мини-схема 1280, сверка */
+.ps2-root .fcap{display:grid;grid-template-columns:1.3fr 1fr 300px;gap:14px;margin:12px 0 48px}
+.ps2-root .fcap .box{width:auto;padding:12px 14px}.ps2-root .fcap .box::before{display:none}.ps2-root .box .cap2,.ps2-root .fcap .box .cap2{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:8px}
+.ps2-root .fcap p{margin:0;font-size:12.5px;color:var(--ink2);line-height:1.5}.ps2-root .fcap p b{color:var(--ink);font-weight:500}.ps2-root .fcap p+p{margin-top:6px}
+.ps2-root .fcap .pm{display:grid;gap:6px}.ps2-root .fcap .pm>div{display:grid;grid-template-columns:16px 1fr;gap:8px;font-size:12.5px;color:var(--ink2);line-height:1.45}.ps2-root .fcap .pm>div>div{display:block}.ps2-root .fcap .pm span{font:500 13px var(--mono)}.ps2-root .fcap .pm .p span{color:var(--ok)}.ps2-root .fcap .pm .n span{color:var(--bad)}
+.ps2-root .sch{display:flex;height:36px;border:1px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--bg);font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink2)}
+.ps2-root .sch div{display:grid;place-items:center;border-right:1px solid var(--line2);white-space:nowrap;overflow:hidden;position:relative;padding:0 4px}.ps2-root .sch div:last-child{border-right:0}
+.ps2-root .sch .r{background:var(--raised);color:var(--ink3);min-width:26px}.ps2-root .sch .p{background:var(--panel)}.ps2-root .sch .w{background:var(--bg);place-items:center start;padding-left:8px}.ps2-root .sch .w u{position:absolute;right:6px;top:5px;bottom:5px;border:1px dashed rgba(194,122,52,.6);border-radius:4px;text-decoration:none;display:grid;place-items:center;color:var(--accent);padding:0 6px;background:var(--bg)}
+.ps2-root .sch-cap{font:10px var(--mono);color:var(--ink3);margin-top:6px;display:flex;justify-content:space-between}.ps2-root .sch-cap b{color:var(--ok);font-weight:500}.ps2-root .sch-cap b.warn{color:var(--warn)}
+.ps2-root .fhead{display:grid;grid-template-columns:60px 1fr;gap:14px;align-items:baseline;margin:0 0 12px}
+.ps2-root .fhead .n{font:500 22px/1 var(--mono);color:var(--accent)}.ps2-root .fhead h2{margin:0 0 4px;font-size:16px;font-weight:500;color:var(--ink)}.ps2-root .fhead p{margin:0;color:var(--ink2);font-size:12.5px;max-width:1100px}.ps2-root .fhead .w{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);display:block;margin-bottom:4px}
+/* кадр «сейчас»: снимок с пометками */
+.ps2-root .now{display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:start;margin:0 0 48px}
+.ps2-root .now .shot{position:relative;width:518px;border:1px solid var(--line2);border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 30px 80px rgba(0,0,0,.6)}.ps2-root .now .shot img{display:block;width:100%}
+.ps2-root .now .pin{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:var(--accent);color:#1a0e04;font:600 10.5px/20px var(--mono);text-align:center;box-shadow:0 0 0 3px rgba(194,122,52,.25),0 4px 12px rgba(0,0,0,.5)}
+.ps2-root .now .pin.b{background:var(--bad-fill,#a3304b);color:#fff;box-shadow:0 0 0 3px rgba(163,48,75,.25),0 4px 12px rgba(0,0,0,.5)}.ps2-root .now .pin.g{background:var(--ink2);color:var(--bg);box-shadow:0 0 0 3px rgba(154,154,162,.25),0 4px 12px rgba(0,0,0,.5)}.ps2-root .now .pin.w{background:var(--warn);color:#1a1a1a;box-shadow:0 0 0 3px rgba(224,178,60,.25),0 4px 12px rgba(0,0,0,.5)}
+.ps2-root .now .brace{position:absolute;border:1px dashed rgba(194,122,52,.7);border-radius:6px;pointer-events:none}.ps2-root .now .brace.b{border-color:rgba(201,86,110,.7)}.ps2-root .now .brace.g{border-color:rgba(154,154,162,.6)}.ps2-root .now .brace.w{border-color:rgba(224,178,60,.7)}
+.ps2-root .now .lg{display:grid;gap:10px;max-width:640px}.ps2-root .now .lg div{display:grid;grid-template-columns:22px 1fr;gap:10px;font-size:12.5px;color:var(--ink2);line-height:1.5;align-items:start}
+.ps2-root .now .lg b{color:var(--ink);font-weight:500}.ps2-root .now .lg .pin{position:static;margin:2px 0 0}
+.ps2-root .now .lg .kv{margin-top:8px;padding-top:10px;border-top:1px solid var(--line);font:10.5px var(--mono);color:var(--ink3);grid-template-columns:1fr}
+/* таблица «блок сейчас → A1/A2/A3» и вопросы */
+.ps2-root .tbl td b{color:var(--ink);font-weight:500}.ps2-root .tbl td.acc{color:var(--accent)}.ps2-root .tbl td.dim{color:var(--ink3)}
+.ps2-root .qs{display:grid;gap:8px;font-size:12.5px;color:var(--ink2);counter-reset:q}.ps2-root .qs>div{display:grid;grid-template-columns:24px 1fr;gap:8px;line-height:1.5}.ps2-root .qs>div>div{display:block}.ps2-root .qs>div::before{counter-increment:q;content:counter(q);font:500 12px var(--mono);color:var(--accent)}.ps2-root .qs b{color:var(--ink);font-weight:500}
+@media (max-width:900px){.ps2-root .fcap{grid-template-columns:1fr !important}.ps2-root .now{grid-template-columns:1fr}.ps2-root .now .shot{width:100%;max-width:518px}.ps2-root .tbl{display:block;overflow-x:auto;max-width:100%}.ps2-root .fhead{grid-template-columns:1fr}.ps2-root .fhead .n{display:none}}

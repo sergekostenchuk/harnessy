@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 40 · Боковая панель · варианты</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="../proto/proto.css"><link rel="stylesheet" href="path.css"><link rel="stylesheet" href="sidebar-v2.css">
+<style>
+  .sheet{max-width:1480px}
+  .sheet>h1,.sheet>.sub{max-width:1100px}
+  .cap{max-width:1440px}
+  .tbl{max-width:1440px;margin:0 0 36px}.tbl td{font-size:12.5px;color:var(--ink2)}
+  .ps2-root .box.q{width:auto;max-width:1440px;margin:0 0 40px}.ps2-root .box.q::before{display:none}
+</style></head>
+<body><div class="sheet ps2-root">
+  <h1>Harnessy · скетч 40 · боковая панель · варианты A1 · A2 · A3</h1>
+  <p class="sub">Концепция А «список сессий» с рейкой из В (слово владельца 22.10). В панели один вид объекта — чат; роль — метка в строке; точка — состояние (идёт ход · ждёт вас · ошибка · тихо). Сверху Новый чат ⌘N и Найти ⌘K, строка-фильтр <b>«Ждёт вас»</b> вместо «Сейчас», закреплённые коротко, другие проекты свёрнуты, низ — лимиты строкой и профиль ▾ (Настройки · Подключения · Журнал · Уйти из проекта · Облик · Клавиши · Выйти). Разделы проекта и План · карта · Путь — вкладки шапки рабочей области. Чип проекта из композера убран — проект меняется только в шапке панели. Рейка: пункт только за живым экраном. Экран-основа — «Новый чат», данные движка (Alpha-Test, Оркестратор · Исполнитель, 9 других проектов, лимиты Claude 64 % W · Codex 91 % W). Элементы — <a href="00-design-code.html#sidebar-v2-spec">дизайн-код · sidebar-v2-spec</a>. <a href="index.html">← все скетчи</a></p>
+
+  <!-- кадр 0: сейчас -->
+  <div class="fhead"><span class="n">00</span><div><span class="w">сейчас · прототип 10-new-chat · 1440 · снимок 22.10</span><h2>Панель сейчас: четыре уровня в одной колонке, дубли, четыре блока внизу</h2><p>Снимок живого прототипа, уменьшен до 72 %. Пометки — диагноз из концепции (разделы 2–3): <span class="pin" style="position:static;display:inline-block;margin:0 2px;vertical-align:-4px">1</span> уровни · <span class="pin b" style="position:static;display:inline-block;margin:0 2px;vertical-align:-4px">2</span> дубли · <span class="pin g" style="position:static;display:inline-block;margin:0 2px;vertical-align:-4px">3</span> низ · <span class="pin w" style="position:static;display:inline-block;margin:0 2px;vertical-align:-4px">4</span> слова.</p></div></div>
+  <div class="now" id="now">
+    <div class="shot"><img src="40-sidebar-now.png" alt="Панель прототипа сейчас: РАБОТА, закреплённые, дерево проекта с разделами и ролями, низ из четырёх блоков">
+      <i class="brace" style="left:1.9%;top:15.6%;width:29.3%;height:11%"></i><i class="brace" style="left:4.2%;top:41%;width:27.1%;height:11.5%"></i><i class="brace" style="left:3%;top:52.8%;width:28.4%;height:6.4%"></i><i class="brace" style="left:3%;top:61.5%;width:28.4%;height:3.2%"></i>
+      <span class="pin" style="left:5%;top:16.1%">1</span><span class="pin" style="left:7.5%;top:42.4%">1</span><span class="pin" style="left:6%;top:54.3%">1</span><span class="pin" style="left:6%;top:62.9%">1</span>
+      <span class="pin b" style="left:19.5%;top:3%">2</span><span class="pin b" style="left:18.5%;top:39.4%">2</span><span class="pin b" style="left:79%;top:42.3%">2</span><span class="pin b" style="left:19.5%;top:65.9%">2</span><span class="pin b" style="left:8.5%;top:28.3%">2</span><span class="pin b" style="left:62.5%;top:61.1%">2</span>
+      <i class="brace g" style="left:1.4%;top:72.6%;width:29.4%;height:26.6%"></i><span class="pin g" style="left:31.5%;top:86%">3</span>
+      <span class="pin w" style="left:14%;top:18.8%">4</span><span class="pin w" style="left:11.5%;top:74.5%">4</span><span class="pin w" style="left:11.5%;top:60.4%">4</span><span class="pin w" style="left:30%;top:25.1%">4</span>
+    </div>
+    <div class="lg">
+      <div><span class="pin">1</span><p style="margin:0"><b>Четыре уровня с одним отступом.</b> Экран приложения (РАБОТА: Сейчас · Чат · План) → раздел проекта (Документы · Артефакты · Память · Ресёрч) → роль (Оркестратор · Исполнитель) → чат («ты готов?»). Глазу не за что зацепиться: где я — видно только по подсветке «Новый чат». Раскрытый проект съедает треть высоты.</p></div>
+      <div><span class="pin b">2</span><p style="margin:0"><b>Один факт — три места.</b> Проект: шапка панели · строка дерева · чип композера. Новый чат: кнопка ⌘N · «＋ чат без роли» · ⌘K. Закреплённые ≈ недавние под полем ≈ чаты дерева. Роль: в строке чата и в чипе композера.</p></div>
+      <div><span class="pin g">3</span><p style="margin:0"><b>Низ: четыре разнородных блока на ~240 px.</b> Уйти · Настройки · виджет лимитов (три строки) · карточка владельца. Лимиты нужны раз в день, место занимают всегда.</p></div>
+      <div><span class="pin w">4</span><p style="margin:0"><b>Слова, которых нет у референсов.</b> «Сейчас», «Уйти», заголовок «БЕЗ РОЛИ», пометка «демо». Ни в Claude Code, ни в Codex, ни в Antigravity таких пунктов нет.</p></div>
+      <div class="kv">частота (концепция · 3): ежеминутно — новый чат, поиск, чаты с признаком «идёт / ждёт»; раз в день — решения, план, лимиты, смена проекта; раз в неделю — документы, артефакты, память, ресёрч, журнал, настройки; почти никогда — уйти, свёртка, группа «без роли»</div>
+    </div>
+  </div>
+
+  <!-- A1 -->
+  <div class="fhead"><span class="n">A1</span><div><span class="w">панель 260 + рейка-сжатие 56 · новый чат · 1440</span><h2>A1 · «Панель + рейка-сжатие»: широкая панель по инвариантам, ⟨ сжимает её в рейку с теми же пунктами</h2><p>Рейка — то же дерево, просто узко: Новый чат · Найти · Ждёт вас (бейдж) · Чаты · Закреплённые · Проекты · низ: кольцо лимитов · профиль. Подсказки по наведению. Выбранный по умолчанию вариант — для него ниже кадр рейки и кадр 390.</p></div></div>
+  <div class="fr ps2-a1" id="a1"></div>
+  <div class="fcap">
+    <div class="box"><div class="cap2">что ушло из панели и куда</div><p><b>Документы · Артефакты · Память · Ресёрч</b> → вкладки шапки рабочей области (ряд над приветствием). <b>План · карта, Путь</b> → туда же. <b>«Сейчас»</b> → строка «Ждёт вас · N» над чатами; клик — экран решений. <b>Журнал · Настройки · Уйти</b> → меню профиля (Уйти — «Уйти из проекта»). <b>Дерево проекта с ролями</b> → одна группа «Чаты · Alpha-Test», роль — метка справа. <b>Другие проекты</b> → одна свёрнутая строка «Другие проекты · 9». <b>Виджет лимитов</b> → одна строка Claude · Codex, клик — попап «Все лимиты» (скетч 27). <b>«＋ чат без роли», чип проекта в композере, заголовок «без роли», пометка «демо»</b> → убраны.</p></div>
+    <div class="box"><div class="cap2">плюсы · минусы</div><div class="pm"><div class="p"><span>+</span><div>Знакомо человеку из Codex / Claude Code; панель короче в 2–2,5 раза; один объект в колонке — чат; рейка не новое поведение, а та же панель узко.</div></div><div class="n"><span>−</span><div>Разделы проекта на один клик дальше (вкладка шапки); рейка с 7 иконками без подписей — та же жалоба, что к рейке сейчас; «Ждёт вас» требует живого статуса чатов от движка (есть: busy/waiting в live.js).</div></div></div></div>
+    <div class="box"><div class="cap2">ширина 1280 · панель + рабочая область</div><div class="sch"><div class="p" style="width:20.3%">260</div><div class="w" style="flex:1">1020<u>композер 760</u></div></div><div class="sch-cap"><span>поля вокруг композера 130 px</span><b>влезает</b></div><div class="sch" style="margin-top:8px"><div class="r" style="width:4.4%">56</div><div class="w" style="flex:1">1224<u>композер 760</u></div></div><div class="sch-cap"><span>рейка: поля 232 px</span><b>влезает</b></div></div>
+  </div>
+
+  <div class="fhead"><span class="n">A1·r</span><div><span class="w">рейка 56 · новый чат · 1440 · наведение на «Ждёт вас»</span><h2>A1 · рейка: те же пункты в иконках, бейдж «Ждёт вас», кольцо лимитов, подсказка по наведению</h2><p>Порядок как в широкой панели. Пункт «Проекты» открывает список других проектов поверх рейки (не нарисовано — то же меню, что у «проект ▾»). Кольцо — остаток по самому близкому к пределу провайдеру (Claude 64 %), клик — попап «Все лимиты».</p></div></div>
+  <div class="fr ps2-a1 rail" id="a1-rail"></div>
+  <div class="fcap">
+    <div class="box"><div class="cap2">что ушло и куда · рейка</div><p>Ничего дополнительно: рейка = широкая панель без подписей. Закреплённые и Проекты раскрываются поверх рейки меню по клику; «Чаты» разворачивает панель обратно (как «Explorer» в VS Code при клике по активному). Ряд вкладок в шапке остаётся — рейка его не меняет.</p></div>
+    <div class="box"><div class="cap2">плюсы · минусы</div><div class="pm"><div class="p"><span>+</span><div>Рейка уже есть в прототипе (side==='rail'); на 1280 даёт композеру 1224 px; бейдж «Ждёт вас» виден всегда.</div></div><div class="n"><span>−</span><div>Семь иконок — надо запомнить; закреплённые и проекты в рейке — только меню поверх; пункт рисуется лишь за живым экраном, пока их мало — рейка короткая и «пустоватая».</div></div></div></div>
+    <div class="box"><div class="cap2">ширина 1280</div><div class="sch"><div class="r" style="width:4.4%">56</div><div class="w" style="flex:1">1224<u>композер 760</u></div></div><div class="sch-cap"><span>поля 232 px</span><b>влезает</b></div></div>
+  </div>
+
+  <!-- A2 -->
+  <div class="fhead"><span class="n">A2</span><div><span class="w">рейка-режимы 56 + панель содержимого 280 · новый чат · 1440 · режим «Чаты»</span><h2>A2 · «Рейка-режимы + панель содержимого»: рейка постоянна, клик по пункту открывает панель режима</h2><p>Рейка: Новый чат · Найти · Чаты · Ждёт вас (N) · Проект · Команда · низ: кольцо лимитов · профиль. Панель 280 — содержимое режима; «Чаты» — список как в A1. Панель можно закрепить (булавка в шапке) или отпустить — тогда прячется по клику в рабочую область. Шапка рабочей области без вкладок: разделы проекта в режиме «Проект».</p></div></div>
+  <div class="fr ps2-a2" id="a2"></div>
+  <div class="fcap">
+    <div class="box"><div class="cap2">что ушло из панели и куда</div><p>Всё, что не чаты, — в режимы рейки: <b>Документы · Артефакты · Память · Ресёрч · План · карта · Путь</b> → режим «Проект»; <b>роли, стая, датчики</b> → режим «Команда»; <b>«Сейчас»</b> → пункт рейки «Ждёт вас» с бейджем + экран решений; <b>Журнал · Настройки · Уйти</b> → профиль. Проект меняется в шапке панели режима (Alpha-Test ▾). <b>Ряда вкладок в шапке рабочей области нет</b> — его роль у режима «Проект». Чип проекта из композера убран.</p></div>
+    <div class="box"><div class="cap2">плюсы · минусы</div><div class="pm"><div class="p"><span>+</span><div>Самая короткая первая панель — только чаты; все разделы на один клик; хорошо растёт на новые разделы (Путь, Датчики, Стая) — добавляется пункт рейки, не строка панели; рабочая область без вкладок чище.</div></div><div class="n"><span>−</span><div>Две колонки слева: на 1280 композеру остаётся 944 px с полями 92 — тесно; режимы рейки — новое поведение, надо обучать подсказками; «Проект» в рейке и «проект ▾» в панели — два места про проект (один меняет, другой показывает).</div></div></div></div>
+    <div class="box"><div class="cap2">ширина 1280 · рейка + панель + рабочая область</div><div class="sch"><div class="r" style="width:4.4%">56</div><div class="p" style="width:21.9%">280</div><div class="w" style="flex:1">944<u>композер 760</u></div></div><div class="sch-cap"><span>поля 92 px — впритык</span><b class="warn">влезает, тесно</b></div><div class="sch" style="margin-top:8px"><div class="r" style="width:4.4%">56</div><div class="w" style="flex:1">панель отпущена · 1224<u>композер 760</u></div></div><div class="sch-cap"><span>поля 232 px</span><b>влезает</b></div></div>
+  </div>
+
+  <div class="fhead"><span class="n">A2·p</span><div><span class="w">рейка 56 + панель 280 · режим «Проект» · 1440</span><h2>A2 · режим «Проект»: карточка проекта и разделы вместо вкладок в шапке</h2><p>Клик по «Проект» в рейке. Сверху — карточка «где я»: имя, git, роли, что ждёт. Ниже — разделы: Документы · Артефакты · Память · Ресёрч · План · карта · Путь, за нежитыми — плашка «макет». Внизу — «Другие проекты · 9». Рабочая область не меняется.</p></div></div>
+  <div class="fr ps2-a2" id="a2-proj"></div>
+  <div class="fcap">
+    <div class="box"><div class="cap2">что здесь и откуда</div><p>Карточка проекта — из «проект ▾» и строки дерева «Alpha-Test · 2 роли · git»; разделы — четыре подпункта дерева + «План · карта» из РАБОТА + «Путь» (скетч 28, пока макет). «Другие проекты · 9» — те же свёрнутые папки дерева, по клику проект меняется, панель остаётся в режиме «Проект».</p></div>
+    <div class="box"><div class="cap2">плюсы · минусы</div><div class="pm"><div class="p"><span>+</span><div>Один экран «где я»: имя, git, роли, что ждёт — ни в одном референсе такого нет; разделы с счётчиками не толкают список чатов.</div></div><div class="n"><span>−</span><div>Переход «чат → документы» = два клика (рейка, пункт); в режиме «Проект» список чатов не виден — текущий чат подсвечен только в рабочей области.</div></div></div></div>
+    <div class="box"><div class="cap2">ширина 1280</div><div class="sch"><div class="r" style="width:4.4%">56</div><div class="p" style="width:21.9%">280</div><div class="w" style="flex:1">944<u>композер 760</u></div></div><div class="sch-cap"><span>как в режиме «Чаты»</span><b class="warn">влезает, тесно</b></div></div>
+  </div>
+
+  <!-- A3 -->
+  <div class="fhead"><span class="n">A3</span><div><span class="w">панель 240 · разделы в шапке · рейка минимальная · новый чат · 1440</span><h2>A3 · «Только панель»: самая короткая панель, закреплённые с булавкой в списке, всё остальное через ⌘K</h2><p>Панель 240: проект ▾ · Новый чат · Найти · Ждёт вас · чаты (закреплённые сверху с булавкой, не отдельной группой) · Другие проекты · низ: лимиты + профиль. Рейка по ⟨ — только четыре иконки: Новый чат · Найти · Ждёт вас · Профиль (кадр не нарисован: см. рейку в дизайн-коде). Шапка рабочей области: Чат · Документы · Артефакты · Память · Ресёрч · План · карта · Путь.</p></div></div>
+  <div class="fr ps2-a3" id="a3"></div>
+  <div class="fcap">
+    <div class="box"><div class="cap2">что ушло из панели и куда</div><p>Как в A1, плюс: <b>группа «Закреплённые»</b> → булавка у строки, закреплённые просто первые в списке; <b>группа РАБОТА целиком</b> → вкладки шапки («Чат» — первая вкладка); <b>Закреплённые · Проекты в рейке</b> → их нет, рейка из четырёх пунктов, остальное ⌘K. Панель короче A1 на одну группу и 20 px уже.</p></div>
+    <div class="box"><div class="cap2">плюсы · минусы</div><div class="pm"><div class="p"><span>+</span><div>Минимум поведения: ни режимов, ни групп — список и шапка; на 1280 рабочей области 1040 px; рейка из четырёх иконок понятна без подписей.</div></div><div class="n"><span>−</span><div>Закреплённый чат другого проекта виден в списке текущего — нужна метка проекта; вкладок в шапке семь — на 1280 ряд плотный; без группы «Закреплённые» человек из Codex (Pinned → Projects → Recents) ищет её глазами.</div></div></div></div>
+    <div class="box"><div class="cap2">ширина 1280</div><div class="sch"><div class="p" style="width:18.75%">240</div><div class="w" style="flex:1">1040<u>композер 760</u></div></div><div class="sch-cap"><span>поля 140 px</span><b>влезает</b></div><div class="sch" style="margin-top:8px"><div class="r" style="width:4.4%">56</div><div class="w" style="flex:1">рейка · 1224<u>композер 760</u></div></div><div class="sch-cap"><span>поля 232 px</span><b>влезает</b></div></div>
+  </div>
+
+  <div class="fhead"><span class="n">A3·1280</span><div><span class="w">панель 240 · 1280 × 860 · ноутбук</span><h2>A3 при 1280: ряд из семи вкладок и панель 240 — проверка на тесноту</h2><p>Тот же экран в ширине ноутбука. Вкладки шапки не переносятся, композер 760 по центру, «недавние» в одну-две строки.</p></div></div>
+  <div class="fr ps2-a3 w1280" id="a3-1280"></div>
+  <div class="fcap">
+    <div class="box"><div class="cap2">что видно</div><p>Вкладки занимают ~640 px из 1040 — справа остаётся место под статус «подключено». Панель 240 не режет метки ролей: «Оркестратор» и «Исполнитель» помещаются справа от названия чата (до ~46 % ширины строки). При 1280 панель A3 равна по высоте A1, но без группы «Закреплённые» — 7 строк вместо 9.</p></div>
+    <div class="box"><div class="cap2">плюсы · минусы · 1280</div><div class="pm"><div class="p"><span>+</span><div>Влезает без свёртки в рейку; ширина рабочей области больше, чем у A2 на 96 px.</div></div><div class="n"><span>−</span><div>Ряд вкладок — предел: восьмой раздел (Датчики, Стая) уже не поместится без «ещё ▾».</div></div></div></div>
+    <div class="box"><div class="cap2">ширина 1280</div><div class="sch"><div class="p" style="width:18.75%">240</div><div class="w" style="flex:1">1040 · вкладки 640<u>композер 760</u></div></div><div class="sch-cap"><span>поля 140 px</span><b>влезает</b></div></div>
+  </div>
+
+  <!-- A1 390 -->
+  <div class="fhead"><span class="n">A1·390</span><div><span class="w">телефон 390 × 844 · выдвижная панель по ☰</span><h2>A1 на телефоне: та же панель выдвигается по ☰ поверх «Нового чата», рейки нет</h2><p>Панель 300 px, строки выше (34 px), низ тот же: лимиты строкой + профиль. Вкладки шапки на телефоне — горизонтальная прокрутка ряда (не нарисовано: рабочая область за панелью).</p></div></div>
+  <div class="fr" id="a1-390" style="max-width:390px"></div>
+  <div class="fcap" style="grid-template-columns:1fr 1fr">
+    <div class="box"><div class="cap2">что видно</div><p>На 390 панель — выдвижной слой (как m-drawer прототипа), не колонка. Те же классы .ps: воркер переносит одну разметку, меняется только контейнер. «Другие проекты · 9» на телефоне раскрывается списком внутри панели, не меню.</p></div>
+    <div class="box"><div class="cap2">плюсы · минусы</div><div class="pm"><div class="p"><span>+</span><div>Одна разметка на три ширины; «Ждёт вас · 2» видно первым после кнопок.</div></div><div class="n"><span>−</span><div>Низ панели на 844 px высоты — лимиты и профиль прижаты; при 12+ чатах прокрутка списка внутри слоя.</div></div></div></div>
+  </div>
+
+  <!-- таблица и вопросы -->
+  <div class="fhead"><span class="n">→</span><div><span class="w">сверка</span><h2>Блок панели сейчас → где в A1 · A2 · A3</h2></div></div>
+  <table class="tbl"><thead><tr><th>блок сейчас</th><th>A1 · панель + рейка-сжатие</th><th>A2 · рейка-режимы + панель</th><th>A3 · только панель</th></tr></thead><tbody>
+    <tr><td><b>проект ▾</b> (шапка)</td><td>шапка панели · то же</td><td>шапка панели режима («Чаты · Alpha-Test ▾»)</td><td>шапка панели · то же</td></tr>
+    <tr><td><b>⟨ свёртка</b></td><td>в рейку 56 с теми же пунктами</td><td class="dim">нет — рейка постоянна; ⟨ отпускает панель</td><td>в рейку из 4 иконок</td></tr>
+    <tr><td><b>Новый чат ⌘N · Найти ⌘K</b></td><td>сверху · то же</td><td>рейка (1-й и 2-й пункты)</td><td>сверху · то же</td></tr>
+    <tr><td><b>Сейчас</b> (РАБОТА)</td><td class="acc">строка «Ждёт вас · N» над чатами</td><td class="acc">пункт рейки «Ждёт вас» с бейджем</td><td class="acc">строка «Ждёт вас · N»</td></tr>
+    <tr><td><b>Чат</b> (счётчик)</td><td>группа «Чаты · Alpha-Test»</td><td>режим «Чаты» (по умолчанию открыт)</td><td>список чатов без заголовка-группы</td></tr>
+    <tr><td><b>План · карта</b></td><td>вкладка шапки</td><td>режим «Проект»</td><td>вкладка шапки</td></tr>
+    <tr><td><b>Закреплённые</b></td><td>группа ≤3 строки, «ещё» → поиск</td><td>группа в режиме «Чаты»</td><td class="acc">булавка у строки, первые в списке</td></tr>
+    <tr><td><b>Документы · Артефакты · Память · Ресёрч</b></td><td>вкладки шапки</td><td>режим «Проект»</td><td>вкладки шапки</td></tr>
+    <tr><td><b>чаты по ролям, БЕЗ РОЛИ, ＋ чат без роли</b></td><td>одна группа, роль — метка; заголовка и «＋» нет</td><td>то же в режиме «Чаты»</td><td>то же</td></tr>
+    <tr><td><b>другие проекты</b> (свёрнутые папки)</td><td>«Другие проекты · 9» → список</td><td>низ режимов «Чаты» и «Проект»</td><td>«Другие проекты · 9» → список</td></tr>
+    <tr><td><b>Журнал</b></td><td>меню профиля</td><td>меню профиля</td><td>меню профиля</td></tr>
+    <tr><td><b>Уйти · Настройки</b></td><td>меню профиля («Уйти из проекта»)</td><td>меню профиля</td><td>меню профиля</td></tr>
+    <tr><td><b>виджет ОСТАЛОСЬ</b></td><td>одна строка · клик → попап 27</td><td>кольцо в рейке · клик → попап 27</td><td>одна строка · клик → попап 27</td></tr>
+    <tr><td><b>карточка Владелец ▾</b></td><td>профиль ▾ · 7 пунктов</td><td>аватар в рейке · то же меню</td><td>профиль ▾ · 7 пунктов</td></tr>
+    <tr><td><b>Стая · Датчики</b> (сейчас только через ⌘K и телефон)</td><td class="dim">⌘K; вкладка шапки, когда экран живой</td><td>режим «Команда» (пункт рейки — за живым экраном)</td><td class="dim">⌘K</td></tr>
+    <tr><td><b>чип проекта в композере</b></td><td>убран</td><td>убран</td><td>убран</td></tr>
+  </tbody></table>
+
+  <div class="box q"><div class="cap2">вопросы владельцу · одним списком</div><div class="qs">
+    <div><div><b>Строка лимитов — остаток или расход?</b> Нарисован остаток (как в скетче 27 и в движке: «Осталось»); пороги брифа «предупреждение ≥80 · блок ≥95» пересчитаны в остаток ≤20 · ≤5.</div></div>
+    <div><div><b>«Ждёт вас» — только чаты, где нужен владелец, или плюс открытые решения?</b> Нарисовано «плюс решения» (2 = 1 чат + 1 решение); клик — экран решений (бывший «Сейчас»), фильтр списка — вторым кликом.</div></div>
+    <div><div><b>Закреплённые из другого проекта</b> показывать в списке текущего (с меткой проекта, как сейчас) — или только свои?</div></div>
+    <div><div><b>A2: панель по умолчанию закреплена или отпущена?</b> Нарисована закреплённой (булавка активна); отпущенная прячется по клику в рабочую область.</div></div>
+    <div><div><b>Вкладка «Путь» в шапке</b> — рисовать сразу с плашкой «макет» (скетч 28 ещё не в движке) или не рисовать до живого экрана, как пункты рейки?</div></div>
+    <div><div><b>Рейка A1: «Закреплённые» и «Проекты»</b> — меню поверх рейки или разворот панели? Нарисовано как меню (в подписи), кадр меню не рисовал.</div></div>
+  </div></div>
+</div>
+<script>
+(function(){
+  const I={new:'<path d="M12 5v14M5 12h14"/>',find:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',wait:'<path d="M3 13l2-8h14l2 8v6H3z"/><path d="M3 13h5l1 2h6l1-2h5"/>',chat:'<path d="M4 6h16v10H9l-5 4z"/>',pin:'<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/>',folder:'<path d="M3 7h6l2 2h10v10H3z"/>',
+    plan:'<path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/>',path:'<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h6a4 4 0 010 8H10a4 4 0 000 8h6"/>',swarm:'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 18c0-2 2-3.5 4-3.5s3 1 3 3"/>',
+    doc:'<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>',art:'<path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h3"/>',mem:'<path d="M5 6c0-1.7 3-3 7-3s7 1.3 7 3v12c0 1.7-3 3-7 3s-7-1.3-7-3z"/><path d="M5 6c0 1.7 3 3 7 3s7-1.3 7-3M5 12c0 1.7 3 3 7 3s7-1.3 7-3"/>',res:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5M8 11h6M11 8v6"/>',
+    log:'<path d="M5 6h14M5 12h14M5 18h9"/>',set:'<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>',conn:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',away:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',theme:'<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>',keys:'<rect x="3" y="7" width="18" height="11" rx="2"/><path d="M7 11h1M11 11h1M15 11h1M8 15h8"/>',exit:'<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h9"/>',
+    logo:'<path d="M5 15c2-9 7 2 9-7M14 8l5 5"/>',role:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"/>',lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',bolt:'<path d="M13 3L5 13h6l-1 8 8-10h-6z"/>',model:'<circle cx="12" cy="12" r="3"/>',up:'<path d="M12 19V5M6 11l6-6 6 6"/>'};
+  const ico=k=>'<svg viewBox="0 0 24 24">'+I[k]+'</svg>';
+  const PROJ='Alpha-Test';
+  const CHATS=[{s:'Кто ты? какая ты модель и чем мне можешь помочь?',r:'Оркестратор',st:'busy'},{s:'Я — Исполнитель: реализую самодостаточный модуль…',r:'Исполнитель',st:'wait'},{s:'ты готов?',r:'',st:''}];
+  const PINS=[{s:'как ты будешь решать задачи в этой папке',m:'harnessy-test'},{s:'какие задачи ты можешь решать в проекте?',m:'harnessy-test'}];
+  const OTHERS=[['chat-test','8 ролей'],['harnessy-test','3 роли'],['FIRST-PROJECT','1 роль'],['ux-walk','3 роли'],['ux-first-run-20261009','1 роль'],['proekt-0910-2045','1 роль'],['proekt-0910-2056','1 роль'],['Юристы 4114','6 ролей'],['OMG-HTML-MAP','0 ролей']];
+  const pinBtn=on=>'<button type="button" class="ps-pin'+(on?' on':'')+'" aria-label="'+(on?'Снять закрепление':'Закрепить')+'">'+ico('pin')+'</button>';
+  const chat=(c,o={})=>'<div class="ps-chat'+(c.st?' '+c.st:'')+(o.act?' act':'')+(o.pin?' pin':'')+'"><i></i><span class="s">'+c.s+'</span>'+(c.r||c.m?'<span class="m">'+(c.r||c.m)+'</span>':'')+pinBtn(!!o.pin)+'</div>';
+  const waitRow=(n,o={})=>'<div class="ps2-wait'+(n?' has':' zero')+(o.on?' on':'')+'" title="Чаты, где нужен владелец, и открытые решения">'+ico('wait')+'<span class="t">Ждёт вас</span>'+(n?'<span class="b">'+n+'</span>':'<span class="m">ничего</span>')+'</div>';
+  const others=(open)=>'<div class="ps2-others'+(open?' open':'')+'" title="Другие проекты">'+ico('folder')+'<span class="t">Другие проекты</span><span class="m">'+OTHERS.length+'</span><span class="chev">›</span></div>'+(open?'<div class="ps2-others-list">'+OTHERS.map(([n,m])=>'<div class="ps-chat">'+ico('folder')+'<span class="s">'+n+'</span><span class="m">'+m+'</span></div>').join('')+'</div>':'');
+  const limV=(name,p,per,tone)=>'<span class="v'+(tone?' '+tone:'')+'" style="--p:'+p+'%"><span>'+name+'</span><b>'+p+' %</b><i>'+per+'</i><u></u></span>';
+  const lim=()=>'<div class="ps2-lim" role="button" title="Осталось · все лимиты">'+limV('Claude',64,'W')+limV('Codex',91,'W')+'</div>';
+  const prof=(open)=>'<div class="ps2-prof'+(open?' on':'')+'" title="Профиль"><span class="av">В<i></i></span><div>Владелец<small>you@example.com</small></div><span class="chev">⌄</span>'+(open?menu():'')+'</div>';
+  const menu=()=>'<div class="ps2-menu"><div class="hd">Владелец<small>you@example.com</small></div><hr><div>'+ico('set')+'Настройки<kbd>⌘,</kbd></div><div>'+ico('conn')+'Подключения</div><div>'+ico('log')+'Журнал</div><div>'+ico('away')+'Уйти из проекта<span class="m">на ночь</span></div><hr><div>'+ico('theme')+'Облик<span class="m">графит ›</span></div><div>'+ico('keys')+'Клавиши</div><hr><div>'+ico('exit')+'Выйти</div></div>';
+  const head=(rail,sym)=>'<div class="ps-head"><span class="logo" title="Новый чат">'+ico('logo')+'</span>'+(rail?'':'<b class="ps-proj" title="Проект">'+PROJ+' <i>▾</i></b>')+'<span class="col" title="'+(rail?'Развернуть панель':'Свернуть панель')+'">'+(sym||(rail?'⟩':'⟨'))+'</span></div>';
+  const newbtn=rail=>'<div class="newbtn on" title="Новый чат · ⌘N">'+ico('new')+(rail?'':'Новый чат<kbd>⌘N</kbd>')+'</div>';
+  const search=rail=>'<div class="search" title="Найти · ⌘K">'+ico('find')+(rail?'':'Найти…<kbd>⌘K</kbd>')+'</div>';
+  const chatsGroup=()=>'<div class="grp">чаты · '+PROJ+'<span class="m">3</span></div>'+CHATS.map(c=>chat(c)).join('');
+  const pinsGroup=()=>'<div class="grp">закреплённые</div>'+PINS.map(p=>chat(p,{pin:1})).join('');
+
+  // A1 · широкая панель 260
+  const panelA1=(o={})=>'<aside class="side ps'+(o.cls||'')+'">'+head(false)+newbtn()+search()+'<div class="ps-scroll">'+waitRow(2)+pinsGroup()+chatsGroup()+others(o.others)+'</div><div class="ps-foot">'+lim()+prof(o.menu)+'</div></aside>';
+  // A1 · рейка 56
+  const railA1=()=>'<aside class="side ps rail">'+head(true)+newbtn(true)+search(true)+'<div class="ps-scroll"><i class="ps-sep"></i><div class="ps2-wait has ps2-hover" title="Ждёт вас">'+ico('wait')+'<span class="b">2</span><span class="ps2-tip">Ждёт вас<span class="b2">2</span><kbd>1 чат · 1 решение</kbd></span></div><div class="nav" title="Чаты">'+ico('chat')+'</div><div class="nav" title="Закреплённые">'+ico('pin')+'</div><div class="nav" title="Проекты">'+ico('folder')+'</div></div><div class="ps-foot"><span class="ps2-ring" style="--p:64%" title="Осталось · Claude 64 % W · Codex 91 % W"><i></i></span><span class="av" title="Профиль">В<i></i></span></div></aside>';
+  // A2 · рейка-режимы + панель режима
+  const railA2=mode=>'<aside class="side ps rail">'+head(true,'')+newbtn(true)+search(true)+'<div class="ps-scroll"><i class="ps-sep"></i><div class="nav'+(mode==='chats'?' on':'')+'" title="Чаты">'+ico('chat')+'</div><div class="ps2-wait has" title="Ждёт вас · 2">'+ico('wait')+'<span class="b">2</span></div><i class="ps-sep"></i><div class="nav'+(mode==='proj'?' on':'')+'" title="Проект">'+ico('folder')+'</div><div class="nav" title="Команда">'+ico('swarm')+'</div></div><div class="ps-foot"><span class="ps2-ring" style="--p:64%" title="Осталось · все лимиты"><i></i></span><span class="av" title="Профиль">В<i></i></span></div></aside>';
+  const modeHead=(t)=>'<div class="ps2-mh">'+t+'<b class="ps-proj">'+PROJ+' <i>▾</i></b><span class="ic on" title="Панель закреплена">'+ico('pin')+'</span><span class="ic" title="Отпустить панель">×</span></div>';
+  const modeChats=()=>'<div class="ps2-mode">'+modeHead('Чаты')+'<div class="ps-scroll">'+waitRow(2)+pinsGroup()+chatsGroup()+others()+'</div></div>';
+  const tagMock='<span class="tag mock">макет</span>';
+  const modeProj=()=>'<div class="ps2-mode">'+modeHead('Проект')+'<div class="ps-scroll"><div class="ps2-pcard"><b>'+PROJ+'</b>git · 2 роли · 3 чата<span class="m"><span class="wait">ждёт вас · 2</span> · идёт ход · 1</span></div><div class="grp">разделы</div><div class="nav">'+ico('doc')+'<span class="t">Документы</span><span class="m">7</span></div><div class="nav">'+ico('art')+'<span class="t">Артефакты</span><span class="m">3</span></div><div class="nav">'+ico('mem')+'<span class="t">Память</span><span class="m">12 правил</span></div><div class="nav">'+ico('res')+'<span class="t">Ресёрч</span><span class="m">2 вопроса</span></div><div class="nav">'+ico('plan')+'<span class="t">План · карта</span>'+tagMock+'</div><div class="nav">'+ico('path')+'<span class="t">Путь</span>'+tagMock+'</div>'+others()+'</div></div>';
+  // A3 · панель 240, закреплённые в списке
+  const panelA3=()=>'<aside class="side ps">'+head(false)+newbtn()+search()+'<div class="ps-scroll">'+waitRow(2)+'<div class="grp">чаты<span class="m">5</span></div>'+PINS.map(p=>chat(p,{pin:1})).join('')+CHATS.map(c=>chat(c)).join('')+others()+'</div><div class="ps-foot">'+lim()+prof()+'</div></aside>';
+  // рабочая область
+  const tabs=()=>'<div class="ps2-tabs"><span class="on">'+ico('chat')+'Чат<b>3</b></span><span>'+ico('doc')+'Документы</span><span>'+ico('art')+'Артефакты<b>3</b></span><span>'+ico('mem')+'Память</span><span>'+ico('res')+'Ресёрч</span><span>'+ico('plan')+'План · карта'+tagMock+'</span><span>'+ico('path')+'Путь'+tagMock+'</span><span class="r"><i></i>подключено</span></div>';
+  const composer=()=>'<div class="cx-top"><span class="cx-chip" title="Чаты: новый, чаты роли, чаты проекта">'+ico('chat')+'<b>Новый чат</b><i>▾</i></span><span class="cx-sp"></span><span class="cx-chip acc" title="Собеседник: в команде Оркестратор, Исполнитель">'+ico('role')+'<b>Без роли</b><i>▾</i></span></div>'+
+    '<div class="box"><div class="in">Написать сообщение…</div><div class="cx-bot"><span class="cx-plus" title="Добавить и настроить">＋</span><span class="cx-chip" title="Права">'+ico('lock')+'<b>Всё без вопросов</b><i>▾</i></span><span class="cx-sp"></span><span class="cx-chip acc" title="Модель">'+ico('model')+'<b>Claude · Sonnet</b><i>▾</i></span><span class="cx-chip dim" title="Усилие">'+ico('bolt')+'<b>Усилие: —</b><i>▾</i></span><span class="cx-info">i</span><span class="cx-go off">'+ico('up')+'</span></div></div>';
+  const recent=()=>'<div class="recent"><span>недавние:</span>'+CHATS.map(c=>'<span class="ps-chat'+(c.st?' '+c.st:'')+'"><i></i><span class="s">'+c.s.slice(0,34)+(c.s.length>34?'…':'')+'</span>'+(c.r?'<span class="m">'+c.r+'</span>':'')+'</span>').join('')+'</div>';
+  const main=(o={})=>'<section class="main">'+(o.tabs?tabs():'')+'<div class="nc"><div class="ret"><span class="pill acc">◆ 2 ждут вас</span><span>Пока вас не было: <b>Исполнитель просит решение</b> и <b>выбор варианта Discovery</b> · 40 мин</span><span class="btn sm">Открыть</span></div><div class="mark">'+ico('logo')+'</div><h2>Чем займёмся?</h2>'+composer()+recent()+'<div class="status"><span>папка '+PROJ+' · git · ролей 2</span><span><span class="kbd">⌘K</span> команды · <span class="kbd">⌘N</span> новый чат</span></div></div></section>';
+  const app=(parts)=>'<div class="app">'+parts.join('')+'</div>';
+  const capl=(t,w)=>'<div class="cap"><span>'+t+'</span><span>'+w+'</span></div>';
+
+  const F={
+    'a1':app([panelA1(),main({tabs:1})])+capl('A1 · панель 260 · ждёт вас · закреплённые · чаты с меткой роли · другие проекты · лимиты строкой · профиль ▾ · вкладки проекта в шапке','1440 × 900'),
+    'a1-rail':app([railA1(),main({tabs:1})])+capl('A1 · рейка 56 · те же пункты · бейдж «ждёт вас» · подсказка · кольцо лимитов','1440 × 900'),
+    'a2':app([railA2('chats'),modeChats(),main()])+capl('A2 · рейка-режимы 56 · панель «чаты» 280 закреплена · шапка без вкладок','1440 × 900'),
+    'a2-proj':app([railA2('proj'),modeProj(),main()])+capl('A2 · режим «проект» · карточка проекта · разделы · другие проекты','1440 × 900'),
+    'a3':app([panelA3(),main({tabs:1})])+capl('A3 · панель 240 · закреплённые булавкой в списке · семь вкладок в шапке','1440 × 900'),
+    'a3-1280':app([panelA3(),main({tabs:1})])+capl('A3 · то же при 1280','1280 × 860'),
+    'a1-390':'<div class="ps2-phone"><div class="ph-top"><span class="m-btn">☰</span>Новый чат<span class="pill acc" style="margin-left:auto">◆ 2</span></div><div class="ph-body"><div class="mark" style="margin:0 auto 10px">'+ico('logo')+'</div><h2>Чем займёмся?</h2><div class="box"><div class="in">Написать сообщение…</div></div></div><div class="ph-bg"></div>'+panelA1({cls:' ps2-drawer'}).replace('⟨','×')+'</div>'+capl('A1 · телефон 390 · панель по ☰','390 × 844')
+  };
+  for(const id in F){ const el=document.getElementById(id); if(el) el.innerHTML=F[id]; }
+  // кадры 1440 уменьшаются до ширины листа; при 1500+ — 1:1
+  const sheet=document.querySelector('.sheet');
+  function fit(){ document.querySelectorAll('.fr').forEach(fr=>{ const a=fr.querySelector('.app, .ps2-phone'); if(!a) return; const w=a.offsetWidth,h=a.offsetHeight,avail=sheet.clientWidth-40,k=Math.min(1,avail/w); a.style.transform=k<1?'scale('+k+')':''; a.style.marginBottom=k<1?(-(h*(1-k)))+'px':''; }); }
+  fit(); addEventListener('resize',fit);
+})();
+</script>
+</body></html>
