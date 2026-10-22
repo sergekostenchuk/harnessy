@@ -18,6 +18,10 @@
     const body=await responseJson(request,'/api/settings',{headers:{Accept:'application/json'},cache:'no-store',credentials:'same-origin'}),owner=body&&typeof body.owner==='object'?body.owner:null;
     return !!owner&&owner[acceptanceKey(release)]===true
   }
+  // Демо на сайте без движка: подтверждение сохранить некуда, дверь закрывается на этот показ (в приложении движок есть всегда).
+  async function engineAvailable(request){
+    return (await responseJson(request,'/api/settings',{headers:{Accept:'application/json'},cache:'no-store',credentials:'same-origin'}))!==null
+  }
   async function remember(request,release){
     const key=acceptanceKey(release),body=await responseJson(request,'/api/settings',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',keepalive:true,body:JSON.stringify({scope:'owner',patch:{[key]:true}})}),saved=body&&typeof body.saved==='object'?body.saved:null;
     return body?.ok===true&&!!saved&&saved[key]===true
@@ -34,8 +38,8 @@
     document.body.append(gate);const button=gate.querySelector('[data-release-accept]'),status=gate.querySelector('.release-status');
     if(await accepted(request,release)){gate.remove();return {mounted:true,shown:false}}
     status.textContent='';button.disabled=false;button.focus();
-    button.addEventListener('click',async()=>{button.disabled=true;status.textContent='Сохраняю подтверждение…';if(await remember(request,release)){gate.remove();return}status.textContent='Не удалось сохранить. Попробуйте ещё раз.';button.disabled=false;button.focus()});
+    button.addEventListener('click',async()=>{button.disabled=true;status.textContent='Сохраняю подтверждение…';if(await remember(request,release)){gate.remove();return}if(!(await engineAvailable(request))){gate.remove();return}status.textContent='Не удалось сохранить. Попробуйте ещё раз.';button.disabled=false;button.focus()});
     return {mounted:true,shown:true,gate};
   }
-  return {acceptanceKey,accepted,remember,mount,releaseValue};
+  return {acceptanceKey,accepted,remember,mount,releaseValue,engineAvailable};
 });
