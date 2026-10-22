@@ -38,7 +38,7 @@
   if(!document.documentElement.hasAttribute('data-proto')) return;
   /*IC*/
   const FILE=location.pathname.split('/').pop()||'10-new-chat.html';
-  const PAGES={new:'10-new-chat.html',now:'14-now.html',inbox:'22-inbox.html',chat:'01-chat.html',plan:'02-plan.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',events:'09-events.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
+  const PAGES={new:'10-new-chat.html',now:'14-now.html',inbox:'44-inbox.html',chat:'01-chat.html',plan:'02-plan.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',events:'09-events.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
   const TIP={now:'Сейчас',inbox:'Входящие',chat:'Чат',plan:'План · карта',res:'Ресёрч',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Стая агентов',sens:'Датчики',spend:'Расход и лимиты',events:'События',log:'Журнал'};
   const TOP=['now','chat','plan','res','doc','art','mem','swarm','sens','spend','events','log'];
   /* экран «План · карта» — две вкладки: «Карта проекта» (02-om-map.html#om, по умолчанию) и «План пользователя» (02-plan.html#user); выбранная вкладка запоминается */

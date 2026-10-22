@@ -2,7 +2,7 @@
 (function(){
   if(!document.documentElement.hasAttribute('data-proto'))return;
   const PAGE=document.documentElement.dataset.page,DAY=86400000,READ_KEY='inboxRead';
-  const L=window.LIVE,esc=L?.esc||((v)=>String(v??'')),state={project:null,generation:0,items:[],read:new Set(),filter:'all',loading:false,error:null,request:0,queued:false};
+  const L=window.LIVE,esc=L?.esc||((v)=>String(v??'')),state={project:null,generation:0,items:[],read:new Set(),filter:'all',loading:false,error:null,sourceErrors:[],request:0,queued:false,pending:new Set(),actionErrors:new Map(),replyOpen:new Set(),replyDrafts:new Map()};
   const recent=(ts,now)=>Number.isFinite(ts)&&ts>=now-7*DAY&&ts<=now+DAY;
   const date=s=>{const n=typeof s==='number'?s:Date.parse(s||'');return Number.isFinite(n)?n:null};
   const validRecord=r=>r&&Number.isSafeInteger(r.seq)&&r.seq>0&&typeof r.kind==='string'&&typeof r.from==='string'&&Array.isArray(r.to);
@@ -54,26 +54,30 @@
   function keepCompleted(rows,previous){const byId=new Map(rows.map(x=>[x.id,x]));for(const old of previous){if(!old.need)continue;const next=byId.get(old.id);if(next){if(old.done){next.done=true;next.read=true}}else if(rows.filter(x=>x.done).length<50){const completed={...old,done:true,read:true};rows.push(completed);byId.set(old.id,completed)}}rows.sort((a,b)=>Number(a.done)-Number(b.done)||Number(a.read)-Number(b.read)||Number(b.need)-Number(a.need)||(b.ts||0)-(a.ts||0));return rows}
   function paintBadges(){const n=counts();document.querySelectorAll('aside.side .ps2-inbox').forEach(row=>{
     const action=row.querySelector('.b'),info=row.querySelector('.b2');if(action){action.textContent=n.need;action.hidden=!n.need;action.style.display=n.need?'':'none'}if(info){info.textContent=n.info;info.hidden=!n.info;info.style.display=n.info?'':'none'}
-  });document.querySelectorAll('.m-drawer a[href="22-inbox.html"] small').forEach(el=>el.textContent=n.need?String(n.need):'');}
+  });document.querySelectorAll('.m-drawer a[href="44-inbox.html"] small').forEach(el=>el.textContent=n.need?String(n.need):'');}
   function signal(){paintBadges();dispatchEvent(new CustomEvent('inbox:changed',{detail:{project:state.project,counts:counts()}}))}
   const current=()=>L?.H?.on&&!L.H.snapshotOnly&&!!L.H.project;
   const binding=()=>({project:L.H.project,generation:L.H.confirmedProjectGeneration||0});
   const same=b=>current()&&L.H.project===b.project&&(L.H.confirmedProjectGeneration||0)===b.generation;
-  async function chatDetails(chats,b){const list=(chats||[]).filter(c=>c&&typeof c.id==='string'&&Number.isFinite(c.last)&&c.last*1000>=Date.now()-7*DAY),result=[];let index=0;
-    await Promise.all(Array.from({length:Math.min(4,list.length)},async()=>{while(index<list.length&&same(b)){const c=list[index++];try{const row=await L.api('/api/chats/'+encodeURIComponent(c.id));if(row?.chat?.id===c.id)result.push(row)}catch{}}}));return result;
+  async function chatDetails(chats,b){const list=(chats||[]).filter(c=>c&&typeof c.id==='string'&&Number.isFinite(c.last)&&c.last*1000>=Date.now()-7*DAY),result=[];let index=0,failed=false;
+    await Promise.all(Array.from({length:Math.min(4,list.length)},async()=>{while(index<list.length&&same(b)){const c=list[index++];try{const row=await L.api('/api/chats/'+encodeURIComponent(c.id));if(row?.chat?.id===c.id&&Array.isArray(row.messages))result.push(row);else failed=true}catch{failed=true}}}));return {rows:result,failed};
   }
   async function refresh(){if(!current())return false;if(state.loading){state.queued=true;return false}
-    const b=binding(),request=++state.request;if(state.project!==b.project||state.generation!==b.generation){state.project=null;state.items=[];signal()}
-    state.loading=true;state.error=null;if(PAGE==='inbox')draw();
+    const b=binding(),request=++state.request;if(state.project!==b.project||state.generation!==b.generation){state.project=null;state.items=[];state.sourceErrors=[];state.pending.clear();state.actionErrors.clear();state.replyOpen.clear();state.replyDrafts.clear();signal()}
+    state.loading=true;if(PAGE==='inbox')draw();
     try{const [status,journal,chats,trace,limits,settings,update]=await Promise.all([
       L.api('/api/status'),L.api('/api/journal?limit=0'),L.api('/api/chats'),L.api('/api/trace?since='+encodeURIComponent(new Date(Date.now()-7*DAY).toISOString())).catch(()=>null),
       L.api('/api/limits').catch(()=>null),L.api('/api/settings'),window.harnessy?.updates?.getState().catch(()=>null)??Promise.resolve(null)
     ]);
       if(!same(b)||request!==state.request)return false;
-      if(status?.project!==b.project||journal?.project!==b.project||!Array.isArray(chats?.chats)||settings?.ok!==true||!settings.owner)throw Error('Данные входящих не подтверждены для текущего проекта');
+      if(status?.project!==b.project||!Array.isArray(status.approvals)||!Array.isArray(status.panes)||journal?.project!==b.project||!Array.isArray(journal.records)||!Array.isArray(chats?.chats)||settings?.ok!==true||!settings.owner)throw Error('Данные входящих не подтверждены для текущего проекта');
       const details=await chatDetails(chats.chats,b);if(!same(b)||request!==state.request)return false;
       state.project=b.project;state.generation=b.generation;state.read=new Set(Array.isArray(settings.owner[READ_KEY])?settings.owner[READ_KEY].filter(v=>typeof v==='string'):[]);
-      state.items=keepCompleted(collect({project:b.project,status,journal,chats:details,trace:trace?.project===b.project&&Array.isArray(trace.records)?trace.records:[],limits:limits?.project===b.project&&Array.isArray(limits.providers)?limits.providers:[],update,read:[...state.read]}),state.items);
+      state.sourceErrors=[];
+      if(trace?.ok!==true||trace.project!==b.project||!Array.isArray(trace.records))state.sourceErrors.push('События подключения недоступны');
+      if(limits?.ok!==true||limits.project!==b.project||!Array.isArray(limits.providers))state.sourceErrors.push('Лимиты недоступны');
+      if(details.failed)state.sourceErrors.push('История чатов недоступна');
+      state.items=keepCompleted(collect({project:b.project,status,journal,chats:details.rows,trace:state.sourceErrors.includes('События подключения недоступны')?[]:trace.records,limits:state.sourceErrors.includes('Лимиты недоступны')?[]:limits.providers,update,read:[...state.read]}),state.items);
       state.error=null;signal();if(PAGE==='inbox')draw();return true;
     }catch(e){if(same(b)){state.error=e?.message||'Нет связи';if(PAGE==='inbox')draw()}return false}
     finally{state.loading=false;if(state.queued){state.queued=false;void refresh()}}
@@ -87,25 +91,26 @@
   });return readJob.catch(e=>{if(same(b)){state.error=e?.message||'Прочитанность не сохранена';draw()}return false})}
   const ago=t=>{if(!t)return 'время неизвестно';const minutes=Math.max(0,Math.floor((Date.now()-t)/60000));return minutes<1?'сейчас':minutes<60?minutes+' мин':minutes<1440?Math.floor(minutes/60)+' ч':Math.floor(minutes/1440)+' д'};
   const icon={approval:'◆',waiting:'◆',question:'◆',verdict:'↳',chat:'✓',network:'⇄',limit:'%',update:'↑'};
-  function actions(x){if(x.done)return '<span class="okm">Выполнено</span>';if(x.type==='approval')return '<button class="btn sm p" data-inbox-action="allow">Разрешить</button><button class="btn sm" data-inbox-action="deny">Отказать</button><button class="btn sm" data-inbox-action="open">Открыть чат</button>';
+  function actions(x){if(x.done)return '<span class="okm">Выполнено</span>';const disabled=state.pending.has(x.id)||!!state.error?' disabled':'';if(x.type==='approval')return '<button class="btn sm p" data-inbox-action="allow"'+disabled+'>Разрешить</button><button class="btn sm" data-inbox-action="deny"'+disabled+'>Отказать</button><button class="btn sm" data-inbox-action="chat">Открыть чат</button>';
     if(x.type==='waiting'){const attrs=' data-attempt-pane="'+esc(x.pane)+'" data-attempt-project="'+esc(state.project)+'" data-attempt-id="'+esc(x.waiting.turnInstanceId)+'"';
       return (x.waiting.actions||[]).filter(a=>['retry','skip','finish'].includes(a)).map(a=>'<button class="btn sm'+(a==='retry'?' p':'')+'" data-attempt-action="'+a+'"'+attrs+'>'+(a==='retry'?(x.waiting.status==='unsent'?'Отправить снова':'Повторить'):a==='skip'?(x.waiting.status==='unsent'?'Убрать':'Пропустить'):'Завершить')+'</button>').join('')+'<button class="btn sm" data-inbox-action="open">Открыть чат</button>'}
-    if(x.type==='question')return '<button class="btn sm p" data-inbox-action="open">Ответить</button>';
+    if(x.type==='question')return '<button class="btn sm p" data-inbox-action="open"'+disabled+'>Ответить</button><button class="btn sm" data-inbox-action="chat">Открыть чат</button>';
     if(x.type==='update')return '<button class="btn sm p" data-inbox-action="install">Перезапустить</button>';
     return '<button class="btn sm" data-inbox-action="open">'+(x.type==='chat'?'Открыть чат':x.type==='network'?'Подключения':x.type==='limit'?'Лимиты':'Открыть')+'</button>';
   }
-  function card(x){const cls=(x.need?' need':'')+(x.read?' read':' new')+(x.done?' done':'')+(x.failed?' err':'');return '<article class="ps2-ib'+cls+'" data-inbox-id="'+esc(x.id)+'" tabindex="0" aria-label="'+esc(x.kind+': '+x.title)+'"><span class="ic" aria-hidden="true">'+(icon[x.type]||'•')+'</span><div class="bd"><div class="k"><b>'+esc(x.kind)+'</b><i>'+esc(ago(x.ts))+'</i></div><div class="t">'+esc(x.title)+'</div><div class="f">'+esc(x.detail||'')+'</div></div><div class="act">'+actions(x)+'</div></article>'}
+  function card(x){const cls=(x.need?' need':'')+(x.read?' read':' new')+(x.done?' done':'')+(x.failed?' err':'');const error=state.actionErrors.get(x.id),reply=x.type==='question'&&state.replyOpen.has(x.id)&&!x.done;
+    return '<article class="ps2-ib'+cls+'" data-inbox-id="'+esc(x.id)+'" tabindex="0" aria-label="'+esc(x.kind+': '+x.title)+'"><span class="ic" aria-hidden="true">'+(icon[x.type]||'•')+'</span><div class="bd"><div class="k"><b>'+esc(x.kind)+'</b><i>'+esc(ago(x.ts))+'</i></div><div class="t">'+esc(x.title)+'</div><div class="f">'+esc(x.detail||'')+'</div>'+(reply?'<div class="ps2-ib-reply"><label for="inbox-reply-'+x.record.seq+'">Ответ владельца на вопрос №'+x.record.seq+'</label><textarea id="inbox-reply-'+x.record.seq+'" data-inbox-reply rows="3" placeholder="Напишите решение…">'+esc(state.replyDrafts.get(x.id)||'')+'</textarea><button class="btn sm p" data-inbox-action="send"'+(state.pending.has(x.id)||state.error?' disabled':'')+'>Отправить ответ</button></div>':'')+(error?'<div class="ps2-ib-action-error" role="status">'+esc(error)+'</div>':'')+'</div><div class="act">'+actions(x)+'</div></article>'}
   function draw(){if(PAGE!=='inbox')return;const feed=document.querySelector('[data-inbox-feed]');if(!feed)return;
     const n=counts(),shown=state.filter==='need'?state.items.filter(x=>x.need&&!x.done):state.filter==='info'?state.items.filter(x=>!x.need):state.items;
     for(const [key,value] of Object.entries({all:n.all,need:n.need,info:n.info})){const el=document.querySelector('[data-inbox-'+(key==='all'?'total':key)+']');if(el)el.textContent=state.project?value:'—'}
     document.querySelectorAll('[data-inbox-filter]').forEach(b=>{const active=b.dataset.inboxFilter===state.filter;b.classList.toggle('on',active);b.setAttribute('aria-selected',String(active))});
-    const link=document.querySelector('[data-inbox-connection]');if(link)link.textContent=state.error?'Не удалось прочитать':state.project?'Подключено':'Подключаемся…';
+    const link=document.querySelector('[data-inbox-connection]');if(link)link.textContent=state.error?'Не удалось прочитать':state.sourceErrors.length?'Часть источников недоступна':state.project?'Подключено':'Подключаемся…';
     const mark=document.querySelector('[data-inbox-read-all]');if(mark)mark.disabled=!state.project||!state.items.some(x=>!x.read);
-    if(state.error){feed.innerHTML='<div class="ps2-ibempty" role="alert"><b>Не удалось прочитать входящие</b>'+esc(state.error)+'<br><button class="btn sm" data-inbox-retry>Повторить</button></div>';return}
-    if(!state.project){feed.innerHTML='<div class="ps2-ibempty"><b>Читаем входящие…</b>Статус, журнал и чаты текущего проекта.</div>';return}
-    if(!shown.length){feed.innerHTML='<div class="ps2-ibempty"><b>Здесь пока пусто</b>'+(state.filter==='need'?'Никто не ждёт вашего решения.':state.filter==='info'?'Новых сообщений к сведению нет.':'Измерений и событий ещё нет.')+'</div>';return}
+    const unavailable=state.error||state.sourceErrors.length?'<div class="ps2-ib-source" role="status">'+(state.error?'Не удалось подтвердить входящие: '+esc(state.error):esc(state.sourceErrors.join(' · ')))+' <button class="btn sm" data-inbox-retry>Повторить</button></div>':'';
+    if(!state.project){feed.innerHTML=unavailable||'<div class="ps2-ibempty"><b>Читаем входящие…</b>Статус, журнал и чаты текущего проекта.</div>';return}
+    if(!shown.length){feed.innerHTML=unavailable+(unavailable?'':'<div class="ps2-ibempty"><b>Здесь пока пусто</b>'+(state.filter==='need'?'Никто не ждёт вашего решения.':state.filter==='info'?'Новых сообщений к сведению нет.':'Измерений и событий ещё нет.')+'</div>');return}
     const need=shown.filter(x=>x.need&&!x.done),info=shown.filter(x=>!x.need&&!x.done),done=shown.filter(x=>x.done);
-    feed.innerHTML=(need.length?'<div class="ps2-ibgrp"><b>требует действия · '+need.length+'</b></div>'+need.map(card).join(''):'')+
+    feed.innerHTML=unavailable+(need.length?'<div class="ps2-ibgrp"><b>требует действия · '+need.length+'</b></div>'+need.map(card).join(''):'')+
       (info.length?'<div class="ps2-ibgrp">к сведению · '+info.length+'</div>'+info.map(card).join(''):'')+
       (done.length?'<div class="ps2-ibgrp">выполнено · '+done.length+'</div>'+done.map(card).join(''):'');
   }
@@ -114,10 +119,15 @@
       if(!same(b))return;S.ui.pane=x.pane;S.ui.fresh=false;S.ui.switched=true;if(x.chat)S.ui.openChat=x.chat;L.save();location.href='01-chat.html';
     }}
   async function action(x,kind){if(!x||!current()||x.done||state.project!==L.H.project||state.generation!==(L.H.confirmedProjectGeneration||0))return;const b=binding();
+    const writing=kind==='allow'||kind==='deny'||kind==='send';if(writing&&(state.pending.has(x.id)||state.error))return;
+    if(writing){state.pending.add(x.id);state.actionErrors.delete(x.id);draw()}
     try{if(kind==='allow'||kind==='deny'){if(x.type!=='approval')return;const result=await L.api('/api/approve',{project:b.project,pane:x.approval.pane,id:x.approval.id,decision:kind});if(!same(b))return;if(!result?.ok)throw Error(result?.error||'Решение не принято');x.done=true;x.read=true;signal();draw();await refresh()}
+      else if(kind==='send'){if(x.type!=='question')return;const message=(state.replyDrafts.get(x.id)||'').trim();if(!message)throw Error('Напишите ответ перед отправкой');const result=await L.api('/api/chat',{pane:x.pane,message,kind:'decision',reply_to:x.record.seq,direct:true});if(!same(b))return;if(!result?.ok)throw Error(result?.error||'Ответ не отправлен');x.done=true;x.read=true;state.replyOpen.delete(x.id);state.replyDrafts.delete(x.id);signal();draw();await refresh()}
       else if(kind==='install'){if(x.type!=='update'||!window.harnessy?.updates?.install)throw Error('Обновление недоступно в этом окне');await window.harnessy.updates.install()}
+      else if(x.type==='question'&&kind==='open'){state.replyOpen.add(x.id);draw();[...document.querySelectorAll('[data-inbox-id]')].find(row=>row.dataset.inboxId===x.id)?.querySelector('[data-inbox-reply]')?.focus()}
       else {await mark([x.id]);if(!same(b))return;await open(x)}
-    }catch(e){if(same(b)){state.error=e?.message||'Действие не выполнено';draw()}}
+    }catch(e){if(same(b)){state.actionErrors.set(x.id,e?.message||'Действие не выполнено');draw()}}
+    finally{if(writing){state.pending.delete(x.id);if(same(b))draw()}}
   }
   document.addEventListener('click',e=>{const filter=e.target.closest('[data-inbox-filter]');if(filter&&PAGE==='inbox'){state.filter=filter.dataset.inboxFilter;draw();return}
     if(e.target.closest('[data-inbox-retry]')){void refresh();return}
@@ -125,6 +135,7 @@
     const button=e.target.closest('[data-inbox-action]'),row=e.target.closest('[data-inbox-id]');if(!row||PAGE!=='inbox')return;
     const x=state.items.find(i=>i.id===row.dataset.inboxId);if(!x)return;if(button){e.preventDefault();e.stopPropagation();void action(x,button.dataset.inboxAction)}else if(!e.target.closest('[data-attempt-action]'))void action(x,'open');
   });
+  document.addEventListener('input',e=>{const field=e.target.closest('[data-inbox-reply]'),row=e.target.closest('[data-inbox-id]');if(field&&row&&state.items.some(x=>x.id===row.dataset.inboxId))state.replyDrafts.set(row.dataset.inboxId,field.value)});
   document.addEventListener('keydown',e=>{if(PAGE!=='inbox'||!['Enter',' '].includes(e.key)||!e.target.matches('[data-inbox-id]'))return;e.preventDefault();const x=state.items.find(i=>i.id===e.target.dataset.inboxId);void action(x,'open')});
   const api=window.HARNESS_INBOX={collect,counts,refresh,paintBadges,get current(){return {project:state.project,items:state.items,counts:counts()}}};
   addEventListener('live:status',()=>{if(current())void refresh()});
