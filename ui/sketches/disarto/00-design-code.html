@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Лист 00 · Дизайн-код Harnessy</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="path.css"><link rel="stylesheet" href="path-map.css"><link rel="stylesheet" href="sidebar-v2.css"><link rel="stylesheet" href="om-map.css"><link rel="stylesheet" href="team-canvas.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="path.css"><link rel="stylesheet" href="path-map.css"><link rel="stylesheet" href="sidebar-v2.css"><link rel="stylesheet" href="om-map.css"><link rel="stylesheet" href="team-canvas.css"><link rel="stylesheet" href="article.css">
 <style>
   .dc{max-width:1280px;display:grid;gap:34px}
   .dc h2{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:0 0 12px;display:flex;gap:10px;align-items:center}.dc h2 i{flex:1;height:1px;background:var(--line)}
@@ -443,6 +443,80 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
   <p class="sub">Один источник правды для скетчей, страницы входа и прототипа: ступени графита, один тёплый акцент — <b>коньячный</b> (оранжевого больше нет), сбои — <b>бордо</b> вместо красного, золото только для знака и имени, служебные подписи моно-капсом, прогресс тиками. Значения ниже — те, что стоят в <span class="mono" style="font-size:11px">style.css</span>, на странице входа и в основном облике прототипа. <a href="index.html">← все скетчи</a></p>
 
   <div class="dc">
+    <section class="art-root art-spec" id="article-spec"><h2>статья о Harnessy · публичная страница RU / EN с видео · скетч 42<i></i></h2>
+      <p class="conn-note" style="margin:0 0 14px">Страница сайта, не экран приложения: без боковой панели прототипа. Колонка текста 720, слева прилипающее оглавление 200, шапка прилипает. Тексты и видео — парами RU / EN (<code>data-l</code>), язык по умолчанию — язык браузера, запоминается. Классы <code>.art-*</code> — <code>article.css</code>. Слово «альфа» есть; «макет» и «не реализовано» на странице не встречаются.</p>
+      <div class="two">
+        <div class="box"><div class="cap2">так говорим</div><p style="margin:0;font-size:12.5px;color:var(--ink2)">помощник · команда помощников · старший помощник · проверяющий · задача · решение · проект · Входящие · Автопилот · Конструктор · Очередь задач · Обсуждение · Рейка · <b>альфа</b> (плашка в шапке и в подвале, раздел «Это альфа-версия») · «Записаться на альфу»</p></div>
+        <div class="box"><div class="cap2">так не говорим · и чего нет</div><p style="margin:0;font-size:12.5px;color:var(--ink3)">«сессия», «воркер», «ревью-раунд», «оркестрация» без объяснения; «макет», «не реализовано», «демо»; данные владельца (имя, почта, пути) — ни в тексте, ни в постерах, ни в мета. Формы записи на странице нет — только кнопка → <code>#alpha</code> (форма — отдельная задача).</p></div>
+      </div>
+
+      <div class="box" style="margin-top:14px"><div class="cap2">шапка статьи · знак · RU | EN · alpha · «Записаться на альфу» → #alpha · прилипает, фон с размытием</div>
+        <div class="art-demo"><div class="art-head"><div class="art-head-in">
+          <a class="art-mark" href="#article-spec"><i><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></i><b>Harnessy</b></a>
+          <div class="art-lang"><button type="button" class="on">RU</button><button type="button">EN</button></div>
+          <span class="art-alpha">alpha</span>
+          <a class="btn p" href="#article-spec">Записаться на альфу</a>
+        </div></div></div>
+        <div class="art-states" style="margin-top:14px">
+          <div><div class="cap2">переключатель · RU активен</div><div class="art-lang"><button type="button" class="on">RU</button><button type="button">EN</button></div></div>
+          <div><div class="cap2">EN активен</div><div class="art-lang"><button type="button">RU</button><button type="button" class="on">EN</button></div></div>
+          <div><div class="cap2">наведение на неактивный</div><div class="art-lang"><button type="button" class="on">RU</button><button type="button" class="hover">EN</button></div></div>
+          <div><div class="cap2">фокус с клавиатуры</div><div class="art-lang"><button type="button" class="on focus">RU</button><button type="button">EN</button></div></div>
+          <div><div class="cap2">кнопка · обычная · наведение · фокус</div><div class="rowx"><span class="btn p">Записаться на альфу</span><span class="btn p hover">Записаться на альфу</span><span class="btn p focus">Записаться на альфу</span></div></div>
+          <div><div class="cap2">плашка alpha · одна форма везде</div><div class="rowx"><span class="art-alpha">alpha</span></div></div>
+        </div>
+        <p class="art-note"><b>Правила.</b> Переключение меняет <code>html[lang]</code>, <code>&lt;title&gt;</code>, description, og:*, тексты и файлы видео/постеров (ru ↔ en); идущее видео останавливается. Выбор хранится в <code>localStorage · harnessy.article.lang</code>; по умолчанию: язык браузера ru → RU, иначе EN. На телефоне (≤ 600) шапка не прилипает; кнопка переносится второй строкой на всю ширину, знак · RU|EN · alpha остаются в первой.</p>
+      </div>
+
+      <div class="two" style="margin-top:14px">
+        <div class="box"><div class="cap2">заголовок и подзаголовок · колонка 720</div>
+          <div class="art-demo"><div class="art-demo-col">
+            <h1 class="art-h1">Harnessy — ваша команда ИИ-помощников в одном окне</h1>
+            <p class="art-sub" style="margin-bottom:0">Вы даёте задачу. Старший помощник распределяет её между остальными, проверяющий проверяет, а вы видите, кто чем занят, и принимаете решения.</p>
+          </div></div>
+          <p class="art-note"><b>h1</b> Inter 600 · 40 / 1,1 · −.02em · ink; на телефоне 30. <b>Подзаголовок</b> 19 / 1,5 · ink2; на телефоне 17. Антиква только в знаке.</p>
+        </div>
+        <div class="box"><div class="cap2">абзац и список · раздел h2</div>
+          <div class="art-demo"><div class="art-demo-col">
+            <h2 class="art-h2">Входящие: всё, что ждёт вас, в одном месте</h2>
+            <p class="art-p">Помощники работают, а вам прилетает только то, что требует вашего участия. Ответить можно <b>прямо в карточке</b>, не открывая чат.</p>
+            <ul class="art-ul" style="margin-bottom:0"><li>решение, которое никто не примет за вас</li><li>вопрос от проверяющего</li><li>закончившаяся работа или упавшее подключение</li></ul>
+          </div></div>
+          <p class="art-note"><b>h2</b> Inter 600 · 24 / 1,2 · отступ сверху 52; на телефоне 21 / 40. <b>Абзац</b> 17 / 1,65 · цвет <code>--art-ink #c6c6cc</code> (между ink и ink2 — для долгого чтения); на телефоне 16. Выделение в абзаце — ink 500. Маркер списка — коньяк.</p>
+        </div>
+      </div>
+
+      <div class="box" style="margin-top:14px"><div class="cap2">видео в рамке окна · постер + ▶ · воспроизведение · пара рядом · на телефоне · без видео</div>
+        <div class="two">
+          <div><div class="cap2">покой · постер первого кадра + ▶ · preload=metadata · playsinline · без автозапуска</div><figure class="art-win"><div class="art-win-bar"><i></i><i></i><i></i><span>Автопилот</span></div><div class="art-win-body"><video preload="metadata" playsinline poster="media/posters/Harnessy-autopilot-ru.jpg" src="media/video/Harnessy-autopilot-ru.mp4"></video><button class="art-play" type="button" aria-label="Воспроизвести"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg></button></div><figcaption class="art-cap">Автопилот «до утра»: у каждого решения записано «почему»</figcaption></figure></div>
+          <div><div class="cap2">воспроизведение · ▶ скрыт · управление браузера · соседи на паузе</div><figure class="art-win is-playing"><div class="art-win-bar"><i></i><i></i><i></i><span>Автопилот</span></div><div class="art-win-body"><video preload="metadata" playsinline poster="media/posters/Harnessy-autopilot-ru.jpg" src="media/video/Harnessy-autopilot-ru.mp4"></video><button class="art-play" type="button" aria-label="Воспроизвести"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg></button></div><figcaption class="art-cap">Автопилот «до утра»: у каждого решения записано «почему»</figcaption></figure><p class="art-note">Пауза возвращает ▶ поверх кадра; конец ролика — постер и ▶ снова.</p></div>
+        </div>
+        <div class="cap2" style="margin-top:14px">пара рядом · два ролика одного раздела · на телефоне столбиком</div>
+        <div class="art-vrow pair"><figure class="art-win"><div class="art-win-bar"><i></i><i></i><i></i><span>Проекты и чаты</span></div><div class="art-win-body"><video preload="metadata" playsinline poster="media/posters/Harnessy-sidebar-ru.jpg" src="media/video/Harnessy-sidebar-ru.mp4"></video><button class="art-play" type="button" aria-label="Воспроизвести"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg></button></div><figcaption class="art-cap">Слева проекты и чаты, справа поле для сообщения</figcaption></figure><figure class="art-win"><div class="art-win-bar"><i></i><i></i><i></i><span>Новый чат</span></div><div class="art-win-body"><video preload="metadata" playsinline poster="media/posters/Harnessy-new-chat-ru.jpg" src="media/video/Harnessy-new-chat-ru.mp4"></video><button class="art-play" type="button" aria-label="Воспроизвести"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg></button></div><figcaption class="art-cap">Вопрос без проекта; одной кнопкой — в проект</figcaption></figure></div>
+        <div class="two" style="margin-top:14px">
+          <div><div class="cap2">на телефоне · 390 · во всю ширину колонки · ▶ 54</div><div class="art-phone"><div class="art-vrow pair" style="margin:0"><figure class="art-win"><div class="art-win-bar"><i></i><i></i><i></i><span>Входящие</span></div><div class="art-win-body"><video preload="metadata" playsinline poster="media/posters/Harnessy-inbox-ru.jpg" src="media/video/Harnessy-inbox-ru.mp4"></video><button class="art-play" type="button" aria-label="Воспроизвести"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg></button></div><figcaption class="art-cap">Ответить можно прямо в карточке, не открывая чат</figcaption></figure></div></div></div>
+          <div><div class="cap2">без видео · заглушка в той же рамке · штриховка · подпись остаётся</div><figure class="art-win is-empty"><div class="art-win-bar"><i></i><i></i><i></i><span>Рейка</span></div><div class="art-win-body" data-empty="видео готовится"></div><figcaption class="art-cap">Иконка открывает нужное, остальное остаётся свёрнутым</figcaption></figure><p class="art-note">Когда ролика ещё нет: рамка и подпись те же, кнопки ▶ нет, по центру одна строка моно-капсом.</p></div>
+        </div>
+        <p class="art-note"><b>Рамка.</b> panel · line2 · радиус 12 · тень 0 18 44; полоса окна 30 с тремя точками line2 и именем раздела моно-капсом. Кадр 16:9, <code>object-fit: cover</code>. ▶ — круг 64 коньяком, ореол 6 px accent 18 %, наведение — accent-hi и +5 %. <b>Подпись</b> 13 / 1,45 · ink2 · одной строкой, под чертой line. Файлы: <code>media/video/Harnessy-&lt;имя&gt;-&lt;ru|en&gt;.mp4</code>, постеры <code>media/posters/…jpg</code> (1280 × 720, первый кадр).</p>
+      </div>
+
+      <div class="two" style="margin-top:14px">
+        <div class="box"><div class="cap2">прилипающее оглавление · ≥ 1100 слева · top 84 · на телефоне скрыто</div>
+          <div class="art-toc"><div class="t">разделы</div><a href="#article-spec">Что это такое</a><a href="#article-spec">Слева — проекты и чаты. Больше ничего</a><a href="#article-spec" class="on">Входящие: всё, что ждёт вас, в одном месте</a><a href="#article-spec" class="hover">Автопилот: уходите, помощники решат за вас</a><a href="#article-spec">Команда: видно, кто чем занят</a><a href="#article-spec">Попробовать</a></div>
+          <p class="art-note"><b>Активный</b> — левая черта коньяком, raised, ink; <b>наведение</b> — raised, ink; остальные — ink2. Активный раздел — последний, чей верх выше линии 120 px от верха окна; обновляется на прокрутке.</p>
+        </div>
+        <div class="box"><div class="cap2">блок «Попробовать» · #alpha · карточка panel · кнопка 40</div>
+          <div class="art-try" style="margin:0"><h2 class="art-h2">Попробовать</h2><p class="art-p">Запишитесь на альфа-тест, и мы пришлём приглашение. Нужен Mac. Приложение бесплатное на время теста; за работу моделей вы платите своим провайдерам.</p><div class="art-try-row"><span class="btn p lg">Записаться на альфу</span><small>Mac · бесплатно на время теста</small></div></div>
+          <p class="art-note">Перед блоком — раздел «Это альфа-версия» обычной типографикой. Кнопка та же, что в шапке, крупнее (40 / 14). На телефоне отступы 22 / 18, кнопка и подпись переносятся.</p>
+        </div>
+      </div>
+
+      <div class="box" style="margin-top:14px"><div class="cap2">подвал · © · условия · конфиденциальность · alpha</div>
+        <div class="art-demo"><div class="art-foot" style="padding:18px 16px"><div class="art-foot-in"><span>© 2026 Harnessy</span><i>·</i><a href="#article-spec">Условия</a><i>·</i><a href="#article-spec">Конфиденциальность</a><i>·</i><span class="art-alpha">alpha</span></div></div></div>
+        <p class="art-note">Ссылки на <code>/terms.html</code> и <code>/privacy.html</code> — те же страницы, что у сайта; ink2, наведение — ink. Одной семьёй с ними: фон <code>--bg</code>, Inter, ссылки коньяком.</p>
+      </div>
+    </section>
+
     <section><h2>графит · поверхности<i></i></h2>
       <div class="sw">
         <div><u style="background:#0a0a0b"></u><b>Полотно</b><span>--canvas · #0a0a0b</span></div>
