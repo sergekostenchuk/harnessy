@@ -951,3 +951,4 @@ html[data-proto] .plan-tabs > span { cursor:pointer; }
 .desktop-update-banner b,.desktop-update-banner small{display:block}.desktop-update-banner b{font-size:13px;font-weight:600}.desktop-update-banner small{font-size:11px;color:var(--ink2);margin-top:3px}.desktop-update-banner .btn{flex:none}
 .desktop-update-channel{display:flex;gap:6px;flex-wrap:wrap}.desktop-update-channel button[aria-pressed="true"]{border-color:var(--accent)}
 @media(max-width:560px){.desktop-update-banner{left:12px;right:12px;bottom:12px;max-width:none}.desktop-update-banner small{max-width:220px}}
+.autopilot-pill{display:inline-flex;align-items:center;white-space:nowrap;color:var(--accent);font:11px var(--mono);padding:5px 8px;border:1px solid var(--line2);border-radius:999px;background:var(--raised)}
