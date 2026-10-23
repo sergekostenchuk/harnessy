@@ -1,5 +1,6 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Harnessy · демо</title><link rel="stylesheet" href="/sketches/disarto/style.css"><link rel="stylesheet" href="/sketches/disarto/article.css">
+<title>Harnessy · демо · demo</title>
+<script>(function(){var l;try{l=localStorage.getItem('harnessy.article.lang')}catch(e){}if(l!=='ru'&&l!=='en')l=/^ru\b/i.test(navigator.language||'')?'ru':'en';document.documentElement.setAttribute('data-lang',l);document.documentElement.lang=l;})();</script><link rel="stylesheet" href="/sketches/disarto/style.css"><link rel="stylesheet" href="/sketches/disarto/article.css">
 <style>
   .demo{max-width:1100px;margin:0 auto;padding:40px 24px 80px}
   .demo h1{font:600 32px/1.15 var(--font);margin:0 0 8px}.demo .sub{color:var(--ink2);font-size:16px;margin:0 0 28px;max-width:760px}
@@ -11,39 +12,40 @@
   .card .k{display:inline-block;margin-top:8px;font:500 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent-line);border-radius:999px;padding:1px 7px}
   .note{margin-top:28px;color:var(--ink3);font:12px var(--mono)}
 </style></head>
-<body><header class="art-head"><div class="art-head-in"><a class="art-logo" href="/"><span class="lg">⌒</span><span class="nm">Harnessy</span></a><span class="release-badge">alpha</span><a class="art-demo" href="/">Статья</a></div></header>
+<body><header class="art-head"><div class="art-head-in"><a class="art-logo" href="/"><span class="lg">⌒</span><span class="nm">Harnessy</span></a><div class="art-lang" role="group" aria-label="Язык · Language"><button type="button" data-lang="ru">RU</button><button type="button" data-lang="en">EN</button></div><span class="release-badge">alpha</span><a class="art-demo" href="/"><span data-l="ru">Статья</span><span data-l="en">Article</span></a></div></header>
 <main class="demo">
-  <h1>Демо · альфа</h1>
-  <p class="sub">Экраны на данных примера («Стройучёт», «Alpha-Test»). Кнопки и переходы работают внутри страницы; к движку эти экраны ещё подключаются. Это то же, что в видео статьи.</p>
-  <h2>Панель и чаты</h2>
+  <h1><span data-l="ru">Демо · альфа</span><span data-l="en">Demo · alpha</span></h1>
+  <p class="sub"><span data-l="ru">Экраны на данных примера («Стройучёт», «Alpha-Test»). Кнопки и переходы работают внутри страницы; к движку эти экраны ещё подключаются. Это то же, что в видео статьи.</span><span data-l="en">Screens on example data (“Stroyuchet”, “Alpha-Test”). Buttons and transitions work inside the page; the engine is still being wired to these screens. The screens themselves are in Russian for now — the English UI is shown in the article’s videos.</span></p>
+  <h2><span data-l="ru">Панель и чаты</span><span data-l="en">Panel and chats</span></h2>
   <div class="cards">
-    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1"><b>Новый чат</b><small>Панель: проекты и чаты, Входящие, чаты без проекта; «В проект ▾»</small><span class="k">клип 01 · 04</span></a>
-    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1-inbox"><b>Входящие</b><small>Требует действия · к сведению, ответ прямо в карточке</small><span class="k">клип 03</span></a>
-    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1-menu"><b>Меню профиля · Автопилот</b><small>Меню вверх от карточки, тумблер Автопилота</small><span class="k">клип 02</span></a>
-    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1-pmenu"><b>Меню проекта</b><small>Наведение на проект: документы, артефакты, команда</small><span class="k">клип 01</span></a>
-    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1-chat"><b>Чат проекта</b><small>Проектная полоска: документы · память · путь · команда агентов</small><span class="k">клип 04</span></a>
-    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a2"><b>Рейка с режимами</b><small>Чаты · Входящие · Проект · Команда</small><span class="k">клип 05</span></a>
-    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1-rail"><b>Рейка (сжатая панель)</b><small>Те же пункты иконками, подсказки</small><span class="k">клип 01</span></a>
+    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1"><b><span data-l="ru">Новый чат</span><span data-l="en">New chat</span></b><small><span data-l="ru">Панель: проекты и чаты, Входящие, чаты без проекта; «В проект ▾»</span><span data-l="en">Panel: projects and chats, Inbox, chats without a project; “To project ▾”</span></small><span class="k"><span data-l="ru">клип 01 · 04</span><span data-l="en">clips 01 · 04</span></span></a>
+    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1-inbox"><b><span data-l="ru">Входящие</span><span data-l="en">Inbox</span></b><small><span data-l="ru">Требует действия · к сведению, ответ прямо в карточке</span><span data-l="en">Needs action · FYI, reply right in the card</span></small><span class="k"><span data-l="ru">клип 03</span><span data-l="en">clip 03</span></span></a>
+    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1-menu"><b><span data-l="ru">Меню профиля · Автопилот</span><span data-l="en">Profile menu · Autopilot</span></b><small><span data-l="ru">Меню вверх от карточки, тумблер Автопилота</span><span data-l="en">Menu opens upward from the card, Autopilot switch</span></small><span class="k"><span data-l="ru">клип 02</span><span data-l="en">clip 02</span></span></a>
+    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1-pmenu"><b><span data-l="ru">Меню проекта</span><span data-l="en">Project menu</span></b><small><span data-l="ru">Наведение на проект: документы, артефакты, команда</span><span data-l="en">Hover a project: documents, artifacts, team</span></small><span class="k"><span data-l="ru">клип 01</span><span data-l="en">clip 01</span></span></a>
+    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1-chat"><b><span data-l="ru">Чат проекта</span><span data-l="en">Project chat</span></b><small><span data-l="ru">Проектная полоска: документы · память · путь · команда агентов</span><span data-l="en">Project tab strip: documents · memory · path · agent team</span></small><span class="k"><span data-l="ru">клип 04</span><span data-l="en">clip 04</span></span></a>
+    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a2"><b><span data-l="ru">Рейка с режимами</span><span data-l="en">Rail with modes</span></b><small><span data-l="ru">Чаты · Входящие · Проект · Команда</span><span data-l="en">Chats · Inbox · Project · Team</span></small><span class="k"><span data-l="ru">клип 05</span><span data-l="en">clip 05</span></span></a>
+    <a class="card" href="/sketches/disarto/40-sidebar.html#shot=a1-rail"><b><span data-l="ru">Рейка (сжатая панель)</span><span data-l="en">Rail (collapsed panel)</span></b><small><span data-l="ru">Те же пункты иконками, подсказки</span><span data-l="en">Same items as icons, with tooltips</span></small><span class="k"><span data-l="ru">клип 01</span><span data-l="en">clip 01</span></span></a>
   </div>
-  <h2>Команда агентов</h2>
+  <h2><span data-l="ru">Команда агентов</span><span data-l="en">Agent team</span></h2>
   <div class="cards">
-    <a class="card" href="/sketches/disarto/41-team-canvas.html#shot=work"><b>Полотно работы</b><small>Оркестратор с чатом, карточки ролей, живая стрелка, «+ роль»</small><span class="k">клип 06</span></a>
-    <a class="card" href="/sketches/disarto/41-team-canvas.html#shot=constructor"><b>Конструктор команды</b><small>Библиотека ролей, холст, модель и права, связи</small><span class="k">клип 07</span></a>
-    <a class="card" href="/sketches/disarto/41-team-canvas.html#shot=queue"><b>Очередь задач</b><small>Номера, перетаскивание на роль</small><span class="k">клип 08</span></a>
-    <a class="card" href="/sketches/disarto/41-team-canvas.html#shot=composer-variants"><b>Над композером · режим общения</b><small>Три варианта: обсуждение и полотно команды</small><span class="k">клип 09</span></a>
+    <a class="card" href="/sketches/disarto/41-team-canvas.html#shot=work"><b><span data-l="ru">Полотно работы</span><span data-l="en">Team at work</span></b><small><span data-l="ru">Оркестратор с чатом, карточки ролей, живая стрелка, «+ роль»</span><span data-l="en">Orchestrator with chat, role cards, live arrow, “+ role”</span></small><span class="k"><span data-l="ru">клип 06</span><span data-l="en">clip 06</span></span></a>
+    <a class="card" href="/sketches/disarto/41-team-canvas.html#shot=constructor"><b><span data-l="ru">Конструктор команды</span><span data-l="en">Team builder</span></b><small><span data-l="ru">Библиотека ролей, холст, модель и права, связи</span><span data-l="en">Role library, canvas, model and permissions, links</span></small><span class="k"><span data-l="ru">клип 07</span><span data-l="en">clip 07</span></span></a>
+    <a class="card" href="/sketches/disarto/41-team-canvas.html#shot=queue"><b><span data-l="ru">Очередь задач</span><span data-l="en">Task queue</span></b><small><span data-l="ru">Номера, перетаскивание на роль</span><span data-l="en">Numbers, drag onto a role</span></small><span class="k"><span data-l="ru">клип 08</span><span data-l="en">clip 08</span></span></a>
+    <a class="card" href="/sketches/disarto/41-team-canvas.html#shot=composer-variants"><b><span data-l="ru">Над композером · режим общения</span><span data-l="en">Above the composer · discussion mode</span></b><small><span data-l="ru">Три варианта: обсуждение и полотно команды</span><span data-l="en">Three options: discussion and the team canvas</span></small><span class="k"><span data-l="ru">клип 09</span><span data-l="en">clip 09</span></span></a>
   </div>
-  <h2>Путь проекта и карта</h2>
+  <h2><span data-l="ru">Путь проекта и карта</span><span data-l="en">Project path and map</span></h2>
   <div class="cards">
-    <a class="card" href="/sketches/disarto/39-path-map.html"><b>Путь · карта</b><small>Стадии раскрываются в узлы, карточка по клику</small><span class="k">скетч 39</span></a>
-    <a class="card" href="/sketches/disarto/28-path.html"><b>Путь · обзор</b><small>Лента стадий, что ждёт вас, бюджет</small><span class="k">скетч 28</span></a>
-    <a class="card" href="/sketches/disarto/30-discovery-progress.html"><b>Discovery · ход исследования</b><small>Оси, блокирующие вопросы, бюджет</small><span class="k">скетч 30</span></a>
-    <a class="card" href="/sketches/disarto/32-discovery-variants.html"><b>Discovery · варианты</b><small>Почему рекомендован, выбор одного</small><span class="k">скетч 32</span></a>
-    <a class="card" href="/sketches/disarto/26-om-map.html"><b>Карта проекта</b><small>Как формируется проект от идеи до плана</small><span class="k">скетч 26</span></a>
+    <a class="card" href="/sketches/disarto/39-path-map.html"><b><span data-l="ru">Путь · карта</span><span data-l="en">Path · map</span></b><small><span data-l="ru">Стадии раскрываются в узлы, карточка по клику</span><span data-l="en">Stages open into nodes, card on click</span></small><span class="k"><span data-l="ru">скетч 39</span><span data-l="en">sketch 39</span></span></a>
+    <a class="card" href="/sketches/disarto/28-path.html"><b><span data-l="ru">Путь · обзор</span><span data-l="en">Path · overview</span></b><small><span data-l="ru">Лента стадий, что ждёт вас, бюджет</span><span data-l="en">Stage ribbon, what awaits you, budget</span></small><span class="k"><span data-l="ru">скетч 28</span><span data-l="en">sketch 28</span></span></a>
+    <a class="card" href="/sketches/disarto/30-discovery-progress.html"><b><span data-l="ru">Discovery · ход исследования</span><span data-l="en">Discovery · research progress</span></b><small><span data-l="ru">Оси, блокирующие вопросы, бюджет</span><span data-l="en">Axes, blocking questions, budget</span></small><span class="k"><span data-l="ru">скетч 30</span><span data-l="en">sketch 30</span></span></a>
+    <a class="card" href="/sketches/disarto/32-discovery-variants.html"><b><span data-l="ru">Discovery · варианты</span><span data-l="en">Discovery · options</span></b><small><span data-l="ru">Почему рекомендован, выбор одного</span><span data-l="en">Why recommended, pick one</span></small><span class="k"><span data-l="ru">скетч 32</span><span data-l="en">sketch 32</span></span></a>
+    <a class="card" href="/sketches/disarto/26-om-map.html"><b><span data-l="ru">Карта проекта</span><span data-l="en">Project map</span></b><small><span data-l="ru">Как формируется проект от идеи до плана</span><span data-l="en">How a project forms from idea to plan</span></small><span class="k"><span data-l="ru">скетч 26</span><span data-l="en">sketch 26</span></span></a>
   </div>
-  <h2>Прежний прототип</h2>
+  <h2><span data-l="ru">Прежний прототип</span><span data-l="en">Live window</span></h2>
   <div class="cards">
-    <a class="card" href="/sketches/proto/10-new-chat.html"><b>Живое окно (старая панель)</b><small>Подключено к движку, панель ещё прежняя — обновляется задачей TS-36</small><span class="k">прототип</span></a>
-    <a class="card" href="/sketches/disarto/index.html"><b>Все скетчи</b><small>Листы с пояснениями 00–42</small><span class="k">индекс</span></a>
+    <a class="card" href="/sketches/proto/10-new-chat.html"><b><span data-l="ru">Живое окно</span><span data-l="en">Live window</span></b><small><span data-l="ru">Подключено к движку: новая панель, Входящие, команда агентов, Автопилот (интерфейс)</span><span data-l="en">Connected to the engine: new panel, Inbox, agent team, Autopilot (interface)</span></small><span class="k"><span data-l="ru">прототип</span><span data-l="en">prototype</span></span></a>
+    <a class="card" href="/sketches/disarto/index.html"><b><span data-l="ru">Все скетчи</span><span data-l="en">All sketches</span></b><small><span data-l="ru">Листы с пояснениями 00–44</span><span data-l="en">Annotated sheets 00–44</span></small><span class="k"><span data-l="ru">индекс</span><span data-l="en">index</span></span></a>
   </div>
-  <p class="note">alpha · данные примера · harnessy.ai</p>
+  <p class="note"><span data-l="ru">alpha · данные примера · harnessy.ai</span><span data-l="en">alpha · example data · harnessy.ai</span></p>
+<script>(function(){function apply(l,save){document.documentElement.setAttribute('data-lang',l);document.documentElement.lang=l;if(save){try{localStorage.setItem('harnessy.article.lang',l)}catch(e){}}document.querySelectorAll('.art-lang button').forEach(function(b){b.classList.toggle('on',b.dataset.lang===l);b.setAttribute('aria-pressed',b.dataset.lang===l?'true':'false')})}apply(document.documentElement.getAttribute('data-lang')||'ru',false);document.querySelectorAll('.art-lang button').forEach(function(b){b.addEventListener('click',function(){apply(b.dataset.lang,true)})})})();</script>
 </main></body></html>
