@@ -78,6 +78,25 @@ test('TS-36E: chat and rights menu choose the same discussion mode; leaving rest
  await v.find('[data-cx-team-view]').emit('click');assert.equal(v.ctx.location.href,'04-swarm.html');
 });
 
+test('TS-36E r2: a busy seat refuses discussion from the switch and rights menu',async()=>{
+ const v=ui();v.H.pane.mode='edit';v.H.pane.busy=true;v.ctx.CX.render();
+ await v.find('[data-cx-discussion]').emit('click');assert.equal(v.H.pane.mode,'edit');assert.match(v.toasts.at(-1)!,/ход уже идёт.*после его завершения/i);
+ await v.find('[data-cx="rights"]').emit('click');await v.find('[data-cx-mode="chat"]').emit('click');
+ assert.equal(v.H.pane.mode,'edit');assert.equal(v.requests.filter(r=>r.body).length,0);
+});
+
+test('TS-36E r2: ok receipt with unchanged mode cannot claim discussion or change the next turn',async()=>{
+ let replyMode='edit',replyBusy=true;
+ const v=ui({fetch:async path=>path==='/api/providers/catalog'?catalogue():{ok:true,pane:{id:'worker',mode:replyMode,busy:replyBusy},appliesFrom:'next'}});
+ v.H.pane.mode='edit';await v.find('[data-cx-discussion]').emit('click');
+ assert.equal(v.H.pane.mode,'edit');assert.equal(v.H.pane.busy,true);
+ assert.doesNotMatch(v.toasts.at(-1)!,/Права места.*Только обсуждение/);assert.match(v.toasts.at(-1)!,/права не изменены/i);
+ v.H.pane.busy=false;replyMode='chat';replyBusy=false;await v.find('[data-cx-discussion]').emit('click');
+ assert.equal(v.H.pane.mode,'chat');assert.match(v.toasts.at(-1)!,/Только обсуждение/);
+ replyMode='edit';await v.find('[data-cx-discussion]').emit('click');assert.equal(v.H.pane.mode,'edit');
+ assert.deepEqual(v.requests.filter(r=>r.body).map(r=>r.body?.mode),['chat','chat','edit']);
+});
+
 for(const page of ['chat','new'])for(const room of [false,true])test('351: '+page+' '+(room?'room':'seat')+' requires explicit full-access confirmation, then selects the program separately',async()=>{
  const v=ui({page,room});v.H.pane.kind=room?'room':'orchestrator';await v.open();const group=v.find('[data-cx-program="agy"]');assert.equal(group.querySelectorAll('[data-cx-group-reason]').length,1);assert.equal(v.select('agy','agy-model').textContent,'Antigravity model');assert.match(group.textContent,/Работает только в режиме «Полный доступ» · без инструментов Harnessy/);if(!room)assert.match(group.textContent,/оркестратор не сможет назначать роли/);
  await v.find('[data-cx-full-access="agy"]').emit('click');assert.match(v.find('[role="alertdialog"]').textContent,/Модель сможет менять файлы проекта и запускать команды/);assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(v.H.pane.mode,'read');await v.find('[data-cx-access-cancel]').emit('click');assert.equal(v.requests.filter(r=>r.body).length,0);
