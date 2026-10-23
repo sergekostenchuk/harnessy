@@ -853,7 +853,7 @@
 
   // TS-15b: project-bound swarm snapshots; demo actions never mutate the live team.
   const SWARM={project:null,generation:0,request:0,confirmed:0,alive:true,data:null,error:null,loading:false,queued:false,checking:null,refreshQueued:false,es:null,selected:null,view:'board',tools:new Map(),proposals:null,proposalError:null};
-  const swarmRoot=()=>PAGE==='swarm'?document.querySelector('.frame .main'):null;
+  const swarmRoot=()=>PAGE==='swarm'&&!document.querySelector('[data-team-live]')?document.querySelector('.frame .main'):null;
   const swCount=n=>Number.isSafeInteger(n)&&n>=0;
   const swNumber=n=>typeof n==='number'&&Number.isFinite(n)&&n>=0;
   const swRecord=x=>x&&swCount(x.seq)&&x.seq>0&&typeof x.ts==='string'&&Number.isFinite(Date.parse(x.ts))&&['from','kind','text'].every(k=>typeof x[k]==='string')&&Array.isArray(x.to)&&x.to.every(id=>typeof id==='string')&&(x.thread===null||typeof x.thread==='string');
@@ -924,7 +924,7 @@
     }
     if(refresh||!SWARM.data)return swarmFetch();
   }
-  if(PAGE==='swarm'){
+  if(PAGE==='swarm'&&!document.querySelector('[data-team-live]')){
     const root=swarmRoot(),comparison=root.querySelector('#v-cmp .wrap');const comparisonNote=document.createElement('div');comparisonNote.innerHTML=swMock('движок не связывает принятые задачи, круги ревью и A/B-испытания с исполнителем.');comparison.insertBefore(comparisonNote,comparison.firstChild);comparison.setAttribute('data-swarm-mock','');
     root.querySelector('#seg').setAttribute('role','tablist');root.querySelectorAll('#seg [data-v]').forEach(node=>{node.setAttribute('role','tab');node.setAttribute('tabindex','0')});root.querySelector('#x').setAttribute('role','button');root.querySelector('#x').setAttribute('tabindex','0');root.querySelector('#x').setAttribute('aria-label','Закрыть');
     swarmDraw();addEventListener('live:status',()=>swarmSync());addEventListener('pagehide',()=>{SWARM.alive=false;swarmReset()});addEventListener('pageshow',e=>{if(e.persisted){SWARM.alive=true;swarmReset()}});addEventListener('focus',()=>swarmRefresh());

@@ -433,7 +433,7 @@ test('141–143: every PROTO_PAGES page hides demo before delayed status; succes
  execFileSync('python3',['ui/deploy/build.py'],{cwd:new URL('../../../',import.meta.url),stdio:'pipe'});
  const build=readFileSync(new URL('../../../ui/deploy/build.py',import.meta.url),'utf8');
  const pages=builtProtoPages(build);
- assert.equal(pages.length,31);assert.ok(pages.includes('44-inbox'));assert.ok(readdirSync(directory).includes('01-chat.html'));assert.ok(readdirSync(directory).includes('38-project-result.html'));
+ assert.equal(pages.length,33);assert.ok(pages.includes('44-inbox'));assert.ok(readdirSync(directory).includes('01-chat.html'));assert.ok(readdirSync(directory).includes('41-team-constructor.html'));assert.ok(readdirSync(directory).includes('38-project-result.html'));
  const css=readFileSync(new URL('../../../ui/deploy/proto.css',import.meta.url),'utf8');assert.match(css,/html\[data-live-pending\] \[data-demo\]\{visibility:hidden!important\}/);
  for(const page of pages){
   const html=readFileSync(new URL(page+'.html',directory),'utf8'),frames=html.match(/<div class="frame[^"]*"[^>]*>/g)||[];
@@ -532,7 +532,7 @@ test('TS-11 r2: rejected startup response leaves a cached preview read-only unti
 
 test('152: all PROTO_PAGES share history return, invalidate old bindings/status, and confirm before accepting writes',async()=>{
  const build=readFileSync(new URL('../../../ui/deploy/build.py',import.meta.url),'utf8'),pages=builtProtoPages(build);
- const mapping=runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data;assert.equal(pages.length,31);assert.ok(pages.includes('44-inbox'));
+ const mapping=runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data;assert.equal(pages.length,33);assert.ok(pages.includes('44-inbox'));assert.ok(pages.includes('41-team-constructor'));assert.ok(pages.includes('41-team-queue'));
  for(const page of pages){
   const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/'+page+'.html',import.meta.url),'utf8'),key=Object.keys(mapping).find(k=>mapping[k]===page+'.html')||(/^(?:2[89]|3[0-8])-/.test(page)?'path':''),v=firstPaint(html,new Map(),key);
   const body=html.match(/<body[^>]*>([\s\S]*?)<script\b/)![1]!,d=historyDOM(v,body),columns=d.document.querySelectorAll('.feed .col');

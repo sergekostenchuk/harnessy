@@ -279,3 +279,52 @@
 .tc-honest{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
 .tc-honest>div{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--ink2);line-height:1.45;background:var(--raised)}
 .tc-honest>div b{display:block;color:var(--ink);font-weight:500;margin-bottom:4px;display:flex;gap:8px;align-items:center}
+
+/* ── TS-36D · live adapter ── */
+.tc-live-loading,.tc-live-error{margin:14px;border:1px dashed var(--line2);border-radius:10px;padding:12px 14px;color:var(--ink3);font-size:12px}
+.tc-live-error{border-color:rgba(163,48,75,.55);color:#d38a9b;background:rgba(163,48,75,.08)}
+.tc-live-error[hidden]{display:none}
+.tc-pmenu button.it,.tc-lib button.it,.tc-instruction-open{appearance:none;width:100%;border:0;background:none;text-align:left;font:inherit}
+.tc-pmenu button.it:disabled,.tc-lib button.it:disabled{opacity:.55}
+.tc-orch .in textarea{resize:none;min-width:0;flex:1;border:0;outline:0;background:transparent;color:var(--ink);font:12.5px/1.4 var(--font);padding:0}
+.tc-orch .in textarea::placeholder{color:var(--ink3)}
+.tc-orch .in button.go{appearance:none;border:0;background:transparent;cursor:pointer}
+.tc-node .row select.v{appearance:none;width:100%;outline:0}
+.tc-node .row select.v:focus{border-color:var(--accent)}
+.tc-node .tc-instruction-open{cursor:pointer}
+.tc-instruction{margin:0 14px 12px;border:1px solid var(--line2);border-radius:12px;background:var(--panel);padding:10px 12px;color:var(--ink2);font-size:12px}
+.tc-instruction>b{display:block;color:var(--ink);font-weight:500;margin-bottom:5px}
+.tc-instruction p{margin:4px 0;color:var(--ink3)}
+.tc-instruction textarea{box-sizing:border-box;width:100%;min-height:112px;resize:vertical;border:1px solid var(--line2);border-radius:8px;background:var(--bg);color:var(--ink2);font:11px/1.5 var(--mono);padding:9px;outline:0}
+.tc-cons .om-canvas>.spec-block{position:absolute;left:12px;top:12px;z-index:5}
+.tc-qbig[data-spec-mock]{position:relative}
+.tc-qbig[data-spec-mock]::before{content:"МАКЕТ · ОЧЕРЕДИ В ДВИЖКЕ НЕТ";position:absolute;right:16px;top:12px;z-index:4;color:var(--accent);font:500 9px var(--mono);letter-spacing:.07em}
+.tc-root .ps2-tabs [data-go]{cursor:pointer}
+
+@media(max-width:759px){
+  html[data-proto][data-m] .tc-root{min-height:100vh;height:auto}
+  html[data-proto][data-m] .tc-main{min-height:100vh;width:100%}
+  html[data-proto][data-m] .tc-main>.ps2-tabs{overflow-x:auto;scrollbar-width:none;flex:none}
+  html[data-proto][data-m] .tc-main>.ps2-tabs span{flex:none}
+  html[data-proto][data-m] .tc-root .ps2-tbar{height:auto;min-height:44px;flex-wrap:wrap;padding:7px 10px;gap:6px}
+  html[data-proto][data-m] .tc-root .ps2-tbar>.r{width:100%;margin-left:0;overflow-x:auto;padding-bottom:2px}
+  html[data-proto][data-m] .tc-work{display:block;padding:8px;overflow:visible}
+  html[data-proto][data-m] .tc-work .om-canvas{height:620px;min-height:620px;margin-bottom:8px}
+  html[data-proto][data-m] .tc-work .tc-card{width:calc(100vw - 46px)}
+  html[data-proto][data-m] .tc-work .tc-orch{width:calc(100vw - 46px)}
+  html[data-proto][data-m] .tc-orch .hd{flex-wrap:wrap}
+  html[data-proto][data-m] .tc-orch .hd .st{margin-left:0}
+  html[data-proto][data-m] .tc-orch .ft{overflow-x:auto}
+  html[data-proto][data-m] .tc-queue .rows{grid-template-columns:1fr}
+  html[data-proto][data-m] .tc-task{grid-template-columns:30px minmax(0,1fr) 76px;height:34px}
+  html[data-proto][data-m] .tc-task .who,html[data-proto][data-m] .tc-task .grip{display:none}
+  html[data-proto][data-m] .tc-cons{grid-template-columns:1fr;padding:8px}
+  html[data-proto][data-m] .tc-cons .tc-lib{max-height:210px}
+  html[data-proto][data-m] .tc-cons .om-canvas{height:660px;min-height:660px}
+  html[data-proto][data-m] .tc-node{width:calc(100vw - 54px)}
+  html[data-proto][data-m] .tc-qbig{grid-template-columns:1fr;padding:8px}
+  html[data-proto][data-m] .tc-qbig .targets{max-height:360px}
+  html[data-proto][data-m] .tc-task.big{grid-template-columns:40px minmax(0,1fr) 92px;height:42px}
+  html[data-proto][data-m] .tc-task.big .who,html[data-proto][data-m] .tc-task.big .grip{display:none}
+  html[data-proto][data-m] .om-zoom{display:none}
+}

@@ -287,5 +287,5 @@ window.TC=(function(){
     document.addEventListener('click',e=>{ const rc=e.target.closest('[data-rchip]'); if(rc&&!e.target.closest('.tc-rights')){ rc.classList.toggle('open'); return; } const it=e.target.closest('.tc-rights .it'); if(it){ const rc2=it.closest('[data-rchip]'); if(rc2&&!rc2.closest('.fr.keep')){ rc2.querySelector('b').textContent=it.querySelector('div').firstChild.textContent.trim(); rc2.classList.remove('open'); } return; }
       const tg=e.target.closest('.tc-tg'); if(tg&&!tg.closest('.tc-static')){ tg.classList.toggle('on'); const t=tg.querySelector('.tog'); if(t) t.classList.toggle('on'); return; }
       const sg=e.target.closest('.tc-seg span'); if(sg&&!sg.closest('.tc-static')){ sg.parentElement.querySelectorAll('span').forEach(s=>s.classList.toggle('on',s===sg)); } }); }
-  return {ROLES,QUEUE0,LIB,card,orch,queue,task,plusMenu,lib,node,composer,chatMain,side,tabs,mountWork,mountCons,mountQueue,phone,spec,page,fit};
+  return {ROLES,QUEUE0,LIB,card,orch,queue,task,plusMenu,lib,node,composer,chatMain,side,tabs,mountWork,mountCons,mountQueue,phone,spec,page,fit,engine,workPath,consPath,bindQueue,ico,tag};
 })();
