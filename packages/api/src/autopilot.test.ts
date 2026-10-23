@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {withPathLock} from '@harnessy/team';
+import {AUTOPILOT_OWNER} from '@harnessy/runtime';
 import {fixture,call,OWNER,deferred,until} from './test-helpers.ts';
 
 const conditions={operations:['answer_question','answer_blocker','answer_escalation'],maxSpendPercent:5};
@@ -78,21 +79,27 @@ test('TS-38.1: changing conditions and re-enabling replace the permission genera
  assert.equal(current.autopilot.conditions.stopCases.length,6);
 });
 
-test('TS-38.1/38.2: generation and effect share the project lock; an owner action cannot cross it',async t=>{
+test('TS-38.1/38.2: effect holds the settings lock but nested owner API takes the project lock',async t=>{
  const h=await fixture(t),first=await state(h.api),enabled=(await call(h.api,'/api/autopilot',{body:change(first,true,'reply')})).body.autopilot;
+ assert.throws(()=>h.runtime.postOwner({to:'worker',kind:'note',text:'подделка'},AUTOPILOT_OWNER),error=>(error as {code?:string}).code==='policy_denied');
  const entered=deferred(),release=deferred();
  const applied=h.runtime.withAutopilotGeneration(enabled.generation,async snapshot=>{
   assert.equal(snapshot.generation,enabled.generation);assert.equal(snapshot.revision,enabled.revision);
   assert.deepEqual(snapshot.stopCodes,['payment','external_publish','data_delete','software_install','external_network','spend_over_cap']);
   assert.equal(Object.isFrozen(snapshot),true);assert.equal(Object.isFrozen(snapshot.conditions.operations),true);
+  await assert.rejects(h.runtime.attempt('worker',{project:h.dir,turnInstanceId:'missing',action:'retry'},AUTOPILOT_OWNER),error=>(error as {code?:string}).code==='not_waiting','the nested owner API must reach its project lock');
   entered.resolve();await release.promise;
-  h.runtime.postOwner({to:'worker',kind:'note',text:'решение консилиума'},OWNER);
+  h.runtime.postOwner({to:'worker',kind:'note',text:'решение консилиума'},AUTOPILOT_OWNER);
+  assert.equal(h.runtime.settings.autopilot().on,true,'the autopilot effect is not the owner returning');
   return 'applied';
  });
  await entered.promise;
  assert.throws(()=>h.runtime.chat({pane:'worker',message:'вернулся'},OWNER),error=>(error as {code?:string}).code==='autopilot_busy');
- release.resolve();assert.equal(await applied,'applied');assert.equal((await state(h.api)).autopilot.on,true);
- const off=(await call(h.api,'/api/autopilot',{body:change(await state(h.api),false)})).body.autopilot;
+ assert.throws(()=>h.runtime.settings.ownerAutopilotAction(),error=>(error as {code?:string}).code==='autopilot_busy');
+ let changed=false;const pendingChange=h.runtime.autopilotSet(change(await state(h.api),false),OWNER).then(value=>{changed=true;return value});
+ await Promise.resolve();assert.equal(changed,false,'a concurrent settings change waits for the effect');
+ release.resolve();assert.equal(await applied,'applied');
+ const off=(await pendingChange).autopilot;assert.equal(off.on,false);
  await assert.rejects(h.runtime.withAutopilotGeneration(enabled.generation,()=>null),error=>(error as {code?:string}).code==='autopilot_off');
  assert.equal(off.generation,enabled.generation+1);
  const again=(await call(h.api,'/api/autopilot',{body:change(await state(h.api),true)})).body.autopilot;
@@ -102,7 +109,7 @@ test('TS-38.1/38.2: generation and effect share the project lock; an owner actio
 
 test('TS-38.1/38.2: expired term refuses application and persists revocation',async t=>{
  const h=await fixture(t),initial=await state(h.api),enabled=(await call(h.api,'/api/autopilot',{body:change(initial,true)})).body.autopilot;
- const entered=deferred(),release=deferred(),blocker=withPathLock(h.dir,async()=>{entered.resolve();await release.promise});await entered.promise;
+ const entered=deferred(),release=deferred(),blocker=withPathLock(join(h.dir,'.harness','state','settings.json'),async()=>{entered.resolve();await release.promise});await entered.promise;
  const application=h.runtime.withAutopilotGeneration(enabled.generation,()=>{throw Error('must not apply')});
  h.clock.time=Date.parse(enabled.until.at);release.resolve();await blocker;
  await assert.rejects(application,error=>(error as {code?:string}).code==='autopilot_expired');

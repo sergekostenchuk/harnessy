@@ -11,6 +11,13 @@ import {BILLING_KEYS,billingConfig,mergeBilling} from './billing.ts';
 import {ProjectError} from './errors.ts';
 import {AUTOPILOT_STOP_CASES,autopilotConditions,autopilotExpired,autopilotState,nextMorning,stopAutopilot,type AutopilotPermissionSnapshot,type AutopilotState} from './autopilot.ts';
 import {SETTINGS_APPLIES,SETTINGS_SCOPE} from './strings.ts';
+// The settings-file key is separate from the project lock. Autopilot effects
+// acquire this lock first, then may enter owner APIs that acquire the project
+// lock. Never acquire the autopilot lock while holding the project lock.
+const activeAutopilotLocks=new Set<string>();
+function withAutopilotLock<T>(path:string,run:()=>T|Promise<T>):Promise<T>{
+ return withPathLock(path,async()=>{activeAutopilotLocks.add(path);try{return await run()}finally{activeAutopilotLocks.delete(path)}})
+}
 function repr(key:string){
  const quote=key.includes("'")&&!key.includes('"')?'"':"'";
  return quote+[...key].map(ch=>{if(ch===quote||ch==='\\')return '\\'+ch;if(ch==='\n')return '\\n';if(ch==='\r')return '\\r';if(ch==='\t')return '\\t';
@@ -58,13 +65,13 @@ export class Settings {
  autopilot():AutopilotState {const {path}=this.autopilotPath();return autopilotState(this.readAutopilotProject(path).autopilot)}
  async currentAutopilot(clock:()=>number=()=>this.now()):Promise<AutopilotState> {
   const {project,path}=this.autopilotPath(),current=autopilotState(this.readAutopilotProject(path).autopilot);if(!autopilotExpired(current,clock()))return current;
-  return withPathLock(project,()=>{const saved=this.readAutopilotProject(path),state=autopilotState(saved.autopilot);if(!autopilotExpired(state,clock()))return state;const stopped=stopAutopilot(state);writeJson(path,{...saved,autopilot:stopped});return stopped})
+  return withAutopilotLock(path,()=>{const saved=this.readAutopilotProject(path),state=autopilotState(saved.autopilot);if(!autopilotExpired(state,clock()))return state;const stopped=stopAutopilot(state);writeJson(path,{...saved,autopilot:stopped});return stopped})
  }
  async changeAutopilot(input:unknown,clock:()=>number=()=>this.now(),assertActive:()=>void=()=>{}):Promise<AutopilotState> {
   if(!object(input)||Object.keys(input).some(key=>!['on','until','conditions','revision'].includes(key))||typeof input.on!=='boolean'||!Number.isSafeInteger(input.revision)||Number(input.revision)<0)throw new ProjectError('autopilot_invalid','Ожидаются on и ревизия состояния Автопилота',400);
   if(input.on&&!(input.until==='morning'||input.until==='reply')||!input.on&&(input.until!==undefined||input.conditions!==undefined))throw new ProjectError('autopilot_invalid','Выберите срок Автопилота: до утра или до ответа',400);
-  const conditions=input.on&&input.conditions!==undefined?autopilotConditions(input.conditions):null,{project,path}=this.autopilotPath();
-  return withPathLock(project,()=>{
+  const conditions=input.on&&input.conditions!==undefined?autopilotConditions(input.conditions):null,{path}=this.autopilotPath();
+  return withAutopilotLock(path,()=>{
    assertActive();const now=clock(),saved=this.readAutopilotProject(path),prior=autopilotState(saved.autopilot),current=autopilotExpired(prior,now)?stopAutopilot(prior):prior;
    if(current!==prior)writeJson(path,{...saved,autopilot:current});
    if(input.revision!==current.revision)throw new ProjectError('autopilot_conflict','Условия Автопилота изменились; перечитайте карточку',409);
@@ -73,13 +80,17 @@ export class Settings {
   })
  }
  ownerAutopilotAction():AutopilotState {
-  const {path}=this.autopilotPath(),saved=this.readAutopilotProject(path),state=autopilotState(saved.autopilot);
+  const {path}=this.autopilotPath();
+  // Synchronous owner APIs cannot wait for an in-flight effect. Their caller
+  // receives a typed retry instead of changing the generation under it.
+  if(activeAutopilotLocks.has(path))throw new ProjectError('autopilot_busy','Автопилот завершает решение; повторите действие после него',409);
+  const saved=this.readAutopilotProject(path),state=autopilotState(saved.autopilot);
   if(!state.on||state.until?.kind!=='reply')return state;
   const stopped=stopAutopilot(state);writeJson(path,{...saved,autopilot:stopped});return stopped;
  }
  async withAutopilotGeneration<T>(expectedGeneration:number,apply:(snapshot:AutopilotPermissionSnapshot)=>T|Promise<T>,clock:()=>number=()=>this.now(),assertActive:()=>void=()=>{}):Promise<T>{
   if(!Number.isSafeInteger(expectedGeneration)||expectedGeneration<1)throw new ProjectError('autopilot_generation_mismatch','Поколение разрешений Автопилота изменилось',409);
-  const {project,path}=this.autopilotPath();return withPathLock(project,async()=>{
+  const {path}=this.autopilotPath();return withAutopilotLock(path,async()=>{
    assertActive();const saved=this.readAutopilotProject(path),state=autopilotState(saved.autopilot);
    if(autopilotExpired(state,clock())){writeJson(path,{...saved,autopilot:stopAutopilot(state)});throw new ProjectError('autopilot_expired','Срок Автопилота истёк',409)}
    if(!state.on)throw new ProjectError('autopilot_off','Автопилот выключен',409);
