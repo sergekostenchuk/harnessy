@@ -26,6 +26,19 @@ function settingsUi(fetch?:(path:string,body?:any)=>Promise<any>,project='/proje
  return {...d,H,L,context,storage,writes,toasts,logs,requests,find,go,ready};
 }
 
+test('TS-36E: profile saves and clears only the owner name through confirmed settings',async t=>{
+ const h=await fixture(t),v=settingsUi(async(path,body)=>(await call(h.api,path,body?{body}:{})).body,h.dir);await v.ready();await v.go('profile');
+ const field=v.find('[data-profile-name]');field.value='  Мария Ветрова  ';await field.emit('input');await v.find('[data-profile-save]').emit('click');await v.ready();
+ assert.equal(h.runtime.settings.profileName(),'Мария Ветрова');assert.equal(v.requests.filter(r=>r.path==='/api/settings'&&r.body).length,1);assert.match(v.find('[data-profile-name]').value,/Мария Ветрова/);
+ await v.find('[data-profile-clear]').emit('click');await v.ready();assert.equal(h.runtime.settings.profileName(),null);assert.equal(v.find('[data-profile-name]').value,'');
+});
+
+test('TS-36E: a refused profile save keeps the entered name and shows no receipt',async()=>{
+ const v=settingsUi(async(path,body)=>body?{ok:false,error:'запись отклонена'}:path==='/api/settings'?{ok:true,owner:{},project:{},effective:{}}:{project:'/projects/p1'});await v.ready();await v.go('profile');
+ const field=v.find('[data-profile-name]');field.value='Новый псевдоним';await field.emit('input');await v.find('[data-profile-save]').emit('click');await v.ready();
+ assert.equal(v.find('[data-profile-name]').value,'Новый псевдоним');assert.match(v.find('[role="alert"]').textContent,/запись отклонена/);assert.equal(v.document.querySelector('[role="status"]'),null);
+});
+
 test('111: less motion has one owner with raw HX and live handlers loaded; one click, one mutation, one log',async()=>{
  const v=settingsUi();await v.ready();await v.go('look');const toggle=v.find('[data-set-local]');
  await toggle.emit('click');assert.equal(toggle.classList.contains('on'),true);assert.equal(v.html.classList.contains('less-motion'),true);assert.deepEqual(v.writes,['harnessy-less-motion']);assert.equal(v.logs.length,1);

@@ -59,3 +59,14 @@ test('ОКНА/56: queued room move cannot close a project selected in the meant
 test('38/56: saved room with unavailable provider remains readable and queues input with typed no_provider',async t=>{
  const h=await harness(t),r=h.runtime;r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','сохранённое');r.project.state.savePanes(r.registry,r.journal);const id=r.project.state.chats.active.room;await r.close();const next=await createRuntime({...h.deps,providers:{}},completedActions);t.after(()=>next.close());assert.equal(next.project.state.chats.active.room,id);assert.equal(next.registry.get('room')!.transcript[0]!.text,'сохранённое');next.chat({pane:'room',message:'в очереди'},OWNER);await next.idle();assert.equal(next.journal.pendingFor('room').length,1);assert.equal(next.waiting('room')!.status,'unsent');assert.equal(next.waiting('room')!.failure?.code,'no_provider');await assert.rejects(next.runTurn('room','проверка'),error('uncertain'));
 });
+
+test('TS-36E: room project boundary survives rights changes and restart',async t=>{
+ const h=await harness(t),r=h.runtime;
+ r.roomSet({model:'w1',folder:h.dir},OWNER);const room=r.registry.get('room')!;
+ r.paneSet('room',{mode:'chat',binding:r.paneBinding('room')},OWNER);
+ assert.equal(room.mode,'chat');assert.equal(room.folderless,false);
+ await r.close();const next=await createRuntime(h.deps,actions);t.after(()=>next.close());
+ assert.equal(next.registry.get('room')!.mode,'chat');assert.equal(next.registry.get('room')!.folderless,false);
+ next.roomSet({model:'w1',folder:false},OWNER);next.paneSet('room',{mode:'read',binding:next.paneBinding('room')},OWNER);
+ assert.equal(next.registry.get('room')!.mode,'read');assert.equal(next.registry.get('room')!.folderless,true);
+});

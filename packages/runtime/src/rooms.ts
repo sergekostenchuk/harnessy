@@ -16,18 +16,19 @@ export function vendorOf(p:Pick<ProjectState,'registry'>,model:string):Vendor|nu
 }
 export function makeRoomIn(p:Pick<ProjectState,'registry'|'dir'|'bus'>,runtime:Runtime,model:string|null,mode:string,vendor?:Vendor):Pane|null {
  const selected=vendor??(model?vendorOf(p,model):p.registry.providers.has('claude')?'claude':p.registry.providers.has('codex')?'codex':'claude');if(!selected||!MODE_IDS.includes(mode as Mode))return null;
- const old=p.registry.get('room'),room=new Pane({id:'room',vendor:selected,label:'без роли',role:'room',model:model||'',mode:mode as Mode,cwd:p.dir},p.bus,runtime.clock);
- if(old){room.transcript=old.transcript;room.transcriptSeq=old.transcriptSeq;room.carry=old.carry;if(old.vendor===selected&&old.model===model)room.sessionId=old.sessionId;room.revision=old.revision+1}
+ const old=p.registry.get('room'),room=new Pane({id:'room',vendor:selected,label:'без роли',role:'room',model:model||'',mode:mode as Mode,cwd:p.dir,folderless:p.dir===runtime.defaultDir||mode==='chat'},p.bus,runtime.clock);
+ if(old){room.transcript=old.transcript;room.transcriptSeq=old.transcriptSeq;room.carry=old.carry;room.folderless=old.folderless;if(old.vendor===selected&&old.model===model)room.sessionId=old.sessionId;room.revision=old.revision+1}
  p.registry.panes.set('room',room);return room;
 }
-export function makeRoom(runtime:Runtime,model:string,mode:string,initiator:Initiator,vendor?:Vendor) {
+export function makeRoom(runtime:Runtime,model:string,mode:string,initiator:Initiator,vendor?:Vendor,folderless?:boolean) {
  const p=owner(runtime,initiator),old=p.registry.get('room');if(old)free(p,old,'разговор без роли сейчас отвечает');
  const room=makeRoomIn(p,runtime,model,mode,vendor);if(!room)throw new RuntimeError('model_unknown','не удалось создать разговор без роли',400);
+ if(folderless!==undefined)room.folderless=folderless;
  p.state.savePanes(p.registry,p.journal);void runtime.kick('room');return room.settings();
 }
 export function roomSet(runtime:Runtime,input:{model?:unknown;folder?:unknown;vendor?:unknown},initiator:Initiator) {
  const p=owner(runtime,initiator),model=pythonTrim(String(input.model||'')),mode=input.folder===undefined||pyTruthy(input.folder)?'read':'chat';if(input.vendor!==undefined&&(typeof input.vendor!=='string'||!p.registry.providers.has(input.vendor)))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);const vendor=typeof input.vendor==='string'?input.vendor:vendorOf(p,model);if(vendor){const models=runtime.validateSelection(vendor,model,mode);if(models)p.registry.models[vendor]=models;}if(!model||!vendor||!p.registry.models[vendor]?.some(m=>m.id===model))throw new RuntimeError('model_unknown','модель не из каталога',400);
- return {ok:true as const,pane:makeRoom(runtime,model,mode,initiator,vendor)};
+ return {ok:true as const,pane:makeRoom(runtime,model,mode,initiator,vendor,mode==='chat')};
 }
 function moveInput(p:ProjectState,source:Chat):Chat {
  const text=transcriptText(source.transcript),carry=text&&!source.carry.endsWith(text)?(source.carry?source.carry+'\n\n':'')+text:source.carry;
@@ -35,6 +36,7 @@ function moveInput(p:ProjectState,source:Chat):Chat {
 }
 function transferRoom(runtime:Runtime,p:ProjectState,source:Chat,mode:string,failure:string):Pane {
  const room=p.registry.get('room')??makeRoomIn(p,runtime,source.model,mode,source.vendor as Vendor);if(!room)throw new RuntimeError('room_missing',failure,400);
+ room.folderless=false;
  const moved=source.cwd!==p.dir,copy=moved?moveInput(p,source):source;
  // The active chat of the destination folder is independent of the source chat.
  p.state.newChat(room);room.transcript=conversationHistory(copy.transcript);room.carry=copy.carry;room.sessionId=!moved&&source.vendor===room.vendor?source.sessionId:null;

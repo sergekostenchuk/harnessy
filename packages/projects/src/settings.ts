@@ -60,6 +60,7 @@ export class Settings {
  }
  private prices(owner:Record<string,unknown>):ModelPrice[]{try{return Object.hasOwn(owner,'priceList')?priceList(owner.priceList):[]}catch(e){throw new ProjectError('pricelist_unreadable','прайс-лист владельца не читается: '+(e as Error).message,409,e)}}
  priceList(){return this.prices(this.readOwner())}
+ profileName(){try{const value=this.readOwner().profileName,name=typeof value==='string'?value.trim():'';return name&&[...name].length<=80&&!/[\p{C}]/u.test(name)?name:null}catch{return null}}
  billing(){try{return billingConfig(this.readOwner())}catch(e){throw new ProjectError('billing_unreadable','Настройки подписок не читаются: '+(e as Error).message,409,e)}}
  async patchBilling(changes:unknown){
   const path=canonicalPath(this.ownerFile);
@@ -78,6 +79,7 @@ export class Settings {
  scope=truthy(scope)?String(scope):'owner';if(!['owner','project'].includes(String(scope))||!object(patch)||!Object.keys(patch).length)throw new ProjectError('invalid_settings',SETTINGS_SCOPE);
  const changes=orderedClone(patch);
  for(const key of orderedKeys(changes)){const value=changes[key];if(key==='network')throw new ProjectError('invalid_settings','Выходы меняются через /api/network');if(key==='llmProviders')throw new ProjectError('invalid_settings','Маршруты меняются через /api/llm/providers');if(key.startsWith('programBinary_'))throw new ProjectError('invalid_settings','Путь к программе меняется через карточку программы');if([...key].length>40||!(/^[\p{L}\p{N}]+$/u.test(key.replaceAll('_',''))))throw new ProjectError('invalid_settings','ключ '+repr(key)+' не годится');
+ if(key==='profileName'){if(scope!=='owner')throw new ProjectError('invalid_settings','profileName: только область owner');if(value!==null){if(typeof value!=='string'||![...value.trim()].length||[...value.trim()].length>80||/[\p{C}]/u.test(value))throw new ProjectError('invalid_settings','Имя: от 1 до 80 символов без управляющих',400);changes[key]=value.trim()}}
  if(key==='traceEnabled'||key==='traceMaxMiB'){if(scope!=='owner')throw new ProjectError('invalid_settings',key+': только область owner');if(value!==null&&(key==='traceEnabled'?typeof value!=='boolean':!Number.isSafeInteger(value)||Number(value)<1||Number(value)>128))throw new ProjectError('invalid_settings',key+': нужен флаг или размер от 1 до 128 МиБ')}
  if(key==='priceList'){if(scope!=='owner')throw new ProjectError('invalid_settings','priceList: только область owner');if(value!==null)changes[key]=priceList(value)}
  if(BILLING_KEYS.includes(key as never)){if(scope!=='owner')throw new ProjectError('billing_invalid',key+': только область owner');if(value!==null)billingConfig({[key]:value})}

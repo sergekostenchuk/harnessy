@@ -60,18 +60,25 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
 }
 
 
-test('TS-32: sidebar profile uses only a confirmed engine account and otherwise stays anonymous',()=>{
+test('TS-36E: sidebar profile uses only the owner name from the engine, never a provider account',()=>{
  const view=ui(),profiles:any[]=[],avatar={firstChild:{nodeValue:''},textContent:''},name={textContent:''},email={textContent:'',hidden:true,removeAttribute(key:string){if(key==='hidden')this.hidden=false},setAttribute(key:string){if(key==='hidden')this.hidden=true}},row={title:'',querySelector(selector:string){return selector==='[data-owner-avatar]'?avatar:selector==='[data-owner-name]'?name:selector==='[data-owner-email]'?email:null}};view.sandbox.window.PS2={setProfile:(profile:any)=>profiles.push(profile)};
  const query=view.sandbox.document.querySelectorAll;view.sandbox.document.querySelectorAll=(selector:string)=>selector==='aside.side.ps [data-owner-profile]'?[row]:query(selector);
- assert.deepEqual(plain(view.functions.profileDraw({auth:{claude:{loggedIn:true,email:'owner@example.test',name:'Мария'},codex:{loggedIn:true,email:'other@example.test'}}})),{name:'Мария',email:'owner@example.test'});assert.equal(avatar.firstChild.nodeValue,'М');assert.equal(name.textContent,'Мария');assert.equal(email.textContent,'owner@example.test');assert.equal(email.hidden,false);
- assert.deepEqual(plain(view.functions.profileDraw({auth:{claude:{loggedIn:false,email:'forged@example.test'},codex:{loggedIn:true,email:'invalid'}}})),{name:'Владелец',email:''});assert.equal(avatar.firstChild.nodeValue,'В');assert.equal(name.textContent,'Владелец');assert.equal(email.textContent,'');assert.equal(email.hidden,true);
- assert.deepEqual(profiles.map(plain),[{name:'Мария',email:'owner@example.test'},{name:'Владелец',email:''}]);assert.doesNotMatch(proto,/9616166@gmail\.com|>Serge</);assert.match(proto,/data-ps2-profile/);
+ assert.deepEqual(plain(view.functions.profileDraw({profile:{name:'Мария'},auth:{claude:{loggedIn:true,email:'owner@example.test',name:'Чужое имя'}}})),{name:'Мария',email:'',configured:true});assert.equal(avatar.firstChild.nodeValue,'М');assert.equal(name.textContent,'Мария');assert.equal(email.textContent,'');assert.equal(email.hidden,true);
+ assert.deepEqual(plain(view.functions.profileDraw({auth:{claude:{loggedIn:true,email:'forged@example.test',name:'Чужое имя'}}})),{name:'Без имени',email:'',configured:false});assert.equal(avatar.firstChild.nodeValue,'?');assert.equal(name.textContent,'Без имени');assert.equal(email.textContent,'');assert.equal(email.hidden,true);
+ assert.deepEqual(profiles.map(plain),[{name:'Мария',email:'',configured:true},{name:'Без имени',email:'',configured:false}]);assert.doesNotMatch(proto,/9616166@gmail\.com|>Serge</);assert.match(proto,/data-ps2-profile/);
 });
 
 test('TS-36A: offline badges never pass demo decisions off as live Inbox data',()=>{
  let inbox:Data|null=null;const sandbox:Data={DEC:{m0:'demo one',limit:'demo two'},waiting:()=>['m0','limit'],window:{LIVE:{H:{on:false,panes:[]}},PS2:{setInbox:(value:Data)=>inbox=value}},document:{querySelectorAll:()=>[]},paneName:(pane:Data)=>pane.label};sandbox.globalThis=sandbox;
  const context=createContext(sandbox);runInContext(part(live,'  function waitList()','  // ── «Сейчас»')+'\nglobalThis.badges=badges;',context);sandbox.badges();assert.deepEqual(plain(inbox),{need:0,info:0,unavailable:true});
  sandbox.window.LIVE.H={on:true,panes:[{id:'worker',label:'воркер',waiting:true,pendingApprovals:0}]};sandbox.badges();assert.deepEqual(plain(inbox),{need:1,info:0});
+});
+
+test('TS-36E: only a reply recorded in chat mode carries the discussion chip',()=>{
+ const view=ui(),reply={role:'ai',src:'live',model:'w1',html:'<p>Ответ</p>',text:'Ответ',t:1791500000000};
+ assert.match(view.functions.bubble({...reply,mode:'chat'},0),/live-discussion-label[^>]*>обсуждение/);
+ assert.doesNotMatch(view.functions.bubble({...reply,mode:'read'},0),/live-discussion-label/);
+ assert.doesNotMatch(view.functions.bubble({...reply,mode:null},0),/live-discussion-label/);
 });
 
 test('TS-25: question and answer share copy and relative time; undated messages invent nothing',()=>{
@@ -185,14 +192,14 @@ test('81/109: busy room uses pane setting and explains next-turn application',as
 });
 
 const directSeats='  worker: {role: executor, vendor: claude, model: w1, mode: read}\n  orchestrator: {role: orchestrator, vendor: claude, model: w1, mode: read}';
-for(const place of ['worker','room'])for(const page of ['chat','new'])test('135: '+place+' composer on '+page+' uses the current project instead of persisted noFolder',()=>{
+for(const place of ['worker','room'])for(const page of ['chat','new'])test('135/TS-36E: '+place+' composer on '+page+' follows current project state without a project chip',()=>{
  const view=ui();view.H.project='/projects/chat-test';view.H.noProject=false;view.H.pane=view.H.panes.find((p:Data)=>p.id===place);view.S.ui.pane=place;view.S.cx={noFolder:true,att:[],modes:{}};view.sandbox.PAGE=page;
  view.sandbox.svg=()=>'';view.sandbox.seats=()=>view.H.panes.filter((p:Data)=>p.id!=='room');
  const top={innerHTML:''},bot={innerHTML:''},att={innerHTML:'',style:{}},box={__cx:{ta:view.ta},previousElementSibling:top,querySelector:(s:string)=>s==='.cx-bot'?bot:s==='.cx-att'?att:null};
  runInContext('(function(){const S=()=>globalState,seat=()=>H.pane,cx=()=>globalState.cx;'+cx.match(/const base=[^;]+;/)![0]+part(cx,'  const chip=','  // ── строка:')+part(cx,'  function render(box)','  function setBusy(')+'globalThis.renderCX=render;})();',view.context);
- const render=(view.context as Data).renderCX;render(box);assert.match(top.innerHTML,/data-cx="folder"[^>]*[\s\S]*?<b>chat-test<\/b>/);assert.doesNotMatch(top.innerHTML,/>Без проекта</);assert.equal(view.S.cx.noFolder,false);
- view.H.project='/projects/next';render(box);assert.match(top.innerHTML,/<b>next<\/b>/);assert.doesNotMatch(top.innerHTML,/<b>chat-test<\/b>/);
- view.H.noProject=true;view.S.cx.noFolder=false;render(box);assert.match(top.innerHTML,/<b>Без проекта<\/b>/);assert.equal(view.S.cx.noFolder,true);
+ const render=(view.context as Data).renderCX;render(box);assert.doesNotMatch(top.innerHTML,/data-cx="folder"|<b>chat-test<\/b>/);assert.equal(view.S.cx.noFolder,false);
+ view.H.project='/projects/next';render(box);assert.doesNotMatch(top.innerHTML,/data-cx="folder"|<b>chat-test<\/b>/);assert.equal(view.S.cx.noFolder,false);
+ view.H.noProject=true;view.S.cx.noFolder=false;render(box);assert.doesNotMatch(top.innerHTML,/data-cx="folder"|<b>Без проекта<\/b>/);assert.equal(view.S.cx.noFolder,true);
 });
 function withOrchestrator(view:ReturnType<typeof ui>){view.H.panes[0].role='executor';view.H.panes[0].kind='worker';view.H.panes.push({id:'orchestrator',label:'оркестратор',role:'orchestrator',kind:'orchestrator',vendor:'claude',model:'w1'});view.H.active.orchestrator='c-orch'}
 for(const change of ['pane','project','chat','away-back','pagehide'])test('TS-08 r2/1: orchestrator card retains its target through delayed history and cancels on '+change,async t=>{
