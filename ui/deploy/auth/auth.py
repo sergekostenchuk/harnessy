@@ -15,11 +15,13 @@
   GET  /auth/admin               владельцу: ожидающие допуска, допустить/заблокировать (POST /auth/admin/act)
   GET  /auth/log                 допущенным: последние события
   GET  /auth/logout
+  POST /auth/alpha               публичная заявка на альфа-тест (JSON, ловушка, лимит по IP)
   POST /auth/tg/webhook          бот: /start, кнопки «Допустить/Отклонить» (X-Telegram-Bot-Api-Secret-Token)
 
 Окружение (/harness/auth/env): BASE_URL, COOKIE_SECRET, BOT_TOKEN, BOT_NAME, GITHUB_CLIENT_ID/SECRET,
 GOOGLE_CLIENT_ID/SECRET, ALLOW_FILE (Telegram ID владельцев = админы, допускаются сразу), LOG_FILE, DB_FILE,
 COOKIE_TTL_DAYS, LISTEN_PORT, TG_WEBHOOK_SECRET.
+Для заявок: ALPHA_IP_SECRET (если пусто — COOKIE_SECRET), ALPHA_RATE_LIMIT (5), ALPHA_RATE_WINDOW (3600).
 """
 import hashlib, hmac, html, json, os, re, secrets, smtplib, sqlite3, threading, time, urllib.parse, urllib.request
 from email.message import EmailMessage
@@ -48,9 +50,17 @@ SMTP_USER, SMTP_PASS = E("SMTP_USER", ""), E("SMTP_PASS", "")
 MAIL_FROM = E("MAIL_FROM", "") or (f"Harnessy <{SMTP_USER}>" if SMTP_USER else "")
 EMAIL_ENABLED = bool(SMTP_USER and SMTP_PASS)
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+GITHUB_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
 PROVIDER_RU = {"telegram": "Telegram", "github": "GitHub", "google": "Google", "email": "почта"}
 COOKIE, STATE_COOKIE = "hs", "hs_state"
 AUTH_DATE_MAX_AGE = 86400
+ALPHA_RATE_LIMIT = int(E("ALPHA_RATE_LIMIT", "5"))
+ALPHA_RATE_WINDOW = int(E("ALPHA_RATE_WINDOW", "3600"))
+ALPHA_IP_SECRET = E("ALPHA_IP_SECRET", "").encode() or COOKIE_SECRET
+ALPHA_TOOLS = ("claude-code", "codex", "antigravity", "other")
+MAX_POST_BYTES = 64 * 1024
+_BASE = urllib.parse.urlsplit(BASE_URL)
+BASE_ORIGIN = f"{_BASE.scheme}://{_BASE.netloc}"
 
 # ───────────────────────── база ─────────────────────────
 SCHEMA = """
@@ -60,6 +70,11 @@ CREATE INDEX IF NOT EXISTS ix_ident_user ON identities(user_id);
 CREATE TABLE IF NOT EXISTS email_codes(email TEXT, code_hash TEXT, created INTEGER, ip TEXT, nxt TEXT, attempts INTEGER DEFAULT 0, used INTEGER DEFAULT 0);
 CREATE INDEX IF NOT EXISTS ix_email_codes ON email_codes(email, created);
 CREATE TABLE IF NOT EXISTS tg_login(nonce TEXT PRIMARY KEY, created INTEGER, code TEXT, ip TEXT, ua TEXT, nxt TEXT, tg_id TEXT, username TEXT, name TEXT, confirmed INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS alpha_requests(id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL COLLATE NOCASE UNIQUE, github TEXT, tools TEXT NOT NULL, mac INTEGER NOT NULL, ip_hash TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', decided INTEGER, decision_by TEXT);
+CREATE INDEX IF NOT EXISTS ix_alpha_status ON alpha_requests(status, ts);
+CREATE TABLE IF NOT EXISTS alpha_rate(ts INTEGER NOT NULL, ip_hash TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_alpha_rate ON alpha_rate(ip_hash, ts);
+CREATE TABLE IF NOT EXISTS alpha_decision_updates(request_id INTEGER PRIMARY KEY, update_id INTEGER NOT NULL UNIQUE, callback_id TEXT NOT NULL UNIQUE, applied INTEGER NOT NULL);
 """
 
 
@@ -151,6 +166,112 @@ def set_status(uid, status, who):
     try:
         c.execute("UPDATE users SET status=?, note=? WHERE id=?", (status, f"{status} by {who} {time.strftime('%Y-%m-%d %H:%M')}", uid))
         c.commit()
+    finally:
+        c.close()
+
+
+def alpha_ip_hash(ip):
+    if not ALPHA_IP_SECRET:
+        return None
+    return hmac.new(ALPHA_IP_SECRET, str(ip).encode(), hashlib.sha256).hexdigest()
+
+
+def alpha_fields(payload):
+    """Строгая публичная форма → нормализованная запись или ошибки по полям."""
+    if not isinstance(payload, dict) or set(payload) - {"name", "email", "github", "tools", "mac", "consent", "company"}:
+        return None, {"form": "invalid"}
+    name = re.sub(r"\s+", " ", str(payload.get("name") or "")).strip()
+    email = str(payload.get("email") or "").strip().lower()
+    github = str(payload.get("github") or "").strip().lstrip("@")
+    raw_tools = payload.get("tools")
+    tools = list(dict.fromkeys(raw_tools)) if isinstance(raw_tools, list) and all(isinstance(v, str) for v in raw_tools) else []
+    errors = {}
+    if not 2 <= len(name) <= 80 or any(ord(ch) < 32 for ch in name):
+        errors["name"] = "name"
+    if len(email) > 254 or not EMAIL_RE.fullmatch(email):
+        errors["email"] = "email"
+    if github and not GITHUB_RE.fullmatch(github):
+        errors["github"] = "github"
+    if not tools or any(v not in ALPHA_TOOLS for v in tools):
+        errors["tools"] = "tools"
+    if type(payload.get("mac")) is not bool:
+        errors["mac"] = "mac"
+    if payload.get("consent") is not True:
+        errors["consent"] = "consent"
+    if errors:
+        return None, errors
+    return {"name": name, "email": email, "github": github or None, "tools": tools, "mac": payload["mac"]}, {}
+
+
+def create_alpha_request(values, ip_hash):
+    """Атомарно считает попытку, применяет лимит и создаёт одну заявку на почту."""
+    now = int(time.time())
+    c = db()
+    try:
+        c.execute("BEGIN IMMEDIATE")
+        c.execute("DELETE FROM alpha_rate WHERE ts < ?", (now - ALPHA_RATE_WINDOW,))
+        count = c.execute("SELECT count(*) FROM alpha_rate WHERE ip_hash=?", (ip_hash,)).fetchone()[0]
+        if count >= ALPHA_RATE_LIMIT:
+            c.rollback()
+            return "rate_limited", None
+        c.execute("INSERT INTO alpha_rate(ts,ip_hash) VALUES(?,?)", (now, ip_hash))
+        found = c.execute("SELECT * FROM alpha_requests WHERE email=?", (values["email"],)).fetchone()
+        if found:
+            c.commit()
+            return "already_received", found
+        cur = c.execute(
+            "INSERT INTO alpha_requests(ts,name,email,github,tools,mac,ip_hash,status) VALUES(?,?,?,?,?,?,?,'pending')",
+            (now, values["name"], values["email"], values["github"], json.dumps(values["tools"]), int(values["mac"]), ip_hash),
+        )
+        row = c.execute("SELECT * FROM alpha_requests WHERE id=?", (cur.lastrowid,)).fetchone()
+        c.commit()
+        return "received", row
+    except Exception:
+        c.rollback()
+        raise
+    finally:
+        c.close()
+
+
+def set_alpha_status(request_id, status, who, *, update_id=None, callback_id=None):
+    if status not in ("invited", "rejected"):
+        return None, False
+    telegram_decision = update_id is not None or callback_id is not None
+    if telegram_decision and (
+        type(update_id) is not int or update_id < 0
+        or not isinstance(callback_id, str) or not callback_id or len(callback_id) > 256
+    ):
+        return None, False
+    c = db()
+    try:
+        c.execute("BEGIN IMMEDIATE")
+        row = c.execute("SELECT * FROM alpha_requests WHERE id=?", (request_id,)).fetchone()
+        if not row:
+            c.rollback()
+            return None, False
+        if telegram_decision:
+            duplicate = c.execute(
+                "SELECT request_id FROM alpha_decision_updates WHERE update_id=? OR callback_id=?",
+                (update_id, callback_id),
+            ).fetchone()
+            previous = c.execute(
+                "SELECT update_id FROM alpha_decision_updates WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            if duplicate or (previous and update_id <= previous["update_id"]):
+                c.rollback()
+                return row, False
+            c.execute(
+                "INSERT INTO alpha_decision_updates(request_id,update_id,callback_id,applied) VALUES(?,?,?,?) "
+                "ON CONFLICT(request_id) DO UPDATE SET update_id=excluded.update_id, callback_id=excluded.callback_id, applied=excluded.applied",
+                (request_id, update_id, callback_id, int(time.time())),
+            )
+        c.execute("UPDATE alpha_requests SET status=?, decided=?, decision_by=? WHERE id=?", (status, int(time.time()), who, request_id))
+        c.commit()
+        return c.execute("SELECT * FROM alpha_requests WHERE id=?", (request_id,)).fetchone(), True
+    except Exception:
+        c.rollback()
+        raise
     finally:
         c.close()
 
@@ -270,6 +391,28 @@ def notify_owners_pending(user, provider, who):
     text = (f"Новый пользователь ждёт допуска на {HOST}\n"
             f"{user['name'] or '—'} · {user['email'] or 'без почты'} · через {provider}: {who}\nid {user['id']}")
     kb = {"inline_keyboard": [[{"text": "✅ Допустить", "callback_data": f"allow:{user['id']}"}, {"text": "⛔ Отклонить", "callback_data": f"block:{user['id']}"}]]}
+    for key in owner_tg_ids():
+        if key.startswith("telegram:") and key[9:].isdigit():
+            tg_api("sendMessage", chat_id=int(key[9:]), text=text, reply_markup=kb)
+
+
+def alpha_tools_text(raw):
+    names = {"claude-code": "Claude Code", "codex": "Codex", "antigravity": "Antigravity", "other": "другое"}
+    try:
+        values = json.loads(raw or "[]")
+    except (TypeError, json.JSONDecodeError):
+        values = []
+    return " · ".join(names.get(v, v) for v in values) or "—"
+
+
+def notify_owners_alpha(row):
+    text = (f"Новая заявка на альфу {HOST}\n"
+            f"{row['name']} · {row['email']}\n"
+            f"GitHub: {('@' + row['github']) if row['github'] else '—'}\n"
+            f"Инструменты: {alpha_tools_text(row['tools'])}\n"
+            f"macOS: {'да' if row['mac'] else 'нет'}\n"
+            f"заявка #{row['id']}")
+    kb = {"inline_keyboard": [[{"text": "✅ Пригласить", "callback_data": f"alpha-invite:{row['id']}"}, {"text": "⛔ Отклонить", "callback_data": f"alpha-reject:{row['id']}"}]]}
     for key in owner_tg_ids():
         if key.startswith("telegram:") and key[9:].isdigit():
             tg_api("sendMessage", chat_id=int(key[9:]), text=text, reply_markup=kb)
@@ -409,6 +552,9 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(data)
+
+    def _json(self, code, payload, extra=()):
+        return self._send(code, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), "application/json; charset=utf-8", extra)
 
     def _page(self, code, title, body, cls="", extra=()):
         return self._send(code, PAGE.format(title=html.escape(title), body=body, cls=cls), extra=extra)
@@ -584,9 +730,18 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlsplit(self.path)
-        n = int(self.headers.get("Content-Length") or 0)
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = -1
+        if n < 0 or n > MAX_POST_BYTES:
+            if u.path == "/auth/alpha":
+                return self._json(413, {"ok": False, "code": "request_too_large"})
+            return self._send(413, "", "text/plain")
         raw = self.rfile.read(n) if n else b""
         try:
+            if u.path == "/auth/alpha":
+                return self.r_alpha(raw)
             if u.path == "/auth/tg/webhook":
                 return self.r_tg_webhook(raw)
             if u.path == "/auth/email/start":
@@ -598,7 +753,41 @@ class H(BaseHTTPRequestHandler):
             return self._send(404, "", "text/plain")
         except Exception as e:  # noqa: BLE001
             log_event({"event": "error", "path": u.path, "detail": repr(e)[:300]})
+            if u.path == "/auth/alpha":
+                return self._json(500, {"ok": False, "code": "server_error"})
             return self._send(500, "", "text/plain")
+
+    def r_alpha(self, raw):
+        if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+            return self._json(415, {"ok": False, "code": "json_required"})
+        origin = self.headers.get("Origin")
+        if origin and origin.rstrip("/") != BASE_ORIGIN:
+            return self._json(403, {"ok": False, "code": "origin_rejected"})
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return self._json(400, {"ok": False, "code": "invalid_json"})
+        if isinstance(payload, dict) and str(payload.get("company") or "").strip():
+            log_event({"event": "alpha", "result": "honeypot"})
+            return self._json(201, {"ok": True, "status": "received"})
+        values, fields = alpha_fields(payload)
+        if fields:
+            return self._json(400, {"ok": False, "code": "validation", "fields": fields})
+        if not BOT_TOKEN.strip():
+            return self._json(503, {"ok": False, "code": "not_configured"})
+        ip_hash = alpha_ip_hash(self._ip())
+        if not ip_hash:
+            return self._json(503, {"ok": False, "code": "not_configured"})
+        status, row = create_alpha_request(values, ip_hash)
+        if status == "rate_limited":
+            log_event({"event": "alpha", "result": status, "ip_hash": ip_hash[:12]})
+            return self._json(429, {"ok": False, "code": status}, [("Retry-After", str(ALPHA_RATE_WINDOW))])
+        if status == "already_received":
+            log_event({"event": "alpha", "result": status, "request": row["id"]})
+            return self._json(200, {"ok": True, "status": status})
+        log_event({"event": "alpha", "result": status, "request": row["id"]})
+        notify_owners_alpha(row)
+        return self._json(201, {"ok": True, "status": status})
 
     def r_check(self):
         user = self._user()
@@ -815,6 +1004,7 @@ class H(BaseHTTPRequestHandler):
         c = db()
         try:
             rows = c.execute("SELECT u.*, (SELECT group_concat(provider||':'||COALESCE(username,email,pid), ' · ') FROM identities i WHERE i.user_id=u.id) AS doors FROM users u ORDER BY (status='pending') DESC, created DESC").fetchall()
+            alpha = c.execute("SELECT * FROM alpha_requests ORDER BY (status='pending') DESC, ts DESC").fetchall()
         finally:
             c.close()
         tr = "".join(
@@ -822,7 +1012,16 @@ class H(BaseHTTPRequestHandler):
             f"<td class='{ {'allowed':'ok','pending':'pend','blocked':'no'}.get(r['status'],'') }'>{r['status']}</td><td>{time.strftime('%d.%m %H:%M', time.localtime(r['created']))}</td>"
             f"<td><form method='post' action='/auth/admin/act' style='display:inline'><input type='hidden' name='uid' value='{r['id']}'>"
             f"<button class='btn' name='act' value='allow'>допустить</button><button class='btn' name='act' value='block'>закрыть</button></form></td></tr>" for r in rows)
-        body = (f"<h1>Пользователи</h1><p>вы: <span class='k'>{html.escape(user['name'] or '')}</span> · <a href='/auth/log'>журнал</a> · <a href='/'>к прототипу</a></p>"
+        alpha_status = {"pending": ("pend", "ждёт решения"), "invited": ("ok", "приглашён"), "rejected": ("no", "отклонён")}
+        alpha_tr = "".join(
+            f"<tr><td>{r['id']}</td><td>{html.escape(r['name'])}<br><span style='color:var(--mute)'>{html.escape(r['email'])}</span></td>"
+            f"<td>{html.escape('@' + r['github'] if r['github'] else '—')}</td><td>{html.escape(alpha_tools_text(r['tools']))}</td><td>{'да' if r['mac'] else 'нет'}</td>"
+            f"<td class='{alpha_status.get(r['status'], ('',''))[0]}'>{alpha_status.get(r['status'], ('',html.escape(r['status'])))[1]}</td><td>{time.strftime('%d.%m %H:%M', time.localtime(r['ts']))}</td>"
+            f"<td><form method='post' action='/auth/admin/act' style='display:inline'><input type='hidden' name='alpha_id' value='{r['id']}'>"
+            f"<button class='btn' name='act' value='invite'>пригласить</button><button class='btn' name='act' value='reject'>отклонить</button></form></td></tr>" for r in alpha)
+        body = (f"<h1>Заявки на альфу</h1><p>вы: <span class='k'>{html.escape(user['name'] or '')}</span> · <a href='/auth/log'>журнал</a> · <a href='/'>к прототипу</a></p>"
+                f"<table><tr><th>#</th><th>Кто</th><th>GitHub</th><th>Инструменты</th><th>Mac</th><th>Статус</th><th>Получена</th><th></th></tr>{alpha_tr or '<tr><td colspan=8>заявок нет</td></tr>'}</table>"
+                f"<h1 style='margin-top:32px'>Пользователи</h1>"
                 f"<table><tr><th>#</th><th>Кто</th><th>Двери</th><th>Статус</th><th>Создан</th><th></th></tr>{tr or '<tr><td colspan=6>пусто</td></tr>'}</table>")
         return self._page(200, "пользователи", body, cls="wide")
 
@@ -830,7 +1029,16 @@ class H(BaseHTTPRequestHandler):
         user = self._user()
         if not (user and user["status"] == "allowed" and is_owner(user["id"])):
             return self._send(403, "", "text/plain")
-        uid, act = int(form.get("uid", "0")), form.get("act", "")
+        act = form.get("act", "")
+        alpha_raw = form.get("alpha_id", "")
+        alpha_id = int(alpha_raw) if alpha_raw.isdigit() else 0
+        if alpha_id and act in ("invite", "reject"):
+            row, applied = set_alpha_status(alpha_id, "invited" if act == "invite" else "rejected", f"admin:{user['id']}")
+            if row and applied:
+                log_event({"event": "alpha-admin", "result": act, "request": alpha_id, "by": user["id"]})
+            return self._send(302, "", extra=[("Location", "/auth/admin")])
+        uid_raw = form.get("uid", "")
+        uid = int(uid_raw) if uid_raw.isdigit() else 0
         if act in ("allow", "block") and uid:
             set_status(uid, "allowed" if act == "allow" else "blocked", f"admin:{user['id']}")
             log_event({"event": "admin", "result": act, "user": uid, "by": user["id"], "ip": self._ip()})
@@ -856,7 +1064,10 @@ class H(BaseHTTPRequestHandler):
 
     # ── бот: /start и кнопки допуска
     def r_tg_webhook(self, raw):
-        if TG_WEBHOOK_SECRET and self.headers.get("X-Telegram-Bot-Api-Secret-Token") != TG_WEBHOOK_SECRET:
+        if not TG_WEBHOOK_SECRET.strip():
+            return self._send(503, "", "text/plain")
+        supplied_secret = self.headers.get("X-Telegram-Bot-Api-Secret-Token") or ""
+        if not hmac.compare_digest(supplied_secret, TG_WEBHOOK_SECRET):
             return self._send(403, "", "text/plain")
         upd = json.loads(raw or b"{}")
         cq = upd.get("callback_query")
@@ -887,6 +1098,23 @@ class H(BaseHTTPRequestHandler):
                     m = cq.get("message") or {}
                     if m:
                         tg_api("editMessageText", chat_id=m["chat"]["id"], message_id=m["message_id"], text=(m.get("text", "") + ("\n\n✅ допущен" if act == "allow" else "\n\n⛔ отклонён")))
+                elif act in ("alpha-invite", "alpha-reject") and uid.isdigit():
+                    update_id, callback_id = upd.get("update_id"), cq.get("id")
+                    row, applied = set_alpha_status(
+                        int(uid), "invited" if act == "alpha-invite" else "rejected", f"tg:{frm}",
+                        update_id=update_id, callback_id=callback_id,
+                    )
+                    result = "invite" if act == "alpha-invite" else "reject"
+                    if row and applied:
+                        log_event({"event": "alpha-admin", "result": result, "request": int(uid), "by": f"tg:{frm}"})
+                    answer = (("Помечено: пригласить вручную" if result == "invite" else "Отклонено") if applied
+                              else "Решение уже обработано" if row else "Кнопка устарела")
+                    tg_api("answerCallbackQuery", callback_query_id=cq["id"], text=answer)
+                    m = cq.get("message") or {}
+                    if m and row and applied:
+                        tg_api("editMessageText", chat_id=m["chat"]["id"], message_id=m["message_id"], text=(m.get("text", "") + ("\n\n✅ помечено: пригласить вручную" if result == "invite" else "\n\n⛔ отклонено")))
+                else:
+                    tg_api("answerCallbackQuery", callback_query_id=cq["id"], text="Кнопка устарела")
             else:
                 tg_api("answerCallbackQuery", callback_query_id=cq["id"], text="Только владелец")
             return self._send(200, "ok", "text/plain")

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru" data-lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Harnessy · Конфиденциальность</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/sketches/disarto/style.css"><link rel="stylesheet" href="/sketches/disarto/article.css">
+</head><body class="art-page art-root">
+<header class="art-head"><div class="art-head-in"><a class="art-mark" href="/"><i><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></i><b>Harnessy</b></a><div class="art-lang" role="group" aria-label="Язык · Language"><button type="button" data-lang="ru" class="on">RU</button><button type="button" data-lang="en">EN</button></div><span class="art-alpha">alpha</span></div></header>
+<main class="art-wrap" style="display:block;max-width:752px"><article class="art-body">
+  <h1 class="art-h1"><span data-l="ru">Конфиденциальность</span><span data-l="en">Privacy</span></h1>
+  <p class="art-p" data-l="ru">Harnessy работает на вашем компьютере. Ключи остаются в системной связке ключей, переписка и файлы проекта — в папках пользователя. Сервис сайта хранит только данные, необходимые для входа и записи на альфа-тест.</p>
+  <p class="art-p" data-l="en">Harnessy runs on your computer. Keys stay in the system keychain; conversations and project files stay in the user's folders. The website service stores only the data needed for sign-in and alpha registration.</p>
+  <section class="art-sec">
+    <h2 class="art-h2"><span data-l="ru">Заявки на альфа-тест</span><span data-l="en">Alpha requests</span></h2>
+    <p class="art-p" data-l="ru">Мы сохраняем имя, почту, необязательный логин GitHub, выбранные инструменты, ответ о наличии macOS, время заявки и необратимый хэш сетевого адреса. Это нужно только для отбора тестеров, связи по заявке и защиты формы от спама. Сырые сетевые адреса в таблицу заявок не записываются.</p>
+    <p class="art-p" data-l="en">We store your name, email, optional GitHub username, selected tools, whether you have macOS, the request time, and a one-way hash of the network address. We use this only to select testers, contact you about the request, and protect the form from spam. Raw network addresses are not stored in the request table.</p>
+    <p class="art-p" data-l="ru">Чтобы удалить заявку, ответьте на письмо о заявке с той же почты и попросите удалить данные.</p>
+    <p class="art-p" data-l="en">To delete your request, reply to the email about your application from the same address and ask us to remove the data.</p>
+  </section>
+  <p class="art-p"><a href="/#alpha"><span data-l="ru">← к форме записи</span><span data-l="en">← back to the signup form</span></a></p>
+</article></main>
+<footer class="art-foot"><div class="art-foot-in"><span>© 2026 Harnessy</span><i>·</i><a href="/"><span data-l="ru">Статья</span><span data-l="en">Article</span></a><i>·</i><span class="art-alpha">alpha</span></div></footer>
+<script>(function(){var root=document.documentElement;function apply(lang){root.dataset.lang=lang;root.lang=lang;document.title=lang==='en'?'Harnessy · Privacy':'Harnessy · Конфиденциальность';document.querySelectorAll('[data-lang]').forEach(function(b){b.classList.toggle('on',b.dataset.lang===lang);b.setAttribute('aria-pressed',b.dataset.lang===lang?'true':'false');});}document.querySelectorAll('[data-lang]').forEach(function(b){b.addEventListener('click',function(){apply(b.dataset.lang);});});apply(/^en\b/i.test(navigator.language||'')?'en':'ru');})();</script>
+</body></html>

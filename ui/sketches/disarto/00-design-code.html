@@ -447,7 +447,7 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
       <p class="conn-note" style="margin:0 0 14px">Страница сайта, не экран приложения: без боковой панели прототипа. Колонка текста 720, слева прилипающее оглавление 200, шапка прилипает. Тексты и видео — парами RU / EN (<code>data-l</code>), язык по умолчанию — язык браузера, запоминается. Классы <code>.art-*</code> — <code>article.css</code>. Слово «альфа» есть; «макет» и «не реализовано» на странице не встречаются.</p>
       <div class="two">
         <div class="box"><div class="cap2">так говорим</div><p style="margin:0;font-size:12.5px;color:var(--ink2)">помощник · команда помощников · старший помощник · проверяющий · задача · решение · проект · Входящие · Автопилот · Конструктор · Очередь задач · Обсуждение · Рейка · <b>альфа</b> (плашка в шапке и в подвале, раздел «Это альфа-версия») · «Записаться на альфу»</p></div>
-        <div class="box"><div class="cap2">так не говорим · и чего нет</div><p style="margin:0;font-size:12.5px;color:var(--ink3)">«сессия», «воркер», «ревью-раунд», «оркестрация» без объяснения; «макет», «не реализовано», «демо»; данные владельца (имя, почта, пути) — ни в тексте, ни в постерах, ни в мета. Формы записи на странице нет — только кнопка → <code>#alpha</code> (форма — отдельная задача).</p></div>
+        <div class="box"><div class="cap2">так не говорим · и чего нет</div><p style="margin:0;font-size:12.5px;color:var(--ink3)">«сессия», «воркер», «ревью-раунд», «оркестрация» без объяснения; «макет», «не реализовано», «демо»; данные владельца (имя, почта, пути) — ни в тексте, ни в постерах, ни в мета. Форма не обещает мгновенный доступ: заявка принята, приглашение приходит отдельно.</p></div>
       </div>
 
       <div class="box" style="margin-top:14px"><div class="cap2">шапка статьи · знак · RU | EN · alpha · «Записаться на альфу» → #alpha · прилипает, фон с размытием</div>
@@ -505,10 +505,30 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
           <div class="art-toc"><div class="t">разделы</div><a href="#article-spec">Что это такое</a><a href="#article-spec">Слева — проекты и чаты. Больше ничего</a><a href="#article-spec" class="on">Входящие: всё, что ждёт вас, в одном месте</a><a href="#article-spec" class="hover">Автопилот: уходите, помощники решат за вас</a><a href="#article-spec">Команда: видно, кто чем занят</a><a href="#article-spec">Попробовать</a></div>
           <p class="art-note"><b>Активный</b> — левая черта коньяком, raised, ink; <b>наведение</b> — raised, ink; остальные — ink2. Активный раздел — последний, чей верх выше линии 120 px от верха окна; обновляется на прокрутке.</p>
         </div>
-        <div class="box"><div class="cap2">блок «Попробовать» · #alpha · карточка panel · кнопка 40</div>
-          <div class="art-try" style="margin:0"><h2 class="art-h2">Попробовать</h2><p class="art-p">Запишитесь на альфа-тест, и мы пришлём приглашение. Нужен Mac. Приложение бесплатное на время теста; за работу моделей вы платите своим провайдерам.</p><div class="art-try-row"><span class="btn p lg">Записаться на альфу</span><small>Mac · бесплатно на время теста</small></div></div>
-          <p class="art-note">Перед блоком — раздел «Это альфа-версия» обычной типографикой. Кнопка та же, что в шапке, крупнее (40 / 14). На телефоне отступы 22 / 18, кнопка и подпись переносятся.</p>
+        <div class="box"><div class="cap2">блок «Попробовать» · #alpha · форма заявки</div>
+          <div class="art-try" style="margin:0"><h2 class="art-h2">Попробовать</h2><p class="art-p">Запишитесь на альфа-тест, и мы пришлём приглашение. Нужен Mac. Приложение бесплатное на время теста; за работу моделей вы платите своим провайдерам.</p>
+            <form class="art-alpha-form">
+              <div class="art-form-grid"><label class="art-field"><span>Имя</span><input type="text" value="Мария" aria-label="Имя"><small class="art-error"></small></label><label class="art-field"><span>Почта</span><input type="email" value="maria@example.com" aria-label="Почта"><small class="art-error"></small></label><label class="art-field full"><span>GitHub · необязательно</span><input type="text" placeholder="username" aria-label="GitHub"><small class="art-error"></small></label></div>
+              <fieldset class="art-choice"><legend>Чем пользуетесь</legend><div class="art-choice-list"><label class="art-check"><input type="checkbox" checked>Claude Code</label><label class="art-check"><input type="checkbox">Codex</label><label class="art-check"><input type="checkbox">Antigravity</label><label class="art-check"><input type="checkbox">Другое</label></div></fieldset>
+              <fieldset class="art-choice"><legend>Есть Mac с macOS?</legend><div class="art-choice-list"><label class="art-check"><input type="radio" checked>Да</label><label class="art-check"><input type="radio">Нет</label></div></fieldset>
+              <label class="art-consent"><input type="checkbox" checked><span>Согласен с <a href="#article-spec">условиями</a> и <a href="#article-spec">политикой конфиденциальности</a></span></label>
+              <div class="art-form-actions"><span class="btn p lg">Записаться</span><small>Ответим на почту после ручного приглашения</small></div>
+            </form>
+          </div>
+          <p class="art-note"><b>Поля.</b> Имя и почта обязательны; GitHub необязателен. Инструменты — множественный выбор, macOS — «да / нет», согласие обязательно. На телефоне поля в одну колонку, варианты — две колонки, кнопка во всю ширину.</p>
         </div>
+      </div>
+
+      <div class="box" style="margin-top:14px"><div class="cap2">состояния формы · тот же блок без скачка высоты</div>
+        <div class="art-states">
+          <div><div class="cap2">пусто</div><div class="art-form-status">Заполните форму — приглашение придёт отдельно.</div></div>
+          <div><div class="cap2">ошибка поля</div><label class="art-field is-error"><span>Почта</span><input type="email" value="maria@"><small class="art-error">Проверьте адрес почты</small></label></div>
+          <div><div class="cap2">отправка</div><div class="art-form-status is-sending"><i class="art-form-spinner"></i>Отправляем заявку…</div></div>
+          <div><div class="cap2">принято</div><div class="art-form-status is-ok">Заявка принята. Ответим на почту.</div></div>
+          <div><div class="cap2">та же почта</div><div class="art-form-status is-repeat">Заявка с этой почтой уже есть. Ответим на почту.</div></div>
+          <div><div class="cap2">сервер не ответил</div><div class="art-form-status is-error">Не удалось отправить. Проверьте связь и попробуйте ещё раз.</div></div>
+        </div>
+        <p class="art-note"><b>Поведение.</b> Во время отправки кнопка неактивна. Ошибка остаётся рядом с полем; общий исход — под кнопкой в <code>aria-live</code>. Введённое не очищается при отказе. После принятия поля блокируются, повтор той же почты считается отдельным понятным исходом.</p>
       </div>
 
       <div class="box" style="margin-top:14px"><div class="cap2">подвал · © · условия · конфиденциальность · alpha</div>
