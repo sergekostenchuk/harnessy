@@ -100,6 +100,15 @@ test('36D: constructor reads the project instruction and saves only the existing
  v.H.panes.find((row:any)=>row.id==='worker').settingsBinding=undefined;await v.context.TEAM_LIVE.refresh(true);await v.settle();for(const select of v.root.querySelectorAll('[data-team-model],[data-team-mode]'))select.value=select.dataset.original!;v.find('[data-team-pane="worker"] [data-team-model]').value='codex/new-model';await v.find('[data-team-save]').emit('click');await v.settle();assert.equal(mutations.length,1);assert.match(v.find('.tc-live-error').textContent,/подтвердить настройки места/);
 });
 
+test('36D r3: a model-only draft preserves rights narrowed by another window',async()=>{
+ const mutations:Array<{path:string;body:any}>=[],worker={...pane('worker','worker',null),busy:false,mode:'all'};let data=snapshot('/project-a',[worker]);
+ const initialReceipt={...settingsBinding('worker'),mode:'all'},v=teamUi('constructor',async(path,body:any)=>{if(path==='/api/swarm')return data;if(path.startsWith('/api/panes/')){mutations.push({path,body});return {ok:true,pane:{id:'worker',vendor:body.vendor,model:body.model,mode:body.mode}}}throw Error('unexpected '+path)},{H:{panes:[{id:'worker',busy:false,settingsBinding:initialReceipt}]}});await v.settle();
+ const model=v.find('[data-team-pane="worker"] [data-team-model]');model.value='codex/new-model';await model.emit('change');
+ const narrowed={...worker,mode:'read'};data=snapshot('/project-a',[narrowed]);const currentReceipt={...settingsBinding('worker'),revision:2,mode:'read'};v.H.panes[0].settingsBinding=currentReceipt;await v.context.TEAM_LIVE.refresh(true);await v.settle();
+ assert.equal(v.find('[data-team-pane="worker"] [data-team-model]').value,'codex/new-model');assert.equal(v.find('[data-team-pane="worker"] [data-team-mode]').value,'read');
+ await v.find('[data-team-save]').emit('click');await v.settle();assert.deepEqual(plain(mutations),[{path:'/api/panes/worker',body:{vendor:'codex',model:'new-model',mode:'read',binding:currentReceipt}}]);
+});
+
 test('36D: an A constructor cannot save through a B receipt while the B snapshot is pending',async()=>{
  const mutations:Array<{path:string;body:unknown}>=[],b=deferred<any>();let project='/project-a',bReads=0;
  const aPane={...pane('worker','worker',null),label:'A воркер',busy:false},bPane={...pane('worker','worker',null),label:'B воркер',busy:false,model:'b-model'};
