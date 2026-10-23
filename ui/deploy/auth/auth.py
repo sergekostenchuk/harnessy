@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS alpha_requests(id INTEGER PRIMARY KEY, ts INTEGER NOT
 CREATE INDEX IF NOT EXISTS ix_alpha_status ON alpha_requests(status, ts);
 CREATE TABLE IF NOT EXISTS alpha_rate(ts INTEGER NOT NULL, ip_hash TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_alpha_rate ON alpha_rate(ip_hash, ts);
+CREATE TABLE IF NOT EXISTS alpha_decision_updates(request_id INTEGER PRIMARY KEY, update_id INTEGER NOT NULL UNIQUE, callback_id TEXT NOT NULL UNIQUE, applied INTEGER NOT NULL);
 """
 
 
@@ -232,19 +233,45 @@ def create_alpha_request(values, ip_hash):
         c.close()
 
 
-def set_alpha_status(request_id, status, who):
+def set_alpha_status(request_id, status, who, *, update_id=None, callback_id=None):
     if status not in ("invited", "rejected"):
-        return None
+        return None, False
+    telegram_decision = update_id is not None or callback_id is not None
+    if telegram_decision and (
+        type(update_id) is not int or update_id < 0
+        or not isinstance(callback_id, str) or not callback_id or len(callback_id) > 256
+    ):
+        return None, False
     c = db()
     try:
         c.execute("BEGIN IMMEDIATE")
         row = c.execute("SELECT * FROM alpha_requests WHERE id=?", (request_id,)).fetchone()
         if not row:
             c.rollback()
-            return None
+            return None, False
+        if telegram_decision:
+            duplicate = c.execute(
+                "SELECT request_id FROM alpha_decision_updates WHERE update_id=? OR callback_id=?",
+                (update_id, callback_id),
+            ).fetchone()
+            previous = c.execute(
+                "SELECT update_id FROM alpha_decision_updates WHERE request_id=?",
+                (request_id,),
+            ).fetchone()
+            if duplicate or (previous and update_id <= previous["update_id"]):
+                c.rollback()
+                return row, False
+            c.execute(
+                "INSERT INTO alpha_decision_updates(request_id,update_id,callback_id,applied) VALUES(?,?,?,?) "
+                "ON CONFLICT(request_id) DO UPDATE SET update_id=excluded.update_id, callback_id=excluded.callback_id, applied=excluded.applied",
+                (request_id, update_id, callback_id, int(time.time())),
+            )
         c.execute("UPDATE alpha_requests SET status=?, decided=?, decision_by=? WHERE id=?", (status, int(time.time()), who, request_id))
         c.commit()
-        return c.execute("SELECT * FROM alpha_requests WHERE id=?", (request_id,)).fetchone()
+        return c.execute("SELECT * FROM alpha_requests WHERE id=?", (request_id,)).fetchone(), True
+    except Exception:
+        c.rollback()
+        raise
     finally:
         c.close()
 
@@ -746,6 +773,8 @@ class H(BaseHTTPRequestHandler):
         values, fields = alpha_fields(payload)
         if fields:
             return self._json(400, {"ok": False, "code": "validation", "fields": fields})
+        if not BOT_TOKEN.strip():
+            return self._json(503, {"ok": False, "code": "not_configured"})
         ip_hash = alpha_ip_hash(self._ip())
         if not ip_hash:
             return self._json(503, {"ok": False, "code": "not_configured"})
@@ -1004,8 +1033,8 @@ class H(BaseHTTPRequestHandler):
         alpha_raw = form.get("alpha_id", "")
         alpha_id = int(alpha_raw) if alpha_raw.isdigit() else 0
         if alpha_id and act in ("invite", "reject"):
-            row = set_alpha_status(alpha_id, "invited" if act == "invite" else "rejected", f"admin:{user['id']}")
-            if row:
+            row, applied = set_alpha_status(alpha_id, "invited" if act == "invite" else "rejected", f"admin:{user['id']}")
+            if row and applied:
                 log_event({"event": "alpha-admin", "result": act, "request": alpha_id, "by": user["id"]})
             return self._send(302, "", extra=[("Location", "/auth/admin")])
         uid_raw = form.get("uid", "")
@@ -1035,7 +1064,10 @@ class H(BaseHTTPRequestHandler):
 
     # ── бот: /start и кнопки допуска
     def r_tg_webhook(self, raw):
-        if TG_WEBHOOK_SECRET and self.headers.get("X-Telegram-Bot-Api-Secret-Token") != TG_WEBHOOK_SECRET:
+        if not TG_WEBHOOK_SECRET.strip():
+            return self._send(503, "", "text/plain")
+        supplied_secret = self.headers.get("X-Telegram-Bot-Api-Secret-Token") or ""
+        if not hmac.compare_digest(supplied_secret, TG_WEBHOOK_SECRET):
             return self._send(403, "", "text/plain")
         upd = json.loads(raw or b"{}")
         cq = upd.get("callback_query")
@@ -1067,13 +1099,19 @@ class H(BaseHTTPRequestHandler):
                     if m:
                         tg_api("editMessageText", chat_id=m["chat"]["id"], message_id=m["message_id"], text=(m.get("text", "") + ("\n\n✅ допущен" if act == "allow" else "\n\n⛔ отклонён")))
                 elif act in ("alpha-invite", "alpha-reject") and uid.isdigit():
-                    row = set_alpha_status(int(uid), "invited" if act == "alpha-invite" else "rejected", f"tg:{frm}")
+                    update_id, callback_id = upd.get("update_id"), cq.get("id")
+                    row, applied = set_alpha_status(
+                        int(uid), "invited" if act == "alpha-invite" else "rejected", f"tg:{frm}",
+                        update_id=update_id, callback_id=callback_id,
+                    )
                     result = "invite" if act == "alpha-invite" else "reject"
-                    if row:
+                    if row and applied:
                         log_event({"event": "alpha-admin", "result": result, "request": int(uid), "by": f"tg:{frm}"})
-                    tg_api("answerCallbackQuery", callback_query_id=cq["id"], text=("Помечено: пригласить вручную" if result == "invite" else "Отклонено") if row else "Заявка не найдена")
+                    answer = (("Помечено: пригласить вручную" if result == "invite" else "Отклонено") if applied
+                              else "Решение уже обработано" if row else "Кнопка устарела")
+                    tg_api("answerCallbackQuery", callback_query_id=cq["id"], text=answer)
                     m = cq.get("message") or {}
-                    if m and row:
+                    if m and row and applied:
                         tg_api("editMessageText", chat_id=m["chat"]["id"], message_id=m["message_id"], text=(m.get("text", "") + ("\n\n✅ помечено: пригласить вручную" if result == "invite" else "\n\n⛔ отклонено")))
                 else:
                     tg_api("answerCallbackQuery", callback_query_id=cq["id"], text="Кнопка устарела")

@@ -77,6 +77,17 @@ class AlphaRequestTest(unittest.TestCase):
         finally:
             c.close()
 
+    def callback(self, action, callback_id, update_id):
+        return {
+            "update_id": update_id,
+            "callback_query": {
+                "id": callback_id,
+                "from": {"id": 42},
+                "data": f"{action}:1",
+                "message": {"chat": {"id": 42}, "message_id": 7, "text": "request"},
+            },
+        }
+
     def test_accept_and_duplicate_email_notify_once(self):
         code, body = self.request(VALID)
         self.assertEqual((code, body), (201, {"ok": True, "status": "received"}))
@@ -106,6 +117,13 @@ class AlphaRequestTest(unittest.TestCase):
         code, body = self.request({**VALID, "email": "no-secret@example.test"})
         self.assertEqual((code, body), (503, {"ok": False, "code": "not_configured"}))
         self.assertEqual(len(self.rows()), 1)
+
+    def test_missing_bot_token_refuses_before_storage(self):
+        auth.BOT_TOKEN = ""
+        code, body = self.request(VALID)
+        self.assertEqual((code, body), (503, {"ok": False, "code": "not_configured"}))
+        self.assertEqual(self.rows(), [])
+        self.assertEqual(self.rows("alpha_rate"), [])
 
     def test_rate_limit_is_atomic_for_parallel_requests(self):
         auth.ALPHA_RATE_LIMIT = 2
@@ -166,10 +184,57 @@ class AlphaRequestTest(unittest.TestCase):
         self.assertEqual(response.status, 302)
         self.assertEqual(self.rows()[0]["status"], "invited")
 
-        update = {"callback_query": {"id": "cb-1", "from": {"id": 42}, "data": "alpha-reject:1", "message": {"chat": {"id": 42}, "message_id": 7, "text": "request"}}}
+        update = self.callback("alpha-reject", "cb-1", 1)
         code, _ = self.request(update, path="/auth/tg/webhook", headers={"X-Telegram-Bot-Api-Secret-Token": "webhook-secret"})
         self.assertEqual(code, 200)
         self.assertEqual(self.rows()[0]["status"], "rejected")
+
+    def test_webhook_requires_configured_secret_before_owner_action(self):
+        self.assertEqual(self.request(VALID)[0], 201)
+        auth.TG_WEBHOOK_SECRET = ""
+        code, _ = self.request(self.callback("alpha-invite", "forged", 10), path="/auth/tg/webhook")
+        self.assertEqual(code, 503)
+        self.assertEqual(self.rows()[0]["status"], "pending")
+
+    def test_telegram_decision_ignores_replayed_and_out_of_order_updates(self):
+        self.assertEqual(self.request(VALID)[0], 201)
+        headers = {"X-Telegram-Bot-Api-Secret-Token": "webhook-secret"}
+        invite = self.callback("alpha-invite", "old-callback", 100)
+        reject = self.callback("alpha-reject", "new-callback", 101)
+        self.assertEqual(self.request(invite, path="/auth/tg/webhook", headers=headers)[0], 200)
+        self.assertEqual(self.request(reject, path="/auth/tg/webhook", headers=headers)[0], 200)
+        self.assertEqual(self.rows()[0]["status"], "rejected")
+        self.assertEqual(self.request(invite, path="/auth/tg/webhook", headers=headers)[0], 200)
+        self.assertEqual(self.rows()[0]["status"], "rejected")
+        receipt = self.rows("alpha_decision_updates")[0]
+        self.assertEqual((receipt["update_id"], receipt["callback_id"]), (101, "new-callback"))
+
+        missing = self.callback("alpha-invite", "missing-update", None)
+        self.assertEqual(self.request(missing, path="/auth/tg/webhook", headers=headers)[0], 200)
+        self.assertEqual(self.rows()[0]["status"], "rejected")
+
+    def test_parallel_telegram_decisions_commit_status_with_highest_update(self):
+        self.assertEqual(self.request(VALID)[0], 201)
+        headers = {"X-Telegram-Bot-Api-Secret-Token": "webhook-secret"}
+        barrier = threading.Barrier(2)
+        codes = []
+
+        def decide(action, callback_id, update_id):
+            barrier.wait()
+            codes.append(self.request(self.callback(action, callback_id, update_id), path="/auth/tg/webhook", headers=headers)[0])
+
+        workers = [
+            threading.Thread(target=decide, args=("alpha-invite", "parallel-old", 100)),
+            threading.Thread(target=decide, args=("alpha-reject", "parallel-new", 101)),
+        ]
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join(timeout=5)
+        self.assertEqual(sorted(codes), [200, 200])
+        self.assertEqual(self.rows()[0]["status"], "rejected")
+        receipt = self.rows("alpha_decision_updates")[0]
+        self.assertEqual((receipt["update_id"], receipt["callback_id"]), (101, "parallel-new"))
 
 
 if __name__ == "__main__":
