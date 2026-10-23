@@ -227,6 +227,18 @@
 .ps2-root .ps2-ibfeed{flex:1;min-height:0;overflow:auto;padding:22px 40px}.ps2-root .ps2-ibcol{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
 .ps2-root .ps2-ibgrp{display:flex;align-items:center;gap:8px;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:10px 2px 4px}.ps2-root .ps2-ibgrp b{color:var(--accent);font-weight:500}.ps2-root .ps2-ibgrp .sp{flex:1}.ps2-root .ps2-ibgrp a{color:var(--ink3);cursor:pointer;letter-spacing:.04em}.ps2-root .ps2-ibgrp a:hover{color:var(--ink2)}
 .ps2-root .ps2-ibempty{padding:40px 0;text-align:center;color:var(--ink3);font-size:13px}.ps2-root .ps2-ibempty b{display:block;color:var(--ink2);font-weight:500;margin-bottom:4px}
+/* Живой экран Входящие сохраняет геометрию A1·inbox; действия доступны с клавиатуры. */
+.ps2-root .ps2-top .fl button{height:26px;padding:0 10px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--ink2);font:12px var(--font);cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.ps2-root .ps2-top .fl button.on{color:var(--ink);background:var(--raised);border-color:var(--ink3)}
+.ps2-root .ps2-top .fl button b{font:500 10px var(--mono);color:var(--ink3)}.ps2-root .ps2-top .fl button.on b{color:var(--accent)}
+.ps2-root .ps2-top .r button{border:0;background:transparent;color:var(--ink3);font:10.5px var(--mono);cursor:pointer;white-space:nowrap}.ps2-root .ps2-top .r button:hover{color:var(--ink)}
+.ps2-root .ps2-ib .act button{font:500 12px var(--font)}.ps2-root .ps2-ib .act{flex-wrap:wrap;justify-content:flex-end}
+.ps2-root .ps2-ib .f{white-space:normal;line-height:1.45}.ps2-root .ps2-ib .t{white-space:normal;overflow-wrap:anywhere;line-height:1.4}
+.ps2-root .ps2-ib .okm{white-space:nowrap}.ps2-root .ps2-ib .act button:disabled{opacity:.45;cursor:default}
+.ps2-root .ps2-ibempty button{margin-top:12px}.ps2-root .ps2-ibfeed{min-height:0}
+.ps2-root .ps2-ib-reply{display:grid;gap:8px;margin-top:12px}.ps2-root .ps2-ib-reply label{font:10px var(--mono);color:var(--ink3);letter-spacing:.05em}.ps2-root .ps2-ib-reply textarea{width:100%;min-height:72px;resize:vertical;border:1px solid var(--line2);border-radius:8px;padding:10px;background:var(--bg);color:var(--ink);font:12.5px/1.5 var(--font)}.ps2-root .ps2-ib-reply .btn{justify-self:start}
+.ps2-root .ps2-ib-action-error,.ps2-root .ps2-ib-source{color:var(--bad);font-size:12px;line-height:1.45}.ps2-root .ps2-ib-action-error{margin-top:8px}.ps2-root .ps2-ib-source{padding:11px 14px;border:1px solid var(--bad);border-radius:9px;background:var(--panel);display:flex;align-items:center;gap:12px;justify-content:space-between}.ps2-root .ps2-ib-source .btn{flex:none}
+@media(max-width:760px){.ps2-root .ps2-top{padding:12px 12px 12px 54px;min-height:50px;height:auto;flex-wrap:wrap;gap:9px}.ps2-root .ps2-top .fl{order:3;width:100%;margin-left:-42px;overflow:auto;padding-bottom:3px}.ps2-root .ps2-top .r{margin-left:auto;gap:8px}.ps2-root .ps2-top .r [data-inbox-connection]{display:none}.ps2-root .ps2-ibfeed{padding:14px 12px 32px;overflow:visible}.ps2-root .ps2-ib{grid-template-columns:28px minmax(0,1fr);gap:8px;padding:12px}.ps2-root .ps2-ib .ic{width:28px;height:28px}.ps2-root .ps2-ib .act{grid-column:2;justify-content:flex-start}}
 
 /* ── шапка рабочей области БЕЗ вкладок (.ps2-top): новый чат и любой самостоятельный чат — ряда разделов нет совсем; справа только «В проект ▾» и статус ── */
 .ps2-root .ps2-top{display:flex;align-items:center;gap:10px;height:46px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--bg);flex:none;position:relative;z-index:6}

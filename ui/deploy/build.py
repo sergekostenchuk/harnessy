@@ -188,7 +188,7 @@ def build_sketches():
 PROTO_PAGES = {"01-chat": "Чат", "02-plan": "План", "04-swarm": "Команда агентов", "05-spend": "Расход и лимиты", "06-settings": "Настройки", "09-events": "Плашки и события",
                "10-new-chat": "Новый чат", "11-connections": "Подключения", "12-research": "Исследования", "13-sensors": "Дашборд", "14-now": "Входящие",
                "15-artifacts": "Артефакты", "16-memory": "Память проекта", "17-doc": "Документ стадии", "18-overlays": "Автопилот · окно · поиск",
-               "19-first-run": "Первый запуск", "20-login-pour": "Вход", "21-journal": "Журнал"}
+               "19-first-run": "Первый запуск", "20-login-pour": "Вход", "21-journal": "Журнал", "44-inbox": "Входящие"}
 PROTO_PAGES["02-om-map"] = "План · карта проекта"   # вкладка «Карта проекта» экрана «План · карта»: живая карта (скетч 26); «План пользователя» — прежний 02-plan
 PROTO_PAGES.update({"28-path": "Путь", "29-discovery-frame": "Путь · рамка Discovery", "30-discovery-progress": "Путь · ход Discovery",
                     "31-discovery-dossier": "Путь · досье", "32-discovery-variants": "Путь · варианты", "33-discovery-summary": "Путь · итог Discovery",
@@ -209,7 +209,7 @@ def build_proto():
     """Прототип из новых экранов: копия скетчей в режиме прототипа (proto.css + proto.js) → out/site/sketches/proto.
     Исходники в sketches/disarto остаются листами с пояснениями; прототип всегда выводится из них."""
     src = ROOT / "sketches" / "disarto"
-    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "release.js", "proto.js", "responsive.js") if (HERE / n).exists()] + [src / n for n in ("om-map.js", "path.js", "path-map.js")])
+    check_eaten_code([HERE / n for n in ("live.js", "cx.js", "ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "network.js", "inbox.js", "release.js", "proto.js", "responsive.js") if (HERE / n).exists()] + [src / n for n in ("om-map.js", "path.js", "path-map.js")])
     dst = OUT / "sketches" / "proto"
     if dst.exists():
         shutil.rmtree(dst)
@@ -226,7 +226,7 @@ def build_proto():
     shutil.copy(HERE / "live.js", dst / "live.js")                    # рабочий слой: состояние, решения, чат, поиск
     shutil.copy(HERE / "release.js", dst / "release.js")              # канал/версия, постоянный бейдж и дисклеймер alpha
     shutil.copy(HERE / "cx.js", dst / "cx.js")                        # поле ввода C′: папка · роль · режимы / ＋ · права · модель · усилие · ⓘ
-    for extra in ("ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "program-missing.js", "network.js"):                      # модули экранов: контекст чата, настройки, подключения (08.10.2026)
+    for extra in ("ctx.js", "set.js", "conn.js", "llm.js", "network-stats.js", "network-add.js", "network-recovery.js", "program-missing.js", "network.js", "inbox.js"):                      # модули экранов: контекст чата, настройки, подключения (08.10.2026)
         if (HERE / extra).exists():
             shutil.copy(HERE / extra, dst / extra)
     (dst / "proto.js").write_text(rep((HERE / "proto.js").read_text(encoding="utf-8"), "/*IC*/", ic), encoding="utf-8")

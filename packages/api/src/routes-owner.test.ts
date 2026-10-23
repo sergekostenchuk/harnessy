@@ -51,6 +51,30 @@ test('1/19/68: chat direct and handoff selection forms, journal, chats and trans
  const steer=await call(h.api,'/api/steer',{body:{pane:'worker',message:'вмешательство'}});assert.equal(steer.status,409);assert.equal(steer.body.code,'steer_failed');assert.equal(h.runtime.journal.pendingFor('worker').length,0)
 });
 
+test('TS-36B r2: owner answers an exact open question through chat without reusing a closed answer',async t=>{
+ const h=await fixture(t,{seats});await call(h.api,'/api/halt',{body:{on:true}});
+ const question=h.runtime.channel.post({to:'owner',kind:'question',text:'Как продолжать?'},{seat:'worker',trust:'agent'});
+ const body={pane:'worker',kind:'decision',message:'Продолжить проверку',reply_to:question.seq,direct:true};
+ const saved=await call(h.api,'/api/chat',{body});assert.equal(saved.status,200,saved.text);
+ const record=h.runtime.journal.get(saved.body.seq)!;assert.equal(record.reply_to,question.seq);assert.equal(record.thread,question.thread);assert.equal(record.kind,'decision');
+ const duplicate=await call(h.api,'/api/chat',{body});assert.equal(duplicate.status,409);assert.match(duplicate.body.error,/уже ответили/);
+ const wrong=await call(h.api,'/api/chat',{body:{...body,reply_to:999999}});assert.equal(wrong.status,409);assert.match(wrong.body.error,/не найден/);
+});
+
+for(const kind of ['question','blocker','escalation'] as const)test('TS-36B r3: owner answers an open '+kind+' only for its addressee',async t=>{
+ const h=await fixture(t,{seats});await call(h.api,'/api/halt',{body:{on:true}});
+ const item=h.runtime.journal.append({sender:'worker',to:'owner',kind,text:'Нужно решение'});
+ const body={pane:'worker',kind:'decision',message:'Продолжить проверку',reply_to:item.seq,direct:true};
+ const saved=await call(h.api,'/api/chat',{body});assert.equal(saved.status,200,saved.text);
+ const reply=h.runtime.journal.get(saved.body.seq)!;assert.equal(reply.reply_to,item.seq);assert.equal(reply.thread,item.thread);
+ const closed=await call(h.api,'/api/chat',{body});assert.equal(closed.status,409);assert.match(closed.body.error,/уже ответили/);
+ const otherRecipient=h.runtime.journal.append({sender:'worker',to:'orch',kind,text:'Не для владельца'});
+ const wrongRecipient=await call(h.api,'/api/chat',{body:{...body,reply_to:otherRecipient.seq}});assert.equal(wrongRecipient.status,409);assert.match(wrongRecipient.body.error,/не найден/);
+ const otherPane=h.runtime.journal.append({sender:'orch',to:'owner',kind,text:'Вопрос другого места'});
+ const wrongPane=await call(h.api,'/api/chat',{body:{...body,reply_to:otherPane.seq}});assert.equal(wrongPane.status,409);assert.match(wrongPane.body.error,/не найден/);
+ assert.equal(h.runtime.journal.repliesTo(item.seq).filter(r=>r.from==='owner').length,1);
+});
+
 test('1: 154: project creation and bound assign alias; replacement is refused',async t=>{
  const h=await fixture(t);const path=join(h.dir,'project');const created=await call(h.api,'/api/project/create',{body:{path,model:'w1',git:true}});
  assert.equal(created.status,200);assert.deepEqual(keys(created.body),['created','git','memory','ok','orchestrator','project','seats']);assert.equal(created.body.created,true);assert.equal(created.body.git,true);assert.equal(created.body.seats,0);

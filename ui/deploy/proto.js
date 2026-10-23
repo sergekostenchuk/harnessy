@@ -38,8 +38,8 @@
   if(!document.documentElement.hasAttribute('data-proto')) return;
   /*IC*/
   const FILE=location.pathname.split('/').pop()||'10-new-chat.html';
-  const PAGES={new:'10-new-chat.html',now:'14-now.html',chat:'01-chat.html',plan:'02-plan.html',path:'28-path.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',events:'09-events.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
-  const TIP={now:'Входящие',chat:'Чат',plan:'План · карта',path:'Путь',res:'Исследования',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Команда агентов',sens:'Дашборд',spend:'Расход и лимиты',events:'События',log:'Журнал'};
+  const PAGES={new:'10-new-chat.html',now:'14-now.html',inbox:'44-inbox.html',chat:'01-chat.html',plan:'02-plan.html',path:'28-path.html',res:'12-research.html',doc:'17-doc.html',art:'15-artifacts.html',mem:'16-memory.html',swarm:'04-swarm.html',sens:'13-sensors.html',spend:'05-spend.html',events:'09-events.html',log:'21-journal.html',set:'06-settings.html',conn:'11-connections.html',away:'18-overlays.html',first:'19-first-run.html',login:'20-login-pour.html'};
+  const TIP={now:'Сейчас · решения',inbox:'Входящие',chat:'Чат',plan:'План · карта',path:'Путь',res:'Исследования',doc:'Документы проекта',art:'Артефакты',mem:'Память проекта',swarm:'Команда агентов',sens:'Дашборд',spend:'Расход и лимиты',events:'События',log:'Журнал'};
   const TOP=['now','chat','plan','path','res','doc','art','mem','swarm','sens','spend','events','log'];
   const PATH_FILES=['28-path.html','29-discovery-frame.html','30-discovery-progress.html','31-discovery-dossier.html','32-discovery-variants.html','33-discovery-summary.html','34-discovery-unknowns.html','35-concept-to-features.html','36-om-owner-questions.html','37-execution-review.html','38-project-result.html'];
   /* экран «План · карта» сохраняет обе прежние вкладки и добавляет «Путь» */
@@ -158,13 +158,13 @@
 
   // ── навигация телефона: кнопка ☰ и выдвижная панель со всеми экранами
   function mobileNav(){ if(document.querySelector('.m-btn')) return;
-    const X={new:'<path d="M12 5v14M5 12h14"/>',conn:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',away:'<path d="M20 14.5A8 8 0 1 1 9.500 4a6.500 6.500 0 0 0 10.500 10.500z"/>'};
+    const X={new:'<path d="M12 5v14M5 12h14"/>',inbox:'<path d="M4 6h16v10H9l-5 4z"/>',conn:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',away:'<path d="M20 14.5A8 8 0 1 1 9.500 4a6.500 6.500 0 0 0 10.500 10.500z"/>'};
     const item=(k,tx,extra)=>'<a class="m-i'+(k===KEY?' on':'')+(extra==='p'?' p':'')+'" href="'+(k==='plan'?planPage():PAGES[k]+(k==='away'?'#leave':''))+'"><svg viewBox="0 0 24 24">'+(IC[k]||X[k]||'')+'</svg>'+tx+(extra&&extra!=='p'?'<small>'+extra+'</small>':'')+'</a>';
     const btn=document.createElement('button'); btn.className='m-btn'; btn.setAttribute('aria-label','Меню'); btn.textContent='☰';
     const bg=document.createElement('div'); bg.className='m-bg';
     const dr=document.createElement('nav'); dr.className='m-drawer';
     dr.innerHTML='<div class="m-h"><i><svg viewBox="0 0 24 24"><path d="M5 15c2-9 7 2 9-7M14 8l5 5"/></svg></i>Harnessy<span data-mx>×</span></div>'+item('new','Новый чат','p')+
-      '<div class="m-g">работа</div>'+item('now','Входящие','2')+item('chat','Чат')+item('plan','План · карта')+item('path','Путь')+item('doc','Документы проекта')+item('art','Артефакты')+item('mem','Память проекта')+item('res','Исследования')+
+      '<div class="m-g">работа</div>'+item('inbox','Входящие')+item('now','Сейчас · решения','2')+item('chat','Чат')+item('plan','План · карта')+item('path','Путь')+item('doc','Документы проекта')+item('art','Артефакты')+item('mem','Память проекта')+item('res','Исследования')+
       '<div class="m-g">команда</div>'+item('swarm','Команда агентов')+item('sens','Дашборд')+item('spend','Расход и лимиты')+item('conn','Подключения и лимиты')+
       '<div class="m-g">прочее</div>'+item('events','События')+item('log','Журнал')+item('set','Настройки')+item('away','Автопилот')+
       '<div class="m-f"><a href="../disarto/'+(SKETCH[FILE]||FILE)+'">этот экран листом, с пояснениями ↗</a><a href="../disarto/index.html">все скетчи ↗</a></div>';
