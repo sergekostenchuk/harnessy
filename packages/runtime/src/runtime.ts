@@ -43,9 +43,15 @@ import {Scopes,ProcessTokens} from './scope.ts';
 import {renderInbox,queueNote} from './inbox.ts';
 import {RuntimeError,message,slice,deepFreeze,object} from './errors.ts';
 import {systemClock,type RuntimeDeps,type RuntimeActions,type ProjectState,type TurnScope,type ActiveTurn,type ActionContext,type RuntimeEvent,type TurnRecords,type BridgeSendArgs,type BridgeFailure,type SendResult,type ReadPaneResult,type AskResult,type MergeResult,type AssignRoleResult} from './types.ts';
+import type {AutopilotAgentReply,AutopilotAgentRequest} from './autopilot-council.ts';
 const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Initiator & {trust:'harness'}={seat:'harness',trust:'harness'};
 // Only valid inside withAutopilotGeneration. Existing owner API checks still apply.
 export const AUTOPILOT_OWNER:Initiator=Object.freeze({seat:'owner',trust:'owner',source:'autopilot'});
+const COUNCIL_ORIGIN='autopilot-council';
+const councilTools=():PeerTools=>{
+ const denied=async()=>({ok:false as const,code:'autopilot_denied',error:'Консилиум может только вернуть решение'});
+ return {proposeSeats:denied,createSeats:denied,send:denied,ask:denied,readPane:denied,merge:denied,assignRole:denied};
+};
 const attachmentExtension:Record<TurnAttachment['mime'],string>={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif'};
 function programBinaryTarget(id:string,file:string):boolean{
  const name=basename(file);
@@ -157,6 +163,28 @@ export class Runtime {
  autopilotCancelDecision(project:string,id:string,initiator:Initiator){this.requireOwner(initiator);const p=this.project;if(project!==p.dir)throw new RuntimeError('project_changed','Проект решения Автопилота изменился',409);if(!this.autopilotDecisionLedger(p).get(id))throw new RuntimeError('decision_unknown','Решение Автопилота не найдено',404);throw new RuntimeError('cancel_unavailable','Отмена решения Автопилота ещё не реализована',501)}
  async autopilotSet(body:Record<string,unknown>,initiator:Initiator){this.requireOwner(initiator,true);if(initiator.source==='autopilot')throw new RuntimeError('policy_denied','Автопилот не меняет собственные условия',403);const p=this.project;if(body.project!==p.dir||body.instance!==p.trace.instanceId)throw new RuntimeError('project_changed','Проект сменился; обновите состояние Автопилота',409);const {project:_,instance:__,...change}=body;const state=await this.settings.changeAutopilot(change,()=>this.clock.now(),()=>this.same(p));this.same(p);this.scheduleAutopilot(p,state);p.owner.publish({type:'autopilot',autopilot:state});return {ok:true as const,project:p.dir,autopilot:state}}
  ownerAutopilotAction(p=this.project,initiator:Initiator=OWNER){this.same(p);if(initiator.source==='autopilot'){this.requireOwner(initiator);return}this.guardAutopilotApplication(p);const before=this.settings.autopilot();if(!before.on||before.until?.kind!=='reply')return;const state=this.settings.ownerAutopilotAction();this.scheduleAutopilot(p,state);p.owner.publish({type:'autopilot',autopilot:state})}
+ async autopilotCouncilAgent(p:ProjectState,request:AutopilotAgentRequest):Promise<AutopilotAgentReply>{
+  this.same(p);const participant=request.participant,pane=this.pane(participant.seat,p);
+  if(pane.kind!==participant.role||pane.model!==participant.model||!pane.model)throw new RuntimeError('participant_changed','Место консилиума изменилось',409);
+  if(request.signal.aborted)throw new ProviderError('cancelled','Консилиум отменён');
+  const hold=reserve(p,[pane],'место консилиума сейчас отвечает');
+  let networkTurn:NetworkTurn|undefined,handle:import('@harnessy/providers').TurnHandle|null=null;
+  const interrupt=()=>{try{void handle?.interrupt().catch(()=>{})}catch{}};request.signal.addEventListener('abort',interrupt,{once:true});
+  try{
+   const record=p.channel.postCore({to:[pane.id],kind:'task',text:request.prompt,thread:request.replyTo,origin:COUNCIL_ORIGIN},HARNESS);
+   await this.waitVendor(p,pane.vendor);this.same(p);
+   if(p.registry.get(pane.id)!==pane||pane.kind!==participant.role||pane.model!==participant.model||request.signal.aborted)throw new RuntimeError('participant_changed','Место консилиума изменилось',409);
+   this.validateTurn(pane.vendor,'chat');const seat={...pane.providerSeat(),mode:'chat' as const,sessionId:null,writePaths:[],worktree:null},provider=this.provider(pane.vendor),vendor=provider.vendor;
+   networkTurn=this.networkRelay.begin(vendor,'autopilot:'+request.requestId,request.signal);let terminalError:string|null=null;
+   const beforeModel=async()=>{const route=apiRoute(vendor);if(route){const config=this.settings.llmProviders()[route];let local=false;try{local=!!config?.baseURL&&['127.0.0.1','localhost','[::1]'].includes(new URL(config.baseURL).hostname)}catch{}if(!local)await this.networkRelay.prepare(vendor,request.signal,networkTurn)}else if(vendor!=='ollama')await this.networkRelay.prepare(vendor,request.signal,networkTurn);networkTurn!.assert()};
+   const ctx:TurnContext={signal:networkTurn.signal,beforeModel,publish:event=>{if(event.type==='error')terminalError=event.text},modelStarted:()=>{},modelResponded:()=>{},askApproval:async()=>false,session:()=>{},setHandle:value=>{handle=value;if(request.signal.aborted)interrupt()},env:apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,request.signal,networkTurn)??this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[],tools:councilTools(),relayDepth:0,projectDir:p.dir,appUrl:this.deps.appUrl,registerProcessToken:token=>{if(!p.closed)this.tokens.register(token,p.generation,pane.id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,pane.id,vendor),writableRoots:[],attachments:[]};
+   if(!apiRoute(vendor)&&vendor!=='ollama')await beforeModel();
+   const result=await networkTurn.run(()=>provider.runTurn(seat,request.prompt,ctx));handle=null;if(terminalError)throw new ProviderError('turn_failed',terminalError);if(request.signal.aborted)throw new ProviderError('cancelled','Консилиум отменён');
+   this.same(p);if(p.registry.get(pane.id)!==pane||pane.kind!==participant.role||pane.model!==participant.model)throw new RuntimeError('participant_changed','Место консилиума изменилось',409);
+   p.registry.refreshPolicy();const response=p.channel.postAgentEffect({to:['owner'],kind:participant.role==='reviewer'?'status':'decision',text:result.text,thread:request.replyTo,reply_to:record.seq},{seat:pane.id,trust:'agent'},'auto');
+   return Object.freeze({seat:pane.id,model:participant.model,requestId:request.requestId,replyTo:request.replyTo,token:request.token,text:response.text});
+  }finally{request.signal.removeEventListener('abort',interrupt);interrupt();try{await networkTurn?.close()}finally{hold.release()}}
+ }
  private attachmentStore(p:ProjectState){let store=this.attachmentStores.get(p);if(!store){store=new AttachmentStore(p.dir);this.attachmentStores.set(p,store)}return store}
  attachmentUpload(input:Record<string,unknown>,initiator:Initiator){this.requireOwner(initiator);if(Object.keys(input).length!==1||!Object.hasOwn(input,'base64'))throw new RuntimeError('attachment_invalid','нужно одно поле base64',400);return this.attachmentStore(this.project).upload(input.base64)}
  attachmentRead(id:unknown,initiator:Initiator){this.requireOwner(initiator);return this.attachmentStore(this.project).bytes(id)}
@@ -262,7 +290,7 @@ export class Runtime {
  if(event.type==='posted')p.registry.get(event.initiator.seat)?.publish({type:'sent',record:event.record});
  if(event.type==='rejected')p.registry.get(event.sender)?.publish({type:'toolError',text:'политика: '+event.reason});
  if(event.type==='pendingAck'){void this.actions.restorePendingAcks({runtime:this,project:p}).catch(e=>this.report(p,p.owner,e));return}
- if(event.type!=='delivered'||event.record.origin==='steer')return;
+ if(event.type!=='delivered'||event.record.origin==='steer'||event.record.origin===COUNCIL_ORIGIN)return;
  for(const id of event.record.to){if(id==='owner'){p.owner.publish({type:'owner',record:event.record});continue}const pane=p.registry.get(id);if(!pane)continue;
  pane.publish({type:'queued',record:event.record,pending:p.journal.pendingFor(id).length});
  if(event.record.kind==='stop')this.cancelTurn(id,'stop',p);
