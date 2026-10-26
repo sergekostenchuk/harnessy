@@ -16,7 +16,7 @@ export interface Record_ {seq:number;id:string;ts:string;from:string;to:string[]
 export type Bounds=Readonly<Record<string,unknown>>;
 export interface DeliveryEntry {record:Record_;deliverySeq:number}
 export interface AppendInput {sender:string;to:string|string[];kind:string;text:string;thread?:string|null;reply_to?:number|null;evidence?:string[]|null;attachments?:AttachmentRef[]|null;policy?:number;score?:number|null;round?:number|null;origin?:string|null;accepted?:boolean|null;bounds?:Bounds|null;ack?:'pending'|null;sha?:string|null;merged?:string|null;attempt?:AttemptDecision}
-export interface Initiator {seat:string;trust:'owner'|'harness'|'agent';source?:'autopilot'}
+export interface Initiator {seat:string;trust:'owner'|'harness'|'agent';source?:'autopilot'|'autopilot-cancel'}
 export interface AgentPostInput {to:string|string[];kind:Kind;text:string;thread?:string|null;reply_to?:number|null;evidence?:string[]|null;score?:number;round?:number;sha?:string}
 export interface CorePostInput extends Omit<AgentPostInput,'kind'> {kind:Kind|typeof SYSTEM_KINDS[number];origin?:string;merged?:string;attachments?:AttachmentRef[]}
 export interface ThreadState {rounds:number;accepted:boolean;lastScore:number|null;sha:string|null;merged:string|null}

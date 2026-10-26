@@ -69,3 +69,11 @@ export function addSeatLocked(lock:PathLock,h:string,args:AddSeatArgs,options:Fi
  save(h,data,options);return seat
  }catch(e){if(created)unlinkSync(created);if(e instanceof TeamError)throw e;throw new TeamError('write_failed','team.yaml не записан: '+message(e),e)}
 }
+/** Remove only the live team assignment. The seat file and conversation history remain intact. */
+export function unassignSeatLocked(lock:PathLock,h:string,sid:string,expectedInstructions:string):boolean {
+ assertPathLock(lock,dirname(h));
+ if(!/^[a-z][a-z0-9_-]{0,30}$/.test(sid)||['owner','harness','all','room'].includes(sid))throw new TeamError('team_invalid','недопустимое имя места');
+ const data=readManifest(h),seats=data.get('seats') as YMap;
+ if(!seats.has(sid)||teamFrom(data,h).seats[sid]?.instructions!==expectedInstructions)return false;
+ seats.delete(sid);teamFrom(data,h);save(h,data,{});return true;
+}

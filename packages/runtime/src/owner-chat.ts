@@ -18,7 +18,7 @@ export function chat(runtime:Runtime,input:Record<string,unknown>,initiator:Init
   if(kind!=='decision'||!Number.isSafeInteger(input.reply_to)||Number(input.reply_to)<1)throw new RuntimeError('reply_invalid','Ответ должен ссылаться на вопрос из этого разговора',400);
   replyTo=Number(input.reply_to);const question=p.journal.get(replyTo);
   if(!question||!['question','blocker','escalation'].includes(question.kind)||question.from!==pane.id||!question.to.includes('owner'))throw new RuntimeError('reply_invalid','Вопрос больше не найден в этом разговоре',409);
-  if(p.journal.repliesTo(replyTo).some(r=>r.from==='owner'&&['answer','note','decision','ack','rejected'].includes(r.kind)))throw new RuntimeError('reply_closed','На этот вопрос уже ответили',409);
+  if(p.journal.repliesTo(replyTo).some(r=>r.from==='owner'&&['answer','note','decision','ack','rejected'].includes(r.kind)&&!p.journal.autopilotReplyRevoked(r.seq)))throw new RuntimeError('reply_closed','На этот вопрос уже ответили',409);
   thread=question.thread;
  }
  const direct=!!input.direct,orchestrator=[...p.registry.panes.values()].some(x=>x.kind==='orchestrator');
