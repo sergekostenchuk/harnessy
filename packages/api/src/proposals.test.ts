@@ -5,11 +5,11 @@ import {join} from 'node:path';
 import {withPathLock} from '@harnessy/team';
 import {createRuntime,diskIO,type StateIO} from '@harnessy/runtime';
 import {completedActions} from '../../runtime/src/test-helpers.ts';
-import {fixture,call,deferred,until,OWNER,FakeProvider} from './test-helpers.ts';
+import {fixture,noRepositoryFixture,call,deferred,until,OWNER,FakeProvider} from './test-helpers.ts';
 const seats='  lead: {kind: orchestrator, role: юрист, label: Ведущий, vendor: claude, model: w1, mode: read}\n  worker: {kind: worker, role: orchestrator, label: orchestrator, vendor: claude, model: w1, mode: read}';
 const member=(label='Юрист')=>({kind:'worker',label,vendor:'claude',model:'w1',mode:'read',intro:'Ты — юрист по договорам. Подготовь анализ условий.'});
 async function setup(t:Parameters<typeof fixture>[0],options:Parameters<typeof fixture>[1]={}){
- const h=await fixture(t,{...options,seats}),end=deferred<{text:string;sessionId:null}>();h.provider.onRun=async(seat,_text,ctx)=>{ctx.modelStarted?.();if(seat.id==='lead'||seat.id==='worker'){ctx.registerProcessToken(seat.id+'-token');return end.promise}ctx.publish({type:'done',sessionId:null,model:seat.model,durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'готов: '+seat.label,sessionId:null}};
+ const h=await noRepositoryFixture(t,{...options,seats}),end=deferred<{text:string;sessionId:null}>();h.provider.onRun=async(seat,_text,ctx)=>{ctx.modelStarted?.();if(seat.id==='lead'||seat.id==='worker'){ctx.registerProcessToken(seat.id+'-token');return end.promise}ctx.publish({type:'done',sessionId:null,model:seat.model,durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'готов: '+seat.label,sessionId:null}};
  const run=h.runtime.runTurn('lead','Предложи команду').catch(e=>{if(e.code!=='cancelled')throw e});await until(()=>h.provider.calls.some(c=>c.seat.id==='lead'));t.after(async()=>{end.resolve({text:'done',sessionId:null});await run});
  const post=(path:string,body:unknown,from='lead')=>call(h.api,path,{body:{...(body as object),from},headers:{'X-Pane-Token':from+'-token'}});
  const propose=async(body:unknown={seats:[member()]})=>{const r=await post('/api/seats/propose',body);assert.equal(r.status,200,JSON.stringify(r.body));return r.body};
@@ -124,7 +124,7 @@ for(const update of [false,true])for(const cut of ['intent','question','receipt'
 
 test('156 round 2: creation receipt precedes child completion; new participant can ask its creator',{timeout:10000},async t=>{
  const {createActions}=await import('@harnessy/runtime');
- const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: юрист, vendor: claude, model: w1, mode: read}',actions:createActions(),before:dir=>writeFileSync(join(dir,'.harness/comms-policy.yaml'),'version: 1\nroutes: [{from: "*", to: "*", kinds: "*"}]\nobserve: {}\n')}),go=deferred<any>(),entered=deferred(),receipt=deferred(),answered=deferred(),childStarted=deferred(),releaseChild=deferred();
+ const h=await noRepositoryFixture(t,{seats:'  lead: {kind: orchestrator, role: юрист, vendor: claude, model: w1, mode: read}',actions:createActions(),before:dir=>writeFileSync(join(dir,'.harness/comms-policy.yaml'),'version: 1\nroutes: [{from: "*", to: "*", kinds: "*"}]\nobserve: {}\n')}),go=deferred<any>(),entered=deferred(),receipt=deferred(),answered=deferred(),childStarted=deferred(),releaseChild=deferred();
  let leadRuns=0,childRuns=0,childReply:any;
  h.provider.onRun=async(seat,_message,ctx)=>{ctx.modelStarted?.();
   if(seat.id==='lead'){ctx.registerProcessToken('lead-token');if(++leadRuns===1){entered.resolve();const ref=await go.promise;const made=await ctx.tools.createSeats(ref);assert.equal(made.ok,true);receipt.resolve();return {text:'Команда создана',sessionId:null}}return {text:'Прочитай договор поставки',sessionId:null}}

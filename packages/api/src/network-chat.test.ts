@@ -1,11 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {mkdirSync,readFileSync,symlinkSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {fixture,call,sse,until,FakeProvider,deferred,OWNER} from './test-helpers.ts';
+import {fixture as realFixture,noRepositoryFixture as fixture,call,sse,until,FakeProvider,deferred,OWNER} from './test-helpers.ts';
 import {listen,proxy,through} from '../../runtime/src/network-test-helpers.ts';
 import {ProviderError} from '@harnessy/providers';
+
+test('TS-45.4: no-repository Git probes are opt-in and reject writes, outside paths and repositories',async t=>{
+ const ordinary=await realFixture(t),first=await fixture(t),second=await fixture(t);
+ assert.equal(ordinary.deps.gitops,undefined);assert.notEqual(first.dir,second.dir);
+ assert.equal(first.runtime.project.repoRoot,null);assert.equal(await first.deps.gitops!.repoRoot(first.dir),null);
+ await assert.rejects(first.deps.gitops!.run(['init'],first.dir),/unexpected Git operation/);
+ await assert.rejects(first.deps.gitops!.repoRoot(second.dir),/path outside project/);
+ await assert.rejects(fixture(t,{deps:{gitops:first.deps.gitops!}}),/custom GitOps conflicts/);
+ mkdirSync(join(first.dir,'.git'));await assert.rejects(first.deps.gitops!.repoRoot(first.dir),/Git repository exists/);
+ assert.equal(await second.deps.gitops!.repoRoot(second.dir),null);
+ symlinkSync('missing-target',join(second.dir,'.git'));await assert.rejects(second.deps.gitops!.repoRoot(second.dir),/Git repository exists/);
+});
 
 async function blocked(t:Parameters<typeof fixture>[0]){
  const h=await fixture(t,{deps:{networkRelayOptions:{timeoutMs:100}}});

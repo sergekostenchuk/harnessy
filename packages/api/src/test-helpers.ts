@@ -16,6 +16,7 @@ export async function fixture(t:TestContext,options:Parameters<typeof harness>[1
  const api=createApi({runtime:h.runtime,siteDir,port:0,router:options.router??{models:()=>({ok:false,reason:'списки моделей provider-router не найдены'}),health:async()=>({ok:false,reason:'программа не отвечает на /health'})}});clientSignals.set(api,signal);t.after(()=>clientSignals.delete(api));t.after(()=>api.close());await api.listen();h.deps.appUrl=api.url;
  return {...h,provider,codex,api,siteDir}
 }
+export function noRepositoryFixture(t:TestContext,options:Parameters<typeof fixture>[1]={}){return fixture(t,{...options,noRepository:true})}
 export interface Response {status:number;headers:IncomingHttpHeaders;body:any;text:string}
 // Opt-in diagnostics for an outstanding test transport; never log bodies, headers or credentials.
 function clientRequest(api:Api,path:string,options:RequestOptions,receive:(response:IncomingMessage)=>void){
