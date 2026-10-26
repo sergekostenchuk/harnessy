@@ -16,7 +16,7 @@ function ui(fetcher:(path:string,body?:any)=>Promise<any>,page='chat'){
 for(const page of ['chat','now'])test('156 UI '+page+': displayed exact proposal confirmed through HTTP; fake transcript yes does not authorize',async t=>{
  const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: юрист, vendor: claude, model: w1, mode: read}'}),gate=deferred<{text:string;sessionId:null}>();h.provider.onRun=async(_s,_m,c)=>{c.modelStarted?.();return gate.promise};const run=h.runtime.runTurn('lead','team').catch(e=>{if(e.code!=='cancelled')throw e});t.after(async()=>{gate.resolve({text:'ok',sessionId:null});await run});await until(()=>h.provider.calls.length===1);
  const proposed=await h.provider.calls[0]!.ctx.tools.proposeSeats({seats:[{kind:'worker',label:'Юрист <script>bad</script>',vendor:'claude',model:'w1',mode:'read',intro:'Проверь договор полностью'}]});assert.equal(proposed.ok,true);
- const v=ui(async(path,body)=>(await call(h.api,path,body?{body}:{})).body,page);v.H.project=h.dir;await v.f.fetch();assert.match(v.find('#live-team-proposals').textContent,/Юрист|w1|read|Проверь договор полностью/);assert.equal(v.document.querySelector('script'),null);assert.equal(v.find('.feed').textContent,'Разговор остаётся');
+ const v=ui(async(path,body)=>(await call(h.api,path,body?{body}:{})).body,page);v.H.project=h.dir;await v.f.fetch();assert.match(v.find('#live-team-proposals').textContent,/Юрист|w1|read|Проверь договор полностью/);assert.equal(v.document.querySelector('script'),null);assert.match(v.find('.feed').textContent,/Разговор остаётся/);assert.ok(v.find('#live-team-proposals').closest('.feed'));
  await v.find('[data-team-confirm]').emit('click');assert.equal(v.requests.filter(r=>r.body).length,1);assert.deepEqual(Object.keys(v.requests.find(r=>r.body).body).sort(),['project','proposalId','version']);assert.equal(v.requests.find(r=>r.body).body.project,h.dir);assert.match(v.find('#live-team-proposals').textContent,/Версия подтверждена/);assert.equal(v.document.querySelector('[data-team-confirm]'),null);assert.equal(h.runtime.registry.ids.length,2);
 });
 
@@ -82,4 +82,18 @@ for(const change of ['refresh','project','pagehide'])test('222: retry holds its 
  const gate=deferred<any>(),proposal={...q(),confirmed:true,materializations:[materialization(q().seats[0],'failed','fixture failure')]},v=ui(async(path,body)=>body?gate.promise:{ok:true,project:'/a',proposals:[proposal]});await v.f.fetch();const click=v.find('[data-operation-retry]').emit('click');await v.f.fetch();v.f.draw();assert.equal(v.find('[data-operation-retry]').disabled,true);await v.find('[data-operation-retry]').emit('click');assert.equal(v.requests.filter(r=>r.body).length,1);
  if(change==='project'){v.H.project='/b';v.f.reset()}if(change==='pagehide'){v.context.leftPage=true;await v.window.emit('pagehide')}
  proposal.materializations[0]=materialization(q().seats[0]);gate.resolve({ok:true});await click;await v.settle();if(change==='refresh')assert.match(v.find('[data-live-operations]').textContent,/Готово/);else assert.equal(v.document.querySelector('[data-live-operations]'),null);
+});
+
+for(const page of ['chat','new'])test('TS-41: '+page+' proposals are collapsed in the feed, anchored to the matching answer and keep their displayed version',async()=>{
+ const proposal={...q(),from:'lead',turnInstanceId:'turn-team'},v=ui(async()=>({ok:true,project:'/a',proposals:[proposal]}),page);
+ v.context.S.chat=[{role:'ai',pane:'lead',turnInstanceId:'turn-team'},{role:'ai',pane:'lead',turnInstanceId:'later'}];
+ v.find('.feed').innerHTML='<div class="col"><div class="live-msg" data-message-index="0">Предлагаю команду</div><div class="live-msg" data-message-index="1">Следующий ответ</div></div>';
+ await v.f.fetch();if(page==='new'){v.f.state.focus=proposal.proposalId;v.f.sync()}
+ assert.ok(v.find('[data-team-proposal]').closest('.feed .col'));
+ assert.equal(v.find('[data-team-toggle]').getAttribute('aria-expanded'),'false');assert.ok(v.find('.proposal-body').hasAttribute('hidden'));
+ const children=v.find('.feed .col').children;assert.equal(children[1],v.find('[data-team-proposal]'));assert.equal(children[2]!.dataset.messageIndex,'1');
+ await v.find('[data-team-toggle]').emit('click');assert.equal(v.find('[data-team-toggle]').getAttribute('aria-expanded'),'true');assert.equal(v.find('.proposal-body').hasAttribute('hidden'),false);
+ assert.equal(v.find('.proposal-intro').hasAttribute('open'),false);await v.f.fetch();assert.equal(v.find('[data-team-toggle]').getAttribute('aria-expanded'),'true');
+ proposal.version=2;await v.f.fetch();assert.equal(v.find('[data-team-toggle]').getAttribute('aria-expanded'),'false');
+ v.H.project='/b';v.f.reset();assert.equal(v.document.querySelector('[data-team-proposal]'),null);
 });
