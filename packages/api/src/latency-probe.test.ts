@@ -1,16 +1,22 @@
-import test from 'node:test';
+import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {promisify} from 'node:util';
-import {createServer,type ServerResponse} from 'node:http';
+import {createServer,type IncomingMessage,type ServerResponse} from 'node:http';
 import {setTimeout as delay} from 'node:timers/promises';
 import {EventParser,argumentsFor,measure} from '../tools/latency-probe.ts';
 import {fixture} from './test-helpers.ts';
 
 function markDouble(api:Awaited<ReturnType<typeof fixture>>['api']){
   api.server.prependListener('request',(request,response)=>{if(request.method==='GET'&&request.url?.startsWith('/api/events/'))response.setHeader('X-Harnessy-Test-Double','1')});
+}
+
+async function localServer(t:TestContext,handle:(req:IncomingMessage,res:ServerResponse)=>void){
+  const server=createServer(handle);await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+  t.after(async()=>{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()))});
+  const address=server.address();assert.ok(address&&typeof address!=='string');return 'http://127.0.0.1:'+address.port;
 }
 
 test('TS-47.T: SSE parser handles split UTF-8, CRLF, multiline data and comments',()=>{
@@ -32,6 +38,28 @@ test('TS-47.T: an unmarked engine receives no chat request in double mode',async
   const h=await fixture(t,{noRepository:true});
   await assert.rejects(measure({url:h.api.url,pane:'worker',message:'must not be sent',mode:'double'}),/test-double marker missing/);
   assert.equal(h.provider.calls.length,0);assert.equal(h.runtime.project.journal.lastSeq,0);
+});
+
+test('TS-47.T r2: a POST redirect from a marked double never reaches the foreign engine',async t=>{
+  let foreignPosts=0,markedPosts=0;
+  const foreign=await localServer(t,(req,res)=>{if(req.method==='POST')foreignPosts++;req.resume();res.end('{}')});
+  const marked=await localServer(t,(req,res)=>{
+    if(req.method==='GET'){res.writeHead(200,{'Content-Type':'text/event-stream','X-Harnessy-Test-Double':'1'});res.write(': ready\n\n');return}
+    markedPosts++;req.resume();res.writeHead(307,{Location:foreign+'/api/chat'});res.end();
+  });
+  await assert.rejects(measure({url:marked,pane:'worker',message:'must not be forwarded',mode:'double',timeoutMs:5000}));
+  assert.equal(markedPosts,1);assert.equal(foreignPosts,0);
+});
+
+test('TS-47.T r2: an SSE redirect cannot borrow another origin marker to authorize a POST',async t=>{
+  let markedRequests=0,ordinaryPosts=0;
+  const marked=await localServer(t,(_req,res)=>{markedRequests++;res.writeHead(200,{'Content-Type':'text/event-stream','X-Harnessy-Test-Double':'1'});res.write(': ready\n\n')});
+  const ordinary=await localServer(t,(req,res)=>{
+    if(req.method==='GET'){res.writeHead(307,{Location:marked+'/api/events/worker'});res.end();return}
+    ordinaryPosts++;req.resume();res.end('{}');
+  });
+  await assert.rejects(measure({url:ordinary,pane:'worker',message:'must not be sent',mode:'double',timeoutMs:5000}));
+  assert.equal(markedRequests,0);assert.equal(ordinaryPosts,0);
 });
 
 for(const ms of [0,2000,15000])test('TS-47.T: real engine with FakeProvider measures '+ms+' ms delay',{timeout:45_000},async t=>{

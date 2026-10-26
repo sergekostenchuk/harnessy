@@ -61,6 +61,7 @@ function target(options:ProbeOptions):URL {
 // Only this trace is counted, so replays and another conversation cannot affect a sample.
 export async function measure(options:ProbeOptions):Promise<Sample> {
   const url=target(options),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),options.timeoutMs??90_000);
+  const eventsUrl=new URL('/api/events/'+encodeURIComponent(options.pane),url),chatUrl=new URL('/api/chat',url);
   let reader:ReadableStreamDefaultReader<Uint8Array>|undefined;
   let pump:Promise<void>|undefined;
   let sentMono=0,sentWall=0,traceId:string|null=null,firstEvent:number|null=null,firstOutputEvent:number|null=null,firstCharacter:number|null=null;
@@ -80,13 +81,14 @@ export async function measure(options:ProbeOptions):Promise<Sample> {
     if(event.type==='done'||event.type==='error'){completed=true;resolveEnd({at,outcome:event.type})}
   };
   try{
-    const stream=await fetch(new URL('/api/events/'+encodeURIComponent(options.pane),url),{signal:controller.signal,headers:{Accept:'text/event-stream'}});
+    const stream=await fetch(eventsUrl,{signal:controller.signal,redirect:'error',headers:{Accept:'text/event-stream'}});
     if(!stream.ok||!stream.body||!stream.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream'))throw Error('event stream unavailable: HTTP '+stream.status);
+    if(new URL(stream.url).origin!==chatUrl.origin)throw Error('event stream origin differs from chat recipient; no message was sent');
     if(options.mode==='double'&&stream.headers.get('x-harnessy-test-double')!=='1')throw Error('test-double marker missing; no message was sent');
     reader=stream.body.getReader();const parser=new EventParser();
     pump=(async()=>{try{while(true){const part=await reader!.read();if(part.done){for(const event of parser.finish())consume({event,at:performance.now()});throw Error('event stream closed before completion')}for(const event of parser.push(part.value))consume({event,at:performance.now()})}}catch(error){streamError=error instanceof Error?error:Error(String(error));if(traceId&&!completed)rejectEnd(streamError)}})();
     sentMono=performance.now();sentWall=Date.now();
-    const response=await fetch(new URL('/api/chat',url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pane:options.pane,message:options.message,direct:true,thread:'latency:'+randomUUID()}),signal:controller.signal});
+    const response=await fetch(chatUrl,{method:'POST',redirect:'error',headers:{'Content-Type':'application/json'},body:JSON.stringify({pane:options.pane,message:options.message,direct:true,thread:'latency:'+randomUUID()}),signal:controller.signal});
     const accepted=performance.now(),body=await response.json() as {ok?:boolean;seq?:number;queued?:boolean;code?:string};
     if(!response.ok||body.ok!==true)throw Error('message refused: '+(body.code||'HTTP '+response.status));
     if(body.queued)throw Error('message was queued; its latency cannot be isolated');
