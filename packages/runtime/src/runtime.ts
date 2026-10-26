@@ -7,6 +7,7 @@ import {ApiAgent,apiRoute,API_MODES} from './api-agent.ts';
 import {createLlmService,LlmError,keySlot,MacKeyStore,routeModels,type KeyStore,type LlmDependencies,type ProviderConfig} from '@harnessy/llm';
 import {TraceStore,currentTrace,traceReason,type TraceContext} from './trace.ts';
 import {ProviderOperations} from './provider-operations.ts';
+import {AutopilotDecisionLedger} from './autopilot-decisions.ts';
 import {ProviderCatalog,catalogCacheDirectory,LoginTerminal,builtinEntries,CLI_DESCRIPTORS,cliEntry,ollamaEntry,OLLAMA_URL} from '@harnessy/providers';
 import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
 import {propose,proposals,confirm,create,createOwnerSeat,restoreProposals,type ProposalInput,type ProposalRef,type OwnerSeatInput} from './proposals.ts';
@@ -82,6 +83,7 @@ export class Runtime {
  private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();private cliQuotas=new WeakMap<ProjectState,ProviderLimitsStore>();
  private programBinaryJobs=new Map<string,Promise<unknown>>();
  private autopilotTimers=new WeakMap<ProjectState,unknown>();
+ private autopilotDecisionLedgers=new WeakMap<ProjectState,AutopilotDecisionLedger>();
  private autopilotApplication=new WeakMap<ProjectState,symbol>();private autopilotContext=new AsyncLocalStorage<symbol>();private autopilotJobs=new WeakMap<ProjectState,Set<Promise<unknown>>>();
  readonly deps:RuntimeDeps;readonly actions:RuntimeActions;
  constructor(deps:RuntimeDeps,actions:RuntimeActions){this.deps=deps;this.actions=actions;this.llmKeys=deps.llmKeys??new MacKeyStore();this.sshTunnels=deps.sshTunnels??new SshTunnels();
@@ -150,6 +152,9 @@ export class Runtime {
  }
  private scheduleAutopilot(p:ProjectState,state:import('@harnessy/projects').AutopilotState){const old=this.autopilotTimers.get(p);if(old!==undefined)this.clock.clearTimeout(old);this.autopilotTimers.delete(p);if(!state.on||state.until?.kind!=='morning')return;const due=Math.max(0,Date.parse(state.until.at)-this.clock.now());const timer=this.clock.setTimeout(()=>{if(this.current===p&&!p.closed)void this.autopilotStatus().catch(error=>this.report(p,p.owner,error))},due);this.autopilotTimers.set(p,timer)}
  async autopilotStatus(){const p=this.project,before=this.settings.autopilot(),state=await this.settings.currentAutopilot(()=>this.clock.now());this.same(p);this.scheduleAutopilot(p,state);if(before.on&&!state.on)p.owner.publish({type:'autopilot',autopilot:state});return state}
+ autopilotDecisionLedger(p=this.project):AutopilotDecisionLedger {let ledger=this.autopilotDecisionLedgers.get(p);if(!ledger){ledger=new AutopilotDecisionLedger(p.dir,event=>{if(!p.closed)p.owner.publish(event)},()=>this.clock.now());this.autopilotDecisionLedgers.set(p,ledger)}return ledger}
+ autopilotDecisions(initiator:Initiator){this.requireOwner(initiator);const p=this.project;return {ok:true as const,project:p.dir,decisions:this.autopilotDecisionLedger(p).list()}}
+ autopilotCancelDecision(project:string,id:string,initiator:Initiator){this.requireOwner(initiator);const p=this.project;if(project!==p.dir)throw new RuntimeError('project_changed','Проект решения Автопилота изменился',409);if(!this.autopilotDecisionLedger(p).get(id))throw new RuntimeError('decision_unknown','Решение Автопилота не найдено',404);throw new RuntimeError('cancel_unavailable','Отмена решения Автопилота ещё не реализована',501)}
  async autopilotSet(body:Record<string,unknown>,initiator:Initiator){this.requireOwner(initiator,true);if(initiator.source==='autopilot')throw new RuntimeError('policy_denied','Автопилот не меняет собственные условия',403);const p=this.project;if(body.project!==p.dir||body.instance!==p.trace.instanceId)throw new RuntimeError('project_changed','Проект сменился; обновите состояние Автопилота',409);const {project:_,instance:__,...change}=body;const state=await this.settings.changeAutopilot(change,()=>this.clock.now(),()=>this.same(p));this.same(p);this.scheduleAutopilot(p,state);p.owner.publish({type:'autopilot',autopilot:state});return {ok:true as const,project:p.dir,autopilot:state}}
  ownerAutopilotAction(p=this.project,initiator:Initiator=OWNER){this.same(p);if(initiator.source==='autopilot'){this.requireOwner(initiator);return}this.guardAutopilotApplication(p);const before=this.settings.autopilot();if(!before.on||before.until?.kind!=='reply')return;const state=this.settings.ownerAutopilotAction();this.scheduleAutopilot(p,state);p.owner.publish({type:'autopilot',autopilot:state})}
  private attachmentStore(p:ProjectState){let store=this.attachmentStores.get(p);if(!store){store=new AttachmentStore(p.dir);this.attachmentStores.set(p,store)}return store}
