@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {webcrypto} from 'node:crypto';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
 
@@ -19,7 +20,7 @@ const until=async(predicate:()=>boolean)=>{for(let i=0;i<100;i++){if(predicate()
 
 const record=(seq=1,from='worker',to=['orch'])=>({seq,ts:'2026-10-23T12:00:00.000Z',from,to,kind:'answer',thread:'current',text:'живое сообщение <img src=x>'});
 const pane=(id:string,kind:string|null,chat:string|null)=>({id,label:id==='orch'?'Оркестратор':id==='worker'?'Воркер':'Роль',role:kind||'worker',kind,vendor:'claude',model:id==='worker'?'worker-model':'orch-model',mode:'read',status:'idle',busy:id==='worker',pendingApprovals:0,pending:0,waiting:null,turn:null,chat,instructionPath:id==='worker'?'.harness/roles/worker.md':null,queue:[],context:{used:170,window:200000,pct:0.1,measured:true,last:{input:100,output:20,cacheRead:30},turns:1}});
-const snapshot=(project='/project-a',panes:any[]=[pane('orch','orchestrator','chat-orch'),pane('worker','worker','chat-worker')])=>({ok:true,project,generatedAt:Date.now(),halted:false,team:{path:project+'/.harness/team.yaml',integrationBranch:'main'},journal:{records:[record()],total:1,lastSeq:1},panes});
+const snapshot=(project='/project-a',panes:any[]=[pane('orch','orchestrator','chat-orch'),pane('worker','worker','chat-worker')])=>({ok:true,project,instance:project+'-instance',policy:{ok:true,routes:[{from:['orchestrator'],to:['worker'],kinds:['task'],trigger:'wake'}]},generatedAt:Date.now(),halted:false,team:{path:project+'/.harness/team.yaml',integrationBranch:'main'},journal:{records:[record()],total:1,lastSeq:1},panes});
 const chat=(id:string,paneId:string,text='Последняя живая реплика')=>({chat:{id,pane:paneId,revision:7,documents:[{project:'/project-a',path:'README.md'}]},messages:[{role:'me',text:'Вопрос владельца',ts:Date.now()-2000},{role:'assistant',text,ts:Date.now()-1000}]});
 const settingsBinding=(id:string,project='/project-a')=>({project,instanceId:project.endsWith('-b')?'instance-b':'instance-a',pane:id,chat:'chat-'+id,revision:1,mode:'read',networkGeneration:null});
 
@@ -28,20 +29,20 @@ function teamUi(mode:'work'|'constructor'|'queue',handler?:ApiHandler,options:an
  const d=dom('<aside class="side ps"></aside><section class="main tc-main" data-team-live="'+mode+'"><div class="spec-banner">Макет · граница данных</div><div class="tc-live-loading">Загрузка</div></section>');
  Object.assign(d.document,{documentElement:d.html,body:d.body});
  const H:any={on:true,snapshotOnly:false,project:'/project-a',projectRequestGeneration:0,confirmedProjectGeneration:0,models:{claude:[{id:'orch-model',label:'Opus live'},{id:'worker-model',label:'Sonnet live'}],codex:[{id:'new-model',label:'Codex live'}]},turnModes:{claude:{read:{ok:true},all:{ok:true}},codex:{read:{ok:true},all:{ok:true}}},roleCatalog:[{role:'orchestrator',kind:'orchestrator',label:'Оркестратор',description:'ведёт ход',available:true},{role:'reviewer',kind:'reviewer',label:'Ревьюер',available:false,reason:'роль создаёт оркестратор'}],active:{room:'room-chat'},panes:[{id:'orch',busy:false,settingsBinding:settingsBinding('orch')},{id:'worker',busy:false,settingsBinding:settingsBinding('worker')}],...options.H};
- const state:any={ui:{pane:'room'}},requests:Array<{path:string;body:unknown}>=[],toasts:string[]=[],subscriptions:any[]=[],location:any={href:'',hash:'',pathname:mode==='work'?'/04-swarm.html':'/41-team-'+mode+'.html'};
+ const state:any=options.state||{ui:{pane:'room'}},requests:Array<{path:string;body:unknown}>=[],toasts:string[]=[],subscriptions:any[]=[],location:any={href:'',hash:'',pathname:mode==='work'?'/04-swarm.html':'/41-team-'+mode+'.html'};
  const fallback:ApiHandler=async(path,body)=>{
   if(path==='/api/swarm')return snapshot(H.project);
   if(path==='/api/chats/chat-orch')return chat('chat-orch','orch');
   if(path==='/api/chats/chat-worker')return chat('chat-worker','worker');
   if(path==='/api/chats/room-chat')return chat('room-chat','room');
-  if(path.startsWith('/api/project/file?'))return {ok:true,project:H.project,path:'.harness/roles/worker.md',text:'# Живая инструкция\nПроверяй итог.'};
+  if(path.startsWith('/api/project/file?'))return {ok:true,project:H.project,path:'.harness/roles/worker.md',instance:'/project-a-instance',hash:'a'.repeat(64),sharedWith:['worker'],text:'# Живая инструкция\nПроверяй итог.'};
   if(path==='/api/assign'||path==='/api/chat'||path.startsWith('/api/panes/'))return {ok:true};
   throw Error('unexpected request '+path+' '+JSON.stringify(body));
  };
  const LIVE:any={H,S:state,esc:escape,async api(path:string,body?:unknown){requests.push({path,body});return (handler||fallback)(path,body)},async refreshStatus(){return true},subscribeLiveEvents(callback:any){const stream={callback,closed:false,close(){this.closed=true}};subscriptions.push(stream);return stream},toast(text:string){toasts.push(text)},save(){}};
  const viewport=()=>({fit(){},takeSuppress(){return false},zoomAt(){},cw(){return 900},chh(){return 600}});
  const timers=new Map<number,()=>void>();let timerId=0;
- const context:any={setTimeout:(fn:()=>void)=>{timers.set(++timerId,fn);return timerId},clearTimeout:(id:number)=>timers.delete(id),document:d.document,location,LIVE,OMCORE:{esc:escape,cubic:(...values:number[])=>'M'+values.join(' '),midOf:()=>[10,10],fwdPath:()=>({d:'M0 0L10 10',m:[5,5]}),viewport},addEventListener:d.window.addEventListener.bind(d.window),URLSearchParams};
+ const context:any={setTimeout:(fn:()=>void)=>{timers.set(++timerId,fn);return timerId},clearTimeout:(id:number)=>timers.delete(id),document:d.document,location,LIVE,crypto:webcrypto,OMCORE:{esc:escape,cubic:(...values:number[])=>'M'+values.join(' '),midOf:()=>[10,10],fwdPath:()=>({d:'M0 0L10 10',m:[5,5]}),viewport},addEventListener:d.window.addEventListener.bind(d.window),URLSearchParams};
  context.window=context;
  const vm=createContext(context);runInContext(canvas,vm);runInContext(live,vm);
  const root=d.document.querySelector('[data-team-live]')!;
@@ -66,6 +67,12 @@ test('36D: a page without a historical top bar keeps the SPEC banner inside main
  const banner=d.document.querySelector('.spec-banner')!,main=d.document.querySelector('.main')!,app=d.document.querySelector('.app')!;assert.equal(banner.parentElement,main);assert.equal(app.children.includes(banner),false);
 });
 
+test('39.2: the live constructor has no page-wide mock banner; only editing connections is mocked',async()=>{
+ const d=dom('<div class="frame"><div class="app"><section class="main" data-team-live="constructor"></section></div></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});
+ const context:any={KEY:'teamcons',document:d.document};context.window=context;runInContext(part(proto,'  // TS-15a specification','  // End TS-15a specification'),createContext(context));assert.equal(d.document.querySelector('.spec-banner'),null);
+ const v=constructorUi();await v.settle();assert.match(v.find('[data-team-policy]').textContent,/макет · редактирование связей/);assert.doesNotMatch(v.find('[data-team-instruction]').textContent,/макет/);
+});
+
 test('36D: clean live team boot never enters the historical swarm overlay controller',()=>{
  const d=dom('<div class="frame"><section class="main" data-team-live="work"></section></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});let overlayQueries=0;
  const query=d.document.querySelector.bind(d.document);d.document.querySelector=(selector:string)=>{if(selector.includes('#ovl'))overlayQueries++;return query(selector)};
@@ -88,16 +95,16 @@ test('36D: + role refuses an incomplete or forged room receipt before /api/assig
  await v.find('[data-team-role="orchestrator"]').emit('click');await v.settle();assert.equal(requests.some(row=>row.path==='/api/assign'),false);assert.match(v.find('.tc-live-error').textContent,/Разговор без роли изменился/);
 });
 
-test('36D: constructor reads the project instruction and saves only the existing model and mode fields',async()=>{
+test('36D: constructor keeps model/mode save separate from the versioned instruction editor',async()=>{
  const mutations:Array<{path:string;body:unknown}>=[];
- const data=snapshot();data.panes[1]!.busy=false;const v=teamUi('constructor',async(path,body)=>{if(path==='/api/swarm')return data;if(path==='/api/chats/chat-orch')return chat('chat-orch','orch');if(path==='/api/chats/chat-worker')return chat('chat-worker','worker');if(path.startsWith('/api/project/file?'))return {ok:true,project:'/project-a',path:'.harness/roles/worker.md',text:'# Настоящая инструкция роли'};if(path.startsWith('/api/panes/')){mutations.push({path,body});return {ok:true,pane:{id:'worker',vendor:'codex',model:'new-model',mode:'all',settingsBinding:settingsBinding('worker')}}}throw Error('unexpected '+path)});await v.settle();
+ const data=snapshot();data.panes[1]!.busy=false;const v=teamUi('constructor',async(path,body)=>{if(path==='/api/swarm')return data;if(path==='/api/chats/chat-orch')return chat('chat-orch','orch');if(path==='/api/chats/chat-worker')return chat('chat-worker','worker');if(path.startsWith('/api/project/file?'))return {ok:true,project:'/project-a',path:'.harness/roles/worker.md',instance:'/project-a-instance',hash:'a'.repeat(64),sharedWith:['worker'],text:'# Настоящая инструкция роли'};if(path.startsWith('/api/panes/')){mutations.push({path,body});return {ok:true,pane:{id:'worker',vendor:'codex',model:'new-model',mode:'all',settingsBinding:settingsBinding('worker')}}}throw Error('unexpected '+path)});await v.settle();
  assert.equal(v.find('[data-team-count]').textContent,'2 ролей');assert.equal(v.find('[data-team-link]').textContent,'подключено');
- await v.find('[data-team-instruction-open="worker"]').emit('click');await v.settle();assert.match(v.find('[data-team-instruction]').textContent,/Настоящая инструкция роли/);assert.match(v.find('[data-team-instruction]').textContent,/нет API записи/);
+ await v.find('[data-team-instruction-open="worker"]').emit('click');await v.settle();assert.match(v.find('[data-team-instruction]').textContent,/Настоящая инструкция роли/);assert.ok(v.find('[data-team-instruction-save]'));assert.doesNotMatch(v.find('[data-team-instruction]').textContent,/нет API записи|макет/);
  for(const select of v.root.querySelectorAll('[data-team-model],[data-team-mode]'))select.value=select.dataset.original!;
  const worker=v.find('[data-team-pane="worker"]'),model=worker.querySelector('[data-team-model]')!,mode=worker.querySelector('[data-team-mode]')!;model.value='codex/new-model';mode.value='all';
  await model.emit('change');await v.context.TEAM_LIVE.refresh(true);await v.settle();const redrawnModel=v.find('[data-team-pane="worker"] [data-team-model]'),redrawnMode=v.find('[data-team-pane="worker"] [data-team-mode]');assert.notEqual(redrawnModel,model);assert.equal(redrawnModel.value,'codex/new-model');assert.equal(redrawnMode.value,'all','unsaved draft survives a live redraw');
  await v.find('[data-team-save]').emit('click');await v.settle();assert.deepEqual(plain(mutations),[{path:'/api/panes/worker',body:{vendor:'codex',model:'new-model',mode:'all',binding:settingsBinding('worker')}}]);
- assert.equal(v.requests.some(row=>/instruction|role/.test(row.path)&&!row.path.startsWith('/api/project/file?')),false,'there is no invented instruction-write endpoint');
+ assert.equal(v.requests.some(row=>/instruction|role/.test(row.path)&&!row.path.startsWith('/api/project/file?')),false,'saving model and mode does not write the instruction');
  v.H.panes.find((row:any)=>row.id==='worker').settingsBinding=undefined;await v.context.TEAM_LIVE.refresh(true);await v.settle();for(const select of v.root.querySelectorAll('[data-team-model],[data-team-mode]'))select.value=select.dataset.original!;v.find('[data-team-pane="worker"] [data-team-model]').value='codex/new-model';await v.find('[data-team-save]').emit('click');await v.settle();assert.equal(mutations.length,1);assert.match(v.find('.tc-live-error').textContent,/подтвердить настройки места/);
 });
 
@@ -186,4 +193,95 @@ test('TS-43 r3: library disclosure follows role identity through a refresh and c
 
 test('TS-43 r3: disclosure does not migrate to an identically named role in another project',async()=>{
  const v=teamUi('work');await v.settle();const before=v.find('[data-key="worker"] [data-tc-reveal="name"]');before.focus();await before.emit('click');v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();const current=v.find('[data-key="worker"] [data-tc-reveal="name"]');assert.equal(current.getAttribute('aria-expanded'),'false');assert.equal(Reflect.get(current.nextElementSibling!,'hidden')??current.nextElementSibling!.hasAttribute('hidden'),true);assert.notEqual(v.document.activeElement,current);
+});
+
+// TS-39.2 replaces only the instruction read-only invariant; queue fixtures stay independent.
+const instructionReceipt=(extra:any={})=>({ok:true,project:'/project-a',instance:'/project-a-instance',path:'.harness/roles/worker.md',hash:'a'.repeat(64),sharedWith:['worker','orch'],text:'Original',...extra});
+function constructorUi(handler?:ApiHandler){return teamUi('constructor',async(path,body)=>{if(path==='/api/swarm')return snapshot('/project-a',[{...pane('orch','orchestrator',null),busy:false},{...pane('worker','worker',null),busy:false}]);if(path.startsWith('/api/project/file?'))return instructionReceipt();return handler?.(path,body)})}
+
+test('39.2: shared instruction is explicit; typing/focus survive live refresh and a rejected save preserves the draft',async()=>{
+ const replies=deferred<any>(),v=constructorUi(()=>replies.promise);await v.settle();await v.find('[data-team-instruction-open="worker"]').emit('click');await v.settle();
+ const input=v.find('[data-team-instruction-text]');input.value='My unsaved instruction';await input.emit('input');input.focus();input.setSelectionRange(3,10);
+ await v.subscriptions[0].callback({data:JSON.stringify({project:'/project-a',event:{type:'instructionUpdated'}})});await v.settle();assert.equal(v.find('[data-team-instruction-text]'),input);assert.equal(v.document.activeElement,input);assert.equal(input.selectionStart,3);assert.equal(input.selectionEnd,10);
+ await v.find('[data-team-instruction-save]').emit('click');assert.equal(v.requests.filter(r=>r.path.endsWith('/instruction')).length,0);assert.match(v.find('[data-team-instruction-error]').textContent,/общего файла/);
+ const shared=v.find('[data-team-instruction-shared]');(shared as any).checked=true;await shared.emit('change');await v.find('[data-team-instruction-save]').emit('click');await v.find('[data-team-instruction-save]').emit('click');assert.equal(v.requests.filter(r=>r.path.endsWith('/instruction')).length,1);
+ replies.resolve({ok:false,code:'file_changed',error:'Файл изменился. Перечитайте.'});await v.settle();assert.equal(v.find('[data-team-instruction-text]').value,'My unsaved instruction');assert.match(v.find('[data-team-instruction-error]').textContent,/Файл изменился/);
+ assert.doesNotMatch(v.find('[data-team-instruction]').textContent,/макет/);assert.match(v.find('[data-team-policy]').textContent,/Оркестратор → Воркер.*задача/);assert.match(v.find('[data-team-policy]').textContent,/макет · редактирование связей/);
+});
+
+test('39.2: missing receipt/hash cannot become an editable instruction; missing file can be created from its receipt',async()=>{
+ for(const answer of [instructionReceipt({hash:undefined}),{ok:false,error:'Источник недоступен'},instructionReceipt({ok:false,code:'instruction_missing',hash:null,canCreate:true})]){
+  const v=teamUi('constructor',async(path)=>path==='/api/swarm'?snapshot('/project-a',[{...pane('worker','worker',null),busy:false}]):answer);await v.settle();await v.find('[data-team-instruction-open="worker"]').emit('click');await v.settle();
+  if(answer.canCreate){assert.match(v.find('[data-team-instruction-save]').textContent,/Создать/)}else{assert.equal(v.root.querySelector('[data-team-instruction-save]'),null);assert.match(v.find('[data-team-instruction-error]').textContent,/прочитать|Источник недоступен/)}
+ }
+});
+
+test('39.2: owner form has seven classes, keeps opId on retry and project draft across A → B → A',async()=>{
+ let replies=deferred<any>(),project='/project-a';const v=teamUi('constructor',async(path)=>path==='/api/swarm'?snapshot(project,[]):replies.promise);await v.settle();await v.find('[data-team-own-open]').emit('click');
+ const set=async(field:string,value:string)=>{const n=v.find('[data-team-own-field="'+field+'"]');n.value=value;await n.emit('input')};await set('label','Аналитик');await set('intro','Проверь условия');
+ assert.deepEqual(JSON.parse(v.find('[data-team-own-field="kind"]').dataset.options!).map((row:any)=>row.value),['worker','orchestrator','reviewer','tester','assistant','architect','researcher']);
+ await v.find('[data-team-own-form]').emit('submit');await v.find('[data-team-own-form]').emit('submit');const first=v.requests.filter(r=>r.path==='/api/seats/propose');assert.equal(first.length,1);assert.equal((first[0]!.body as any).instance,'/project-a-instance');
+ replies.resolve({ok:false,error:'Соединение оборвалось'});await v.settle();assert.equal(v.find('[data-team-own-field="label"]').value,'Аналитик');replies=deferred();await v.find('[data-team-own-form]').emit('submit');const second=v.requests.filter(r=>r.path==='/api/seats/propose')[1]!;assert.equal((second.body as any).opId,(first[0]!.body as any).opId);
+ project=v.H.project='/project-b';v.H.projectRequestGeneration=1;v.H.confirmedProjectGeneration=1;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-own-field="label"]').value,'');
+ replies.resolve({ok:true,project:'/project-a',instance:'/project-a-instance',pane:'role-old'});await v.settle();assert.doesNotMatch(v.root.textContent,/Роль создана/);
+ project=v.H.project='/project-a';v.H.projectRequestGeneration=2;v.H.confirmedProjectGeneration=2;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-own-field="label"]').value,'Аналитик');assert.equal(v.find('[data-team-own-field="intro"]').value,'Проверь условия');
+});
+
+test('39.2: constructor choices use the design menu, keyboard navigation and readable rights',async()=>{
+ const v=constructorUi();await v.settle();assert.equal(v.root.querySelector('select'),null);assert.match(v.find('[data-team-mode]').textContent,/Только чтение/);
+ await v.find('[data-team-own-open]').emit('click');const control=v.find('[data-team-own-field="kind"]');v.context.innerWidth=390;Object.assign(v.html,{clientWidth:375});Object.assign(control,{getBoundingClientRect:()=>({left:192,bottom:532,width:160})});await control.emit('click');
+ const menu=v.document.querySelector('.tc-choice-menu')!;assert.ok(menu);assert.ok(parseFloat(menu.style.left!)+parseFloat(menu.style.width!)<=367,'menu clears the scrollbar');const choices=menu.querySelectorAll('[data-team-option]');assert.equal(choices.length,7);assert.equal(control.getAttribute('aria-expanded'),'true');
+ assert.equal(v.document.activeElement,choices[0]);await choices[0]!.emit('keydown',{key:'ArrowDown'});assert.equal(v.document.activeElement,choices[1]);
+ await choices.find(row=>row.dataset.teamOption==='tester')!.emit('click');assert.equal(control.value,'tester');assert.match(control.textContent,/Тестер/);assert.equal(v.document.querySelector('.tc-choice-menu'),null);assert.equal(v.document.activeElement,control);
+ await control.emit('click');await v.document.activeElement!.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('.tc-choice-menu'),null);assert.equal(control.getAttribute('aria-expanded'),'false');
+});
+
+test('39.2: a late instruction reload preserves text, focus and selection while typing',async()=>{
+ let pending=false;const receipt=deferred<any>(),v=teamUi('constructor',async path=>path==='/api/swarm'?snapshot('/project-a',[{...pane('worker','worker',null),busy:false}]):pending?receipt.promise:instructionReceipt());
+ await v.settle();await v.find('[data-team-instruction-open="worker"]').emit('click');await v.settle();pending=true;await v.find('[data-team-instruction-reload]').emit('click');
+ const editor=v.find('[data-team-instruction-text]');editor.value='Unsaved while reading';await editor.emit('input');editor.focus();editor.setSelectionRange(2,8,'backward');
+ receipt.resolve(instructionReceipt({text:'Changed on disk',hash:'b'.repeat(64)}));await v.settle();const current=v.find('[data-team-instruction-text]');assert.equal(current.value,'Unsaved while reading');assert.equal(v.document.activeElement,current);assert.equal(current.selectionStart,2);assert.equal(current.selectionEnd,8);assert.equal(current.selectionDirection,'backward');
+});
+
+test('39.2 r2: drafts survive new page instances A → B → A, and writes use the newly confirmed instance',async()=>{
+ const page=(project:string,instance:string,state?:any)=>teamUi('constructor',async(path,body:any)=>{
+  if(path==='/api/swarm')return {...snapshot(project,[{...pane('worker','worker',null),busy:false}]),instance};
+  if(path.startsWith('/api/project/file?'))return instructionReceipt({project,instance,sharedWith:['worker']});
+  if(path.endsWith('/instruction'))return instructionReceipt({...body,ok:true,hash:'b'.repeat(64)});
+  throw Error('unexpected '+path);
+ },{H:{project},state});
+ const first=page('/project-a','first-instance');await first.settle();await first.find('[data-team-instruction-open="worker"]').emit('click');await first.settle();const text=first.find('[data-team-instruction-text]');text.value='Инструкция А';await text.emit('input');await first.find('[data-team-own-open]').emit('click');
+ for(const [field,value] of [['label','Роль А'],['intro','Вводная А']] as const){const node=first.find('[data-team-own-field="'+field+'"]');node.value=value;await node.emit('input')}await first.window.emit('pagehide');
+ const other=page('/project-b','other-instance',plain(first.state));await other.settle();await other.find('[data-team-own-open]').emit('click');assert.equal(other.find('[data-team-own-field="label"]').value,'');assert.equal(other.root.querySelector('[data-team-instruction-text]'),null);await other.window.emit('pagehide');
+ const returned=page('/project-a','returned-instance',plain(other.state));await returned.settle();assert.equal(returned.find('[data-team-own-field="label"]').value,'Роль А');assert.equal(returned.find('[data-team-own-field="intro"]').value,'Вводная А');assert.equal(returned.find('[data-team-instruction-text]').value,'Инструкция А');
+ await returned.find('[data-team-own-close]').emit('click');await returned.find('[data-team-instruction-save]').emit('click');await returned.settle();const sent=returned.requests.find(row=>row.path.endsWith('/instruction'))!;assert.equal((sent.body as any).instance,'returned-instance');assert.equal((sent.body as any).expectedHash,'a'.repeat(64));assert.equal((sent.body as any).text,'Инструкция А');
+});
+
+test('39.2 r2: a restored draft cannot silently adopt a changed file hash or an absent instance',async()=>{
+ const first=constructorUi();await first.settle();await first.find('[data-team-instruction-open="worker"]').emit('click');await first.settle();const editor=first.find('[data-team-instruction-text]');editor.value='Draft';await editor.emit('input');
+ for(const instance of ['new-instance',undefined]){const v=teamUi('constructor',async path=>path==='/api/swarm'?{...snapshot('/project-a',[{...pane('worker','worker',null),busy:false}]),instance}:instructionReceipt({instance,text:'Remote changed',hash:'b'.repeat(64)}),{state:plain(first.state)});await v.settle();if(instance){assert.equal(v.find('[data-team-instruction-text]').value,'Draft');assert.match(v.find('[data-team-instruction-error]').textContent,/Файл изменился/);assert.equal(v.state.constructorDrafts.projects['/project-a'].instructions.worker.hash,'a'.repeat(64))}else assert.equal(v.root.querySelector('[data-team-instruction-save]'),null);assert.equal(v.requests.some(row=>row.body),false)}
+});
+
+test('39.2 r2: a late save confirms only its sent text; typing removes the saved claim',async()=>{
+ const response=deferred<any>(),v=constructorUi(()=>response.promise);await v.settle();await v.find('[data-team-instruction-open="worker"]').emit('click');await v.settle();let editor=v.find('[data-team-instruction-text]');editor.value='Sent text';await editor.emit('input');const shared=v.find('[data-team-instruction-shared]');(shared as any).checked=true;await shared.emit('change');await v.find('[data-team-instruction-save]').emit('click');editor=v.find('[data-team-instruction-text]');editor.value='Newer text';await editor.emit('input');editor.focus();editor.setSelectionRange(2,5);
+ response.resolve(instructionReceipt({text:'Sent text',hash:'b'.repeat(64)}));await v.settle();editor=v.find('[data-team-instruction-text]');assert.equal(editor.value,'Newer text');assert.equal(v.document.activeElement,editor);assert.equal(editor.selectionStart,2);assert.match(v.find('[data-team-instruction-error]').textContent,/несохранённые/);assert.doesNotMatch(v.find('[data-team-instruction-error]').textContent,/Сохранено/);
+ editor.value='Sent text';await editor.emit('input');assert.match(v.find('[data-team-instruction-error]').textContent,/Сохранено/);editor.value='Changed again';await editor.emit('input');assert.match(v.find('[data-team-instruction-error]').textContent,/несохранённые/);
+ const stored=v.state.constructorDrafts.projects['/project-a'].instructions.worker;assert.equal(stored.text,'Changed again');assert.equal(stored.original,'Sent text');assert.equal(stored.hash,'b'.repeat(64));
+});
+
+test('39.2 r2: unchanged status keeps class/model menus and focus; changed choices close onto the button',async()=>{
+ const v=constructorUi();await v.settle();await v.find('[data-team-own-open]').emit('click');
+ for(const selector of ['[data-team-own-field="kind"]','[data-team-pane="worker"] [data-team-model]']){const control=v.find(selector);await control.emit('click');const menu=v.document.querySelector('.tc-choice-menu')!,focused=v.document.activeElement;await v.subscriptions[0].callback({data:JSON.stringify({project:'/project-a',event:{type:'state'}})});await v.settle();assert.equal(v.document.querySelector('.tc-choice-menu'),menu);assert.equal(v.document.activeElement,focused);assert.equal(v.find(selector).getAttribute('aria-expanded'),'true');await focused!.emit('keydown',{key:'Escape'});assert.equal(v.document.activeElement,v.find(selector))}
+ await v.find('[data-team-pane="worker"] [data-team-model]').emit('click');v.H.models.codex.push({id:'another',label:'Другая модель'});await v.context.TEAM_LIVE.refresh();await v.settle();assert.equal(v.document.querySelector('.tc-choice-menu'),null);assert.equal(v.document.activeElement,v.find('[data-team-pane="worker"] [data-team-model]'));
+ await v.find('[data-team-own-field="model"]').emit('click');v.H.models.codex.push({id:'last',label:'Последняя модель'});await v.context.TEAM_LIVE.refresh();await v.settle();assert.equal(v.document.querySelector('.tc-choice-menu'),null);assert.equal(v.document.activeElement,v.find('[data-team-own-field="model"]'));
+});
+
+test('39.2 r2: both write forms explain a transport failure in Russian and preserve their text',async()=>{
+ const v=constructorUi(()=>{throw new TypeError('Failed to fetch')});await v.settle();await v.find('[data-team-instruction-open="worker"]').emit('click');await v.settle();const editor=v.find('[data-team-instruction-text]');editor.value='Instruction draft';await editor.emit('input');const shared=v.find('[data-team-instruction-shared]');(shared as any).checked=true;await shared.emit('change');await v.find('[data-team-instruction-save]').emit('click');await v.settle();assert.match(v.find('[data-team-instruction-error]').textContent,/Сохранение не выполнено, черновик сохранён, повторите/);assert.equal(v.find('[data-team-instruction-text]').value,'Instruction draft');
+ await v.find('[data-team-own-open]').emit('click');for(const [field,value] of [['label','Моя роль'],['intro','Моя вводная']] as const){const node=v.find('[data-team-own-field="'+field+'"]');node.value=value;await node.emit('input')}await v.find('[data-team-own-form]').emit('submit');await v.settle();assert.match(v.find('[data-team-own-error]').textContent,/Сохранение не выполнено, черновик сохранён, повторите/);assert.equal(v.find('[data-team-own-field="intro"]').value,'Моя вводная');assert.doesNotMatch(v.root.textContent,/Failed to fetch/);
+});
+
+test('39.2 r2: changing the custom role provider refreshes supported rights while keeping every other field',async()=>{
+ const v=teamUi('constructor',undefined,{H:{models:{gemini:[{id:'g1',label:'Gemini'}],claude:[{id:'w1',label:'Claude'}]},turnModes:{gemini:{all:{ok:true}},claude:{read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true}}}}});await v.settle();await v.find('[data-team-own-open]').emit('click');for(const [field,value] of [['label','Аналитик'],['intro','Прочитай договор']] as const){const n=v.find('[data-team-own-field="'+field+'"]');n.value=value;await n.emit('input')}
+ assert.equal(v.find('[data-team-own-field="mode"]').value,'all');await v.find('[data-team-own-field="model"]').emit('click');await v.document.querySelector('[data-team-option="claude/w1"]')!.emit('click');assert.deepEqual(JSON.parse(v.find('[data-team-own-field="mode"]').dataset.options!).map((row:any)=>row.value),['read','edit','all','chat']);assert.equal(v.find('[data-team-own-field="mode"]').value,'all');assert.equal(v.find('[data-team-own-field="label"]').value,'Аналитик');assert.equal(v.find('[data-team-own-field="intro"]').value,'Прочитай договор');assert.equal(v.find('[data-team-own-field="kind"]').value,'worker');assert.equal(v.document.activeElement,v.find('[data-team-own-field="model"]'));
 });

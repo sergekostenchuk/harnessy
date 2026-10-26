@@ -12,7 +12,7 @@ import type {Runtime} from './runtime.ts';
 import type {ProjectState,ActionContext} from './types.ts';
 
 export interface ProposalSeat {kind:SeatKind;label:string;vendor:Vendor;model:string;mode:Mode;intro:string;sid:string;operationId:string}
-export interface TeamProposal {turnInstanceId?:string;requestKey?:string;proposalId:string;version:number;from:string;thread:string;questionSeq:number|null;confirmed:boolean;seats:ProposalSeat[];ownerSeats?:Record<string,{kind:SeatKind;created:boolean}>}
+export interface TeamProposal {ownerOperation?:{opId:string;bodyHash:string};turnInstanceId?:string;requestKey?:string;proposalId:string;version:number;from:string;thread:string;questionSeq:number|null;confirmed:boolean;seats:ProposalSeat[];ownerSeats?:Record<string,{kind:SeatKind;created:boolean}>}
 interface Store {project:string;proposals:TeamProposal[]}
 export interface ProposalInput {proposalId?:unknown;version?:unknown;seats?:unknown}
 export interface ProposalRef {proposalId?:unknown;version?:unknown;project?:unknown}
@@ -30,6 +30,8 @@ function read(p:ProjectState):Store {
  for(const value of raw.proposals){if(!object(value)||value.turnInstanceId!==undefined&&(typeof value.turnInstanceId!=='string'||!value.turnInstanceId||value.turnInstanceId.length>128)||value.requestKey!==undefined&&(typeof value.requestKey!=='string'||!/^sha256:[0-9a-f]{64}$/.test(value.requestKey))||!token(value.proposalId,'p')||ids.has(String(value.proposalId))||!Number.isSafeInteger(value.version)||Number(value.version)<1||typeof value.from!=='string'||!/^[a-z][a-z0-9_-]{0,30}$/.test(value.from)||typeof value.confirmed!=='boolean'||value.thread!=='team:'+value.proposalId+':'+value.version||!(value.questionSeq===null||Number.isSafeInteger(value.questionSeq)&&Number(value.questionSeq)>0)||!Array.isArray(value.seats)||!value.seats.length||value.seats.length>12)invalid();ids.add(String(value.proposalId));
   for(const rawSeat of value.seats){if(!object(rawSeat))invalid();const {sid,operationId,...input}=rawSeat;seatInput(input);if(typeof sid!=='string'||sid!==input.kind+'-'+String(operationId).slice(1)||typeof operationId!=='string'||!/^c[0-9a-f]{5,20}$/.test(operationId)||places.has(sid)||ops.has(String(operationId)))invalid();places.add(sid);ops.add(String(operationId))}
   if(value.ownerSeats!==undefined){if(!object(value.ownerSeats))invalid();for(const [index,selection] of Object.entries(value.ownerSeats)){if(!/^(0|[1-9][0-9]*)$/.test(index)||Number(index)>=value.seats.length||!object(selection)||Object.keys(selection).some(k=>!['kind','created'].includes(k))||!SEAT_KINDS.includes(selection.kind as SeatKind)||typeof selection.created!=='boolean')invalid('выбор владельца не читается')}}
+  if(value.ownerOperation!==undefined){const op=value.ownerOperation;if(value.from!=='owner'||!object(op)||typeof op.opId!=='string'||!/^[A-Za-z0-9_-]{8,128}$/.test(op.opId)||typeof op.bodyHash!=='string'||!/^sha256:[0-9a-f]{64}$/.test(op.bodyHash)||value.seats.length!==1||value.confirmed!==true||value.questionSeq!==null)invalid('владельческое предложение не читается')}
+  if(value.from==='owner'&&!value.ownerOperation)invalid('нет квитанции владельческого предложения');
   if(value.requestKey!==undefined&&value.requestKey!==savedRequestKey(value as unknown as TeamProposal))invalid('ключ повтора не соответствует составу');
  }
  return raw as unknown as Store;
@@ -47,11 +49,13 @@ function savedRequestKey(q:TeamProposal){return proposalKey(q.from,q.seats.map((
 function receipt(p:ProjectState,q:TeamProposal){return {ok:true as const,project:p.dir,proposal:jsonClone(q),proposalId:q.proposalId,version:q.version}}
 function summary(q:TeamProposal){return 'Оркестратор '+q.from+' предлагает состав команды, версия '+q.version+'.\n\n'+q.seats.map((s,i)=>(i+1)+'. '+s.label+' · '+s.kind+' · '+s.vendor+'/'+s.model+' · '+s.mode+'\nВводная: '+s.intro.slice(0,240)+(s.intro.length>240?'…':'')).join('\n\n')+'\n\nПодтвердите именно эту версию кнопкой в окне. Ответ «да» в чате не подтверждает состав.'}
 function question(p:ProjectState,q:TeamProposal){
+ if(q.ownerOperation)return;
  const records=p.journal.read({limit:0,thread:q.thread}),text=summary(q),saved=records.find(r=>r.from==='harness'&&r.kind==='question'&&r.origin==='team-proposal'&&r.to.length===1&&r.to[0]==='owner');
  if(saved&&saved.text!==text||q.questionSeq!==null&&saved?.seq!==q.questionSeq)invalid('вопрос о составе не совпадает с сохранённым предложением');
  q.questionSeq=(saved??p.channel.postCore({to:['owner'],kind:'question',text,thread:q.thread,origin:'team-proposal'},HARNESS)).seq;
 }
 function confirmedNote(p:ProjectState,q:TeamProposal){
+ if(q.ownerOperation)return;
  const text='Владелец подтвердил состав команды '+q.proposalId+', версия '+q.version+'. Создай участников инструментом create_seats с proposalId="'+q.proposalId+'", version='+q.version+'.';
  const saved=p.journal.read({limit:0,thread:q.thread}).find(r=>r.from==='harness'&&r.origin==='team-proposal-confirm'&&r.kind==='note'&&r.to.length===1&&r.to[0]===q.from);
  if(saved&&saved.text!==text)invalid('подтверждение состава не совпадает');
@@ -65,7 +69,7 @@ export function proposalTeam(p:ProjectState,q:TeamProposal):TeamMemberKnowledge[
   const kind=op?.input.kind??choice?.kind??s.kind;if(pane&&pane.kind!==kind)invalid('класс созданного места не совпадает с назначением');
   return {id:s.sid,label:pane?.label??s.label,kind,proposedKind:s.kind,model:pane?.model??s.model,mode:pane?.mode??s.mode,task:s.intro,state:complete?'created':op?'creating':'proposed',chat:complete?s.operationId:null,createdBy:complete?op!.by:null};
  });
- const lead=p.registry.get(q.from);if(!lead||lead.kind!=='orchestrator')invalid('оркестратор предложения отсутствует');const chat=p.state.chats.active[lead.id];
+ const lead=q.ownerOperation?[...p.registry.panes.values()].find(pane=>pane.kind==='orchestrator'):p.registry.get(q.from);if(q.ownerOperation)return lead&&!members.some(m=>m.id===lead.id)?[{id:lead.id,label:lead.label,kind:'orchestrator',proposedKind:'orchestrator',model:lead.model,mode:lead.mode,task:'Ведёт обмен команды и разговор с владельцем',state:'created',chat:p.state.chats.active[lead.id]??null,createdBy:null},...members]:members;if(!lead||lead.kind!=='orchestrator')invalid('оркестратор предложения отсутствует');const chat=p.state.chats.active[lead.id];
  return [{id:lead.id,label:lead.label,kind:'orchestrator',proposedKind:'orchestrator',model:lead.model,mode:lead.mode,task:'Ведёт обмен команды и разговор с владельцем',state:'created',chat:chat??null,createdBy:null},...members];
 }
 export function roleKnowledge(p:ProjectState,chat:Chat):RoleKnowledge|null {
@@ -74,9 +78,9 @@ export function roleKnowledge(p:ProjectState,chat:Chat):RoleKnowledge|null {
  const store=read(p),q=[...store.proposals].reverse().find(q=>q.seats.some(s=>s.sid===chat.pane&&s.operationId===assignment.operationId));if(!q)invalid('предложение созданной роли не найдено');
  const seat=q.seats.find(s=>s.sid===chat.pane)!;if(!p.registry.get(chat.pane))invalid('место разговора отсутствует');
  const source=Object.values(p.state.chats.chats).find(c=>c.pane===q.from&&q.turnInstanceId&&(c.turns?.some(turn=>turn.turnInstanceId===q.turnInstanceId)||c.transcript.some(m=>object(m.runtime)&&m.runtime.turnInstanceId===q.turnInstanceId)||p.state.chats.active[q.from]===c.id&&p.active.get(q.from)?.scope.turnInstanceId===q.turnInstanceId));
- if(!source)invalid('исходный разговор предложения не найден');chatMetadata(source);
+ if(!source&&!q.ownerOperation)invalid('исходный разговор предложения не найден');if(source)chatMetadata(source);
  let memory='';try{const file=realpathSync(join(p.dir,'.harness/MEMORY.md')),path=relative(realpathSync(p.dir),file);if(isAbsolute(path)||path==='..'||path.startsWith('..'+sep))invalid('память роли находится вне проекта');memory=diskIO.read(file)}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e}
- const input={project:p.dir,pane:chat.pane,chat:chat.id,proposalId:q.proposalId,version:q.version,memory,documents:jsonClone(source.documents??[]),intro:seat.intro,team:proposalTeam(p,q)};
+ const input={project:p.dir,pane:chat.pane,chat:chat.id,proposalId:q.proposalId,version:q.version,memory,documents:jsonClone(source?.documents??[]),intro:seat.intro,team:proposalTeam(p,q)};
  return {...input,text:roleKnowledgeText(input)};
 }
 export async function propose(runtime:Runtime,ctx:ActionContext,input:ProposalInput){
@@ -95,6 +99,21 @@ export async function propose(runtime:Runtime,ctx:ActionContext,input:ProposalIn
   const allocated=new Set<string>(assignments.map(op=>object(op)?String(op.operationId):''));const q:TeamProposal={turnInstanceId:ctx.scope.turnInstanceId,requestKey:key,proposalId,version,from:ctx.scope.seatId,thread:'team:'+proposalId+':'+version,questionSeq:null,confirmed:false,seats:seats.map(s=>{let operationId='';for(let n=0;n<100;n++){const id='c'+Math.floor(p.now()).toString(16)+randomBytes(2).toString('hex');if(!store.proposals.some(x=>x.seats.some(s=>s.operationId===id))&&!p.state.chats.chats[id]&&!allocated.has(id)&&!manifest.has(s.kind+'-'+id.slice(1))&&!p.registry.get(s.kind+'-'+id.slice(1))){operationId=id;allocated.add(id);break}}if(!operationId)invalid('не удалось выделить идентификатор места');return {...s,sid:s.kind+'-'+operationId.slice(1),operationId}})};
   store.proposals=store.proposals.filter(x=>x!==old);store.proposals.push(q);p.state.saveProposals(store);question(p,q);p.state.saveProposals(store);publish(p);return receipt(p,q);
  });
+}
+// Owner-created roles share the proposal/materialization store, including recovery.
+export async function proposeOwner(runtime:Runtime,input:Record<string,unknown>,initiator:Initiator){
+ const p=owner(runtime,initiator),{project,instance,opId,label,kind,vendor,model,mode,intro}=input;
+ if(Object.keys(input).some(k=>!['project','instance','opId','label','kind','vendor','model','mode','intro'].includes(k))||typeof opId!=='string'||!/^[A-Za-z0-9_-]{8,128}$/.test(opId)||!SEAT_KINDS.includes(kind as SeatKind))invalid('Нужны ключ повтора и класс роли из семи.');
+ const chosen=kind as SeatKind,seat=seatInput({label,kind:chosen==='orchestrator'?'worker':chosen,vendor,model,mode,intro}),bodyHash='sha256:'+createHash('sha256').update(JSON.stringify({...seat,kind:chosen})).digest('hex');
+ const current=()=>{same(runtime,p);runtime.assertOwner(initiator);if(project!==p.dir||instance!==p.trace.instanceId)fail('project_changed','Проект изменился. Откройте форму в текущем проекте.')};current();
+ const proposal=await withPathLock(p.dir,()=>{current();const store=read(p),previous=store.proposals.find(q=>q.ownerOperation?.opId===opId);
+  if(previous){if(previous.ownerOperation!.bodyHash!==bodyHash)fail('op_conflict','Этот ключ повтора уже использован с другими полями.');return receipt(p,previous)}
+  runtime.validateTurn(seat.vendor,seat.mode);if(!p.registry.providers.has(seat.vendor)||!p.registry.models[seat.vendor]?.some(m=>m.id===seat.model))invalid('Модель отсутствует в каталоге провайдера.');
+  p.team=loadTeam(p.team!.harnessDir);if(chosen==='orchestrator'&&(Object.values(p.team.seats).some(s=>s.kind==='orchestrator')||store.proposals.some(q=>Object.values(q.ownerSeats??{}).some(s=>s.kind==='orchestrator'&&!s.created))))fail('role_taken','В проекте уже есть оркестратор.');
+  const operationId='c'+randomBytes(10).toString('hex'),proposalId='p'+randomBytes(12).toString('hex'),q:TeamProposal={ownerOperation:{opId,bodyHash},proposalId,version:1,from:'owner',thread:'team:'+proposalId+':1',questionSeq:null,confirmed:true,seats:[{...seat,sid:seat.kind+'-'+operationId.slice(1),operationId}],ownerSeats:{0:{kind:chosen,created:false}}};
+  store.proposals.push(q);p.state.saveProposals(store);publish(p);return receipt(p,q);
+ });
+ current();const created=await createOwnerSeat(runtime,{project:p.dir,proposalId:proposal.proposalId,version:proposal.version,seatIndex:0,kind:chosen},initiator);return {...created,instance:p.trace.instanceId};
 }
 export async function proposals(runtime:Runtime,initiator:Initiator){const p=owner(runtime,initiator);return withPathLock(p.dir,()=>{same(runtime,p);runtime.assertOwner(initiator);const store=read(p);for(const q of store.proposals){question(p,q);if(q.confirmed)confirmedNote(p,q)}if(store.proposals.length)p.state.saveProposals(store);return {ok:true as const,project:p.dir,proposals:store.proposals.map(q=>({...jsonClone(q),team:proposalTeam(p,q),materializations:q.seats.map(s=>materializationProgress(p,s.operationId,s.sid))}))}})}
 export async function confirm(runtime:Runtime,input:ProposalRef,initiator:Initiator){

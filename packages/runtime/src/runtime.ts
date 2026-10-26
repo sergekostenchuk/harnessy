@@ -1,4 +1,5 @@
 import {turnUsage} from './turn-usage.ts';
+import {instructionFile,updateInstruction} from './instructions.ts';
 import {NetworkStats} from './network-stats.ts';
 import {NetworkProviderChecks} from './network-provider-checks.ts';
 import {NetworkRelay,NetworkError,type NetworkTurn} from './network-relay.ts';
@@ -12,7 +13,7 @@ import {AutopilotDecisionLedger} from './autopilot-decisions.ts';
 import {cancelAutopilotDecision} from './autopilot-cancel.ts';
 import {ProviderCatalog,catalogCacheDirectory,LoginTerminal,builtinEntries,CLI_DESCRIPTORS,cliEntry,ollamaEntry,OLLAMA_URL} from '@harnessy/providers';
 import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
-import {propose,proposals,confirm,create,createOwnerSeat,restoreProposals,type ProposalInput,type ProposalRef,type OwnerSeatInput} from './proposals.ts';
+import {propose,proposals,confirm,create,createOwnerSeat,proposeOwner,restoreProposals,type ProposalInput,type ProposalRef,type OwnerSeatInput} from './proposals.ts';
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
 import {basename,dirname,isAbsolute,join,relative,resolve,sep} from 'node:path';
 import {AttachmentStore,expandUser,initProject,projectsRoot} from '@harnessy/projects';
@@ -441,6 +442,9 @@ export class Runtime {
  teamProposals(initiator:Initiator){return proposals(this,initiator)}
  confirmTeam(input:ProposalRef,initiator:Initiator){return confirm(this,input,initiator)}
  createOwnerSeat(input:OwnerSeatInput,initiator:Initiator){return createOwnerSeat(this,input,initiator)}
+ proposeOwnerSeat(input:Record<string,unknown>,initiator:Initiator){return proposeOwner(this,input,initiator)}
+ instructionFile(path:string){return instructionFile(this,path)}
+ updateInstruction(id:string,input:Record<string,unknown>,initiator:Initiator){return updateInstruction(this,id,input,initiator)}
  toolsFor(scope:TurnScope):PeerTools {
  this.scopes.assert(scope);const p=this.project,turn=p.active.get(scope.seatId);if(!turn||turn.scope!==scope)throw new RuntimeError('turn_ended','ход не активен',403);
  return {
