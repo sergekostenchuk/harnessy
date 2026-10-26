@@ -15,7 +15,7 @@ export async function serverRequest(method:string,input:unknown,ctx:TurnContext|
  }
  }
  const current=!!ctx&&!ctx.signal.aborted;
- const ask=async(title:string,detail:string)=>{const id=randomUUID();if(current)ctx?.traceEvent?.({id,name:method,phase:'call',data:{name:title}});const allow=current&&ctx?await approval(ctx,title,detail):false;if(current)ctx?.traceEvent?.({id,name:method,phase:'result',outcome:allow?'ok':'rejected',...(allow?{}:{reason:'approval_policy',error:'Разрешение инструмента отклонено'})});return allow};
+ const ask=async(title:string,detail:string)=>{const id=randomUUID();if(current)ctx?.traceEvent?.({id,name:method,phase:'call',data:{name:title}});const allow=current&&ctx?await approval(ctx,title,detail,ctx.signal,{provider:'codex',operation:method,parameters:p}):false;if(current)ctx?.traceEvent?.({id,name:method,phase:'result',outcome:allow?'ok':'rejected',...(allow?{}:{reason:'approval_policy',error:'Разрешение инструмента отклонено'})});return allow};
  if(method==='item/commandExecution/requestApproval'){
  const command=Array.isArray(p.command)?p.command.join(' '):String(p.command??'');
  const allow=await ask('Codex просит выполнить команду',command.slice(0,300)+(p.reason?'\nПричина: '+String(p.reason).slice(0,300):''));

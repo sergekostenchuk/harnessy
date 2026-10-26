@@ -171,3 +171,10 @@ test('22c: Claude child gets the complete relay environment including Node trans
  f.ctx.env={HTTP_PROXY:'http://127.0.0.1:19999',HTTPS_PROXY:'http://127.0.0.1:19999',ALL_PROXY:'http://127.0.0.1:19999',NO_PROXY:'localhost,127.0.0.1',NODE_OPTIONS:'--require /fixture/relay.cjs',NODE_USE_ENV_PROXY:'1',HARNESS_RELAY_PROXY:'http://127.0.0.1:19999'};await p.runTurn(f.seat,'fixture',f.ctx);
  for(const [key,value]of Object.entries(f.ctx.env))assert.equal(h.options[0]!.options!.env![key],value);
 });
+
+test('38.5 Claude forwards the native permission parameters separately from truncated description',async()=>{
+ const f=fixture('claude'),input={command:'x'.repeat(500),description:'harmless',nested:{target:'private'}};let request:unknown;
+ f.ctx.askApproval=async(_title,_detail,native)=>{request=native;return false};
+ await claudeOptions(f.seat,f.ctx,'/fake',{}).canUseTool!('Bash',input,{signal:f.ctx.signal,toolUseID:'tool',requestId:'request'});
+ assert.deepEqual(request,{provider:'claude',operation:'Bash',parameters:input});
+});

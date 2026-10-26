@@ -1,3 +1,5 @@
+import {classifyAutopilotApproval} from './autopilot-stops.ts';
+import type {ToolApprovalRequest} from '@harnessy/providers';
 import type {Initiator,Record_} from '@harnessy/journal';
 import {RuntimeError,object} from './errors.ts';
 import {promotionIdentity} from './chats.ts';
@@ -30,7 +32,7 @@ const sameProject=(runtime:Runtime,project:ProjectState)=>{if(project.closed||ru
 export async function runAutopilotOwnerEffect<T>(apply:(initiator:Initiator)=>T|Promise<T>):Promise<T>{return apply(AUTOPILOT_OWNER)}
 
 export const autopilotJournalSource=(record:Pick<Record_,'seq'|'id'|'kind'|'text'>)=>Object.freeze({id:'journal:'+record.seq+':'+record.id,kind:record.kind,text:record.text});
-export const autopilotApprovalSource=(pane:string,approval:Readonly<{id:string;title:string;detail:string}>)=>Object.freeze({id:'approval:'+autopilotHash({pane,id:approval.id,title:approval.title,detail:approval.detail}),kind:'approval',text:approval.title+'\n'+approval.detail});
+export const autopilotApprovalSource=(pane:string,approval:Readonly<{id:string;title:string;detail:string;request?:Readonly<ToolApprovalRequest>|undefined}>)=>Object.freeze({id:'approval:'+autopilotHash({pane,id:approval.id,title:approval.title,detail:approval.detail,...(approval.request?{request:approval.request}:{})}),kind:'approval',text:approval.title+'\n'+approval.detail});
 export const autopilotWaitingSource=(pane:string,waiting:Pick<Waiting,'status'|'turnInstanceId'|'actions'|'failure'>)=>Object.freeze({id:'waiting:'+pane+':'+waiting.turnInstanceId,kind:'waiting',text:JSON.stringify({status:waiting.status,actions:[...waiting.actions],failure:waiting.failure?{code:waiting.failure.code,reason:waiting.failure.reason}:null})});
 export const autopilotAssignmentSource=(parameters:Readonly<Record<string,unknown>>)=>Object.freeze({id:'assignment:'+autopilotHash(parameters),kind:'assign_role',text:JSON.stringify(parameters)});
 
@@ -128,7 +130,14 @@ export class RuntimeAutopilotSafety implements AutopilotSafetyPort {
  check({issue,capability,proposal}:Parameters<AutopilotSafetyPort['check']>[0]){
   sameProject(this.runtime,this.project);
   const p=this.project,value=capability.parameters,pane=typeof value.pane==='string'?p.registry.get(value.pane):null;
-  if(capability.operation==='approve')throw new RuntimeError('stop_checks_missing','Запрос разрешения не содержит подтверждённых кодов эффекта; решение ждёт владельца',409);
+  if(capability.operation==='approve'){
+   const approval=typeof value.approvalId==='string'?pane?.approvals.get(value.approvalId):null;
+   if(!approval||!sourceEqual(issue.source,autopilotApprovalSource(pane!.id,approval)))throw new RuntimeError('source_changed','Запрос разрешения изменился',409);
+   const classification=classifyAutopilotApproval(approval.request);
+   if(classification.blocked.length)return classification;
+   // Read-only tooling is known, but its resumed agent loop has no bounded continuation cost.
+   throw new RuntimeError('stop_checks_missing','Продолжение после инструмента не имеет подтверждённого верхнего расхода; решение ждёт владельца',409);
+  }
   if(capability.operation==='deny'){
    const approval=typeof value.approvalId==='string'?pane?.approvals.get(value.approvalId):null;
    if(!approval||!sourceEqual(issue.source,autopilotApprovalSource(pane!.id,approval)))throw new RuntimeError('source_changed','Запрос разрешения изменился',409);

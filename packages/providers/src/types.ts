@@ -43,11 +43,12 @@ export const FORBIDDEN_ENV={claude:['ANTHROPIC_API_KEY','CLAUDECODE','CLAUDE_COD
 export interface TurnHandle {interrupt():Promise<void>;steer(text:string):Promise<void>}
 export interface TurnAttachment {data:Buffer;path?:string;mime:'image/png'|'image/jpeg'|'image/webp'|'image/gif'}
 export interface ToolTrace {id:string;name:string;phase:'call'|'result'|'warning';data?:unknown;outcome?:'ok'|'failed'|'rejected'|'timeout'|'cancelled';reason?:string;error?:string}
+export interface ToolApprovalRequest {provider:Vendor;operation:string;parameters:Record<string,unknown>}
 export interface TurnContext {
  /** Optional owner-probe binding check, after preparation and immediately before inference. */
  beforeModel?(run:{provider:string;model:string}):Promise<void>;
  traceTool?<T>(name:string,args:unknown,run:()=>Promise<T>):Promise<T>;traceEvent?(event:ToolTrace):void;
- modelStarted?():void;modelResponded?():void;signal:AbortSignal;publish(ev:TurnEvent):void;askApproval(title:string,detail:string):Promise<boolean>;
+ modelStarted?():void;modelResponded?():void;signal:AbortSignal;publish(ev:TurnEvent):void;askApproval(title:string,detail:string,request?:ToolApprovalRequest):Promise<boolean>;
  session(id:string):void;setHandle(h:TurnHandle|null):void;env:RouteEnv;roleNote:string;
  peers:{id:string;label:string;vendor:Vendor}[];tools:PeerTools;relayDepth:number;projectDir:string|null;appUrl:string;
  registerProcessToken(token:string):void;revokeProcessToken(token:string):void;writableRoots:string[];attachments?:TurnAttachment[]
@@ -86,11 +87,11 @@ export function snapshot(seat:Seat,ctx:TurnContext):Seat {
  throw new ProviderError('protocol','invalid TurnContext');
  return {...seat,writePaths:[...seat.writePaths]};
 }
-export async function approval(ctx:TurnContext,title:string,detail:string,requestSignal:AbortSignal=ctx.signal):Promise<boolean>{
+export async function approval(ctx:TurnContext,title:string,detail:string,requestSignal:AbortSignal=ctx.signal,request?:ToolApprovalRequest):Promise<boolean>{
  const signal=AbortSignal.any([ctx.signal,requestSignal]);
  if(signal.aborted)return false;
  let stop:()=>void=()=>{};
  const cancelled=new Promise<boolean>(resolve=>{stop=()=>resolve(false);signal.addEventListener('abort',stop,{once:true})});
- try{const allowed=await Promise.race([Promise.resolve().then(()=>signal.aborted?false:ctx.askApproval(title,detail)).catch(()=>false),cancelled]);return allowed===true&&!signal.aborted}
+ try{const allowed=await Promise.race([Promise.resolve().then(()=>signal.aborted?false:ctx.askApproval(title,detail,request)).catch(()=>false),cancelled]);return allowed===true&&!signal.aborted}
  finally{signal.removeEventListener('abort',stop)}
 }
