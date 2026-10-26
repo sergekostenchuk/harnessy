@@ -373,7 +373,7 @@ test('78/106: arrows never switch projects; state is keyed by full path and surv
  const restarted=ui({storage:view.storage}),next=restarted.sidebar();assert.equal(next.expanded(a),false);assert.equal(next.expanded(b),true);await click({path:a.path});assert.equal(opened,a.path);
 });
 
-test('TS-36C: profile entry opens the Autopilot master; until morning/answer stay preview-only',()=>{
+test('TS-38.1: profile entry opens the Autopilot master and submits typed conditions',()=>{
  const listeners:((e:Data)=>void)[]=[],location={href:''};let reopened=0;const document={addEventListener(_t:string,fn:(e:Data)=>void){listeners.push(fn)},getElementById:()=>({click(){reopened++}})};
  const context=createContext({document,location,KEY:'chat',PAGES:{away:'18-overlays.html'},window:{}});runInContext(part(proto,"  document.addEventListener('click',e=>{const mode=","  document.addEventListener('click',e=>{if(!e.target.closest('.ps-foot'))"),context);
  const target={closest:(selector:string)=>selector==='aside.side'?{}:selector==='[data-go]'?{dataset:{go:'away'}}:null};
@@ -382,18 +382,17 @@ test('TS-36C: profile entry opens the Autopilot master; until morning/answer sta
  const templates:string[]=[];runInContext(part(away,"  HX.bind('#leave'",'  // ── Показать окно'),createContext({HX:{bind(_s:string,fn:()=>string){templates.push(fn())}},blk:(_label:string,html:string)=>html,kv:()=>''}));
  assert.match(proto,/class="it ap" data-go="away" href="18-overlays\.html#leave"/);
  assert.match(templates[0]!,/до утра · 07:00/);assert.match(templates[0]!,/до ответа/);
- assert.match(templates[0]!,/<button[^>]+disabled[^>]+title="движок пока не исполняет Автопилот"[^>]*>Включить Автопилот<\/button>/);assert.doesNotMatch(templates[0]!,/Сначала подписать M0|Прошлые ночи/);
+ assert.match(templates[0]!,/data-autopilot-on/);assert.match(templates[0]!,/data-autopilot-off/);assert.match(templates[0]!,/data-autopilot-cap/);assert.doesNotMatch(templates[0]!,/<button[^>]+disabled[^>]*>Включить Автопилот<\/button>/);
+ assert.match(live,/api\('\/api\/autopilot',body\)/);assert.match(live,/status\?\.trace\?\.instanceId/);
  assert.match(proto,/PAGES\[k\]\+\(k==='away'\?'#leave':''\)/);assert.doesNotMatch(away,/<div class="comp"|<div class="col"><div class="me"/);
- const view=ui();view.S.away={deputy:'fake'};const callbacks:(()=>void)[]=[];view.sandbox.setTimeout=(fn:()=>void)=>callbacks.push(fn);
- runInContext(part(live,"  if(PAGE==='away'){",'  // ── боковая панель'),Object.assign(view.context,{PAGE:'away'}));const sign=view.clicks.at(-1)!;let stopped=false;
- sign({target:{closest:(selector:string)=>selector==='.panel .btn'?{textContent:'Включить Автопилот',dataset:{},closest:()=>null}:null},preventDefault(){},stopImmediatePropagation(){stopped=true}});assert.equal(stopped,true);assert.equal(view.S.away.deputy,'fake');assert.match(view.toasts.at(-1)!,/движок пока не исполняет Автопилот/);
+ const view=ui();view.S.away={deputy:'fake'};
  const cleaned=createContext({KEY:'k',localStorage:{getItem:()=>JSON.stringify({...view.S,v:1})}});runInContext(part(live,'  let S;','  const now=')+'load();globalThis.cleaned=S;',cleaned);assert.equal(Object.hasOwn((cleaned as Data).cleaned,'away'),false);
 });
 
-test('TS-36C: orchestrator chat offers the same master without claiming Autopilot is active',()=>{
+test('TS-38.1: orchestrator chat offers the same master without claiming decisions execute',()=>{
  const view=ui(),d=dom('<div class="frame cur"><div class="main"><div class="feed"><div class="col"></div></div></div></div>');view.sandbox.document=d.document;
  view.functions.chatGuidanceDraw();const card=d.document.querySelector('[data-autopilot-guidance]');assert.ok(card);
- assert.match(card.textContent,/Движок пока не исполняет Автопилот/);assert.equal(card.querySelector('a')?.getAttribute('href'),'18-overlays.html#leave');
+ assert.match(card.textContent,/автоматическое исполнение решений ещё не подключено/);assert.equal(card.querySelector('a')?.getAttribute('href'),'18-overlays.html#leave');
  assert.equal(view.requests.length,0);assert.doesNotMatch(d.body.innerHTML,/автопилот · до 07:00|Автопилот решил/);
  view.H.snapshotOnly=true;view.functions.chatGuidanceDraw();assert.equal(d.document.querySelector('[data-autopilot-guidance]'),null);
 });

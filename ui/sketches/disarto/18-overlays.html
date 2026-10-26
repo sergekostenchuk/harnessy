@@ -28,14 +28,14 @@
   <div class="frame" data-demo><div class="app">
     <aside class="side" data-rail="chat"></aside>
     <section class="main">
-      <div class="top"><span class="orb"></span><b>Автопилот</b><span class="st">условия Автопилота движок пока не исполняет</span>
+      <div class="top"><span class="orb"></span><b>Автопилот</b><span class="st">срок и условия — в движке; решения пока ждут вас</span>
         <div class="r"><span class="btn sm ghost" id="k">⌘K Найти</span><span class="btn sm ghost" id="leave">☾ Автопилот</span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
       <div class="feed"><div class="away-intro"><p>Настройте период отсутствия и заместителя в мастере «Автопилот». Разговоры команды открываются в списке чатов проекта.</p></div></div>
     </section>
   </div>
   <div class="cap"><span>18 · оверлеи поверх чата · Автопилот / показать окно / ⌘K / паспорт</span><span>1280 × 860</span></div>
   <div class="hint-bar"><span>кнопки в шапке и чип «показать окно» в композере · клавиша ⌘K или Ctrl+K · × / клик мимо / esc</span></div>
-  <div class="recon"><b>Сверка с прототипом</b> (Автопилот · Показать окно · поиск + «Паспорт»): условия → шаг 1; «до утра · 07:00 / до ответа» и заместитель → шаг 2; итог и недоступное включение с причиной → шаг 3. Исполнение условий и журнал решений появятся после подключения движка.</div></div>
+  <div class="recon"><b>Сверка с прототипом</b> (Автопилот · Показать окно · поиск + «Паспорт»): условия → шаг 1; «до утра · 07:00 / до ответа» и виды решений → шаг 2; подтверждение срока и условий → шаг 3. Исполнение решений и журнал появятся в следующих частях TS-38.</div></div>
 </div>
 <script src="app.js"></script>
 <script>
@@ -44,15 +44,15 @@
   // ── Автопилот: выбор условий в три шага; запуск пока недоступен
   HX.bind('#leave',()=>'<div class="from">Автопилот · делегировать · шаг <span data-stepn>1</span> из 3</div><div class="steps"><i class="on"></i><i></i><i></i></div>'+
     '<div data-step="1" class="fh"><h4>Настройка Автопилота</h4><p>На следующем экране вы выберете период отсутствия и заместителя. Затем сможете проверить условия.</p>'+
-      blk('исполнение','<p>условия Автопилота движок пока не исполняет</p>')+
+      blk('состояние','<p>Срок и условия сохраняются в проекте. Автоматическое исполнение решений появится на следующем этапе.</p>')+
       '<div class="ft"><span class="btn ghost" data-close>Отмена</span><span class="btn p" data-go="2" style="margin-left:auto">Дальше</span></div></div>'+
-    '<div data-step="2" class="fh"><h4>На сколько и кто решает за вас</h4><p>Стоп-случаи ждут вас всегда — их заместитель не закрывает.</p>'+
-      blk('когда остановить','<div class="opt"><div>Срок Автопилота<small>до утра — 07:00 по местному времени; до ответа — когда вы вернётесь к вопросу</small></div><span class="seg"><span data-pick class="on">до утра · 07:00</span><span data-pick>до ответа</span></span></div><div class="opt"><div>Заместитель<small>кто отвечает на вопросы команды</small></div><span class="seg"><span data-pick class="on">Fable</span><span data-pick>никому — всё ждёт меня</span></span></div>')+
-      blk('что заместитель может','<div class="opt"><div>Подтверждать стадии, принятые хранителем</div><span class="tog on"></span></div><div class="opt"><div>Переключать модель при лимите</div><span class="tog on"></span></div><div class="opt"><div>Отвечать на «чьё это» и возвращать задачи</div><span class="tog on"></span></div><div class="opt"><div>Запускать живой проход</div><span class="tog"></span></div>')+
+    '<div data-step="2" class="fh"><h4>На сколько и какие решения</h4><p>Стоп-случаи всегда остаются за вами. После подключения исполнения оркестратор будет предлагать решение, а ревьюер — проверять.</p>'+
+      blk('когда остановить','<div class="opt"><div>Срок Автопилота<small>до утра — 07:00 по местному времени; до ответа — первое ваше действие в проекте</small></div><span class="seg"><span data-pick class="on">до утра · 07:00</span><span data-pick>до ответа</span></span></div>')+
+      blk('какие решения можно передать','<div class="opt" data-auto-ops="answer_question,answer_blocker,answer_escalation"><div>Ответы на вопросы и блокировки</div><span class="tog on"></span></div><div class="opt" data-auto-ops="approve,deny"><div>Разрешить или отклонить запрос</div><span class="tog"></span></div><div class="opt" data-auto-ops="assign_role"><div>Назначить роль из команды</div><span class="tog"></span></div><div class="opt" data-auto-ops="continue_pane,stop_pane"><div>Продолжить или остановить место</div><span class="tog"></span></div><div class="opt"><label for="autopilot-cap">Потолок расхода за ночь · % недельного лимита</label><input id="autopilot-cap" data-autopilot-cap type="number" min="0" max="100" step="0.1" value="5"></div>')+
       '<div class="ft"><span class="btn ghost" data-go="1">Назад</span><span class="btn p" data-go="3" style="margin-left:auto">Дальше</span></div></div>'+
     '<div data-step="3" class="fh"><h4>Включить Автопилот</h4><p>Утром — раздел «Входящие · Пока вас не было»: что сделано, что решил заместитель, что ждёт вас.</p>'+
-      blk('итог',kv([['срок','до утра · 07:00'],['заместитель','Fable · три права из четырёх'],['будить вас','только стоп-случаи: снос данных, расход > 5 %, секреты'],['не двинется без вас','подпись M0 · живой проход']]))+
-      '<p role="status">Движок пока не исполняет Автопилот. Выбор можно просмотреть, но включить его нельзя.</p><div class="ft"><span class="btn ghost" data-go="2">Назад</span><span class="btn ghost" data-close>Отмена</span><button type="button" class="btn p" disabled title="движок пока не исполняет Автопилот" style="margin-left:auto">Включить Автопилот</button></div></div>',{w:720,h:640,hide:false});
+      blk('итог',kv([['срок','до утра · 07:00'],['решения','выбранные виды · только по условиям'],['стоп-случаи','платёж, публикация, удаление, установка, сеть наружу, расход сверх потолка'],['исполнение','решения пока остаются владельцу']]))+
+      '<p role="status" data-autopilot-result>Состояние и срок будут сохранены; автоматическое исполнение решений ещё не подключено.</p><div class="ft"><span class="btn ghost" data-go="2">Назад</span><span class="btn ghost" data-close>Отмена</span><button type="button" class="btn ghost" data-autopilot-off hidden>Выключить</button><button type="button" class="btn p" data-autopilot-on style="margin-left:auto">Включить Автопилот</button></div></div>',{w:720,h:640,hide:false});
   // ── Показать окно
   HX.bind('#win',()=>'<div class="from">показать окно агенту</div><div class="ch"><h3>Какое окно показать оркестратору</h3></div><div class="csub">снимок уйдёт в этот разговор; агент скажет, что видит, и сверит со своими данными</div>'+
     '<div class="wins">'+[['Workbench · OM-VIEW','карта проекта · выбрано',1],['Терминал · прогон H1.5','шаг 4/7'],['Браузер · harness.autoiflow.com','вход'],['Codex · ревьюер','круг 2'],['Finder · REPORTS','отчёты'],['Экран целиком','все окна']].map(([a,b,on])=>'<div class="win'+(on?' on':'')+'" data-pick><div class="thumb">'+a.split(' · ')[0]+'</div><b>'+a+'</b>'+b+'</div>').join('')+'</div>'+

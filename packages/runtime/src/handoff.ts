@@ -50,6 +50,6 @@ export function handoff(runtime:Runtime,input:{to?:unknown;from?:unknown;kind?:u
  }
  p.registry.refreshPolicy();const record=p.channel.postCore({to:ids,kind:kind as 'task'|'note'|'question',text,thread:kind==='task'?'T'+(p.journal.lastSeq+1):null,origin:'handoff'},{seat:'owner',trust:'owner'});
  const names=targets.map(x=>x!.label).join(', '),note='контекст передан: '+names+' · запись №'+record.seq;
- src.record('peer','[от харнесс] '+note);src.publish({type:'note',text:note});p.state.savePanes(p.registry,p.journal);
+ src.record('peer','[от харнесс] '+note);src.publish({type:'note',text:note});p.state.savePanes(p.registry,p.journal);runtime.ownerAutopilotAction(p,initiator);
  return {ok:true as const,seq:record.seq,to:targets.map(x=>x!.settings()),names,chars:[...text].length,answers};
 }

@@ -96,11 +96,11 @@ export async function propose(runtime:Runtime,ctx:ActionContext,input:ProposalIn
   store.proposals=store.proposals.filter(x=>x!==old);store.proposals.push(q);p.state.saveProposals(store);question(p,q);p.state.saveProposals(store);publish(p);return receipt(p,q);
  });
 }
-export async function proposals(runtime:Runtime,initiator:Initiator){const p=owner(runtime,initiator);return withPathLock(p.dir,()=>{same(runtime,p);const store=read(p);for(const q of store.proposals){question(p,q);if(q.confirmed)confirmedNote(p,q)}if(store.proposals.length)p.state.saveProposals(store);return {ok:true as const,project:p.dir,proposals:store.proposals.map(q=>({...jsonClone(q),team:proposalTeam(p,q),materializations:q.seats.map(s=>materializationProgress(p,s.operationId,s.sid))}))}})}
+export async function proposals(runtime:Runtime,initiator:Initiator){const p=owner(runtime,initiator);return withPathLock(p.dir,()=>{same(runtime,p);runtime.assertOwner(initiator);const store=read(p);for(const q of store.proposals){question(p,q);if(q.confirmed)confirmedNote(p,q)}if(store.proposals.length)p.state.saveProposals(store);return {ok:true as const,project:p.dir,proposals:store.proposals.map(q=>({...jsonClone(q),team:proposalTeam(p,q),materializations:q.seats.map(s=>materializationProgress(p,s.operationId,s.sid))}))}})}
 export async function confirm(runtime:Runtime,input:ProposalRef,initiator:Initiator){
  const p=owner(runtime,initiator),wanted=ref(input),project=input.project;if(project!==p.dir)fail('proposal_project_changed','проект подтверждения не совпадает');
- const result=await withPathLock(p.dir,lock=>{same(runtime,p);if(runtime.project.dir!==project)fail('proposal_project_changed','проект подтверждения сменился');const store=read(p),q=find(store,wanted),already=q.confirmed;
-  question(p,q);q.confirmed=true;p.state.saveProposals(store);const seats=q.seats.map((_s,i)=>materializeSeat(runtime,p,lock,q,i,()=>same(runtime,p)));confirmedNote(p,q);publish(p);return {ok:true as const,project:p.dir,proposalId:q.proposalId,version:q.version,already,seats};
+ const result=await withPathLock(p.dir,lock=>{same(runtime,p);runtime.assertOwner(initiator);if(runtime.project.dir!==project)fail('proposal_project_changed','проект подтверждения сменился');const store=read(p),q=find(store,wanted),already=q.confirmed;
+  question(p,q);q.confirmed=true;p.state.saveProposals(store);const seats=q.seats.map((_s,i)=>materializeSeat(runtime,p,lock,q,i,()=>{same(runtime,p);runtime.assertOwner(initiator)}));confirmedNote(p,q);publish(p);runtime.ownerAutopilotAction(p,initiator);return {ok:true as const,project:p.dir,proposalId:q.proposalId,version:q.version,already,seats};
  });for(const seat of result.seats)if(!p.closed)void runtime.resumeQueue(seat.pane,p);return result;
 }
 export async function create(runtime:Runtime,ctx:ActionContext,input:ProposalRef){
@@ -119,13 +119,13 @@ export async function createOwnerSeat(runtime:Runtime,input:OwnerSeatInput,initi
  const p=owner(runtime,initiator),wanted=ref(input),project=input.project,index=input.seatIndex,kind=input.kind;
  if(project!==p.dir)fail('proposal_project_changed','проект создания не совпадает');
  if(!Number.isSafeInteger(index)||Number(index)<0||kind!==undefined&&!SEAT_KINDS.includes(kind as SeatKind))invalid('нужны индекс строки и класс прав из семи');
- const result=await withPathLock(p.dir,lock=>{same(runtime,p);const store=read(p),q=find(store,wanted),s=q.seats[Number(index)];if(!s)invalid('нет такой строки предложения');
+ const result=await withPathLock(p.dir,lock=>{same(runtime,p);runtime.assertOwner(initiator);const store=read(p),q=find(store,wanted),s=q.seats[Number(index)];if(!s)invalid('нет такой строки предложения');
   const selection=q.ownerSeats?.[Number(index)],chosen=(kind as SeatKind|undefined)??selection?.kind??s.kind,ops=p.state.readMaterializations();if(!Array.isArray(ops))invalid();
   const saved=ops.find(o=>object(o)&&o.operationId===s.operationId);
   if(selection&&selection.kind!==chosen||object(saved)&&object(saved.input)&&saved.input.kind!==chosen)fail('proposal_seat_locked','создание уже начато с другим классом прав');
   p.team=loadTeam(p.team!.harnessDir);if(chosen==='orchestrator'&&Object.values(p.team.seats).some(x=>x.kind==='orchestrator'&&x.id!==s.sid))fail('role_taken','в проекте уже есть оркестратор');
   question(p,q);q.ownerSeats??={};q.ownerSeats[Number(index)]??={kind:chosen,created:false};p.state.saveProposals(store);
-  const seat=materializeSeat(runtime,p,lock,q,Number(index),()=>same(runtime,p),true);q.ownerSeats[Number(index)]!.created=true;p.state.saveProposals(store);publish(p);
+  const seat=materializeSeat(runtime,p,lock,q,Number(index),()=>{same(runtime,p);runtime.assertOwner(initiator)},true);q.ownerSeats[Number(index)]!.created=true;p.state.saveProposals(store);publish(p);runtime.ownerAutopilotAction(p,initiator);
   return {ok:true as const,project:p.dir,proposalId:q.proposalId,version:q.version,seatIndex:index,...seat,already:!!saved};
  });
  if(!p.closed)void runtime.resumeQueue(result.pane,p);return result;

@@ -27,9 +27,10 @@ import {accessSync,chmodSync,lstatSync,mkdtempSync,realpathSync,rmSync,writeFile
 import {access,realpath,stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {ensureLineLocked,withPathLock,loadTeam,instructionsFor,canonicalPath,type Vendor} from '@harnessy/team';
 import {ATTACHMENT_MAX_COUNT,Journal,Channel,Policy,JournalError,normalizeAttachments,pythonTrim,type AgentPostInput,type AttachmentRef,type Initiator,type Record_,type DeliveryEntry,type ChannelEvent} from '@harnessy/journal';
-import {NetworkChecks,NetworkSettings,openProjectGit,writableRoots,Connections,ProjectRegistry,Settings,Pins,gitops} from '@harnessy/projects';
+import {NetworkChecks,NetworkSettings,openProjectGit,writableRoots,Connections,ProjectRegistry,Settings,Pins,gitops,type AutopilotPermissionSnapshot} from '@harnessy/projects';
 import {digest,roleNote,contextCard,conversationTransfer,transferSettings,transferLabel,TRANSFER_DEFAULTS,type ConversationTransfer} from '@harnessy/context';
 import {ProviderError,type TurnAttachment,type TurnContext,type PeerTools,type SendArgs,type AskArgs,type ReadPaneArgs,type MergeArgs,type AssignRoleArgs} from '@harnessy/providers';
 import {Pane,Registry,validDir} from './pane.ts';
@@ -42,6 +43,8 @@ import {renderInbox,queueNote} from './inbox.ts';
 import {RuntimeError,message,slice,deepFreeze,object} from './errors.ts';
 import {systemClock,type RuntimeDeps,type RuntimeActions,type ProjectState,type TurnScope,type ActiveTurn,type ActionContext,type RuntimeEvent,type TurnRecords,type BridgeSendArgs,type BridgeFailure,type SendResult,type ReadPaneResult,type AskResult,type MergeResult,type AssignRoleResult} from './types.ts';
 const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Initiator & {trust:'harness'}={seat:'harness',trust:'harness'};
+// Only valid inside withAutopilotGeneration. Existing owner API checks still apply.
+export const AUTOPILOT_OWNER:Initiator=Object.freeze({seat:'owner',trust:'owner',source:'autopilot'});
 const attachmentExtension:Record<TurnAttachment['mime'],string>={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif'};
 function programBinaryTarget(id:string,file:string):boolean{
  const name=basename(file);
@@ -78,6 +81,8 @@ export class Runtime {
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
  private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();private cliQuotas=new WeakMap<ProjectState,ProviderLimitsStore>();
  private programBinaryJobs=new Map<string,Promise<unknown>>();
+ private autopilotTimers=new WeakMap<ProjectState,unknown>();
+ private autopilotApplication=new WeakMap<ProjectState,symbol>();private autopilotContext=new AsyncLocalStorage<symbol>();private autopilotJobs=new WeakMap<ProjectState,Set<Promise<unknown>>>();
  readonly deps:RuntimeDeps;readonly actions:RuntimeActions;
  constructor(deps:RuntimeDeps,actions:RuntimeActions){this.deps=deps;this.actions=actions;this.llmKeys=deps.llmKeys??new MacKeyStore();this.sshTunnels=deps.sshTunnels??new SshTunnels();
  if(!actions||['ask','merge','assignRole','afterTurn','restorePendingAcks','cancelAsks'].some(k=>typeof (actions as unknown as Record<string,unknown>)[k]!=='function'))throw new RuntimeError('actions_required','порт действий обязателен',500);
@@ -132,7 +137,21 @@ export class Runtime {
  private ollamaAgent(maxSteps?:number){return new ApiAgent('ollama',{vendor:'ollama',...(maxSteps===undefined?{}:{maxSteps}),prepareModel:async(model,signal)=>{await this.network.migrate();if(this.networkRelay.configured('ollama')&&/(?::cloud|-cloud)$/.test(model))throw new ProviderError('capability_unsupported','Подключите Ollama Cloud как API по адресу https://ollama.com/v1 с ключом — тогда маршрут применится');const prepare=this.providerOperations.catalog.get('ollama').prepareModel;if(!prepare)throw new ProviderError('capability_unsupported','Подготовка модели Ollama не подключена');return prepare(model,signal)},service:async signal=>{const p=this.project,models=await this.providerOperations.catalog.get('ollama').models(signal,false);if(!models.length)throw new ProviderError('models_unavailable','Ollama: список моделей пуст');const config:ProviderConfig={api:'openai-completions',baseURL:OLLAMA_URL+'/v1',models:models.map(m=>({id:m.id,name:m.label})),compat:{supportsStore:false,supportsDeveloperRole:false}};return this.modelService(()=>({ollama:config}),()=>()=>{},p,'')}})}
  private provider(vendor:Vendor|'human'):import('@harnessy/providers').Provider{if(vendor==='ollama'){let agent=this.apiAgents.get(vendor);if(!agent){agent=this.ollamaAgent();this.apiAgents.set(vendor,agent)}return agent}const route=apiRoute(vendor);if(route){let agent=this.apiAgents.get(vendor);if(!agent){agent=new ApiAgent(route,{service:()=>this.llm});this.apiAgents.set(vendor,agent)}return agent}const provider=vendor==='human'?null:this.deps.providers[vendor]??(this.providerOperations.catalog.ids().includes(vendor)?this.providerOperations.catalog.provider(vendor):null);if(!provider)throw new RuntimeError('no_provider','нет провайдера: '+vendor,503);return provider}
  providerProbeTurn(seat:import('@harnessy/providers').CliSeat,prompt:string,ctx:import('@harnessy/providers').CliContext):ReturnType<import('@harnessy/providers').Provider['runTurn']>{return seat.vendor==='ollama'?this.ollamaAgent(1).runTurn({...seat,mode:'chat'},prompt,ctx):this.providerOperations.catalog.get(seat.vendor).runTurn(seat,prompt,ctx)}
- private requireOwner(initiator:Initiator):void {if(initiator?.seat!=='owner'||initiator.trust!=='owner')throw new RuntimeError('policy_denied','действие доступно только владельцу',403)}
+ private requireOwner(initiator:Initiator,allowQueuedChange=false):void {if(initiator?.seat!=='owner'||initiator.trust!=='owner')throw new RuntimeError('policy_denied','действие доступно только владельцу',403);const p=this.current;if(!p||p.closed)return;if(initiator.source==='autopilot'){const token=this.autopilotApplication.get(p);if(!token||this.autopilotContext.getStore()!==token)throw new RuntimeError('policy_denied','действие Автопилота доступно только внутри подтверждённого применения',403)}else if(!allowQueuedChange)this.guardAutopilotApplication(p)}
+ assertOwner(initiator:Initiator):void {this.requireOwner(initiator)}
+ private guardAutopilotApplication(p:ProjectState){const token=this.autopilotApplication.get(p);if(token&&this.autopilotContext.getStore()!==token)throw new RuntimeError('autopilot_busy','Автопилот завершает решение; повторите действие после него',409)}
+ async withAutopilotGeneration<T>(expectedGeneration:number,apply:(snapshot:AutopilotPermissionSnapshot)=>T|Promise<T>):Promise<T>{
+  const p=this.project,job=this.settings.withAutopilotGeneration(expectedGeneration,snapshot=>{
+   this.same(p);const token=Symbol('autopilot application');this.autopilotApplication.set(p,token);
+   return this.autopilotContext.run(token,async()=>{try{return await apply(snapshot)}finally{this.autopilotApplication.delete(p)}})
+  },()=>this.clock.now(),()=>this.same(p));
+  let jobs=this.autopilotJobs.get(p);if(!jobs)this.autopilotJobs.set(p,jobs=new Set());jobs.add(job);
+  try{return await job}finally{jobs.delete(job)}
+ }
+ private scheduleAutopilot(p:ProjectState,state:import('@harnessy/projects').AutopilotState){const old=this.autopilotTimers.get(p);if(old!==undefined)this.clock.clearTimeout(old);this.autopilotTimers.delete(p);if(!state.on||state.until?.kind!=='morning')return;const due=Math.max(0,Date.parse(state.until.at)-this.clock.now());const timer=this.clock.setTimeout(()=>{if(this.current===p&&!p.closed)void this.autopilotStatus().catch(error=>this.report(p,p.owner,error))},due);this.autopilotTimers.set(p,timer)}
+ async autopilotStatus(){const p=this.project,before=this.settings.autopilot(),state=await this.settings.currentAutopilot(()=>this.clock.now());this.same(p);this.scheduleAutopilot(p,state);if(before.on&&!state.on)p.owner.publish({type:'autopilot',autopilot:state});return state}
+ async autopilotSet(body:Record<string,unknown>,initiator:Initiator){this.requireOwner(initiator,true);if(initiator.source==='autopilot')throw new RuntimeError('policy_denied','Автопилот не меняет собственные условия',403);const p=this.project;if(body.project!==p.dir||body.instance!==p.trace.instanceId)throw new RuntimeError('project_changed','Проект сменился; обновите состояние Автопилота',409);const {project:_,instance:__,...change}=body;const state=await this.settings.changeAutopilot(change,()=>this.clock.now(),()=>this.same(p));this.same(p);this.scheduleAutopilot(p,state);p.owner.publish({type:'autopilot',autopilot:state});return {ok:true as const,project:p.dir,autopilot:state}}
+ ownerAutopilotAction(p=this.project,initiator:Initiator=OWNER){this.same(p);if(initiator.source==='autopilot'){this.requireOwner(initiator);return}this.guardAutopilotApplication(p);const before=this.settings.autopilot();if(!before.on||before.until?.kind!=='reply')return;const state=this.settings.ownerAutopilotAction();this.scheduleAutopilot(p,state);p.owner.publish({type:'autopilot',autopilot:state})}
  private attachmentStore(p:ProjectState){let store=this.attachmentStores.get(p);if(!store){store=new AttachmentStore(p.dir);this.attachmentStores.set(p,store)}return store}
  attachmentUpload(input:Record<string,unknown>,initiator:Initiator){this.requireOwner(initiator);if(Object.keys(input).length!==1||!Object.hasOwn(input,'base64'))throw new RuntimeError('attachment_invalid','нужно одно поле base64',400);return this.attachmentStore(this.project).upload(input.base64)}
  attachmentRead(id:unknown,initiator:Initiator){this.requireOwner(initiator);return this.attachmentStore(this.project).bytes(id)}
@@ -148,6 +167,7 @@ export class Runtime {
  try{return await operation()}finally{release()}
  }
  async openProject(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean;roomModel?:string}={}):Promise<void> {
+ const current=this.current;if(current&&this.autopilotApplication.has(current))throw new RuntimeError('autopilot_busy','Автопилот завершает решение; дождитесь его окончания',409);
  return this.changeProject(()=>this.openProjectLocked(dir,options))
  }
  private async openProjectLocked(dir:string,options:{expected?:ProjectState;initialize?:(p:ProjectState)=>void|Promise<void>;deferPumps?:boolean;roomModel?:string},root=canonicalPath(projectsRoot(this.settings.effective()))):Promise<void> {
@@ -195,13 +215,13 @@ export class Runtime {
  else {await this.recover(p,pane)}
  }
  if(!lineErrors.some(text=>text.startsWith('chats.json не читается'))){if(freshRoom)state.savePanes(registry,journal);else state.saveChats(registry)}
- p.starting=false;this.quota(p).start();this.providerOperations.start(p);if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if((pane.status==='idle'||p.state.attempts[pane.id]?.unsent)&&!p.materializing.has(pane.id)&&!p.restoreFailed.has(pane.id))await this.resumeQueue(pane.id,p);
+ p.starting=false;try{await this.autopilotStatus()}catch(error){lineErrors.push('Автопилот: '+message(error))}this.quota(p).start();this.providerOperations.start(p);if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if((pane.status==='idle'||p.state.attempts[pane.id]?.unsent)&&!p.materializing.has(pane.id)&&!p.restoreFailed.has(pane.id))await this.resumeQueue(pane.id,p);
  }
  async projectSet(path:string,options:{reload?:boolean},initiator:Initiator){
  this.requireOwner(initiator);const p=this.project;
  if(!validDir(path))throw new RuntimeError('path_invalid','папки нет или это не папка: '+path,400);
  return this.changeProject(async()=>{
- this.same(p);const target=this.projectPath(path);if(target===p.dir&&!options.reload)return {ok:true as const,project:target,changed:false as const};
+ this.same(p);this.requireOwner(initiator);const target=this.projectPath(path);if(target===p.dir&&!options.reload)return {ok:true as const,project:target,changed:false as const};
  const hold=reserve(p,[...p.registry.panes.values()],'идёт ход: смени папку, когда все окна свободны',true);
  try{if(!validDir(target))throw new RuntimeError('path_invalid','папки нет или это не папка: '+path,400);await this.openProjectLocked(target,{expected:p});const next=this.project;return {ok:true as const,project:next.dir,changed:true as const,lineErrors:[...next.lineErrors],panes:[...next.registry.panes.values()].map(p=>p.settings())}}
  finally{hold.release()}
@@ -211,12 +231,12 @@ export class Runtime {
  this.requireOwner(initiator);const p=this.project,path=expandUser(pythonTrim(String(input.path||'')));
  if(!path||!isAbsolute(path)||[...path].length>400)throw new RuntimeError('path_invalid','нужен абсолютный путь папки',400);
  return this.changeProject(async()=>{
- this.same(p);const target=this.projectPath(path),busyText='идёт ход: создай папку, когда все окна свободны';let hold=reserve(p,[...p.registry.panes.values()],busyText,true);
+ this.same(p);this.requireOwner(initiator);const target=this.projectPath(path),busyText='идёт ход: создай папку, когда все окна свободны';let hold=reserve(p,[...p.registry.panes.values()],busyText,true);
  try{
  let info:Awaited<ReturnType<typeof initProject>>;
- try{info=await initProject(target,{git:input.git===undefined||pyTruthy(input.git),model:String(input.model||''),orchestrator:false},{...(this.deps.gitops?{gitops:this.deps.gitops}:{}),catalog:structuredClone(p.registry.models),...(p.registry.get('room')?.model?{roomModel:p.registry.get('room')!.model}:{}),settings:structuredClone(this.settings.effective())})}
- catch(e){throw new RuntimeError('project_failed','проект не создан: '+message(e),400,{cause:e})}
- this.same(p);
+ try{info=await initProject(target,{git:input.git===undefined||pyTruthy(input.git),model:String(input.model||''),orchestrator:false},{...(this.deps.gitops?{gitops:this.deps.gitops}:{}),catalog:structuredClone(p.registry.models),...(p.registry.get('room')?.model?{roomModel:p.registry.get('room')!.model}:{}),settings:structuredClone(this.settings.effective()),validatePath:()=>{this.same(p);this.requireOwner(initiator)}})}
+ catch(e){if(e instanceof RuntimeError&&['project_changed','autopilot_busy','policy_denied'].includes(e.code))throw e;throw new RuntimeError('project_failed','проект не создан: '+message(e),400,{cause:e})}
+ this.same(p);this.requireOwner(initiator);
  // Reacquire for the current seats synchronously; closing marks the project closed before the next await.
  hold.release();hold=reserve(p,[...p.registry.panes.values()],busyText,true);
  await this.openProjectLocked(target,{expected:p,...(typeof input.model==='string'?{roomModel:input.model}:{})});const next=this.project;
@@ -224,8 +244,8 @@ export class Runtime {
  }finally{hold.release();if(this.current===p&&!p.closed)for(const id of p.registry.ids)void this.kick(id)}
  })
  }
- async closeProject():Promise<void>{return this.changeProject(()=>this.closeProjectLocked())}
- private async closeProjectLocked():Promise<void>{const p=this.current;if(!p||p.closed)return;if(p.state.undurable.size){try{p.state.saveChats(p.registry);p.state.undurable.clear()}catch(e){throw new RuntimeError('write_failed','ответ модели не сохранён: '+p.state.chatsPath+': '+message(e),409,{cause:e,fields:{path:p.state.chatsPath}})}}p.closed=true;this.actions.closeProject?.(p);const turns=[...p.active.values()];
+ async closeProject():Promise<void>{const p=this.current,jobs=p&&this.autopilotJobs.get(p);if(jobs?.size)await Promise.allSettled([...jobs]);return this.changeProject(()=>this.closeProjectLocked())}
+ private async closeProjectLocked():Promise<void>{const p=this.current;if(!p||p.closed)return;if(p.state.undurable.size){try{p.state.saveChats(p.registry);p.state.undurable.clear()}catch(e){throw new RuntimeError('write_failed','ответ модели не сохранён: '+p.state.chatsPath+': '+message(e),409,{cause:e,fields:{path:p.state.chatsPath}})}}p.closed=true;const timer=this.autopilotTimers.get(p);if(timer!==undefined)this.clock.clearTimeout(timer);this.autopilotTimers.delete(p);this.actions.closeProject?.(p);const turns=[...p.active.values()];
  this.quotas.get(p)?.close();this.cliQuotas.get(p)?.close();for(const turn of turns)this.cancelTurn(turn.pane.id,'project_closed',p);
  await this.networkProviderChecks.closeProject(p);p.owner.denyApprovals();p.bus.close();this.tokens.clear();this.scopes.clear();await this.providerOperations.cancel(p);
  let failure:unknown;try{await Promise.all([...Object.values(this.deps.providers),...this.apiAgents.values()].map(provider=>provider?.close()))}catch(e){failure=e}
@@ -247,7 +267,7 @@ export class Runtime {
  waiting(id:string){const p=this.project,pane=this.pane(id,p);if(p.restoreFailed.has(id))return null;const info=waiting(p,pane);if(info)return info;const pending=this.attemptDecisions(p).find(d=>d.record.attempt!.pane===id&&!d.done);if(!pending)return null;const a=pending.record.attempt!,result=p.state.results(pane).find(r=>r.runtime?.turnInstanceId===a.turnInstanceId);return {status:a.action==='finish'?'recovering' as const:'uncertain' as const,recordSeqs:Array.isArray(result?.runtime.recordSeqs)?[...result.runtime.recordSeqs]:[],startedAt:null,turnInstanceId:a.turnInstanceId,actions:[a.action]}}
  publishState(id:string):void {const p=this.project;this.stateEvent(p,this.pane(id,p))}
  private warningId(p:ProjectState,pane:Pane,kind:string):string {return pane.id+':'+(waiting(p,pane)?.turnInstanceId??p.active.get(pane.id)?.scope.turnInstanceId??'episode:'+p.generation)+':'+kind}
- postOwner(input:AgentPostInput,initiator:Initiator):Record_ {this.requireOwner(initiator);const p=this.project,targets=Array.isArray(input.to)?input.to:[input.to];if(input.kind!=='stop'&&[...p.registry.panes.keys()].some(id=>(targets.includes(id)||targets.includes('*'))&&(p.editing.has(id)||p.materializing.has(id)||p.restoreFailed.has(id))))throw new RuntimeError('busy','назначение или изменение разговора ещё не завершено',409);p.registry.refreshPolicy();return p.channel.postCore({...input,thread:input.thread??(input.kind==='task'?'T'+(p.journal.lastSeq+1):null)},OWNER)}
+ postOwner(input:AgentPostInput,initiator:Initiator):Record_ {this.requireOwner(initiator);const p=this.project,targets=Array.isArray(input.to)?input.to:[input.to];if(input.kind!=='stop'&&[...p.registry.panes.keys()].some(id=>(targets.includes(id)||targets.includes('*'))&&(p.editing.has(id)||p.materializing.has(id)||p.restoreFailed.has(id))))throw new RuntimeError('busy','назначение или изменение разговора ещё не завершено',409);p.registry.refreshPolicy();const record=p.channel.postCore({...input,thread:input.thread??(input.kind==='task'?'T'+(p.journal.lastSeq+1):null)},OWNER);this.ownerAutopilotAction(p,initiator);return record}
  private report(p:ProjectState,pane:Pane,error:unknown):void{if(!p.closed){const failure=turnFailure(error,p.dir,0),event={type:'error',message:failure.reason,sessionId:pane.sessionId,code:failure.code,waiting:pane.status==='uncertain'?this.waiting(pane.id):null,warning:this.warningId(p,pane,'error')};if(pane.status==='recovering'||pane.status==='uncertain')pane.recoveryError=event;pane.publish(event)}}
  private stateEvent(p:ProjectState,pane:Pane){if(!p.closed)pane.publish({type:'state',...pane.settings(),settingsBinding:this.paneBinding(pane.id,p),pending:p.journal.pendingFor(pane.id).length,status:pane.status,waiting:this.waiting(pane.id)})}
  private attemptDecisions(p:ProjectState):{record:Record_;done:Record_|null}[] {
@@ -291,7 +311,7 @@ export class Runtime {
     const record=previous?.record??p.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'attempt',thread:'attempt:'+input.turnInstanceId,text:'владелец решил: '+label+range,attempt:{pane:id,turnInstanceId:input.turnInstanceId as string,action,...(direct?{network:'direct_once' as const}:{}),...(info?.status==='unsent'?{unsent:true as const}:{}),deliverySeq,done:false}});
     await this.finishDecision(p,record);if(direct){let grants=this.directRetries.get(p);if(!grants)this.directRetries.set(p,grants=new Map());grants.set(id,{binding:grantedBinding!,seqs:[...seqs]})}return this.decisionResult(record)
    }catch(e){const pending=this.attemptDecisions(p).find(d=>d.record.attempt!.pane===id&&!d.done);if(pending){pane.status=pending.record.attempt!.action==='finish'?'recovering':'uncertain';this.report(p,pane,e)}throw e}finally{hold.release()}
-  });if(!p.closed)void this.kick(id);return result
+  });this.ownerAutopilotAction(p,initiator);if(!p.closed)void this.kick(id);return result
  }
  kick(id:string):Promise<void> {const p=this.project,pane=this.pane(id,p),running=p.pumps.get(id);p.wakeups.add(id);if(running)return running;
  let again=false;
@@ -514,11 +534,11 @@ export class Runtime {
  if(turn.handle)this.interruptHandle(p,turn.pane,turn.handle);
  turn.timer=this.clock.setTimeout(()=>{if(p.active.get(id)===turn)void this.resetVendor(turn.vendor as Vendor,p).catch(e=>this.report(p,turn.pane,e))},30_000);return true
  }
- interrupt(id:string,initiator:Initiator){this.requireOwner(initiator);const pane=this.pane(id);if(this.cancelTurn(id,'interrupt'))return {ok:true};pane.denyApprovals();return {ok:false,error:'нечего прерывать'}}
- approve(id:string,approvalId:string,decision:'allow'|'deny',initiator:Initiator){this.requireOwner(initiator);const p=this.project;if(id==='owner'&&approvalId.startsWith('provider-probe:'))return this.providerOperations.approve(p,approvalId,decision);const pane=id==='owner'?p.owner:this.pane(id,p),ok=pane.resolveApproval(approvalId,decision==='allow');return {ok,error:ok?null:'вопрос уже закрыт'}}
+ interrupt(id:string,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);if(this.cancelTurn(id,'interrupt')){this.ownerAutopilotAction(p,initiator);return {ok:true}}pane.denyApprovals();return {ok:false,error:'нечего прерывать'}}
+ approve(id:string,approvalId:string,decision:'allow'|'deny',initiator:Initiator){this.requireOwner(initiator);const p=this.project;if(id==='owner'&&approvalId.startsWith('provider-probe:')){const result=this.providerOperations.approve(p,approvalId,decision);if(result.ok)this.ownerAutopilotAction(p,initiator);return result}const pane=id==='owner'?p.owner:this.pane(id,p),ok=pane.resolveApproval(approvalId,decision==='allow');if(ok)this.ownerAutopilotAction(p,initiator);return {ok,error:ok?null:'вопрос уже закрыт'}}
  async halt(on:boolean,initiator:Initiator){this.requireOwner(initiator);const p=this.project;let failure:unknown;if(on){p.halted=true;try{p.state.saveHalt(true)}catch(e){failure=e}}else{p.state.saveHalt(false);p.halted=false}const interrupted:string[]=[];
  for(const pane of p.registry.panes.values()){if(on&&this.cancelTurn(pane.id,'halt',p))interrupted.push(pane.id);pane.publish({type:'note',text:on?'остановлено владельцем: ходы не идут, сообщения ждут в очереди':'работа возобновлена владельцем'});this.stateEvent(p,pane);if(!on&&pane.status==='idle')void this.kick(pane.id)}
- if(failure)throw failure;return {ok:true,halted:on,interrupted,pending:Object.fromEntries([...p.registry.panes.values()].map(pane=>[pane.id,p.journal.pendingFor(pane.id).length]).filter(([,n])=>n))}
+ if(failure)throw failure;this.ownerAutopilotAction(p,initiator);return {ok:true,halted:on,interrupted,pending:Object.fromEntries([...p.registry.panes.values()].map(pane=>[pane.id,p.journal.pendingFor(pane.id).length]).filter(([,n])=>n))}
  }
  validateTurn(vendor:string,mode:string){if(apiRoute(vendor)){if(!Object.hasOwn(this.settings.llmProviders(),apiRoute(vendor)!))throw new RuntimeError('provider_unknown','Маршрут API не найден',409);if(!Object.hasOwn(API_MODES,mode)||!API_MODES[mode as keyof typeof API_MODES].ok)throw new RuntimeError('mode_unsupported','Режим API-модели не подключён',409);return}if(vendor==='claude'||vendor==='codex')return;const catalog=this.providerOperations.catalog;if(!catalog.ids().includes(vendor))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);
  const supported=catalog.get(vendor).capabilities.turn?.[mode as 'read'|'edit'|'all'];if(supported?.ok!==true){const reason=supported?.reason??'Программа не гарантирует режим '+mode;throw new RuntimeError('capability_unsupported',reason,409,{fields:{reason}})}
@@ -553,10 +573,10 @@ export class Runtime {
   if(models)p.registry.models[target]=models;
   if(typeof model!=='string'||!p.registry.models[target]?.some(m=>m.id===model))throw new RuntimeError('model_unsupported','Модель отсутствует в снимке каталога',409);
  }else this.validateTurn(target,mode);
- const updated=p.registry.update(pane,safe);if(updated){p.state.savePanes(p.registry,p.journal);this.stateEvent(p,pane);if(pane.status==='idle')void this.kick(id)}const info=waiting(p,pane);return {ok:true,pane:{...pane.settings(),settingsBinding:this.paneBinding(id,p)},...(updated&&pane.busy?{appliesFrom:'next' as const}:{}),...(info?{waiting:info}:{})}}
+ const updated=p.registry.update(pane,safe);if(updated){p.state.savePanes(p.registry,p.journal);this.ownerAutopilotAction(p,initiator);this.stateEvent(p,pane);if(pane.status==='idle')void this.kick(id)}const info=waiting(p,pane);return {ok:true,pane:{...pane.settings(),settingsBinding:this.paneBinding(id,p)},...(updated&&pane.busy?{appliesFrom:'next' as const}:{}),...(info?{waiting:info}:{})}}
  async steer(id:string,text:string,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);text=pythonTrim(text);if(!text)throw new RuntimeError('text_empty','пустое сообщение',400);
  const turn=p.active.get(id),record=p.channel.postCore({to:[id],kind:'note',text,origin:'steer'},OWNER);
- try{if(!turn||turn.stopRequested||!turn.handle)throw new RuntimeError('turn_ended','ход не активен');this.scopes.assert(turn.scope);await turn.handle.steer(text);this.same(p);this.scopes.assert(turn.scope);pane.record('me',text);pane.publish({type:'steered',record});return {ok:true,seq:record.seq,steered:true}}
+ try{if(!turn||turn.stopRequested||!turn.handle)throw new RuntimeError('turn_ended','ход не активен');this.scopes.assert(turn.scope);await turn.handle.steer(text);this.same(p);this.requireOwner(initiator);this.scopes.assert(turn.scope);pane.record('me',text);pane.publish({type:'steered',record});this.ownerAutopilotAction(p,initiator);return {ok:true,seq:record.seq,steered:true}}
  catch(e){const reason='вмешательство не доставлено: '+turnFailure(e,p.dir,0).reason;if(!p.closed)p.channel.postCore({to:['owner'],kind:'rejected',text:reason,reply_to:record.seq,origin:'steer'},HARNESS);throw new RuntimeError('steer_failed',reason,409,{cause:e})}
  }
  resetVendor(vendor:Vendor,p=this.project):Promise<void>{const existing=p.resets.get(vendor);if(existing)return existing;
@@ -573,9 +593,9 @@ export class Runtime {
  async listSessions(id:string){const p=this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);return this.provider(pane.vendor).listSessions(pane.cwd)}
  async sessionMessages(id:string,sessionId:string){const p=this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);return this.provider(pane.vendor).sessionMessages(pane.cwd,sessionId)}
  async openSession(id:string,sessionId:string,initiator:Initiator){this.requireOwner(initiator);const p=this.project,pane=this.pane(id,p);free(p,pane,pane.label+' занято: идёт ход');const {revision,vendor,cwd}=pane;const msgs=await this.provider(vendor).sessionMessages(cwd,sessionId);
- this.same(p);if(p.registry.get(id)!==pane||pane.revision!==revision||pane.vendor!==vendor||pane.cwd!==cwd||pane.busy||p.editing.has(id)||p.materializing.has(id))throw new RuntimeError('stale_session','окно изменилось во время чтения сессии');
+ this.same(p);this.requireOwner(initiator);if(p.registry.get(id)!==pane||pane.revision!==revision||pane.vendor!==vendor||pane.cwd!==cwd||pane.busy||p.editing.has(id)||p.materializing.has(id))throw new RuntimeError('stale_session','окно изменилось во время чтения сессии');
  free(p,pane,pane.label+' занято: идёт ход');
- pane.sessionId=sessionId;pane.touched=true;pane.revision++;pane.transcript=msgs.map(m=>({role:m.role,text:m.text,ts:0}));pane.seen={};p.state.savePanes(p.registry,p.journal);return {id:sessionId,messages:msgs}
+ pane.sessionId=sessionId;pane.touched=true;pane.revision++;pane.transcript=msgs.map(m=>({role:m.role,text:m.text,ts:0}));pane.seen={};p.state.savePanes(p.registry,p.journal);this.ownerAutopilotAction(p,initiator);return {id:sessionId,messages:msgs}
  }
  promoteChat(id:string,input:PromotionInput,initiator:Initiator){return promoteChat(this,id,input,initiator)}
  roleCatalog(){return roleCatalog(this)}
@@ -592,13 +612,13 @@ export class Runtime {
  chatsNew(input:{pane?:unknown;carry?:unknown},initiator:Initiator){return chatsNew(this,input,initiator)}
  chatsOpen(input:{chat?:unknown;carry?:unknown},initiator:Initiator){return chatsOpen(this,input,initiator)}
  handoff(input:{to?:unknown;from?:unknown;kind?:unknown;chat?:unknown;seqs?:unknown;quotes?:unknown;prompt?:unknown;text?:unknown},initiator:Initiator){return handoff(this,input,initiator)}
- chat(input:Record<string,unknown>,initiator:Initiator){return chat(this,input,initiator)}
+ chat(input:Record<string,unknown>,initiator:Initiator){const p=this.project;this.requireOwner(initiator);const result=chat(this,input,initiator);this.ownerAutopilotAction(p,initiator);return result}
  pinsGet(initiator:Initiator){this.requireOwner(initiator);return this.pins.get()}
- async pinSet(input:Parameters<Pins['set']>[0],initiator:Initiator){this.requireOwner(initiator);return this.pins.set(input)}
+ async pinSet(input:Parameters<Pins['set']>[0],initiator:Initiator){this.requireOwner(initiator);const p=this.project;return this.pins.set(input,()=>{this.same(p);this.requireOwner(initiator)},()=>this.ownerAutopilotAction(p,initiator))}
  settingsGet(initiator:Initiator){this.requireOwner(initiator);return this.settings.get()}
  async settingsPatch(scope:unknown,patch:unknown,initiator:Initiator){this.requireOwner(initiator);
  if(object(patch)&&Object.keys(TRANSFER_DEFAULTS).some(key=>Object.hasOwn(patch,key))){if(scope&&scope!=='owner')throw new RuntimeError('context_settings_invalid','настройки переноса: только область owner',400);try{transferSettings(patch)}catch(e){throw new RuntimeError('context_settings_invalid',message(e),400)}}
- const result=await this.settings.patch(scope,patch);this.traceSettings();return result}
+ const p=this.project,result=await this.settings.patch(scope,patch,()=>{this.same(p);this.requireOwner(initiator)},()=>this.ownerAutopilotAction(p,initiator));this.traceSettings();return result}
  async setProgramBinary(id:string,path:unknown,initiator:Initiator){
   this.requireOwner(initiator);
   const project=this.project;
@@ -616,7 +636,7 @@ export class Runtime {
    this.same(project);if(await realpath(path)!==canonical)throw Error('program link changed');
   }catch(e){if(e instanceof RuntimeError)throw e;throw new RuntimeError('program_binary_invalid','Это не '+id+'. Выберите файл программы '+id+'.',400)}
   if([...project.active.values()].some(active=>active.pane.vendor===id))throw new RuntimeError('provider_busy','Программа отвечает; дождитесь завершения хода',409);
-  await this.settings.setProgramBinary(id,canonical);
+  await this.settings.setProgramBinary(id,canonical,()=>{this.same(project);this.requireOwner(initiator)},()=>this.ownerAutopilotAction(project,initiator));
   if(id==='claude'||id==='codex'){process.env[id==='claude'?'CLAUDE_BIN':'CODEX_BIN']=canonical;await this.deps.providers[id]?.reset()}
   const read=await this.providerOperations.catalog.setBinary(id,canonical);
   return {ok:true,provider:read.row};

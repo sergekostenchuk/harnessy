@@ -9,7 +9,15 @@ import {orderedClone,orderedKeys,parseCompat} from '@harnessy/journal';
 import {priceList,type ModelPrice} from './price-list.ts';
 import {BILLING_KEYS,billingConfig,mergeBilling} from './billing.ts';
 import {ProjectError} from './errors.ts';
+import {AUTOPILOT_STOP_CASES,autopilotConditions,autopilotExpired,autopilotState,nextMorning,stopAutopilot,type AutopilotPermissionSnapshot,type AutopilotState} from './autopilot.ts';
 import {SETTINGS_APPLIES,SETTINGS_SCOPE} from './strings.ts';
+// The settings-file key is separate from the project lock. Autopilot effects
+// acquire this lock first, then may enter owner APIs that acquire the project
+// lock. Never acquire the autopilot lock while holding the project lock.
+const activeAutopilotLocks=new Set<string>();
+function withAutopilotLock<T>(path:string,run:()=>T|Promise<T>):Promise<T>{
+ return withPathLock(path,async()=>{activeAutopilotLocks.add(path);try{return await run()}finally{activeAutopilotLocks.delete(path)}})
+}
 function repr(key:string){
  const quote=key.includes("'")&&!key.includes('"')?'"':"'";
  return quote+[...key].map(ch=>{if(ch===quote||ch==='\\')return '\\'+ch;if(ch==='\n')return '\\n';if(ch==='\r')return '\\r';if(ch==='\t')return '\\t';
@@ -52,6 +60,45 @@ export class Settings {
   });
  }
  projectPath(){const path=this.currentProject();return path?join(path,'.harness','state','settings.json'):null}
+ private autopilotPath(){const project=this.currentProject(),path=this.projectPath();if(!project||!path)throw new ProjectError('autopilot_invalid','Сначала откройте проект',409);return {project,path:canonicalPath(path)}}
+ private readAutopilotProject(path:string){let raw:unknown;try{raw=parseCompat(new TextDecoder('utf-8',{fatal:true}).decode(readFileSync(path)))}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return {};throw new ProjectError('autopilot_unreadable','Настройки проекта для Автопилота не читаются',409,error)}if(!object(raw))throw new ProjectError('autopilot_unreadable','Настройки проекта для Автопилота не читаются',409);return raw}
+ autopilot():AutopilotState {const {path}=this.autopilotPath();return autopilotState(this.readAutopilotProject(path).autopilot)}
+ async currentAutopilot(clock:()=>number=()=>this.now()):Promise<AutopilotState> {
+  const {project,path}=this.autopilotPath(),current=autopilotState(this.readAutopilotProject(path).autopilot);if(!autopilotExpired(current,clock()))return current;
+  return withAutopilotLock(path,()=>{const saved=this.readAutopilotProject(path),state=autopilotState(saved.autopilot);if(!autopilotExpired(state,clock()))return state;const stopped=stopAutopilot(state);writeJson(path,{...saved,autopilot:stopped});return stopped})
+ }
+ async changeAutopilot(input:unknown,clock:()=>number=()=>this.now(),assertActive:()=>void=()=>{}):Promise<AutopilotState> {
+  if(!object(input)||Object.keys(input).some(key=>!['on','until','conditions','revision'].includes(key))||typeof input.on!=='boolean'||!Number.isSafeInteger(input.revision)||Number(input.revision)<0)throw new ProjectError('autopilot_invalid','Ожидаются on и ревизия состояния Автопилота',400);
+  if(input.on&&!(input.until==='morning'||input.until==='reply')||!input.on&&(input.until!==undefined||input.conditions!==undefined))throw new ProjectError('autopilot_invalid','Выберите срок Автопилота: до утра или до ответа',400);
+  const conditions=input.on&&input.conditions!==undefined?autopilotConditions(input.conditions):null,{path}=this.autopilotPath();
+  return withAutopilotLock(path,()=>{
+   assertActive();const now=clock(),saved=this.readAutopilotProject(path),prior=autopilotState(saved.autopilot),current=autopilotExpired(prior,now)?stopAutopilot(prior):prior;
+   if(current!==prior)writeJson(path,{...saved,autopilot:current});
+   if(input.revision!==current.revision)throw new ProjectError('autopilot_conflict','Условия Автопилота изменились; перечитайте карточку',409);
+   const state:AutopilotState=input.on?{on:true,until:input.until==='morning'?{kind:'morning',at:nextMorning(now)}:{kind:'reply',at:null},conditions:conditions??current.conditions,generation:current.generation+1,revision:current.revision+1,startedAt:new Date(now).toISOString()}:stopAutopilot(current);
+   writeJson(path,{...saved,autopilot:state});return state;
+  })
+ }
+ ownerAutopilotAction():AutopilotState {
+  const {path}=this.autopilotPath();
+  // Synchronous owner APIs cannot wait for an in-flight effect. Their caller
+  // receives a typed retry instead of changing the generation under it.
+  if(activeAutopilotLocks.has(path))throw new ProjectError('autopilot_busy','Автопилот завершает решение; повторите действие после него',409);
+  const saved=this.readAutopilotProject(path),state=autopilotState(saved.autopilot);
+  if(!state.on||state.until?.kind!=='reply')return state;
+  const stopped=stopAutopilot(state);writeJson(path,{...saved,autopilot:stopped});return stopped;
+ }
+ async withAutopilotGeneration<T>(expectedGeneration:number,apply:(snapshot:AutopilotPermissionSnapshot)=>T|Promise<T>,clock:()=>number=()=>this.now(),assertActive:()=>void=()=>{}):Promise<T>{
+  if(!Number.isSafeInteger(expectedGeneration)||expectedGeneration<1)throw new ProjectError('autopilot_generation_mismatch','Поколение разрешений Автопилота изменилось',409);
+  const {path}=this.autopilotPath();return withAutopilotLock(path,async()=>{
+   assertActive();const saved=this.readAutopilotProject(path),state=autopilotState(saved.autopilot);
+   if(autopilotExpired(state,clock())){writeJson(path,{...saved,autopilot:stopAutopilot(state)});throw new ProjectError('autopilot_expired','Срок Автопилота истёк',409)}
+   if(!state.on)throw new ProjectError('autopilot_off','Автопилот выключен',409);
+   if(state.generation!==expectedGeneration)throw new ProjectError('autopilot_generation_mismatch','Поколение разрешений Автопилота изменилось',409);
+   const snapshot:AutopilotPermissionSnapshot=Object.freeze({generation:state.generation,revision:state.revision,conditions:Object.freeze({...state.conditions,operations:Object.freeze([...state.conditions.operations]),stopCases:Object.freeze([...state.conditions.stopCases])}),stopCodes:Object.freeze([...AUTOPILOT_STOP_CASES])});
+   const result=await apply(snapshot);assertActive();return result;
+  })
+ }
  private readOwner(writing=false,path=canonicalPath(this.ownerFile)){
   let raw:unknown;try{raw=parseCompat(new TextDecoder('utf-8',{fatal:true}).decode(readFileSync(path)))}
   catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return {};if(writing&&(e as NodeJS.ErrnoException).code==='EISDIR')throw new ProjectError('write_failed','не записано: '+String(e),500,e);throw new ProjectError('pricelist_unreadable','прайс-лист владельца не читается',409,e)}
@@ -72,12 +119,13 @@ export class Settings {
  }
  private merged(owner:Record<string,unknown>,project:Record<string,unknown>){const overrides=orderedClone(project);for(const key of ['network','llmProviders','priceList','traceEnabled','traceMaxMiB',...BILLING_KEYS])delete overrides[key];return orderedClone(owner,overrides)}
  get(){const owner=this.readOwner(),path=this.projectPath(),project=path?readObject(path):{};this.prices(owner);return {ok:true as const,owner,project,effective:this.merged(owner,project),applies:SETTINGS_APPLIES}}
- async setProgramBinary(id:string,binary:string){const path=canonicalPath(this.ownerFile);return withPathLock(path,()=>{const owner=this.readOwner(true,path),saved=orderedClone(owner);saved['programBinary_'+id]=binary;writeJson(path,saved);return binary})}
+ async setProgramBinary(id:string,binary:string,beforeWrite:()=>void=()=>{},afterWrite:()=>void=()=>{}){const path=canonicalPath(this.ownerFile);return withPathLock(path,()=>{beforeWrite();const owner=this.readOwner(true,path),saved=orderedClone(owner);saved['programBinary_'+id]=binary;writeJson(path,saved);afterWrite();return binary})}
  // Broken prices must not prevent opening a project or reaching the owner's repair endpoint.
  effective(){const path=this.projectPath();return this.merged(readObject(this.ownerFile),path?readObject(path):{})}
- async patch(scope:unknown,patch:unknown){
+ async patch(scope:unknown,patch:unknown,beforeWrite:()=>void=()=>{},afterWrite:()=>void=()=>{}){
  scope=truthy(scope)?String(scope):'owner';if(!['owner','project'].includes(String(scope))||!object(patch)||!Object.keys(patch).length)throw new ProjectError('invalid_settings',SETTINGS_SCOPE);
  const changes=orderedClone(patch);
+ if(Object.hasOwn(changes,'autopilot'))throw new ProjectError('autopilot_invalid','Автопилот меняется через /api/autopilot');
  for(const key of orderedKeys(changes)){const value=changes[key];if(key==='network')throw new ProjectError('invalid_settings','Выходы меняются через /api/network');if(key==='llmProviders')throw new ProjectError('invalid_settings','Маршруты меняются через /api/llm/providers');if(key.startsWith('programBinary_'))throw new ProjectError('invalid_settings','Путь к программе меняется через карточку программы');if([...key].length>40||!(/^[\p{L}\p{N}]+$/u.test(key.replaceAll('_',''))))throw new ProjectError('invalid_settings','ключ '+repr(key)+' не годится');
  if(key==='profileName'){if(scope!=='owner')throw new ProjectError('invalid_settings','profileName: только область owner');if(value!==null){if(typeof value!=='string'||![...value.trim()].length||[...value.trim()].length>80||/[\p{C}]/u.test(value))throw new ProjectError('invalid_settings','Имя: от 1 до 80 символов без управляющих',400);changes[key]=value.trim()}}
  if(key==='traceEnabled'||key==='traceMaxMiB'){if(scope!=='owner')throw new ProjectError('invalid_settings',key+': только область owner');if(value!==null&&(key==='traceEnabled'?typeof value!=='boolean':!Number.isSafeInteger(value)||Number(value)<1||Number(value)>128))throw new ProjectError('invalid_settings',key+': нужен флаг или размер от 1 до 128 МиБ')}
@@ -88,9 +136,10 @@ export class Settings {
  const project=this.currentProject(),selected=scope==='owner'?this.ownerFile:project?join(project,'.harness','state','settings.json'):null;if(!selected)throw new ProjectError('invalid_settings','папка не открыта');
  const path=canonicalPath(selected);
  return withPathLock(scope==='project'?project!:path,()=>{
+ beforeWrite();
  const cur=scope==='owner'?this.readOwner(true,path):readObject(path),saved=orderedClone(cur);for(const key of orderedKeys(changes)){if(changes[key]===null)delete saved[key];else Object.defineProperty(saved,key,{value:changes[key],enumerable:true,configurable:true,writable:true})}
  const ordered=orderedClone(cur,saved);for(const key of orderedKeys(ordered))if(!Object.hasOwn(saved,key))delete ordered[key];if(scope==='owner')this.prices(ordered);writeJson(path,ordered);
- return {ok:true as const,scope,saved:ordered,effective:this.effective(),applies:SETTINGS_APPLIES,ts:Math.floor(this.now()/1000)}
+ const result={ok:true as const,scope,saved:ordered,effective:this.effective(),applies:SETTINGS_APPLIES,ts:Math.floor(this.now()/1000)};afterWrite();return result
  })
  }
 }
