@@ -7,6 +7,7 @@ import {OWNER,integer,string,type Route} from './routes.ts';
 export function bridgeReply(result:{ok:true}|BridgeFailure,denied:number):Reply{return json(result,result.ok?200:result.code!=='proposal_required'&&result.code.startsWith('proposal_')?409:['token_invalid','turn_ended'].includes(result.code)?403:result.code==='write_failed'?500:['recovering','uncertain','merge_uncertain','project_changed','stale_session','ack_closed'].includes(result.code)?409:denied)}
 export function bridgeRoutes(r:Runtime):Route[]{return [
  ...(['propose','create'] as const).map((name):Route=>({method:'POST',path:name==='propose'?'/api/seats/propose':'/api/seats',style:'J',handle:async({request,body})=>{
+  if(name==='propose'&&request.headers['x-pane-token']===undefined&&body.from===undefined)return json(await r.proposeOwnerSeat(body,OWNER));
   if(name==='create'&&!header(request,'x-pane-token')&&body.proposalId===undefined&&body.version===undefined)return json({ok:false,code:'proposal_required',error:'участников создаёт оркестратор по подтверждённому предложению'},409);
   const scope=r.validateBridge(string(body.from),header(request,'x-pane-token'));const {from:_,...args}=body;return bridgeReply(await r.traceTool(scope,name==='propose'?'propose_seats':'create_seats',args,async()=>name==='propose'?await r.proposeSeats(scope,args):await r.createSeats(scope,args)),403);
  }})),

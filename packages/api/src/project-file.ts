@@ -16,6 +16,7 @@ export function projectFileRoutes(r:Runtime):Route[]{return [{method:'GET',path:
  try{
   const p=r.project,current=()=>{if(p.closed||r.project!==p||query.get('project')!==p.dir)throw new RuntimeError('project_changed','Проект изменился. Откройте файл из текущего проекта.',409)};current();
   const path=query.get('path');if(!path||path.length>4096||/[\x00-\x1f\\]/.test(path))throw new RuntimeError('file_invalid','Нужен путь к файлу проекта.',400);
+  if(query.get('text')==='1'){const instruction=r.instructionFile(path);if(instruction)return {...json(instruction),headers}}
   const root=await realpath(p.dir),requested=resolve(root,path);if(!within(root,requested))throw denied();
   const canonical=await realpath(requested);if(!within(root,canonical))throw denied();
   file=await open(canonical,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);

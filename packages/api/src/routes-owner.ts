@@ -9,6 +9,7 @@ export function ownerRoutes(r:Runtime):Route[]{return [
  {method:'POST',path:'/api/project',handle:async({body})=>json(await r.projectSet(string(body.path),{reload:pyTruthy(body.reload)},OWNER))},
  {method:'POST',path:'/api/project/create',handle:async({body})=>json(await r.projectCreate(body,OWNER))},
  {method:'POST',path:'/api/panes/:id',style:'E',handle:({params,body})=>json(r.paneSet(params.id!,body,OWNER))},
+ {method:'POST',path:'/api/panes/:id/instruction',style:'J',handle:async({request,params,body})=>{providerOwner(request);return json(await r.updateInstruction(params.id!,body,OWNER))}},
  {method:'POST',path:'/api/panes/:id/attempt',style:'J',handle:async({params,body})=>json(await r.attempt(params.id!,body,OWNER))},
  {method:'GET',path:'/api/chats',handle:()=>json(r.chatsList(OWNER))},
  {method:'POST',path:'/api/chats/new',handle:async({body})=>json(await r.chatsNew(body,OWNER))},

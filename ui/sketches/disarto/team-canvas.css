@@ -346,3 +346,20 @@
 
 .tc-pmenu.tc-live-menu{display:flex;position:fixed;right:auto;bottom:auto;z-index:10000;box-sizing:border-box;animation:none}
 html[data-proto] [data-team-plus-wrap]>.tc-pmenu{display:none}
+/* TS-39.2: constructor editors use the same role-card surface. */
+.tc-instruction[hidden]{display:none}
+.tc-instruction [role="status"]{min-height:18px;margin-top:7px}
+.tc-instruction pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:160px;overflow:auto}
+.tc-instruction .tc-editor-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.tc-shared{display:flex;gap:7px;align-items:center;margin:8px 0;color:var(--accent)}
+.tc-own-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0}
+.tc-ownrole label{display:flex;flex-direction:column;gap:5px;min-width:0;color:var(--ink3)}
+.tc-ownrole input,.tc-ownrole select{box-sizing:border-box;width:100%;min-width:0;background:var(--bg);border:1px solid var(--line2);border-radius:7px;padding:7px;color:var(--ink);font:12px var(--font)}
+.tc-ownrole textarea{min-height:74px}
+.tc-policy{flex:none}.tc-policy summary{cursor:pointer;color:var(--ink2)}.tc-policy li{margin:5px 0;overflow-wrap:anywhere}
+@media(max-width:759px){.tc-own-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tc-instruction{margin:0 10px 10px}.tc-ownrole .tc-editor-actions .btn{flex:1}}
+
+[data-team-live="constructor"] .tc-cons>[data-team-library]{min-width:0;min-height:0}
+[data-team-live="constructor"] .tc-lib{box-sizing:border-box;max-height:100%}
+[data-team-live="constructor"]>.tc-instruction{flex-shrink:0}
+@media(max-width:759px){html[data-proto][data-m] [data-team-live="constructor"] .tc-cons{grid-template-columns:minmax(0,1fr)}}
