@@ -101,7 +101,7 @@ export class Journal {
  }
  pendingFor(seat:string):DeliveryEntry[]{
  this.recover();const cursor=this.cursorData[seat]??0,out:DeliveryEntry[]=[],revoked=this.revokedAutopilotRecords();
- for(const record of this.records){if(revoked.has(record.seq)||record.origin==='steer'||SYSTEM_KINDS.includes(record.kind as never)||record.from===seat||!record.to.some(t=>t===seat||t==='*'))continue;
+ for(const record of this.records){if(revoked.has(record.seq)||record.origin==='steer'||record.origin==='autopilot-council'||SYSTEM_KINDS.includes(record.kind as never)||record.from===seat||!record.to.some(t=>t===seat||t==='*'))continue;
  const resolution=this.decisions.get(record.seq);if(record.ack==='pending'&&resolution?.kind!=='ack')continue;
  const deliverySeq=record.ack==='pending'?resolution!.seq:record.seq;if(deliverySeq>cursor)out.push({record,deliverySeq})}
  return out.sort((a,b)=>a.deliverySeq-b.deliverySeq)
