@@ -5,11 +5,13 @@ import type {Route} from './routes.ts';
 const outcomes=['ok','failed','rejected','timeout','cancelled'];
 export function traceRoutes(r:Runtime):Route[]{return [
  {method:'GET',path:'/api/trace',style:'J',handle:async({query})=>{
- const p=r.project,id=query.get('traceId'),since=query.get('since'),outcome=query.get('outcome'),seq=query.get('journalSeq');
+ const p=r.project,id=query.get('traceId'),since=query.get('since'),outcome=query.get('outcome'),seq=query.get('journalSeq'),turn=query.get('turnId');
+ if(turn!==null&&!traceId(turn))return json({ok:false,code:'trace_invalid',error:'Некорректный id хода'},400);
  if(id!==null&&!traceId(id)||since!==null&&!Number.isFinite(Date.parse(since))||outcome!==null&&!outcomes.includes(outcome)||seq!==null&&(!/^\d+$/.test(seq)||!Number.isSafeInteger(Number(seq))||Number(seq)<1))return json({ok:false,code:'trace_invalid',error:'Некорректный фильтр цепочки'},400);
  if(query.has('project')&&query.get('project')!==p.dir)return json({ok:false,code:'project_changed',error:'Проект сменился'},409);
  let records=await p.trace.read({...id?{traceId:id}:{},...since?{since:Date.parse(since)}:{},...outcome?{outcome:outcome as TraceOutcome}:{}});
  if(seq){const ids=new Set(records.filter(row=>row.refs.journalSeq===Number(seq)).map(row=>row.traceId));records=records.filter(row=>ids.has(row.traceId))}
+ if(turn){const ids=new Set(records.filter(row=>row.turnInstanceId===turn).map(row=>row.traceId));records=records.filter(row=>ids.has(row.traceId))}
  if(r.project!==p||p.closed)return json({ok:false,code:'project_changed',error:'Проект сменился'},409);
  return json({ok:true,project:p.dir,instanceId:p.trace.instanceId,status:p.trace.status,records});
  }},

@@ -43,7 +43,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  function hEvent(','  const isDirect=')+
   part(live,'  async function loadChat(','  // подключение к движку')+
   part(live,'  // TS-09b2:','  // End TS-09b2 promotion.')+
-  part(live,'  const timePart=','  const ckBox=')+
+  part(live,'  const fmtN=','  const ckBox=')+
   part(live,'  const bubble=','  const cols=')+
   part(live,'  function guidanceState(','  function render(')+
   '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
@@ -667,4 +667,29 @@ test('TS-41: proposal cards live inside the chat feed, collapsed, rather than a 
  assert.equal(card.querySelector('[data-team-toggle]')!.getAttribute('aria-expanded'),'false');assert.ok(card.querySelector('.proposal-body')!.hasAttribute('hidden'));
  assert.doesNotMatch(style,/\.team-proposals\{[^}]*max-height|html\[data-page="new"\] \.team-proposals\{position:absolute/);
  assert.match(style,/live-demo-off[^}]*:not\(\.team-proposals\)/,'connected mode must not hide a live proposal as demo content');
+});
+function turnStatsUI(){
+ const d=dom('<main></main>'),H:any={project:'/project-a',pane:{id:'worker'},active:{worker:'chat-a'}},S:any={chat:[]},copied:string[]=[];
+ const context:any={H,S,document:d.document,esc:(value:any)=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),navigator:{clipboard:{writeText:async(value:string)=>{copied.push(value)}}},toast(){}};
+ context.render=()=>{d.document.querySelector('main')!.innerHTML=S.chat.map((m:any,i:number)=>'<article>'+context.stats.button(m,i)+context.stats.card(m,i)+'</article>').join('')};
+ runInContext(part(live,'  const fmtN=','  const timePart=')+'globalThis.stats={parse:messageUsage,button:turnStatsButton,card:turnStatsCard};',createContext(context));
+ return {...d,H,S,copied,render:context.render,stats:context.stats};
+}
+const statsUsage={turnId:'12345678-1234-1234-1234-123456789012',model:'claude-test',vendor:'claude',mode:'read',input:50892,cacheRead:779968,output:17413,durationMs:6400,toolCalls:2,stopped:false,contextAfter:{used:68305,window:200000},cost:.031,currency:'USD'};
+test('TS-40 UI: complete, missing and interrupted cards preserve nulls and show real zeroes',async()=>{
+ const view=turnStatsUI();view.S.chat=[{role:'ai',src:'live',usage:statsUsage},{role:'ai',src:'live',usage:{...statsUsage,turnId:'22345678-1234-1234-1234-123456789012',model:'codex-test',input:null,output:null,cacheRead:null,cost:null,currency:null,contextAfter:null}},{role:'ai',src:'live',usage:{...statsUsage,turnId:'32345678-1234-1234-1234-123456789012',stopped:true,cacheRead:0,output:611}}];view.render();
+ assert.equal(view.document.querySelector('.tstat'),null);await view.document.querySelector('[data-turn-stats="0"]')!.emit('click');let card=view.document.querySelector('.tstat')!;assert.match(card.textContent,/50 892/);assert.match(card.textContent,/94 % входа/);assert.equal(card.querySelectorAll('.ticks i').length,32);
+ await view.document.querySelector('[data-turn-stats="1"]')!.emit('click');assert.equal(view.document.querySelectorAll('.tstat').length,1);card=view.document.querySelector('.tstat')!;assert.match(card.textContent,/Провайдер не сообщил расход/);assert.equal(card.querySelector('.ticks'),null);assert.equal(card.querySelectorAll('.dim').length,4);assert.doesNotMatch(card.textContent,/0 токенов/);
+ await view.document.querySelector('[data-turn-stats="2"]')!.emit('click');card=view.document.querySelector('.tstat')!;assert.match(card.textContent,/Ход прерван/);assert.match(card.textContent,/611/);assert.equal(card.querySelectorAll('.cell b')[1]!.textContent,'0');assert.equal(view.stats.parse({input:0,output:0,cacheRead:0}),null,'legacy usage has no card');
+});
+test('TS-40 UI: ids are copied exactly, journal links use the turn and project, foreign chat does not retain an open card',async()=>{
+ const view=turnStatsUI();view.S.chat=[{role:'ai',src:'live',usage:statsUsage}];view.render();await view.document.querySelector('[data-turn-stats]')!.emit('click');
+ const link=view.document.querySelector('.tstat a')!.getAttribute('href')!;assert.equal(link,'21-journal.html?project=%2Fproject-a#turn='+statsUsage.turnId);await view.document.querySelector('[data-turn-copy]')!.emit('click');assert.deepEqual(view.copied,[statsUsage.turnId]);
+ view.H.active.worker='chat-b';view.render();assert.equal(view.document.querySelector('.tstat'),null);
+ view.S.chat[0].usage={...statsUsage,turnId:null,model:'<img src=x>'};view.render();await view.document.querySelector('[data-turn-stats]')!.emit('click');assert.equal(view.document.querySelector('[data-turn-copy]'),null);assert.equal(view.document.querySelector('.tstat a'),null);assert.equal(view.document.querySelector('img'),null);
+});
+test('TS-40 UI: history and live completion parse the same per-turn usage',async()=>{
+ const view=ui({fetch:async()=>({messages:[{seq:1,role:'ai',text:'Ответ',ts:1,usage:statsUsage}]})});await view.functions.loadChat({onboard:false});assert.deepEqual(plain(view.S.chat[0].usage),statsUsage);
+ view.H.cur={text:'Ещё ответ',tools:[],pane:'worker'};view.functions.finish({type:'done',turnUsage:{...statsUsage,input:null},usage:{input:null,output:17413,cacheRead:779968},durationMs:6400});assert.equal(view.S.chat.at(-1).usage.input,null);assert.equal(view.S.chat.at(-1).usage.turnId,statsUsage.turnId);assert.equal(view.S.chat.at(-1).turnNumber,2);view.S.chat=[{role:'ai',src:'live',turnNumber:41,usage:statsUsage}];view.H.cur={text:'Следующий',tools:[],pane:'worker'};view.functions.finish({type:'done',turnUsage:statsUsage});assert.equal(view.S.chat.at(-1).turnNumber,42);
+ assert.match(style,/@media\(max-width:640px\).*\.tstat \.grid\{grid-template-columns:repeat\(2/);
 });

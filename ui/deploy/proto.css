@@ -350,7 +350,35 @@ html[data-proto][data-page="chat"] .cx-top { width:auto; max-width:760px; margin
 .cx-filters { display:flex; gap:4px; flex-wrap:wrap; padding:0 4px 6px; } .cx-filters span { font-size:11px; color:var(--ink3); border:1px solid var(--line2); border-radius:999px; padding:2px 8px; cursor:pointer; } .cx-filters span.on { color:var(--ink); border-color:var(--ink3); }
 .cx-tog { margin-left:auto; width:26px; height:14px; border-radius:8px; border:1px solid var(--line2); position:relative; display:inline-block; flex:none; cursor:pointer; } .cx-tog::after { content:""; position:absolute; left:1px; top:1px; width:10px; height:10px; border-radius:50%; background:var(--ink3); transition:left .15s; } .cx-tog.on { background:var(--accent-soft); border-color:transparent; } .cx-tog.on::after { left:13px; background:var(--accent); }
 .cx-row .cx-tog + small { margin-left:8px; padding-left:0; }
-.live-cost { margin-top:6px; font:10.5px var(--mono); letter-spacing:.05em; color:var(--ink3); }
+.live-acts .st {display:inline-flex;align-items:center;gap:5px;padding:2px 6px;border-radius:6px;border:1px solid transparent;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.live-acts .st svg {width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+.live-acts .st.open {border-color:var(--line2);background:var(--raised);color:var(--ink)}
+.live-acts .st .cost {color:var(--accent-hi,#d89c54);text-transform:none;letter-spacing:0}
+.live-msg.live-stats-open .live-acts {opacity:1;pointer-events:auto}
+.tstat {margin-top:10px;max-width:560px;border:1px solid var(--line2);border-radius:12px;background:var(--panel);overflow:hidden;font-variant-numeric:tabular-nums}
+.tstat .hd {display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:9px 14px;border-bottom:1px solid var(--line);font:10px var(--mono);color:var(--ink3)}
+.tstat .hd b {font:500 12.5px var(--font);color:var(--ink)}
+.tstat .hd .r {margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.tstat .mode {padding:1px 6px;border-radius:5px;border:1px solid var(--line2);color:var(--ink2)}
+.tstat .grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:12px 14px 10px}
+.tstat .cell+.cell {border-left:1px solid var(--line);padding-left:12px}
+.tstat .cell small {display:block;font:10px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px}
+.tstat .cell b {display:block;font:500 16px/1.1 var(--font);font-variant-numeric:tabular-nums;color:var(--ink);overflow-wrap:anywhere}
+.tstat .cell b.acc {color:var(--accent-hi,#d89c54)}
+.tstat .cell b.dim {color:var(--ink3);font-weight:400;font-size:13px}
+.tstat .cell span {display:block;font:11px var(--font);color:var(--ink2);margin-top:3px}
+.tstat .ticks {display:flex;gap:2px;margin:6px 14px 10px}
+.tstat .ticks i {flex:1;height:8px;border-radius:1px;background:var(--line2)}
+.tstat .ticks i.in {background:var(--ink3)}
+.tstat .ticks i.cache {background:var(--accent-deep,#6a2808)}
+.tstat .ticks i.out {background:var(--accent)}
+.tstat .ft {display:flex;flex-wrap:wrap;gap:8px 14px;padding:8px 14px;border-top:1px solid var(--line);font:11px var(--font);color:var(--ink2)}
+.tstat .ft .r {margin-left:auto;display:flex;flex-wrap:wrap;gap:10px;font:10px var(--mono);color:var(--ink3)}
+.tstat button,.tstat a {padding:0;border:0;background:none;font:inherit;color:inherit;cursor:pointer;text-decoration:none}
+.tstat button:hover,.tstat a:hover {color:var(--ink)}
+.tstat .note {padding:10px 14px;font-size:12px;color:var(--ink2);border-top:1px solid var(--line)}
+.tstat .note b {color:var(--warn);font-weight:500}
+@media(max-width:640px){.tstat .grid{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:12px}.tstat .cell:nth-child(3){border-left:0;padding-left:0}.tstat .hd .r,.tstat .ft .r{margin-left:0}.tstat .ft .r{gap:12px}}
 html[data-proto][data-page="new"] .starts, html[data-proto][data-page="new"] .hints, html[data-proto][data-page="new"] .live-how { display:none !important; }   /* переехали в ⓘ (ревью №3454/№3458) */
 html[data-m] .cx-pop { position:fixed; left:12px !important; right:12px; width:auto; top:auto !important; bottom:12px; max-height:70vh; }
 /* действия под живым ответом и разговор без роли */

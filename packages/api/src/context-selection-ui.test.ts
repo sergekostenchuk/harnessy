@@ -109,7 +109,7 @@ test('260: the actual role-switch context door opens empty and sends only explic
 
 test('261: streamed owner and model replies retain engine ids for selection; an unbound result is not selectable',async()=>{
  const v=ui();Object.assign(v.ctx,{mdFiles:new Map(),now:()=>1,md:String,mdMessageArtifacts:()=>'',toolLine:()=>''});
- runInContext(part('  function finish(ev)','  function hEvent(ev)')+'globalThis.finish=finish;',v.ctx);
+ runInContext(part('  const statNumber=','  let turnStatsOpen=')+part('  function finish(ev)','  function hEvent(ev)')+'globalThis.finish=finish;',v.ctx);
  v.S.chat=[{role:'me',text:'Новый вопрос'}];v.H.cur={text:'Новый ответ',tools:[]};v.ctx.finish({type:'done',chat:'chat-a',seq:9,messages:[{role:'me',text:'Новый вопрос',seq:8}]});v.start();await v.find('[data-sel="all"]').emit('click');await v.find('[data-sel="go"]').emit('click');assert.deepEqual(v.requests[0]!.seqs,[8,9]);
  v.S.chat=[];v.H.cur={text:'Без привязки',tools:[]};v.ctx.finish({type:'done',seq:10});v.start();assert.equal(v.document.querySelector('.live-selbar'),null);assert.equal(v.requests.length,1);
 });
