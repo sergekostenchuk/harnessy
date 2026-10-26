@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {harness,OWNER,deferred,until} from './test-helpers.ts';
-import {AutopilotSpendBudget} from './autopilot-budget.ts';
+import {AutopilotSpendBudget,type AutopilotSpendQuotes} from './autopilot-budget.ts';
 import {RuntimeAutopilotSafety,autopilotAssignmentSource} from './autopilot-runtime.ts';
 const seats='  orchestrator: {role: orchestrator, vendor: claude, label: оркестратор, model: w1, mode: chat, digest: false}\n  reviewer: {role: reviewer, vendor: claude, label: ревьюер, model: w2, mode: chat, digest: false}\n  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: chat, digest: false}';
 const policy=(dir:string)=>writeFileSync(join(dir,'.harness','comms-policy.yaml'),readFileSync(new URL('../../team/templates/comms-policy.yaml',import.meta.url)));
 const quotes=async(calls:readonly unknown[])=>calls.map(()=>({window:'claude:weekly:1',percentUsed:20,upperPercent:0.01,basis:'stub verified weekly upper bound'}));
 const line=(s:string,p:string)=>s.split('\n').find(l=>l.startsWith(p))!.slice(p.length);
-async function setup(t:Parameters<typeof harness>[0],options:{quoted?:boolean;review?:'agree'|'objection';operations?:string[]}={}){
- const h=await harness(t,{seats,before:policy,deps:options.quoted===false?{}:{autopilotSpendQuotes:quotes}});
+async function setup(t:Parameters<typeof harness>[0],options:{quoted?:boolean;quotes?:AutopilotSpendQuotes;review?:'agree'|'objection';operations?:string[]}={}){
+ const h=await harness(t,{seats,before:policy,deps:options.quoted===false?{}:{autopilotSpendQuotes:options.quotes??quotes}});
  h.provider.onRun=async(seat,prompt,ctx)=>{ctx.modelStarted?.();ctx.publish({type:'done',sessionId:null,model:seat.model,durationMs:1,usage:{input:10,output:5,cacheRead:0}});if(prompt.includes('requestHash: ')){const caps=JSON.parse(line(prompt,'Разрешённые операции: '));return {text:JSON.stringify({requestHash:line(prompt,'requestHash: '),capability:caps[0].id,answer:caps[0].operation.startsWith('answer_')?'Внутренний ответ':null,reason:'внутренняя операция'}),sessionId:null}}if(prompt.includes('proposalHash: '))return {text:JSON.stringify({proposalHash:line(prompt,'proposalHash: '),verdict:options.review??'agree',reason:'проверено'}),sessionId:null};return {text:'получено',sessionId:null}};
  await h.runtime.autopilotSet({project:h.dir,instance:h.runtime.project.trace.instanceId,on:true,until:'morning',revision:0,conditions:{operations:options.operations??['answer_question'],maxSpendPercent:5}},OWNER);
  await h.runtime.idle();return h;
@@ -29,7 +29,7 @@ test('38.2 runtime: no verified budget means no model; exhausted budget turns au
 });
 test('38.2 budget: parallel reservations and restart count the cancelled upper bounds; absent quote fails closed',async t=>{
  const h=await harness(t),b=new AutopilotSpendBudget(h.dir,quotes),input={project:h.dir,generation:1,maxSpendPercent:0.015,calls:[{seat:'o',model:'m',purpose:'proposal' as const,round:1 as const}]};
- const outcomes=await Promise.allSettled([b.reserve(input),b.reserve(input)]);assert.equal(outcomes.filter(r=>r.status==='fulfilled').length,1);const one=outcomes.find(r=>r.status==='fulfilled');if(one?.status==='fulfilled')await one.value.close('owner');await assert.rejects(new AutopilotSpendBudget(h.dir,quotes).reserve(input),{code:'spend_over_cap'});await assert.rejects(new AutopilotSpendBudget(h.dir,async()=>[]).reserve({...input,generation:2}),{code:'spend_unknown'});
+ const outcomes=await Promise.allSettled([b.reserve(input),b.reserve(input)]);assert.equal(outcomes.filter(r=>r.status==='fulfilled').length,1);const one=outcomes.find(r=>r.status==='fulfilled');if(one?.status==='fulfilled'){await one.value.use(input.calls[0]!);await one.value.close('owner')}await assert.rejects(new AutopilotSpendBudget(h.dir,quotes).reserve(input),{code:'spend_over_cap'});await assert.rejects(new AutopilotSpendBudget(h.dir,async()=>[]).reserve({...input,generation:2}),{code:'spend_unknown'});
 });
 test('38.2 runtime: turning off while reviewer is answering rejects late agreement before owner API',async t=>{
  const h=await setup(t),gate=deferred<{text:string;sessionId:null}>(),old=h.provider.onRun!;
@@ -92,4 +92,18 @@ test('38.2 r2: provider preparation cannot invoke the model after a late disable
 });
 test('38.2 r2: restart seals an unproved intent without repeating its effect',async t=>{
  const h=await setup(t,{operations:['stop_pane']}),ledger=h.runtime.autopilotDecisionLedger(),old=h.provider.onRun!,attempt=h.runtime.attempt.bind(h.runtime);let effects=0;h.provider.onRun=async(seat,prompt,ctx)=>{if(seat.id==='worker')throw Error('stub failed');return old(seat,prompt,ctx)};ledger.failed=async()=>{throw Error('lost failure receipt')};h.runtime.attempt=async()=>{effects++;throw Error('effect unavailable')};h.runtime.chat({pane:'worker',message:'ошибка',direct:true},OWNER);await h.runtime.idle();assert.equal(ledger.list()[0]!.entry.state,'intent');assert.equal(effects,1);h.runtime.attempt=attempt;await h.runtime.autopilotSet({project:h.dir,instance:h.runtime.project.trace.instanceId,on:false,revision:1},OWNER);const calls=h.provider.calls.length;await h.runtime.openProject(h.dir);await h.runtime.idle();const saved=h.runtime.autopilotDecisionLedger().list()[0]!.entry;assert.equal(saved.state,'uncertain');assert.equal(h.provider.calls.length,calls);assert.equal(effects,1);
+});
+
+test('38.2 r3: two completed measured 0.4 calls fit a one-point cap without double charging',async t=>{
+ const h=await harness(t);let percentUsed=20;const b=new AutopilotSpendBudget(h.dir,async calls=>calls.map(()=>({window:'weekly',percentUsed,upperPercent:0.4,basis:'verified'}))),first={seat:'o',model:'m',purpose:'proposal' as const,round:1 as const},second={...first,seat:'r',purpose:'review' as const},lease=await b.reserve({project:h.dir,generation:1,maxSpendPercent:1,calls:[first,second]});await lease.use(first);percentUsed=20.4;await lease.complete!(first);await lease.use(second);percentUsed=20.8;await lease.complete!(second);await lease.close('applied');const rows=JSON.parse(readFileSync(join(h.dir,'.harness/state/autopilot-spend.json'),'utf8'));assert.equal(rows[0].amount,0);
+});
+test('38.2 r3: all five Runtime calls at 0.2 stay inside one point and do not disable autopilot',async t=>{
+ let percentUsed=20;const h=await setup(t,{quotes:async calls=>calls.map(()=>({window:'weekly',percentUsed,upperPercent:0.2,basis:'verified'}))}),old=h.provider.onRun!;let reviews=0;h.provider.onRun=async(seat,prompt,ctx)=>{const result=await old(seat,prompt,ctx);if(prompt.includes('proposalHash: ')&&++reviews===1)result.text=JSON.stringify({...JSON.parse(result.text),verdict:'objection'});percentUsed+=0.2;return result};await h.runtime.autopilotSet({project:h.dir,instance:h.runtime.project.trace.instanceId,on:true,until:'morning',revision:1,conditions:{operations:['answer_question'],maxSpendPercent:1}},OWNER);const q=question(h);await h.runtime.idle();assert.equal(h.provider.calls.length,5);assert.equal(h.runtime.settings.autopilot().on,true);assert.equal(h.runtime.journal.repliesTo(q.seq).filter(r=>r.from==='owner').length,1);assert.equal(h.runtime.autopilotDecisionLedger().list()[0]!.entry.state,'applied');const rows=JSON.parse(readFileSync(join(h.dir,'.harness/state/autopilot-spend.json'),'utf8'));assert.ok(rows.every((r:{amount:number})=>r.amount<1e-9));
+});
+test('38.2 r3: an unresolved cancelled call keeps its upper reserve across restart and other measured calls',async t=>{
+ const h=await harness(t);let percentUsed=20;const quote:AutopilotSpendQuotes=async calls=>calls.map(()=>({window:'weekly',percentUsed,upperPercent:0.4,basis:'verified'})),first={seat:'o',model:'m',purpose:'proposal' as const,round:1 as const},second={...first,seat:'r',purpose:'review' as const},b=new AutopilotSpendBudget(h.dir,quote),lease=await b.reserve({project:h.dir,generation:1,maxSpendPercent:1,calls:[first,second]});await lease.use(first);await lease.close('owner');percentUsed=20.4;await assert.rejects(new AutopilotSpendBudget(h.dir,quote).reserve({project:h.dir,generation:1,maxSpendPercent:1,calls:[second]}),{code:'spend_over_cap'});const rows=JSON.parse(readFileSync(join(h.dir,'.harness/state/autopilot-spend.json'),'utf8'));assert.equal(rows[0].amount,0.4);
+});
+
+test('38.2 r3: a finished call with an unavailable measurement retains its reserve',async t=>{
+ const h=await harness(t);let measured=true;const b=new AutopilotSpendBudget(h.dir,async calls=>calls.map(()=>({window:'weekly',percentUsed:20,upperPercent:0.4,basis:'verified',measured}))),call={seat:'o',model:'m',purpose:'proposal' as const,round:1 as const},lease=await b.reserve({project:h.dir,generation:1,maxSpendPercent:1,calls:[call]});await lease.use(call);measured=false;await lease.complete!(call);await lease.close('applied');const rows=JSON.parse(readFileSync(join(h.dir,'.harness/state/autopilot-spend.json'),'utf8'));assert.equal(rows[0].amount,0.4);
 });

@@ -49,6 +49,7 @@ const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Ini
 // Only valid inside withAutopilotGeneration. Existing owner API checks still apply.
 export const AUTOPILOT_OWNER:Initiator=Object.freeze({seat:'owner',trust:'owner',source:'autopilot'});
 const COUNCIL_ORIGIN='autopilot-council';
+const measuredUsage=(value:unknown)=>object(value)&&Number.isSafeInteger(value.input)&&Number(value.input)>=0&&Number.isSafeInteger(value.output)&&Number(value.output)>=0;
 const councilTools=():PeerTools=>{
  const denied=async()=>({ok:false as const,code:'autopilot_denied',error:'Консилиум может только вернуть решение'});
  return {proposeSeats:denied,createSeats:denied,send:denied,ask:denied,readPane:denied,merge:denied,assignRole:denied};
@@ -89,6 +90,8 @@ export class Runtime {
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
  private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();private cliQuotas=new WeakMap<ProjectState,ProviderLimitsStore>();
  private programBinaryJobs=new Map<string,Promise<unknown>>();
+ private autopilotSettlements=new WeakMap<ProjectState,Map<string,()=>Promise<void>>>();
+ autopilotModelSettlement(key:string,complete:()=>Promise<void>){const p=this.project;let callbacks=this.autopilotSettlements.get(p);if(!callbacks)this.autopilotSettlements.set(p,callbacks=new Map());callbacks.set(key,complete)}
  private autopilotEngines=new WeakMap<ProjectState,RuntimeAutopilotEngine>();
  private autopilotTimers=new WeakMap<ProjectState,unknown>();
  private autopilotDecisionLedgers=new WeakMap<ProjectState,AutopilotDecisionLedger>();
@@ -177,14 +180,14 @@ export class Runtime {
    await this.waitVendor(p,pane.vendor);this.same(p);
    if(p.registry.get(pane.id)!==pane||pane.kind!==participant.role||pane.model!==participant.model||pane.vendor!==participant.vendor||request.signal.aborted)throw new RuntimeError('participant_changed','Место консилиума изменилось',409);
    this.validateTurn(pane.vendor,'chat');const seat={...pane.providerSeat(),mode:'chat' as const,sessionId:null,writePaths:[],worktree:null},provider=this.provider(pane.vendor),vendor=provider.vendor;
-   networkTurn=this.networkRelay.begin(vendor,'autopilot:'+request.requestId,request.signal);let terminalError:string|null=null,usage:unknown=null,durationMs=0;const started=this.clock.now();
+   networkTurn=this.networkRelay.begin(vendor,'autopilot:'+request.requestId,request.signal);let terminalError:string|null=null,usage:unknown=null,usageIncomplete=false,durationMs=0;const started=this.clock.now();
    const beforeModel=async()=>{const route=apiRoute(vendor);if(route){const config=this.settings.llmProviders()[route];let local=false;try{local=!!config?.baseURL&&['127.0.0.1','localhost','[::1]'].includes(new URL(config.baseURL).hostname)}catch{}if(!local)await this.networkRelay.prepare(vendor,request.signal,networkTurn)}else if(vendor!=='ollama')await this.networkRelay.prepare(vendor,request.signal,networkTurn);networkTurn!.assert();await this.withAutopilotGeneration(request.generation,()=>{this.same(p);if(request.signal.aborted)throw new ProviderError('cancelled','Консилиум отменён')})};
-   const ctx:TurnContext={signal:networkTurn.signal,beforeModel,publish:event=>{if(event.type==='error')terminalError=event.text;if(event.type==='done'){usage=event.usage;durationMs=event.durationMs}},modelStarted:()=>{},modelResponded:()=>{},askApproval:async()=>false,session:()=>{},setHandle:value=>{handle=value;if(request.signal.aborted)interrupt()},env:apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,request.signal,networkTurn)??this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[],tools:councilTools(),relayDepth:0,projectDir:p.dir,appUrl:this.deps.appUrl,registerProcessToken:token=>{if(!p.closed)this.tokens.register(token,p.generation,pane.id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,pane.id,vendor),writableRoots:[],attachments:[]};
+   const ctx:TurnContext={signal:networkTurn.signal,beforeModel,publish:event=>{if(event.type==='error')terminalError=event.text;if(event.type==='done'){usage=event.usage;usageIncomplete=event.usageIncomplete===true;durationMs=event.durationMs}},modelStarted:()=>{},modelResponded:()=>{},askApproval:async()=>false,session:()=>{},setHandle:value=>{handle=value;if(request.signal.aborted)interrupt()},env:apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,request.signal,networkTurn)??this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[],tools:councilTools(),relayDepth:0,projectDir:p.dir,appUrl:this.deps.appUrl,registerProcessToken:token=>{if(!p.closed)this.tokens.register(token,p.generation,pane.id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,pane.id,vendor),writableRoots:[],attachments:[]};
    if(!apiRoute(vendor)&&vendor!=='ollama')await beforeModel();
    let result:Awaited<ReturnType<typeof provider.runTurn>>;try{result=await networkTurn.run(async()=>{const started=await this.withAutopilotGeneration(request.generation,()=>{this.same(p);if(request.signal.aborted)throw new ProviderError('cancelled','Консилиум отменён');return {response:provider.runTurn(seat,request.prompt,ctx)}});return started.response})}finally{if(!p.closed){pane.append({...timestampMessage('ai','[консилиум Автопилота]',this.clock.now()),vendor,model:seat.model,usage:usage??{input:null,output:null,cacheRead:null},durationMs:durationMs||this.clock.now()-started,outcome:request.signal.aborted?'interrupted':'ok',deliverySeq:record.seq,runtime:{turnInstanceId:'autopilot:'+request.requestId,recordSeqs:[],effectsPending:false,interrupted:request.signal.aborted,nextSeen:{}}});p.state.saveChats(p.registry)}}handle=null;if(terminalError)throw new ProviderError('turn_failed',terminalError);if(request.signal.aborted)throw new ProviderError('cancelled','Консилиум отменён');
    this.same(p);if(p.registry.get(pane.id)!==pane||pane.kind!==participant.role||pane.model!==participant.model||pane.vendor!==participant.vendor)throw new RuntimeError('participant_changed','Место консилиума изменилось',409);
    p.registry.refreshPolicy();const response=p.channel.postAgentEffect({to:['owner'],kind:participant.role==='reviewer'?'status':'decision',text:result.text,thread:request.replyTo,reply_to:record.seq},{seat:pane.id,trust:'agent'},'auto');
-   return Object.freeze({seat:pane.id,model:participant.model,requestId:request.requestId,replyTo:request.replyTo,token:request.token,text:response.text});
+   return Object.freeze({seat:pane.id,model:participant.model,requestId:request.requestId,replyTo:request.replyTo,token:request.token,text:response.text,measured:!usageIncomplete&&measuredUsage(usage)});
   }finally{request.signal.removeEventListener('abort',interrupt);interrupt();try{await networkTurn?.close()}finally{hold.release()}}
  }
  private attachmentStore(p:ProjectState){let store=this.attachmentStores.get(p);if(!store){store=new AttachmentStore(p.dir);this.attachmentStores.set(p,store)}return store}
@@ -532,6 +535,11 @@ export class Runtime {
  for(const m of injected)pane.uncommitted.delete(m);
  const response=timestampMessage('ai',result.text,this.clock.now()) as ResultMessage;response.mode=launchSeat.mode;const held=(turn as ActiveTurn).terminal;
  if(held?.type==='done'){if(typeof held.model==='string'&&held.model)response.model=held.model;if(object(held.usage))response.usage=structuredClone(held.usage);if(held.usageIncomplete===true)response.usageIncomplete=true;if(typeof held.durationMs==='number'&&Number.isFinite(held.durationMs))response.durationMs=held.durationMs}
+ if(!interrupted&&held?.type==='done'&&held.usageIncomplete!==true&&measuredUsage(held.usage)){
+  const keys=records.filter(r=>r.origin?.startsWith('autopilot:')).map(r=>r.origin!.slice(10));
+  for(const {record}of this.attemptDecisions(p)){const a=record.attempt!;if(a.autopilot&&a.action==='retry'&&a.pane===id&&a.deliverySeq!==null&&records.some(r=>r.seq<=a.deliverySeq!))keys.push('attempt:'+a.turnInstanceId)}
+  for(const key of new Set(keys)){const callbacks=this.autopilotSettlements.get(p),complete=callbacks?.get(key);if(complete){callbacks!.delete(key);try{await complete()}catch(error){if(!p.closed)p.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'autopilot-owner',text:'Учёт расхода не подтверждён; верхний резерв сохранён'})}}}
+ }
  const connection=networkTurn?.receipt();if(connection)response.network=connection;
  response.vendor=launchVendor;response.outcome=interrupted?'interrupted':'ok';
  response.deliverySeq=turn.deliverySeq;response.runtime={turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),effectsPending:true,interrupted,nextSeen};turn.result=response;if(artifacts.size)response.artifacts={project:p.dir,chat:p.state.activeChat(pane)!.id,turnInstanceId:scope.turnInstanceId,paths:[...artifacts]};

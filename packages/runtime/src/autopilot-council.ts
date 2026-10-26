@@ -45,6 +45,7 @@ export interface AutopilotAgentReply {
  readonly replyTo:string;
  readonly token:string;
  readonly text:string;
+ readonly measured?:boolean;
 }
 export interface AutopilotAgentPort {
  participants(project:string):Promise<Readonly<{orchestrator:AutopilotParticipant|null;reviewer:AutopilotParticipant|null}>>|Readonly<{orchestrator:AutopilotParticipant|null;reviewer:AutopilotParticipant|null}>;
@@ -53,6 +54,8 @@ export interface AutopilotAgentPort {
 export interface AutopilotBudgetCall {readonly seat:string;readonly model:string;readonly vendor?:string;readonly purpose:'proposal'|'review'|'effect';readonly round:1|2}
 export interface AutopilotBudgetLease {
  use(call:AutopilotBudgetCall):Promise<void>|void;
+ /** A completed call plus a fresh provider measurement; cancellation never calls this. */
+ complete?(call:AutopilotBudgetCall):Promise<void>|void;
  close(result:'applied'|'owner'):Promise<void>|void;
 }
 export interface AutopilotBudgetPort {
@@ -64,7 +67,7 @@ export interface AutopilotSafetyPort {
 }
 export interface AutopilotEffectReceipt {readonly result:Readonly<Record<string,unknown>>;readonly effectVersion:string}
 export interface AutopilotEffectPort {
- apply(input:Readonly<{decisionId:string;issue:AutopilotIssue;capability:BoundCapability;proposal:CouncilProposal}>):Promise<AutopilotEffectReceipt>;
+ apply(input:Readonly<{decisionId:string;issue:AutopilotIssue;capability:BoundCapability;proposal:CouncilProposal;modelComplete?:()=>Promise<void>}>):Promise<AutopilotEffectReceipt>;
  recover(input:Readonly<{decisionId:string;issue:AutopilotIssue;capability:BoundCapability;proposal:CouncilProposal}>):Promise<AutopilotEffectReceipt|null>;
 }
 export interface AutopilotDecisionBase {
@@ -210,6 +213,7 @@ export class AutopilotCouncil {
    const start=this.deps.state.withAutopilotGeneration(generation,()=>{if(controller.signal.aborted||this.closed)throw new CouncilError('cancelled','Консилиум отменён');return {response:this.deps.agents.run({generation,participant,requestId,replyTo,token,round,prompt,signal:controller.signal})}});
    const response=await Promise.race([start.then(started=>started.response),timeout,cancelled]);
    if(!object(response)||response.seat!==participant.seat||response.model!==participant.model||response.requestId!==requestId||response.replyTo!==replyTo||response.token!==token||typeof response.text!=='string')throw new CouncilError('sender_invalid','Ответ консилиума пришёл не от подтверждённого места');
+   if(response.measured===true)await lease.complete?.({seat:participant.seat,model:participant.model,...(participant.vendor?{vendor:participant.vendor}:{}),purpose,round});
    return response.text;
   }finally{this.controllers.delete(controller);if(timer!==undefined)this.deps.clock.clearTimeout(timer)}
  }
@@ -281,7 +285,7 @@ export class AutopilotCouncil {
     await this.deps.decisions.applied({...base,receipt:recovered});return Object.freeze({status:'applied' as const,decisionId,proposalHash:parsed.hash,operation:parsed.capability.operation,receipt:recovered,round,replayed:true});
    }
    await this.deps.decisions.intent(base);
-   let receipt:AutopilotEffectReceipt;try{receipt=await this.deps.effects.apply({decisionId,issue,capability:parsed.capability,proposal:parsed.value})}catch(error){const reason=errorReason(error),code=errorCode(error);await this.deps.decisions.failed({...base,state:'uncertain',code,reason});throw error}
+   let receipt:AutopilotEffectReceipt;try{receipt=await this.deps.effects.apply({decisionId,issue,capability:parsed.capability,proposal:parsed.value,...(parsed.capability.effectModelCall&&lease.complete?{modelComplete:async()=>{await lease.complete!({...parsed.capability.effectModelCall!,purpose:'effect',round})}}:{})})}catch(error){const reason=errorReason(error),code=errorCode(error);await this.deps.decisions.failed({...base,state:'uncertain',code,reason});throw error}
    try{await this.deps.decisions.applied({...base,receipt})}catch(error){throw new CouncilError('effect_uncertain','Эффект выполнен, но подтверждение не записано: '+errorReason(error))}
    return Object.freeze({status:'applied' as const,decisionId,proposalHash:parsed.hash,operation:parsed.capability.operation,receipt,round,replayed:false});
   })}catch(error){return this.owner(error,round,{proposalHash:parsed.hash,decisionId})}
