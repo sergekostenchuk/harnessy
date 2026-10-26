@@ -30,6 +30,7 @@ export interface AutopilotIssue {
 export interface AutopilotParticipant {readonly seat:string;readonly model:string;readonly vendor?:string;readonly role:'orchestrator'|'reviewer'}
 export interface AutopilotAgentRequest {
  readonly participant:AutopilotParticipant;
+ readonly generation:number;
  readonly requestId:string;
  readonly replyTo:string;
  readonly token:string;
@@ -198,7 +199,7 @@ export class AutopilotCouncil {
   const job=this.run(normalized).finally(()=>{if(this.jobs.get(key)===job)this.jobs.delete(key)});this.jobs.set(key,job);return job;
  }
  private owner(error:unknown,round:0|1|2,extra:Partial<Extract<AutopilotCouncilOutcome,{status:'owner'}>>={}):Extract<AutopilotCouncilOutcome,{status:'owner'}>{return Object.freeze({status:'owner',code:errorCode(error),reason:errorReason(error),round,...extra})}
- private async authenticatedCall(participant:AutopilotParticipant,prompt:string,replyTo:string,round:1|2,lease:AutopilotBudgetLease,purpose:'proposal'|'review'):Promise<string>{
+ private async authenticatedCall(generation:number,participant:AutopilotParticipant,prompt:string,replyTo:string,round:1|2,lease:AutopilotBudgetLease,purpose:'proposal'|'review'):Promise<string>{
   const requestId=autopilotHash({replyTo,seat:participant.seat,round,purpose,nonce:this.randomToken()}),token=this.randomToken(),controller=new AbortController();
   if(this.closed)throw new CouncilError('cancelled','Консилиум отменён');
   await lease.use({seat:participant.seat,model:participant.model,...(participant.vendor?{vendor:participant.vendor}:{}),purpose,round});
@@ -206,7 +207,8 @@ export class AutopilotCouncil {
   let timer:unknown;const timeout=new Promise<never>((_,reject)=>{timer=this.deps.clock.setTimeout(()=>{controller.abort('autopilot_timeout');reject(new CouncilError('council_timeout','Консилиум не ответил вовремя'))},this.timeoutMs)});
   try{
    const cancelled=new Promise<never>((_,reject)=>{controller.signal.addEventListener('abort',()=>reject(new CouncilError(controller.signal.reason==='autopilot_timeout'?'council_timeout':'cancelled',controller.signal.reason==='autopilot_timeout'?'Консилиум не ответил вовремя':'Консилиум отменён')),{once:true})});
-   const response=await Promise.race([this.deps.agents.run({participant,requestId,replyTo,token,round,prompt,signal:controller.signal}),timeout,cancelled]);
+   const start=this.deps.state.withAutopilotGeneration(generation,()=>{if(controller.signal.aborted||this.closed)throw new CouncilError('cancelled','Консилиум отменён');return {response:this.deps.agents.run({generation,participant,requestId,replyTo,token,round,prompt,signal:controller.signal})}});
+   const response=await Promise.race([start.then(started=>started.response),timeout,cancelled]);
    if(!object(response)||response.seat!==participant.seat||response.model!==participant.model||response.requestId!==requestId||response.replyTo!==replyTo||response.token!==token||typeof response.text!=='string')throw new CouncilError('sender_invalid','Ответ консилиума пришёл не от подтверждённого места');
    return response.text;
   }finally{this.controllers.delete(controller);if(timer!==undefined)this.deps.clock.clearTimeout(timer)}
@@ -228,9 +230,9 @@ export class AutopilotCouncil {
     let parsed:ReturnType<typeof proposal>,checked:CouncilReview;
     try{
      await this.deps.state.withAutopilotGeneration(issue.generation,()=>{});
-     const request='autopilot:'+issueHash+':proposal:'+round,answer=await this.authenticatedCall(orchestrator,proposalPrompt(issue,capabilities,issueHash,round,previous),request,round,lease,'proposal');parsed=proposal(answer,issueHash,capabilities);
+     const request='autopilot:'+issueHash+':proposal:'+round,answer=await this.authenticatedCall(issue.generation,orchestrator,proposalPrompt(issue,capabilities,issueHash,round,previous),request,round,lease,'proposal');parsed=proposal(answer,issueHash,capabilities);
      await this.deps.state.withAutopilotGeneration(issue.generation,()=>{});
-     const reviewRequest='autopilot:'+issueHash+':review:'+round+':'+parsed.hash,answerReview=await this.authenticatedCall(reviewer,reviewPrompt(issue,parsed.value,parsed.hash),reviewRequest,round,lease,'review');checked=review(answerReview,parsed.hash);
+     const reviewRequest='autopilot:'+issueHash+':review:'+round+':'+parsed.hash,answerReview=await this.authenticatedCall(issue.generation,reviewer,reviewPrompt(issue,parsed.value,parsed.hash),reviewRequest,round,lease,'review');checked=review(answerReview,parsed.hash);
     }catch(error){outcome=this.owner(error,round);break}
     if(checked.verdict==='objection'){
      if(round===2){outcome=this.owner(new CouncilError('review_objection','Ревьюер возразил после повторного круга: '+checked.reason),2,{proposalHash:parsed.hash});break}

@@ -43,7 +43,7 @@ export class RuntimeAutopilotEffects implements AutopilotEffectPort {
  private readonly runtime:Runtime;private readonly project:ProjectState;
  constructor(runtime:Runtime,project:ProjectState=runtime.project){this.runtime=runtime;this.project=project}
  private current(){sameProject(this.runtime,this.project);return this.project}
- private journalRecord(input:{issue:AutopilotIssue;capability:BoundCapability}){
+ private journalRecord(input:{issue:Pick<AutopilotIssue,'project'|'source'>;capability:BoundCapability}){
   const value=parameters(input.capability,['pane','replyTo']);if(typeof value.pane!=='string'||!Number.isSafeInteger(value.replyTo)||Number(value.replyTo)<1)throw new RuntimeError('capability_invalid','Для ответа нужны pane и replyTo',409);
   const record=this.current().journal.get(Number(value.replyTo)),kind=answerKind(input.capability.operation);
   if(!record||record.kind!==kind||record.from!==value.pane||!record.to.includes('owner')||!sourceEqual(input.issue.source,autopilotJournalSource(record)))throw new RuntimeError('source_changed','Исходный вопрос Автопилота изменился',409);
@@ -75,12 +75,25 @@ export class RuntimeAutopilotEffects implements AutopilotEffectPort {
    const bound=this.waiting(input),result=await this.runtime.attempt(bound.pane,{project:this.project.dir,turnInstanceId:bound.turnInstanceId,action:bound.action},initiator);return effectReceipt({...result},'attempt:'+result.seq)
   });
  }
- async recover(input:Readonly<{decisionId:string;issue:AutopilotIssue;capability:BoundCapability;proposal:CouncilProposal}>):Promise<AutopilotEffectReceipt|null>{
+ async recover(input:Readonly<{decisionId:string;issue:Pick<AutopilotIssue,'project'|'source'>;capability:BoundCapability;proposal:CouncilProposal}>):Promise<AutopilotEffectReceipt|null>{
   this.current();if(input.issue.project!==this.project.dir)return null;
   if(input.capability.operation.startsWith('answer_')){let bound:ReturnType<RuntimeAutopilotEffects['journalRecord']>;try{bound=this.journalRecord(input)}catch(error){if(error instanceof RuntimeError&&error.code==='source_changed')return null;throw error}const reply=this.project.journal.repliesTo(bound.record.seq).find(record=>record.from==='owner'&&record.to.length===1&&record.to[0]===bound.pane&&record.kind==='decision'&&record.origin==='autopilot:'+input.decisionId&&record.text===input.proposal.answer);return reply?effectReceipt({ok:true,seq:reply.seq,thread:reply.thread,pane:bound.pane},'journal:'+reply.seq+':'+reply.id):null}
   if(input.capability.operation==='continue_pane'||input.capability.operation==='stop_pane'){const value=parameters(input.capability,['pane','turnInstanceId','action']);if(typeof value.pane!=='string'||typeof value.turnInstanceId!=='string'||typeof value.action!=='string')return null;const decisions=this.project.journal.read({limit:0}).filter(record=>{const attempt=record.attempt;if(!attempt)return false;return record.from==='harness'&&record.kind==='note'&&record.origin==='attempt'&&attempt.pane===value.pane&&attempt.turnInstanceId===value.turnInstanceId&&attempt.action===value.action}),intent=decisions.find(record=>record.attempt?.done===false),done=intent&&decisions.find(record=>record.attempt?.done===true&&record.reply_to===intent.seq);return intent&&done?effectReceipt({ok:true,pane:value.pane,turnInstanceId:value.turnInstanceId,action:value.action,seq:intent.seq},'attempt:'+intent.seq):null}
   if(input.capability.operation==='assign_role'){const value=parameters(input.capability,['role','chat','project','revision','documents'],['task','createProject']),chat=typeof value.chat==='string'?this.project.state.chats.chats[value.chat]:null;if(!chat||!object(chat.promotion)||chat.promotion.done!==true||!object(chat.promotion.input)||chat.promotion.input.project!==value.project||chat.promotion.input.revision!==value.revision||JSON.stringify(chat.promotion.input.documents)!==JSON.stringify(value.documents))return null;const promotion=promotionIdentity(chat);return promotion&&promotion.completed===4?effectReceipt({ok:true,project:this.project.dir,pane:chat.pane,chat:chat.id,operationId:promotion.operationId},'promotion:'+promotion.operationId):null}
   return null;
+ }
+}
+
+/** Startup reconciliation proves an old effect; it never grants authority for a new one. */
+export async function recoverAutopilotIntents(runtime:Runtime,project:ProjectState){
+ const ledger=runtime.autopilotDecisionLedger(project),effects=new RuntimeAutopilotEffects(runtime,project);
+ for(const {entry}of ledger.list()){
+  if(entry.state!=='intent')continue;sameProject(runtime,project);
+  let receipt:AutopilotEffectReceipt|null=null;
+  try{if(AUTOPILOT_COUNCIL_OPERATIONS.includes(entry.operation as never))receipt=await effects.recover({decisionId:entry.decisionId,issue:{project:project.dir,source:entry.question},capability:entry.capability as BoundCapability,proposal:entry.proposal as CouncilProposal})}catch(error){if(error instanceof RuntimeError&&error.code==='project_changed')throw error}
+  sameProject(runtime,project);
+  if(receipt)await ledger.applied({...entry,receipt});
+  else await ledger.failed({...entry,state:'uncertain',code:'effect_uncertain',reason:'Исход прежнего эффекта не подтверждён; повтор запрещён'});
  }
 }
 

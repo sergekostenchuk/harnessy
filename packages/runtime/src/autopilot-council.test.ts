@@ -19,6 +19,7 @@ interface FixtureOptions {
  state?:AutopilotPermissionSnapshot|Error;
  safety?:{checked:readonly typeof stops[number][];blocked:readonly typeof stops[number][]}|Error;
  reserveError?:Error;
+ beforeUse?:()=>Promise<void>;
  effect?:AutopilotEffectReceipt|Error;
  recovered?:AutopilotEffectReceipt|null;
 }
@@ -27,7 +28,7 @@ function fixture(options:FixtureOptions={}){
  if(options.decision)records.set(options.decision.decisionId,options.decision);
  const responders=[...(options.responders??[])];
  const agents:AutopilotAgentPort={participants:()=>({orchestrator:{seat:'orch',model:'o1',role:'orchestrator'},reviewer:options.reviewer===false?null:{seat:'review',model:'r1',role:'reviewer'}}),async run(request){requests.push(request);const answer=await (responders.shift()?.(request)??(()=>{if(request.participant.role==='orchestrator'){const caps=jsonFrom(request.prompt,'Разрешённые операции: ');return JSON.stringify({requestHash:hashFrom(request.prompt,'requestHash: '),capability:caps[0].id,answer:'Делай безопасно',reason:'вопрос внутренний'})}return JSON.stringify({proposalHash:hashFrom(request.prompt,'proposalHash: '),verdict:'agree',reason:'проверено'})})()),reply={seat:request.participant.seat,model:request.participant.model,requestId:request.requestId,replyTo:request.replyTo,token:request.token,text:answer};return options.tamper?.(reply,request)??reply}};
- const lease:AutopilotBudgetLease={use(call){uses.push(call);events.push('budget:'+call.purpose+':'+call.round)},close(result){events.push('budget-close:'+result)}};
+ const lease:AutopilotBudgetLease={async use(call){uses.push(call);events.push('budget:'+call.purpose+':'+call.round);await options.beforeUse?.()},close(result){events.push('budget-close:'+result)}};
  const reserved:{project:string;generation:number;maxSpendPercent:number;calls:readonly AutopilotBudgetCall[]}[]=[];
  let applyCalls=0,recoverCalls=0;
  const deps:AutopilotCouncilDeps={clock,agents,state:{async withAutopilotGeneration(_generation,apply){events.push('generation');if(options.state instanceof Error)throw options.state;return apply(options.state??permission)}},budget:{async reserve(input){if(options.reserveError)throw options.reserveError;reserved.push(input);events.push('budget-reserve');return lease}},safety:{async check(){events.push('safety');if(options.safety instanceof Error)throw options.safety;return options.safety??{checked:stops,blocked:[]}}},effects:{async apply(){applyCalls++;events.push('effect');if(options.effect instanceof Error)throw options.effect;return options.effect??{result:{ok:true,seq:42},effectVersion:'reply:42'}},async recover(){recoverCalls++;events.push('recover');return options.recovered??null}},decisions:{findByIssue(issueHash){events.push('find-issue');return [...records.values()].find(entry=>entry.issueHash===issueHash)??null},get(id){events.push('get');return records.get(id)??null},intent(entry){events.push('intent');records.set(entry.decisionId,{...entry,state:'intent'})},applied(entry){events.push('receipt');records.set(entry.decisionId,{...entry,state:'applied'})},failed(entry){events.push(entry.state);records.set(entry.decisionId,entry)}},randomToken:(()=>{let n=0;return()=>String(++n).padStart(64,'0')})(),timeoutMs:500};
@@ -95,4 +96,8 @@ test('38.2: permission snapshot and exact proposal bind revision, operation and 
 });
 test('38.2: every mandatory stop code individually prevents intent and effect',async()=>{
  for(const code of stops){const f=fixture({safety:{checked:stops,blocked:[code]}});owner(await f.council.consider(issue()),'stop_case');assert.equal(f.applyCalls,0);assert.equal(f.records.size,0)}
+});
+
+test('38.2 r2: permission revoked while preparing budget prevents the model launch',async()=>{
+ const gate=deferred<void>(),options:FixtureOptions={beforeUse:()=>gate.promise},f=fixture(options),pending=f.council.consider(issue());await until(()=>f.uses.length===1);options.state=error('autopilot_off');gate.resolve();const result=await pending;owner(result,'autopilot_off');assert.equal(f.requests.length,0);assert.equal(f.applyCalls,0);
 });

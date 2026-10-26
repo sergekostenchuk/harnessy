@@ -3,11 +3,11 @@ import {RuntimeError,message} from './errors.ts';
 import type {Runtime} from './runtime.ts';
 import type {ProjectState} from './types.ts';
 import {AutopilotSpendBudget} from './autopilot-budget.ts';
-import {RuntimeAutopilotCouncil,RuntimeAutopilotSafety,autopilotJournalSource,autopilotApprovalSource,autopilotWaitingSource} from './autopilot-runtime.ts';
+import {RuntimeAutopilotCouncil,RuntimeAutopilotSafety,recoverAutopilotIntents,autopilotJournalSource,autopilotApprovalSource,autopilotWaitingSource} from './autopilot-runtime.ts';
 import {autopilotHash,type AutopilotIssue,type AutopilotCapability,type AutopilotPermissionSnapshot} from './autopilot-council.ts';
 
 export class RuntimeAutopilotEngine {
- private seen=new Set<string>();private running:Promise<void>|null=null;private again=false;private closed=false;
+ private recovered=false;private seen=new Set<string>();private running:Promise<void>|null=null;private again=false;private closed=false;
  private council:RuntimeAutopilotCouncil;
  private runtime:Runtime;private project:ProjectState;
  constructor(runtime:Runtime,project:ProjectState){this.runtime=runtime;this.project=project;
@@ -19,7 +19,8 @@ export class RuntimeAutopilotEngine {
  private current(){return !this.closed&&!this.project.closed&&this.runtime.project===this.project}
  private notice(code:string,reason:string,source?:AutopilotIssue['source']){if(!this.current())return;reason=safeDiagnostic(reason,{project:this.project.dir});this.project.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'autopilot-owner',text:JSON.stringify({code,reason,source:source??null})});this.project.owner.publish({type:'autopilotWaiting',code,reason,source:source??null})}
  private async scan(){
-  if(!this.current())return;const r=this.runtime,p=this.project,state=await r.autopilotStatus();if(!this.current()||!state.on)return;
+  if(!this.current())return;const r=this.runtime,p=this.project;
+  if(!this.recovered){await recoverAutopilotIntents(r,p);this.recovered=true}const state=await r.autopilotStatus();if(!this.current()||!state.on)return;
   if([...p.registry.panes.values()].some(pane=>(pane.kind==='orchestrator'||pane.kind==='reviewer')&&(pane.busy||p.editing.has(pane.id)||p.materializing.has(pane.id))))return;
   const permission:AutopilotPermissionSnapshot={generation:state.generation,revision:state.revision,conditions:state.conditions,stopCodes:state.conditions.stopCases};
   const issues:AutopilotIssue[]=[],add=(source:AutopilotIssue['source'],capabilities:AutopilotCapability[])=>{const allowed=capabilities.filter(c=>permission.conditions.operations.includes(c.operation));if(allowed.length)issues.push({project:p.dir,generation:state.generation,permission,source,capabilities:allowed})};
