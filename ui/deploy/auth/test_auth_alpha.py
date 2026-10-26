@@ -2,6 +2,7 @@ import http.client
 import json
 import os
 import pathlib
+import secrets
 import sys
 import tempfile
 import threading
@@ -22,34 +23,82 @@ VALID = {
 }
 
 
+class FixtureServer(auth.ThreadingHTTPServer):
+    def __init__(self):
+        self.idle = threading.Condition()
+        self.pending = 0
+        super().__init__(("127.0.0.1", 0), auth.H)
+
+    def finished(self):
+        with self.idle:
+            self.pending -= 1
+            self.idle.notify_all()
+
+    def process_request(self, request, address):
+        with self.idle:
+            self.pending += 1
+        try:
+            super().process_request(request, address)
+        except BaseException:
+            self.finished()
+            raise
+
+    def process_request_thread(self, request, address):
+        try:
+            super().process_request_thread(request, address)
+        finally:
+            self.finished()
+
+    def drain(self):
+        with self.idle:
+            if not self.idle.wait_for(lambda: self.pending == 0, timeout=20):
+                raise AssertionError("auth request did not finish before fixture reset")
+
+
 class AlphaRequestTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.server = FixtureServer()
+        cls.thread = threading.Thread(target=cls.server.serve_forever,
+                                      kwargs={"poll_interval": 0.01}, daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=2)
+        if cls.thread.is_alive():
+            raise AssertionError("auth server did not stop")
+
     def setUp(self):
+        # A shared listening socket must not share state or unfinished handlers.
+        self.server.drain()
+        self.original_auth = {name: getattr(auth, name) for name in (
+            "DB_FILE", "LOG_FILE", "ALLOW_FILE", "COOKIE_SECRET", "ALPHA_IP_SECRET",
+            "ALPHA_RATE_LIMIT", "ALPHA_RATE_WINDOW", "TG_WEBHOOK_SECRET", "BOT_TOKEN", "tg_api")}
         self.tmp = tempfile.TemporaryDirectory()
         auth.DB_FILE = os.path.join(self.tmp.name, "auth.sqlite")
         auth.LOG_FILE = os.path.join(self.tmp.name, "auth.ndjson")
         auth.ALLOW_FILE = os.path.join(self.tmp.name, "allow.txt")
-        auth.COOKIE_SECRET = b"test-cookie-secret"
-        auth.ALPHA_IP_SECRET = b"test-alpha-ip-secret"
+        auth.COOKIE_SECRET = secrets.token_bytes(32)
+        auth.ALPHA_IP_SECRET = secrets.token_bytes(32)
         auth.ALPHA_RATE_LIMIT = 5
         auth.ALPHA_RATE_WINDOW = 3600
-        auth.TG_WEBHOOK_SECRET = "webhook-secret"
+        self.webhook_secret = secrets.token_hex(16)
+        auth.TG_WEBHOOK_SECRET = self.webhook_secret
         with open(auth.ALLOW_FILE, "w", encoding="utf-8") as out:
             out.write("telegram:42\n")
         self.tg = []
-        self.original_tg = auth.tg_api
-        self.original_bot_token = auth.BOT_TOKEN
         auth.BOT_TOKEN = "test-bot-token"
         auth.tg_api = lambda method, **kw: self.tg.append((method, kw)) or {"ok": True}
-        self.server = auth.ThreadingHTTPServer(("127.0.0.1", 0), auth.H)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
+        self.assertFalse(os.path.exists(auth.DB_FILE))
 
     def tearDown(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=2)
-        auth.tg_api = self.original_tg
-        auth.BOT_TOKEN = self.original_bot_token
+        # Completion is signalled by the handler, not inferred from elapsed time.
+        self.server.drain()
+        for name, value in self.original_auth.items():
+            setattr(auth, name, value)
         self.tmp.cleanup()
 
     def request(self, payload, *, ip="203.0.113.8", origin=auth.BASE_ORIGIN, path="/auth/alpha", headers=None):
@@ -101,6 +150,42 @@ class AlphaRequestTest(unittest.TestCase):
         self.assertEqual(len(sent), 1)
         self.assertIn("Пригласить", json.dumps(sent[0][1]["reply_markup"], ensure_ascii=False))
         self.assertNotIn(auth.BOT_TOKEN, json.dumps(sent, ensure_ascii=False))
+
+    def test_fixture_waits_for_handler_before_resetting_state(self):
+        entered, release, draining, drained = [threading.Event() for _ in range(4)]
+        original = auth.tg_api
+        results = []
+
+        def held_notification(method, **kw):
+            entered.set()
+            if not release.wait(timeout=10):
+                raise AssertionError("notification fixture was not released")
+            return original(method, **kw)
+
+        def drain():
+            draining.set()
+            self.server.drain()
+            drained.set()
+
+        auth.tg_api = held_notification
+        request = threading.Thread(target=lambda: results.append(self.request(VALID)))
+        waiter = threading.Thread(target=drain)
+        request.start()
+        try:
+            self.assertTrue(entered.wait(timeout=5))
+            waiter.start()
+            self.assertTrue(draining.wait(timeout=5))
+            self.assertFalse(drained.is_set())
+        finally:
+            release.set()
+            request.join(timeout=5)
+            if waiter.ident is not None:
+                waiter.join(timeout=5)
+        self.assertFalse(request.is_alive())
+        self.assertFalse(waiter.is_alive())
+        self.assertTrue(drained.is_set())
+        self.assertEqual(results, [(201, {"ok": True, "status": "received"})])
+        self.assertEqual(len(self.rows()), 1)
 
     def test_honeypot_looks_successful_without_storage_or_telegram(self):
         code, body = self.request({**VALID, "company": "bot company"})
@@ -185,7 +270,7 @@ class AlphaRequestTest(unittest.TestCase):
         self.assertEqual(self.rows()[0]["status"], "invited")
 
         update = self.callback("alpha-reject", "cb-1", 1)
-        code, _ = self.request(update, path="/auth/tg/webhook", headers={"X-Telegram-Bot-Api-Secret-Token": "webhook-secret"})
+        code, _ = self.request(update, path="/auth/tg/webhook", headers={"X-Telegram-Bot-Api-Secret-Token": self.webhook_secret})
         self.assertEqual(code, 200)
         self.assertEqual(self.rows()[0]["status"], "rejected")
 
@@ -198,7 +283,7 @@ class AlphaRequestTest(unittest.TestCase):
 
     def test_telegram_decision_ignores_replayed_and_out_of_order_updates(self):
         self.assertEqual(self.request(VALID)[0], 201)
-        headers = {"X-Telegram-Bot-Api-Secret-Token": "webhook-secret"}
+        headers = {"X-Telegram-Bot-Api-Secret-Token": self.webhook_secret}
         invite = self.callback("alpha-invite", "old-callback", 100)
         reject = self.callback("alpha-reject", "new-callback", 101)
         self.assertEqual(self.request(invite, path="/auth/tg/webhook", headers=headers)[0], 200)
@@ -215,7 +300,7 @@ class AlphaRequestTest(unittest.TestCase):
 
     def test_parallel_telegram_decisions_commit_status_with_highest_update(self):
         self.assertEqual(self.request(VALID)[0], 201)
-        headers = {"X-Telegram-Bot-Api-Secret-Token": "webhook-secret"}
+        headers = {"X-Telegram-Bot-Api-Secret-Token": self.webhook_secret}
         barrier = threading.Barrier(2)
         codes = []
 

@@ -72,15 +72,6 @@
     "body": {}
   },
   {
-    "path": "/api/seats",
-    "status": 400,
-    "response": {
-      "ok": false,
-      "error": "неизвестная роль "
-    },
-    "body": {}
-  },
-  {
     "path": "/api/onboard",
     "status": 404,
     "response": {
