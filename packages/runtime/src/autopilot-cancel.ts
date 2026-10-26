@@ -30,8 +30,10 @@ function promotionRecords(p:ProjectState,operationId:string,paneId:string,intro?
 }
 function revokePromotionRecords(p:ProjectState,records:Record_[],paneId:string):boolean {
  for(const record of records)if(!p.journal.autopilotPromotionRevoked(record.seq)&&!p.journal.pendingFor(paneId).some(row=>row.record.seq===record.seq))return false;
- for(const record of records)if(!p.journal.autopilotPromotionRevoked(record.seq))p.channel.postCore({to:['owner'],kind:'rejected',reply_to:record.seq,thread:record.thread,origin:'autopilot-cancel',text:'Запись назначения #'+record.seq+' отозвана владельцем'},HARNESS);
- return true;
+ if(records.every(record=>p.journal.autopilotPromotionRevoked(record.seq)))return true;
+ const intro=records[0]!;
+ p.channel.postCore({to:['owner'],kind:'rejected',reply_to:intro.seq,thread:intro.thread,origin:'autopilot-cancel',text:'Вводная и поручение назначения #'+intro.seq+' отозваны владельцем'},HARNESS);
+ return records.every(record=>p.journal.autopilotPromotionRevoked(record.seq));
 }
 
 function answer(runtime:Runtime,p:ProjectState,entry:Extract<AutopilotDecisionEntry,{state:'applied'}>):Promise<Outcome>{

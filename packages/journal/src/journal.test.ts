@@ -73,6 +73,34 @@ test('[08] pending excludes self/system/unconfirmed and honours wildcard',()=>{
  j.append({sender:'owner',to:'right',kind:'ack',text:'yes',reply_to:held.seq});assert.deepEqual(j.pendingFor('left').map(e=>e.record.text),['a','c','held'])
  }finally{t.close()}
 });
+test('TS-38.4: one promotion marker revokes only its existing pair across reload',()=>{
+ const t=temp();try{
+ const j=new Journal(t.root);
+ const intro=j.append({sender:'harness',to:'lead',kind:'note',origin:'onboarding',thread:'promotion:c123:intro',text:'Вводная'});
+ const task=j.append({sender:'owner',to:'lead',kind:'task',origin:'promotion',thread:'promotion:c123:task',text:'Поручение'});
+ const other=j.append({sender:'owner',to:'lead',kind:'task',origin:'promotion',thread:'promotion:c456:task',text:'Другое назначение'});
+ const foreign=j.append({sender:'owner',to:'worker',kind:'task',origin:'promotion',thread:task.thread,text:'Чужой адресат'});
+ j.append({sender:'harness',to:'owner',kind:'rejected',origin:'autopilot-cancel',thread:intro.thread,reply_to:intro.seq,text:'Назначение отозвано'});
+ const later=j.append({sender:'owner',to:'lead',kind:'task',origin:'promotion',thread:task.thread,text:'Запись после отзыва'});
+ for(const journal of [j,new Journal(t.root)]){
+  assert.equal(journal.autopilotPromotionRevoked(intro.seq),true);assert.equal(journal.autopilotPromotionRevoked(task.seq),true);
+  assert.deepEqual(journal.pendingFor('lead').map(row=>row.record.seq),[other.seq,later.seq]);
+  assert.deepEqual(journal.pendingFor('worker').map(row=>row.record.seq),[foreign.seq]);
+ }
+ }finally{t.close()}
+});
+test('TS-38.4: absent or mismatched promotion pair cannot turn a marker into a group revocation',()=>{
+ for(const mismatch of ['missing','recipient','sender','origin','duplicate'] as const){
+ const t=temp();try{
+  const j=new Journal(t.root),intro=j.append({sender:'harness',to:'lead',kind:'note',origin:'onboarding',thread:'promotion:c123:intro',text:'Вводная'});
+  if(mismatch!=='missing')j.append({sender:mismatch==='sender'?'worker':'owner',to:mismatch==='recipient'?'worker':'lead',kind:'task',origin:mismatch==='origin'?'other':'promotion',thread:'promotion:c123:task',text:'Поручение'});
+  if(mismatch==='duplicate')j.append({sender:'owner',to:'lead',kind:'task',origin:'promotion',thread:'promotion:c123:task',text:'Дубль'});
+  const before=j.pendingFor('lead').map(row=>row.record.seq);
+  j.append({sender:'harness',to:'owner',kind:'rejected',origin:'autopilot-cancel',thread:intro.thread,reply_to:intro.seq,text:'Назначение отозвано'});
+  assert.deepEqual(new Journal(t.root).pendingFor('lead').map(row=>row.record.seq),before,mismatch);
+ }finally{t.close()}
+ }
+});
 test('[09] Python state opens, continues byte-for-byte and persists cursors/panes',()=>{
  const t=temp();try{const state=join(t.root,'.harness','state');mkdirSync(state,{recursive:true});for(const name of ['channel.ndjson','cursors.json','panes.json'])copyFileSync(join(fixtureDir,'python-state',name),join(state,name));
  const j=new Journal(t.root,fixed);assert.equal(j.lastSeq,2);assert.deepEqual(j.cursors,{left:1,reviewer:2});

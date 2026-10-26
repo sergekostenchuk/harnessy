@@ -122,6 +122,7 @@ test('TS-38.4: untouched promotion can be unassigned without deleting its origin
  assert.equal(response.status,200,response.text);assert.equal(response.body.state,'cancelled');assert.equal(h.runtime.registry.get(assigned.pane.id),null);
  assert.equal(h.runtime.project.state.chats.active.room,original.chat);
  for(const record of oldRecords)assert.equal(h.runtime.journal.autopilotPromotionRevoked(record.seq),true);
+ assert.equal(h.runtime.journal.read({limit:0}).filter(r=>r.from==='harness'&&r.origin==='autopilot-cancel'&&oldRecords.some(old=>old.seq===r.reply_to)).length,1,'both records are revoked by one durable marker');
  await h.runtime.openProject(h.dir);h.runtime.project.halted=true;
  assert.equal(h.runtime.registry.get(assigned.pane.id),null);assert.equal(h.runtime.project.state.chats.active.room,original.chat);
  assert.equal(h.runtime.journal.pendingFor(assigned.pane.id).some(row=>oldRecords.some(r=>r.seq===row.record.seq)),false);
@@ -146,7 +147,7 @@ test('TS-38.4: a role that already started work stays assigned with a durable pa
  assert.equal(h.runtime.autopilotDecisionLedger().cancellation(base.decisionId)?.state,'partial');
 });
 
-test('TS-38.4: a promotion cancellation resumes after one durable revocation and a restart',async t=>{
+test('TS-38.4: a promotion cancellation survives ordinary restart without delivering its task',async t=>{
  const h=await fixture(t);h.runtime.project.halted=true;h.runtime.roomSet({model:'w1'},OWNER);
  const original=promotionInput(h.runtime),assigned=await h.runtime.assignRoomRole({...original,role:'orchestrator'},OWNER),operationId=assigned.promotion!.operationId,version='promotion:'+operationId;
  const base=effect(h.dir,{id:'assignment:'+operationId,kind:'assign_role',text:'Назначить оркестратора'},'assign_role',{role:'orchestrator',chat:original.chat,project:h.dir,revision:original.revision,documents:original.documents},null);
@@ -155,11 +156,14 @@ test('TS-38.4: a promotion cancellation resumes after one durable revocation and
  await ledger.beginCancellation(base.decisionId,version);
  const intro=records.find(r=>r.thread?.endsWith(':intro'))!;
  h.runtime.channel.postCore({to:['owner'],kind:'rejected',reply_to:intro.seq,thread:intro.thread,origin:'autopilot-cancel',text:'Вводная отозвана'},{seat:'harness',trust:'harness'});
- await h.runtime.openProject(h.dir,{deferPumps:true});h.runtime.project.halted=true;
+ await h.runtime.openProject(h.dir);await h.runtime.idle();
+ assert.equal(h.runtime.project.halted,false,'the normal queue remains enabled');
+ assert.equal(h.provider.calls.filter(call=>call.seat.id===assigned.pane.id).length,0,'restart cannot deliver the cancelled promotion task');
+ assert.equal(h.runtime.journal.pendingFor(assigned.pane.id).some(row=>records.some(old=>old.seq===row.record.seq)),false);
  const response=await call(h.api,'/api/autopilot/decisions/'+base.decisionId+'/cancel',{body:{project:h.dir,effectVersion:version}});
  assert.equal(response.status,200,response.text);assert.equal(response.body.state,'cancelled');assert.equal(h.runtime.registry.get(assigned.pane.id),null);
  for(const record of records)assert.equal(h.runtime.journal.autopilotPromotionRevoked(record.seq),true);
- const markers=h.runtime.journal.read({limit:0}).filter(r=>r.from==='harness'&&r.origin==='autopilot-cancel'&&records.some(old=>old.seq===r.reply_to));assert.equal(markers.length,2);
+ const markers=h.runtime.journal.read({limit:0}).filter(r=>r.from==='harness'&&r.origin==='autopilot-cancel'&&records.some(old=>old.seq===r.reply_to));assert.equal(markers.length,1);
 });
 
 test('TS-38.4: a reassigned role in team.yaml cannot be removed by an old cancellation',async t=>{

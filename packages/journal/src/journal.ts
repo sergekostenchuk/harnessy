@@ -82,14 +82,22 @@ export class Journal {
  }
  repliesTo(seq:number):Record_[]{this.recover();return this.records.filter(r=>r.reply_to===seq)}
  private revokedAutopilotRecords():Set<number> {
- this.recover();const bySeq=new Map(this.records.map(r=>[r.seq,r]));
- return new Set(this.records.filter(marker=>{
-  if(marker.from!=='harness'||marker.kind!=='rejected'||marker.origin!=='autopilot-cancel'||marker.to.length!==1||marker.to[0]!=='owner'||marker.reply_to===null)return false;
-  const target=bySeq.get(marker.reply_to);if(!target||target.to.length!==1||target.thread!==marker.thread)return false;
-  if(target.from==='owner'&&target.kind==='decision')return true;
-  const promotion=/^promotion:c[0-9a-f]+:(intro|task)$/.exec(target.thread??'');
-  return !!promotion&&(promotion[1]==='intro'?target.from==='harness'&&target.kind==='note'&&target.origin==='onboarding':target.from==='owner'&&target.kind==='task'&&target.origin==='promotion');
- }).map(r=>r.reply_to!));
+ this.recover();const bySeq=new Map(this.records.map(r=>[r.seq,r])),promotions=new Map<string,Record_[]>(),revoked=new Set<number>();
+ for(const record of this.records){
+  const match=/^promotion:(c[0-9a-f]+):(intro|task)$/.exec(record.thread??'');
+  if(!match||record.to.length!==1||!(match[2]==='intro'?record.from==='harness'&&record.kind==='note'&&record.origin==='onboarding':record.from==='owner'&&record.kind==='task'&&record.origin==='promotion'))continue;
+  const group=promotions.get(match[1]!)??[];group.push(record);promotions.set(match[1]!,group);
+ }
+ for(const marker of this.records){
+  if(marker.from!=='harness'||marker.kind!=='rejected'||marker.origin!=='autopilot-cancel'||marker.to.length!==1||marker.to[0]!=='owner'||marker.reply_to===null)continue;
+  const target=bySeq.get(marker.reply_to);if(!target||target.seq>=marker.seq||target.to.length!==1||target.thread!==marker.thread)continue;
+  if(target.from==='owner'&&target.kind==='decision'){revoked.add(target.seq);continue}
+  const operation=/^promotion:(c[0-9a-f]+):(intro|task)$/.exec(target.thread??'')?.[1];
+  const pair=(promotions.get(operation??'')??[]).filter(r=>r.seq<marker.seq&&r.to[0]===target.to[0]);
+  // One durable marker cancels the whole promotion delivery, including older intro-only markers.
+  if(pair.length===2&&pair.includes(target)&&pair.some(r=>r.thread?.endsWith(':intro'))&&pair.some(r=>r.thread?.endsWith(':task')))for(const record of pair)revoked.add(record.seq);
+ }
+ return revoked;
  }
  pendingFor(seat:string):DeliveryEntry[]{
  this.recover();const cursor=this.cursorData[seat]??0,out:DeliveryEntry[]=[],revoked=this.revokedAutopilotRecords();
