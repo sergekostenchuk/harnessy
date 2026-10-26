@@ -155,7 +155,11 @@ window.TC=(function(){
     const VP=OMCORE.viewport(canvas,view,{box:box,blank:()=>[canvas,view,svg,layer],ignore:'[data-zoom],[data-nodrag],.tc-legend',kmin:.4,
       items:t=>{ const el=t.closest('[data-key]'); if(!el||!el.closest('[data-nodes]')||el.dataset.key==='empty') return null; return [{el:el,r:G.rects[el.dataset.key],key:el.dataset.key}]; },
       onMove:()=>drawEdges(), onEnd:()=>{ if(o.onEnd) o.onEnd(G); }, onView:V=>{ const z=root.querySelector('[data-zpct]'); if(z) z.textContent=Math.round(V.k*100)+' %'; }});
-    function render(fit){ layer.innerHTML=o.nodes(); const W=canvas.clientWidth||900, H=canvas.clientHeight||600; o.layout(G,W,H,layer); place(); measure(); drawEdges(); if(fit!==false) VP.fit(); }
+    let layoutWidth=0,layoutHeight=0;
+    function layout(fit){const W=canvas.clientWidth||900,H=canvas.clientHeight||600;o.layout(G,W,H,layer);place();measure();drawEdges();layoutWidth=canvas.clientWidth||900;layoutHeight=canvas.clientHeight||600;if(fit!==false)VP.fit()}
+    function render(fit){layer.innerHTML=o.nodes();layout(fit)}
+    function resize(){if(!canvas.isConnected){observer?.disconnect();if(typeof removeEventListener==='function')removeEventListener('resize',resize);return}if((canvas.clientWidth||900)!==layoutWidth||(canvas.clientHeight||600)!==layoutHeight)layout()}
+    const observer=typeof ResizeObserver==='function'?new ResizeObserver(resize):null;observer?.observe(canvas);addEventListener('resize',resize);
     root.addEventListener('click',e=>{ const t=e.target; if(t.closest('aside.side')) return; if(VP.takeSuppress()) return;
       const z=t.closest('[data-z]'); if(z){ const W=VP.cw(),H=VP.chh(); if(z.dataset.z==='fit') VP.fit(); else VP.zoomAt(W/2,H/2,z.dataset.z==='in'?1.25:.8); return; }
       if(o.onClick&&o.onClick(t)===true) return;

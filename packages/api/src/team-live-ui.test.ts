@@ -289,3 +289,12 @@ test('TS-44: every canonical role has an icon and constructor rights use owner-f
  for(const icon of icons)assert.match(icon,/<(?:path|circle|rect)\b/);assert.equal(new Set(icons).size,7);
  const rights=v.find('[data-team-mode]');assert.equal(JSON.parse(rights.dataset.options!).find((row:any)=>row.value==='read').label,'Чтение папки');assert.equal(rights.value,'read');
 });
+
+
+for(const mode of ['work','constructor'] as const)test('TS-44 r2: '+mode+' canvas relayouts both ways without replacing focused controls or drafts',async()=>{
+ const v=teamUi(mode);await v.settle();const engine=v.context.TEAM_LIVE.state.engine,canvas=v.find('[data-canvas]');
+ Object.assign(canvas,{clientWidth:900,clientHeight:800});await v.window.emit('resize');const wide=engine.G.rects.worker.x;
+ const control=v.find(mode==='work'?'[data-team-chat-input]':'[data-team-pane="worker"] [data-team-model]');control.value='Черновик';control.focus();
+ Object.assign(canvas,{clientWidth:340,clientHeight:800});await v.window.emit('resize');const narrow=engine.G.rects.worker.x;assert.ok(narrow<wide);assert.equal(v.document.activeElement,control);assert.equal(control.value,'Черновик');assert.equal(control.isConnected,true);
+ Object.assign(canvas,{clientWidth:900,clientHeight:800});await v.window.emit('resize');assert.equal(engine.G.rects.worker.x,wide);assert.equal(v.document.activeElement,control);assert.equal(control.value,'Черновик');
+});

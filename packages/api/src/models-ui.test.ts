@@ -397,3 +397,24 @@ test('23d: provider menu shows engine connection and typed unavailable cause, ke
 test('23d: menu login failure class, not free-form reason, labels unavailable providers',async()=>{
  const v=ui();await v.open();const next:any=catalogue();next.providers[0].login={state:'error',failure:'unresponsive',reason:'REGION BLOCKED'};await v.providers(next);assert.match(v.find('[data-cx-program="claude"] .proxy-model-path').textContent,/не отвечает/);assert.doesNotMatch(v.find('[data-cx-program="claude"] .proxy-model-path').textContent,/регион|блокиров/);assert.equal(v.select('claude','shared').disabled,false);
 });
+
+
+for(const page of ['new','chat','first'])test('TS-44 r2: '+page+' composer menu chooses rights by keyboard and Escape returns to the live chip',async()=>{
+ const v=ui({page});v.find('[data-cx="rights"]').focus();await v.find('[data-cx="rights"]').emit('click');
+ const first=v.find('[data-cx-mode="chat"]');assert.equal(v.document.activeElement,first);assert.equal(first.getAttribute('tabindex'),'0');
+ await first.emit('keydown',{key:'ArrowDown'});assert.equal(v.document.activeElement,v.find('[data-cx-mode="read"]'));
+ await v.document.activeElement!.emit('keydown',{key:'Home'});assert.equal(v.document.activeElement,first);
+ (first as any).click=()=>first.emit('click');await first.emit('keydown',{key:'Enter'});await v.flush();assert.equal(v.H.pane.mode,'chat');
+ await v.document.activeElement!.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('.cx-pop'),null);assert.equal(v.document.activeElement,v.find('[data-cx="rights"]'));
+ v.ctx.CX.render();assert.equal(v.document.activeElement,v.find('[data-cx="rights"]'));
+});
+
+test('TS-44 r2: composer search, filtered actions, nested menu and Tab form one keyboard path',async()=>{
+ const v=ui();await v.find('[data-cx="plus"]').emit('click');const search=v.find('.cx-find');assert.equal(v.document.activeElement,search);
+ search.value='команды';await search.emit('input');await search.emit('keydown',{key:'ArrowDown'});
+ const action=v.find('[data-cx-nav="cmds"]');assert.equal(v.document.activeElement,action);(action as any).click=()=>action.emit('click');await action.emit('keydown',{key:'Enter'});
+ const back=v.find('[data-cx-back]');const nextSearch=v.find('.cx-find');assert.equal(v.document.activeElement,nextSearch);
+ await nextSearch.emit('keydown',{key:'Tab',shiftKey:true});assert.equal(v.document.activeElement,back);
+ (back as any).click=()=>back.emit('click');await back.emit('keydown',{key:' '});assert.equal(v.document.activeElement,v.find('.cx-find'));
+ await v.document.activeElement!.emit('keydown',{key:'Escape'});assert.equal(v.document.activeElement,v.find('[data-cx="plus"]'));
+});

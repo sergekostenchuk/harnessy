@@ -49,11 +49,11 @@
     if(box.__cx.ta) box.__cx.ta.placeholder=p&&!isRoom(p)?'Написать: '+L.paneName(p)+'…':'Написать сообщение…'; }
   function setBusy(on){ document.querySelectorAll('.cx-go').forEach(g=>{ if(g.classList.contains('busy')===!!on) return; const p=seat();g.classList.toggle('busy',!!on); g.title=on?'Остановить · Esc':H.on&&!(p&&p.model)?'выберите модель: у разговора нет сохранённой настройки':'Отправить · Enter'; g.innerHTML=on?'<i class="sq"></i>':svg('up');
     const box=g.closest('.box'), ta=box&&box.__cx&&box.__cx.ta,state=L.composerState&&box?L.composerState(box):{hasContent:!!(ta&&ta.value.trim()),blocked:false}; g.classList.toggle('off',!on&&(!state.hasContent||state.blocked||H.on&&!(p&&p.model))); }); }
-  function renderAll(){ if(L.attachmentsDraw)L.attachmentsDraw();document.querySelectorAll('.box').forEach(b=>{ if(b.__cx){ build(b); render(b); } });if(L.operationsDraw)L.operationsDraw(); }
+  function renderAll(){const focused=document.activeElement?.closest('[data-cx]'),focusKey=focused?.dataset.cx,focusBox=focused&&(focused.closest('.box')||focused.parentElement?.nextElementSibling);if(L.attachmentsDraw)L.attachmentsDraw();document.querySelectorAll('.box').forEach(b=>{ if(b.__cx){ build(b); render(b); } });if(L.operationsDraw)L.operationsDraw();if(focusKey&&focusBox){const next=focusBox.querySelector('[data-cx="'+focusKey+'"]')||focusBox.previousElementSibling?.querySelector('[data-cx="'+focusKey+'"]');next?.focus({preventScroll:true})} }
 
   // ── всплывающая панель: одна, от чипа; поле внизу — открывается вверх; внутри переходы с «Назад»
   let pop=null, stack=[];
-  function close(){ if(pop){ if(pop.__models&&pop.__models.events)pop.__models.events.close(); pop.remove(); pop=null; stack=[]; } }
+  function close(restore=true){ if(pop){const anchor=restore?anchorEl():null;if(pop.__models&&pop.__models.events)pop.__models.events.close();pop.remove();pop=null;stack=[];anchor?.focus({preventScroll:true});} }
   function anchorEl(){ const b=pop.__box, k=pop.__key; let a=null;   // живой чип по ключу: после перерисовки строки прежний элемент уже не в документе
     if(b){ a=(b.previousElementSibling&&b.previousElementSibling.querySelector('[data-cx="'+k+'"]'))||b.querySelector('[data-cx="'+k+'"]'); }
     return a||(pop.__anchor&&pop.__anchor.isConnected?pop.__anchor:null); }
@@ -63,13 +63,23 @@
     let left=l; if(l+pw>mw-12) left=l+w-pw; left=Math.max(12,Math.min(left,mw-pw-12));
     let top=t-8-ph; if(top<12) top=t+h+8; if(top+ph>mh-12) top=Math.max(12,mh-ph-12);   // вверх от строки; не влезло — вниз; и никогда за пределы кадра
     pop.style.left=left+'px'; pop.style.top=top+'px'; }
-  function open(anchor,k){ close(); const m=anchor.closest('.main')||document.body; pop=document.createElement('div'); pop.className='cx-pop'; m.appendChild(pop); pop.__anchor=anchor; pop.__box=anchor.closest('.box')||(anchor.parentElement&&anchor.parentElement.nextElementSibling); pop.__key=anchor.dataset.cx; pop.__binding=L.sendBinding(); pop.__settingsBinding=seat()&&seat().settingsBinding&&{...seat().settingsBinding}; stack=[k]; draw(); if(k==='model')void loadModels(pop); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); }
+  function open(anchor,k){ close(false); const m=anchor.closest('.main')||document.body; pop=document.createElement('div'); pop.className='cx-pop'; m.appendChild(pop); pop.__anchor=anchor; pop.__box=anchor.closest('.box')||(anchor.parentElement&&anchor.parentElement.nextElementSibling); pop.__key=anchor.dataset.cx; pop.__binding=L.sendBinding(); pop.__settingsBinding=seat()&&seat().settingsBinding&&{...seat().settingsBinding}; stack=[k]; draw(); if(k==='model')void loadModels(pop); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); }
   function nav(k){ stack.push(k); draw(); if(k==='model')void loadModels(pop); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); } function back(){ stack.pop(); draw(); }
-  function draw(){ if(!pop) return; const k=stack[stack.length-1]; pop.innerHTML=(stack.length>1?'<div class="cx-hd back" data-cx-back>'+svg('back')+'<span>'+esc(TITLES[k]||'')+'</span></div>':'')+VIEWS[k](); place();
-    const f=pop.querySelector('input.cx-find'); if(f){ f.addEventListener('input',()=>filter(f)); if(f.classList.contains('cx-path'))f.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();return submitProjectMenu(!!pop.querySelector('[data-cx-mkdir]'))}}); setTimeout(()=>f.focus(),0); } }
+  function menuItems(){if(!pop)return [];return [...pop.querySelectorAll('.cx-row,[data-cx-back],input,button,a[href]')].filter(node=>{if(node.disabled||node.classList.contains('dis'))return false;const row=node.closest('.cx-row');if(row&&row!==node)return false;for(let p=node;p&&p!==pop;p=p.parentElement){if(p.hidden||p.hasAttribute('hidden')||p.style.display==='none'||p.classList.contains('cx-sub')&&!p.parentElement.classList.contains('open'))return false}return true})}
+  const menuKey=node=>node&&JSON.stringify([node.tagName,node.dataset]);
+  function draw(){if(!pop)return;const k=stack[stack.length-1],focus=pop.contains(document.activeElement)&&pop.__view===k?menuKey(document.activeElement):null;pop.__view=k;
+    pop.innerHTML=(stack.length>1?'<div class="cx-hd back" data-cx-back>'+svg('back')+'<span>'+esc(TITLES[k]||'')+'</span></div>':'')+VIEWS[k]();pop.setAttribute('role','dialog');pop.setAttribute('aria-label',TITLES[k]||'Меню');pop.setAttribute('tabindex','-1');
+    pop.querySelectorAll('.cx-row,[data-cx-back]').forEach(node=>{if(!node.matches('button,a'))node.setAttribute('role','button');node.setAttribute('tabindex',node.disabled||node.classList.contains('dis')?'-1':'0');node.setAttribute('aria-disabled',String(!!node.disabled||node.classList.contains('dis')))});place();
+    const f=pop.querySelector('input.cx-find');if(f){f.addEventListener('input',()=>filter(f));if(f.classList.contains('cx-path'))f.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();return submitProjectMenu(!!pop.querySelector('[data-cx-mkdir]'))}})}
+    const items=menuItems();(items.find(node=>focus&&menuKey(node)===focus)||f||items[0]||pop).focus({preventScroll:true});
+  }
   function filter(inp){ const q=inp.value.trim().toLowerCase(); pop.querySelectorAll('[data-q]').forEach(el=>{ el.style.display=!q||el.dataset.q.toLowerCase().includes(q)?'':'none'; }); if(q) pop.querySelectorAll('.cx-grp').forEach(g=>g.classList.add('open')); }
-  document.addEventListener('click',e=>{ if(pop&&!pop.contains(e.target)&&!e.target.closest('[data-cx]')) close(); },true);
-  addEventListener('keydown',e=>{ if(e.key==='Escape'&&pop) close(); });
+  document.addEventListener('click',e=>{ if(pop&&!pop.contains(e.target)&&!e.target.closest('[data-cx]')) close(false); },true);
+  addEventListener('keydown',e=>{if(!pop||e.defaultPrevented||e.isComposing)return;if(e.key==='Escape'){e.preventDefault();close();return}if(!pop.contains(e.target))return;
+    const items=menuItems(),index=items.indexOf(e.target),editing=e.target.matches('input,textarea');
+    if(['Tab','ArrowDown','ArrowUp'].includes(e.key)||!editing&&['Home','End'].includes(e.key)){e.preventDefault();if(!items.length){pop.focus();return}const next=e.key==='Home'?0:e.key==='End'?items.length-1:(index+(e.key==='ArrowUp'||e.key==='Tab'&&e.shiftKey?-1:1)+items.length)%items.length;items[next].focus();items[next].scrollIntoView?.({block:'nearest'});return}
+    if(!editing&&['Enter',' '].includes(e.key)&&items.includes(e.target)&&!e.target.matches('button,a')){e.preventDefault();(e.target.querySelector('[data-cx-tog]')||e.target).click()}
+  });
 
   const TITLES={folder:'Проект',mkdir:'Создать проект',opendir:'Открыть проект',role:'Собеседник',switch:'Переключение',chat:'Чаты',newchat:'Новый чат',rights:'Права',model:'Модель',effort:'Усилие',plus:'Добавить и настроить',files:'Файлы и папки',shot:'Снимок экрана',sources:'Другие источники',tools:'Инструменты и субагенты',cmds:'Команды и навыки',info:'Информация'};
   const hd=(t,r)=>'<div class="cx-hd"><span>'+t+'</span>'+(r?'<small>'+r+'</small>':'')+'</div>';
@@ -143,7 +153,7 @@
     redrawModels(panel);
   }
   function modelsStatus(){if(!pop||!pop.__models)return;if(!modelsCurrent(pop)){close();return}const state=pop.__models,stamp=modeStamp();if(stamp!==state.modes){state.modes=stamp;state.revision++}if(state.access&&accessStamp(state.access.group)!==state.access.stamp){state.access=null;state.failure='Настройки места изменились. Подтвердите полный доступ заново.'}redrawModels(pop)}
-  addEventListener('live:status',modelsStatus);addEventListener('pagehide',close);
+  addEventListener('live:status',modelsStatus);addEventListener('pagehide',()=>close(false));
   async function chooseModel(button){const panel=pop,state=panel&&panel.__models;if(!state||state.saving||!modelsCurrent(panel))return;
     const program=modelGroups(panel).find(p=>p.id===(button.dataset.cxGroup||button.dataset.cxVendor)),model=program&&program.models.find(m=>m.id===button.dataset.cxModel);
     if(!model||!modelSupport(program.vendor,model).ok)return;const revision=state.revision,modes=modeStamp();state.saving=true;state.failure='';redrawModels(panel);

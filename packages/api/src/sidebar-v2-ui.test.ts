@@ -125,3 +125,13 @@ test('TS-44 rebase: keyboard opens the TS-43 project folder once and preserves i
  await row.emit('keydown',{key:'Enter',preventDefault(){}});assert.equal(row.getAttribute('aria-expanded'),'true');assert.equal(v.find('[data-ps2-project-chats="/b"] [data-pin-chat="b1"]').dataset.pinPath,'/b');
  await row.emit('keydown',{key:' ',preventDefault(){}});assert.equal(row.getAttribute('aria-expanded'),'false');assert.equal(v.document.querySelector('[data-ps2-project-chats="/b"]'),null);
 });
+
+
+test('TS-44 r2: sidebar redraw keeps focus on its project/chat identity, never a foreign chat with the same id',async()=>{
+ const v=view(),chat={id:'same-id',pane:'worker',title:'Первый чат',active:true};
+ v.context.PS2.setData({project:{path:'/a',name:'A'},chats:[chat]});v.find('[data-chat="same-id"]').focus();
+ v.context.PS2.setInbox({need:1,info:1});assert.equal(v.document.activeElement,v.find('[data-chat="same-id"]'));
+ v.context.PS2.setData({chats:[{id:'second',pane:'reviewer',title:'Соседний'},chat]});const current=v.find('[data-chat="same-id"]');assert.equal(v.document.activeElement,current);
+ let clicks=0;(current as any).click=()=>current.emit('click');current.addEventListener('click',()=>clicks++);await current.emit('keydown',{key:'Enter'});assert.equal(clicks,1);
+ v.context.PS2.setData({project:{path:'/b',name:'B'},chats:[chat]});assert.notEqual(v.document.activeElement,v.find('[data-chat="same-id"]'));
+});
