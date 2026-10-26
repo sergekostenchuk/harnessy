@@ -44,17 +44,17 @@ for(const change of ['project','pagehide','history'] as const)test('254 DOM+HTTP
 });
 test('253/254 DOM+HTTP: confirm creates the remaining team once and offers a working first-chat link',async t=>{
  const h=await setup(t),v=ui(h);h.provider.onRun=async(_s,_text,c)=>{c.modelStarted?.();return {text:'готов',sessionId:'s'}};
- await v.L.proposalsFetch();await v.find('[data-team-confirm]').emit('click');await v.settle();await h.runtime.idle();assert.equal(h.runtime.registry.ids.length,3);
+ await v.L.proposalsFetch();v.L.showTeamProposal(h.q.proposalId);await v.find('[data-team-confirm]').emit('click');await v.settle();await h.runtime.idle();assert.equal(h.runtime.registry.ids.length,3);
  assert.equal(v.document.querySelector('[data-team-confirm]'),null);const link=v.find('[data-team-create]');await link.emit('click');await v.settle();assert.equal(v.S.ui.pane,h.q.seats[0]!.sid);assert.ok(v.document.querySelector('#live-role-knowledge'));
- const before=h.provider.calls.length;await v.L.proposalsFetch();await v.find('[data-team-create]').emit('click');await v.settle();await h.runtime.idle();assert.equal(h.provider.calls.length,before);
+ const before=h.provider.calls.length;await v.L.proposalsFetch();v.L.showTeamProposal(h.q.proposalId);await v.find('[data-team-create]').emit('click');await v.settle();await h.runtime.idle();assert.equal(h.provider.calls.length,before);
 });
 
 test('251 DOM+HTTP: missing knowledge cannot start the paid turn and offers a working retry',async t=>{
  const h=await setup(t);let omit=true;const v=ui(h,async(path,_body,response)=>{if(omit&&path==='/api/chats/'+h.q.seats[0]!.operationId){delete response.knowledge}});
- await v.L.proposalsFetch();await v.find('[data-team-create]').emit('click');await v.settle();await h.runtime.idle();assert.equal(h.provider.calls.length,1);assert.match(v.find('#live-role-knowledge').textContent,/Не удалось прочитать контекст/);omit=false;
+ await v.L.proposalsFetch();v.L.showTeamProposal(h.q.proposalId);await v.find('[data-team-create]').emit('click');await v.settle();await h.runtime.idle();assert.equal(h.provider.calls.length,1);assert.match(v.find('#live-role-knowledge').textContent,/Не удалось прочитать контекст/);omit=false;
  await v.find('[data-knowledge-retry]').emit('click');await until(()=>h.provider.calls.length===2);await v.settle();await h.runtime.idle();assert.equal(h.provider.calls.length,2);
 });
 test('252 DOM+HTTP: team notification refreshes the visible knowledge without a model call',async t=>{
- const h=await setup(t),v=ui(h);await v.L.proposalsFetch();await v.find('[data-team-create]').emit('click');await v.settle();await h.runtime.idle();const count=h.provider.calls.length;assert.match(v.find('#live-role-knowledge').textContent,/предложена · чата ещё нет/);
+ const h=await setup(t),v=ui(h);await v.L.proposalsFetch();v.L.showTeamProposal(h.q.proposalId);await v.find('[data-team-create]').emit('click');await v.settle();await h.runtime.idle();const count=h.provider.calls.length;assert.match(v.find('#live-role-knowledge').textContent,/предложена · чата ещё нет/);
  await h.runtime.createOwnerSeat({project:h.dir,proposalId:h.q.proposalId,version:1,seatIndex:1,kind:'researcher'},OWNER);await v.L.proposalsFetch();await v.settle();await h.runtime.idle();assert.match(v.find('#live-role-knowledge').textContent,/создана владельцем как researcher/);assert.equal(h.provider.calls.length,count);
 });
