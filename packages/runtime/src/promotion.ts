@@ -38,7 +38,8 @@ function documents(value:unknown):DocumentRef[]{
 }
 function verifyDocuments(refs:DocumentRef[]){if(JSON.stringify(documents(refs))!==JSON.stringify(refs))throw new RuntimeError('documents_invalid','путь документа изменился после сохранения',409)}
 function rolePath(op:Promotion){return 'roles/seats/'+op.id+'.md'}
-function roleFile(op:Promotion){return '<!-- promotion:'+op.id+' -->\nОркестратор команды проекта. Предметная вводная и первое поручение сохранены в журнале повышения.\n'}
+export function promotionSeatFile(operationId:string){return '<!-- promotion:'+operationId+' -->\nОркестратор команды проекта. Предметная вводная и первое поручение сохранены в журнале повышения.\n'}
+function roleFile(op:Promotion){return promotionSeatFile(op.id)}
 // Only receipts from this operation's frozen source may retain the old addressee.
 // A room label alone proves nothing: another room chat uses that same label.
 export function promotionHistory(p:ProjectState,c:Chat):{pane:string;seqs:Set<number>}|null {

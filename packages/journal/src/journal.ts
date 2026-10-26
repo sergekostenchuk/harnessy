@@ -81,13 +81,33 @@ export class Journal {
  this.recover();const out=this.records.filter(r=>r.seq>since&&(before===undefined||r.seq<before)&&(thread===null||r.thread===thread)&&(!kinds?.length||kinds.includes(r.kind)));if(before!==undefined)out.sort((a,b)=>a.seq-b.seq);return limit?out.slice(-limit):out
  }
  repliesTo(seq:number):Record_[]{this.recover();return this.records.filter(r=>r.reply_to===seq)}
+ private revokedAutopilotRecords():Set<number> {
+ this.recover();const bySeq=new Map(this.records.map(r=>[r.seq,r])),promotions=new Map<string,Record_[]>(),revoked=new Set<number>();
+ for(const record of this.records){
+  const match=/^promotion:(c[0-9a-f]+):(intro|task)$/.exec(record.thread??'');
+  if(!match||record.to.length!==1||!(match[2]==='intro'?record.from==='harness'&&record.kind==='note'&&record.origin==='onboarding':record.from==='owner'&&record.kind==='task'&&record.origin==='promotion'))continue;
+  const group=promotions.get(match[1]!)??[];group.push(record);promotions.set(match[1]!,group);
+ }
+ for(const marker of this.records){
+  if(marker.from!=='harness'||marker.kind!=='rejected'||marker.origin!=='autopilot-cancel'||marker.to.length!==1||marker.to[0]!=='owner'||marker.reply_to===null)continue;
+  const target=bySeq.get(marker.reply_to);if(!target||target.seq>=marker.seq||target.to.length!==1||target.thread!==marker.thread)continue;
+  if(target.from==='owner'&&target.kind==='decision'){revoked.add(target.seq);continue}
+  const operation=/^promotion:(c[0-9a-f]+):(intro|task)$/.exec(target.thread??'')?.[1];
+  const pair=(promotions.get(operation??'')??[]).filter(r=>r.seq<marker.seq&&r.to[0]===target.to[0]);
+  // One durable marker cancels the whole promotion delivery, including older intro-only markers.
+  if(pair.length===2&&pair.includes(target)&&pair.some(r=>r.thread?.endsWith(':intro'))&&pair.some(r=>r.thread?.endsWith(':task')))for(const record of pair)revoked.add(record.seq);
+ }
+ return revoked;
+ }
  pendingFor(seat:string):DeliveryEntry[]{
- this.recover();const cursor=this.cursorData[seat]??0,out:DeliveryEntry[]=[];
- for(const record of this.records){if(record.origin==='steer'||SYSTEM_KINDS.includes(record.kind as never)||record.from===seat||!record.to.some(t=>t===seat||t==='*'))continue;
+ this.recover();const cursor=this.cursorData[seat]??0,out:DeliveryEntry[]=[],revoked=this.revokedAutopilotRecords();
+ for(const record of this.records){if(revoked.has(record.seq)||record.origin==='steer'||SYSTEM_KINDS.includes(record.kind as never)||record.from===seat||!record.to.some(t=>t===seat||t==='*'))continue;
  const resolution=this.decisions.get(record.seq);if(record.ack==='pending'&&resolution?.kind!=='ack')continue;
  const deliverySeq=record.ack==='pending'?resolution!.seq:record.seq;if(deliverySeq>cursor)out.push({record,deliverySeq})}
  return out.sort((a,b)=>a.deliverySeq-b.deliverySeq)
  }
+ autopilotReplyRevoked(seq:number):boolean {return this.revokedAutopilotRecords().has(seq)}
+ autopilotPromotionRevoked(seq:number):boolean {return this.revokedAutopilotRecords().has(seq)}
  markAcked(seq:number){this.recover();const record=this.get(seq);if(!record)return;const resolution=ackResolution(record,this.repliesTo(seq));if(resolution)this.decisions.set(seq,resolution)}
  ackEventRecorded(decision:Record_,event:string):boolean{return this.ackEvents[decision.seq+':'+decision.id]?.includes(event)??false}
  markAckEvent(decision:Record_,event:string):void {
