@@ -11,7 +11,7 @@
   const identity=(project,...parts)=>JSON.stringify([project,...parts]);
   const operationLabel=Object.freeze({answer_question:'Ответ на вопрос',answer_blocker:'Ответ на блокировку',answer_escalation:'Ответ на срочный вопрос',approve:'Разрешить действие',deny:'Отказать в действии',assign_role:'Назначить роль',continue_pane:'Продолжить ход',stop_pane:'Остановить ход'});
   const item=(id,kind,title,detail,ts,need,extra={})=>({id,kind,title,detail,ts,need,done:false,read:false,...extra});
-  function collect({project,status,journal,chats=[],trace=[],limits=[],decisions=[],update=null,read=[]},now=Date.now()){
+  function collect({project,status,journal,chats=[],trace=[],limits=[],decisions=[],proposals=[],update=null,read=[]},now=Date.now()){
     if(!project||status?.project!==project||journal?.project!==project)return [];
     const records=Array.isArray(journal.records)?journal.records.filter(validRecord):[],bySeq=new Map(records.map(r=>[r.seq,r]));
     const revoked=new Set(records.filter(r=>{const target=bySeq.get(r.reply_to);return r.from==='harness'&&r.kind==='rejected'&&r.origin==='autopilot-cancel'&&r.to.length===1&&r.to[0]==='owner'&&target?.from==='owner'&&target.kind==='decision'&&target.to.length===1&&target.thread===r.thread}).map(r=>r.reply_to));
@@ -28,9 +28,14 @@
       const w=p.waiting,title=w.status==='unsent'?'Не отправлено: '+(text(w.failure?.reason)||'проверка перед ходом не прошла'):w.status==='recovering'?'Завершить восстановление хода':'Итог хода неизвестен';
       add(item(identity(project,'waiting',p.id,w.turnInstanceId),'решение',title,text(w.failure?.reason)||'Требуется ваше решение',date(w.startedAt),true,{type:'waiting',pane:p.id,waiting:w}));
     }
+    for(const q of proposals){if(!q||typeof q.proposalId!=='string'||!Number.isSafeInteger(q.version)||!Array.isArray(q.seats)||!q.seats.length||typeof q.from!=='string')continue;
+      const r=bySeq.get(q.questionSeq);if(!r||r.from!=='harness'||r.origin!=='team-proposal'||!r.to.includes('owner')||replies.has(r.seq))continue;
+      const chat=typeof q.turnInstanceId==='string'&&chats.find(c=>c.chat?.pane===q.from&&c.messages?.some(m=>m.runtime?.turnInstanceId===q.turnInstanceId));
+      add(item(identity(project,'record',r.seq),'состав команды','Состав команды · версия '+q.version+' · '+q.seats.length+' '+(q.seats.length===1?'роль':q.seats.length<5?'роли':'ролей'),'Предложение оркестратора',date(r.ts),true,{type:'teamProposal',pane:q.from,chat:chat?.chat?.id||null,proposal:q.proposalId}));
+    }
     for(const r of records){const ts=date(r.ts);
       if(r.from!=='owner'&&r.to.includes('owner')&&['question','blocker','escalation'].includes(r.kind)&&!replies.has(r.seq))
-        add(item(identity(project,'record',r.seq),'решение',text(r.text)||'Вопрос владельцу','Журнал №'+r.seq,ts,true,{type:'question',pane:r.from,record:r}));
+        add(r.from==='harness'&&r.origin==='team-proposal'?item(identity(project,'record',r.seq),'состав команды','Состав команды недоступен','Обновите Входящие, чтобы прочитать предложение.',ts,true,{type:'teamUnavailable',record:r}):item(identity(project,'record',r.seq),'решение',text(r.text)||'Вопрос владельцу','Журнал №'+r.seq,ts,true,{type:'question',pane:r.from,record:r}));
       if(r.kind==='verdict'&&(status.panes||[]).some(p=>p.id===r.from&&(p.kind==='reviewer'||p.role==='reviewer'))&&recent(ts,now))
         add(item(identity(project,'verdict',r.seq),'возврат ревьюера',text(r.text)||'Ревьюер вернул результат','Журнал №'+r.seq,ts,false,{type:'verdict',pane:r.from,record:r}));
     }
@@ -72,26 +77,27 @@
   const current=()=>L?.H?.on&&!L.H.snapshotOnly&&!!L.H.project;
   const binding=()=>({project:L.H.project,generation:L.H.confirmedProjectGeneration||0});
   const same=b=>current()&&L.H.project===b.project&&(L.H.confirmedProjectGeneration||0)===b.generation;
-  async function chatDetails(chats,b){const list=(chats||[]).filter(c=>c&&typeof c.id==='string'&&Number.isFinite(c.last)&&c.last*1000>=Date.now()-7*DAY),result=[];let index=0,failed=false;
+  async function chatDetails(chats,b,proposals=[]){const authors=new Set(proposals.filter(q=>q&&typeof q.from==='string'&&typeof q.turnInstanceId==='string').map(q=>q.from));const list=(chats||[]).filter(c=>c&&typeof c.id==='string'&&(authors.has(c.pane)||Number.isFinite(c.last)&&c.last*1000>=Date.now()-7*DAY)),result=[];let index=0,failed=false;
     await Promise.all(Array.from({length:Math.min(4,list.length)},async()=>{while(index<list.length&&same(b)){const c=list[index++];try{const row=await L.api('/api/chats/'+encodeURIComponent(c.id));if(row?.chat?.id===c.id&&Array.isArray(row.messages))result.push(row);else failed=true}catch{failed=true}}}));return {rows:result,failed};
   }
   async function refresh(){clearTimeout(retryTimer);if(!alive)return false;if(!current()){state.error='Движок недоступен · данные не подтверждены';draw();return false;}if(state.loading){state.queued=true;return false}
     const b=binding(),request=++state.request;if(state.project!==b.project||state.generation!==b.generation){state.project=null;state.items=[];state.sourceErrors=[];state.pending.clear();state.actionErrors.clear();state.replyOpen.clear();state.replyDrafts.clear();signal()}
     state.loading=true;if(PAGE==='inbox')draw();
-    try{const [status,journal,chats,trace,limits,decisions,settings,update]=await Promise.all([
+    try{const [status,journal,chats,trace,limits,decisions,settings,update,proposals]=await Promise.all([
       L.api('/api/status'),L.api('/api/journal?limit=0'),L.api('/api/chats'),L.api('/api/trace?since='+encodeURIComponent(new Date(Date.now()-7*DAY).toISOString())).catch(()=>null),
-      L.api('/api/limits').catch(()=>null),L.api('/api/autopilot/decisions').catch(()=>null),L.api('/api/settings'),window.harnessy?.updates?.getState().catch(()=>null)??Promise.resolve(null)
+      L.api('/api/limits').catch(()=>null),L.api('/api/autopilot/decisions').catch(()=>null),L.api('/api/settings'),window.harnessy?.updates?.getState().catch(()=>null)??Promise.resolve(null),L.api('/api/seats/proposals').catch(()=>null)
     ]);
       if(!same(b)||request!==state.request)return false;
       if(status?.project!==b.project||!Array.isArray(status.approvals)||!Array.isArray(status.panes)||journal?.project!==b.project||!Array.isArray(journal.records)||!Array.isArray(chats?.chats)||settings?.ok!==true||!settings.owner)throw Error('Данные входящих не подтверждены для текущего проекта');
-      const details=await chatDetails(chats.chats,b);if(!same(b)||request!==state.request)return false;
+      const details=await chatDetails(chats.chats,b,proposals?.ok===true&&proposals.project===b.project&&Array.isArray(proposals.proposals)?proposals.proposals:[]);if(!same(b)||request!==state.request)return false;
       state.project=b.project;state.generation=b.generation;state.read=new Set(Array.isArray(settings.owner[READ_KEY])?settings.owner[READ_KEY].filter(v=>typeof v==='string'):[]);
       state.sourceErrors=[];
       if(trace?.ok!==true||trace.project!==b.project||!Array.isArray(trace.records))state.sourceErrors.push('События подключения недоступны');
       if(limits?.ok!==true||limits.project!==b.project||!Array.isArray(limits.providers))state.sourceErrors.push('Лимиты недоступны');
       if(decisions?.ok!==true||decisions.project!==b.project||!Array.isArray(decisions.decisions))state.sourceErrors.push('Решения Автопилота недоступны');
+      if(proposals?.ok!==true||proposals.project!==b.project||!Array.isArray(proposals.proposals))state.sourceErrors.push('Состав команды недоступен');
       if(details.failed)state.sourceErrors.push('История чатов недоступна');
-      const next=collect({project:b.project,status,journal,chats:details.rows,trace:state.sourceErrors.includes('События подключения недоступны')?[]:trace.records,limits:state.sourceErrors.includes('Лимиты недоступны')?[]:limits.providers,decisions:state.sourceErrors.includes('Решения Автопилота недоступны')?[]:decisions.decisions,update,read:[...state.read]});
+      const next=collect({project:b.project,status,journal,chats:details.rows,trace:state.sourceErrors.includes('События подключения недоступны')?[]:trace.records,limits:state.sourceErrors.includes('Лимиты недоступны')?[]:limits.providers,decisions:state.sourceErrors.includes('Решения Автопилота недоступны')?[]:decisions.decisions,proposals:proposals?.ok===true&&proposals.project===b.project?proposals.proposals:[],update,read:[...state.read]});
       if(state.sourceErrors.includes('Решения Автопилота недоступны'))for(const old of state.items)if(old.type==='autopilotDecision'&&!next.some(row=>row.id===old.id))next.push(old);
       state.items=keepCompleted(next,state.items);
       state.error=null;signal();if(PAGE==='inbox')draw();return true;
@@ -107,7 +113,7 @@
   });return readJob.catch(e=>{if(same(b)){state.error=e?.message||'Прочитанность не сохранена';draw()}return false})}
   const ago=t=>{if(!t)return 'время неизвестно';const minutes=Math.max(0,Math.floor((Date.now()-t)/60000));return minutes<1?'сейчас':minutes<60?minutes+' мин':minutes<1440?Math.floor(minutes/60)+' ч':Math.floor(minutes/1440)+' д'};
   const icon={approval:'◆',waiting:'◆',question:'◆',verdict:'↳',chat:'✓',network:'⇄',limit:'%',update:'↑',autopilotDecision:'◆'};
-  function actions(x){if(x.done)return '<span class="okm">Выполнено</span>';const disabled=state.pending.has(x.id)||!!state.error?' disabled':'';if(x.type==='approval')return '<button class="btn sm p" data-inbox-action="allow"'+disabled+'>Разрешить</button><button class="btn sm" data-inbox-action="deny"'+disabled+'>Отказать</button><button class="btn sm" data-inbox-action="chat">Открыть чат</button>';
+  function actions(x){if(x.type==='teamUnavailable')return '<button class="btn sm" data-inbox-retry>Повторить</button>';if(x.type==='teamProposal')return '<button class="btn sm p" data-inbox-action="open">Открыть состав</button>';if(x.done)return '<span class="okm">Выполнено</span>';const disabled=state.pending.has(x.id)||!!state.error?' disabled':'';if(x.type==='approval')return '<button class="btn sm p" data-inbox-action="allow"'+disabled+'>Разрешить</button><button class="btn sm" data-inbox-action="deny"'+disabled+'>Отказать</button><button class="btn sm" data-inbox-action="chat">Открыть чат</button>';
     if(x.type==='waiting'){const attrs=' data-attempt-pane="'+esc(x.pane)+'" data-attempt-project="'+esc(state.project)+'" data-attempt-id="'+esc(x.waiting.turnInstanceId)+'"';
       return (x.waiting.actions||[]).filter(a=>['retry','skip','finish'].includes(a)).map(a=>'<button class="btn sm'+(a==='retry'?' p':'')+'" data-attempt-action="'+a+'"'+attrs+'>'+(a==='retry'?(x.waiting.status==='unsent'?'Отправить снова':'Повторить'):a==='skip'?(x.waiting.status==='unsent'?'Убрать':'Пропустить'):'Завершить')+'</button>').join('')+'<button class="btn sm" data-inbox-action="open">Открыть чат</button>'}
     if(x.type==='question')return '<button class="btn sm p" data-inbox-action="open"'+disabled+'>Ответить</button><button class="btn sm" data-inbox-action="chat">Открыть чат</button>';
@@ -139,9 +145,9 @@
       (done.length?'<div class="ps2-ibgrp">выполнено · '+done.length+'</div>'+done.map(card).join(''):'');
     if(editor){const row=[...feed.querySelectorAll('[data-inbox-id]')].find(x=>x.dataset.inboxId===editor.id),field=row?.querySelector('[data-inbox-reply]');if(field){field.focus({preventScroll:true});if(Number.isSafeInteger(editor.start)&&Number.isSafeInteger(editor.end))field.setSelectionRange(editor.start,editor.end,editor.direction);field.scrollTop=editor.scrollTop}}
   }
-  async function open(x){if(x.type==='network')location.href='11-connections.html';else if(x.type==='limit')location.href='05-spend.html';else if(x.type==='update')location.href='06-settings.html#p=about';else if(x.type==='verdict'||!x.pane)location.href='21-journal.html';else{
+  async function open(x){if(x.type==='teamUnavailable')throw Error('Не удалось прочитать состав. Обновите Входящие.');if(x.type==='teamProposal'&&!x.chat)throw Error('Чат предложения не найден. Обновите Входящие и попробуйте снова.');if(x.type==='network')location.href='11-connections.html';else if(x.type==='limit')location.href='05-spend.html';else if(x.type==='update')location.href='06-settings.html#p=about';else if(x.type==='verdict'||!x.pane)location.href='21-journal.html';else{
       const b=binding(),S=L.S;if(x.chat&&L.H.active?.[x.pane]!==x.chat){const r=await L.api('/api/chats/open',{chat:x.chat,carry:'none'});if(!same(b)||!r?.ok)throw Error(r?.error||'Чат не открылся')}
-      if(!same(b))return;S.ui.pane=x.pane;S.ui.fresh=false;S.ui.switched=true;if(x.chat)S.ui.openChat=x.chat;L.save();location.href='01-chat.html';
+      if(!same(b))return;S.ui.pane=x.pane;S.ui.fresh=false;S.ui.switched=true;if(x.chat)S.ui.openChat=x.chat;L.save();location.href='01-chat.html'+(x.type==='teamProposal'?'#team='+encodeURIComponent(x.proposal):'');
     }}
   async function action(x,kind){if(!x||!current()||x.done||state.project!==L.H.project||state.generation!==(L.H.confirmedProjectGeneration||0))return;const b=binding();
     const writing=kind==='allow'||kind==='deny'||kind==='send'||kind==='cancel';if(writing&&(state.pending.has(x.id)||state.error))return;

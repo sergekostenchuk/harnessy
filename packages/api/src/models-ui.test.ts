@@ -69,7 +69,7 @@ for(const page of ['chat','new','first'])test('305/306: '+page+' lists every cat
 test('TS-36E: chat and rights menu choose the same discussion mode; leaving restores prior rights',async()=>{
  const v=ui();assert.ok(v.find('[data-cx-team-view]'));assert.equal(v.document.querySelector('[data-cx="folder"]'),null);
  assert.equal(v.find('[data-cx-discussion]').getAttribute('aria-checked'),'false');await v.find('[data-cx-discussion]').emit('click');
- assert.equal(v.H.pane.mode,'chat');assert.equal(v.find('[data-cx-discussion]').getAttribute('aria-checked'),'true');assert.equal(v.document.querySelector('.cx-discussion-state'),null);assert.doesNotMatch(v.find('.cx-bot').textContent,/проект не меняется/);assert.equal(v.find('[data-cx-discussion]').getAttribute('title'),'Только обсуждение: проект не меняется');
+ assert.equal(v.H.pane.mode,'chat');assert.equal(v.find('[data-cx-discussion]').getAttribute('aria-checked'),'true');assert.equal(v.document.querySelector('.cx-discussion-state'),null);assert.match(v.find('.cx-bot').textContent,/обсуждение · проект не меняется/);assert.equal(v.find('[data-cx-discussion]').getAttribute('title'),'Только обсуждение: проект не меняется');
  assert.deepEqual(v.requests.filter(r=>r.body).map(r=>r.body?.mode),['chat']);
  await v.find('[data-cx="rights"]').emit('click');assert.equal(v.find('[data-cx-mode]').dataset.cxMode,'chat');assert.match(v.find('[data-cx-mode]').textContent,/Только обсуждение/);
  await v.find('[data-cx-discussion]').emit('click');assert.equal(v.H.pane.mode,'read');await v.find('[data-cx="rights"]').emit('click');

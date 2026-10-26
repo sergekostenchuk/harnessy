@@ -11,7 +11,8 @@ window.TC=(function(){
     check:'<path d="M5 12l4 4L19 6"/>',clock:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',file:'<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/>',cons:'<rect x="3" y="5" width="7" height="6" rx="1.5"/><rect x="14" y="13" width="7" height="6" rx="1.5"/><path d="M10 8h2a2 2 0 012 2v4"/>',
     eye:'<path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',talk:'<path d="M4 5h11v8H8l-4 3z"/><path d="M15 9h5v8h-3l-3 3v-3h-2"/>',test:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3"/>',ux:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 12l3-3 2 2 4-4"/>',
     orch:'<circle cx="12" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M12 8.5v4M12 12.5l-5.5 3.5M12 12.5l5.5 3.5"/>',rev:'<path d="M4 6h16v12H4z"/><path d="M8 12l3 3 5-6"/>',worker:'<path d="M14 4l6 6-10 10H4v-6z"/><path d="M12 6l6 6"/>',save:'<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>',play:'<path d="M7 5l12 7-12 7z"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>'};
-  const ico=k=>'<svg viewBox="0 0 24 24">'+(I[k]||'')+'</svg>';
+  const roleIcons={orchestrator:'orch',assistant:'talk',architect:'cons',worker:'worker',reviewer:'rev',tester:'test',researcher:'res'};
+  const ico=k=>'<svg viewBox="0 0 24 24">'+(I[roleIcons[k]||k]||I.role)+'</svg>';
   const tag=(k,t)=>'<span class="tag '+k+'">'+t+'</span>';
   let textDetailId=0;
   function revealText(value,key=''){const text=esc(value),id='tc-full-text-'+(++textDetailId);return '<span class="tc-text-detail"><button type="button" class="tc-text-short" data-tc-reveal="'+esc(key)+'" data-nodrag title="'+text+'" aria-expanded="false" aria-controls="'+id+'">'+text+'</button><span class="tc-text-full" data-nodrag id="'+id+'" hidden>'+text+'</span></span>'}

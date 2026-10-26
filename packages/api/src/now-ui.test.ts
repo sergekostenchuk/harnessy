@@ -13,12 +13,14 @@ const settled=async(v:ReturnType<typeof nowUI>)=>{for(let i=0;i<10&&v.functions.
 
 test('167/185: cold HTTP snapshot includes ordinary and durable owner confirmations; real sketch controls decide once',async t=>{
  const h=await fixture(t),pane=h.runtime.registry.get('worker')!;void pane.askApproval('Обычный вопрос','<script>untrusted</script>');h.clock.time=Date.now()-3600000;
- const seq=h.runtime.journal.append({sender:'worker',to:'owner',kind:'question',text:'Подтвердить работу'}).seq;
+ const question=h.runtime.journal.append({sender:'worker',to:'owner',kind:'question',text:'Подтвердить работу'}),seq=question.seq;
  const ack=new Approval('ack:'+seq,h.runtime.project.owner,'Подтверждение записи','Сохранённая запись',900000,h.clock);h.runtime.project.owner.approvals.set(ack.id,ack);
  const v=nowUI(async(path,body)=>(await call(h.api,path,{body})).body);v.H.project=h.dir;
  const originals=['#v-turn .nums','#v-turn .lst','#v-week .filters','#v-week .lst','#v-away .nums','#v-away .lst','#idle'].map(s=>v.find(s));await v.start();
  for(const n of originals)assert.ok(v.document.contains(n));v.functions.oldRefresh();assert.equal(v.functions.items().pending.length,2);assert.match(v.find('#v-turn .lst').textContent,/время начала неизвестно/);assert.match(v.find('#v-turn .lst').textContent,/60 мин/);
- assert.doesNotMatch(v.find('.views').textContent,/H1\.5|18:40|6 ч 12 мин/);assert.match(v.find('#v-away .lst').textContent,/События|события/);assert.match(v.find('#idle').textContent,/Нет данных о времени завершения/);
+ // A real journal timestamp may be 18:40, the same time as the sketch fixture. Check its provenance instead.
+ assert.equal(v.find('[data-now-record="'+seq+'"]').closest('.li')!.querySelector('.m')!.textContent,new Date(question.ts).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}));
+ assert.doesNotMatch(v.find('.views').textContent,/H1\.5|6 ч 12 мин/);assert.match(v.find('#v-away .lst').textContent,/События|события/);assert.match(v.find('#idle').textContent,/Нет данных о времени завершения/);
  const age=v.functions.items().pending.find((p:any)=>p.approval?.id===ack.id).ts;await v.functions.fetch();assert.equal(v.functions.items().pending.find((p:any)=>p.approval?.id===ack.id).ts,age);assert.equal(h.provider.calls.length,0);
 });
 

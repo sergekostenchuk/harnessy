@@ -226,7 +226,7 @@ test('39.2: owner form has seven classes, keeps opId on retry and project draft 
 });
 
 test('39.2: constructor choices use the design menu, keyboard navigation and readable rights',async()=>{
- const v=constructorUi();await v.settle();assert.equal(v.root.querySelector('select'),null);assert.match(v.find('[data-team-mode]').textContent,/Только чтение/);
+ const v=constructorUi();await v.settle();assert.equal(v.root.querySelector('select'),null);assert.match(v.find('[data-team-mode]').textContent,/Чтение папки/);
  await v.find('[data-team-own-open]').emit('click');const control=v.find('[data-team-own-field="kind"]');v.context.innerWidth=390;Object.assign(v.html,{clientWidth:375});Object.assign(control,{getBoundingClientRect:()=>({left:192,bottom:532,width:160})});await control.emit('click');
  const menu=v.document.querySelector('.tc-choice-menu')!;assert.ok(menu);assert.ok(parseFloat(menu.style.left!)+parseFloat(menu.style.width!)<=367,'menu clears the scrollbar');const choices=menu.querySelectorAll('[data-team-option]');assert.equal(choices.length,7);assert.equal(control.getAttribute('aria-expanded'),'true');
  assert.equal(v.document.activeElement,choices[0]);await choices[0]!.emit('keydown',{key:'ArrowDown'});assert.equal(v.document.activeElement,choices[1]);
@@ -282,4 +282,10 @@ test('39.2 r2: both write forms explain a transport failure in Russian and prese
 test('39.2 r2: changing the custom role provider refreshes supported rights while keeping every other field',async()=>{
  const v=teamUi('constructor',undefined,{H:{models:{gemini:[{id:'g1',label:'Gemini'}],claude:[{id:'w1',label:'Claude'}]},turnModes:{gemini:{all:{ok:true}},claude:{read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true}}}}});await v.settle();await v.find('[data-team-own-open]').emit('click');for(const [field,value] of [['label','Аналитик'],['intro','Прочитай договор']] as const){const n=v.find('[data-team-own-field="'+field+'"]');n.value=value;await n.emit('input')}
  assert.equal(v.find('[data-team-own-field="mode"]').value,'all');await v.find('[data-team-own-field="model"]').emit('click');await v.document.querySelector('[data-team-option="claude/w1"]')!.emit('click');assert.deepEqual(JSON.parse(v.find('[data-team-own-field="mode"]').dataset.options!).map((row:any)=>row.value),['read','edit','all','chat']);assert.equal(v.find('[data-team-own-field="mode"]').value,'all');assert.equal(v.find('[data-team-own-field="label"]').value,'Аналитик');assert.equal(v.find('[data-team-own-field="intro"]').value,'Прочитай договор');assert.equal(v.find('[data-team-own-field="kind"]').value,'worker');assert.equal(v.document.activeElement,v.find('[data-team-own-field="model"]'));
+});
+
+test('TS-44: every canonical role has an icon and constructor rights use owner-facing words',async()=>{
+ const v=teamUi('constructor');await v.settle();const icons=['orchestrator','assistant','architect','worker','reviewer','tester','researcher'].map(kind=>v.context.TC.ico(kind));
+ for(const icon of icons)assert.match(icon,/<(?:path|circle|rect)\b/);assert.equal(new Set(icons).size,7);
+ const rights=v.find('[data-team-mode]');assert.equal(JSON.parse(rights.dataset.options!).find((row:any)=>row.value==='read').label,'Чтение папки');assert.equal(rights.value,'read');
 });
