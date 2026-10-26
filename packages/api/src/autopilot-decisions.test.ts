@@ -46,6 +46,15 @@ test('TS-38.3: forged id and edited journal line fail closed',async t=>{
  const response=await call(h.api,'/api/autopilot/decisions');assert.equal(response.status,409);assert.equal(response.body.code,'decision_invalid');
 });
 
+test('TS-38.3 r2: parallel different proposals for one issue leave one readable intent',async t=>{
+ const h=await fixture(t),ledger=h.runtime.autopilotDecisionLedger(),first=decision(h.dir),secondProposal={...first.proposal,answer:'Нет, остановить до утра'},second={...first,proposal:secondProposal,proposalHash:autopilotDecisionHash(secondProposal),decisionId:autopilotDecisionId(h.dir,question,secondProposal,first.generation)};
+ const results=await Promise.allSettled([ledger.intent({...first,cost:unknownCost}),ledger.intent({...second,cost:unknownCost})]);
+ assert.equal(results.filter(result=>result.status==='fulfilled').length,1);
+ const rejected=results.find(result=>result.status==='rejected');assert.equal(rejected?.status,'rejected');assert.equal((rejected as PromiseRejectedResult).reason.code,'decision_conflict');
+ const listed=await call(h.api,'/api/autopilot/decisions');assert.equal(listed.status,200,listed.text);assert.equal(listed.body.decisions.length,1);assert.equal(listed.body.decisions[0].entry.state,'intent');
+ assert.equal(readFileSync(ledger.path,'utf8').trim().split('\n').length,1);
+});
+
 test('TS-38.3: missing cost and linked project state cannot masquerade as a decision journal',async t=>{
  const project=mkdtempSync(join(tmpdir(),'harnessy-decisions-')),outside=mkdtempSync(join(tmpdir(),'harnessy-decisions-outside-'));t.after(()=>{rmSync(project,{recursive:true,force:true});rmSync(outside,{recursive:true,force:true})});
  const base=decision(project),ledger=new AutopilotDecisionLedger(project);

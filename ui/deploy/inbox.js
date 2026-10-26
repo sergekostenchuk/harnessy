@@ -8,6 +8,7 @@
   const validRecord=r=>r&&Number.isSafeInteger(r.seq)&&r.seq>0&&typeof r.kind==='string'&&typeof r.from==='string'&&Array.isArray(r.to);
   const text=s=>typeof s==='string'?s.trim().slice(0,240):'';
   const identity=(project,...parts)=>JSON.stringify([project,...parts]);
+  const operationLabel=Object.freeze({answer_question:'Ответ на вопрос',answer_blocker:'Ответ на блокировку',answer_escalation:'Ответ на срочный вопрос',approve:'Разрешить действие',deny:'Отказать в действии',assign_role:'Назначить роль',continue_pane:'Продолжить ход',stop_pane:'Остановить ход'});
   const item=(id,kind,title,detail,ts,need,extra={})=>({id,kind,title,detail,ts,need,done:false,read:false,...extra});
   function collect({project,status,journal,chats=[],trace=[],limits=[],decisions=[],update=null,read=[]},now=Date.now()){
     if(!project||status?.project!==project||journal?.project!==project)return [];
@@ -42,7 +43,7 @@
       add(item(identity(project,'network',r.seq), 'подключение',title,text(r.reason?.text)||text(data.code)||'Проверьте подключение',ts,false,{type:'network',vendor:text(data.vendor),failed}));
     }
     for(const record of decisions){const d=record?.entry,ts=date(record?.at);if(record?.project!==project||record?.version!==1||d?.state!=='applied'||typeof d.decisionId!=='string'||!/^[0-9a-f]{64}$/.test(d.decisionId)||!d.question||typeof d.question.id!=='string'||typeof d.question.kind!=='string'||typeof d.question.text!=='string'||!d.proposal||typeof d.proposal.reason!=='string'||!d.council?.orchestrator||!d.council?.reviewer||typeof d.council.orchestrator.seat!=='string'||typeof d.council.orchestrator.model!=='string'||typeof d.council.reviewer.seat!=='string'||typeof d.council.reviewer.model!=='string'||!Number.isFinite(ts))continue;
-      const summary=text(d.proposal.answer)||text(d.operation)||'Решение принято';
+      const summary=text(d.proposal.answer)||operationLabel[d.operation]||'Решение принято';
       add(item(identity(project,'autopilot',d.decisionId),'автопилот · решение','Автопилот решил: '+summary,text(d.question.text),ts,false,{type:'autopilotDecision',decision:record}));
     }
     for(const p of limits){if(!p||typeof p.vendor!=='string'||p.sourceConnected===false||p.ok===false)continue;

@@ -81,7 +81,9 @@ export class AutopilotDecisionLedger {
  async intent(entry:Omit<Extract<AutopilotDecisionEntry,{state:'intent'}>,'state'>):Promise<void>{await this.put({...entry,state:'intent'})}
  async applied(entry:Omit<Extract<AutopilotDecisionEntry,{state:'applied'}>,'state'>):Promise<void>{await this.put({...entry,state:'applied'})}
  async failed(entry:Extract<AutopilotDecisionEntry,{state:'failed'|'uncertain'}>):Promise<void>{await this.put(entry)}
- private put(entry:AutopilotDecisionEntry):Promise<void>{return withPathLock(this.path,()=>{checked(entry,this.project);const lines=this.read(),prior=[...lines].reverse().find(row=>row.record.entry.decisionId===entry.decisionId)?.record.entry;
+ private put(entry:AutopilotDecisionEntry):Promise<void>{return withPathLock(this.path,()=>{checked(entry,this.project);const lines=this.read(),conflict=lines.find(row=>row.record.entry.issueHash===entry.issueHash&&row.record.entry.decisionId!==entry.decisionId);
+   if(conflict)throw new RuntimeError('decision_conflict','Для этого вопроса уже сохранено другое решение Автопилота',409);
+   const prior=[...lines].reverse().find(row=>row.record.entry.decisionId===entry.decisionId)?.record.entry;
    if(prior){if(autopilotDecisionHash(prior)===autopilotDecisionHash(entry))return;if(prior.state!=='intent'||entry.state==='intent'||autopilotDecisionHash(stable(prior))!==autopilotDecisionHash(stable(entry)))return fail('Решение уже записано с другим содержимым')}
    else if(entry.state!=='intent')return fail('Квитанция не имеет сохранённого намерения');
    this.append(entry,lines);

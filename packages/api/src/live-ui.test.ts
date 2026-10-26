@@ -456,6 +456,14 @@ test('141–143: every PROTO_PAGES page hides demo before delayed status; succes
   // Late recovery removes the mock label; merely connecting and leaving /api/chats pending must not fall back to a mock.
   const recovered=offline.paint.connect().finally(()=>offline.paint.ready());offline.status.resolve(realStatus());await recovered;assert.equal(offline.attrs.has('data-live-mock'),false);
  }
+ const inboxHtml=readFileSync(new URL('44-inbox.html',directory),'utf8'),inboxScript=readFileSync(new URL('inbox.js',directory),'utf8');
+ assert.match(inboxHtml,/<script src="inbox\.js\?v=[0-9a-f]+"><\/script>/);assert.ok(inboxHtml.indexOf('<script src="live.js?')<inboxHtml.indexOf('<script src="inbox.js?'));
+ const d=dom(inboxHtml.slice(inboxHtml.indexOf('<body>')+6,inboxHtml.lastIndexOf('</body>')));Object.assign(d.document,{documentElement:d.html,body:d.body});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page','inbox');
+ const id='e'.repeat(64),project='/built-project',row={version:1,project,at:new Date().toISOString(),entry:{state:'applied',decisionId:id,operation:'stop_pane',question:{id:'waiting:1',kind:'waiting',text:'Ход не ответил'},proposal:{answer:null,reason:'Консилиум подтвердил остановку'},council:{orchestrator:{seat:'lead',model:'w1'},reviewer:{seat:'review',model:'w2'}},cost:{currency:'USD',amount:0.03,status:'measured'}}};
+ const H={on:false,snapshotOnly:false,project,confirmedProjectGeneration:1,active:{}},api=async(path:string)=>path==='/api/status'?{project,approvals:[],panes:[]}:path==='/api/journal?limit=0'?{project,records:[]}:path==='/api/chats'?{chats:[]}:path.startsWith('/api/trace?')?{ok:true,project,records:[]}:path==='/api/limits'?{ok:true,project,providers:[]}:path==='/api/autopilot/decisions'?{ok:true,project,decisions:[row]}:path==='/api/settings'?{ok:true,owner:{}}:Promise.reject(Error('unexpected '+path));
+ const sandbox:Data={window:null,document:d.document,location:{href:''},Date,Set,Map,Number,Array,JSON,Promise,encodeURIComponent,CustomEvent:class{},dispatchEvent(){},addEventListener:d.window.addEventListener.bind(d.window),LIVE:{H,S:{ui:{}},api,esc:(value:unknown)=>String(value??''),subscribeLiveEvents:()=>({})}};sandbox.window=sandbox;
+ runInContext(inboxScript,createContext(sandbox));H.on=true;await sandbox.HARNESS_INBOX.refresh();
+ assert.match(d.document.querySelector('[data-inbox-feed]')!.textContent,/Автопилот решил: Остановить ход/);assert.match(d.document.querySelector('[data-inbox-feed]')!.textContent,/Консилиум подтвердил остановку/);
 });
 
 test('142: cached status and chat list render before HTTP; wrong project, corrupt or absent snapshot never renders',async()=>{

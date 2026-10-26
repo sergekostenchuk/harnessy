@@ -141,6 +141,11 @@ test('TS-38.3: durable applied decision becomes an inbox card; cancel stays a ty
   assert.ok((v.owner.inboxRead as string[]).some(value=>value.includes(id)));
 });
 
+test('TS-38.3 r2: an operation without answer uses a human label',()=>{
+ const id='d'.repeat(64),row={version:1,project:'/a',at:stamp,entry:{state:'applied',decisionId:id,operation:'stop_pane',question:{id:'waiting:1',kind:'waiting',text:'Ход завис'},proposal:{answer:null,reason:'Повтор запрещён'},council:{orchestrator:{seat:'lead',model:'w1'},reviewer:{seat:'review',model:'w2'}},cost:{currency:'USD',amount:null,status:'unavailable'}}};
+ const v=view({},[row]),items=v.context.HARNESS_INBOX.collect({project:'/a',status,journal,chats:[],decisions:[row]});const card=items.find((x:any)=>x.type==='autopilotDecision');assert.equal(card.title,'Автопилот решил: Остановить ход');assert.doesNotMatch(card.title,/stop_pane/);
+});
+
 test('TS-38.3: missing decisions source is visible; forged project decision is not shown',async()=>{
   const v=view();await v.refresh();const initial=v.context.LIVE.api;
   v.context.LIVE.api=(path:string,body?:any)=>path==='/api/autopilot/decisions'?Promise.resolve({ok:true,project:'/foreign',decisions:[]}):initial(path,body);
