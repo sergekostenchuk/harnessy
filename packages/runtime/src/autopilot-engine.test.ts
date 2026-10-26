@@ -107,3 +107,24 @@ test('38.2 r3: an unresolved cancelled call keeps its upper reserve across resta
 test('38.2 r3: a finished call with an unavailable measurement retains its reserve',async t=>{
  const h=await harness(t);let measured=true;const b=new AutopilotSpendBudget(h.dir,async calls=>calls.map(()=>({window:'weekly',percentUsed:20,upperPercent:0.4,basis:'verified',measured}))),call={seat:'o',model:'m',purpose:'proposal' as const,round:1 as const},lease=await b.reserve({project:h.dir,generation:1,maxSpendPercent:1,calls:[call]});await lease.use(call);measured=false;await lease.complete!(call);await lease.close('applied');const rows=JSON.parse(readFileSync(join(h.dir,'.harness/state/autopilot-spend.json'),'utf8'));assert.equal(rows[0].amount,0.4);
 });
+
+test('38.2 r4: successful owner retry has a new invocation and cannot settle the previous unknown effect',async t=>{
+ const upper:AutopilotSpendQuotes=async calls=>calls.map(()=>({window:'claude:weekly:1',percentUsed:20,upperPercent:0.4,basis:'fixture upper'}));
+ const h=await setup(t,{quotes:upper}),old=h.provider.onRun!;let workerCalls=0;
+ await h.runtime.autopilotSet({project:h.dir,instance:h.runtime.project.trace.instanceId,on:true,until:'morning',revision:1,conditions:{operations:['answer_question'],maxSpendPercent:2.1}},OWNER);
+ const invocations:string[]=[];
+ h.provider.onRun=async(seat,prompt,ctx)=>{
+  if(seat.id==='worker'){
+   invocations.push(h.runtime.project.active.get('worker')!.scope.turnInstanceId);
+   if(++workerCalls===1){ctx.modelStarted?.();throw Error('transport lost, usage unknown')}
+  }
+  return old(seat,prompt,ctx);
+ };
+ const outstanding=()=>JSON.parse(readFileSync(join(h.dir,'.harness','state','autopilot-spend.json'),'utf8')).reduce((sum:number,r:{amount:number})=>sum+r.amount,0);
+ question(h);await h.runtime.idle();assert.ok(Math.abs(outstanding()-0.4)<1e-9);
+ const waiting=h.runtime.waiting('worker')!;assert.ok(waiting.actions.includes('retry'));
+ await h.runtime.attempt('worker',{project:h.dir,turnInstanceId:waiting.turnInstanceId,action:'retry'},OWNER);await h.runtime.idle();
+ assert.equal(workerCalls,2);assert.notEqual(invocations[0],invocations[1]);assert.ok(Math.abs(outstanding()-0.4)<1e-9);
+ await h.runtime.openProject(h.dir);await h.runtime.idle();assert.equal(workerCalls,2);assert.ok(Math.abs(outstanding()-0.4)<1e-9);
+ const state=h.runtime.settings.autopilot();await assert.rejects(new AutopilotSpendBudget(h.dir,upper).reserve({project:h.dir,generation:state.generation,maxSpendPercent:2.1,calls:Array.from({length:5},(_,n)=>({seat:'extra-'+n,model:'w1',vendor:'claude',purpose:'proposal' as const,round:1 as const}))}),{code:'spend_over_cap'});
+});

@@ -92,6 +92,19 @@ export class Runtime {
  private programBinaryJobs=new Map<string,Promise<unknown>>();
  private autopilotSettlements=new WeakMap<ProjectState,Map<string,()=>Promise<void>>>();
  autopilotModelSettlement(key:string,complete:()=>Promise<void>){const p=this.project;let callbacks=this.autopilotSettlements.get(p);if(!callbacks)this.autopilotSettlements.set(p,callbacks=new Map());callbacks.set(key,complete)}
+ /** A delivery claims callbacks once, before async preparation. A retry cannot claim them again. */
+ private claimAutopilotSettlement(p:ProjectState,pane:string,records:readonly Record_[],turnInstanceId:string){
+  const keys=records.filter(r=>r.origin?.startsWith('autopilot:')).map(r=>r.origin!.slice(10));
+  for(const {record}of this.attemptDecisions(p)){const a=record.attempt!;if(a.autopilot&&a.action==='retry'&&a.pane===pane&&a.deliverySeq!==null&&records.some(r=>r.seq<=a.deliverySeq!))keys.push('attempt:'+a.turnInstanceId)}
+  const pending=this.autopilotSettlements.get(p),callbacks:(()=>Promise<void>)[]=[];
+  for(const key of new Set(keys)){const callback=pending?.get(key);if(callback){pending!.delete(key);callbacks.push(callback)}}
+  let completed=false;
+  return Object.freeze({turnInstanceId,complete:async(callId:string)=>{
+   if(callId!==turnInstanceId)throw new RuntimeError('spend_call_mismatch','Квитанция расхода относится к другому вызову',409);
+   this.same(p);if(completed)return;completed=true;
+   for(const callback of callbacks)await callback();
+  }});
+ }
  private autopilotEngines=new WeakMap<ProjectState,RuntimeAutopilotEngine>();
  private autopilotTimers=new WeakMap<ProjectState,unknown>();
  private autopilotDecisionLedgers=new WeakMap<ProjectState,AutopilotDecisionLedger>();
@@ -449,9 +462,10 @@ export class Runtime {
  private async waitVendor(p:ProjectState,vendor:Vendor|'human'):Promise<void>{if(vendor==='human')return;while(p.resets.has(vendor)||p.routeJobs.has(vendor)){await Promise.all([p.resets.get(vendor),p.routeJobs.get(vendor)]);this.same(p)}}
  async runTurn(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol;directOnce?:string;combined?:number[]}={}):Promise<string> {
  const p=options.project??this.project,parent=options.entries?.length?p.trace.parentForJournal(options.entries.map(e=>e.record.seq)):currentTrace(),turnInstanceId=randomUUID(),started=this.clock.now(),span=p.trace.record('turn.start',{actor:'model:'+id,pane:id,chat:p.state.chats.active[id]??null,turnInstanceId,refs:{attemptId:turnInstanceId}},parent);
- return p.trace.run(span,async()=>{try{const text=await this.runTurnCore(id,messageText,options),result=p.registry.get(id)?.transcript.find(m=>object(m.runtime)&&m.runtime.turnInstanceId===turnInstanceId);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:result?.outcome==='interrupted'?'cancelled':result?.outcome==='error'?'failed':'ok',reason:result?.outcome==='error'?traceReason(result.errorCode,'Ошибка провайдера'):{code:'none',text:''},durationMs:this.clock.now()-started,data:{model:result?.model,usage:result?.usage}});return text}catch(e){const failure=turnFailure(e,p.dir,this.clock.now()-started),reason=traceReason(failure.code,failure.reason);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:reason.code==='cancelled'?'cancelled':reason.code==='timeout'?'timeout':'failed',reason,durationMs:this.clock.now()-started});throw e}finally{this.finishTraceTools(p,turnInstanceId)}});
+ const settlement=this.claimAutopilotSettlement(p,id,(options.entries??[]).map(e=>e.record),turnInstanceId);
+ return p.trace.run(span,async()=>{try{const text=await this.runTurnCore(id,messageText,options,settlement),result=p.registry.get(id)?.transcript.find(m=>object(m.runtime)&&m.runtime.turnInstanceId===turnInstanceId);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:result?.outcome==='interrupted'?'cancelled':result?.outcome==='error'?'failed':'ok',reason:result?.outcome==='error'?traceReason(result.errorCode,'Ошибка провайдера'):{code:'none',text:''},durationMs:this.clock.now()-started,data:{model:result?.model,usage:result?.usage}});return text}catch(e){const failure=turnFailure(e,p.dir,this.clock.now()-started),reason=traceReason(failure.code,failure.reason);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:reason.code==='cancelled'?'cancelled':reason.code==='timeout'?'timeout':'failed',reason,durationMs:this.clock.now()-started});throw e}finally{this.finishTraceTools(p,turnInstanceId)}});
  }
- private async runTurnCore(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol;directOnce?:string;combined?:number[]}={}):Promise<string> {
+ private async runTurnCore(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol;directOnce?:string;combined?:number[]},settlement:Readonly<{turnInstanceId:string;complete:(callId:string)=>Promise<void>}>):Promise<string> {
  const p=options.project??this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);this.same(p);if(options.entries?.some(entry=>!p.journal.pendingFor(id).some(current=>current.record.seq===entry.record.seq&&current.deliverySeq===entry.deliverySeq)))throw new RuntimeError('stale_attempt','Сообщение уже убрано или отправлено');if(options.directOnce)this.assertDirectReady(p,pane,options.directOnce,options.entries??[]);this.validateTurn(pane.vendor,pane.mode);
  if(p.starting)throw new RuntimeError('project_opening','проект открывается',409);
  if(firstOpenPending(p,pane))throw new RuntimeError('role_not_opened','Откройте чат роли, чтобы она получила вводную',409);
@@ -536,9 +550,7 @@ export class Runtime {
  const response=timestampMessage('ai',result.text,this.clock.now()) as ResultMessage;response.mode=launchSeat.mode;const held=(turn as ActiveTurn).terminal;
  if(held?.type==='done'){if(typeof held.model==='string'&&held.model)response.model=held.model;if(object(held.usage))response.usage=structuredClone(held.usage);if(held.usageIncomplete===true)response.usageIncomplete=true;if(typeof held.durationMs==='number'&&Number.isFinite(held.durationMs))response.durationMs=held.durationMs}
  if(!interrupted&&held?.type==='done'&&held.usageIncomplete!==true&&measuredUsage(held.usage)){
-  const keys=records.filter(r=>r.origin?.startsWith('autopilot:')).map(r=>r.origin!.slice(10));
-  for(const {record}of this.attemptDecisions(p)){const a=record.attempt!;if(a.autopilot&&a.action==='retry'&&a.pane===id&&a.deliverySeq!==null&&records.some(r=>r.seq<=a.deliverySeq!))keys.push('attempt:'+a.turnInstanceId)}
-  for(const key of new Set(keys)){const callbacks=this.autopilotSettlements.get(p),complete=callbacks?.get(key);if(complete){callbacks!.delete(key);try{await complete()}catch(error){if(!p.closed)p.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'autopilot-owner',text:'Учёт расхода не подтверждён; верхний резерв сохранён'})}}}
+  try{await settlement.complete(scope.turnInstanceId)}catch(error){if(!p.closed)p.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'autopilot-owner',text:'Учёт расхода не подтверждён; верхний резерв сохранён'})}
  }
  const connection=networkTurn?.receipt();if(connection)response.network=connection;
  response.vendor=launchVendor;response.outcome=interrupted?'interrupted':'ok';
