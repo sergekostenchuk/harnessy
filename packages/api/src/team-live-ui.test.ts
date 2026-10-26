@@ -141,3 +141,31 @@ test('TS-43: failed team read is unavailable rather than missing orchestrator; a
  broken=false;[...ui.timers.values()][0]!();await ui.settle();assert.equal(ui.context.TEAM_LIVE.state.error,null);assert.ok(ui.root.querySelector('[data-key="orch"]'));assert.equal(ui.timers.size,0);
  broken=true;await ui.context.TEAM_LIVE.refresh();assert.match(ui.find('[data-team-error]').textContent,/Последний снимок устарел/);assert.equal(ui.find('[data-team-send]').disabled,true);await ui.window.emit('pagehide');assert.equal(ui.timers.size,0);
 });
+
+
+test('TS-43 r2: full role name is escaped, opens without hover and closes on Escape with focus restored',async()=>{
+ const name='Аналитик договора поставки оборудования <img src=x>',data=snapshot('/project-a',[{...pane('worker','worker',null),label:name}]);
+ const v=teamUi('work',async path=>{assert.equal(path,'/api/swarm');return data});await v.settle();
+ const nameButton=v.find('.tc-card .l1 [data-tc-reveal]'),full=nameButton.nextElementSibling!;
+ assert.equal(nameButton.getAttribute('title'),name);assert.equal(full.hasAttribute('hidden'),true);assert.equal(v.root.querySelector('img'),null);assert.equal(v.find('.tc-card .md').textContent,'Sonnet live');
+ await nameButton.emit('click');assert.equal(Reflect.get(full,'hidden'),false);assert.equal(full.textContent,name);assert.equal(nameButton.getAttribute('aria-expanded'),'true');
+ await v.window.emit('keydown',{key:'Escape'});assert.equal(Reflect.get(full,'hidden'),true);assert.equal(v.document.activeElement,nameButton);
+ await nameButton.emit('click');await v.body.emit('click');assert.equal(Reflect.get(full,'hidden'),true);
+});
+
+for(const mode of ['work','constructor'] as const)test('TS-43 r2: '+mode+' expands the same unavailable reason without assigning the role',async()=>{
+ const reason='Участников создаёт оркестратор по подтверждённому предложению <script>bad()</script>',v=teamUi(mode,undefined,{H:{roleCatalog:[{role:'reviewer',kind:'reviewer',label:'Ревьюер',available:false,reason}]}});await v.settle();
+ const role=v.find('[data-team-role="reviewer"]');assert.equal(role.disabled,true);const detail=v.find('.tc-reason [data-tc-reveal]'),full=detail.nextElementSibling!,requests=v.requests.length;
+ assert.equal(detail.getAttribute('title'),reason);assert.equal(full.hasAttribute('hidden'),true);await detail.emit('click');assert.equal(Reflect.get(full,'hidden'),false);assert.equal(full.textContent,reason);assert.equal(v.root.querySelector('script'),null);
+ await detail.emit('click');assert.equal(Reflect.get(full,'hidden'),true);assert.equal(v.requests.length,requests);assert.equal(v.requests.some(row=>row.path==='/api/assign'),false);
+});
+
+
+test('TS-43 r2: role popup escapes the clipped toolbar, keeps disclosure on status refresh and restores focus',async()=>{
+ const v=teamUi('work');await v.settle();Object.assign(v.context,{innerWidth:390,innerHeight:844});
+ await v.find('[data-team-plus]').emit('click');const menu=v.document.querySelector('[data-team-role-menu]')!;assert.ok(menu);assert.equal(menu.parentElement,v.body);
+ const detail=menu.querySelector('[data-tc-reveal]')!;await detail.emit('click');assert.equal(Reflect.get(detail.nextElementSibling!,'hidden'),false);
+ await v.context.TEAM_LIVE.refresh();assert.equal(v.document.querySelector('[data-team-role-menu]'),menu);assert.equal(Reflect.get(detail.nextElementSibling!,'hidden'),false,'unchanged catalog keeps the explanation open');
+ await v.window.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('[data-team-role-menu]'),null);assert.equal(v.document.activeElement,v.find('[data-team-plus]'));
+ await v.find('[data-team-plus]').emit('click');v.H.roleCatalog=[];await v.context.TEAM_LIVE.refresh();assert.equal(v.document.querySelector('[data-team-role-menu]'),null,'changed catalog closes stale choices');
+});

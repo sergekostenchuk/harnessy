@@ -1508,6 +1508,16 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
 </div>
 </section>
 
+<section class="spec" id="live-connection-spec" style="max-width:1280px;margin:36px auto;padding:0 20px">
+<div class="from">Связь с движком · общий компонент всех экранов · TS-43</div><h2>Загрузка · отказ · повтор · восстановление</h2>
+<p class="conn-note">До подтверждённого снимка содержимое экрана скрыто: ни данные примера, ни устаревшие данные не выдаются за текущие. Одна карточка <code>.live-connection</code> использует общие токены и кнопку <code>.btn.sm</code>. Повтор не создаёт второй запрос, восстановление убирает карточку и показывает полученный снимок.</p>
+<div class="two">
+<div class="box"><div class="cap2">загрузка</div><section class="live-connection" role="status"><b>Подключаемся к движку…</b></section></div>
+<div class="box"><div class="cap2">отказ</div><section class="live-connection" role="status"><b>Не удалось прочитать данные движка</b><p>Проверьте, что движок запущен. Повторяем подключение автоматически.</p><button type="button" class="btn sm">Повторить</button></section></div>
+<div class="box"><div class="cap2">повтор · запрос уже идёт</div><section class="live-connection" role="status" aria-busy="true"><b>Подключаемся к движку…</b><p>Последний снимок устарел. Дождитесь нового чтения.</p><button type="button" class="btn sm" disabled>Повторить</button></section></div>
+<div class="box"><div class="cap2">восстановление</div><section class="live-connection" role="status" hidden></section><p class="conn-note">Подключено. Карточка скрыта; экран показывает новый снимок движка.</p></div>
+</div></section>
+
 <section class="spec ps2-root" id="sidebar-v2-spec" data-sidebar-v2-design style="max-width:1280px;margin:36px auto;padding:0 20px">
 <div class="from">Боковая панель v2 · скетч 40 · концепция А с рейкой из В · 22.10.2026 · вторая серия решений владельца</div><h2>Боковая панель · чат как единственный объект, «Входящие», меню проекта по наведению, чаты без проекта, Автопилот, лимиты строкой, профиль, рейка, проектная полоска вкладок</h2>
 <p class="conn-note">Элементы, из которых собраны варианты A1 · A2 · A3 скетча 40. Классы <code>.ps</code> — прототипа (proto.js <code>sideHTML</code>, proto.css), новые — <code>.ps2-*</code> (sidebar-v2.css). Где состояние неприменимо — написано словами. Данные — движка: проект Alpha-Test, роли Оркестратор · Исполнитель; чаты без проекта — пример.</p>
@@ -1575,6 +1585,7 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
   <div class="box"><div class="cap2">так не говорим · и плашки</div><p style="margin:0 0 10px;font-size:12.5px;color:var(--ink3)">«Стая», «место» (в интерфейсе — роль; «место в канале» — только в подписях про движок), «агент бездействует», «граф», «нода», «воркфлоу», «пайплайн», «сессия».</p><div class="rowx"><span class="tag live">есть</span><span class="tag mock">макет</span><span class="tag none">нет в движке</span></div><p class="conn-note" style="margin:8px 0 0">«есть» — роли, назначения, канал, статусы busy / waiting, модель и права у роли; «макет» — очередь из плана (компиляция OMG не подключена) и конструктор (canvas 0.4).</p></div>
 </div>
 <div class="box" style="margin-top:14px"><div class="cap2">выбранный вариант (в) · режим общения · клип 09</div><p style="margin:0;font-size:12.5px;color:var(--ink2)">Над полем ввода — переключатель вида <b>Чат · Команда</b>; «Команда» открывает полотно проекта. В строке прав — тумблер <b>Обсуждение</b>: включённое состояние подписано «обсуждение · проект не меняется», ответ получает чип «обсуждение». Первый пункт меню прав — «Только обсуждение» и выполняет то же действие. Выключение возвращает прежние права места; если для их восстановления нужно новое подтверждение, оно запрашивается явно. Проект выбирается только в шапке панели, чипа проекта в поле ввода нет. Внизу панели — имя из профиля владельца; при отсутствии «Без имени» ведёт в профиль.</p></div>
+<div class="box" style="margin-top:14px"><div class="cap2">TS-43 · длинное имя и причина недоступности</div><p class="conn-note">Название роли сокращается с «…», модель остаётся в первой строке. Полный текст доступен в title и по нажатию (также Enter / пробел); Escape или нажатие вне закрывает раскрытие. Причина недоступности — одна строка под ролью, одинаковая в меню и библиотеке; нажатие раскрывает полный текст внутри компонента, не назначая роль. Раскрытое меню роли находится поверх полотна вне обрезающей строки кнопок, целиком внутри окна; Escape закрывает его и возвращает фокус на «+ роль».</p><div class="tc-static" data-tc-long-name></div><div class="tc-pmenu static"><div class="tc-role-entry"><button type="button" class="it dis" disabled>Ревьюер</button><div class="tc-reason" data-tc-long-reason></div></div></div></div>
 <div data-tc="spec" style="margin-top:14px"></div>
 </section>
 <script src="om-map.js"></script>
@@ -1582,6 +1593,9 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
 <script>
 (function(){
   document.querySelectorAll('[data-tc="spec"]').forEach(TC.spec);
+  document.querySelectorAll('[data-tc-long-name]').forEach(el=>el.innerHTML=TC.card({...TC.ROLES[0],name:'Аналитик договора поставки оборудования'}));
+  document.querySelectorAll('[data-tc-long-reason]').forEach(el=>el.innerHTML=TC.revealText('Участников создаёт оркестратор по подтверждённому предложению'));
+
   /* режим снимка одного раздела: #only=<id> — прячутся соседи по всей цепочке предков, лист без полей */
   const m=location.hash.match(/only=([\w-]+)/); if(!m) return; const el=document.getElementById(m[1]); if(!el) return;
   let cur=el; while(cur&&cur!==document.body){ Array.from(cur.parentElement.children).forEach(s=>{ if(s!==cur&&s.tagName!=='SCRIPT'&&s.tagName!=='STYLE') s.style.display='none'; }); cur=cur.parentElement; }

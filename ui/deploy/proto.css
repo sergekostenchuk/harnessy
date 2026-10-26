@@ -1026,8 +1026,7 @@ html[data-m][data-page="chat"] .main{display:flex!important;flex-direction:colum
 /* TS-43: startup failure is shared by all live screens; sketch content remains hidden. */
 html[data-proto]:not([data-live-connection="ready"]) .frame .main> :not([data-live-connection]){visibility:hidden!important;pointer-events:none!important}
 html[data-proto]:not([data-live-connection="ready"]) .frame .main{position:relative}
-.live-connection{position:absolute;top:64px;left:16px;right:16px;max-width:680px;margin:0 auto;padding:20px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);color:var(--ink);z-index:50;line-height:1.5}
-.live-connection[hidden]{display:none}.live-connection b{display:block}.live-connection p{color:var(--ink2);margin:8px 0 12px}
+.frame .main>.live-connection{position:absolute;top:64px;left:16px;right:16px;z-index:50}
 html[data-proto] .tc-work{grid-template-rows:minmax(280px,1fr) auto;overflow:auto;gap:16px}
 html[data-proto] .tc-work .om-canvas{height:auto;min-height:280px!important;overflow:hidden}
 html[data-proto] .tc-work [data-team-queue-preview]{position:relative;min-width:0;min-height:0;max-height:min(30vh,260px);overflow:auto}
