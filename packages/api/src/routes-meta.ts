@@ -11,6 +11,7 @@ import {json,slice,text} from './responses.ts';
 import {spend,spendTurns} from './spend.ts';
 import {projectFileRoutes} from './project-file.ts';
 import {sectionRoutes} from './routes-sections.ts';
+import {providerOwner} from './routes-providers.ts';
 import {swarm} from './swarm.ts';
 import {readRouterModels,routerHealthReader,type RouterSource,type RouterHealth} from './router-health.ts';
 export function sameProject(r:Runtime,p:ProjectState):void {if(p.closed||r.project!==p)throw new RuntimeError('project_changed','проект сменился',409)}
@@ -52,7 +53,7 @@ export function metaRoutes(r:Runtime,router:RouterSource={health:routerHealthRea
  promotions:Object.values(p.state.chats.chats).map(promotionIdentity).filter(Boolean),roleCatalog:r.roleCatalog(),noProject:p.dir===r.defaultDir||p.registry.get('room')?.folderless===true,projectsRoot:projectsRoot(r.settings.effective()),activeChats:{...p.state.chats.active},hasOrchestrator:[...p.registry.panes.values()].some(p=>p.kind==='orchestrator'),halted:p.halted,threads:threads(p),auth:{claude,codex},profile:{name:r.settings.profileName()},journal:{lastSeq:p.journal.lastSeq,path:p.journal.channelPath}})
  }},
  {method:'GET',path:'/api/dir',handle:({query})=>{const cwd=query.get('cwd')??'';if(!validDir(cwd))return json({ok:false,error:'папки нет или это не папка: '+cwd},400);let hasHarness=false;try{hasHarness=statSync(join(cwd,'.harness')).isDirectory()}catch{}return json({ok:true,cwd,hasHarness})}},
- {method:'GET',path:'/api/projects',handle:async()=>{const p=r.project,data=await r.projectRegistry.listProjects(p.dir);sameProject(r,p);for(const row of data.projects)if(row.current)row.seats=[...p.registry.panes.values()].filter(p=>p.id!=='room').length;return json(data)}},
+ {method:'GET',path:'/api/projects',handle:async({request})=>{providerOwner(request);const p=r.project,data=await r.projectRegistry.listProjects(p.dir);sameProject(r,p);for(const row of data.projects)if(row.current)row.seats=[...p.registry.panes.values()].filter(p=>p.id!=='room').length;return json(data)}},
  {method:'GET',path:'/api/journal',handle:({query})=>{let before:number|undefined;
  if(query.has('before')){const raw=query.get('before')!;before=Number(raw);if(query.getAll('before').length!==1||!/^\d+$/.test(raw)||!Number.isSafeInteger(before)||before<=0)return json({ok:false,code:'before_invalid',error:'before: ожидается целое число больше нуля'},400)}
  let since=integer(query.get('since')??'0',NaN),limit=integer(query.get('limit')??'100',NaN);if(!Number.isFinite(since)||!Number.isFinite(limit)){since=0;limit=100}const p=r.project;

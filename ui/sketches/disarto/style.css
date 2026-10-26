@@ -105,3 +105,8 @@ h1{font:500 14px var(--mono);letter-spacing:.06em;text-transform:uppercase;color
 .hint-bar{display:flex;gap:16px;justify-content:center;margin:12px 0 0;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
 .recon{margin:14px 0 0;padding:10px 14px;border:1px dashed var(--line2);border-radius:10px;font-size:12px;color:var(--ink2);max-width:1280px}.recon b{color:var(--ink);font-weight:500}
 [data-passport]{cursor:pointer}
+
+/* Связь с движком · live-connection-spec: размеры и состояния общие для окна и дизайн-кода. */
+.live-connection{box-sizing:border-box;max-width:680px;margin:0 auto;padding:20px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);color:var(--ink);line-height:1.5}
+.live-connection[hidden]{display:none}.live-connection b{display:block}.live-connection p{color:var(--ink2);margin:8px 0 12px}
+.live-connection .btn:disabled{opacity:.55;cursor:default}

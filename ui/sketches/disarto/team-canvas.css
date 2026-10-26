@@ -28,8 +28,8 @@
 .tc-card{position:absolute;width:204px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);padding:9px 11px 8px;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.35);transition:border-color .15s,opacity .2s,transform .15s,box-shadow .15s;font-size:11.5px;color:var(--ink2);box-sizing:border-box}
 .tc-card:hover{transform:translateY(-2px);border-color:#4a4a52}
 .tc-card .l1{display:flex;align-items:center;gap:7px;margin-bottom:5px;white-space:nowrap;min-width:0}
-.tc-card .l1 b{font-weight:500;font-size:13px;color:var(--ink)}
-.tc-card .l1 .md{margin-left:auto;font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tc-card .l1 b{flex:1;min-width:0;font-weight:500;font-size:13px;color:var(--ink)}
+.tc-card .l1 .md{flex:0 1 45%;margin-left:auto;font:9.5px var(--mono);letter-spacing:.04em;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;min-width:0}
 .tc-card .l2{font:10.5px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink2);margin-bottom:5px;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tc-card .l3{font-size:11.5px;line-height:1.4;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px}
 .tc-card .l3::before{content:"«";color:var(--ink3)}.tc-card .l3::after{content:"»";color:var(--ink3)}
@@ -165,7 +165,7 @@
 .tc-node:hover{border-color:#4a4a52}
 .tc-node .hd{display:flex;align-items:center;gap:8px;padding:8px 10px 7px;border-bottom:1px solid var(--line)}
 .tc-node .hd .ic{width:26px;height:26px;border-radius:7px;background:var(--panel);border:1px solid var(--line2);display:grid;place-items:center;flex:none}.tc-node .hd .ic svg{width:13px;height:13px;stroke:var(--ink2);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.tc-node .hd>div{min-width:0;line-height:1.2}.tc-node .hd b{font-weight:500;font-size:13px;color:var(--ink);display:block;white-space:nowrap}.tc-node .hd small{font:9px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);display:block;white-space:nowrap}
+.tc-node .hd>div{flex:1;min-width:0;line-height:1.2}.tc-node .hd b{font-weight:500;font-size:13px;color:var(--ink);display:block;white-space:nowrap}.tc-node .hd small{font:9px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);display:block;white-space:nowrap}
 .tc-node .hd .x{margin-left:auto;color:var(--ink3);cursor:pointer;font-size:14px;width:20px;height:20px;display:grid;place-items:center;border-radius:6px;flex:none}.tc-node .hd .x:hover{background:var(--tile);color:var(--ink)}
 .tc-node .rows{padding:5px 0 6px}
 .tc-node .row{display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px;align-items:center;padding:3px 10px;font-size:11.5px}
@@ -328,3 +328,21 @@
   html[data-proto][data-m] .tc-task.big .who,html[data-proto][data-m] .tc-task.big .grip{display:none}
   html[data-proto][data-m] .om-zoom{display:none}
 }
+
+/* Полный текст по нажатию: одна дверь для имени роли и причины в меню/библиотеке. */
+.tc-text-detail{display:block;min-width:0;max-width:100%}
+.tc-text-short{appearance:none;display:block;width:100%;min-width:0;padding:0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.tc-text-short:focus-visible{outline:1px solid var(--accent);outline-offset:2px;border-radius:4px}
+.tc-text-full{display:block;padding:8px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--ink2);font:12px/1.5 var(--font);white-space:normal;overflow-wrap:anywhere;box-sizing:border-box}
+.tc-text-full[hidden]{display:none}
+.tc-card .tc-text-full,.tc-node .tc-text-full{position:absolute;left:8px;right:8px;top:32px;z-index:3;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.tc-card:has([data-tc-reveal][aria-expanded="true"]),.tc-node:has([data-tc-reveal][aria-expanded="true"]){z-index:5}
+.tc-role-entry{min-width:0;max-width:100%}
+.tc-role-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.tc-pmenu .it .m{min-width:0;max-width:40%;overflow:hidden;text-overflow:ellipsis}
+.tc-reason{min-width:0;margin:0 8px 4px;color:var(--ink3);font:9.5px var(--mono)}
+.tc-reason .tc-text-full{margin-top:4px}
+.tc-pmenu{max-width:calc(100vw - 32px);max-height:calc(100dvh - 128px);overflow-y:auto}
+
+.tc-pmenu.tc-live-menu{display:flex;position:fixed;right:auto;bottom:auto;z-index:10000;box-sizing:border-box;animation:none}
+html[data-proto] [data-team-plus-wrap]>.tc-pmenu{display:none}

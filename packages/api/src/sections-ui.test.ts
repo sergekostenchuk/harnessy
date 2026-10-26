@@ -26,7 +26,7 @@ function view(page:Page,fetch:(path:string,body?:any)=>Promise<any>,boot=false){
  runInContext(app.slice(0,app.indexOf('})();')+5),context);
  for(const script of raw.matchAll(/<script>([\s\S]*?)<\/script>/g))runInContext(script[1]!,context);
  if(boot)runInContext(proto.split('/* LIVE_BOOT_END */')[0]!,context);
- runInContext(part(live,'  let bindingGeneration','  function md(')+part(live,'  function rememberLive(','  // лента активного чата')+part(live,'  // TS-09a.1: one lifecycle','  // End TS-09a.1 page lifecycle.')+'\nglobalThis.sections={fetch:sectionFetch,draw:sectionDraw,sync:sectionSync,changing:sectionChanging,request:sectionRequest,applyStatus,refreshStatus,resumePage,sendBinding,bindingCurrent,PS};',context);
+ runInContext(part(live,'  function connectionFailed()','  // TS-18:')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function rememberLive(','  // лента активного чата')+part(live,'  // TS-09a.1: one lifecycle','  // End TS-09a.1 page lifecycle.')+'\nglobalThis.sections={fetch:sectionFetch,draw:sectionDraw,sync:sectionSync,changing:sectionChanging,request:sectionRequest,applyStatus,refreshStatus,resumePage,sendBinding,bindingCurrent,PS};',context);
  // Register the actual old hooks too: they must stay harmless after the engine connects.
  const lines=live.split('\n');for(let i=0;i<lines.length;i++)if(lines[i]!.startsWith('  if(')&&lines[i]!.includes("PAGE==='"+page+"'")){const end=lines.indexOf('  }',i+1);assert.ok(end>i);runInContext(lines.slice(i,end+1).join('\n'),context);i=end}
  H.on=true;
@@ -79,8 +79,8 @@ test('137/136: template memory and truncation have distinct, honest captions',as
 });
 
 test('87/139: sidebar, rail, mobile and palette all route Documents to the same real screen, including cold reload',async()=>{
- const d=dom('<aside class="side"><div data-go="doc">Документы проекта</div></aside>'),location={href:''},context:any={document:d.document,window:{},location,KEY:'chat',PAGES:{doc:'17-doc.html'},frames:[],cur:0,show(){},renderSide(){},renderWorkspaceHeader(){}};
- runInContext(part(proto,"  document.addEventListener('click',e=>{const mode=e.target.closest('[data-ps2-action-mode]');",'  // ── навигация телефона'),createContext({...context,addEventListener(){}}));await d.document.querySelector('[data-go="doc"]')!.emit('click');assert.equal(location.href,'17-doc.html');
+ const d=dom('<aside class="side"><div data-go="doc">Документы проекта</div></aside>'),location={href:''},context:any={document:d.document,window:{},location,KEY:'chat',PAGES:{doc:'17-doc.html'},frames:[],cur:0,show(){},renderSide(){},renderWorkspaceHeader(){},closeProjectMenu(){}};
+ runInContext(part(proto,"  document.addEventListener('click',e=>{const menuButton=e.target.closest('[data-ps2-project-menu]');",'  // ── навигация телефона'),createContext({...context,addEventListener(){}}));await d.document.querySelector('[data-go="doc"]')!.emit('click');assert.equal(location.href,'17-doc.html');
  assert.match(proto,/\['doc','Документы',count\(project,'docs'\)\]/);assert.match(proto,/item\('doc','Документы проекта'\)/);assert.match(live,/\['Документы проекта','17-doc.html'\]/);assert.doesNotMatch(proto,/Документ стадии/);
  const cold=view('doc',async()=>data('doc'));await cold.functions.fetch();assert.match(cold.document.title,/Документы проекта · a/);assert.equal(cold.find('[data-project-section]').dataset.projectSection,'docs');
 });

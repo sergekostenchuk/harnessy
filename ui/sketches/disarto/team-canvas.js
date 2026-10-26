@@ -13,6 +13,11 @@ window.TC=(function(){
     orch:'<circle cx="12" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M12 8.5v4M12 12.5l-5.5 3.5M12 12.5l5.5 3.5"/>',rev:'<path d="M4 6h16v12H4z"/><path d="M8 12l3 3 5-6"/>',worker:'<path d="M14 4l6 6-10 10H4v-6z"/><path d="M12 6l6 6"/>',save:'<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>',play:'<path d="M7 5l12 7-12 7z"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>'};
   const ico=k=>'<svg viewBox="0 0 24 24">'+(I[k]||'')+'</svg>';
   const tag=(k,t)=>'<span class="tag '+k+'">'+t+'</span>';
+  let textDetailId=0;
+  function revealText(value,key=''){const text=esc(value),id='tc-full-text-'+(++textDetailId);return '<span class="tc-text-detail"><button type="button" class="tc-text-short" data-tc-reveal="'+esc(key)+'" data-nodrag title="'+text+'" aria-expanded="false" aria-controls="'+id+'">'+text+'</button><span class="tc-text-full" data-nodrag id="'+id+'" hidden>'+text+'</span></span>'}
+  function closeText(except){document.querySelectorAll('[data-tc-reveal][aria-expanded="true"]').forEach(button=>{if(button!==except){button.setAttribute('aria-expanded','false');button.nextElementSibling.hidden=true}})}
+  document.addEventListener('click',event=>{const button=event.target.closest('[data-tc-reveal]');if(button){const open=button.getAttribute('aria-expanded')!=='true';closeText(button);button.setAttribute('aria-expanded',String(open));button.nextElementSibling.hidden=!open}else if(!event.target.closest('.tc-text-full'))closeText()});
+  addEventListener('keydown',event=>{if(event.key==='Escape'){const button=document.querySelector('[data-tc-reveal][aria-expanded="true"]');closeText();if(button)button.focus()}});
   const PROJ='Alpha-Test';
 
   /* ---- данные ---- */
@@ -68,9 +73,9 @@ window.TC=(function(){
   const dot=st=>'<span class="tc-o '+st+'"></span>';
   /* карточка члена команды · 4 строки */
   function card(r,o={}){ const st=o.st||r.st; const free=st==='free';
-    return '<div class="tc-card '+st+(o.cls?' '+o.cls:'')+'" data-key="'+r.id+'" data-name="'+esc(r.name)+'" data-gen="'+esc(r.gen||r.name)+'"><div class="l1">'+dot(st)+'<b>'+esc(r.name)+'</b><span class="md">'+esc(r.model)+'</span></div>'+
+    return '<div class="tc-card '+st+(o.cls?' '+o.cls:'')+'" data-key="'+r.id+'" data-name="'+esc(r.name)+'" data-gen="'+esc(r.gen||r.name)+'"><div class="l1">'+dot(st)+'<b title="'+esc(r.name)+'">'+revealText(r.name,'name')+'</b><span class="md" title="'+esc(r.model)+'">'+esc(r.model)+'</span></div>'+
       '<div class="l2">'+esc(o.stText||r.stText)+'</div><div class="l3" title="'+esc(r.last)+'">'+(free?'задачи нет — назначьте из очереди':esc(r.last))+'</div>'+
-      '<div class="l4"><span>ход</span><b>'+esc(r.spend)+'</b><i>'+esc(r.tok)+' · '+esc(r.at)+'</i></div><span class="drophint">назначить '+esc(r.gen||r.name)+'</span></div>'; }
+      '<div class="l4" title="'+esc('ход · '+r.spend+' · '+r.tok+' · '+r.at)+'"><span>ход</span><b>'+esc(r.spend)+'</b><i>'+esc(r.tok)+' · '+esc(r.at)+'</i></div><span class="drophint">назначить '+esc(r.gen||r.name)+'</span></div>'; }
   /* крупная карточка оркестратора — тот же чат оркестратора, встроенный (последние реплики + поле ввода) */
   function orch(o={}){ const st=o.st||'think', txt=o.stText||(st==='wait'?'ждёт вас · подпись M0':st==='write'?'пишет':'думает · 2 с');
     const msgs=o.msgs||'<div class="me">Что ждёт меня после сдачи TS-35?</div><div class="ai"><div><p><b>Воркер 1</b> сдал TS-35 ревьюеру 2 мин назад. <b>Ревьюер</b> всё ещё ждёт вашу подпись M0 по D8.4d — это держит TS-34 воркера 2.</p>'+(st==='wait'?'<div class="decide"><div class="lbl">нужно ваше решение</div><div class="act"><span class="btn p">Подписать M0</span><span class="btn">Открыть D8.4d</span></div></div>':'')+'</div></div>'+(st==='think'?'<div class="ai typing">думает 2 с… собирает сдачу TS-35 для ревью</div>':'');
@@ -91,7 +96,7 @@ window.TC=(function(){
       '<div class="it own" data-lib="own"><span class="ic">'+ico('new')+'</span><div><b>Своя роль</b><small>имя · инструкция · модель</small></div><span class="m">＋</span></div><div class="ft">перетащите роль на холст или кликните — появится карточка без связей; модель и права — на карточке</div></div>'; }
   /* карточка роли в конструкторе: порты · модель ▾ · права · инструкция роли */
   function node(n,o={}){ const cls=(n.neu?' neu':'')+(n.chg?' chg':'')+(!n.model?' err':'')+(o.cls?' '+o.cls:'');
-    return '<div class="tc-node'+cls+'" data-key="'+n.id+'"><span class="pi" data-l="получает"></span><span class="po" data-l="пишет"></span><div class="hd"><span class="ic">'+ico(n.ic)+'</span><div><b>'+esc(n.name)+'</b><small>'+esc(n.role)+(n.neu?' · новая':'')+(!n.model?' · нет модели':'')+'</small></div><span class="x" data-nodrag data-x="'+n.id+'" title="Убрать из команды">×</span></div>'+
+    return '<div class="tc-node'+cls+'" data-key="'+n.id+'"><span class="pi" data-l="получает"></span><span class="po" data-l="пишет"></span><div class="hd"><span class="ic">'+ico(n.ic)+'</span><div><b>'+revealText(n.name,'name')+'</b><small>'+esc(n.role)+(n.neu?' · новая':'')+(!n.model?' · нет модели':'')+'</small></div><span class="x" data-nodrag data-x="'+n.id+'" title="Убрать из команды">×</span></div>'+
       '<div class="rows"><div class="row"><span>модель</span><span class="v'+(n.model?'':' none')+'" data-nodrag>'+ico('model')+'<em>'+(n.model?esc(n.model):'выбрать модель')+'</em><i>▾</i></span></div>'+
       '<div class="row"><span>права</span><span class="v'+(n.rights==='Всё без вопросов'?' acc':'')+'" data-nodrag>'+ico('lock')+'<em>'+esc(n.rights)+'</em><i>▾</i></span></div>'+
       '<div class="row"><span>инструкция</span><span class="v file" data-nodrag>'+ico('file')+'<em>'+esc(n.file)+'</em><i>↗</i></span></div></div>'+
@@ -287,5 +292,5 @@ window.TC=(function(){
     document.addEventListener('click',e=>{ const rc=e.target.closest('[data-rchip]'); if(rc&&!e.target.closest('.tc-rights')){ rc.classList.toggle('open'); return; } const it=e.target.closest('.tc-rights .it'); if(it){ const rc2=it.closest('[data-rchip]'); if(rc2&&!rc2.closest('.fr.keep')){ rc2.querySelector('b').textContent=it.querySelector('div').firstChild.textContent.trim(); rc2.classList.remove('open'); } return; }
       const tg=e.target.closest('.tc-tg'); if(tg&&!tg.closest('.tc-static')){ tg.classList.toggle('on'); const t=tg.querySelector('.tog'); if(t) t.classList.toggle('on'); return; }
       const sg=e.target.closest('.tc-seg span'); if(sg&&!sg.closest('.tc-static')){ sg.parentElement.querySelectorAll('span').forEach(s=>s.classList.toggle('on',s===sg)); } }); }
-  return {ROLES,QUEUE0,LIB,card,orch,queue,task,plusMenu,lib,node,composer,chatMain,side,tabs,mountWork,mountCons,mountQueue,phone,spec,page,fit,engine,workPath,consPath,bindQueue,ico,tag};
+  return {revealText,ROLES,QUEUE0,LIB,card,orch,queue,task,plusMenu,lib,node,composer,chatMain,side,tabs,mountWork,mountCons,mountQueue,phone,spec,page,fit,engine,workPath,consPath,bindQueue,ico,tag};
 })();

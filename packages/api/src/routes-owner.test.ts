@@ -27,6 +27,18 @@ test('1/19: golden pins/settings/project/dir/halt/room forms via actual HTTP por
  assert.equal((await call(h.api,'/api/context/worker')).body.ok,true);
 });
 
+test('TS-43: project chat metadata is owner-only before any registered project is read',async t=>{
+ const h=await fixture(t),other=join(h.dir,'foreign-project');mkdirSync(join(other,'.harness/state'),{recursive:true});
+ writeFileSync(join(other,'.harness/state/chats.json'),JSON.stringify({chats:{foreign:{id:'foreign',pane:'reviewer',title:'Чужой закрытый разговор',created:1}},active:{}}));
+ writeFileSync(join(h.dir,'projects.json'),JSON.stringify([h.dir,other]));
+ const list=h.runtime.projectRegistry.listProjects.bind(h.runtime.projectRegistry);let reads=0;
+ h.runtime.projectRegistry.listProjects=async current=>{reads++;return list(current)};
+ for(const headers of [{'X-Harness-Pane':'worker'},{'X-Pane-Token':'worker-token'},{'X-Harness-Pane':'worker','X-Pane-Token':'worker-token'}]){
+  const response=await call(h.api,'/api/projects',{headers});assert.equal(response.status,403);assert.equal(response.body.code,'owner_only');assert.equal(reads,0);assert.equal(response.body.projects,undefined);assert.doesNotMatch(JSON.stringify(response.body),/Чужой закрытый разговор/);
+ }
+ const owner=await call(h.api,'/api/projects');assert.equal(owner.status,200);assert.equal(reads,1);assert.equal(owner.body.projects.find((p:{path:string})=>p.path===other).chats[0].title,'Чужой закрытый разговор');
+});
+
 test('TS-30 r3: agent identities cannot write owner or project settings',async t=>{
  const h=await fixture(t);
  for(const headers of [{'x-pane-token':'forged'},{'x-harness-pane':'worker'}])for(const scope of ['owner','project']){

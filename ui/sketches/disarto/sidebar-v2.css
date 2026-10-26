@@ -354,7 +354,8 @@ html.ps2-root[data-ps2-panel="closed"]:not([data-m]) .frame>.stage{grid-template
 .ps2-root .ps2-mode>.search{display:flex;align-items:center;gap:8px;height:32px;box-sizing:border-box;padding:0 10px;border:1px solid var(--line2);border-radius:var(--rs,9px);color:var(--ink3);background:var(--bg);margin:6px 10px 0;font-size:12.5px;cursor:pointer}
 .ps2-root .ps2-mode .ps2-inbox .b2{font:10px var(--mono);color:var(--ink3);margin-left:-3px}
 .ps2-root .tag.mock{display:inline-flex;align-items:center;height:16px;padding:0 5px;border:1px dashed var(--line2);border-radius:5px;color:var(--ink3);font:8.5px var(--mono);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
-.ps2-root .ps-chat.ps2-prow>svg,.ps2-root .ps2-others-list .ps-chat>svg{position:absolute;left:9px;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.6;color:var(--ink3)}
+.ps2-root .ps-chat.ps2-prow{padding-left:9px}
+.ps2-root .ps-chat.ps2-prow>svg,.ps2-root .ps2-others-list .ps-chat>svg{position:static;flex:none;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.6;color:var(--ink3)}
 .ps2-root .ps2-prow>.ps2-pmenu svg{position:static;width:14px;height:14px;color:var(--ink2)}
 .ps2-root .ps2-mode .ps2-prow>.ps2-pmenu{left:auto;right:0;top:28px}
 .ps2-root .ps2-mode .ps2-mh .ps-proj{position:relative;cursor:pointer}

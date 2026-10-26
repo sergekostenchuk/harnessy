@@ -26,7 +26,7 @@ function view(owner:Record<string,unknown>={},decisionRows:any[]=[]){
     if(path.endsWith('/cancel'))return {ok:false,code:'cancel_unavailable',error:'Отмена решения Автопилота ещё не реализована'};
     if(path==='/api/settings'&&body){Object.assign(owner,body.patch);return {ok:true,saved:owner}};
     if(path==='/api/approve'||path==='/api/chat')return {ok:true};throw Error('unexpected '+path)};
-  const context:any={window:null,document:d.document,location:{href:''},Date,Set,Map,Number,Array,JSON,Promise,encodeURIComponent,CustomEvent:class{type:string;init:any;constructor(type:string,init:any){this.type=type;this.init=init}},dispatchEvent(){},addEventListener:d.window.addEventListener.bind(d.window),
+  const context:any={setTimeout:()=>1,clearTimeout(){},window:null,document:d.document,location:{href:''},Date,Set,Map,Number,Array,JSON,Promise,encodeURIComponent,CustomEvent:class{type:string;init:any;constructor(type:string,init:any){this.type=type;this.init=init}},dispatchEvent(){},addEventListener:d.window.addEventListener.bind(d.window),
     LIVE:{H,S,api,esc:(v:any)=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),save(){},subscribeLiveEvents:()=>{const item={};events.push(item);return item}}};context.window=context;
   context.PS2={setInbox:(value:any)=>panelCounts.push({...value}),setData:(value:any)=>{if(value.inbox)panelCounts.push({...value.inbox})}};runInContext(source,createContext(context));return {d,H,S,owner,calls,panelCounts,context,events,async refresh(){await new Promise(resolve=>setImmediate(resolve));await context.HARNESS_INBOX.refresh();await new Promise(resolve=>setImmediate(resolve))},async settle(){await new Promise(resolve=>setImmediate(resolve))}};
 }

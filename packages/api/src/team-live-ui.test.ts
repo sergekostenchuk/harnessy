@@ -40,12 +40,13 @@ function teamUi(mode:'work'|'constructor'|'queue',handler?:ApiHandler,options:an
  };
  const LIVE:any={H,S:state,esc:escape,async api(path:string,body?:unknown){requests.push({path,body});return (handler||fallback)(path,body)},async refreshStatus(){return true},subscribeLiveEvents(callback:any){const stream={callback,closed:false,close(){this.closed=true}};subscriptions.push(stream);return stream},toast(text:string){toasts.push(text)},save(){}};
  const viewport=()=>({fit(){},takeSuppress(){return false},zoomAt(){},cw(){return 900},chh(){return 600}});
- const context:any={document:d.document,location,LIVE,OMCORE:{esc:escape,cubic:(...values:number[])=>'M'+values.join(' '),midOf:()=>[10,10],fwdPath:()=>({d:'M0 0L10 10',m:[5,5]}),viewport},addEventListener:d.window.addEventListener.bind(d.window),URLSearchParams};
+ const timers=new Map<number,()=>void>();let timerId=0;
+ const context:any={setTimeout:(fn:()=>void)=>{timers.set(++timerId,fn);return timerId},clearTimeout:(id:number)=>timers.delete(id),document:d.document,location,LIVE,OMCORE:{esc:escape,cubic:(...values:number[])=>'M'+values.join(' '),midOf:()=>[10,10],fwdPath:()=>({d:'M0 0L10 10',m:[5,5]}),viewport},addEventListener:d.window.addEventListener.bind(d.window),URLSearchParams};
  context.window=context;
  const vm=createContext(context);runInContext(canvas,vm);runInContext(live,vm);
  const root=d.document.querySelector('[data-team-live]')!;
  const find=(selector:string)=>{const node=root.querySelector(selector);assert.ok(node,selector);return node};
- return {...d,H,state,requests,toasts,subscriptions,location,context,root,find,settle};
+ return {...d,H,state,requests,toasts,subscriptions,location,context,root,find,settle,timers};
 }
 
 test('36D: live work canvas uses project seats, chats, usage and channel, and the orchestrator card is the same chat',async()=>{
@@ -131,4 +132,58 @@ test('36D: missing live data stays honest, while the queue is explicitly local m
  const queue=teamUi('queue');await queue.settle();assert.match(queue.root.textContent,/в движке очереди нет/);assert.match(queue.root.textContent,/пример · не данные движка/);assert.equal(queue.requests.length,0);
  const transfer:any={value:'',effectAllowed:'',dropEffect:'',setData(_type:string,value:string){this.value=value},getData(){return this.value}},task=queue.find('[data-task="14"]'),target=queue.find('[data-key="mock-orch"]');await task.emit('dragstart',{dataTransfer:transfer});await target.emit('dragover',{dataTransfer:transfer});await target.emit('drop',{dataTransfer:transfer});
  const changed=queue.context.TEAM_LIVE.state.queue.find((row:any)=>row.n===14);assert.equal(changed.who,'Оркестратор');assert.equal(changed.st,'work');assert.match(target.textContent,/№14 назначена/);assert.equal(queue.requests.length,0);
+});
+
+
+test('TS-43: failed team read is unavailable rather than missing orchestrator; automatic retry restores data',async()=>{
+ let broken=true;const ui=teamUi('work',async path=>{if(broken)throw Error('503');if(path==='/api/swarm')return snapshot();if(path==='/api/chats/chat-orch')return chat('chat-orch','orch');if(path==='/api/chats/chat-worker')return chat('chat-worker','worker');throw Error(path)});await ui.settle();
+ assert.match(ui.find('[data-team-error]').textContent,/503/);assert.ok(ui.find('[data-team-refresh]'));assert.equal(ui.root.querySelector('[data-key="missing-orchestrator"]'),null);assert.equal(ui.timers.size,1);
+ broken=false;[...ui.timers.values()][0]!();await ui.settle();assert.equal(ui.context.TEAM_LIVE.state.error,null);assert.ok(ui.root.querySelector('[data-key="orch"]'));assert.equal(ui.timers.size,0);
+ broken=true;await ui.context.TEAM_LIVE.refresh();assert.match(ui.find('[data-team-error]').textContent,/Последний снимок устарел/);assert.equal(ui.find('[data-team-send]').disabled,true);await ui.window.emit('pagehide');assert.equal(ui.timers.size,0);
+});
+
+
+test('TS-43 r2: full role name is escaped, opens without hover and closes on Escape with focus restored',async()=>{
+ const name='Аналитик договора поставки оборудования <img src=x>',data=snapshot('/project-a',[{...pane('worker','worker',null),label:name}]);
+ const v=teamUi('work',async path=>{assert.equal(path,'/api/swarm');return data});await v.settle();
+ const nameButton=v.find('.tc-card .l1 [data-tc-reveal]'),full=nameButton.nextElementSibling!;
+ assert.equal(nameButton.getAttribute('title'),name);assert.equal(full.hasAttribute('hidden'),true);assert.equal(v.root.querySelector('img'),null);assert.equal(v.find('.tc-card .md').textContent,'Sonnet live');
+ await nameButton.emit('click');assert.equal(Reflect.get(full,'hidden'),false);assert.equal(full.textContent,name);assert.equal(nameButton.getAttribute('aria-expanded'),'true');
+ await v.window.emit('keydown',{key:'Escape'});assert.equal(Reflect.get(full,'hidden'),true);assert.equal(v.document.activeElement,nameButton);
+ await nameButton.emit('click');await v.body.emit('click');assert.equal(Reflect.get(full,'hidden'),true);
+});
+
+for(const mode of ['work','constructor'] as const)test('TS-43 r2: '+mode+' expands the same unavailable reason without assigning the role',async()=>{
+ const reason='Участников создаёт оркестратор по подтверждённому предложению <script>bad()</script>',v=teamUi(mode,undefined,{H:{roleCatalog:[{role:'reviewer',kind:'reviewer',label:'Ревьюер',available:false,reason}]}});await v.settle();
+ const role=v.find('[data-team-role="reviewer"]');assert.equal(role.disabled,true);const detail=v.find('.tc-reason [data-tc-reveal]'),full=detail.nextElementSibling!,requests=v.requests.length;
+ assert.equal(detail.getAttribute('title'),reason);assert.equal(full.hasAttribute('hidden'),true);await detail.emit('click');assert.equal(Reflect.get(full,'hidden'),false);assert.equal(full.textContent,reason);assert.equal(v.root.querySelector('script'),null);
+ await detail.emit('click');assert.equal(Reflect.get(full,'hidden'),true);assert.equal(v.requests.length,requests);assert.equal(v.requests.some(row=>row.path==='/api/assign'),false);
+});
+
+
+test('TS-43 r2: role popup escapes the clipped toolbar, keeps disclosure on status refresh and restores focus',async()=>{
+ const v=teamUi('work');await v.settle();Object.assign(v.context,{innerWidth:390,innerHeight:844});
+ await v.find('[data-team-plus]').emit('click');const menu=v.document.querySelector('[data-team-role-menu]')!;assert.ok(menu);assert.equal(menu.parentElement,v.body);
+ const detail=menu.querySelector('[data-tc-reveal]')!;await detail.emit('click');assert.equal(Reflect.get(detail.nextElementSibling!,'hidden'),false);
+ await v.context.TEAM_LIVE.refresh();assert.equal(v.document.querySelector('[data-team-role-menu]'),menu);assert.equal(Reflect.get(detail.nextElementSibling!,'hidden'),false,'unchanged catalog keeps the explanation open');
+ await v.window.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('[data-team-role-menu]'),null);assert.equal(v.document.activeElement,v.find('[data-team-plus]'));
+ await v.find('[data-team-plus]').emit('click');v.H.roleCatalog=[];await v.context.TEAM_LIVE.refresh();assert.equal(v.document.querySelector('[data-team-role-menu]'),null,'changed catalog closes stale choices');
+});
+
+
+for(const mode of ['work','constructor'] as const)test('TS-43 r3: '+mode+' keeps the full role name and its focus after live status',async()=>{
+ const label='Аналитик договора поставки оборудования <img src=x>',data=snapshot('/project-a',[{...pane('worker','worker',null),label}]);
+ const v=teamUi(mode,async path=>{assert.equal(path,'/api/swarm');return data});await v.settle();const selector='[data-key="worker"] [data-tc-reveal="name"]',before=v.find(selector);before.focus();await before.emit('click');
+ await v.window.emit('live:status');await v.settle();const current=v.find(selector);assert.notEqual(current,before);assert.equal(current.getAttribute('aria-expanded'),'true');assert.equal(Reflect.get(current.nextElementSibling!,'hidden'),false);assert.equal(current.getAttribute('aria-controls'),current.nextElementSibling!.getAttribute('id'));assert.equal(current.nextElementSibling!.textContent,label);assert.equal(current.getAttribute('title'),label);assert.equal(v.document.activeElement,current);assert.equal(v.root.querySelector('img'),null);
+ if(mode==='constructor')assert.ok(v.find('[data-team-pane="worker"] [data-team-model]'));
+ await v.window.emit('keydown',{key:'Escape'});assert.equal(Reflect.get(current.nextElementSibling!,'hidden'),true);assert.equal(v.document.activeElement,current);
+});
+
+test('TS-43 r3: library disclosure follows role identity through a refresh and closes when the reason changes',async()=>{
+ const v=teamUi('constructor');await v.settle();const selector='[data-team-role-key="reviewer"] [data-tc-reveal="reason"]',detail=v.find(selector);detail.focus();await detail.emit('click');v.H.roleCatalog.reverse();await v.window.emit('live:status');await v.settle();const current=v.find(selector);assert.equal(v.document.activeElement,current);assert.equal(current.getAttribute('aria-expanded'),'true');assert.equal(Reflect.get(current.nextElementSibling!,'hidden'),false);
+ v.H.roleCatalog.find((role:any)=>role.role==='reviewer').reason='Новая причина недоступности';await v.window.emit('live:status');await v.settle();const changed=v.find(selector);assert.equal(changed.getAttribute('aria-expanded'),'false');assert.equal(v.document.activeElement,changed);assert.equal(v.requests.some(row=>row.body),false);
+});
+
+test('TS-43 r3: disclosure does not migrate to an identically named role in another project',async()=>{
+ const v=teamUi('work');await v.settle();const before=v.find('[data-key="worker"] [data-tc-reveal="name"]');before.focus();await before.emit('click');v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();const current=v.find('[data-key="worker"] [data-tc-reveal="name"]');assert.equal(current.getAttribute('aria-expanded'),'false');assert.equal(Reflect.get(current.nextElementSibling!,'hidden')??current.nextElementSibling!.hasAttribute('hidden'),true);assert.notEqual(v.document.activeElement,current);
 });
