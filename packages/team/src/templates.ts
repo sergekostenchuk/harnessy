@@ -70,10 +70,11 @@ export function addSeatLocked(lock:PathLock,h:string,args:AddSeatArgs,options:Fi
  }catch(e){if(created)unlinkSync(created);if(e instanceof TeamError)throw e;throw new TeamError('write_failed','team.yaml не записан: '+message(e),e)}
 }
 /** Remove only the live team assignment. The seat file and conversation history remain intact. */
-export function unassignSeatLocked(lock:PathLock,h:string,sid:string,expectedInstructions:string):boolean {
+export function unassignSeatLocked(lock:PathLock,h:string,sid:string,expected:Seat):boolean {
  assertPathLock(lock,dirname(h));
  if(!/^[a-z][a-z0-9_-]{0,30}$/.test(sid)||['owner','harness','all','room'].includes(sid))throw new TeamError('team_invalid','недопустимое имя места');
  const data=readManifest(h),seats=data.get('seats') as YMap;
- if(!seats.has(sid)||teamFrom(data,h).seats[sid]?.instructions!==expectedInstructions)return false;
+ const current=teamFrom(data,h).seats[sid];
+ if(!current||current.id!==expected.id||current.role!==expected.role||current.kind!==expected.kind||current.label!==expected.label||current.vendor!==expected.vendor||current.model!==expected.model||current.mode!==expected.mode||current.digest!==expected.digest||current.instructions!==expected.instructions||current.worktree!==expected.worktree||JSON.stringify(current.writePaths)!==JSON.stringify(expected.writePaths))return false;
  seats.delete(sid);teamFrom(data,h);save(h,data,{});return true;
 }

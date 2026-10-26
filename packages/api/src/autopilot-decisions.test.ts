@@ -114,10 +114,24 @@ test('TS-38.4: untouched promotion can be unassigned without deleting its origin
  const original=promotionInput(h.runtime),assigned=await h.runtime.assignRoomRole({...original,role:'orchestrator'},OWNER),version='promotion:'+assigned.promotion!.operationId;
  const base=effect(h.dir,{id:'assignment:'+assigned.promotion!.operationId,kind:'assign_role',text:'Назначить оркестратора'},'assign_role',{role:'orchestrator',chat:original.chat,project:h.dir,revision:original.revision,documents:original.documents},null);
  await applied(h,base,{result:{ok:true,project:h.dir,pane:assigned.pane.id,chat:assigned.chat.id,operationId:assigned.promotion!.operationId},effectVersion:version});
+ const oldRecords=h.runtime.journal.read({limit:0}).filter(r=>r.thread?.startsWith('promotion:'+assigned.promotion!.operationId+':'));
+ assert.equal(oldRecords.length,2);assert.equal(h.runtime.journal.pendingFor(assigned.pane.id).filter(row=>oldRecords.some(r=>r.seq===row.record.seq)).length,2);
+ h.runtime.journal.append({sender:'worker',to:['owner'],kind:'rejected',origin:'autopilot-cancel',thread:oldRecords[0]!.thread,reply_to:oldRecords[0]!.seq,text:'поддельный отзыв'});
+ assert.equal(h.runtime.journal.pendingFor(assigned.pane.id).some(row=>row.record.seq===oldRecords[0]!.seq),true);
  const response=await call(h.api,'/api/autopilot/decisions/'+base.decisionId+'/cancel',{body:{project:h.dir,effectVersion:version}});
  assert.equal(response.status,200,response.text);assert.equal(response.body.state,'cancelled');assert.equal(h.runtime.registry.get(assigned.pane.id),null);
  assert.equal(h.runtime.project.state.chats.active.room,original.chat);
- await h.runtime.openProject(h.dir);assert.equal(h.runtime.registry.get(assigned.pane.id),null);assert.equal(h.runtime.project.state.chats.active.room,original.chat);
+ for(const record of oldRecords)assert.equal(h.runtime.journal.autopilotPromotionRevoked(record.seq),true);
+ await h.runtime.openProject(h.dir);h.runtime.project.halted=true;
+ assert.equal(h.runtime.registry.get(assigned.pane.id),null);assert.equal(h.runtime.project.state.chats.active.room,original.chat);
+ assert.equal(h.runtime.journal.pendingFor(assigned.pane.id).some(row=>oldRecords.some(r=>r.seq===row.record.seq)),false);
+ const next=await h.runtime.assignRoomRole({...promotionInput(h.runtime),role:'orchestrator'},OWNER);
+ assert.equal(next.pane.id,assigned.pane.id);assert.notEqual(next.promotion!.operationId,assigned.promotion!.operationId);
+ const pending=h.runtime.journal.pendingFor(next.pane.id);assert.equal(pending.filter(row=>oldRecords.some(r=>r.seq===row.record.seq)).length,0);
+ assert.equal(pending.filter(row=>row.record.thread?.startsWith('promotion:'+next.promotion!.operationId+':')).length,2);
+ const repeat=await call(h.api,'/api/autopilot/decisions/'+base.decisionId+'/cancel',{body:{project:h.dir,effectVersion:version}});
+ assert.equal(repeat.status,200);assert.equal(repeat.body.state,'cancelled');
+ assert.equal(h.runtime.journal.pendingFor(next.pane.id).filter(row=>row.record.thread?.startsWith('promotion:'+next.promotion!.operationId+':')).length,2);
 });
 
 test('TS-38.4: a role that already started work stays assigned with a durable partial outcome',async t=>{
@@ -125,10 +139,27 @@ test('TS-38.4: a role that already started work stays assigned with a durable pa
  const original=promotionInput(h.runtime),assigned=await h.runtime.assignRoomRole({...original,role:'orchestrator'},OWNER),version='promotion:'+assigned.promotion!.operationId;
  const base=effect(h.dir,{id:'assignment:'+assigned.promotion!.operationId,kind:'assign_role',text:'Назначить оркестратора'},'assign_role',{role:'orchestrator',chat:original.chat,project:h.dir,revision:original.revision,documents:original.documents},null);
  await applied(h,base,{result:{ok:true,project:h.dir,pane:assigned.pane.id,chat:assigned.chat.id,operationId:assigned.promotion!.operationId},effectVersion:version});
- h.runtime.registry.get(assigned.pane.id)!.touched=true;
+ const intro=h.runtime.journal.read({limit:0}).find(r=>r.thread==='promotion:'+assigned.promotion!.operationId+':intro')!;
+ h.runtime.journal.advance(assigned.pane.id,intro.seq);
  const response=await call(h.api,'/api/autopilot/decisions/'+base.decisionId+'/cancel',{body:{project:h.dir,effectVersion:version}});
  assert.equal(response.status,200,response.text);assert.equal(response.body.state,'partial');assert.ok(h.runtime.registry.get(assigned.pane.id));
  assert.equal(h.runtime.autopilotDecisionLedger().cancellation(base.decisionId)?.state,'partial');
+});
+
+test('TS-38.4: a promotion cancellation resumes after one durable revocation and a restart',async t=>{
+ const h=await fixture(t);h.runtime.project.halted=true;h.runtime.roomSet({model:'w1'},OWNER);
+ const original=promotionInput(h.runtime),assigned=await h.runtime.assignRoomRole({...original,role:'orchestrator'},OWNER),operationId=assigned.promotion!.operationId,version='promotion:'+operationId;
+ const base=effect(h.dir,{id:'assignment:'+operationId,kind:'assign_role',text:'Назначить оркестратора'},'assign_role',{role:'orchestrator',chat:original.chat,project:h.dir,revision:original.revision,documents:original.documents},null);
+ const ledger=await applied(h,base,{result:{ok:true,project:h.dir,pane:assigned.pane.id,chat:assigned.chat.id,operationId},effectVersion:version});
+ const records=h.runtime.journal.read({limit:0}).filter(r=>r.thread?.startsWith('promotion:'+operationId+':'));
+ await ledger.beginCancellation(base.decisionId,version);
+ const intro=records.find(r=>r.thread?.endsWith(':intro'))!;
+ h.runtime.channel.postCore({to:['owner'],kind:'rejected',reply_to:intro.seq,thread:intro.thread,origin:'autopilot-cancel',text:'Вводная отозвана'},{seat:'harness',trust:'harness'});
+ await h.runtime.openProject(h.dir,{deferPumps:true});h.runtime.project.halted=true;
+ const response=await call(h.api,'/api/autopilot/decisions/'+base.decisionId+'/cancel',{body:{project:h.dir,effectVersion:version}});
+ assert.equal(response.status,200,response.text);assert.equal(response.body.state,'cancelled');assert.equal(h.runtime.registry.get(assigned.pane.id),null);
+ for(const record of records)assert.equal(h.runtime.journal.autopilotPromotionRevoked(record.seq),true);
+ const markers=h.runtime.journal.read({limit:0}).filter(r=>r.from==='harness'&&r.origin==='autopilot-cancel'&&records.some(old=>old.seq===r.reply_to));assert.equal(markers.length,2);
 });
 
 test('TS-38.4: a reassigned role in team.yaml cannot be removed by an old cancellation',async t=>{
@@ -141,6 +172,19 @@ test('TS-38.4: a reassigned role in team.yaml cannot be removed by an old cancel
  const response=await call(h.api,'/api/autopilot/decisions/'+base.decisionId+'/cancel',{body:{project:h.dir,effectVersion:version}});
  assert.equal(response.status,409,response.text);assert.equal(response.body.code,'effect_changed');
  assert.ok(readFileSync(manifest,'utf8').includes(newInstructions));assert.ok(h.runtime.registry.get(assigned.pane.id));
+});
+
+test('TS-38.4: a changed role model refuses old cancellation without revoking its assignment records',async t=>{
+ const h=await fixture(t);h.runtime.project.halted=true;h.runtime.roomSet({model:'w1'},OWNER);
+ const original=promotionInput(h.runtime),assigned=await h.runtime.assignRoomRole({...original,role:'orchestrator'},OWNER),version='promotion:'+assigned.promotion!.operationId;
+ const base=effect(h.dir,{id:'assignment:'+assigned.promotion!.operationId,kind:'assign_role',text:'Назначить оркестратора'},'assign_role',{role:'orchestrator',chat:original.chat,project:h.dir,revision:original.revision,documents:original.documents},null);
+ await applied(h,base,{result:{ok:true,project:h.dir,pane:assigned.pane.id,chat:assigned.chat.id,operationId:assigned.promotion!.operationId},effectVersion:version});
+ h.runtime.paneSet(assigned.pane.id,{model:'w2'},OWNER);
+ const response=await call(h.api,'/api/autopilot/decisions/'+base.decisionId+'/cancel',{body:{project:h.dir,effectVersion:version}});
+ assert.equal(response.status,409,response.text);assert.equal(response.body.code,'effect_changed');
+ assert.equal(h.runtime.registry.get(assigned.pane.id)?.model,'w2');
+ const records=h.runtime.journal.read({limit:0}).filter(r=>r.thread?.startsWith('promotion:'+assigned.promotion!.operationId+':'));
+ assert.equal(records.length,2);assert.equal(records.every(r=>!h.runtime.journal.autopilotPromotionRevoked(r.seq)),true);
 });
 
 test('TS-38.3: forged id and edited journal line fail closed',async t=>{

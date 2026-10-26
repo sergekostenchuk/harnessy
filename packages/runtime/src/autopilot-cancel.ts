@@ -1,7 +1,10 @@
 import {withPathLock,loadTeam,unassignSeatLocked} from '@harnessy/team';
-import type {Initiator} from '@harnessy/journal';
-import {RuntimeError} from './errors.ts';
+import type {Initiator,Record_} from '@harnessy/journal';
+import {lstatSync,readFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {RuntimeError,object} from './errors.ts';
 import {promotionIdentity} from './chats.ts';
+import {promotionSeatFile} from './promotion.ts';
 import type {AutopilotCancellation,AutopilotDecisionEntry} from './autopilot-decisions.ts';
 import type {Runtime} from './runtime.ts';
 import type {ProjectState} from './types.ts';
@@ -13,6 +16,23 @@ const outcome=(state:Outcome['state'],code:string,reason:string,nextStep:string,
 const irreversible=(reason:string,nextStep:string,code='cancel_irreversible')=>outcome('irreversible',code,reason,nextStep);
 const validSeq=(value:unknown):value is number=>Number.isSafeInteger(value)&&Number(value)>0;
 const field=(value:unknown):value is string=>typeof value==='string'&&value.length>0;
+
+function promotionRecords(p:ProjectState,operationId:string,paneId:string,intro?:string,task?:string):Record_[]|null {
+ if(!/^c[0-9a-f]+$/.test(operationId))return null;
+ const specs=[{suffix:'intro',from:'harness',kind:'note',origin:'onboarding',text:intro},{suffix:'task',from:'owner',kind:'task',origin:'promotion',text:task}];
+ const records:Record_[]=[];
+ for(const spec of specs){const thread='promotion:'+operationId+':'+spec.suffix;
+  const found=p.journal.read({limit:0,thread}).filter(r=>r.thread===thread&&r.from===spec.from&&r.kind===spec.kind&&r.origin===spec.origin&&r.to.length===1&&r.to[0]===paneId);
+  if(found.length!==1||spec.text!==undefined&&found[0]!.text!==spec.text)return null;
+  records.push(found[0]!);
+ }
+ return records;
+}
+function revokePromotionRecords(p:ProjectState,records:Record_[],paneId:string):boolean {
+ for(const record of records)if(!p.journal.autopilotPromotionRevoked(record.seq)&&!p.journal.pendingFor(paneId).some(row=>row.record.seq===record.seq))return false;
+ for(const record of records)if(!p.journal.autopilotPromotionRevoked(record.seq))p.channel.postCore({to:['owner'],kind:'rejected',reply_to:record.seq,thread:record.thread,origin:'autopilot-cancel',text:'Запись назначения #'+record.seq+' отозвана владельцем'},HARNESS);
+ return true;
+}
 
 function answer(runtime:Runtime,p:ProjectState,entry:Extract<AutopilotDecisionEntry,{state:'applied'}>):Promise<Outcome>{
  return withPathLock(p.dir,()=>{
@@ -34,14 +54,18 @@ function assignment(runtime:Runtime,p:ProjectState,entry:Extract<AutopilotDecisi
   runtime.assertOwner(CANCEL_OWNER);if(runtime.project!==p)throw new RuntimeError('project_changed','Проект решения изменился',409);
   const result=entry.receipt.result,paneId=result.pane,chatId=result.chat,operationId=result.operationId;
   if(!field(paneId)||!field(chatId)||!field(operationId)||entry.receipt.effectVersion!=='promotion:'+operationId)return irreversible('Квитанция назначения не содержит проверенную версию','Откройте карточку роли и проверьте назначение вручную','cancel_unverifiable');
-  const pane=p.registry.get(paneId),chat=p.state.chats.chats[chatId],promotion=chat&&promotionIdentity(chat);
-  if(!chat||!promotion||promotion.operationId!==operationId||promotion.pane!==paneId||promotion.target!==p.dir||promotion.completed!==4||chat.pane!==paneId||p.team?.seats[paneId]?.instructions!=='roles/seats/'+operationId+'.md')return irreversible('Назначение не совпало с сохранённой ролью','Откройте команду и проверьте роль','effect_changed');
-  if(!pane||!p.team?.seats[paneId]||p.state.chats.active[paneId]!==chatId)return irreversible('Роль уже изменена после назначения','Откройте команду и решите, как поступить с новой ролью','effect_changed');
+  const pane=p.registry.get(paneId),chat=p.state.chats.chats[chatId],promotion=chat&&promotionIdentity(chat),op=chat&&object(chat.promotion)?chat.promotion:null,input=op&&object(op.input)?op.input:null;
+  const team=loadTeam(join(p.dir,'.harness')),seat=team.seats[paneId],instructions='roles/seats/'+operationId+'.md';
+  let roleFileMatches=false;try{const path=join(team.harnessDir,instructions),info=lstatSync(path);roleFileMatches=info.isFile()&&!info.isSymbolicLink()&&readFileSync(path,'utf8')===promotionSeatFile(operationId)}catch{}
+  if(!chat||!promotion||promotion.operationId!==operationId||promotion.pane!==paneId||promotion.target!==p.dir||promotion.completed!==4||chat.pane!==paneId||!op||!input||!field(op.model)||!field(op.vendor)||!field(op.mode)||!field(op.intro)||!field(input.task)||!seat||seat.id!==paneId||seat.role!=='orchestrator'||seat.kind!=='orchestrator'||seat.label!=='Оркестратор'||seat.vendor!==op.vendor||seat.model!==op.model||seat.mode!==op.mode||seat.instructions!==instructions||seat.digest||seat.writePaths.length!==0||seat.worktree!==null||!roleFileMatches)return irreversible('Назначение изменилось после применения: модель, права, инструкция или вводная не совпали','Откройте команду и проверьте роль','effect_changed');
+  if(!pane||pane.vendor!==op.vendor||pane.model!==op.model||pane.mode!==op.mode||pane.role!=='orchestrator'||pane.kind!=='orchestrator'||pane.label!==seat.label||pane.digest||pane.writePaths.length!==0||p.state.chats.active[paneId]!==chatId)return irreversible('Текущая роль уже отличается от сохранённого назначения','Откройте команду и проверьте роль','effect_changed');
+  const records=promotionRecords(p,operationId,paneId,op.intro as string,input.task as string);
+  if(!records)return irreversible('Вводная или первое поручение назначения изменились','Откройте журнал повышения роли','effect_changed');
   const room=p.registry.get('room'),roomChat=p.state.chats.chats[p.state.chats.active.room??''];
-  if(pane.busy||p.active.has(paneId)||pane.touched||(p.journal.cursors[paneId]??0)>0||p.state.attempts[paneId]||!room||room.busy||p.active.has('room')||roomChat?.transcript.length)return outcome('partial','cancel_partial','Роль или исходный разговор уже продолжили работу; автоматическое снятие могло бы скрыть новые результаты','Остановите ходы и снимите роль вручную',{pane:paneId,operationId});
-  if(!p.team)throw new RuntimeError('team_invalid','Команда проекта не читается',409);
-  if(!unassignSeatLocked(lock,p.team.harnessDir,paneId,'roles/seats/'+operationId+'.md'))return irreversible('Роль уже изменена после назначения','Откройте команду и проверьте роль','effect_changed');
-  p.registry.panes.delete(paneId);delete p.state.chats.active[paneId];p.team=loadTeam(p.team.harnessDir);
+  if(pane.busy||p.active.has(paneId)||(p.journal.cursors[paneId]??0)>0||p.state.attempts[paneId]||!room||room.busy||p.active.has('room')||roomChat?.transcript.length)return outcome('partial','cancel_partial','Роль или исходный разговор уже продолжили работу; автоматическое снятие могло бы скрыть новые результаты','Остановите ходы и снимите роль вручную',{pane:paneId,operationId});
+  if(!revokePromotionRecords(p,records,paneId))return irreversible('Вводная или поручение уже доставлены; безопасно снять роль нельзя','Проверьте историю места и снимите роль вручную');
+  if(!unassignSeatLocked(lock,team.harnessDir,paneId,seat))return outcome('partial','cancel_partial','Записи назначения отозваны, но сама роль успела измениться','Проверьте команду и снимите роль вручную',{pane:paneId,operationId});
+  p.registry.panes.delete(paneId);delete p.state.chats.active[paneId];p.team=loadTeam(team.harnessDir);
   if(roomChat&&roomChat.id!==chat.id)roomChat.closed=Math.floor(p.now()/1000);
   chat.pane='room';delete chat.promotion;p.state.chats.active.room=chat.id;
   room.transcript=chat.transcript;room.transcriptSeq=chat.transcriptSeq??0;room.sessionId=chat.sessionId;room.carry=chat.carry;room.model=chat.model??room.model;room.vendor=chat.vendor as typeof room.vendor;room.revision++;
@@ -88,9 +112,17 @@ export async function cancelAutopilotDecision(runtime:Runtime,project:string,id:
  if(existing&&existing.state!=='intent')return cancellationResult(existing);
  const started=await ledger.beginCancellation(id,effectVersion);
  if(existing?.state==='intent'&&entry.operation==='assign_role'){
-  const pane=entry.receipt.result.pane,chatId=entry.receipt.result.chat;
-  if(field(pane)&&!p.team?.seats[pane]){
-   const restored=field(chatId)&&p.state.chats.active.room===chatId,finished=await ledger.finishCancellation(id,{state:restored?'cancelled':'partial',effectVersion,code:restored?'cancelled':'cancel_partial',reason:restored?'Назначение снято':'Роль снята, но разговор требует восстановления',nextStep:restored?'При необходимости назначьте роль снова':'Откройте историю разговора и восстановите её вручную',result:{pane}});return cancellationResult(finished)
+  const pane=entry.receipt.result.pane,chatId=entry.receipt.result.chat,operationId=entry.receipt.result.operationId;
+  if(field(pane)&&field(operationId)){
+   const recovered=await withPathLock(p.dir,()=>{
+    runtime.assertOwner(CANCEL_OWNER);if(runtime.project!==p)throw new RuntimeError('project_changed','Проект решения изменился',409);
+    if(loadTeam(join(p.dir,'.harness')).seats[pane])return null;
+    const records=promotionRecords(p,operationId,pane),revoked=!!records&&revokePromotionRecords(p,records,pane);
+    return {restored:field(chatId)&&p.state.chats.active.room===chatId,revoked};
+   });
+   if(recovered){
+    const complete=recovered.restored&&recovered.revoked,finished=await ledger.finishCancellation(id,{state:complete?'cancelled':'partial',effectVersion,code:complete?'cancelled':'cancel_partial',reason:complete?'Назначение снято и записи отозваны':'Роль снята, но восстановление разговора или отзыв записей требует проверки',nextStep:complete?'При необходимости назначьте роль снова':'Откройте историю разговора и журнал назначения',result:{pane}});return cancellationResult(finished)
+   }
   }
  }
  if(existing?.state==='intent'&&['continue_pane','stop_pane'].includes(entry.operation)){
