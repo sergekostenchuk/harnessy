@@ -992,3 +992,5 @@ html[data-proto] .plan-tabs > span { cursor:pointer; }
 .desktop-update-channel{display:flex;gap:6px;flex-wrap:wrap}.desktop-update-channel button[aria-pressed="true"]{border-color:var(--accent)}
 @media(max-width:560px){.desktop-update-banner{left:12px;right:12px;bottom:12px;max-width:none}.desktop-update-banner small{max-width:220px}}
 .autopilot-pill{display:inline-flex;align-items:center;white-space:nowrap;color:var(--accent);font:11px var(--mono);padding:5px 8px;border:1px solid var(--line2);border-radius:999px;background:var(--raised)}
+
+html[data-page="away"] .frame .top .st{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(50vw,380px);min-width:0}

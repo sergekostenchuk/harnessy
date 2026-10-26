@@ -17,7 +17,7 @@ export class RuntimeAutopilotEngine {
  async idle(){while(this.running)await this.running}
  close(){this.closed=true;this.council.close()}
  private current(){return !this.closed&&!this.project.closed&&this.runtime.project===this.project}
- private notice(code:string,reason:string,source?:AutopilotIssue['source']){if(!this.current())return;reason=safeDiagnostic(reason,{project:this.project.dir});this.project.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'autopilot-owner',text:JSON.stringify({code,reason,source:source??null})});this.project.owner.publish({type:'autopilotWaiting',code,reason,source:source??null})}
+ private notice(code:string,reason:string,source?:AutopilotIssue['source'],generation=this.runtime.settings.autopilot().generation){if(!this.current())return;reason=safeDiagnostic(reason,{project:this.project.dir});this.project.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'autopilot-owner',text:JSON.stringify({code,reason,generation,source:source??null})});this.project.owner.publish({type:'autopilotWaiting',code,reason,source:source??null})}
  private async scan(){
   if(!this.current())return;const r=this.runtime,p=this.project;
   if(!this.recovered){await recoverAutopilotIntents(r,p);this.recovered=true}const state=await r.autopilotStatus();if(!this.current()||!state.on)return;
@@ -41,7 +41,7 @@ export class RuntimeAutopilotEngine {
    try{await r.withAutopilotGeneration(issue.generation,snapshot=>{if(snapshot.revision!==permission.revision)throw new RuntimeError('autopilot_generation_mismatch','Условия изменились',409)})}catch{return}
    const result=await this.council.consider(issue);if(!this.current())return;
    if(result.status==='owner'){
-    this.notice(result.code,result.reason,issue.source);
+    this.notice(result.code,result.reason,issue.source,issue.generation);
     if(result.code==='spend_over_cap'){
      const latest=r.settings.autopilot();if(latest.on&&latest.generation===issue.generation){const stopped=await r.settings.changeAutopilot({on:false,revision:latest.revision},()=>r.clock.now(),()=>{if(!this.current())throw new RuntimeError('project_changed','Проект изменился',409)});p.owner.publish({type:'autopilot',autopilot:stopped})}return;
     }
