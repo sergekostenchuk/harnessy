@@ -10,7 +10,7 @@ import {ACK_TIMEOUT_MS} from './owner-acks.ts';
 import {harness,OWNER,deferred,until,collect,FakeProvider} from './test-helpers.ts';
 const seats='  worker: {role: assistant, vendor: claude, label: A, model: w1, mode: read}\n  peer: {role: assistant, vendor: claude, label: B, model: w1, mode: read}\n  third: {role: assistant, vendor: claude, label: C, model: w1, mode: read}';
 const policy='version: 1\nroutes: [{from: "*", to: "*", kinds: "*"}]\nobserve: {}\n';
-const setup=(t:Parameters<typeof harness>[0],ack=false)=>harness(t,{seats,actions:createActions(),before:dir=>writeFileSync(join(dir,'.harness','comms-policy.yaml'),ack?'version: 1\nroutes: [{from: "*", to: "*", kinds: [answer], trigger: owner-ack}, {from: "*", to: "*", kinds: "*"}]\nobserve: {}\n':policy)});
+const setup=(t:Parameters<typeof harness>[0],ack=false,noRepository=true)=>harness(t,{noRepository,seats,actions:createActions(),before:dir=>writeFileSync(join(dir,'.harness','comms-policy.yaml'),ack?'version: 1\nroutes: [{from: "*", to: "*", kinds: [answer], trigger: owner-ack}, {from: "*", to: "*", kinds: "*"}]\nobserve: {}\n':policy)});
 
 test('4/34/58: ask matches reply_to/from/answer/addressee, waits for ack delivery, peerReply uses codepoints',async t=>{
  const {runtime:r,provider:f}=await setup(t,true),gate=deferred<{text:string;sessionId:string|null}>(),{events}=collect(r);f.onRun=async(_s,_m,c)=>{c.modelStarted?.();return gate.promise};
@@ -55,7 +55,7 @@ test('4/34: 1800s timeout removes wait; late answer does not create peerReply or
 });
 
 for(const how of ['interrupt','halt','stop','reset','close','project'])test('32/34/41/62: '+how+' cancels waiting ask and prevents late peerReply',async t=>{
- const h=await setup(t),{runtime:r,provider:f}=h,gate=deferred<{text:string;sessionId:string|null}>(),{events}=collect(r);f.onRun=async(_s,_m,c)=>{c.modelStarted?.();return gate.promise};
+ const h=await setup(t,false,how!=='project'),{runtime:r,provider:f}=h,gate=deferred<{text:string;sessionId:string|null}>(),{events}=collect(r);f.onRun=async(_s,_m,c)=>{c.modelStarted?.();return gate.promise};
  r.postOwner({to:'worker',kind:'task',text:'начать'},OWNER);await until(()=>f.calls.length===1);const scope:TurnScope=r.project.active.get('worker')!.scope,wait=r.ask(scope,{to:'peer',text:'жду'}),p=r.project;
  if(how==='interrupt')r.interrupt('worker',OWNER);if(how==='halt')await r.halt(true,OWNER);if(how==='stop')r.postOwner({to:'worker',kind:'stop',text:'стоп'},OWNER);if(how==='reset')await r.resetVendor('claude');if(how==='close')await r.close();
  if(how==='project'){const dir=mkdtempSync(join(tmpdir(),'harnessy-ask-switch-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));await r.openProject(dir)}
@@ -119,7 +119,7 @@ test('R2/1: acknowledged question retains its own depth after restart without it
 
 for(const cut of ['before-question','after-question'])test('R2/1: depth state '+cut+' failure never launches a question at depth zero, including restart',async t=>{
  let armed=true;const io:StateIO={read:diskIO.read,write(path,text){if(armed&&path.endsWith('actions.json')){const raw=JSON.parse(text);if(raw.askDepths&&(cut==='before-question'||raw.askDepths.questions.length)){armed=false;throw Error('depth not saved')}}diskIO.write(path,text)}};
- const h=await harness(t,{seats,actions:createActions(),deps:{stateIO:io},before:dir=>writeFileSync(join(dir,'.harness','comms-policy.yaml'),questionAckPolicy)}),r=h.runtime,gate=deferred<{text:string;sessionId:null}>();
+ const h=await harness(t,{noRepository:true,seats,actions:createActions(),deps:{stateIO:io},before:dir=>writeFileSync(join(dir,'.harness','comms-policy.yaml'),questionAckPolicy)}),r=h.runtime,gate=deferred<{text:string;sessionId:null}>();
  h.provider.onRun=async(s,m,c)=>{c.modelStarted?.();return s.id==='worker'&&m==='source'?gate.promise:{text:'ответ',sessionId:null}};
  const source=r.runTurn('worker','source',{relayDepth:2});void source.catch(()=>{});await until(()=>h.provider.calls.length===1);const failure=await r.ask(r.project.active.get('worker')!.scope,{to:'peer',text:'хранение глубины'});assert.equal(!failure.ok&&failure.code,'write_failed');
  const qs=r.journal.read({limit:0}).filter(q=>q.origin==='ask');assert.equal(qs.length,cut==='before-question'?0:1);
