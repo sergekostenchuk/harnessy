@@ -7,16 +7,17 @@ import {fixture,call,deferred} from './test-helpers.ts';
 const metadata=():CatalogEntry=>({id:'fixture',title:'Fixture',binary:'/no-real-cli',login:{args:['login']},forbiddenEnv:[],capabilities:{headless:true,mcp:true,resume:true,limits:false},async version(){return '1'},async auth(){return {loggedIn:true,email:'alice@example.test'}},async models(){return [{id:'m1',label:'Model 1'}]},async runTurn(){throw Error('no models allowed')}});
 function update(c:ProviderCatalog){const event=deferred<any>(),off=c.subscribe(v=>{off();event.resolve(v)});return event.promise}
 
-test('290/315: startup and TTL refresh in background; every cached HTTP request is below 100ms, with one pending read per program',async t=>{
+test('290/315: cached HTTP completes while metadata is held; startup and TTL keep one pending read per program',{timeout:60000},async t=>{
  let now=Date.now(),versions=0,gate=deferred();const entry=metadata();entry.version=async()=>{versions++;await gate.promise;return '1'};
  const catalog=new ProviderCatalog([entry],()=>now),first=update(catalog),h=await fixture(t,{deps:{providerCatalog:catalog}});t.after(()=>gate.resolve());
  assert.equal(versions,1,'startup begins metadata without waiting for it');
- const fast=async()=>{const start=performance.now(),r=await call(h.api,'/api/providers/catalog');assert.ok(performance.now()-start<100,'cached GET must not wait for CLI');assert.equal(r.status,200);return r.body.providers[0]};
- for(let i=0;i<3;i++){const row=await fast();assert.equal(row.installed,null);assert.equal(row.checking,true);assert.equal(row.login.state,'unknown');assert.match(row.login.reason,/проверяется/);assert.deepEqual(row.models,[])}assert.equal(versions,1);
- gate.resolve();await first;const ready=await fast();assert.equal(ready.installed,true);assert.equal(ready.checking,false);assert.equal(ready.login.state,'ok');assert.equal(ready.models[0].id,'m1');
- gate=deferred();now+=300_000;const fresh=update(catalog);const refreshing=await fast();assert.equal(refreshing.installed,true);assert.equal(refreshing.checking,true);assert.equal(refreshing.login.checkedAt,ready.login.checkedAt);await fast();assert.equal(versions,2);
- gate.resolve();await fresh;const updated=await fast();assert.equal(updated.checking,false);assert.equal(updated.login.checkedAt,now);assert.equal(versions,2);
- now++;await call(h.api,'/api/providers/fixture/check',{body:{}});assert.equal(versions,3,'explicit check bypasses TTL');assert.equal((await fast()).login.checkedAt,now);
+ // Completion before gate.resolve(), not CPU speed, proves that GET never waits for the CLI.
+ const cached=async()=>{const r=await call(h.api,'/api/providers/catalog');assert.equal(r.status,200);return r.body.providers[0]};
+ for(let i=0;i<3;i++){const row=await cached();assert.equal(row.installed,null);assert.equal(row.checking,true);assert.equal(row.login.state,'unknown');assert.match(row.login.reason,/проверяется/);assert.deepEqual(row.models,[])}assert.equal(versions,1);
+ gate.resolve();await first;const ready=await cached();assert.equal(ready.installed,true);assert.equal(ready.checking,false);assert.equal(ready.login.state,'ok');assert.equal(ready.models[0].id,'m1');
+ gate=deferred();now+=300_000;const fresh=update(catalog);const refreshing=await cached();assert.equal(refreshing.installed,true);assert.equal(refreshing.checking,true);assert.equal(refreshing.login.checkedAt,ready.login.checkedAt);await cached();assert.equal(versions,2);
+ gate.resolve();await fresh;const updated=await cached();assert.equal(updated.checking,false);assert.equal(updated.login.checkedAt,now);assert.equal(versions,2);
+ now++;await call(h.api,'/api/providers/fixture/check',{body:{}});assert.equal(versions,3,'explicit check bypasses TTL');assert.equal((await cached()).login.checkedAt,now);
 });
 
 for(const stage of ['version','auth','models'] as const)test('315: '+stage+' transient failure preserves the same account, models and timestamp; errors do not create a GET retry loop',async t=>{

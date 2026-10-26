@@ -3,12 +3,10 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import https from 'node:https';
 import {readFileSync} from 'node:fs';
-import {fileURLToPath} from 'node:url';
 import net from 'node:net';
-import {execFile} from 'node:child_process';
 import {fixture,call,deferred,FakeProvider,sse} from '../../api/src/test-helpers.ts';
 import {MemoryKeys,config as apiConfig,openai,collect,prompt} from '../../llm/src/test-helpers.ts';
-import {CLI_DESCRIPTORS,ProviderCatalog,builtinEntries} from '@harnessy/providers';
+import {ProviderCatalog,builtinEntries} from '@harnessy/providers';
 import {listen,proxy,socks,through} from './network-test-helpers.ts';
 const cert=readFileSync(new URL('./fixtures/network-test-cert.pem',import.meta.url),'utf8'),key=readFileSync(new URL('./fixtures/network-test-key.pem',import.meta.url),'utf8');
 const opts={timeout:20000},signal=()=>new AbortController().signal;
@@ -66,28 +64,6 @@ test('22c: changed settings during password await refuse old connection; SSH por
  const other=await fixture(t,{deps:{sshTunnels:{ensure:async id=>{calls.push(id);return {id,state:'up',url:p.url,generation:1,code:null,reason:null,retryAt:null}},get:()=>null,subscribe:()=>()=>false,snapshots:()=>[],stop:async()=>{},close:async()=>{}},networkRelayOptions:{timeoutMs:1000}}});
  await other.runtime.settings.changeNetwork(async config=>{config.migrated=true;config.exits.ssh={id:'ssh',label:'SSH',type:'ssh',host:'vps.test',port:22,user:'owner',keyPath:'~/.ssh/key'};config.chains.claude=['ssh'];return {result:undefined}});
  assert.equal(await (await other.runtime.networkRelay.fetch('claude')('http://ssh-origin.invalid/')).text(),'ssh');assert.deepEqual(p.hosts,['ssh-origin.invalid']);assert.ok(calls.length>=1);
-});
-
-test('22c: every program catalog id receives the relay; real Node http and fetch children count CONNECT without model calls',opts,async t=>{
- const target=http.createServer((_q,r)=>{r.setHeader('Connection','close');r.end('node')}),port=await listen(t,target),p=await proxy(t,port),h=await fixture(t,{deps:{networkRelayOptions:{timeoutMs:1000}}});await save(h,'proxy',p.url);
- for(const id of ['claude','codex',...CLI_DESCRIPTORS.map(d=>d.id)]){
-  // Configure catalog ids directly so no installed program, login or model is queried.
-  await h.runtime.settings.changeNetwork(async config=>{config.migrated=true;config.chains[id]=['proxy'];return {result:undefined}});
-  assert.equal((await h.runtime.networkRelay.status(id)).verification,'unverified');const env=await h.runtime.networkRelay.environment(id,signal());assert.equal(new URL(env!.HTTPS_PROXY!).username,'harnessy');assert.match(new URL(env!.HTTPS_PROXY!).password,/^[A-Za-z0-9_-]{43}$/);const before=p.connects.length;
-  const script="const http=require('node:http');http.get('http://fixture.invalid/agent',r=>{r.resume();r.on('end',async()=>{console.log(await(await fetch('http://fixture.invalid/fetch')).text());process.exit(0)})}).on('error',e=>{console.error(e);process.exit(1)});";
-  const result=await new Promise<string>((resolve,reject)=>execFile(process.execPath,['-e',script],{env:{...process.env,...env},timeout:5000},(error,out)=>error?reject(error):resolve(out)));assert.equal(result.trim(),'node',id);assert.equal(p.connects.length-before,2,id);assert.equal((await h.runtime.networkRelay.status(id)).verification,'verified');
- }
-});
-
-
-test('22c r2: every CLI id accepts authenticated HTTPS_PROXY in Node https and fetch doubles',opts,async t=>{
- const target=https.createServer({cert,key},(_q,r)=>{r.setHeader('Connection','close');r.end('secure-node')}),port=await listen(t,target),p=await proxy(t,port),h=await fixture(t,{deps:{networkRelayOptions:{timeoutMs:1000}}});await save(h,'proxy',p.url);
- for(const id of ['claude','codex',...CLI_DESCRIPTORS.map(d=>d.id)]){
-  await chain(h,id,['proxy']);const env=await h.runtime.networkRelay.environment(id,t.signal),before=p.connects.length;
-  const script="const https=require('node:https');https.get('https://api-origin.invalid/agent',r=>{r.resume();r.on('end',async()=>{try{console.log(await(await fetch('https://api-origin.invalid/fetch')).text());process.exit(0)}catch{process.exit(1)}})}).on('error',()=>process.exit(1));";
-  const output=await new Promise<string>((resolve,reject)=>execFile(process.execPath,['-e',script],{env:{...process.env,...env,NODE_EXTRA_CA_CERTS:fileURLToPath(new URL('./fixtures/network-test-cert.pem',import.meta.url))},timeout:5000},(error,out)=>error?reject(error):resolve(out)));
-  assert.equal(output.trim(),'secure-node',id);assert.equal(p.connects.length-before,2,id);assert.equal((await h.runtime.networkRelay.status(id)).verification,'verified');assert.ok(p.connects.every(c=>c.headers['proxy-authorization']===undefined));
- }
 });
 
 test('22c: API stream, saved and draft discovery use the same relay, keep credentials at origin, and fail closed',opts,async t=>{

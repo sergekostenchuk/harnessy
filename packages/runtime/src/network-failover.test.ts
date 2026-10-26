@@ -1,9 +1,9 @@
-import test from 'node:test';
+import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import https from 'node:https';
 import {readFileSync} from 'node:fs';
-import {fixture,call,FakeProvider} from '../../api/src/test-helpers.ts';
+import {fixture,call,FakeProvider,deferred} from '../../api/src/test-helpers.ts';
 import {networkRevision,type NetworkPolicy,type ExitCheck} from '@harnessy/projects';
 import {listen,proxy,through} from './network-test-helpers.ts';
 import {ProviderCatalog,builtinEntries} from '@harnessy/providers';
@@ -11,6 +11,20 @@ import {MemoryKeys,config,openai} from '../../llm/src/test-helpers.ts';
 const opts={timeout:20000};
 const cert=readFileSync(new URL('./fixtures/network-test-cert.pem',import.meta.url),'utf8'),key=readFileSync(new URL('./fixtures/network-test-key.pem',import.meta.url),'utf8');
 type Harness=Awaited<ReturnType<typeof fixture>>;
+// Only the cleanup deadline is virtual. Sockets, HTTP and provider finally blocks stay real.
+function cleanupDeadline(t:TestContext){
+ const timeoutMs=23457,armed=deferred(),set=globalThis.setTimeout,clear=globalThis.clearTimeout;
+ let pending:{timer:ReturnType<typeof setTimeout>;fire:()=>void}|null=null;
+ t.mock.method(globalThis,'setTimeout',((callback:(...args:any[])=>void,ms?:number,...args:any[])=>{
+  if(ms!==timeoutMs)return set(callback,ms,...args);
+  assert.equal(pending,null,'one cleanup deadline per attempt');
+  const timer={unref(){return this},ref(){return this},hasRef(){return false}} as ReturnType<typeof setTimeout>;
+  pending={timer,fire:()=>callback(...args)};armed.resolve();return timer;
+ }) as typeof setTimeout);
+ t.mock.method(globalThis,'clearTimeout',((timer:Parameters<typeof clearTimeout>[0])=>{if(pending&&timer===pending.timer)pending=null;else clear(timer)}) as typeof clearTimeout);
+ return {timeoutMs,armed:armed.promise,get pending(){return pending!==null},expire(){assert.ok(pending,'cleanup deadline must be armed');const fire=pending.fire;pending=null;fire()}};
+}
+
 async function routes(h:Harness,vendor:string,urls:string[],policy:NetworkPolicy={mode:'fallback',silenceSeconds:1},countries:(string|null)[]=urls.map(()=>'Germany')){
  await h.runtime.settings.changeNetwork(async c=>{c.migrated=true;urls.forEach((url,i)=>{c.exits['exit-'+i]={id:'exit-'+i,label:'Выход '+i,type:'proxy',url}});c.chains[vendor]=urls.map((_,i)=>'exit-'+i);(c.policies??={})[vendor]=policy;return {result:undefined}});
  const checks=new Map<string,ExitCheck>();urls.forEach((_,i)=>{checks.set('exit-'+i,{revision:networkRevision(h.runtime.settings.network().exits['exit-'+i])!,checkedAt:Date.now(),ok:true,ip:'192.0.2.'+(i+1),country:countries[i]??null,durationMs:1,state:'checked'})});
@@ -83,12 +97,13 @@ test('22d: partial API response followed by silence never retries; reasoning als
 });
 
 for(const cleanup of ['delayed','never'] as const)test('22d: approved probe waits for '+cleanup+' cleanup before safe retry',opts,async t=>{
- const {sse}=await import('../../api/src/test-helpers.ts');const fake=new FakeProvider();fake.auth=async()=>({loggedIn:true,email:'fixture@example.test'});
- const catalog=new ProviderCatalog(builtinEntries({claude:fake},{},{execute:async()=>({code:0,signal:null,stdout:'1.0',stderr:''})}));const h=await fixture(t,{deps:{providers:{claude:fake},providerCatalog:catalog,networkRelayOptions:{settleTimeoutMs:50}}});let release!:()=>void;const held=new Promise<void>(r=>release=r);t.after(()=>release());let busy=false;
+ const deadline=cleanupDeadline(t),cleaning=deferred();const {sse}=await import('../../api/src/test-helpers.ts');const fake=new FakeProvider();fake.auth=async()=>({loggedIn:true,email:'fixture@example.test'});
+ const catalog=new ProviderCatalog(builtinEntries({claude:fake},{},{execute:async()=>({code:0,signal:null,stdout:'1.0',stderr:''})}));const h=await fixture(t,{deps:{providers:{claude:fake},providerCatalog:catalog,networkRelayOptions:{settleTimeoutMs:deadline.timeoutMs}}});let release!:()=>void;const held=new Promise<void>(r=>release=r);t.after(()=>release());let busy=false;
  const bad=http.createServer();bad.on('connect',(_q,s)=>s.end('HTTP/1.1 503 Unavailable\r\nContent-Length: 0\r\n\r\n'));const good=http.createServer((_q,r)=>r.end('done')),p=await proxy(t,await listen(t,good));await routes(h,'claude',['http://127.0.0.1:'+await listen(t,bad),p.url]);
- fake.onRun=async(seat,_text,ctx)=>{assert.equal(busy,false);busy=true;ctx.modelStarted?.();try{const text=await through(ctx.env.HTTP_PROXY!,'http://origin.invalid');ctx.publish({type:'done',model:seat.model,sessionId:null,durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text,sessionId:null}}finally{if(fake.calls.length===1){if(cleanup==='never')await held;else await new Promise<void>(r=>setImmediate(r))}busy=false}};
+ fake.onRun=async(seat,_text,ctx)=>{assert.equal(busy,false);busy=true;ctx.modelStarted?.();try{const text=await through(ctx.env.HTTP_PROXY!,'http://origin.invalid');ctx.publish({type:'done',model:seat.model,sessionId:null,durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text,sessionId:null}}finally{if(fake.calls.length===1){cleaning.resolve();await held}busy=false}};
  const events=await sse(h.api,'owner');t.after(()=>events.close());const response=await call(h.api,'/api/providers/claude/probe',{body:{model:'w1'}});assert.equal(response.status,200,response.text);assert.equal(fake.calls.length,0);await call(h.api,'/api/approve',{body:{pane:'owner',id:response.body.approvalId,decision:'allow',project:h.dir}});
- await new Promise<void>((resolve,reject)=>{const match=()=>{if(events.frames.some(e=>e.type==='providers'&&e.event==='probe'&&['done','error'].includes(e.status))){clean();resolve()}},stop=()=>{clean();reject(Error('probe closed'))},clean=()=>{events.response.off('data',match);events.response.off('close',stop);t.signal.removeEventListener('abort',stop)};events.response.on('data',match);events.response.once('close',stop);t.signal.addEventListener('abort',stop,{once:true});match()});const terminal=events.frames.find(e=>e.type==='providers'&&e.event==='probe'&&['done','error'].includes(e.status));assert.equal(terminal.status,cleanup==='never'?'error':'done',JSON.stringify(terminal));assert.equal(fake.calls.length,cleanup==='never'?1:2);assert.equal(p.connects.length,cleanup==='never'?0:1);release();
+ await Promise.all([cleaning.promise,deadline.armed]);assert.equal(fake.calls.length,1);assert.equal(p.connects.length,0,'reserve waits for cleanup');if(cleanup==='never')deadline.expire();else release();
+ await new Promise<void>((resolve,reject)=>{const match=()=>{if(events.frames.some(e=>e.type==='providers'&&e.event==='probe'&&['done','error'].includes(e.status))){clean();resolve()}},stop=()=>{clean();reject(Error('probe closed'))},clean=()=>{events.response.off('data',match);events.response.off('close',stop);t.signal.removeEventListener('abort',stop)};events.response.on('data',match);events.response.once('close',stop);t.signal.addEventListener('abort',stop,{once:true});match()});const terminal=events.frames.find(e=>e.type==='providers'&&e.event==='probe'&&['done','error'].includes(e.status));assert.equal(terminal.status,cleanup==='never'?'error':'done',JSON.stringify(terminal));assert.equal(fake.calls.length,cleanup==='never'?1:2);assert.equal(p.connects.length,cleanup==='never'?0:1);assert.equal(deadline.pending,false,'settled attempt clears its deadline');release();
 });
 
 test('22d: proxy authentication refusal does not trigger another exit or an automatic turn',opts,async t=>{
@@ -121,10 +136,10 @@ for(const partial of ['none','thinking','assistant-text','initial-block','tool-j
 });
 
 for(const settle of ['delayed','never'] as const)test('22d: provider cleanup '+settle+' completes before retry or stops with a card',opts,async t=>{
- const bad=http.createServer((_q,r)=>{r.writeHead(503);r.end()}),good=http.createServer((_q,r)=>r.end('safe')),pa=await proxy(t,await listen(t,bad)),pb=await proxy(t,await listen(t,good)),fake=new FakeProvider();
- const h=await fixture(t,{deps:{providers:{claude:fake},networkRelayOptions:{settleTimeoutMs:50}}});await routes(h,'claude',[pa.url,pb.url]);
+ const deadline=cleanupDeadline(t);const bad=http.createServer((_q,r)=>{r.writeHead(503);r.end()}),good=http.createServer((_q,r)=>r.end('safe')),pa=await proxy(t,await listen(t,bad)),pb=await proxy(t,await listen(t,good)),fake=new FakeProvider();
+ const h=await fixture(t,{deps:{providers:{claude:fake},networkRelayOptions:{settleTimeoutMs:deadline.timeoutMs}}});await routes(h,'claude',[pa.url,pb.url]);
  let release!:()=>void,entered!:()=>void,busy=false;const cleanup=new Promise<void>(r=>release=r),cleaning=new Promise<void>(r=>entered=r);t.after(()=>release());
  fake.onRun=async(_seat,_text,ctx)=>{assert.equal(busy,false,'previous attempt must release the seat');busy=true;ctx.modelStarted?.();try{return {text:await through(ctx.env.HTTP_PROXY!,'http://origin.invalid'),sessionId:null}}finally{if(fake.calls.length===1){entered();await cleanup}busy=false}};
- const run=h.runtime.runTurn('worker','cleanup'),outcome=run.then(text=>({text}),e=>({error:e}));await cleaning;assert.equal(fake.calls.length,1);assert.equal(pb.connects.length,0);
- if(settle==='delayed'){release();assert.deepEqual(await outcome,{text:'safe'});assert.equal(fake.calls.length,2)}else{const value=await outcome;assert.ok('error'in value);assert.equal(value.error.code,'network_unavailable');assert.match(value.error.message,/не подтвердила завершение/);assert.equal(fake.calls.length,1);assert.equal(pb.connects.length,0);assert.equal(h.runtime.registry.get('worker')!.status,'uncertain');release();await cleanup}
+ const run=h.runtime.runTurn('worker','cleanup'),outcome=run.then(text=>({text}),e=>({error:e}));await Promise.all([cleaning,deadline.armed]);assert.equal(fake.calls.length,1);assert.equal(pb.connects.length,0);
+ if(settle==='delayed'){release();assert.deepEqual(await outcome,{text:'safe'});assert.equal(fake.calls.length,2)}else{deadline.expire();const value=await outcome;assert.ok('error'in value);assert.equal(value.error.code,'network_unavailable');assert.match(value.error.message,/не подтвердила завершение/);assert.equal(fake.calls.length,1);assert.equal(pb.connects.length,0);assert.equal(h.runtime.registry.get('worker')!.status,'uncertain');release();await cleanup}assert.equal(deadline.pending,false);
 });

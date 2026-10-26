@@ -1,5 +1,6 @@
-import {mkdtempSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs';
+import {mkdirSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
+import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import type {TestContext} from 'node:test';
 import {ANTIGRAVITY} from './antigravity.ts';
@@ -23,7 +24,8 @@ if(args.join(' ')==='--output-format json -p /usage'){
 }else {console.error('Unexpected inference or login invocation');process.exit(91)}
 `;
 export function antigravityFixture(t:TestContext,scenario='ok'){
- const dir=mkdtempSync(join(tmpdir(),'agy metadata ')),binary=join(dir,'agy fixture.mjs'),log=join(dir,'calls.ndjson');
+ // Hex cannot randomly become a public-secret marker such as AIza in the descriptor path.
+ const dir=join(tmpdir(),'agy metadata '+randomUUID().replaceAll('-',''));mkdirSync(dir,{mode:0o700});const binary=join(dir,'agy fixture.mjs'),log=join(dir,'calls.ndjson');
  writeFileSync(binary,'#!'+process.execPath+'\n'+program,{mode:0o700});t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const description={...ANTIGRAVITY,binary},env={...process.env,AGY_FIXTURE_CASE:scenario,AGY_FIXTURE_LOG:log,GEMINI_API_KEY:'FIXTURE-SECRET',GOOGLE_GEMINI_BASE_URL:'https://fixture.invalid',PANE_TOKEN:'FIXTURE-TOKEN'};
  return {dir,description,env,entry:cliEntry(description,{env,cwd:dir,probeTimeoutMs:5000}),capture:()=>existsSync(log)?readFileSync(log,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[]};
