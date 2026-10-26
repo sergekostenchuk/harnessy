@@ -1,5 +1,6 @@
 import {turnUsage} from './turn-usage.ts';
 import {instructionFile,updateInstruction} from './instructions.ts';
+import {TaskStore} from './tasks.ts';
 import {NetworkStats} from './network-stats.ts';
 import {NetworkProviderChecks} from './network-provider-checks.ts';
 import {NetworkRelay,NetworkError,type NetworkTurn} from './network-relay.ts';
@@ -267,6 +268,7 @@ export class Runtime {
  try{await restoreAssignments(this,p)}catch(e){lineErrors.push(message(e));for(const id of registry.ids)p.restoreFailed.set(id,message(e))}
  for(const id of p.materializing){p.restoreFailed.set(id,[...lineErrors].reverse().find(text=>text.startsWith('назначение '+id+' '))??lineErrors.at(-1)??'восстановление назначения не завершено')}p.materializing.clear();
  await restorePromotions(this,p);
+ try{this.tasksStore(p).recover()}catch(e){lineErrors.push(message(e));for(const id of registry.ids)p.restoreFailed.set(id,message(e))}
  try{await options.initialize?.(p)}catch(e){p.starting=false;throw e}
  try{await this.restoreAttemptDecisions(p)}catch(e){lineErrors.push(message(e));for(const id of registry.ids)p.restoreFailed.set(id,message(e))}
  for(const pane of registry.panes.values()){
@@ -327,6 +329,10 @@ export class Runtime {
  waiting(id:string){const p=this.project,pane=this.pane(id,p);if(p.restoreFailed.has(id))return null;const info=waiting(p,pane);if(info)return info;const pending=this.attemptDecisions(p).find(d=>d.record.attempt!.pane===id&&!d.done);if(!pending)return null;const a=pending.record.attempt!,result=p.state.results(pane).find(r=>r.runtime?.turnInstanceId===a.turnInstanceId);return {status:a.action==='finish'?'recovering' as const:'uncertain' as const,recordSeqs:Array.isArray(result?.runtime.recordSeqs)?[...result.runtime.recordSeqs]:[],startedAt:null,turnInstanceId:a.turnInstanceId,actions:[a.action]}}
  publishState(id:string):void {const p=this.project;this.stateEvent(p,this.pane(id,p))}
  private warningId(p:ProjectState,pane:Pane,kind:string):string {return pane.id+':'+(waiting(p,pane)?.turnInstanceId??p.active.get(pane.id)?.scope.turnInstanceId??'episode:'+p.generation)+':'+kind}
+ private taskStores=new WeakMap<ProjectState,TaskStore>();
+ private tasksStore(p=this.project){let store=this.taskStores.get(p);if(!store){store=new TaskStore(p);this.taskStores.set(p,store)}return store}
+ async tasksList(initiator:Initiator,scope?:TurnScope){const p=this.project;return locked(this,p,()=>{if(initiator.trust==='owner')this.requireOwner(initiator);else {if(!scope||scope.seatId!==initiator.seat)throw new RuntimeError('owner_only','Нужно подтверждённое место',403);this.scopes.assert(scope);if(scope.projectDir!==p.dir||!p.registry.canObserve(scope.seatId,'owner'))throw new RuntimeError('policy_denied','Политика не разрешает читать очередь владельца',403)}const store=this.tasksStore(p);store.recover();return store.list()})}
+ async taskChange(action:'create'|'assign',body:Record<string,unknown>,initiator:Initiator,id?:string){this.requireOwner(initiator,true);const p=this.project;return locked(this,p,()=>{if(body.project!==p.dir||body.instance!==p.trace.instanceId&&!this.tasksStore(p).hasOperation(body.opId))throw new RuntimeError('project_changed','Проект изменился; обновите очередь',409);this.guardAutopilotApplication(p);const task=this.tasksStore(p).change(action,body,id);this.ownerAutopilotAction(p,initiator);if(task.to)void this.kick(task.to);return {ok:true,project:p.dir,instance:p.trace.instanceId,task}},initiator)}
  postOwner(input:AgentPostInput,initiator:Initiator):Record_ {this.requireOwner(initiator);const p=this.project,targets=Array.isArray(input.to)?input.to:[input.to];if(input.kind!=='stop'&&[...p.registry.panes.keys()].some(id=>(targets.includes(id)||targets.includes('*'))&&(p.editing.has(id)||p.materializing.has(id)||p.restoreFailed.has(id))))throw new RuntimeError('busy','назначение или изменение разговора ещё не завершено',409);p.registry.refreshPolicy();const record=p.channel.postCore({...input,thread:input.thread??(input.kind==='task'?'T'+(p.journal.lastSeq+1):null)},OWNER);this.ownerAutopilotAction(p,initiator);return record}
  private report(p:ProjectState,pane:Pane,error:unknown):void{if(!p.closed){const failure=turnFailure(error,p.dir,0),event={type:'error',message:failure.reason,sessionId:pane.sessionId,code:failure.code,waiting:pane.status==='uncertain'?this.waiting(pane.id):null,warning:this.warningId(p,pane,'error')};if(pane.status==='recovering'||pane.status==='uncertain')pane.recoveryError=event;pane.publish(event)}}
  private stateEvent(p:ProjectState,pane:Pane){if(!p.closed)pane.publish({type:'state',...pane.settings(),settingsBinding:this.paneBinding(pane.id,p),pending:p.journal.pendingFor(pane.id).length,status:pane.status,waiting:this.waiting(pane.id)})}
@@ -478,7 +484,8 @@ export class Runtime {
  return p.trace.run(span,async()=>{try{const text=await this.runTurnCore(id,messageText,options,settlement),result=p.registry.get(id)?.transcript.find(m=>object(m.runtime)&&m.runtime.turnInstanceId===turnInstanceId);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:result?.outcome==='interrupted'?'cancelled':result?.outcome==='error'?'failed':'ok',reason:result?.outcome==='error'?traceReason(result.errorCode,'Ошибка провайдера'):{code:'none',text:''},durationMs:this.clock.now()-started,data:{model:result?.model,usage:result?.usage}});return text}catch(e){const failure=turnFailure(e,p.dir,this.clock.now()-started),reason=traceReason(failure.code,failure.reason);p.trace.end(span,'turn.end',{actor:'model:'+id,outcome:reason.code==='cancelled'?'cancelled':reason.code==='timeout'?'timeout':'failed',reason,durationMs:this.clock.now()-started});throw e}finally{this.finishTraceTools(p,turnInstanceId)}});
  }
  private async runTurnCore(id:string,messageText:string,options:{entries?:DeliveryEntry[];project?:ProjectState;relayDepth?:number;reservation?:symbol;directOnce?:string;combined?:number[]},settlement:Readonly<{turnInstanceId:string;complete:(callId:string)=>Promise<void>}>):Promise<string> {
- const p=options.project??this.project,pane=this.pane(id,p);await this.waitVendor(p,pane.vendor);this.same(p);if(options.entries?.some(entry=>!p.journal.pendingFor(id).some(current=>current.record.seq===entry.record.seq&&current.deliverySeq===entry.deliverySeq)))throw new RuntimeError('stale_attempt','Сообщение уже убрано или отправлено');if(options.directOnce)this.assertDirectReady(p,pane,options.directOnce,options.entries??[]);this.validateTurn(pane.vendor,pane.mode);
+ const p=options.project??this.project;await this.waitVendor(p,this.pane(id,p).vendor);
+ const prepare=()=>{const pane=this.pane(id,p);this.same(p);if(options.entries?.some(entry=>!p.journal.pendingFor(id).some(current=>current.record.seq===entry.record.seq&&current.deliverySeq===entry.deliverySeq)))throw new RuntimeError('stale_attempt','Сообщение уже убрано или отправлено');if(options.directOnce)this.assertDirectReady(p,pane,options.directOnce,options.entries??[]);this.validateTurn(pane.vendor,pane.mode);
  if(p.starting)throw new RuntimeError('project_opening','проект открывается',409);
  if(firstOpenPending(p,pane))throw new RuntimeError('role_not_opened','Откройте чат роли, чтобы она получила вводную',409);
  if(p.halted)throw new RuntimeError('halted','остановлено владельцем: ходы не идут, сообщения ждут в очереди');
@@ -503,6 +510,10 @@ export class Runtime {
  pane.busy=true;pane.touched=true;pane.revision++;const launchModel=launchSeat.model,launchEpoch=pane.sessionEpoch;
  const scope=this.scopes.create(p.dir,id,currentTrace()?.turnInstanceId??randomUUID()),controller=new AbortController();let releaseReset!:()=>void,finish!:()=>void;
  const turn:ActiveTurn={scope,controller,pane,vendor:pane.vendor,records,deliverySeq:Math.max(0,...entries.map(e=>e.deliverySeq)),relayDepth,attemptNumber:0,handle:null,started:false,stopRequested:false,terminal:null,partial:'',finished:new Promise(r=>{finish=r}),finish:()=>finish(),timer:undefined,resetWait:new Promise(r=>{releaseReset=r}),releaseReset:()=>releaseReset(),result:null,injected};p.active.set(id,turn);this.stateEvent(p,pane);
+ return {automatic,pane,entries,records,injected,artifacts,relayDepth,launchSeat,verifiedAttachments,launchModel,launchEpoch,scope,controller,turn};};
+ // Registered queue claims share the assignment lock; legacy deliveries keep their existing path.
+ const prepared=options.entries?.some(({record})=>record.from==='owner'&&record.origin?.startsWith('task-operation:'))?await locked(this,p,prepare):prepare();
+ const {automatic,pane,entries,records,injected,artifacts,relayDepth,launchSeat,verifiedAttachments,launchModel,launchEpoch,scope,controller,turn}=prepared;
  let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null,networkTurn:NetworkTurn|undefined,turnAttachments:TurnAttachment[]=verifiedAttachments,cleanupAttachments=()=>{};
  try{
  p.state.startAttempt(pane,{turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),startedAt:this.clock.now(),deliverySeq:turn.deliverySeq});

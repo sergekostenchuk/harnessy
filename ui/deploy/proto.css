@@ -1044,3 +1044,9 @@ html[data-proto] .tc-cons>[data-team-library]{min-width:0;overflow:hidden}
 .live-connection{visibility:visible!important}
 
 html[data-proto]:not([data-live-connection="ready"]) .release-gate{display:none}
+/* TS-39.1 queue actions share the canvas typography and stay inside 390px. */
+[data-task-queue] form{display:flex;gap:8px;padding:12px 14px;align-items:end}[data-task-queue] form label{flex:1;min-width:0;font-size:12px}[data-task-queue] input{display:block;width:100%;box-sizing:border-box;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:9px;margin-top:6px}[data-task-queue] .tc-task{grid-template-columns:36px minmax(0,1fr);align-items:start;height:auto;min-height:56px}[data-task-queue] .tc-task .t{min-width:0;flex:1;white-space:normal;overflow-wrap:anywhere}[data-task-queue] .tc-task .t b{display:block;font-weight:500}[data-task-queue] .tc-task p{font-size:11px;color:var(--ink3);margin:5px 0}[data-task-queue] .filt{flex-wrap:wrap}[data-task-queue] select{max-width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--line);padding:5px;border-radius:5px}[data-task-queue] .task-assign{display:block;font-size:11px;margin-top:7px}[data-task-queue] .tc-task-error{padding:10px 14px;color:var(--red,#e9817d)}[data-task-targets] .tc-card{position:relative;width:100%;box-sizing:border-box;min-width:0}[data-task-targets] .body{padding:10px}[data-task-queue]{min-width:0}@media(max-width:600px){.tc-qbig{display:flex;flex-direction:column}[data-task-queue] form{flex-wrap:wrap}[data-task-targets]{display:grid;grid-template-columns:1fr 1fr;gap:8px}}
+
+[data-task-queue] .src{white-space:normal;overflow-wrap:anywhere}
+html[data-proto][data-m] [data-task-queue] .tc-task{height:auto;min-height:56px;grid-template-columns:30px minmax(0,1fr)}
+html[data-proto][data-m] .tc-qbig .tc-queue{overflow:visible}

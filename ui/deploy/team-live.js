@@ -1,11 +1,11 @@
-/* TS-36D: live team canvas, constructor, and an explicitly mocked task queue. */
+/* TS-36D: live team canvas, constructor, and a journal-backed task queue. */
 (function(){
   const root=document.querySelector('[data-team-live]');
   if(!root)return;
   const LIVE=window.LIVE, TC=window.TC, mode=root.dataset.teamLive;
   if(!LIVE||!TC){root.innerHTML='<div class="tc-live-error">Экран команды не загрузился.</div>';return}
   let retryTimer=null,alive=true;
-  const H=LIVE.H, esc=LIVE.esc, S={request:0,loading:false,queued:false,binding:null,settings:new Map(),drafts:new Map(),skipDraftCapture:false,data:null,chats:new Map(),derived:null,engine:null,selected:null,error:null,events:null,queue:JSON.parse(JSON.stringify(TC.QUEUE0)),filter:'all'};
+  const H=LIVE.H, esc=LIVE.esc, S={request:0,loading:false,queued:false,binding:null,settings:new Map(),drafts:new Map(),skipDraftCapture:false,data:null,chats:new Map(),derived:null,engine:null,selected:null,error:null,events:null,queue:[],filter:'all'};
   const projectBinding=()=>({project:H.project,request:H.projectRequestGeneration||0,confirmed:H.confirmedProjectGeneration||0});
   const projectCurrent=binding=>binding.project===H.project&&binding.request===(H.projectRequestGeneration||0)&&binding.confirmed===(H.confirmedProjectGeneration||0);
   const sameBinding=(left,right)=>!!left&&!!right&&left.project===right.project&&left.request===right.request&&left.confirmed===right.confirmed;
@@ -42,9 +42,9 @@
   const cardHTML=row=>TC.card(row);
   function workShell(){content(tabs()+'<div class="ps2-tbar"><b>Команда агентов</b><span class="m" data-team-summary>Читаю состав…</span><span class="st"><i></i><span data-team-channel>канал читается</span></span><span class="r"><span class="tc-plus" data-team-plus-wrap><button type="button" class="btn sm" data-team-plus>'+icon('new')+'роль</button>'+roleMenu()+'</span><button type="button" class="btn sm ghost" data-team-constructor>'+icon('cons')+'Открыть конструктор</button><button type="button" class="btn sm ghost" data-team-queue>'+icon('file')+'Очередь</button><button type="button" class="btn sm ghost" data-team-refresh>Обновить</button></span></div><div class="tc-work"><div class="om-canvas tc" data-canvas><div class="om-view" data-view><svg class="om-edges" data-edges></svg><div data-nodes></div></div>'+zoom()+'<div class="tc-legend"><span><i></i>оргсхема</span><span><i class="live"></i>живое сообщение</span><span>·</span>'+TC.tag('live','есть')+'<span>роли · статусы · чат · канал</span></div></div><div data-team-queue-preview></div></div>');
     S.engine=TC.engine(root,{nodes:()=>S.derived?orchHTML(S.derived.orch)+S.derived.roles.map(cardHTML).join(''):'',edges:()=>S.derived?S.derived.edges:[],path:TC.workPath,padBottom:70,layout:(G,W,Hh,layer)=>{const derived=S.derived||{orch:null,roles:[]},mobile=W<650,orch=derived.orch,orchEl=layer.querySelector('.tc-orch'),ow=mobile?Math.max(240,W-32):Math.min(600,W-32),oh=orchEl&&orchEl.offsetHeight||240;G.rects[orch?orch.id:'missing-orchestrator']={x:16+(W-32-ow)/2,y:16,w:ow,h:oh};const roles=derived.roles,cw=mobile?Math.max(204,W-32):204,cols=mobile?1:Math.max(1,Math.min(4,Math.floor((W-24)/(cw+20)))),gap=mobile?14:Math.max(18,Math.min(42,(W-cols*cw-24)/Math.max(1,cols-1))),rows=Math.ceil(roles.length/cols),startY=oh+96;roles.forEach((row,index)=>{const col=index%cols,line=Math.floor(index/cols),used=Math.min(cols,roles.length-line*cols),lineWidth=used*cw+(used-1)*gap,x0=(W-lineWidth)/2;G.rects[row.id]={x:x0+col*(cw+gap),y:startY+line*142,w:cw,h:120}});const canvas=root.querySelector('[data-canvas]');if(canvas)canvas.style.minHeight=Math.max(360,startY+rows*142+50)+'px'}});
-    TC.bindQueue(root,S.queue,()=>drawQueuePreview());drawQueuePreview();
+    drawQueuePreview();
   }
-  function drawQueuePreview(){const box=root.querySelector('[data-team-queue-preview]');if(box)box.innerHTML=TC.queue(S.queue.slice(0,4),{one:true})}
+  function drawQueuePreview(){const box=root.querySelector('[data-team-queue-preview]');if(box&&!box.querySelector('[data-task-queue]'))box.innerHTML='<div data-task-queue="preview"></div>';window.HARNESS_TASK_QUEUE?.draw()}
   function drawWork(){if(!S.engine)workShell();const data=S.data,view=S.derived,roles=view&&view.members||[],ready=!S.error&&snapshotCurrent();root.querySelector('[data-team-count]').textContent=roles.length+' ролей';root.querySelector('[data-team-link]').textContent=ready?'подключено':data?'данные устарели':'нет данных';root.querySelector('[data-team-summary]').textContent=data?projectName()+' · '+roles.length+' ролей · '+roles.filter(row=>row.st==='write').length+' работают · '+roles.filter(row=>row.st==='decide'||row.st==='err').length+' ждут вас':'Данные команды не прочитаны';root.querySelector('[data-team-channel]').textContent=data?(view.live.length?view.live.length+' сообщений в канале':'канал тихий'):'канал недоступен';const menu=root.querySelector('[data-team-plus-wrap] .tc-pmenu');if(menu)menu.outerHTML=roleMenu();if(floatingRoleMenu&&(!ready||roleMenuCatalog!==JSON.stringify(H.roleCatalog)))closeRoleMenu(true);S.engine.render();root.querySelectorAll('[data-team-plus],[data-team-send],[data-team-open-chat],[data-team-chat-input]').forEach(node=>node.disabled=!ready);if(!ready)root.querySelectorAll('[data-team-role]').forEach(node=>node.disabled=true);error(S.error)}
   function draftFor(id){return S.binding&&S.drafts.get(draftKey(S.binding.project,id))||null}
   const draftHas=(draft,key)=>!!draft&&Object.prototype.hasOwnProperty.call(draft,key);
@@ -150,5 +150,5 @@
   addEventListener('pagehide',()=>{closeRoleMenu();alive=false;clearTimeout(retryTimer);S.request++;S.loading=false;S.queued=false;if(S.events){S.events.close();S.events=null}});
   addEventListener('pageshow',event=>{if(event.persisted){alive=true;void sync(true);subscribe()}});
   window.TEAM_LIVE={validSnapshot,validChat,derive,refresh:sync,state:S};
-  if(mode==='queue')queueShell();else{void (async()=>{if(!H.on)try{await LIVE.refreshStatus(true)}catch(failure){}await sync(true);subscribe()})()}
+  {void (async()=>{if(!H.on)try{await LIVE.refreshStatus(true)}catch(failure){}await sync(true);subscribe()})()}
 })();

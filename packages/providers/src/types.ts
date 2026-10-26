@@ -25,7 +25,7 @@ export type TurnEvent =
  | {type:'done';sessionId:string|null;model:string;durationMs:number;usage:Usage;usageIncomplete?:true}|{type:'error';text:string};
 export type ToolResult={ok:true;text:string}|{ok:false;error:string;code?:string};
 export type Kind='task'|'status'|'question'|'answer'|'review-request'|'verdict'|'blocker'|'escalation'|'note'|'stop'|'resume'|'digest'|'proposal'|'decision'|'report';
-export interface SendArgs {to:string;kind:Kind;text:string;thread?:string;reply_to?:number;evidence?:string[];score?:number;round?:number;sha?:string}
+export interface SendArgs {outcome?:'done'|'blocked'|'partial';to:string;kind:Kind;text:string;thread?:string;reply_to?:number;evidence?:string[];score?:number;round?:number;sha?:string}
 export interface AskArgs {to:string;text:string;thread?:string}
 export interface ReadPaneArgs {pane:string;last_n?:number}
 export interface MergeArgs {sha:string;message?:string}

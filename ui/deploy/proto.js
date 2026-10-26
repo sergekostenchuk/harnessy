@@ -62,8 +62,8 @@
     doc:['частично','Документы и разделы читаются из проекта; история версий и переходы между стадиями — макет.'],
     plan:['макет','План, задачи и показатели пока показаны на примере: движок не отдаёт карту работ.'],
     path:['макет','Путь и его стадии показаны на примере: движок Harnessy пока не подключён к OMG.'],
-    swarm:['частично','Состав, состояния, разговор оркестратора и канал читаются из текущего проекта. Очередь отмечена как макет.'],
-    teamqueue:['макет','Очереди задач в движке нет: данные примера и взаимодействия показаны как макет.'],
+    swarm:['частично','Состав, состояния, разговор оркестратора, канал и очередь задач читаются из текущего проекта.'],
+    teamqueue:['живо','Задачи, назначения и исходы читаются из журнала проекта. Создание и назначение сохраняются в движке.'],
     sens:['макет','Дашборд и пороги — пример; движок пока не отдаёт эти измерения.'],
     now:['частично','Решения и подтверждения приходят от движка; остальные показатели и прогнозы пока демонстрационные.'],
     events:['частично','Лента читается из журнала текущего проекта. Соседние блоки — примеры уведомлений и состояний.'],
@@ -75,7 +75,7 @@
   function specificationLabels(){const spec=SPEC[KEY];if(!spec)return;document.documentElement.setAttribute('data-spec-state',spec[0]);
     document.querySelectorAll('.frame').forEach(frame=>{const app=frame.querySelector('.app,.stage');if(!app||app.querySelector('.spec-banner'))return;
       const banner=document.createElement('div');banner.className='spec-banner';banner.setAttribute('role','note');
-      banner.textContent='Макет · образец данных · страница: '+spec[0]+'. '+spec[1];
+      banner.textContent=(KEY==='teamqueue'?'Живые данные · ': 'Макет · образец данных · страница: '+spec[0]+'. ')+spec[1];
       const main=app.querySelector('.main'),top=main&&main.querySelector('.top');
       if(top){const heading=document.createElement('div');heading.className='spec-heading';top.before(heading);heading.appendChild(banner);top.remove();heading.appendChild(top)}else if(main)main.insertBefore(banner,main.firstChild);else app.insertBefore(banner,app.firstChild);
     });

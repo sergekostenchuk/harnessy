@@ -6,18 +6,19 @@ export const IMAGE_MIMES=['image/png','image/jpeg','image/webp','image/gif'] as 
 export type ImageMime=typeof IMAGE_MIMES[number];
 export const ATTACHMENT_MAX_BYTES=10*1024*1024,ATTACHMENT_MAX_COUNT=8;
 export interface AttachmentRef {id:string;mime:ImageMime;size:number;w:number;h:number}
-export type JournalCode='kind_unknown'|'to_invalid'|'to_unknown'|'self_addressed'|'text_empty'|'text_too_long'|'attachments_invalid'|'reply_to_missing'|'evidence_invalid'|'score_invalid'|'round_invalid'|'reply_to_required'|'sha_required'|'sha_unknown'|'evidence_required'|'evidence_outside'|'evidence_missing'|'evidence_contract'|'policy_denied'|'ack_not_pending'|'ack_closed'|'write_failed'|'initiator_invalid'|'before_invalid';
+export type JournalCode='kind_unknown'|'to_invalid'|'to_unknown'|'self_addressed'|'text_empty'|'text_too_long'|'attachments_invalid'|'reply_to_missing'|'evidence_invalid'|'score_invalid'|'round_invalid'|'reply_to_required'|'sha_required'|'sha_unknown'|'evidence_required'|'evidence_outside'|'evidence_missing'|'evidence_contract'|'policy_denied'|'ack_not_pending'|'ack_closed'|'write_failed'|'initiator_invalid'|'before_invalid'|'outcome_invalid';
 export class JournalError extends Error {
  readonly code:JournalCode;readonly maybeWritten?:true;
  constructor(code:JournalCode,message:string,maybeWritten?:true){super(message);this.name='JournalError';this.code=code;if(maybeWritten)this.maybeWritten=maybeWritten}
 }
 export interface AttemptDecision {pane:string;turnInstanceId:string;action:'retry'|'skip'|'finish';network?:'direct_once';autopilot?:{model:string;vendor:string};unsent?:true;deliverySeq:number|null;done:boolean}
-export interface Record_ {seq:number;id:string;ts:string;from:string;to:string[];kind:string;thread:string|null;reply_to:number|null;text:string;evidence:string[];attachments?:AttachmentRef[];policy:number;score?:number;round?:number;origin?:string;accepted?:boolean;bounds?:Bounds|null;ack?:'pending';sha?:string;merged?:string;version?:number;kinds?:string[];attempt?:AttemptDecision}
+export type TaskOutcome='done'|'blocked'|'partial';
+export interface Record_ {outcome?:TaskOutcome;seq:number;id:string;ts:string;from:string;to:string[];kind:string;thread:string|null;reply_to:number|null;text:string;evidence:string[];attachments?:AttachmentRef[];policy:number;score?:number;round?:number;origin?:string;accepted?:boolean;bounds?:Bounds|null;ack?:'pending';sha?:string;merged?:string;version?:number;kinds?:string[];attempt?:AttemptDecision}
 export type Bounds=Readonly<Record<string,unknown>>;
 export interface DeliveryEntry {record:Record_;deliverySeq:number}
-export interface AppendInput {sender:string;to:string|string[];kind:string;text:string;thread?:string|null;reply_to?:number|null;evidence?:string[]|null;attachments?:AttachmentRef[]|null;policy?:number;score?:number|null;round?:number|null;origin?:string|null;accepted?:boolean|null;bounds?:Bounds|null;ack?:'pending'|null;sha?:string|null;merged?:string|null;attempt?:AttemptDecision}
+export interface AppendInput {outcome?:TaskOutcome;sender:string;to:string|string[];kind:string;text:string;thread?:string|null;reply_to?:number|null;evidence?:string[]|null;attachments?:AttachmentRef[]|null;policy?:number;score?:number|null;round?:number|null;origin?:string|null;accepted?:boolean|null;bounds?:Bounds|null;ack?:'pending'|null;sha?:string|null;merged?:string|null;attempt?:AttemptDecision}
 export interface Initiator {seat:string;trust:'owner'|'harness'|'agent';source?:'autopilot'|'autopilot-cancel'}
-export interface AgentPostInput {to:string|string[];kind:Kind;text:string;thread?:string|null;reply_to?:number|null;evidence?:string[]|null;score?:number;round?:number;sha?:string}
+export interface AgentPostInput {outcome?:TaskOutcome;to:string|string[];kind:Kind;text:string;thread?:string|null;reply_to?:number|null;evidence?:string[]|null;score?:number;round?:number;sha?:string}
 export interface CorePostInput extends Omit<AgentPostInput,'kind'> {kind:Kind|typeof SYSTEM_KINDS[number];origin?:string;merged?:string;attachments?:AttachmentRef[]}
 export interface ThreadState {rounds:number;accepted:boolean;lastScore:number|null;sha:string|null;merged:string|null}
 export interface Route {from:readonly string[];to:readonly string[];kinds:'*'|readonly string[];trigger:string|null;bounds:Bounds|null;n:number}
