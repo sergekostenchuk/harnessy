@@ -139,6 +139,16 @@ test('TS-39.1: missing live team data stays honest; the queue mounts the journal
  const queue=teamUi('queue');await queue.settle();assert.ok(queue.root.querySelector('[data-task-queue="full"]'));assert.ok(queue.requests.some(row=>row.path==='/api/swarm'));assert.doesNotMatch(queue.root.textContent,/в движке очереди нет|пример · не данные движка/);assert.doesNotMatch(live,/QUEUE0|bindQueue/);
 });
 
+test('TS-44 rebase: live queue and orchestrator draft survive the same canvas refresh',async()=>{
+ const v=teamUi('work');let draws=0;
+ v.context.HARNESS_TASK_QUEUE={draw(){const queue=v.root.querySelector('[data-task-queue="preview"]');if(queue){queue.textContent='Живая задача';draws++}}};
+ await v.settle();const queue=v.find('[data-task-queue="preview"]');assert.ok(draws>0);assert.match(queue.textContent,/Живая задача/);
+ const input=v.find('[data-team-chat-input]');input.value='Сохранённый черновик';input.focus();input.setSelectionRange(1,5);
+ await v.context.TEAM_LIVE.refresh(true);await v.settle();
+ assert.equal(v.find('[data-task-queue="preview"]'),queue);assert.match(queue.textContent,/Живая задача/);
+ const restored=v.find('[data-team-chat-input]');assert.equal(restored.value,'Сохранённый черновик');assert.equal(v.document.activeElement,restored);assert.deepEqual([restored.selectionStart,restored.selectionEnd],[1,5]);
+});
+
 
 test('TS-43: failed team read is unavailable rather than missing orchestrator; automatic retry restores data',async()=>{
  let broken=true;const ui=teamUi('work',async path=>{if(broken)throw Error('503');if(path==='/api/swarm')return snapshot();if(path==='/api/chats/chat-orch')return chat('chat-orch','orch');if(path==='/api/chats/chat-worker')return chat('chat-worker','worker');throw Error(path)});await ui.settle();
