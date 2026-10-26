@@ -230,6 +230,15 @@ test('307 integration: Antigravity with probe capability opens owner approval th
  await v.find('[data-program-check]').emit('click');await v.settle();assert.equal(v.find('[data-program-check]').disabled,false);assert.equal(v.find('[data-program-probe]').disabled,false);await v.find('[data-program-probe]').emit('click');await v.settle();assert.equal(v.posts('/probe').length,1);assert.equal(h.runtime.owner.approvals.size,1);assert.equal(f.capture().some(c=>c.args.includes('stream-json')),false);assert.ok(v.document.querySelector('dialog'));assert.equal(v.posts('/api/approve').length,0);
 });
 
+test('TS-45a: a secret-like fixture path is refused before any metadata read; the isolated fixture is accepted',async t=>{
+ const f=antigravityFixture(t);
+ assert.throws(()=>new ProviderCatalog([{...f.entry,binary:'/tmp/agy metadata AIza01/agy fixture.mjs'}]),{code:'protocol'});
+ assert.equal(f.capture().length,0);
+ const source=new ProviderCatalog([f.entry]);t.after(()=>source.close());
+ assert.equal((await source.read('antigravity')).row.installed,true);
+ assert.ok(f.capture().length>0);
+});
+
 test('260/276 integration: an explicitly denied Antigravity descriptor reaches conn.js through actual routes and refuses a probe before any process or owner approval',{timeout:20000},async t=>{
  const f=antigravityFixture(t),entry={...f.entry,capabilities:{...f.entry.capabilities,probe:{ok:false,reason:'Нет изолированного MCP-конфига'}}},h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([entry])}}),v=ui(undefined,undefined,(path,init)=>fetch(h.api.url+path,init),h.dir);await call(h.api,'/api/providers/antigravity/check',{body:{}});await refreshPrograms(v);await open(v);assert.match(v.find('.conn-facts').textContent,/1\.2\.17/);assert.equal(v.find('[data-program-probe]').disabled,true);assert.equal(v.find('[data-program-probe]').textContent,'Недоступно');assert.match(v.find('.cbody').textContent,/Нет изолированного MCP-конфига/);
  await v.find('[data-program-check]').emit('click');await v.settle();assert.equal(v.find('[data-program-check]').disabled,false);assert.equal(v.find('[data-program-probe]').disabled,true);const before=f.capture().length;await v.find('[data-program-probe]').emit('click');assert.equal(v.posts('/probe').length,0);const r=await call(h.api,'/api/providers/antigravity/probe',{body:{model:'gemini-3.8-flash-high'}});assert.equal(r.status,409);assert.equal(r.body.code,'capability_unsupported');assert.equal(f.capture().length,before);assert.equal(h.runtime.owner.approvals.size,0);assert.equal(v.document.querySelector('dialog'),null);
