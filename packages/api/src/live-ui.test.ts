@@ -699,6 +699,8 @@ test('TS-40 UI: history and live completion parse the same per-turn usage',async
 test('TS-40 cost: icon and card round to three decimals without changing stored precision',async()=>{
  const view=turnStatsUI(),usage={...statsUsage,cost:.322515};view.S.chat=[{role:'ai',src:'live',usage}];view.render();
  assert.equal(view.document.querySelector('[data-turn-stats] .cost')!.textContent,'$0,323');await view.document.querySelector('[data-turn-stats]')!.emit('click');assert.match(view.document.querySelector('.tstat')!.textContent,/\$0,323/);assert.equal(usage.cost,.322515);
+});
+
 test('TS-43: reconnecting a busy chat keeps the answer already received over SSE',async()=>{
  const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/01-chat.html',import.meta.url),'utf8'),v=firstPaint(html),status=realStatus();status.panes[0]!.busy=true;
  v.H.project=status.project;v.H.panes=status.panes;v.H.pane=status.panes[0];v.H.cur={text:'PREFIX ',tools:[]};
