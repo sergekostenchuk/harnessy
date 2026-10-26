@@ -360,3 +360,34 @@ test('TS-44 r4: a receipt never clears a newer revision or an unconfirmed draft'
 test('TS-44 r4: a late rejected receipt neither changes the other chat nor clears the unsent draft',async()=>{
  const receipt=deferred<any>();let activeChat='chat-orch';const v=teamUi('work',async path=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator',activeChat)]):path==='/api/chat'?receipt.promise:chat(activeChat,'orch'));await v.settle();v.find('[data-team-chat-input]').value='Черновик A';await v.find('[data-team-send]').emit('click');activeChat='other-chat';await v.window.emit('live:status');await v.settle();v.find('[data-team-chat-input]').value='Черновик B';receipt.resolve({ok:false,error:'Отказ A'});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');assert.doesNotMatch(v.root.textContent,/Отказ A/);activeChat='chat-orch';await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик A');
 });
+
+test('TS-44-rest: a new instance reuses the project/chat draft key and retains the unsent text',async()=>{
+ let instance='instance-a';const v=teamUi('work',async path=>path==='/api/swarm'?{...snapshot('/project-a',[pane('orch','orchestrator','chat-orch')]),instance}:chat('chat-orch','orch'));await v.settle();
+ let input=v.find('[data-team-chat-input]');const key=input.dataset.teamChatKey!;assert.deepEqual(JSON.parse(key),['/project-a','orch','chat-orch']);input.value='Неотправленный черновик';
+ instance='instance-b';await v.context.TEAM_LIVE.refresh(true);await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.dataset.teamChatKey,key);assert.equal(input.value,'Неотправленный черновик');assert.equal(v.context.TEAM_LIVE.state.workDrafts.get(key),'Неотправленный черновик');assert.equal(v.context.TEAM_LIVE.state.workDrafts.size,1);
+});
+
+for(const code of ['binding_changed','pane_busy'])test('TS-44-rest: '+code+' preserves the draft after an instance change',async()=>{
+ const receipt=deferred<any>();let instance='instance-a';const v=teamUi('work',async path=>path==='/api/swarm'?{...snapshot('/project-a',[pane('orch','orchestrator','chat-orch')]),instance}:path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();
+ let input=v.find('[data-team-chat-input]');const key=input.dataset.teamChatKey!;input.value='Не подтверждено';await v.find('[data-team-send]').emit('click');assert.equal(v.context.TEAM_LIVE.state.workSending.has(JSON.stringify(['/project-a','instance-a','orch','chat-orch'])),true);
+ instance='instance-b';await v.context.TEAM_LIVE.refresh(true);await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.dataset.teamChatKey,key);assert.equal(input.value,'Не подтверждено');assert.equal(input.disabled,false);
+ receipt.resolve({ok:false,code,error:'Не отправлено'});await v.settle();assert.equal(v.context.TEAM_LIVE.state.workDrafts.get(key),'Не подтверждено');assert.equal(v.find('[data-team-chat-input]').value,'Не подтверждено');assert.equal(v.context.TEAM_LIVE.state.workSending.size,0);
+});
+
+test('TS-44-rest: a confirmed send removes its actual draft key even after the instance changes',async()=>{
+ const receipt=deferred<any>();let instance='instance-a';const v=teamUi('work',async path=>path==='/api/swarm'?{...snapshot('/project-a',[pane('orch','orchestrator','chat-orch')]),instance}:path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();
+ const key=v.find('[data-team-chat-input]').dataset.teamChatKey!;v.find('[data-team-chat-input]').value='Доставлено';await v.find('[data-team-send]').emit('click');instance='instance-b';await v.context.TEAM_LIVE.refresh(true);await v.settle();receipt.resolve({ok:true});await v.settle();
+ assert.equal(v.context.TEAM_LIVE.state.workDrafts.has(key),false);assert.equal(v.find('[data-team-chat-input]').value,'');assert.equal(v.context.TEAM_LIVE.state.workSending.size,0);
+});
+
+test('TS-44-rest: an earlier receipt cannot clear an identical newer instance attempt',async()=>{
+ const first=deferred<any>(),second=deferred<any>();let instance='instance-a',calls=0;const v=teamUi('work',async path=>path==='/api/swarm'?{...snapshot('/project-a',[pane('orch','orchestrator','chat-orch')]),instance}:path==='/api/chat'?(++calls===1?first.promise:second.promise):chat('chat-orch','orch'));await v.settle();
+ const key=v.find('[data-team-chat-input]').dataset.teamChatKey!;v.find('[data-team-chat-input]').value='Один текст';await v.find('[data-team-send]').emit('click');instance='instance-b';await v.context.TEAM_LIVE.refresh(true);await v.settle();assert.equal(v.find('[data-team-chat-input]').disabled,false);await v.find('[data-team-send]').emit('click');assert.equal(calls,2);
+ first.resolve({ok:true});await v.settle();assert.equal(v.context.TEAM_LIVE.state.workDrafts.get(key),'Один текст');assert.equal(v.find('[data-team-chat-input]').value,'Один текст');assert.equal(v.find('[data-team-chat-input]').disabled,true);
+ second.resolve({ok:false,code:'pane_busy',error:'Место занято'});await v.settle();assert.equal(v.context.TEAM_LIVE.state.workDrafts.get(key),'Один текст');assert.equal(v.find('[data-team-chat-input]').value,'Один текст');
+});
+
+test('TS-44-rest: editing a draft after a send protects it even if the text is restored',async()=>{
+ const receipt=deferred<any>();let instance='instance-a';const v=teamUi('work',async path=>path==='/api/swarm'?{...snapshot('/project-a',[pane('orch','orchestrator','chat-orch')]),instance}:path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();
+ const key=v.find('[data-team-chat-input]').dataset.teamChatKey!;v.find('[data-team-chat-input]').value='Черновик';await v.find('[data-team-send]').emit('click');instance='instance-b';await v.context.TEAM_LIVE.refresh(true);await v.settle();const input=v.find('[data-team-chat-input]');input.value='Другая редакция';await input.emit('input');input.value='Черновик';await input.emit('input');receipt.resolve({ok:true});await v.settle();assert.equal(v.context.TEAM_LIVE.state.workDrafts.get(key),'Черновик');assert.equal(v.find('[data-team-chat-input]').value,'Черновик');
+});
