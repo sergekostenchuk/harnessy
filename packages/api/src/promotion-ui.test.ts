@@ -51,6 +51,15 @@ test('154 UI: repeat from partially materialized role uses saved documents and c
  const v=await ui(h,undefined,{prepare:false,pane:'orchestrator'});await v.click('composer');await v.settle();await r.idle();assert.equal(r.project.state.chats.active.orchestrator,id);assert.equal(h.provider.calls.length,1);assert.match(v.find('#toast').textContent,/Оркестратор назначен/);assert.equal(r.chatGet(id,OWNER).chat.promotion?.pending,false);
 });
 
+test('TS-47.1: reply resumes the current partially materialized promotion with its original identity',async t=>{
+ const h=await noRepositoryFixture(t),r=h.runtime;r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','Обсуждение');const list=r.chatsList(OWNER),id=list.active.room!,chat=list.chats.find(c=>c.id===id)!,append=r.journal.append.bind(r.journal);let once=true;
+ r.journal.append=record=>{const out=append(record);if(once&&record.origin==='onboarding'){once=false;throw Error('after intro')}return out};
+ await assert.rejects(r.promoteChat(id,{project:h.dir,revision:chat.revision,documents:[]},OWNER),/after intro/);
+ const pending=r.chatGet(id,OWNER).chat.promotion!;assert.equal(pending.pending,true);assert.equal(pending.completed,3);const operationId=pending.operationId;
+ const v=await ui(h,undefined,{prepare:false,pane:'orchestrator'});await v.find('[data-la="assign"]').emit('click');await v.settle();await r.idle();
+ const completed=r.chatGet(id,OWNER).chat;assert.equal(completed.id,id);assert.equal(completed.promotion?.operationId,operationId);assert.equal(completed.promotion?.pending,false);assert.equal(r.project.state.chats.active.orchestrator,id);assert.equal(h.provider.calls.length,1);assert.equal(v.requests.filter(request=>request.path.endsWith('/orchestrator')).length,1);assert.match(v.find('#toast').textContent,/Оркестратор назначен/);
+});
+
 
 test('154 UI: promotion on the new-chat page survives applyStatus selecting room, then navigates to the promoted chat',async t=>{
  const h=await noRepositoryFixture(t),v=await ui(h,undefined,{page:'new'}),id=v.H.active.room;await v.click('composer');await v.settle();await h.runtime.idle();assert.equal(v.context.location.href,'01-chat.html');assert.equal(v.S.ui.pane,'orchestrator');assert.equal(v.H.active.orchestrator,id);assert.equal(v.S.ui.fresh,false);

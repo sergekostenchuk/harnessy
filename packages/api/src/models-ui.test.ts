@@ -12,6 +12,7 @@ import {collect} from '../../runtime/src/test-helpers.ts';
 type Data=Record<string,any>;
 const cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');
+const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');
 const part=(s:string,a:string,b:string)=>{const start=s.indexOf(a),end=s.indexOf(b,start+a.length);assert.ok(start>=0&&end>start,a);return s.slice(start,end)};
 const plain=(value:unknown)=>JSON.parse(JSON.stringify(value));
 const esc=(value:unknown)=>String(value??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!));
@@ -39,8 +40,8 @@ function ui(options:{apiRoutes?:Data[];page?:string;room?:boolean;statusFetch?:(
    const result=path==='/api/status'?(options.statusFetch?await options.statusFetch():{project:H.project,panes:H.panes,models:serverModels??H.models,turnModes:H.turnModes}):options.fetch?await options.fetch(path,body):path==='/api/providers/catalog'?snapshot:{ok:true,pane:{...H.pane,...body}};
    if(body&&result.ok)lastPane=result.pane;return {status:result.code==='capability_unsupported'?409:200,json:async()=>result};}};
  ctx.window=ctx;const context=createContext(ctx);
- runInContext(part(live,'  const api=','  // TS-07: waiting controls')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function applyStatus(','  async function refreshChats(')+
-  '\nglobalThis.binding={networkMenu,networkPath,networkWarning,api,sendBinding,bindingCurrent,invalidateBinding,configureSetting,applyStatus};',context);
+ runInContext(part(live,'  const api=','  // TS-07: waiting controls')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function applyStatus(','  async function refreshChats(')+part(live,'  function projectPathValue(','  function laPath(')+
+  '\nglobalThis.binding={networkMenu,networkPath,networkWarning,api,sendBinding,bindingCurrent,invalidateBinding,configureSetting,applyStatus,projectPathValue};',context);
  ctx.LIVE={H,S,esc,...ctx.binding,...(options.apiRoutes?{apiRoutes:options.apiRoutes,loadLlmRoutes:async()=>true}:{}),save(){},log(){},toast:ctx.toast,paneName:(p:Data)=>p.label,busy:()=>false,hStatus(){},
   refreshStatus:async()=>{if(lastPane){Object.assign(H.pane,lastPane);await d.window.emit('live:status')}},
   subscribeLiveEvents(onmessage:(event:Data)=>void){const listener={onmessage,close(){listeners.delete(listener)}};listeners.add(listener);return listener}};
@@ -54,6 +55,30 @@ function ui(options:{apiRoutes?:Data[];page?:string;room?:boolean;statusFetch?:(
  return {...d,H,S,ctx,requests,toasts,waiting,listeners,find,open,select,flush,providers,
   status:()=>d.window.emit('live:status'),hide:()=>d.window.emit('pagehide')};
 }
+
+test('TS-47.1 F07: direct-mode close uses mouse and keyboard without opening rights, and the next request is routed normally',async()=>{
+ for(const action of ['click','Enter',' ']){
+  const v=ui();v.S.ui.direct={worker:true};v.ctx.CX.render();runInContext(part(proto,'  const keyboardActions=','  renderSide();renderWorkspaceHeader();'),v.ctx);
+  const close=v.find('[data-cx-direct-off]');assert.equal(close.tagName,'SPAN');assert.match(close.parentElement!.textContent,/напрямую/);assert.equal(close.getAttribute('role'),'button');assert.equal(close.getAttribute('tabindex'),'0');assert.equal(close.getAttribute('aria-label'),'Снова через оркестратора');
+  if(action==='click')await close.emit('click');else{(close as any).click=()=>close.emit('click');await close.emit('keydown',{key:action});await v.flush()}
+  assert.equal(!!v.S.ui.direct.worker,false,action);assert.equal(v.document.querySelector('.cx-pop'),null,action);
+  Object.assign(v.ctx,{paneName:v.ctx.LIVE.paneName,drawLive(){},render(){},log(){},cols:()=>[],scrollEnd(){},renderWaiting(){},refreshStatus:async()=>{}});
+  runInContext(part(live,'  async function ask(','  function rememberLive()')+'\nglobalThis.realAsk=ask;',v.ctx);await v.ctx.realAsk('следующий ход',v.ctx.binding.sendBinding());
+  assert.equal(v.requests.find(r=>r.path==='/api/chat')?.body?.direct,false,action);
+  await v.find('.cx-bot [data-cx="rights"]').emit('click');assert.ok(v.document.querySelector('[data-cx-mode="read"]'),action);
+ }
+});
+
+test('TS-47.1 F08: role menu distinguishes a background orchestrator from one in the selected project',async()=>{
+ const v=ui({room:true});v.H.panes.push({id:'lead',kind:'orchestrator',role:'orchestrator',label:'Оркестратор',vendor:'claude',model:'shared',mode:'read'});
+ v.H.roleCatalog=[{role:'orchestrator',kind:'orchestrator',label:'оркестратор',multi:false}];v.H.noProject=true;v.ctx.CX.render();await v.find('[data-cx="role"]').emit('click');
+ assert.ok(v.document.querySelector('[data-cx-newseat="orchestrator"]'),'a foreign role must not suppress the action');
+ v.H.noProject=false;v.ctx.CX.render();await v.find('[data-cx="role"]').emit('click');assert.equal(v.document.querySelector('[data-cx-newseat="orchestrator"]'),null);
+ assert.match(v.find('.cx-pop').textContent,/В этом проекте уже есть оркестратор/);
+ v.H.chatList=[{id:'chat-a',promotion:{pending:true}}];v.ctx.CX.render();await v.find('[data-cx="role"]').emit('click');
+ assert.ok(v.document.querySelector('[data-cx-newseat="orchestrator"]'),'pending promotion remains resumable');
+ assert.doesNotMatch(v.find('.cx-pop').textContent,/В этом проекте уже есть оркестратор/);
+});
 
 for(const page of ['chat','new','first'])test('305/306: '+page+' lists every catalogue program and selects the exact vendor/model',async()=>{
  const v=ui({page});await v.open();
