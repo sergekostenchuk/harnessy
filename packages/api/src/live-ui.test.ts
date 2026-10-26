@@ -693,3 +693,9 @@ test('TS-40 UI: history and live completion parse the same per-turn usage',async
  view.H.cur={text:'Ещё ответ',tools:[],pane:'worker'};view.functions.finish({type:'done',turnUsage:{...statsUsage,input:null},usage:{input:null,output:17413,cacheRead:779968},durationMs:6400});assert.equal(view.S.chat.at(-1).usage.input,null);assert.equal(view.S.chat.at(-1).usage.turnId,statsUsage.turnId);assert.equal(view.S.chat.at(-1).turnNumber,2);view.S.chat=[{role:'ai',src:'live',turnNumber:41,usage:statsUsage}];view.H.cur={text:'Следующий',tools:[],pane:'worker'};view.functions.finish({type:'done',turnUsage:statsUsage});assert.equal(view.S.chat.at(-1).turnNumber,42);
  assert.match(style,/@media\(max-width:640px\).*\.tstat \.grid\{grid-template-columns:repeat\(2/);
 });
+
+
+test('TS-40 cost: icon and card round to three decimals without changing stored precision',async()=>{
+ const view=turnStatsUI(),usage={...statsUsage,cost:.322515};view.S.chat=[{role:'ai',src:'live',usage}];view.render();
+ assert.equal(view.document.querySelector('[data-turn-stats] .cost')!.textContent,'$0,323');await view.document.querySelector('[data-turn-stats]')!.emit('click');assert.match(view.document.querySelector('.tstat')!.textContent,/\$0,323/);assert.equal(usage.cost,.322515);
+});
