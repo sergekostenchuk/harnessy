@@ -14,7 +14,7 @@ window.TC=(function(){
   const ico=k=>'<svg viewBox="0 0 24 24">'+(I[k]||'')+'</svg>';
   const tag=(k,t)=>'<span class="tag '+k+'">'+t+'</span>';
   let textDetailId=0;
-  function revealText(value){const text=esc(value),id='tc-full-text-'+(++textDetailId);return '<span class="tc-text-detail"><button type="button" class="tc-text-short" data-tc-reveal data-nodrag title="'+text+'" aria-expanded="false" aria-controls="'+id+'">'+text+'</button><span class="tc-text-full" data-nodrag id="'+id+'" hidden>'+text+'</span></span>'}
+  function revealText(value,key=''){const text=esc(value),id='tc-full-text-'+(++textDetailId);return '<span class="tc-text-detail"><button type="button" class="tc-text-short" data-tc-reveal="'+esc(key)+'" data-nodrag title="'+text+'" aria-expanded="false" aria-controls="'+id+'">'+text+'</button><span class="tc-text-full" data-nodrag id="'+id+'" hidden>'+text+'</span></span>'}
   function closeText(except){document.querySelectorAll('[data-tc-reveal][aria-expanded="true"]').forEach(button=>{if(button!==except){button.setAttribute('aria-expanded','false');button.nextElementSibling.hidden=true}})}
   document.addEventListener('click',event=>{const button=event.target.closest('[data-tc-reveal]');if(button){const open=button.getAttribute('aria-expanded')!=='true';closeText(button);button.setAttribute('aria-expanded',String(open));button.nextElementSibling.hidden=!open}else if(!event.target.closest('.tc-text-full'))closeText()});
   addEventListener('keydown',event=>{if(event.key==='Escape'){const button=document.querySelector('[data-tc-reveal][aria-expanded="true"]');closeText();if(button)button.focus()}});
@@ -73,7 +73,7 @@ window.TC=(function(){
   const dot=st=>'<span class="tc-o '+st+'"></span>';
   /* карточка члена команды · 4 строки */
   function card(r,o={}){ const st=o.st||r.st; const free=st==='free';
-    return '<div class="tc-card '+st+(o.cls?' '+o.cls:'')+'" data-key="'+r.id+'" data-name="'+esc(r.name)+'" data-gen="'+esc(r.gen||r.name)+'"><div class="l1">'+dot(st)+'<b title="'+esc(r.name)+'">'+revealText(r.name)+'</b><span class="md" title="'+esc(r.model)+'">'+esc(r.model)+'</span></div>'+
+    return '<div class="tc-card '+st+(o.cls?' '+o.cls:'')+'" data-key="'+r.id+'" data-name="'+esc(r.name)+'" data-gen="'+esc(r.gen||r.name)+'"><div class="l1">'+dot(st)+'<b title="'+esc(r.name)+'">'+revealText(r.name,'name')+'</b><span class="md" title="'+esc(r.model)+'">'+esc(r.model)+'</span></div>'+
       '<div class="l2">'+esc(o.stText||r.stText)+'</div><div class="l3" title="'+esc(r.last)+'">'+(free?'задачи нет — назначьте из очереди':esc(r.last))+'</div>'+
       '<div class="l4" title="'+esc('ход · '+r.spend+' · '+r.tok+' · '+r.at)+'"><span>ход</span><b>'+esc(r.spend)+'</b><i>'+esc(r.tok)+' · '+esc(r.at)+'</i></div><span class="drophint">назначить '+esc(r.gen||r.name)+'</span></div>'; }
   /* крупная карточка оркестратора — тот же чат оркестратора, встроенный (последние реплики + поле ввода) */
@@ -96,7 +96,7 @@ window.TC=(function(){
       '<div class="it own" data-lib="own"><span class="ic">'+ico('new')+'</span><div><b>Своя роль</b><small>имя · инструкция · модель</small></div><span class="m">＋</span></div><div class="ft">перетащите роль на холст или кликните — появится карточка без связей; модель и права — на карточке</div></div>'; }
   /* карточка роли в конструкторе: порты · модель ▾ · права · инструкция роли */
   function node(n,o={}){ const cls=(n.neu?' neu':'')+(n.chg?' chg':'')+(!n.model?' err':'')+(o.cls?' '+o.cls:'');
-    return '<div class="tc-node'+cls+'" data-key="'+n.id+'"><span class="pi" data-l="получает"></span><span class="po" data-l="пишет"></span><div class="hd"><span class="ic">'+ico(n.ic)+'</span><div><b>'+esc(n.name)+'</b><small>'+esc(n.role)+(n.neu?' · новая':'')+(!n.model?' · нет модели':'')+'</small></div><span class="x" data-nodrag data-x="'+n.id+'" title="Убрать из команды">×</span></div>'+
+    return '<div class="tc-node'+cls+'" data-key="'+n.id+'"><span class="pi" data-l="получает"></span><span class="po" data-l="пишет"></span><div class="hd"><span class="ic">'+ico(n.ic)+'</span><div><b>'+revealText(n.name,'name')+'</b><small>'+esc(n.role)+(n.neu?' · новая':'')+(!n.model?' · нет модели':'')+'</small></div><span class="x" data-nodrag data-x="'+n.id+'" title="Убрать из команды">×</span></div>'+
       '<div class="rows"><div class="row"><span>модель</span><span class="v'+(n.model?'':' none')+'" data-nodrag>'+ico('model')+'<em>'+(n.model?esc(n.model):'выбрать модель')+'</em><i>▾</i></span></div>'+
       '<div class="row"><span>права</span><span class="v'+(n.rights==='Всё без вопросов'?' acc':'')+'" data-nodrag>'+ico('lock')+'<em>'+esc(n.rights)+'</em><i>▾</i></span></div>'+
       '<div class="row"><span>инструкция</span><span class="v file" data-nodrag>'+ico('file')+'<em>'+esc(n.file)+'</em><i>↗</i></span></div></div>'+

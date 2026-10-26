@@ -169,3 +169,21 @@ test('TS-43 r2: role popup escapes the clipped toolbar, keeps disclosure on stat
  await v.window.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('[data-team-role-menu]'),null);assert.equal(v.document.activeElement,v.find('[data-team-plus]'));
  await v.find('[data-team-plus]').emit('click');v.H.roleCatalog=[];await v.context.TEAM_LIVE.refresh();assert.equal(v.document.querySelector('[data-team-role-menu]'),null,'changed catalog closes stale choices');
 });
+
+
+for(const mode of ['work','constructor'] as const)test('TS-43 r3: '+mode+' keeps the full role name and its focus after live status',async()=>{
+ const label='Аналитик договора поставки оборудования <img src=x>',data=snapshot('/project-a',[{...pane('worker','worker',null),label}]);
+ const v=teamUi(mode,async path=>{assert.equal(path,'/api/swarm');return data});await v.settle();const selector='[data-key="worker"] [data-tc-reveal="name"]',before=v.find(selector);before.focus();await before.emit('click');
+ await v.window.emit('live:status');await v.settle();const current=v.find(selector);assert.notEqual(current,before);assert.equal(current.getAttribute('aria-expanded'),'true');assert.equal(Reflect.get(current.nextElementSibling!,'hidden'),false);assert.equal(current.getAttribute('aria-controls'),current.nextElementSibling!.getAttribute('id'));assert.equal(current.nextElementSibling!.textContent,label);assert.equal(current.getAttribute('title'),label);assert.equal(v.document.activeElement,current);assert.equal(v.root.querySelector('img'),null);
+ if(mode==='constructor')assert.ok(v.find('[data-team-pane="worker"] [data-team-model]'));
+ await v.window.emit('keydown',{key:'Escape'});assert.equal(Reflect.get(current.nextElementSibling!,'hidden'),true);assert.equal(v.document.activeElement,current);
+});
+
+test('TS-43 r3: library disclosure follows role identity through a refresh and closes when the reason changes',async()=>{
+ const v=teamUi('constructor');await v.settle();const selector='[data-team-role-key="reviewer"] [data-tc-reveal="reason"]',detail=v.find(selector);detail.focus();await detail.emit('click');v.H.roleCatalog.reverse();await v.window.emit('live:status');await v.settle();const current=v.find(selector);assert.equal(v.document.activeElement,current);assert.equal(current.getAttribute('aria-expanded'),'true');assert.equal(Reflect.get(current.nextElementSibling!,'hidden'),false);
+ v.H.roleCatalog.find((role:any)=>role.role==='reviewer').reason='Новая причина недоступности';await v.window.emit('live:status');await v.settle();const changed=v.find(selector);assert.equal(changed.getAttribute('aria-expanded'),'false');assert.equal(v.document.activeElement,changed);assert.equal(v.requests.some(row=>row.body),false);
+});
+
+test('TS-43 r3: disclosure does not migrate to an identically named role in another project',async()=>{
+ const v=teamUi('work');await v.settle();const before=v.find('[data-key="worker"] [data-tc-reveal="name"]');before.focus();await before.emit('click');v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();const current=v.find('[data-key="worker"] [data-tc-reveal="name"]');assert.equal(current.getAttribute('aria-expanded'),'false');assert.equal(Reflect.get(current.nextElementSibling!,'hidden')??current.nextElementSibling!.hasAttribute('hidden'),true);assert.notEqual(v.document.activeElement,current);
+});
