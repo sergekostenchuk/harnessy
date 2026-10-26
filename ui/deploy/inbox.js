@@ -3,6 +3,7 @@
   if(!document.documentElement.hasAttribute('data-proto'))return;
   const PAGE=document.documentElement.dataset.page,DAY=86400000,READ_KEY='inboxRead';
   const L=window.LIVE,esc=L?.esc||((v)=>String(v??'')),state={project:null,generation:0,items:[],read:new Set(),filter:'all',loading:false,error:null,sourceErrors:[],request:0,queued:false,pending:new Set(),actionErrors:new Map(),replyOpen:new Set(),replyDrafts:new Map()};
+  let retryTimer=null,alive=true;
   const recent=(ts,now)=>Number.isFinite(ts)&&ts>=now-7*DAY&&ts<=now+DAY;
   const date=s=>{const n=typeof s==='number'?s:Date.parse(s||'');return Number.isFinite(n)?n:null};
   const validRecord=r=>r&&Number.isSafeInteger(r.seq)&&r.seq>0&&typeof r.kind==='string'&&typeof r.from==='string'&&Array.isArray(r.to);
@@ -74,7 +75,7 @@
   async function chatDetails(chats,b){const list=(chats||[]).filter(c=>c&&typeof c.id==='string'&&Number.isFinite(c.last)&&c.last*1000>=Date.now()-7*DAY),result=[];let index=0,failed=false;
     await Promise.all(Array.from({length:Math.min(4,list.length)},async()=>{while(index<list.length&&same(b)){const c=list[index++];try{const row=await L.api('/api/chats/'+encodeURIComponent(c.id));if(row?.chat?.id===c.id&&Array.isArray(row.messages))result.push(row);else failed=true}catch{failed=true}}}));return {rows:result,failed};
   }
-  async function refresh(){if(!current())return false;if(state.loading){state.queued=true;return false}
+  async function refresh(){clearTimeout(retryTimer);if(!alive)return false;if(!current()){state.error='Движок недоступен · данные не подтверждены';draw();return false;}if(state.loading){state.queued=true;return false}
     const b=binding(),request=++state.request;if(state.project!==b.project||state.generation!==b.generation){state.project=null;state.items=[];state.sourceErrors=[];state.pending.clear();state.actionErrors.clear();state.replyOpen.clear();state.replyDrafts.clear();signal()}
     state.loading=true;if(PAGE==='inbox')draw();
     try{const [status,journal,chats,trace,limits,decisions,settings,update]=await Promise.all([
@@ -95,7 +96,7 @@
       state.items=keepCompleted(next,state.items);
       state.error=null;signal();if(PAGE==='inbox')draw();return true;
     }catch(e){if(same(b)){state.error=e?.message||'Нет связи';if(PAGE==='inbox')draw()}return false}
-    finally{state.loading=false;if(state.queued){state.queued=false;void refresh()}}
+    finally{state.loading=false;if(state.queued){state.queued=false;void refresh()}else if(alive&&(state.error||state.sourceErrors.length))retryTimer=setTimeout(()=>{void refresh()},3000)}
   }
   let readJob=Promise.resolve();
   function mark(ids){const b=binding();if(state.project!==b.project||state.generation!==b.generation)return Promise.resolve(false);readJob=readJob.catch(()=>{}).then(async()=>{
@@ -156,7 +157,7 @@
     finally{if(writing){state.pending.delete(x.id);if(same(b))draw()}}
   }
   document.addEventListener('click',e=>{const filter=e.target.closest('[data-inbox-filter]');if(filter&&PAGE==='inbox'){state.filter=filter.dataset.inboxFilter;draw();return}
-    if(e.target.closest('[data-inbox-retry]')){void refresh();return}
+    if(e.target.closest('[data-inbox-retry]')){void (async()=>{if(!current())await L.connect();await refresh()})();return}
     if(e.target.closest('[data-inbox-read-all]')){void mark(state.items.map(x=>x.id));return}
     const button=e.target.closest('[data-inbox-action]'),row=e.target.closest('[data-inbox-id]');if(!row||PAGE!=='inbox')return;
     const x=state.items.find(i=>i.id===row.dataset.inboxId);if(!x)return;if(button){e.preventDefault();e.stopPropagation();void action(x,button.dataset.inboxAction)}else if(!e.target.closest('[data-attempt-action]'))void action(x,'open');
@@ -166,9 +167,9 @@
   const api=window.HARNESS_INBOX={collect,counts,panelCounts,refresh,paintBadges,get current(){return {project:state.project,items:state.items,counts:counts()}}};
   bindPanelCounts();
   addEventListener('live:status',()=>{if(current())void refresh()});
-  addEventListener('pageshow',event=>{if(event.persisted&&current())void refresh()});
-  addEventListener('pagehide',()=>{state.request++;state.project=null;state.items=[]});
+  addEventListener('pageshow',event=>{if(event.persisted){alive=true;void refresh()}});
+  addEventListener('pagehide',()=>{alive=false;clearTimeout(retryTimer);state.request++;state.project=null;state.items=[]});
   const events=L?.subscribeLiveEvents?.();if(events)events.onmessage=e=>{let data;try{data=JSON.parse(e.data)}catch{return}if(['state','done','approval','queued','peerReply','note','networkRoute','limits','network','providers','autopilotDecision'].includes(data.type)&&current())void refresh()};
   window.harnessy?.updates?.onState?.(()=>{if(current())void refresh()});
-  if(current())void refresh();
+  void refresh();
 })();

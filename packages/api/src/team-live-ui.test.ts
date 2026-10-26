@@ -40,12 +40,13 @@ function teamUi(mode:'work'|'constructor'|'queue',handler?:ApiHandler,options:an
  };
  const LIVE:any={H,S:state,esc:escape,async api(path:string,body?:unknown){requests.push({path,body});return (handler||fallback)(path,body)},async refreshStatus(){return true},subscribeLiveEvents(callback:any){const stream={callback,closed:false,close(){this.closed=true}};subscriptions.push(stream);return stream},toast(text:string){toasts.push(text)},save(){}};
  const viewport=()=>({fit(){},takeSuppress(){return false},zoomAt(){},cw(){return 900},chh(){return 600}});
- const context:any={document:d.document,location,LIVE,OMCORE:{esc:escape,cubic:(...values:number[])=>'M'+values.join(' '),midOf:()=>[10,10],fwdPath:()=>({d:'M0 0L10 10',m:[5,5]}),viewport},addEventListener:d.window.addEventListener.bind(d.window),URLSearchParams};
+ const timers=new Map<number,()=>void>();let timerId=0;
+ const context:any={setTimeout:(fn:()=>void)=>{timers.set(++timerId,fn);return timerId},clearTimeout:(id:number)=>timers.delete(id),document:d.document,location,LIVE,OMCORE:{esc:escape,cubic:(...values:number[])=>'M'+values.join(' '),midOf:()=>[10,10],fwdPath:()=>({d:'M0 0L10 10',m:[5,5]}),viewport},addEventListener:d.window.addEventListener.bind(d.window),URLSearchParams};
  context.window=context;
  const vm=createContext(context);runInContext(canvas,vm);runInContext(live,vm);
  const root=d.document.querySelector('[data-team-live]')!;
  const find=(selector:string)=>{const node=root.querySelector(selector);assert.ok(node,selector);return node};
- return {...d,H,state,requests,toasts,subscriptions,location,context,root,find,settle};
+ return {...d,H,state,requests,toasts,subscriptions,location,context,root,find,settle,timers};
 }
 
 test('36D: live work canvas uses project seats, chats, usage and channel, and the orchestrator card is the same chat',async()=>{
@@ -131,4 +132,12 @@ test('36D: missing live data stays honest, while the queue is explicitly local m
  const queue=teamUi('queue');await queue.settle();assert.match(queue.root.textContent,/в движке очереди нет/);assert.match(queue.root.textContent,/пример · не данные движка/);assert.equal(queue.requests.length,0);
  const transfer:any={value:'',effectAllowed:'',dropEffect:'',setData(_type:string,value:string){this.value=value},getData(){return this.value}},task=queue.find('[data-task="14"]'),target=queue.find('[data-key="mock-orch"]');await task.emit('dragstart',{dataTransfer:transfer});await target.emit('dragover',{dataTransfer:transfer});await target.emit('drop',{dataTransfer:transfer});
  const changed=queue.context.TEAM_LIVE.state.queue.find((row:any)=>row.n===14);assert.equal(changed.who,'Оркестратор');assert.equal(changed.st,'work');assert.match(target.textContent,/№14 назначена/);assert.equal(queue.requests.length,0);
+});
+
+
+test('TS-43: failed team read is unavailable rather than missing orchestrator; automatic retry restores data',async()=>{
+ let broken=true;const ui=teamUi('work',async path=>{if(broken)throw Error('503');if(path==='/api/swarm')return snapshot();if(path==='/api/chats/chat-orch')return chat('chat-orch','orch');if(path==='/api/chats/chat-worker')return chat('chat-worker','worker');throw Error(path)});await ui.settle();
+ assert.match(ui.find('[data-team-error]').textContent,/503/);assert.ok(ui.find('[data-team-refresh]'));assert.equal(ui.root.querySelector('[data-key="missing-orchestrator"]'),null);assert.equal(ui.timers.size,1);
+ broken=false;[...ui.timers.values()][0]!();await ui.settle();assert.equal(ui.context.TEAM_LIVE.state.error,null);assert.ok(ui.root.querySelector('[data-key="orch"]'));assert.equal(ui.timers.size,0);
+ broken=true;await ui.context.TEAM_LIVE.refresh();assert.match(ui.find('[data-team-error]').textContent,/Последний снимок устарел/);assert.equal(ui.find('[data-team-send]').disabled,true);await ui.window.emit('pagehide');assert.equal(ui.timers.size,0);
 });

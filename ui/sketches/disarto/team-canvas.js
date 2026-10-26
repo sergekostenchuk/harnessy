@@ -70,7 +70,7 @@ window.TC=(function(){
   function card(r,o={}){ const st=o.st||r.st; const free=st==='free';
     return '<div class="tc-card '+st+(o.cls?' '+o.cls:'')+'" data-key="'+r.id+'" data-name="'+esc(r.name)+'" data-gen="'+esc(r.gen||r.name)+'"><div class="l1">'+dot(st)+'<b>'+esc(r.name)+'</b><span class="md">'+esc(r.model)+'</span></div>'+
       '<div class="l2">'+esc(o.stText||r.stText)+'</div><div class="l3" title="'+esc(r.last)+'">'+(free?'задачи нет — назначьте из очереди':esc(r.last))+'</div>'+
-      '<div class="l4"><span>ход</span><b>'+esc(r.spend)+'</b><i>'+esc(r.tok)+' · '+esc(r.at)+'</i></div><span class="drophint">назначить '+esc(r.gen||r.name)+'</span></div>'; }
+      '<div class="l4" title="'+esc('ход · '+r.spend+' · '+r.tok+' · '+r.at)+'"><span>ход</span><b>'+esc(r.spend)+'</b><i>'+esc(r.tok)+' · '+esc(r.at)+'</i></div><span class="drophint">назначить '+esc(r.gen||r.name)+'</span></div>'; }
   /* крупная карточка оркестратора — тот же чат оркестратора, встроенный (последние реплики + поле ввода) */
   function orch(o={}){ const st=o.st||'think', txt=o.stText||(st==='wait'?'ждёт вас · подпись M0':st==='write'?'пишет':'думает · 2 с');
     const msgs=o.msgs||'<div class="me">Что ждёт меня после сдачи TS-35?</div><div class="ai"><div><p><b>Воркер 1</b> сдал TS-35 ревьюеру 2 мин назад. <b>Ревьюер</b> всё ещё ждёт вашу подпись M0 по D8.4d — это держит TS-34 воркера 2.</p>'+(st==='wait'?'<div class="decide"><div class="lbl">нужно ваше решение</div><div class="act"><span class="btn p">Подписать M0</span><span class="btn">Открыть D8.4d</span></div></div>':'')+'</div></div>'+(st==='think'?'<div class="ai typing">думает 2 с… собирает сдачу TS-35 для ревью</div>':'');

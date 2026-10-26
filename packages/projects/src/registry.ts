@@ -3,6 +3,7 @@ import {basename,dirname,join} from 'node:path';
 import {withPathLock,atomicWrite,parseYaml,mapping} from '@harnessy/team';
 import {gitops,GitOps} from './gitops.ts';
 import {ownerPaths,readJson,writeJson,validDir} from './files.ts';
+import {projectChats} from './project-chats.ts';
 import {ProjectError} from './errors.ts';
 import type {OwnerPaths,ProjectInfo} from './types.ts';
 export class ProjectRegistry {
@@ -17,7 +18,7 @@ export class ProjectRegistry {
  const raw=readJson(this.paths.projects),known=Array.isArray(raw)?raw:[],out:ProjectInfo[]=[],git=this.options.gitops??gitops;
  for(const path of new Set([current,...known])){if(!validDir(path))continue;const file=join(path,'.harness','team.yaml'),hasTeam=existsSync(file);let seats:number|null=null;
  if(path===current&&this.options.currentSeats)seats=this.options.currentSeats();else if(hasTeam)try{const data=parseYaml(readFileSync(file,'utf8')),s=mapping(data)?data.get('seats'):null;seats=s?mapping(s)?s.size:Array.isArray(s)||typeof s==='string'?s.length:null:0}catch{}
- out.push({path,name:basename(path.replace(/\/+$/,''))||path,hasTeam,seats,git:await git.ownRepo(path),current:path===current})}
+ out.push({...projectChats(path),path,name:basename(path.replace(/\/+$/,''))||path,hasTeam,seats,git:await git.ownRepo(path),current:path===current})}
  return {current,projects:out}
  }
 }

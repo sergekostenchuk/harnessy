@@ -57,6 +57,7 @@
 
   // ── мост к харнессу: если страницу отдал сам харнесс (~/HARNESS, :3777), чат идёт к настоящей модели по подписке, ответ — потоком событий
   const H={on:false,panes:[],pane:null,cur:null,asks:{}};
+  function connectionFailed(){H.connectionFailed=true;dispatchEvent(new CustomEvent('live:offline'))}
   // TS-18: each owner action carries an immutable project/engine binding.
   const TRACE={current:null,alive:true,last:new WeakMap(),controller:null};
   const traceUUID=()=>globalThis.crypto.randomUUID();
@@ -408,7 +409,7 @@
     if(H.on&&!H.snapshotOnly&&state&&state.on){const label=state.until?.kind==='morning'?'до '+new Date(state.until.at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'до ответа';document.querySelectorAll('.frame .main .top .r').forEach(host=>{const pill=document.createElement('span');pill.className='autopilot-pill';pill.dataset.autopilotPill='';pill.textContent='◆ автопилот · '+label;host.prepend(pill)})}
     if(PAGE==='away'){document.querySelectorAll('.frame .top .st').forEach(node=>node.textContent=state?.on?'автопилот включён · решения пока ждут вас':'автопилот выключен');document.querySelectorAll('[data-autopilot-off]').forEach(node=>node.hidden=!state?.on)}
   }
-  function applyStatus(st,request,connected=false){if(leftPage||window.HARNESS_BOOT&&!window.HARNESS_BOOT.confirm(st.project||'',request))return false;if(connected){H.on=true;H.snapshotOnly=false}H.liveStatus=st;const changed=H.project!==(st.project||''),previousRoom=(H.panes||[]).find(p=>p.id==='room');H.panes=st.panes; H.models=st.models||{}; H.turnModes=st.turnModes||{}; H.network=st.network||{}; H.networkError=st.networkError||null; H.modes=st.modes||[]; H.project=st.project||''; H.defaultDir=st.defaultDir||''; H.roleCatalog=st.roleCatalog||[]; H.noProject=!!st.noProject; H.repo=!!st.repo; H.projectsRoot=st.projectsRoot||''; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; H.halted=!!st.halted; H.kinds=st.kinds||[]; H.threads=st.threads||{};
+  function applyStatus(st,request,connected=false){if(leftPage||window.HARNESS_BOOT&&!window.HARNESS_BOOT.confirm(st.project||'',request))return false;if(connected){H.on=true;H.snapshotOnly=false}H.connectionFailed=false;H.liveStatus=st;const changed=H.project!==(st.project||''),previousRoom=(H.panes||[]).find(p=>p.id==='room');H.panes=st.panes; H.models=st.models||{}; H.turnModes=st.turnModes||{}; H.network=st.network||{}; H.networkError=st.networkError||null; H.modes=st.modes||[]; H.project=st.project||''; H.defaultDir=st.defaultDir||''; H.roleCatalog=st.roleCatalog||[]; H.noProject=!!st.noProject; H.repo=!!st.repo; H.projectsRoot=st.projectsRoot||''; H.active=st.activeChats||{}; H.hasOrch=!!st.hasOrchestrator; H.halted=!!st.halted; H.kinds=st.kinds||[]; H.threads=st.threads||{};
     if(changed){knowledgeReset();H.confirmedProjectGeneration=(H.confirmedProjectGeneration||0)+1;S.chat=[];H.chatList=[];H.pins=[];H.projects=null;const selectedRoom=(H.panes||[]).find(p=>p.id==='room');if(previousRoom&&selectedRoom&&previousRoom.model!==selectedRoom.model)toast('у проекта своя настройка модели: '+esc(modelName(selectedRoom.model)));}
     if(changed&&typeof eventsReset==='function')eventsReset();if(changed&&typeof swarmReset==='function')swarmReset();
     if(changed&&typeof resetJournal==='function'){resetJournal(H.project);if(H.on&&!H.snapshotOnly&&window.psKey==='log')journalFetch()}setTimeout(()=>dispatchEvent(new CustomEvent('live:status')),0);
@@ -418,19 +419,26 @@
     if(PAGE==='new'){ S.ui.pane='room'; S.ui.fresh=true; S.ui.switched=false; save(); }   // стартовый экран — ВСЕГДА без роли · новый чат; выбор роли или чата отсюда = переход в чат (слово владельца 08.10)
     if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); renderWaiting();if(typeof chatGuidanceDraw==='function')chatGuidanceDraw(); }
   async function refreshChats(){ const binding=sendBinding();try{ const r=await api('/api/chats');if(!bindingCurrent(binding))return; H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } if(typeof sideChats==='function') await sideChats();if(window.HARNESS_BOOT)rememberLive(); }
-  async function refreshStatus(connected=false){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){} if(!st||!Array.isArray(st.panes))return null; if(applyStatus(st,request,connected)===false)return null; await refreshChats(); hStatus(); if(window.CX) CX.render(); return st; }
+  async function refreshStatus(connected=false){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){} if(!st||!Array.isArray(st.panes)){if(window.HARNESS_BOOT&&request&&!window.HARNESS_BOOT.current(request))return null;connectionFailed();return null;} if(applyStatus(st,request,connected)===false)return null; await refreshChats(); hStatus(); if(window.CX) CX.render(); return st; }
   // лента активного чата — из харнесса (один источник правды для Electron, браузера и сервера); цена хода у старых реплик неизвестна
   let LOADED=null; const ONB={};
+  document.addEventListener('click',event=>{if(event.target.closest('[data-chat-read-retry]'))void loadChat({onboard:false})});
+  addEventListener('pagehide',()=>{if(H.chatReadTimer)clearTimeout(H.chatReadTimer);H.chatReadTimer=null});
   // вводная роли при первом открытии её чата — в том числе когда чата ещё нет (место посеяно при создании проекта; Kimi UX-1 №85 п.4); движок повторно не шлёт
   async function onboardOnce(p){ if(!p||p.id==='room'||ONB[p.id]) return; ONB[p.id]=1; try{ const o=await api('/api/onboard',{pane:p.id}); if(o&&o.sent){ toast('Роль получает вводную: кто она, где, с кем работает'); await refreshStatus(); if(H.pane&&H.pane.busy){if(!H.cur)H.cur={text:'',tools:[]};drawLive(); } else await loadChat(); } }catch(e){} }
   async function loadAttemptNotes(p,binding){if(!p)return;let r=null;try{r=await api('/api/journal?limit=0')}catch(e){}if(!r||!Array.isArray(r.records)||!bindingCurrent(binding))return;
     const done=new Map();for(const record of r.records){const a=record.attempt;if(record.from==='harness'&&record.kind==='note'&&record.origin==='attempt'&&record.to&&record.to.length===1&&record.to[0]==='owner'&&a&&typeof a.turnInstanceId==='string'&&a.turnInstanceId&&a.done===true&&a.pane===p.id&&record.thread==='attempt:'+a.turnInstanceId&&['retry','skip','finish'].includes(a.action))done.set(a.turnInstanceId,record)}
     const notes=[...done.values()].map(record=>{const a=record.attempt,text='владелец решил: '+({retry:'повторить ход',skip:'пропустить записи прежнего хода',finish:'завершить восстановление'}[a.action]);return {role:'ai',src:'sys',who:'харнесс',pane:p.id,text,html:md(text),t:Date.parse(record.ts),attemptId:a.turnInstanceId}});
     S.chat=S.chat.filter(m=>!m.attemptId).concat(notes).sort((a,b)=>a.t-b.t);save();render();}
-  async function loadChat({onboard=true,visible=false}={}){ if(!H.on||PAGE!=='chat'&&!(visible&&cols().length)) return; knowledgeReset();const p=H.pane, cid=p?(H.active||{})[p.id]:null,binding=sendBinding();
-    if(!cid){ S.chat=[]; save(); LOADED=cid||'none';renderWaiting();render();await loadAttemptNotes(p,binding);if(!bindingCurrent(binding))return;if(onboard&&p&&!p.busy) await onboardOnce(p); return; }
+  async function loadChat({onboard=true,visible=false}={}){
+  function chatReadError(message,binding){document.querySelectorAll('[data-chat-read-error]').forEach(node=>node.remove());if(H.chatReadTimer)clearTimeout(H.chatReadTimer);H.chatReadTimer=null;if(!message)return;
+    const feed=document.querySelector('.frame.cur .feed .col');if(feed){const box=document.createElement('div');box.className='live-guidance';box.setAttribute('data-chat-read-error','');box.innerHTML='<b>'+esc(message)+'</b><p>'+(S.chat.length?'Последний снимок устарел.':'История пока не прочитана.')+'</p><button class="btn sm" data-chat-read-retry>Повторить</button>';feed.insertBefore(box,feed.firstChild);feed.querySelectorAll('.live-sep').forEach(node=>node.remove())}
+    H.chatReadTimer=setTimeout(()=>{if(bindingCurrent(binding))void loadChat({onboard:false})},3000);
+  }
+    if(!H.on||PAGE!=='chat'&&!(visible&&cols().length)) return; knowledgeReset();const p=H.pane, cid=p?(H.active||{})[p.id]:null,binding=sendBinding();
+    if(!cid){chatReadError(null); S.chat=[]; save(); LOADED=cid||'none';renderWaiting();render();await loadAttemptNotes(p,binding);if(!bindingCurrent(binding))return;if(onboard&&p&&!p.busy) await onboardOnce(p); return; }
     if(LOADED!==cid){S.chat=[];save();render()}
-    let r=null; try{ r=await api('/api/chats/'+cid); }catch(e){} if(!r||!Array.isArray(r.messages)){ return; }
+    let r=null; try{ r=await api('/api/chats/'+cid); }catch(e){} if(!bindingCurrent(binding))return;if(!r||!Array.isArray(r.messages)){chatReadError('Не удалось прочитать чат',binding);return;}chatReadError(null);
     const who=p.id==='room'?'Без роли':paneName(p);
     const hsys=m=>m.role==='peer'&&/^\[от харнесс\]/.test(m.text);   // заметки харнесса (вводная, передача) — системные: без модели, расхода и действий
     if(!bindingCurrent(binding)) return;
@@ -465,9 +473,9 @@
   addEventListener('pagehide',()=>{LIVE_EVENTS.alive=false;stopLiveEvents()});
   addEventListener('pageshow',event=>{if(event.persisted)LIVE_EVENTS.alive=true});
   // End TS-12 shared events.
-  async function hConnect(){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)){ return; }   /* движок подключён, если статус есть — даже без единого места: иначе чистая машина (первый запуск) остаётся в демо-режиме и проект создать нельзя */
+  async function hConnect(){ const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){ } if(!st||!Array.isArray(st.panes)){if(window.HARNESS_BOOT&&request&&!window.HARNESS_BOOT.current(request))return null;connectionFailed();return;}   /* движок подключён, если статус есть — даже без единого места: иначе чистая машина (первый запуск) остаётся в демо-режиме и проект создать нельзя */
     if(applyStatus(st,request,true)===false)return;H.connected=true;if(window.HARNESS_BOOT)window.HARNESS_BOOT.accept(); if(!H.pane&&S.ui.pane!=='room'){ H.on=false; return; }
-    if(PAGE==='chat'||PAGE==='first'){ if(H.pane&&H.pane.busy) H.cur={text:'',tools:[]};
+    if(PAGE==='chat'||PAGE==='first'){ if(H.pane&&H.pane.busy&&!H.cur) H.cur={text:'',tools:[]};
       let linkedProject=H.project;const es=H.events||(H.events=subscribeLiveEvents()); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='autopilot'){void refreshStatus();return} if(ev.type==='teamProposals'&&ev.project===H.project){void proposalsFetch();void knowledgeFetch();} if(ev.type==='state'&&KN.data)void knowledgeFetch(); if(!H.pane||ev.pane!==H.pane.id) return; hEvent(ev); };
       es.onerror=()=>{ if(H.link!=='lost'){ H.link='lost'; hStatus(); if(!H.projectLinkChange)toast('Связь с движком потеряна — переподключаюсь…'); } };   // плановая смена проекта тоже закрывает SSE — это не потеря движка
       es.onopen=async()=>{ if(H.link==='lost'){ const switching=H.projectLinkChange;H.link='ok'; hStatus(); await refreshStatus();void proposalsFetch();if(!switching&&H.project===linkedProject)toast('Связь восстановлена');linkedProject=H.project;H.projectLinkChange=false; }else void proposalsFetch(); };
@@ -477,7 +485,7 @@
     syncLiveEvents();await refreshChats();
     if(PAGE==='chat')await loadChat();else if(PAGE==='first'){firstSelectPane();await loadChat({onboard:false,visible:true});firstDraw()}
     if(/21-journal\.html$/.test(location.pathname)) journalLive();
-    if(window.CX) CX.render(); }
+    if(window.CX) CX.render();if(H.connected){render();liveFirstPaint()} }
 
   // ── чат: настоящее поле ввода; разговор хранится; ответы — по сценарию и так и подписаны (или от настоящей модели через мост)
   const link=(href,t,p)=>'<a class="btn sm'+(p?' p':'')+'" href="'+href+'" style="text-decoration:none">'+t+'</a>';
@@ -1720,7 +1728,7 @@
       const point=(pane,active)=>pane.waiting&&pane.waiting.status==='unsent'||pane.status==='uncertain'?'err':pane.waiting||pane.pendingApprovals>0?'wait':pane.busy&&active?'busy':'';
       const liveChats=seats.flatMap(pane=>{const rows=all.filter(chat=>chat.pane===pane.id);return rows.length?rows.map(chat=>({pane:pane.id,id:chat.id,title:chat.title||'разговор ещё пуст',role:paneName(pane),active:!!chat.active,state:point(pane,!!chat.active)})):[{pane:pane.id,id:'',title:'разговор ещё пуст',role:paneName(pane),active:false,state:point(pane,true)}]});
       const roomRows=rooms.map(chat=>{const pane=(H.panes||[]).find(item=>item.id==='room')||{};return {pane:'room',id:chat.id,title:chat.title||'без названия',active:!!chat.active,state:point(pane,!!chat.active)}});
-      const pinRows=pins.map(pin=>pin.kind==='folder'?{kind:'folder',id:'',name:pin.name||base(pin.path),title:pin.name||base(pin.path),label:'проект',path:pin.path,current:!!pin.current,active:!!pin.current,seats:Number.isSafeInteger(pin.seats)?pin.seats:null}:{kind:'chat',id:pin.chat,title:pin.title||'без названия',label:(pin.label||'')+(pin.current?'':' · '+(pin.name||base(pin.path))),path:pin.path,current:!!pin.current,pane:(all.find(chat=>chat.id===pin.chat)||{}).pane||'',active:!!pin.current&&all.some(chat=>chat.id===pin.chat&&chat.active)});
+      const pinRows=pins.map(pin=>pin.kind==='folder'?{...(H.projects||[]).find(project=>project.path===pin.path),kind:'folder',id:'',name:pin.name||base(pin.path),title:pin.name||base(pin.path),label:'проект',path:pin.path,current:!!pin.current,active:!!pin.current,seats:Number.isSafeInteger(pin.seats)?pin.seats:null}:{kind:'chat',id:pin.chat,title:pin.title||'без названия',label:(pin.label||'')+(pin.current?'':' · '+(pin.name||base(pin.path))),path:pin.path,current:!!pin.current,pane:(all.find(chat=>chat.id===pin.chat)||{}).pane||'',active:!!pin.current&&all.some(chat=>chat.id===pin.chat&&chat.active)});
       const projects=(H.projects||[]).map(item=>({...item,current:!!item.current||item.path===cur}));
       const currentProject=projects.find(item=>item.current)||{path:cur,name:base(cur),current:true,seats:seats.length,git:H.repo};
       window.PS2.setData({live:true,project:{name:currentProject.name||base(cur)||'Без проекта',path:cur,repo:!!(currentProject.git||H.repo)},inbox:{need:waitList().length,info:0},pinned:pinRows,chats:liveChats,rooms:roomRows,projects,sections:sectionCounts});
@@ -1734,7 +1742,7 @@
     document.querySelectorAll('aside.side.ps .newbtn[data-go="new"], aside.side.ps .logo[data-go="new"]').forEach(b=>b.title='Новый разговор без роли (стартовый экран). Новый чат с ролью — чип «чат» у поля ввода');
     document.querySelectorAll('aside.side.ps .ps-pins').forEach(box=>{ box.innerHTML=(pinError?'<div class="ps-chat more" role="status">'+esc(pinError)+' <button class="btn sm" data-pins-refresh>Повторить</button></div>':'')+(pins.map(pinRow).join('')||(!pinError?'<div class="ps-chat more">закреплённых пока нет</div>':'')); });
     document.querySelectorAll('aside.side.ps .ps-folders').forEach(box=>{ box.innerHTML=(H.projects||[]).map(folderRow).join('')||'<div class="ps-chat more">папок пока нет</div>'; });
-    document.querySelectorAll('aside.side.ps .ps-proj').forEach(b=>{ b.innerHTML=esc(cur?base(cur):'без проекта')+' <i>▾</i>'; b.title=(cur||'проект не выбран')+' — нажмите, чтобы сменить'; });
+    document.querySelectorAll('aside.side.ps .ps-proj:not(.ps2-prow)').forEach(b=>{ b.innerHTML=esc(cur?base(cur):'без проекта')+' <i>▾</i>'; b.title=(cur||'проект не выбран')+' — нажмите, чтобы сменить'; });
     document.querySelectorAll('.recent').forEach(rc=>{ rc.innerHTML='<span>недавние:</span>'+(all.slice(0,4).map(c=>'<span class="chip ps-chat'+(c.active?' act':'')+'" data-chat="'+c.id+'" data-pane="'+c.pane+'"><i></i>'+esc((c.title||'без названия').slice(0,38))+' <small>'+esc(c.label)+'</small></span>').join('')||'<span class="chip" style="opacity:.6">пока нет</span>'); }); }
   async function openChatRow(chatId,paneId){ invalidateBinding();const project=H.project,target=(H.panes||[]).find(p=>p.id===paneId||chatId&&(H.active||{})[p.id]===chatId),viewOnly=target&&(!chatId||(H.active||{})[target.id]===chatId);if(viewOnly)S.ui.pane=target.id;else if(chatId){ let r=null; try{ r=await api('/api/chats/open',{chat:chatId,carry:'text'}); }catch(x){} if(H.project!==project)return;if(!r||!r.ok){ toast('Не вышло: '+esc((r&&r.error)||'нет связи')); return; } S.ui.pane=r.pane.id; if(!r.already) toast('Открыт чат: '+esc((r.chat&&r.chat.title)||'без названия')+(r.carried?' · прежний чат закрыт, контекст передан текстом':'')); }   // то же, что чип чата: смена ленты не молчит (Kimi UX-5 №129 п.2)
     else S.ui.pane=paneId;   // у роли чата ещё нет — чат начнётся с вводной (движок: /api/onboard один раз)
@@ -1756,9 +1764,9 @@
   // меню профиля (скетч 07): всплывает из кнопки профиля в панели; отдельный кадр #f2 не открываем
   document.addEventListener('click',e=>{ const u=e.target.closest('aside.side.ps [data-go="profile"]'); if(!u) return; e.preventDefault(); e.stopImmediatePropagation();
     const items=[{t:'<b>Локальное окно</b> <small>без входа</small>',dis:true},{t:'Проект: '+esc((H.project||'').split('/').pop()||'не выбрана'),r:'сменить',act:'proj'},{t:'Облик',r:'A · Графит',href:'06-settings.html#p=look'},{t:'Клавиши',r:'⌘/',href:'06-settings.html#p=keys'},{t:'Настройки',r:'⌘,',href:'06-settings.html#p=profile'},{t:'Выйти',r:'на сайте harnessy.ai',dis:true}];
-    laMenu(u.closest('.ps-foot')||u,'профиль',items.filter(it=>!(H.on&&it.dis)),it=>{ if(it.href) location.href=it.href; else if(it.act==='proj'){ const pj=document.querySelector('aside.side.ps .ps-proj'); if(pj) pj.click(); } }); },true);
+    laMenu(u.closest('.ps-foot')||u,'профиль',items.filter(it=>!(H.on&&it.dis)),it=>{ if(it.href) location.href=it.href; else if(it.act==='proj'){ const pj=document.querySelector('aside.side.ps .ps-proj:not(.ps2-prow)'); if(pj) pj.click(); } }); },true);
   // папка проекта: строка в шапке (и значок папки в рейке) — меню смены
-  document.addEventListener('click',async e=>{ const pj=e.target.closest('aside.side.ps .ps-proj, aside.side.ps [data-folders]'); if(!pj||!H.on) return; e.preventDefault(); e.stopPropagation();
+  document.addEventListener('click',async e=>{ const pj=e.target.closest('aside.side.ps .ps-proj:not(.ps2-prow), aside.side.ps [data-folders]'); if(!pj||!H.on) return; e.preventDefault(); e.stopPropagation();
     const items=(H.projects||[]).map(pr=>({t:esc(pr.name)+(pr.current?' <small>текущая</small>':''),r:(pr.seats==null?'':pr.seats+' '+pl(pr.seats,'роль','роли','ролей'))+(pr.git?' · git':''),path:pr.path,dis:!!pr.current})).concat([{t:'Открыть другой проект…',open:true}]);
     const hd=pj.closest('.ps-head')||pj;   // якорь — вся шапка: aside режет по краю, меню шириной в панель
     laMenu(hd,'проект',items,async it=>{ if(it.open){ laPath(hd,'открыть проект',H.homeHint||'',p=>sideSwitchProject(p),'Открыть'); return; } await sideSwitchProject(it.path); }); });
@@ -1996,7 +2004,7 @@
   }
   addEventListener('pageshow',event=>{if(event.persisted)return resumePage()});
   // End TS-09a.1 page lifecycle.
-  window.LIVE={networkMenu,networkPath,networkWarning,profileDraw,firstModelsDraw:()=>{if(PAGE==='first')firstDraw()},subscribeLiveEvents,providerLimitHTML:(id,name,kind,supported)=>{if(!supported)return '<p class="conn-note">Провайдер лимиты не отдаёт.</p>';return spLimitHTML({id,name,kind},true)},stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,operationsDraw,operationAttention,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting,composerState,attachmentsDraw,pickImages,get teamProposals(){return TP;},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};   // для cx.js (поле ввода)
+  window.LIVE={connect:hConnect,networkMenu,networkPath,networkWarning,profileDraw,firstModelsDraw:()=>{if(PAGE==='first')firstDraw()},subscribeLiveEvents,providerLimitHTML:(id,name,kind,supported)=>{if(!supported)return '<p class="conn-note">Провайдер лимиты не отдаёт.</p>';return spLimitHTML({id,name,kind},true)},stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,operationsDraw,operationAttention,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting,composerState,attachmentsDraw,pickImages,get teamProposals(){return TP;},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};   // для cx.js (поле ввода)
   // TS-09b3: proposal cards always confirm the exact displayed project and version.
   const TP={project:null,generation:0,data:[],loading:false,queued:false,sending:false,error:null,focus:null,focusBinding:null,kinds:{},expanded:{}};
   const KN={request:0,data:null,binding:null,error:null};

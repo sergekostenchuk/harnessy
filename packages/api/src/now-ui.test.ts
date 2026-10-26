@@ -162,7 +162,7 @@ for(const delay of [false,true])for(const statusFirst of [false,true])test('167/
  const {request}=await import('node:http'),{runInContext}=await import('node:vm'),{live}=await import('./now-ui-test-helpers.ts');
  const h=await fixture(t),p=h.runtime.registry.get('worker')!,approved=p.askApproval('Real confirmation','fixture',1000),gate=deferred(),sources:any[]=[];
  const v=nowUI(async(path,body)=>(await call(h.api,path,{body})).body);v.H.project=h.dir;v.H.on=false;v.H.pane=p.settings();v.context.S.ui.pane='worker';
- Object.assign(v.context,{hStatus(){},loadChat:async()=>{},refreshChats:async()=>{if(delay)await gate.promise},applyStatus(st:any){Object.assign(v.H,{on:true,project:st.project,panes:st.panes,liveStatus:st});if(statusFirst)void v.window.emit('live:status')},EventSource:class{
+ Object.assign(v.context,{hStatus(){},render(){},liveFirstPaint(){},loadChat:async()=>{},refreshChats:async()=>{if(delay)await gate.promise},applyStatus(st:any){Object.assign(v.H,{on:true,project:st.project,panes:st.panes,liveStatus:st});if(statusFirst)void v.window.emit('live:status')},EventSource:class{
   onmessage?:((e:any)=>void);onopen?:((e:any)=>void);onerror?:((e:any)=>void);frames:any[]=[];req:any;res:any;
   constructor(url:string){sources.push(this);this.req=request(h.api.url+url,res=>{this.res=res;this.onopen?.({});let pending='';res.on('error',()=>{});res.on('data',chunk=>{pending+=chunk.toString();let end;while((end=pending.indexOf('\n\n'))>=0){const block=pending.slice(0,end);pending=pending.slice(end+2);if(block.startsWith('data: ')){const data=block.slice(6);this.frames.push(JSON.parse(data));this.onmessage?.({data})}}})});this.req.on('error',()=>{});this.req.end();t.after(()=>this.close())}close(){this.req.destroy();this.res?.destroy()}
  }});

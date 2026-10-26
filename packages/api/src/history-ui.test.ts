@@ -10,10 +10,11 @@ const part=(start:string,end:string)=>{const a=live.indexOf(start),b=live.indexO
 function ui(project:string,active:Record<string,string>,fetch:(path:string)=>Promise<any>){
  const d=dom('<div class="frame cur"><div class="feed"><div class="col"><div class="ai static-example">six fake replies OMG</div></div></div></div><div class="frame"><div class="feed"><div class="col"><div class="ai static-example">old demo</div></div></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});
  const H:any={on:true,project,panes:[{id:'worker',label:'воркер',model:'configured-later'}],active,asks:{},cur:null};H.pane=H.panes[0];const S:any={chat:[{role:'me',text:'browser duplicate'},{role:'ai',src:'live',html:'browser duplicate'}],ui:{pane:'worker',demo:true},cx:{}},requests:string[]=[],storage=new Map<string,string>();
+ const timers=new Map<number,()=>void>();let timerId=0;
  const context:any={H,S,document:d.document,window:{},PAGE:'chat',LOADED:null,SEL:null,md:(s:string)=>s,knowledgeReset(){},knowledgeSet(){return true},knowledgeOpen:async()=>{},knowledgeFetch(){},KN:{data:null},hydrateArtifacts(){},mdMessageArtifacts(){return ""},esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),paneName:(p:any)=>p.label,now:()=>1,hhmm:(n:number)=>new Date(n).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),save(){storage.set('state',JSON.stringify(S))},
-  api:async(path:string)=>{requests.push(path);return fetch(path)},setTimeout(){},showWaiting(){},showRestore(){},renderWaiting(){},loadAttemptNotes:async()=>{},renderAll(){},selBar(){},drawLive(){},onboardOnce:async()=>{},addEventListener:d.window.addEventListener.bind(d.window)};
+  api:async(path:string)=>{requests.push(path);return fetch(path)},setTimeout(fn:()=>void){timers.set(++timerId,fn);return timerId},clearTimeout(id:number){timers.delete(id)},showWaiting(){},showRestore(){},renderWaiting(){},loadAttemptNotes:async()=>{},renderAll(){},selBar(){},drawLive(){},onboardOnce:async()=>{},addEventListener:d.window.addEventListener.bind(d.window)};
  const vm=createContext(context);runInContext(part('  // TS-23d:','  // TS-07: waiting controls')+part('  let bindingGeneration','  function md(')+part('  async function loadChat(','  // подключение к движку')+part('  const fmtN=',"  document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]');")+'\nglobalThis.testing={load:loadChat,render,bubble,invalidate:invalidateBinding};',vm);
- return {...d,H,S,context,requests,storage,functions:context.testing};
+ return {...d,H,S,context,requests,storage,timers,functions:context.testing};
 }
 
 test('120/121: six genuine HTTP messages replace local/demo history once through repeated loads, render and F5; equal texts remain distinct',async t=>{
@@ -50,4 +51,14 @@ test('23d: reloaded response uses its captured connection, not the current provi
  const network={provider:'claude',via:{id:'nl',type:'ssh',label:'Нидерланды'},reserve:{from:{id:'first',type:'ssh',label:'Первый <сервер>'},reason:'connection'}};
  const v=ui('/projects/a',{worker:'a'},async()=>({messages:[{role:'ai',text:'Сохранённый ответ',ts:1,network}]}));v.H.network={claude:{id:'other',type:'ssh',label:'Другой выход'}};await v.functions.load();
  const reply=v.document.querySelector('.frame.cur .live-msg.ai')!;assert.match(reply.textContent,/через VPS «Нидерланды»/);assert.match(reply.textContent,/ход пошёл через запасной/);assert.doesNotMatch(reply.textContent,/Другой выход/);assert.match(reply.innerHTML,/&lt;сервер&gt;/);assert.match(reply.textContent,/Сохранённый ответ/);
+});
+
+
+test('TS-43: chat read failure labels stale history, retries and removes the error after real recovery',async()=>{
+ let failed=false;const v=ui('/projects/a',{worker:'a'},async()=>failed?{ok:false,error:'503'}:{messages:[{role:'ai',text:'Ответ из движка',ts:1}]});
+ await v.functions.load();failed=true;await v.functions.load();
+ assert.match(v.document.querySelector('[data-chat-read-error]')!.textContent,/Не удалось прочитать чат.*Последний снимок устарел/s);assert.equal(v.timers.size,1);assert.equal(v.S.chat[0].text,'Ответ из движка');
+ failed=false;const retry=[...v.timers.values()][0]!;retry();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(v.document.querySelector('[data-chat-read-error]'),null);assert.equal(v.timers.size,0);assert.equal(v.S.chat[0].text,'Ответ из движка');
+ failed=true;await v.functions.load();const old=[...v.timers.values()][0]!,before=v.requests.length;v.functions.invalidate();v.H.project='/projects/b';old();await new Promise(resolve=>setImmediate(resolve));assert.equal(v.requests.length,before,'old project does not retry into the new one');
 });

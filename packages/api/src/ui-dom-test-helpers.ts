@@ -16,6 +16,7 @@ export class DomNode {
  get isConnected():boolean{return this===this.owner||!!this.parentElement?.isConnected}
  get firstElementChild():DomNode|null{return this.children.find(n=>n.tagName!=='#TEXT')??null}
  get firstChild():DomNode|null{return this.children[0]??null}
+ get nextElementSibling():DomNode|null {const siblings=this.parentElement?.children.filter(n=>n.tagName!=='#TEXT')??[];return siblings[siblings.indexOf(this)+1]??null}
  get previousElementSibling():DomNode|null {const siblings=this.parentElement?.children.filter(n=>n.tagName!=='#TEXT')??[];return siblings[siblings.indexOf(this)-1]??null}
  get checked(){return this.hasAttribute('checked')}set checked(on:boolean){if(on)this.setAttribute('checked','');else delete this.attributes.checked}
  get disabled(){return this.hasAttribute('disabled')}set disabled(on:boolean){if(on)this.setAttribute('disabled','');else delete this.attributes.disabled}

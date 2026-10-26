@@ -23,6 +23,7 @@
 
   // ── строка: верх над .box, вложения внутри перед полем, низ вместо нарисованной .bar2
   function build(box){ if(!box.__cx||box.__cxBuilt) return; box.__cxBuilt=true;
+    const status=box.closest('.main')?.querySelector('.status');if(status){status.classList.add('cx-status');box.after(status)}
     const top=document.createElement('div'); top.className='cx-top'; box.before(top);
     const att=document.createElement('div'); att.className='cx-att'; box.insertBefore(att, box.querySelector('.in'));
     const bar=box.querySelector('.bar2'), bot=document.createElement('div'); bot.className='cx-bot'; if(bar) bar.replaceWith(bot); else box.appendChild(bot);

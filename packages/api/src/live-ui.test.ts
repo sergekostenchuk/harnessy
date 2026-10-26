@@ -375,7 +375,7 @@ test('78/106: arrows never switch projects; state is keyed by full path and surv
 
 test('TS-38.1: profile entry opens the Autopilot master and submits typed conditions',()=>{
  const listeners:((e:Data)=>void)[]=[],location={href:''};let reopened=0;const document={addEventListener(_t:string,fn:(e:Data)=>void){listeners.push(fn)},getElementById:()=>({click(){reopened++}})};
- const context=createContext({document,location,KEY:'chat',PAGES:{away:'18-overlays.html'},window:{}});runInContext(part(proto,"  document.addEventListener('click',e=>{const mode=","  document.addEventListener('click',e=>{if(!e.target.closest('.ps-foot'))"),context);
+ const context=createContext({document,location,KEY:'chat',PAGES:{away:'18-overlays.html'},window:{}});runInContext(part(proto,"  document.addEventListener('click',e=>{const menuButton=","  document.addEventListener('click',e=>{if(!e.target.closest('.ps-foot'))"),context);
  const target={closest:(selector:string)=>selector==='aside.side'?{}:selector==='[data-go]'?{dataset:{go:'away'}}:null};
  for(const side of ['wide','rail']){listeners[0]!({target,preventDefault(){},stopPropagation(){}});assert.equal(location.href,'18-overlays.html#leave',side)}
  (context as Data).KEY='away';listeners[0]!({target,preventDefault(){},stopPropagation(){}});assert.equal(reopened,1);
@@ -408,7 +408,7 @@ function firstPaint(html:string,storage=new Map<string,string>(),page='chat'){
  const root={dataset:{page:''},hasAttribute:(a:string)=>attrs.has(a),setAttribute:(a:string,v:string)=>attrs.set(a,v),removeAttribute:(a:string)=>attrs.delete(a)};
  Object.assign(view.sandbox.document,{documentElement:root,getElementById:(id:string)=>nodes.get(id)||null,createElement:node,body:{appendChild(el:Data){nodes.set(el.id,el)}}});
  const original=view.sandbox.document.querySelectorAll;
- view.sandbox.document.querySelectorAll=(q:string)=>q==='aside.side.ps'?[side]:q==='aside.side.ps .ps-folders'?[folders]:q==='aside.side.ps .ps-proj'?[project]:q==='.frame .top > b'?[head]:original(q);
+ view.sandbox.document.querySelectorAll=(q:string)=>q==='aside.side.ps'?[side]:q==='aside.side.ps .ps-folders'?[folders]:q==='aside.side.ps .ps-proj:not(.ps2-prow)'?[project]:q==='.frame .top > b'?[head]:original(q);
  Object.assign(view.sandbox,{setTimeout:(fn:()=>void,ms:number)=>{timers.set(++timerId,{fn,ms});return timerId},clearTimeout:(id:number)=>timers.delete(id),sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,v:string)=>storage.set(k,v)},badges(){},limitsDraw(){},firstSelectPane(){},firstDraw(){},EventSource:class {close(){}},nowLive(){},journalLive(){},journalFetch:async()=>{},SP:{generation:0},JR:{epoch:0},base:(path:string)=>path.split('/').pop(),PROJ_ITEMS:[],PIN:'',PAGE:page});
  view.sandbox.window=view.sandbox;view.sandbox.psKey=page;view.sandbox.location.pathname='/sketches/proto/'+(runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data)[page];view.H.on=false;view.H.panes=[];view.H.project=undefined;view.H.pane=null;
  const first=html.match(/<head>\s*<script>([\s\S]*?)<\/script>/);assert.ok(first,'first head script precedes styles and all frames');runInContext(first[1]!,view.context);
@@ -420,7 +420,7 @@ function firstPaint(html:string,storage=new Map<string,string>(),page='chat'){
   part(live,'  // TS-09a.1: one lifecycle','  // End TS-09a.1 page lifecycle.')+
   '\nglobalThis.paint={restore:restoreLiveSnapshot,connect:hConnect,refresh:refreshStatus,apply:applyStatus,ready:liveFirstPaint,remember:rememberLive};',view.context);
  return {...view,root,attrs,timers,nodes,side,folders,project,head,status,storage,boot:view.sandbox.HARNESS_BOOT,paint:view.sandbox.paint,
-  demoVisible:()=>!attrs.has('data-live-pending'),deadline(){for(const [id,timer] of timers)if(timer.ms===1500){timers.delete(id);timer.fn()}}};
+  demoVisible:()=>!attrs.has('data-live-pending')&&!attrs.has('data-live-unavailable'),deadline(){for(const [id,timer] of timers)if(timer.ms===1500){timers.delete(id);timer.fn()}}};
 }
 const realStatus=()=>({project:'/real/project',panes:[{id:'worker',label:'Настоящий оркестратор',model:'w1',vendor:'claude',role:'orchestrator',kind:'orchestrator',busy:false}],activeChats:{worker:'c-real'},models:{},auth:{token:'must-not-cache'}});
 
@@ -452,8 +452,8 @@ test('141–143: every PROTO_PAGES page hides demo before delayed status; succes
   assert.equal(v.demoVisible(),true,page);assert.match(v.project.innerHTML,/project/);assert.match(v.folders.innerHTML,/Настоящий оркестратор/);assert.doesNotMatch(v.folders.innerHTML,/OMG|H1\.5/);
   assert.equal(v.attrs.has('data-live-mock'),false);assert.equal(v.nodes.has('live-boot-state'),false);
   assert.doesNotMatch(v.storage.get('harnessy-live-snapshot-v1')!,/must-not-cache/);
-  const offline=firstPaint(html,new Map(),key);offline.deadline();assert.equal(offline.demoVisible(),true,page);assert.match(offline.nodes.get('live-boot-state')!.textContent,/макет/);
-  // Late recovery removes the mock label; merely connecting and leaving /api/chats pending must not fall back to a mock.
+  const offline=firstPaint(html,new Map(),key);offline.deadline();assert.equal(offline.demoVisible(),false,page);assert.match(offline.nodes.get('live-boot-state')!.textContent,/Движок недоступен/);
+  // TS-43: late recovery removes the unavailable label; merely connecting and leaving /api/chats pending must not fall back to a mock.
   const recovered=offline.paint.connect().finally(()=>offline.paint.ready());offline.status.resolve(realStatus());await recovered;assert.equal(offline.attrs.has('data-live-mock'),false);
  }
  const inboxHtml=readFileSync(new URL('44-inbox.html',directory),'utf8'),inboxScript=readFileSync(new URL('inbox.js',directory),'utf8');
@@ -461,7 +461,7 @@ test('141–143: every PROTO_PAGES page hides demo before delayed status; succes
  const d=dom(inboxHtml.slice(inboxHtml.indexOf('<body>')+6,inboxHtml.lastIndexOf('</body>')));Object.assign(d.document,{documentElement:d.html,body:d.body});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page','inbox');
  const id='e'.repeat(64),project='/built-project',row={version:1,project,at:new Date().toISOString(),entry:{state:'applied',decisionId:id,operation:'stop_pane',receipt:{result:{},effectVersion:'attempt:4'},question:{id:'waiting:1',kind:'waiting',text:'Ход не ответил'},proposal:{answer:null,reason:'Консилиум подтвердил остановку'},council:{orchestrator:{seat:'lead',model:'w1'},reviewer:{seat:'review',model:'w2'}},cost:{currency:'USD',amount:0.03,status:'measured'}}};
  const H={on:false,snapshotOnly:false,project,confirmedProjectGeneration:1,active:{}},api=async(path:string)=>path==='/api/status'?{project,approvals:[],panes:[]}:path==='/api/journal?limit=0'?{project,records:[]}:path==='/api/chats'?{chats:[]}:path.startsWith('/api/trace?')?{ok:true,project,records:[]}:path==='/api/limits'?{ok:true,project,providers:[]}:path==='/api/autopilot/decisions'?{ok:true,project,decisions:[row]}:path==='/api/settings'?{ok:true,owner:{}}:Promise.reject(Error('unexpected '+path));
- const sandbox:Data={window:null,document:d.document,location:{href:''},Date,Set,Map,Number,Array,JSON,Promise,encodeURIComponent,CustomEvent:class{},dispatchEvent(){},addEventListener:d.window.addEventListener.bind(d.window),LIVE:{H,S:{ui:{}},api,esc:(value:unknown)=>String(value??''),subscribeLiveEvents:()=>({})}};sandbox.window=sandbox;
+ const sandbox:Data={window:null,document:d.document,location:{href:''},setTimeout(){},clearTimeout(){},Date,Set,Map,Number,Array,JSON,Promise,encodeURIComponent,CustomEvent:class{},dispatchEvent(){},addEventListener:d.window.addEventListener.bind(d.window),LIVE:{H,S:{ui:{}},api,esc:(value:unknown)=>String(value??''),subscribeLiveEvents:()=>({})}};sandbox.window=sandbox;
  runInContext(inboxScript,createContext(sandbox));H.on=true;await sandbox.HARNESS_INBOX.refresh();
  assert.match(d.document.querySelector('[data-inbox-feed]')!.textContent,/Автопилот решил: Остановить ход/);assert.match(d.document.querySelector('[data-inbox-feed]')!.textContent,/Консилиум подтвердил остановку/);
  assert.match(d.document.querySelector('[data-inbox-feed]')!.innerHTML,/data-inbox-action="cancel"/);
@@ -488,12 +488,12 @@ test('142: cached status and chat list render before HTTP; wrong project, corrup
 });
 
 
-test('141: offline deadline before body parsing waits to attach its label; accepted live data cancels deferred mock captions',()=>{
+test('141: offline deadline before body parsing waits to attach its label; accepted live data cancels deferred unavailable captions',()=>{
  const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/01-chat.html',import.meta.url),'utf8');
  for(const recovered of [false,true]){
   const v=firstPaint(html),document=v.sandbox.document,body=document.body;let loaded!:()=>void;document.body=null;document.addEventListener=(kind:string,fn:()=>void)=>{if(kind==='DOMContentLoaded')loaded=fn};
   assert.doesNotThrow(()=>v.deadline());assert.ok(loaded);if(recovered)v.boot.ready();document.body=body;loaded();
-  if(recovered)assert.equal(v.nodes.has('live-boot-state'),false);else assert.match(v.nodes.get('live-boot-state')!.textContent,/макет/);
+  if(recovered)assert.equal(v.nodes.has('live-boot-state'),false);else assert.match(v.nodes.get('live-boot-state')!.textContent,/Движок недоступен/);
  }
 });
 
@@ -692,4 +692,12 @@ test('TS-40 UI: history and live completion parse the same per-turn usage',async
  const view=ui({fetch:async()=>({messages:[{seq:1,role:'ai',text:'Ответ',ts:1,usage:statsUsage}]})});await view.functions.loadChat({onboard:false});assert.deepEqual(plain(view.S.chat[0].usage),statsUsage);
  view.H.cur={text:'Ещё ответ',tools:[],pane:'worker'};view.functions.finish({type:'done',turnUsage:{...statsUsage,input:null},usage:{input:null,output:17413,cacheRead:779968},durationMs:6400});assert.equal(view.S.chat.at(-1).usage.input,null);assert.equal(view.S.chat.at(-1).usage.turnId,statsUsage.turnId);assert.equal(view.S.chat.at(-1).turnNumber,2);view.S.chat=[{role:'ai',src:'live',turnNumber:41,usage:statsUsage}];view.H.cur={text:'Следующий',tools:[],pane:'worker'};view.functions.finish({type:'done',turnUsage:statsUsage});assert.equal(view.S.chat.at(-1).turnNumber,42);
  assert.match(style,/@media\(max-width:640px\).*\.tstat \.grid\{grid-template-columns:repeat\(2/);
+});
+
+
+test('TS-43: reconnecting a busy chat keeps the answer already received over SSE',async()=>{
+ const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/01-chat.html',import.meta.url),'utf8'),v=firstPaint(html),status=realStatus();status.panes[0]!.busy=true;
+ v.H.project=status.project;v.H.panes=status.panes;v.H.pane=status.panes[0];v.H.cur={text:'PREFIX ',tools:[]};
+ const pending=v.paint.connect();v.status.resolve(status);await pending;
+ assert.equal(v.H.cur.text,'PREFIX ');v.functions.hEvent({type:'delta',text:'SUFFIX'});assert.equal(v.H.cur.text,'PREFIX SUFFIX');
 });
