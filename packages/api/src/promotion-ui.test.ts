@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {setImmediate as immediate} from 'node:timers/promises';
-import {fixture,call,OWNER,deferred,sse,until} from './test-helpers.ts';
+import {fixture,noRepositoryFixture,call,OWNER,deferred,sse,until} from './test-helpers.ts';
 import {dom} from './ui-dom-test-helpers.ts';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
 const part=(s:string,a:string,b:string)=>{const from=s.indexOf(a),to=s.indexOf(b,from+a.length);assert.ok(from>=0&&to>from,a);return s.slice(from,to)};
@@ -23,17 +23,17 @@ async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body
  return {...d,H,S,requests,context,click,settle,find};
 }
 for(const entry of ['reply','composer'])test('154 UI '+entry+': actual menu click reaches HTTP and preserves chat',async t=>{
- const h=await fixture(t),v=await ui(h),id=v.H.active.room;await v.click(entry);await v.settle();await h.runtime.idle();const posts=v.requests.filter(r=>r.path.endsWith('/orchestrator'));assert.equal(posts.length,1);assert.equal(posts[0].body.project,h.dir);assert.equal(typeof posts[0].body.revision,'number');assert.deepEqual(Array.from(posts[0].body.documents),[]);assert.equal(h.runtime.project.state.chats.active.orchestrator,id);assert.equal(v.S.ui.pane,'orchestrator');assert.equal(h.provider.calls.length,1);assert.match(v.find('#toast').textContent,/Оркестратор назначен/);
+ const h=await noRepositoryFixture(t),v=await ui(h),id=v.H.active.room;await v.click(entry);await v.settle();await h.runtime.idle();const posts=v.requests.filter(r=>r.path.endsWith('/orchestrator'));assert.equal(posts.length,1);assert.equal(posts[0].body.project,h.dir);assert.equal(typeof posts[0].body.revision,'number');assert.deepEqual(Array.from(posts[0].body.documents),[]);assert.equal(h.runtime.project.state.chats.active.orchestrator,id);assert.equal(v.S.ui.pane,'orchestrator');assert.equal(h.provider.calls.length,1);assert.match(v.find('#toast').textContent,/Оркестратор назначен/);
 });
 for(const change of ['project','chat','pagehide','setting-failed'])test('154 UI pending '+change+' never promotes the current replacement binding',async t=>{
- const h=await fixture(t),gate=deferred(),entered=deferred();let once=true;const v=await ui(h,async(path,body)=>{if(!body&&path.startsWith('/api/chats/')&&once){once=false;entered.resolve();await gate.promise}});
+ const h=await noRepositoryFixture(t),gate=deferred(),entered=deferred();let once=true;const v=await ui(h,async(path,body)=>{if(!body&&path.startsWith('/api/chats/')&&once){once=false;entered.resolve();await gate.promise}});
  if(change==='setting-failed'){runInContext('LIVE.configureSetting(async()=>false)',v.context);await v.click('reply');await v.settle();assert.equal(v.requests.length,0);return}
  const click=v.click('reply');await entered.promise;if(change==='project')v.H.project='/another';else if(change==='chat')v.H.active.room='other';else await v.window.emit('pagehide');gate.resolve();await click;await v.settle();assert.equal(v.requests.filter(r=>r.body).length,0);assert.equal(h.runtime.registry.get('orchestrator'),null);
 });
 
 
 for(const page of ['chat','new'])test('154 UI '+page+': conflict opens existing conversation without replacing history',async t=>{
- const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: юрист, vendor: claude, model: w1, mode: read}'});h.runtime.registry.get('lead')!.record('ai','existing answer');const v=await ui(h,undefined,{page}),old=h.runtime.chatsList(OWNER).active.lead;
+ const h=await noRepositoryFixture(t,{seats:'  lead: {kind: orchestrator, role: юрист, vendor: claude, model: w1, mode: read}'});h.runtime.registry.get('lead')!.record('ai','existing answer');const v=await ui(h,undefined,{page}),old=h.runtime.chatsList(OWNER).active.lead;
  await v.click('reply');await v.settle();assert.match(v.find('.live-menu').textContent,/Открыть существующий/);await v.find('.live-menu [data-k="0"]').emit('click');await v.settle();assert.equal(v.S.ui.pane,'lead');assert.equal(h.runtime.project.state.chats.active.lead,old);assert.equal(h.runtime.registry.get('lead')!.transcript[0]!.text,'existing answer');assert.equal(h.provider.calls.length,0);if(page==='new')assert.equal((v.context as any).location.href,'01-chat.html');
 });
 
@@ -45,7 +45,7 @@ test('157: tool failure shows a readable reason and preserves escaped technical 
 
 
 test('154 UI: repeat from partially materialized role uses saved documents and completes the same operation',async t=>{
- const h=await fixture(t),r=h.runtime;r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','Обсуждение');writeFileSync(h.dir+'/case.txt','original');const list=r.chatsList(OWNER),id=list.active.room!,chat=list.chats.find(c=>c.id===id)!,append=r.journal.append.bind(r.journal);let once=true;
+ const h=await noRepositoryFixture(t),r=h.runtime;r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','Обсуждение');writeFileSync(h.dir+'/case.txt','original');const list=r.chatsList(OWNER),id=list.active.room!,chat=list.chats.find(c=>c.id===id)!,append=r.journal.append.bind(r.journal);let once=true;
  r.journal.append=(record)=>{const out=append(record);if(once&&record.origin==='onboarding'){once=false;throw Error('after intro')}return out};
  await assert.rejects(r.promoteChat(id,{project:h.dir,revision:chat.revision,documents:[{project:h.dir,path:'case.txt'}]},OWNER),/after intro/);
  const v=await ui(h,undefined,{prepare:false,pane:'orchestrator'});await v.click('composer');await v.settle();await r.idle();assert.equal(r.project.state.chats.active.orchestrator,id);assert.equal(h.provider.calls.length,1);assert.match(v.find('#toast').textContent,/Оркестратор назначен/);assert.equal(r.chatGet(id,OWNER).chat.promotion?.pending,false);
@@ -53,7 +53,7 @@ test('154 UI: repeat from partially materialized role uses saved documents and c
 
 
 test('154 UI: promotion on the new-chat page survives applyStatus selecting room, then navigates to the promoted chat',async t=>{
- const h=await fixture(t),v=await ui(h,undefined,{page:'new'}),id=v.H.active.room;await v.click('composer');await v.settle();await h.runtime.idle();assert.equal(v.context.location.href,'01-chat.html');assert.equal(v.S.ui.pane,'orchestrator');assert.equal(v.H.active.orchestrator,id);assert.equal(v.S.ui.fresh,false);
+ const h=await noRepositoryFixture(t),v=await ui(h,undefined,{page:'new'}),id=v.H.active.room;await v.click('composer');await v.settle();await h.runtime.idle();assert.equal(v.context.location.href,'01-chat.html');assert.equal(v.S.ui.pane,'orchestrator');assert.equal(v.H.active.orchestrator,id);assert.equal(v.S.ui.fresh,false);
 });
 
 for(const nextChoice of ['other','back','pagehide'])test('154 ОКНА: executed POST reply cannot undo '+nextChoice+' through the real api/boot boundary',async t=>{
@@ -78,7 +78,7 @@ for(const nextChoice of ['other','back','pagehide'])test('154 ОКНА: executed
 });
 
 for(const returns of [false,true])test('154 round 3 ОКНА: another client confirms '+(returns?'A → B → A':'B')+' before a delayed promotion reply',async t=>{
- const h=await fixture(t),v=await ui(h),storage=new Map<string,string>(),entered=deferred(),release=deferred();
+ const h=await noRepositoryFixture(t),v=await ui(h),storage=new Map<string,string>(),entered=deferred(),release=deferred();
  Object.assign(v.context,{rememberLive(){},sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,value:string)=>storage.set(k,value)}});
  const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');runInContext(proto.slice(0,proto.indexOf('/* LIVE_BOOT_END */')),v.context);
  const boot=v.context.HARNESS_BOOT;boot.select(h.dir);boot.confirm(h.dir,boot.capture());let sections=0;v.context.sectionChanging=()=>sections++;
@@ -112,28 +112,28 @@ for(const scenario of ['late','early','foreign','round-trip','wrong-operation','
 });
 
 for(const entry of ['reply','composer'])test('223: '+entry+' shows progress before delayed POST; a repeat focuses the same card and sends once',async t=>{
- const h=await fixture(t),entered=deferred(),gate=deferred(),v=await ui(h,async(path,body)=>{if(body&&path.endsWith('/orchestrator')){entered.resolve();await gate.promise}});
+ const h=await noRepositoryFixture(t),entered=deferred(),gate=deferred(),v=await ui(h,async(path,body)=>{if(body&&path.endsWith('/orchestrator')){entered.resolve();await gate.promise}});
  const clicking=v.click(entry);await entered.promise;assert.match(v.find('[data-live-operations]').textContent,/Harnessy создаёт оркестратора…/);assert.match(v.find('[data-live-operations]').textContent,/шаг 1 из 4/);assert.equal(v.find('[data-la="assign"]').disabled,true);assert.match(v.find('[data-cx="role"]').textContent,/Создаём оркестратора/);
  await v.find('[data-la="assign"]').emit('click');await v.find('[data-cx="role"]').emit('click');assert.match(v.find('[data-live-operations]').textContent,/уже идёт/);assert.equal(v.requests.filter(r=>r.path.endsWith('/orchestrator')).length,1);assert.equal(v.find('[data-live-operations]').querySelectorAll('[data-operation]').length,1);
  gate.resolve();await clicking;await v.settle();assert.equal(v.S.ui.pane,'orchestrator');assert.equal(v.document.querySelector('[data-live-operations]'),null);assert.equal(v.find('[data-la="assign"]').disabled,false);
 });
 
 test('223: failed promotion keeps the reason and retry uses the saved operation once',async t=>{
- const h=await fixture(t),v=await ui(h),original=h.runtime.promoteChat.bind(h.runtime);let once=true;
+ const h=await noRepositoryFixture(t),v=await ui(h),original=h.runtime.promoteChat.bind(h.runtime);let once=true;
  h.runtime.promoteChat=async(...args:Parameters<typeof original>)=>{if(once){once=false;throw Error('temporary fixture failure <img src=x>')}return original(...args)};
  await v.click('reply');await v.settle();assert.match(v.find('[data-live-operations]').textContent,/temporary fixture failure/);assert.equal(v.find('[data-live-operations]').querySelector('img'),null);assert.equal(v.find('[data-la="assign"]').disabled,false);
  await v.find('[data-operation-retry]').emit('click');await v.settle();await h.runtime.idle();assert.equal(v.document.querySelector('[data-live-operations]'),null);assert.equal(v.S.ui.pane,'orchestrator');assert.equal(h.provider.calls.length,1);
 });
 
 for(const change of ['project','chat','pagehide'])test('223: delayed POST after '+change+' cannot leave a progress card in another binding',async t=>{
- const h=await fixture(t),entered=deferred(),gate=deferred(),v=await ui(h,async(path,body)=>{if(body&&path.endsWith('/orchestrator')){entered.resolve();await gate.promise}});const clicking=v.click('reply');await entered.promise;
+ const h=await noRepositoryFixture(t),entered=deferred(),gate=deferred(),v=await ui(h,async(path,body)=>{if(body&&path.endsWith('/orchestrator')){entered.resolve();await gate.promise}});const clicking=v.click('reply');await entered.promise;
  if(change==='project')v.H.project='/other';else if(change==='chat')v.H.active.room='other';else await v.window.emit('pagehide');v.context.LIVE.operationsDraw();assert.equal(v.document.querySelector('[data-live-operations]'),null);
  gate.resolve();await clicking;await v.settle();assert.equal(v.document.querySelector('[data-live-operations]'),null);assert.equal(v.find('[data-la="assign"]').disabled,false);assert.notEqual(v.S.ui.pane,'orchestrator');
 });
 
 
 test('221/223: saved progress arrives through SSE before POST receipt; status restores the same failed operation',async t=>{
- const h=await fixture(t),v=await ui(h),gate=deferred(),stream=await sse(h.api);t.after(()=>stream.close());const original=v.context.api;
+ const h=await noRepositoryFixture(t),v=await ui(h),gate=deferred(),stream=await sse(h.api);t.after(()=>stream.close());const original=v.context.api;
  v.context.api=async(path:string,body:any)=>{const out=await original(path,body);if(path.endsWith('/orchestrator'))await gate.promise;return out};
  const click=v.click('reply');await until(()=>stream.frames.some(e=>e.type==='promotion'&&e.promotion.completed===4));
  const events=stream.frames.filter(e=>e.type==='promotion');assert.deepEqual(events.map(e=>e.promotion.completed),[1,2,3,4]);const first=events[0]!;
@@ -145,7 +145,7 @@ test('221/223: saved progress arrives through SSE before POST receipt; status re
 });
 
 test('221: a saved partial promotion reappears with its reason and retries the same identity',async t=>{
- const h=await fixture(t),r=h.runtime;r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','Обсуждение');const row=r.chatsList(OWNER).chats.find(c=>c.pane==='room')!,append=r.journal.append.bind(r.journal);let once=true;
+ const h=await noRepositoryFixture(t),r=h.runtime;r.roomSet({model:'w1'},OWNER);r.registry.get('room')!.record('me','Обсуждение');const row=r.chatsList(OWNER).chats.find(c=>c.pane==='room')!,append=r.journal.append.bind(r.journal);let once=true;
  r.journal.append=(record)=>{const out=append(record);if(once&&record.origin==='onboarding'){once=false;throw Error('fixture interrupted after intro')}return out};
  await assert.rejects(r.promoteChat(row.id,{project:h.dir,revision:row.revision,documents:[]},OWNER),/fixture interrupted/);
  const status=(await call(h.api,'/api/status')).body,progress=status.promotions.find((p:any)=>p.chat===row.id);assert.equal(progress.completed,3);assert.match(progress.error,/fixture interrupted/);

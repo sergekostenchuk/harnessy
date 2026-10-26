@@ -1,12 +1,12 @@
 import {ProviderCatalog} from '@harnessy/providers';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
+import {lstatSync,mkdtempSync,mkdirSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {dirname,isAbsolute,join,relative,sep} from 'node:path';
 import {setImmediate as immediate} from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import {parseCompat,compatJson} from '@harnessy/journal';
 import type {TestContext} from 'node:test';
-import {Connections,ProjectRegistry,Settings,Pins} from '@harnessy/projects';
+import {Connections,GitOps,ProjectRegistry,Settings,Pins} from '@harnessy/projects';
 import type {Provider,Seat,TurnContext,Vendor} from '@harnessy/providers';
 import {createRuntime,type Runtime,type RuntimeDeps,type RuntimeActions,type RuntimeEvent,type Clock} from './index.ts';
 export const OWNER={seat:'owner',trust:'owner'} as const;
@@ -28,11 +28,28 @@ export class FakeProvider implements Provider {
  async sessionMessages(_cwd:string,_id:string){this.messageCalls++;return this.onMessages?this.onMessages():[{role:'ai' as const,text:'прежний ответ'}]}
 }
 export function collect(runtime:Runtime){const events:RuntimeEvent[]=[],sub=runtime.subscribe({all:true});void (async()=>{for await(const event of sub.events)events.push(event)})();return {events,sub}}
-export async function harness(t:TestContext,options:{seats?:string;deps?:Partial<RuntimeDeps>;actions?:RuntimeActions;before?:(dir:string)=>void}={}){
+// An opt-in test double only for probes in a known isolated non-Git project.
+// Any write, outside path or newly created repository fails instead of being masked.
+export function noRepositoryGit(root:string){
+ const project=realpathSync(root);
+ return new GitOps(async(args,cwd)=>{
+  if(!cwd)throw Error('no-repository fixture: missing Git working directory');
+  const path=realpathSync(cwd),rel=relative(project,path);
+  if(rel==='..'||rel.startsWith('..'+sep)||isAbsolute(rel))throw Error('no-repository fixture: path outside project');
+  for(let dir=path;;dir=dirname(dir)){
+   try{lstatSync(join(dir,'.git'));throw Error('no-repository fixture: Git repository exists')}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}
+   if(dirname(dir)===dir)break;
+  }
+  if(args.length===2&&args[0]==='rev-parse'&&(args[1]==='--show-toplevel'||args[1]==='--is-inside-work-tree'))return {code:128,stdout:'',stderr:'not a git repository'};
+  throw Error('no-repository fixture: unexpected Git operation '+args.join(' '));
+ });
+}
+export async function harness(t:TestContext,options:{seats?:string;deps?:Partial<RuntimeDeps>;actions?:RuntimeActions;before?:(dir:string)=>void;noRepository?:boolean}={}){
+ if(options.noRepository&&options.deps?.gitops)throw Error('no-repository fixture: custom GitOps conflicts with option');
  const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-runtime-')));mkdirSync(join(dir,'.harness','state'),{recursive:true});
  const seats=options.seats??'  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read, digest: false}';
  writeFileSync(join(dir,'.harness','team.yaml'),'version: 1\nintegration_branch: main\nseats:\n'+seats+'\n');options.before?.(dir);
- const provider=new FakeProvider(),clock=new FakeClock();const deps:RuntimeDeps={providerCatalog:new ProviderCatalog([]),projectDir:dir,limitsCacheDir:join(dir,'limits-cache'),appUrl:'http://127.0.0.1:9000',providers:{claude:provider},clock,models:{claude:[{id:'w1'},{id:'w2'}],codex:[{id:'c1'}]},connections:new Connections(join(dir,'connections.json')),projectRegistry:new ProjectRegistry({projects:join(dir,'projects.json'),lastProject:join(dir,'last')},{noLast:true}),settings:current=>new Settings(join(dir,'owner-settings.json'),current),pins:(current,meta)=>new Pins(join(dir,'pins.json'),current,meta),...options.deps};
+ const provider=new FakeProvider(),clock=new FakeClock();const deps:RuntimeDeps={providerCatalog:new ProviderCatalog([]),projectDir:dir,limitsCacheDir:join(dir,'limits-cache'),appUrl:'http://127.0.0.1:9000',providers:{claude:provider},clock,models:{claude:[{id:'w1'},{id:'w2'}],codex:[{id:'c1'}]},connections:new Connections(join(dir,'connections.json')),projectRegistry:new ProjectRegistry({projects:join(dir,'projects.json'),lastProject:join(dir,'last')},{noLast:true}),settings:current=>new Settings(join(dir,'owner-settings.json'),current),pins:(current,meta)=>new Pins(join(dir,'pins.json'),current,meta),...(options.noRepository?{gitops:noRepositoryGit(dir)}:{}),...options.deps};
  const runtime=await createRuntime(deps,options.actions??completedActions);t.after(async()=>{await runtime.close();rmSync(dir,{recursive:true,force:true})});await runtime.idle();return {runtime,provider,clock,dir,deps}
 }
 
