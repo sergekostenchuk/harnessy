@@ -354,7 +354,7 @@ html[data-proto] [data-team-plus-wrap]>.tc-pmenu{display:none}
 .tc-shared{display:flex;gap:7px;align-items:center;margin:8px 0;color:var(--accent)}
 .tc-own-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0}
 .tc-ownrole label{display:flex;flex-direction:column;gap:5px;min-width:0;color:var(--ink3)}
-.tc-ownrole input,.tc-ownrole select{box-sizing:border-box;width:100%;min-width:0;background:var(--bg);border:1px solid var(--line2);border-radius:7px;padding:7px;color:var(--ink);font:12px var(--font)}
+.tc-ownrole input,.tc-ownrole .tc-choice{box-sizing:border-box;width:100%;min-width:0;background:var(--bg);border:1px solid var(--line2);border-radius:7px;padding:7px;color:var(--ink);font:12px var(--font)}
 .tc-ownrole textarea{min-height:74px}
 .tc-policy{flex:none}.tc-policy summary{cursor:pointer;color:var(--ink2)}.tc-policy li{margin:5px 0;overflow-wrap:anywhere}
 @media(max-width:759px){.tc-own-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tc-instruction{margin:0 10px 10px}.tc-ownrole .tc-editor-actions .btn{flex:1}}
@@ -363,3 +363,10 @@ html[data-proto] [data-team-plus-wrap]>.tc-pmenu{display:none}
 [data-team-live="constructor"] .tc-lib{box-sizing:border-box;max-height:100%}
 [data-team-live="constructor"]>.tc-instruction{flex-shrink:0}
 @media(max-width:759px){html[data-proto][data-m] [data-team-live="constructor"] .tc-cons{grid-template-columns:minmax(0,1fr)}}
+
+.tc-choice{min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:var(--ink2);background:var(--bg);border:1px solid var(--line2);border-radius:6px;padding:4px 8px;font:12px var(--font)}
+.tc-choice:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.tc-choice:disabled{opacity:.45;cursor:default}
+.tc-pmenu.tc-choice-menu{position:fixed;display:block;z-index:12000;overflow:auto;box-sizing:border-box}.tc-choice-menu .it{width:100%;border:0;text-align:left;color:var(--ink2);background:transparent;cursor:pointer}.tc-choice-menu .it:hover,.tc-choice-menu .it:focus-visible{color:var(--ink);background:var(--raised);outline:1px solid var(--accent)}
+
+[data-team-live="constructor"]{overflow:auto}[data-team-live="constructor"] .tc-cons{flex:1 0 320px;min-height:320px}
+@media(max-width:759px){html[data-proto][data-m] [data-team-live="constructor"] .tc-cons{flex:none;min-height:0}}

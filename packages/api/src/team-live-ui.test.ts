@@ -67,6 +67,12 @@ test('36D: a page without a historical top bar keeps the SPEC banner inside main
  const banner=d.document.querySelector('.spec-banner')!,main=d.document.querySelector('.main')!,app=d.document.querySelector('.app')!;assert.equal(banner.parentElement,main);assert.equal(app.children.includes(banner),false);
 });
 
+test('39.2: the live constructor has no page-wide mock banner; only editing connections is mocked',async()=>{
+ const d=dom('<div class="frame"><div class="app"><section class="main" data-team-live="constructor"></section></div></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});
+ const context:any={KEY:'teamcons',document:d.document};context.window=context;runInContext(part(proto,'  // TS-15a specification','  // End TS-15a specification'),createContext(context));assert.equal(d.document.querySelector('.spec-banner'),null);
+ const v=constructorUi();await v.settle();assert.match(v.find('[data-team-policy]').textContent,/макет · редактирование связей/);assert.doesNotMatch(v.find('[data-team-instruction]').textContent,/макет/);
+});
+
 test('36D: clean live team boot never enters the historical swarm overlay controller',()=>{
  const d=dom('<div class="frame"><section class="main" data-team-live="work"></section></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});let overlayQueries=0;
  const query=d.document.querySelector.bind(d.document);d.document.querySelector=(selector:string)=>{if(selector.includes('#ovl'))overlayQueries++;return query(selector)};
@@ -200,7 +206,7 @@ test('39.2: shared instruction is explicit; typing/focus survive live refresh an
  await v.find('[data-team-instruction-save]').emit('click');assert.equal(v.requests.filter(r=>r.path.endsWith('/instruction')).length,0);assert.match(v.find('[data-team-instruction-error]').textContent,/общего файла/);
  const shared=v.find('[data-team-instruction-shared]');(shared as any).checked=true;await shared.emit('change');await v.find('[data-team-instruction-save]').emit('click');await v.find('[data-team-instruction-save]').emit('click');assert.equal(v.requests.filter(r=>r.path.endsWith('/instruction')).length,1);
  replies.resolve({ok:false,code:'file_changed',error:'Файл изменился. Перечитайте.'});await v.settle();assert.equal(v.find('[data-team-instruction-text]').value,'My unsaved instruction');assert.match(v.find('[data-team-instruction-error]').textContent,/Файл изменился/);
- assert.doesNotMatch(v.find('[data-team-instruction]').textContent,/макет/);assert.match(v.find('[data-team-policy]').textContent,/orchestrator → worker.*task/);assert.match(v.find('[data-team-policy]').textContent,/макет · редактирование связей/);
+ assert.doesNotMatch(v.find('[data-team-instruction]').textContent,/макет/);assert.match(v.find('[data-team-policy]').textContent,/Оркестратор → Воркер.*задача/);assert.match(v.find('[data-team-policy]').textContent,/макет · редактирование связей/);
 });
 
 test('39.2: missing receipt/hash cannot become an editable instruction; missing file can be created from its receipt',async()=>{
@@ -213,10 +219,26 @@ test('39.2: missing receipt/hash cannot become an editable instruction; missing 
 test('39.2: owner form has seven classes, keeps opId on retry and project draft across A → B → A',async()=>{
  let replies=deferred<any>(),project='/project-a';const v=teamUi('constructor',async(path)=>path==='/api/swarm'?snapshot(project,[]):replies.promise);await v.settle();await v.find('[data-team-own-open]').emit('click');
  const set=async(field:string,value:string)=>{const n=v.find('[data-team-own-field="'+field+'"]');n.value=value;await n.emit('input')};await set('label','Аналитик');await set('intro','Проверь условия');
- assert.deepEqual(v.find('[data-team-own-field="kind"]').children.map(n=>n.getAttribute('value')),['worker','orchestrator','reviewer','tester','assistant','architect','researcher']);
+ assert.deepEqual(JSON.parse(v.find('[data-team-own-field="kind"]').dataset.options!).map((row:any)=>row.value),['worker','orchestrator','reviewer','tester','assistant','architect','researcher']);
  await v.find('[data-team-own-form]').emit('submit');await v.find('[data-team-own-form]').emit('submit');const first=v.requests.filter(r=>r.path==='/api/seats/propose');assert.equal(first.length,1);assert.equal((first[0]!.body as any).instance,'/project-a-instance');
  replies.resolve({ok:false,error:'Соединение оборвалось'});await v.settle();assert.equal(v.find('[data-team-own-field="label"]').value,'Аналитик');replies=deferred();await v.find('[data-team-own-form]').emit('submit');const second=v.requests.filter(r=>r.path==='/api/seats/propose')[1]!;assert.equal((second.body as any).opId,(first[0]!.body as any).opId);
  project=v.H.project='/project-b';v.H.projectRequestGeneration=1;v.H.confirmedProjectGeneration=1;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-own-field="label"]').value,'');
  replies.resolve({ok:true,project:'/project-a',instance:'/project-a-instance',pane:'role-old'});await v.settle();assert.doesNotMatch(v.root.textContent,/Роль создана/);
  project=v.H.project='/project-a';v.H.projectRequestGeneration=2;v.H.confirmedProjectGeneration=2;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-own-field="label"]').value,'Аналитик');assert.equal(v.find('[data-team-own-field="intro"]').value,'Проверь условия');
+});
+
+test('39.2: constructor choices use the design menu, keyboard navigation and readable rights',async()=>{
+ const v=constructorUi();await v.settle();assert.equal(v.root.querySelector('select'),null);assert.match(v.find('[data-team-mode]').textContent,/Только чтение/);
+ await v.find('[data-team-own-open]').emit('click');const control=v.find('[data-team-own-field="kind"]');v.context.innerWidth=390;Object.assign(v.html,{clientWidth:375});Object.assign(control,{getBoundingClientRect:()=>({left:192,bottom:532,width:160})});await control.emit('click');
+ const menu=v.document.querySelector('.tc-choice-menu')!;assert.ok(menu);assert.ok(parseFloat(menu.style.left!)+parseFloat(menu.style.width!)<=367,'menu clears the scrollbar');const choices=menu.querySelectorAll('[data-team-option]');assert.equal(choices.length,7);assert.equal(control.getAttribute('aria-expanded'),'true');
+ assert.equal(v.document.activeElement,choices[0]);await choices[0]!.emit('keydown',{key:'ArrowDown'});assert.equal(v.document.activeElement,choices[1]);
+ await choices.find(row=>row.dataset.teamOption==='tester')!.emit('click');assert.equal(control.value,'tester');assert.match(control.textContent,/Тестер/);assert.equal(v.document.querySelector('.tc-choice-menu'),null);assert.equal(v.document.activeElement,control);
+ await control.emit('click');await v.document.activeElement!.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('.tc-choice-menu'),null);assert.equal(control.getAttribute('aria-expanded'),'false');
+});
+
+test('39.2: a late instruction reload preserves text, focus and selection while typing',async()=>{
+ let pending=false;const receipt=deferred<any>(),v=teamUi('constructor',async path=>path==='/api/swarm'?snapshot('/project-a',[{...pane('worker','worker',null),busy:false}]):pending?receipt.promise:instructionReceipt());
+ await v.settle();await v.find('[data-team-instruction-open="worker"]').emit('click');await v.settle();pending=true;await v.find('[data-team-instruction-reload]').emit('click');
+ const editor=v.find('[data-team-instruction-text]');editor.value='Unsaved while reading';await editor.emit('input');editor.focus();editor.setSelectionRange(2,8,'backward');
+ receipt.resolve(instructionReceipt({text:'Changed on disk',hash:'b'.repeat(64)}));await v.settle();const current=v.find('[data-team-instruction-text]');assert.equal(current.value,'Unsaved while reading');assert.equal(v.document.activeElement,current);assert.equal(current.selectionStart,2);assert.equal(current.selectionEnd,8);assert.equal(current.selectionDirection,'backward');
 });
