@@ -21,6 +21,7 @@
     const n=count(state,options.rows,options.project);
     return 'Автопилот '+until+' · решает за вас с консилиумом: оркестратор + ревьюер. '+conditions+' Решений за эту ночь: '+(n===null?(options.error?'журнал недоступен.':'читаю журнал…'):n+'.')+(options.reason?' Последний отказ движка: '+options.reason:'');
   }
+  function short(state){if(!state||typeof state.on!=='boolean')return 'Автопилот · нет данных';if(!state.on)return 'Автопилот выключен';const at=state.until?.kind==='morning'?new Date(state.until.at):null,until=state.until?.kind==='reply'?'до ответа':at&&Number.isFinite(at.getTime())?'до '+at.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'срок не подтверждён',n=count(state,view.key===binding()?view.rows:null,L?.H.project);return 'Автопилот '+until+' · '+(n===null?(view.error?'журнал недоступен':'читаю журнал'):n+' решений')}
   function text(state){return format(state,view.key===binding()?{rows:view.rows,reason:view.reason,error:view.error,project:L?.H.project}:{})}
   function draw(){L?.autopilotDraw?.();L?.chatGuidanceDraw?.()}
   function reset(key){view.key=key;view.request++;view.loading=false;view.loaded=false;view.again=false;view.rows=null;view.reason=null;view.error=false}
@@ -32,19 +33,15 @@
     if(view.loading){if(force)view.again=true;return}if(view.loaded&&!force){draw();return}
     view.loading=true;const request=++view.request,project=L.H.project;
     try{
-      const [decisions,journal]=await Promise.all([L.api('/api/autopilot/decisions'),L.api('/api/journal?limit=100').catch(()=>null)]);
+      const decisions=await L.api('/api/autopilot/decisions');
       if(binding()!==key||view.key!==key||view.request!==request)return;
       if(decisions?.ok!==true||decisions.project!==project||!Array.isArray(decisions.decisions))throw Error('unconfirmed decisions');
-      view.rows=decisions.decisions;view.error=false;view.reason=null;
-      if(journal?.project===project&&Array.isArray(journal.records))for(const row of [...journal.records].reverse()){
-        if(row.origin!=='autopilot-owner'||!Number.isFinite(Date.parse(row.ts))||!Number.isFinite(Date.parse(state.startedAt))||Date.parse(row.ts)<Date.parse(state.startedAt))continue;
-        try{const reason=JSON.parse(row.text);if(typeof reason.code!=='string'||typeof reason.reason!=='string')continue;
-          view.reason=reason.reason;break;
-        }catch{}
-      }
-    }catch{if(binding()===key&&view.request===request){view.rows=null;view.reason=null;view.error=true}}
-    finally{if(binding()===key&&view.request===request){view.loading=false;view.loaded=true;const again=view.again;view.again=false;draw();if(again)void refresh(true)}}
+      const failure=decisions.lastFailure;
+      if(failure!==null&&(!failure||failure.generation!==state.generation||typeof failure.code!=='string'||!failure.code||typeof failure.reason!=='string'||!failure.reason||!Number.isFinite(Date.parse(failure.at))||!Number.isFinite(Date.parse(state.startedAt))||Date.parse(failure.at)<Date.parse(state.startedAt)))throw Error('unconfirmed refusal');
+      view.rows=decisions.decisions;view.error=false;view.reason=failure?.reason||null;view.loaded=true;
+    }catch{if(binding()===key&&view.request===request){view.rows=null;view.reason=null;view.error=true;view.loaded=false}}
+    finally{if(binding()===key&&view.request===request){view.loading=false;const again=view.again;view.again=false;draw();if(again)void refresh(true)}}
   }
-  window.HARNESS_AUTOPILOT_UI={format,count,text,refresh};
-  if(L){addEventListener('live:status',()=>{void refresh()});addEventListener('pagehide',()=>reset(null));const events=L.subscribeLiveEvents?.();if(events)events.onmessage=e=>{let data;try{data=JSON.parse(e.data)}catch{return}if(['autopilot','autopilotDecision','autopilotWaiting'].includes(data.type))void refresh(true)};void refresh()}
+  window.HARNESS_AUTOPILOT_UI={format,count,text,short,refresh};
+  if(L){addEventListener('live:status',()=>{void refresh()});addEventListener('pagehide',()=>reset(null));const events=L.subscribeLiveEvents?.();if(events){events.onopen=()=>{void refresh(true)};events.onmessage=e=>{let data;try{data=JSON.parse(e.data)}catch{return}if(['autopilot','autopilotDecision','autopilotWaiting'].includes(data.type))void refresh(true)}};void refresh()}
 })();
