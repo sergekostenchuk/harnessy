@@ -33,6 +33,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   showWaiting(){},showRestore(){},renderWaiting(){},loadAttemptNotes:async()=>{},setTimeout(){},clearInterval(){},setInterval(){return 1},addEventListener(type:string,fn:(event:Data)=>unknown){if(type==='pagehide')pagehide.push(fn as ()=>void);if(type==='pageshow')pageshow.push(fn)},dispatchEvent(){},CustomEvent:class {},confirm:()=>false,sideChats(){},btoa:(raw:string)=>Buffer.from(raw,'binary').toString('base64'),URL:{createObjectURL:()=>"blob:test-image",revokeObjectURL(){}},
   refreshStatus:async()=>{},refreshChats:async()=>{},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)||null},close(){},renderAll(){},draw(){},base:()=>'',modeLabel:(s:string)=>s,modelLabel:(s:string)=>s,ROOM:'room',isRoom:(p:Data)=>p.id==='room',ico:()=>'',pl:(n:number)=>String(n)};
  const context=createContext(sandbox);
+ runInContext(readFileSync(new URL('../../../ui/deploy/autopilot-ui.js',import.meta.url),'utf8'),context);
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+
   part(live,'  const warningSeen=','  function waitingControls(')+
   part(live,'  let bindingGeneration','  function md(')+
@@ -389,10 +390,10 @@ test('TS-38.1: profile entry opens the Autopilot master and submits typed condit
  const cleaned=createContext({KEY:'k',localStorage:{getItem:()=>JSON.stringify({...view.S,v:1})}});runInContext(part(live,'  let S;','  const now=')+'load();globalThis.cleaned=S;',cleaned);assert.equal(Object.hasOwn((cleaned as Data).cleaned,'away'),false);
 });
 
-test('TS-38.1: orchestrator chat offers the same master without claiming decisions execute',()=>{
+test('TS-42: orchestrator chat shows engine conditions and retains the same master',()=>{
  const view=ui(),d=dom('<div class="frame cur"><div class="main"><div class="feed"><div class="col"></div></div></div></div>');view.sandbox.document=d.document;
- view.functions.chatGuidanceDraw();const card=d.document.querySelector('[data-autopilot-guidance]');assert.ok(card);
- assert.match(card.textContent,/автоматическое исполнение решений ещё не подключено/);assert.equal(card.querySelector('a')?.getAttribute('href'),'18-overlays.html#leave');
+ view.H.liveStatus={autopilot:{on:false,conditions:{operations:['answer_question'],stopCases:['payment'],maxSpendPercent:3}}};view.functions.chatGuidanceDraw();const card=d.document.querySelector('[data-autopilot-guidance]');assert.ok(card);
+ assert.match(card.textContent,/Автопилот выключен.*ответы на вопросы.*деньги и оплата.*3 %/);assert.equal(card.querySelector('a')?.getAttribute('href'),'18-overlays.html#leave');
  assert.equal(view.requests.length,0);assert.doesNotMatch(d.body.innerHTML,/автопилот · до 07:00|Автопилот решил/);
  view.H.snapshotOnly=true;view.functions.chatGuidanceDraw();assert.equal(d.document.querySelector('[data-autopilot-guidance]'),null);
 });
