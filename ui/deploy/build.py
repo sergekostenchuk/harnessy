@@ -10,7 +10,7 @@
 Где: ~/Harnessy/ui/deploy/ → out/site/. Заливка: deploy.sh.
 Зачем: правки эскиза делаются в мастере, серверная копия всегда выводится из него — ручных патчей больше нет.
 """
-import json, re, shutil, sys
+import json, re, shutil, sys, argparse
 from pathlib import Path
 from forbidden_guard import assert_clean
 
@@ -18,7 +18,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 MASTER = ROOT / "sketches" / "harness.html"
 DS = ROOT / "sketches" / "design-system.html"
-OUT = HERE / "out" / "site"
+_args = argparse.ArgumentParser(description=__doc__)
+_args.add_argument("--out", type=Path, default=HERE / "out" / "site")
+OUT = _args.parse_args().out.resolve()
 MARK = "АДАПТИВ (04.10.2026)"
 
 

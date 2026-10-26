@@ -1,3 +1,4 @@
+import {buildTestSite} from '../../api/src/site-test-helpers.ts';
 import {createHash} from 'node:crypto';
 import {lstatSync,mkdtempSync,readFileSync,readdirSync,readlinkSync,rmSync} from 'node:fs';
 import {join,resolve} from 'node:path';
@@ -35,6 +36,7 @@ if(main&&process.argv[2]==='run'){
  // One full run, with isolation installed before test modules load in each worker.
  process.exitCode=checkOwnerFiles(()=>{
   const build=spawnSync('npm',['run','build'],{stdio:'inherit'});if(build.error)throw build.error;if(build.status!==0)return build.status??1;
+  process.env.HARNESSY_TEST_SITE=buildTestSite();
   const tests=spawnSync(process.execPath,['--import',ownFile,'--test','packages/*/src/**/*.test.ts'],{stdio:'inherit'});if(tests.error)throw tests.error;return tests.status??1;
  });
 }else{
