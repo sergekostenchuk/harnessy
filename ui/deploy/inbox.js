@@ -8,8 +8,9 @@
   const validRecord=r=>r&&Number.isSafeInteger(r.seq)&&r.seq>0&&typeof r.kind==='string'&&typeof r.from==='string'&&Array.isArray(r.to);
   const text=s=>typeof s==='string'?s.trim().slice(0,240):'';
   const identity=(project,...parts)=>JSON.stringify([project,...parts]);
+  const operationLabel=Object.freeze({answer_question:'Ответ на вопрос',answer_blocker:'Ответ на блокировку',answer_escalation:'Ответ на срочный вопрос',approve:'Разрешить действие',deny:'Отказать в действии',assign_role:'Назначить роль',continue_pane:'Продолжить ход',stop_pane:'Остановить ход'});
   const item=(id,kind,title,detail,ts,need,extra={})=>({id,kind,title,detail,ts,need,done:false,read:false,...extra});
-  function collect({project,status,journal,chats=[],trace=[],limits=[],update=null,read=[]},now=Date.now()){
+  function collect({project,status,journal,chats=[],trace=[],limits=[],decisions=[],update=null,read=[]},now=Date.now()){
     if(!project||status?.project!==project||journal?.project!==project)return [];
     const records=Array.isArray(journal.records)?journal.records.filter(validRecord):[],bySeq=new Map(records.map(r=>[r.seq,r]));
     const replies=new Set(records.filter(r=>Number.isSafeInteger(r.reply_to)&&r.reply_to>0&&(
@@ -41,6 +42,10 @@
       const title=r.kind==='network.failover'?'Подключение переключено на резерв':r.kind==='network.tunnel'?'SSH-туннель не отвечает':'Выход не отвечает';
       add(item(identity(project,'network',r.seq), 'подключение',title,text(r.reason?.text)||text(data.code)||'Проверьте подключение',ts,false,{type:'network',vendor:text(data.vendor),failed}));
     }
+    for(const record of decisions){const d=record?.entry,ts=date(record?.at);if(record?.project!==project||record?.version!==1||d?.state!=='applied'||typeof d.decisionId!=='string'||!/^[0-9a-f]{64}$/.test(d.decisionId)||!d.question||typeof d.question.id!=='string'||typeof d.question.kind!=='string'||typeof d.question.text!=='string'||!d.proposal||typeof d.proposal.reason!=='string'||!d.council?.orchestrator||!d.council?.reviewer||typeof d.council.orchestrator.seat!=='string'||typeof d.council.orchestrator.model!=='string'||typeof d.council.reviewer.seat!=='string'||typeof d.council.reviewer.model!=='string'||!Number.isFinite(ts))continue;
+      const summary=text(d.proposal.answer)||operationLabel[d.operation]||'Решение принято';
+      add(item(identity(project,'autopilot',d.decisionId),'автопилот · решение','Автопилот решил: '+summary,text(d.question.text),ts,false,{type:'autopilotDecision',decision:record}));
+    }
     for(const p of limits){if(!p||typeof p.vendor!=='string'||p.sourceConnected===false||p.ok===false)continue;
       for(const w of p.windows||[]){if(!w||!Number.isFinite(w.percentUsed)||w.percentUsed<80||w.percentUsed>100)continue;
         const level=w.percentUsed>=95?95:80,remaining=Math.max(0,Math.round(100-w.percentUsed)),reset=Number.isFinite(w.resetsAt)?new Date(w.resetsAt*1000).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):null;
@@ -71,9 +76,9 @@
   async function refresh(){if(!current())return false;if(state.loading){state.queued=true;return false}
     const b=binding(),request=++state.request;if(state.project!==b.project||state.generation!==b.generation){state.project=null;state.items=[];state.sourceErrors=[];state.pending.clear();state.actionErrors.clear();state.replyOpen.clear();state.replyDrafts.clear();signal()}
     state.loading=true;if(PAGE==='inbox')draw();
-    try{const [status,journal,chats,trace,limits,settings,update]=await Promise.all([
+    try{const [status,journal,chats,trace,limits,decisions,settings,update]=await Promise.all([
       L.api('/api/status'),L.api('/api/journal?limit=0'),L.api('/api/chats'),L.api('/api/trace?since='+encodeURIComponent(new Date(Date.now()-7*DAY).toISOString())).catch(()=>null),
-      L.api('/api/limits').catch(()=>null),L.api('/api/settings'),window.harnessy?.updates?.getState().catch(()=>null)??Promise.resolve(null)
+      L.api('/api/limits').catch(()=>null),L.api('/api/autopilot/decisions').catch(()=>null),L.api('/api/settings'),window.harnessy?.updates?.getState().catch(()=>null)??Promise.resolve(null)
     ]);
       if(!same(b)||request!==state.request)return false;
       if(status?.project!==b.project||!Array.isArray(status.approvals)||!Array.isArray(status.panes)||journal?.project!==b.project||!Array.isArray(journal.records)||!Array.isArray(chats?.chats)||settings?.ok!==true||!settings.owner)throw Error('Данные входящих не подтверждены для текущего проекта');
@@ -82,8 +87,11 @@
       state.sourceErrors=[];
       if(trace?.ok!==true||trace.project!==b.project||!Array.isArray(trace.records))state.sourceErrors.push('События подключения недоступны');
       if(limits?.ok!==true||limits.project!==b.project||!Array.isArray(limits.providers))state.sourceErrors.push('Лимиты недоступны');
+      if(decisions?.ok!==true||decisions.project!==b.project||!Array.isArray(decisions.decisions))state.sourceErrors.push('Решения Автопилота недоступны');
       if(details.failed)state.sourceErrors.push('История чатов недоступна');
-      state.items=keepCompleted(collect({project:b.project,status,journal,chats:details.rows,trace:state.sourceErrors.includes('События подключения недоступны')?[]:trace.records,limits:state.sourceErrors.includes('Лимиты недоступны')?[]:limits.providers,update,read:[...state.read]}),state.items);
+      const next=collect({project:b.project,status,journal,chats:details.rows,trace:state.sourceErrors.includes('События подключения недоступны')?[]:trace.records,limits:state.sourceErrors.includes('Лимиты недоступны')?[]:limits.providers,decisions:state.sourceErrors.includes('Решения Автопилота недоступны')?[]:decisions.decisions,update,read:[...state.read]});
+      if(state.sourceErrors.includes('Решения Автопилота недоступны'))for(const old of state.items)if(old.type==='autopilotDecision'&&!next.some(row=>row.id===old.id))next.push(old);
+      state.items=keepCompleted(next,state.items);
       state.error=null;signal();if(PAGE==='inbox')draw();return true;
     }catch(e){if(same(b)){state.error=e?.message||'Нет связи';if(PAGE==='inbox')draw()}return false}
     finally{state.loading=false;if(state.queued){state.queued=false;void refresh()}}
@@ -96,16 +104,19 @@
     if(same(b)){state.read=new Set(merged);for(const x of state.items)x.read=state.read.has(x.id);signal();if(PAGE==='inbox')draw()}return true;
   });return readJob.catch(e=>{if(same(b)){state.error=e?.message||'Прочитанность не сохранена';draw()}return false})}
   const ago=t=>{if(!t)return 'время неизвестно';const minutes=Math.max(0,Math.floor((Date.now()-t)/60000));return minutes<1?'сейчас':minutes<60?minutes+' мин':minutes<1440?Math.floor(minutes/60)+' ч':Math.floor(minutes/1440)+' д'};
-  const icon={approval:'◆',waiting:'◆',question:'◆',verdict:'↳',chat:'✓',network:'⇄',limit:'%',update:'↑'};
+  const icon={approval:'◆',waiting:'◆',question:'◆',verdict:'↳',chat:'✓',network:'⇄',limit:'%',update:'↑',autopilotDecision:'◆'};
   function actions(x){if(x.done)return '<span class="okm">Выполнено</span>';const disabled=state.pending.has(x.id)||!!state.error?' disabled':'';if(x.type==='approval')return '<button class="btn sm p" data-inbox-action="allow"'+disabled+'>Разрешить</button><button class="btn sm" data-inbox-action="deny"'+disabled+'>Отказать</button><button class="btn sm" data-inbox-action="chat">Открыть чат</button>';
     if(x.type==='waiting'){const attrs=' data-attempt-pane="'+esc(x.pane)+'" data-attempt-project="'+esc(state.project)+'" data-attempt-id="'+esc(x.waiting.turnInstanceId)+'"';
       return (x.waiting.actions||[]).filter(a=>['retry','skip','finish'].includes(a)).map(a=>'<button class="btn sm'+(a==='retry'?' p':'')+'" data-attempt-action="'+a+'"'+attrs+'>'+(a==='retry'?(x.waiting.status==='unsent'?'Отправить снова':'Повторить'):a==='skip'?(x.waiting.status==='unsent'?'Убрать':'Пропустить'):'Завершить')+'</button>').join('')+'<button class="btn sm" data-inbox-action="open">Открыть чат</button>'}
     if(x.type==='question')return '<button class="btn sm p" data-inbox-action="open"'+disabled+'>Ответить</button><button class="btn sm" data-inbox-action="chat">Открыть чат</button>';
+    if(x.type==='autopilotDecision')return '<button class="btn sm p" data-inbox-action="ack"'+disabled+'>Хорошо</button><button class="btn sm" data-inbox-action="cancel"'+disabled+'>Отменить</button>';
     if(x.type==='update')return '<button class="btn sm p" data-inbox-action="install">Перезапустить</button>';
     return '<button class="btn sm" data-inbox-action="open">'+(x.type==='chat'?'Открыть чат':x.type==='network'?'Подключения':x.type==='limit'?'Лимиты':'Открыть')+'</button>';
   }
   function card(x){const cls=(x.need?' need':'')+(x.read?' read':' new')+(x.done?' done':'')+(x.failed?' err':'');const error=state.actionErrors.get(x.id),reply=x.type==='question'&&state.replyOpen.has(x.id)&&!x.done;
-    return '<article class="ps2-ib'+cls+'" data-inbox-id="'+esc(x.id)+'" tabindex="0" aria-label="'+esc(x.kind+': '+x.title)+'"><span class="ic" aria-hidden="true">'+(icon[x.type]||'•')+'</span><div class="bd"><div class="k"><b>'+esc(x.kind)+'</b><i>'+esc(ago(x.ts))+'</i></div><div class="t">'+esc(x.title)+'</div><div class="f">'+esc(x.detail||'')+'</div>'+(reply?'<div class="ps2-ib-reply"><label for="inbox-reply-'+x.record.seq+'">Ответ владельца на вопрос №'+x.record.seq+'</label><textarea id="inbox-reply-'+x.record.seq+'" data-inbox-reply rows="3" placeholder="Напишите решение…">'+esc(state.replyDrafts.get(x.id)||'')+'</textarea><button class="btn sm p" data-inbox-action="send"'+(state.pending.has(x.id)||state.error?' disabled':'')+'>Отправить ответ</button></div>':'')+(error?'<div class="ps2-ib-action-error" role="status">'+esc(error)+'</div>':'')+'</div><div class="act">'+actions(x)+'</div></article>'}
+    const d=x.type==='autopilotDecision'?x.decision.entry:null,cost=d?.cost?.status==='measured'?d.cost.amount+' USD':'стоимость не подтверждена',council=d?.council;
+    const explanation=d?'<div class="ps2-ib-autopilot"><div><b>Почему:</b> '+esc(d.proposal.reason||'Причина не указана')+'</div><div><b>Советовались:</b> '+esc(council.orchestrator.seat+' · '+council.orchestrator.model+'; '+council.reviewer.seat+' · '+council.reviewer.model)+'</div><div><b>Вопрос:</b> '+esc(d.question.kind+' · '+d.question.id)+' · '+esc(cost)+'</div></div>':'';
+    return '<article class="ps2-ib'+cls+'" data-inbox-id="'+esc(x.id)+'" tabindex="0" aria-label="'+esc(x.kind+': '+x.title)+'"><span class="ic" aria-hidden="true">'+(icon[x.type]||'•')+'</span><div class="bd"><div class="k"><b>'+esc(x.kind)+'</b><i>'+esc(ago(x.ts))+'</i></div><div class="t">'+esc(x.title)+'</div><div class="f">'+esc(x.detail||'')+'</div>'+explanation+(reply?'<div class="ps2-ib-reply"><label for="inbox-reply-'+x.record.seq+'">Ответ владельца на вопрос №'+x.record.seq+'</label><textarea id="inbox-reply-'+x.record.seq+'" data-inbox-reply rows="3" placeholder="Напишите решение…">'+esc(state.replyDrafts.get(x.id)||'')+'</textarea><button class="btn sm p" data-inbox-action="send"'+(state.pending.has(x.id)||state.error?' disabled':'')+'>Отправить ответ</button></div>':'')+(error?'<div class="ps2-ib-action-error" role="status">'+esc(error)+'</div>':'')+'</div><div class="act">'+actions(x)+'</div></article>'}
   function draw(){if(PAGE!=='inbox')return;const feed=document.querySelector('[data-inbox-feed]');if(!feed)return;
     const active=document.activeElement,activeRow=feed.contains(active)?active?.closest('[data-inbox-id]'):null,activeId=active?.matches('[data-inbox-reply]')?activeRow?.dataset.inboxId:null;
     const editor=activeId&&state.replyOpen.has(activeId)?{id:activeId,value:active.value,start:active.selectionStart,end:active.selectionEnd,direction:active.selectionDirection,scrollTop:active.scrollTop}:null;
@@ -129,10 +140,12 @@
       if(!same(b))return;S.ui.pane=x.pane;S.ui.fresh=false;S.ui.switched=true;if(x.chat)S.ui.openChat=x.chat;L.save();location.href='01-chat.html';
     }}
   async function action(x,kind){if(!x||!current()||x.done||state.project!==L.H.project||state.generation!==(L.H.confirmedProjectGeneration||0))return;const b=binding();
-    const writing=kind==='allow'||kind==='deny'||kind==='send';if(writing&&(state.pending.has(x.id)||state.error))return;
+    const writing=kind==='allow'||kind==='deny'||kind==='send'||kind==='cancel';if(writing&&(state.pending.has(x.id)||state.error))return;
     if(writing){state.pending.add(x.id);state.actionErrors.delete(x.id);draw()}
     try{if(kind==='allow'||kind==='deny'){if(x.type!=='approval')return;const result=await L.api('/api/approve',{project:b.project,pane:x.approval.pane,id:x.approval.id,decision:kind});if(!same(b))return;if(!result?.ok)throw Error(result?.error||'Решение не принято');x.done=true;x.read=true;signal();draw();await refresh()}
       else if(kind==='send'){if(x.type!=='question')return;const message=(state.replyDrafts.get(x.id)||'').trim();if(!message)throw Error('Напишите ответ перед отправкой');const result=await L.api('/api/chat',{pane:x.pane,message,kind:'decision',reply_to:x.record.seq,direct:true});if(!same(b))return;if(!result?.ok)throw Error(result?.error||'Ответ не отправлен');x.done=true;x.read=true;state.replyOpen.delete(x.id);state.replyDrafts.delete(x.id);signal();draw();await refresh()}
+      else if(kind==='ack'&&x.type==='autopilotDecision'){await mark([x.id]);if(same(b))draw()}
+      else if(kind==='cancel'&&x.type==='autopilotDecision'){const result=await L.api('/api/autopilot/decisions/'+encodeURIComponent(x.decision.entry.decisionId)+'/cancel',{project:b.project});if(!same(b))return;if(!result?.ok)throw Error(result?.error||'Отмена решения недоступна');await refresh()}
       else if(kind==='install'){if(x.type!=='update'||!window.harnessy?.updates?.install)throw Error('Обновление недоступно в этом окне');await window.harnessy.updates.install()}
       else if(x.type==='question'&&kind==='open'){state.replyOpen.add(x.id);draw();[...document.querySelectorAll('[data-inbox-id]')].find(row=>row.dataset.inboxId===x.id)?.querySelector('[data-inbox-reply]')?.focus()}
       else {await mark([x.id]);if(!same(b))return;await open(x)}
@@ -152,7 +165,7 @@
   addEventListener('live:status',()=>{if(current())void refresh()});
   addEventListener('pageshow',event=>{if(event.persisted&&current())void refresh()});
   addEventListener('pagehide',()=>{state.request++;state.project=null;state.items=[]});
-  const events=L?.subscribeLiveEvents?.();if(events)events.onmessage=e=>{let data;try{data=JSON.parse(e.data)}catch{return}if(['state','done','approval','queued','peerReply','note','networkRoute','limits','network','providers'].includes(data.type)&&current())void refresh()};
+  const events=L?.subscribeLiveEvents?.();if(events)events.onmessage=e=>{let data;try{data=JSON.parse(e.data)}catch{return}if(['state','done','approval','queued','peerReply','note','networkRoute','limits','network','providers','autopilotDecision'].includes(data.type)&&current())void refresh()};
   window.harnessy?.updates?.onState?.(()=>{if(current())void refresh()});
   if(current())void refresh();
 })();

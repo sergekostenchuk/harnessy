@@ -6,6 +6,7 @@ export {RuntimeError} from './errors.ts';
 export {createActions,withRoleActions} from './actions.ts';
 export {renderInbox,INBOX_HELP} from './inbox.ts';
 export {StateStore,diskIO,type StateIO,type TranscriptMessage,type ResultMessage,type Receipt,type Attempt,type Chat} from './state.ts';
+export {AutopilotDecisionLedger,autopilotDecisionHash,autopilotDecisionId,type AutopilotDecisionBase,type AutopilotDecisionEntry,type AutopilotDecisionRecord,type AutopilotDecisionQuestion,type AutopilotDecisionParty,type AutopilotDecisionCost} from './autopilot-decisions.ts';
 export type {RuntimeDeps,RuntimeActions,BridgeSendArgs,BridgeFailure,SendResult,ReadPaneResult,AskResult,MergeResult,AssignRoleResult,ActionContext,AfterTurnContext,OwnerMergeContext,TurnScope,TurnRecords,ProjectState,RuntimeEvent,Clock,ModelCatalog} from './types.ts';
 export type {CreateSeatInput,Assignment,SeatInput} from './roles.ts';
 export type {ChatMeta} from './chats.ts';

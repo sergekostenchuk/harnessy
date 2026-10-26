@@ -20,6 +20,8 @@ export function ownerRoutes(r:Runtime):Route[]{return [
  {method:'GET',path:'/api/settings',handle:()=>json(r.settingsGet(OWNER))},
  {method:'POST',path:'/api/settings',handle:async({request,body})=>{providerOwner(request);return json(await r.settingsPatch(body.scope,body.patch,OWNER))}},
  {method:'POST',path:'/api/autopilot',style:'J',handle:async({request,body})=>{providerOwner(request);return json(await r.autopilotSet(body,OWNER))}},
+ {method:'GET',path:'/api/autopilot/decisions',style:'J',handle:({request})=>{providerOwner(request);return json(r.autopilotDecisions(OWNER))}},
+ {method:'POST',path:'/api/autopilot/decisions/:id/cancel',style:'J',handle:({request,body,params})=>{providerOwner(request);if(Object.keys(body).some(key=>key!=='project')||typeof body.project!=='string')throw new RuntimeError('decision_invalid','Ожидается только проект решения',400);return json(r.autopilotCancelDecision(body.project,params.id!,OWNER))}},
  {method:'GET',path:'/api/context/:id',handle:({params})=>r.registry.get(params.id!)?json(r.context(params.id!)):json({ok:false,error:'нет такого места'},404)},
  {method:'POST',path:'/api/halt',handle:async({body})=>json(await r.halt(body.on===undefined||pyTruthy(body.on),OWNER))},
  {method:'POST',path:'/api/room',handle:async({body})=>json(await r.roomSet(body,OWNER))},
