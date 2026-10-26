@@ -156,7 +156,7 @@ window.TC=(function(){
       items:t=>{ const el=t.closest('[data-key]'); if(!el||!el.closest('[data-nodes]')||el.dataset.key==='empty') return null; return [{el:el,r:G.rects[el.dataset.key],key:el.dataset.key}]; },
       onMove:()=>drawEdges(), onEnd:()=>{ if(o.onEnd) o.onEnd(G); }, onView:V=>{ const z=root.querySelector('[data-zpct]'); if(z) z.textContent=Math.round(V.k*100)+' %'; }});
     let layoutWidth=0,layoutHeight=0;
-    function layout(fit){const W=canvas.clientWidth||900,H=canvas.clientHeight||600;o.layout(G,W,H,layer);place();measure();drawEdges();layoutWidth=canvas.clientWidth||900;layoutHeight=canvas.clientHeight||600;if(fit!==false)VP.fit()}
+    function layout(fit){const W=canvas.clientWidth||900,H=canvas.clientHeight||600;o.layout(G,W,H,layer);const keys=new Set([...layer.querySelectorAll('[data-key]')].map(el=>el.dataset.key));Object.keys(G.rects).forEach(key=>{if(!keys.has(key))delete G.rects[key]});place();measure();drawEdges();layoutWidth=canvas.clientWidth||900;layoutHeight=canvas.clientHeight||600;if(fit!==false)VP.fit()}
     function render(fit){layer.innerHTML=o.nodes();layout(fit)}
     function resize(){if(!canvas.isConnected){observer?.disconnect();if(typeof removeEventListener==='function')removeEventListener('resize',resize);return}if((canvas.clientWidth||900)!==layoutWidth||(canvas.clientHeight||600)!==layoutHeight)layout()}
     const observer=typeof ResizeObserver==='function'?new ResizeObserver(resize):null;observer?.observe(canvas);addEventListener('resize',resize);

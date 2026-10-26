@@ -418,3 +418,15 @@ test('TS-44 r2: composer search, filtered actions, nested menu and Tab form one 
  (back as any).click=()=>back.emit('click');await back.emit('keydown',{key:' '});assert.equal(v.document.activeElement,v.find('.cx-find'));
  await v.document.activeElement!.emit('keydown',{key:'Escape'});assert.equal(v.document.activeElement,v.find('[data-cx="plus"]'));
 });
+
+
+for(const kind of ['model','group'])test('TS-44 r3: '+kind+' focus survives an unchanged status and injected action metadata',async()=>{
+ const v=ui();await v.open();const group=v.find('[data-cx-program="codex"]'),header=v.find('[data-cx-program="codex"] [data-cx-grp]');await header.emit('click');assert.equal(group.classList.contains('open'),true);
+ const target=kind==='model'?v.select('codex','shared'):header;target.dataset.action='auto-action';target.focus();await v.status();await v.flush();const restored=kind==='model'?v.select('codex','shared'):v.find('[data-cx-program="codex"] [data-cx-grp]');assert.equal(v.document.activeElement,restored);assert.equal(v.find('[data-cx-program="codex"]').classList.contains('open'),true);
+ await restored.emit('keydown',{key:'Escape'});assert.equal(v.document.activeElement,v.find('[data-cx="model"]'));
+});
+
+test('TS-44 r3: model focus is restored after the search filter, and removed choices fall back to search',async()=>{
+ const v=ui();await v.open();const input=v.find('.cx-find');input.value='codex';await input.emit('input');const model=v.select('codex','shared');model.dataset.action='auto-action';model.focus();await v.status();await v.flush();assert.equal(v.document.activeElement,v.select('codex','shared'));assert.equal(v.find('.cx-find').value,'codex');assert.equal(v.find('[data-cx-program="codex"]').classList.contains('open'),true);assert.equal(v.select('claude','shared').style.display,'none');
+ const next=catalogue();next.providers.find(p=>p.id==='codex')!.models=[];await v.providers(next);assert.equal(v.document.activeElement,v.find('.cx-find'));assert.equal(v.find('.cx-find').value,'codex');
+});

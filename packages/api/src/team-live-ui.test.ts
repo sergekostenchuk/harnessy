@@ -298,3 +298,28 @@ for(const mode of ['work','constructor'] as const)test('TS-44 r2: '+mode+' canva
  Object.assign(canvas,{clientWidth:340,clientHeight:800});await v.window.emit('resize');const narrow=engine.G.rects.worker.x;assert.ok(narrow<wide);assert.equal(v.document.activeElement,control);assert.equal(control.value,'Черновик');assert.equal(control.isConnected,true);
  Object.assign(canvas,{clientWidth:900,clientHeight:800});await v.window.emit('resize');assert.equal(engine.G.rects.worker.x,wide);assert.equal(v.document.activeElement,control);assert.equal(control.value,'Черновик');
 });
+
+
+test('TS-44 r3: fit bounds retain only mounted nodes after a missing orchestrator is replaced',async()=>{
+ const v=teamUi('work');await v.settle();const engine=v.context.TEAM_LIVE.state.engine,canvas=v.find('[data-canvas]');
+ assert.equal(engine.G.rects['missing-orchestrator'],undefined);
+ for(const width of [900,340,900]){Object.assign(canvas,{clientWidth:width,clientHeight:800});await v.window.emit('resize');assert.deepEqual(Object.keys(engine.G.rects).sort(),v.root.querySelectorAll('[data-key]').map(node=>node.dataset.key).sort())}
+});
+
+test('TS-44 r3: status retains the orchestrator draft, focus and selection; project and chat changes isolate it',async()=>{
+ const v=teamUi('work');await v.settle();let input=v.find('[data-team-chat-input]');input.value='Неотправленный текст';input.focus();input.setSelectionRange(2,9,'backward');
+ await v.window.emit('live:status');await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.value,'Неотправленный текст');assert.equal(v.document.activeElement,input);assert.deepEqual([input.selectionStart,input.selectionEnd,input.selectionDirection],[2,9,'backward']);
+ v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.value,'');assert.notEqual(v.document.activeElement,input);input.value='Проект Б';
+ v.H.project='/project-a';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Неотправленный текст');
+ assert.equal(v.requests.some(row=>row.path==='/api/chat'),false);
+});
+
+test('TS-44 r3: a pending send survives status; its receipt clears only the sent draft',async()=>{
+ const receipt=deferred<any>();let activeChat='chat-orch';const v=teamUi('work',async(path,body)=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator',activeChat)]):path==='/api/chat'?receipt.promise:chat(activeChat,'orch'));await v.settle();let input=v.find('[data-team-chat-input]');input.value='Отправлено';await v.find('[data-team-send]').emit('click');
+ await v.window.emit('live:status');await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.value,'Отправлено');assert.equal(input.disabled,true);assert.equal(v.find('[data-team-send]').disabled,true);
+ activeChat='other-chat';await v.window.emit('live:status');await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.value,'');input.value='Новый разговор';receipt.resolve({ok:true});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Новый разговор');assert.equal(v.find('[data-team-chat-input]').disabled,false);
+});
+
+test('TS-44 r3: successful send clears its draft even if status replaced the input',async()=>{
+ const receipt=deferred<any>();const v=teamUi('work',async path=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator','chat-orch')]):path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();v.find('[data-team-chat-input]').value='Отправлено';await v.find('[data-team-send]').emit('click');await v.window.emit('live:status');await v.settle();receipt.resolve({ok:true});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'');assert.equal(v.find('[data-team-chat-input]').disabled,false);
+});

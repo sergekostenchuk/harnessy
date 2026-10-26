@@ -66,12 +66,13 @@
   function open(anchor,k){ close(false); const m=anchor.closest('.main')||document.body; pop=document.createElement('div'); pop.className='cx-pop'; m.appendChild(pop); pop.__anchor=anchor; pop.__box=anchor.closest('.box')||(anchor.parentElement&&anchor.parentElement.nextElementSibling); pop.__key=anchor.dataset.cx; pop.__binding=L.sendBinding(); pop.__settingsBinding=seat()&&seat().settingsBinding&&{...seat().settingsBinding}; stack=[k]; draw(); if(k==='model')void loadModels(pop); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); }
   function nav(k){ stack.push(k); draw(); if(k==='model')void loadModels(pop); if(k==='role'&&H.on&&L.proposalsFetch)void L.proposalsFetch(); } function back(){ stack.pop(); draw(); }
   function menuItems(){if(!pop)return [];return [...pop.querySelectorAll('.cx-row,[data-cx-back],input,button,a[href]')].filter(node=>{if(node.disabled||node.classList.contains('dis'))return false;const row=node.closest('.cx-row');if(row&&row!==node)return false;for(let p=node;p&&p!==pop;p=p.parentElement){if(p.hidden||p.hasAttribute('hidden')||p.style.display==='none'||p.classList.contains('cx-sub')&&!p.parentElement.classList.contains('open'))return false}return true})}
-  const menuKey=node=>node&&JSON.stringify([node.tagName,node.dataset]);
-  function draw(){if(!pop)return;const k=stack[stack.length-1],focus=pop.contains(document.activeElement)&&pop.__view===k?menuKey(document.activeElement):null;pop.__view=k;
+  function menuKey(node){if(!node)return null;if(node.hasAttribute('data-cx-model'))return JSON.stringify(['model',node.dataset.cxVendor,node.dataset.cxModel]);if(node.hasAttribute('data-cx-grp'))return JSON.stringify(['group',node.closest('[data-cx-program]')?.dataset.cxProgram]);return JSON.stringify([node.tagName,Object.keys(node.dataset).filter(key=>key.startsWith('cx')).sort().map(key=>[key,node.dataset[key]])])}
+  function focusMenu(key){const items=menuItems();(items.find(node=>key&&menuKey(node)===key)||pop.querySelector('input.cx-find')||items[0]||pop).focus({preventScroll:true})}
+  function draw(restoreFocus=true){if(!pop)return;const k=stack[stack.length-1],focus=pop.contains(document.activeElement)&&pop.__view===k?menuKey(document.activeElement):null;pop.__view=k;
     pop.innerHTML=(stack.length>1?'<div class="cx-hd back" data-cx-back>'+svg('back')+'<span>'+esc(TITLES[k]||'')+'</span></div>':'')+VIEWS[k]();pop.setAttribute('role','dialog');pop.setAttribute('aria-label',TITLES[k]||'Меню');pop.setAttribute('tabindex','-1');
     pop.querySelectorAll('.cx-row,[data-cx-back]').forEach(node=>{if(!node.matches('button,a'))node.setAttribute('role','button');node.setAttribute('tabindex',node.disabled||node.classList.contains('dis')?'-1':'0');node.setAttribute('aria-disabled',String(!!node.disabled||node.classList.contains('dis')))});place();
     const f=pop.querySelector('input.cx-find');if(f){f.addEventListener('input',()=>filter(f));if(f.classList.contains('cx-path'))f.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();return submitProjectMenu(!!pop.querySelector('[data-cx-mkdir]'))}})}
-    const items=menuItems();(items.find(node=>focus&&menuKey(node)===focus)||f||items[0]||pop).focus({preventScroll:true});
+    if(restoreFocus)focusMenu(focus);
   }
   function filter(inp){ const q=inp.value.trim().toLowerCase(); pop.querySelectorAll('[data-q]').forEach(el=>{ el.style.display=!q||el.dataset.q.toLowerCase().includes(q)?'':'none'; }); if(q) pop.querySelectorAll('.cx-grp').forEach(g=>g.classList.add('open')); }
   document.addEventListener('click',e=>{ if(pop&&!pop.contains(e.target)&&!e.target.closest('[data-cx]')) close(false); },true);
@@ -133,8 +134,8 @@
   }
   function modelsCurrent(panel){return panel===pop&&L.bindingCurrent(panel.__binding)}
   function redrawModels(panel){if(!modelsCurrent(panel)||stack[stack.length-1]!=='model')return;
-    const input=panel.querySelector('.cx-find'),value=input&&input.value,focused=document.activeElement===input,groups=Array.from(panel.querySelectorAll('[data-cx-program]')).map(g=>[g.dataset.cxProgram,g.classList.contains('open')]);
-    draw();const next=panel.querySelector('.cx-find');if(next&&value){next.value=value;filter(next)}else for(const [id,on]of groups){const g=Array.from(panel.querySelectorAll('[data-cx-program]')).find(g=>g.dataset.cxProgram===id);if(g)g.classList.toggle('open',on)}if(next&&focused)next.focus();
+    const input=panel.querySelector('.cx-find'),value=input&&input.value,active=document.activeElement,focus=panel.contains(active)?menuKey(active):null,selection=active===input?[input.selectionStart,input.selectionEnd,input.selectionDirection]:null,groups=Array.from(panel.querySelectorAll('[data-cx-program]')).map(g=>[g.dataset.cxProgram,g.classList.contains('open')]);
+    draw(false);for(const [id,on]of groups){const g=Array.from(panel.querySelectorAll('[data-cx-program]')).find(g=>g.dataset.cxProgram===id);if(g)g.classList.toggle('open',on)}const next=panel.querySelector('.cx-find');if(next){next.value=value||'';filter(next)}focusMenu(focus);if(next&&document.activeElement===next&&selection)next.setSelectionRange?.(...selection);
   }
   async function loadModels(panel){if(!modelsCurrent(panel))return;
     const state=panel.__models||(panel.__models={rows:null,error:'',loading:false,saving:false,request:0,revision:0,modes:modeStamp(),events:null});

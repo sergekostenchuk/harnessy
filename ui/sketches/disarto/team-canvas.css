@@ -326,7 +326,6 @@
   html[data-proto][data-m] .tc-qbig .targets{max-height:360px}
   html[data-proto][data-m] .tc-task.big{grid-template-columns:40px minmax(0,1fr) 92px;height:42px}
   html[data-proto][data-m] .tc-task.big .who,html[data-proto][data-m] .tc-task.big .grip{display:none}
-  html[data-proto][data-m] .om-zoom{display:none}
 }
 
 /* Полный текст по нажатию: одна дверь для имени роли и причины в меню/библиотеке. */
