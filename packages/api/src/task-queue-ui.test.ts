@@ -46,3 +46,16 @@ test('TS-39.1 status refresh preserves row/menu identity, input and filter focus
  const filter=v.body.querySelector('.task-filter-wide [data-task-filter="done"]')!;filter.focus();await filter.emit('click');assert.equal(v.document.activeElement,v.body.querySelector('.task-filter-wide [data-task-filter="done"]'));assert.match(v.body.textContent,/В этом статусе задач нет/);await v.ui.refresh();assert.equal(v.document.activeElement,v.body.querySelector('.task-filter-wide [data-task-filter="done"]'));
  assert.equal(v.body.querySelector('select'),null);assert.doesNotMatch(v.body.querySelector('[data-task-targets]')!.textContent,/idle/);
 });
+
+for(const success of [true,false])for(const move of [false,true])test('TS-39.1 assignment restores real activeElement after '+(success?'success':'refusal')+(move?' without stealing another control':''),async()=>{
+ const gate=deferred<any>();let assigned=false;const v=view(async(_path,body,H)=>body?gate.promise:{ok:true,project:H.project,instance:'instance-a',tasks:[task(assigned?{to:'worker',state:'queued'}:{})],outsideQueue:[]});await settled();
+ await v.body.querySelector('[data-task-assign]')!.emit('click');const choice=v.body.querySelector('[data-task-choice]')!;choice.focus();const job=v.ui.assign(task().taskId,'worker');
+ const input=v.body.querySelector('[data-task-text]')!;if(move){input.focus();await input.emit('focusin')}
+ assigned=success;gate.resolve({ok:success,project:'/a',instance:'instance-a',error:success?undefined:'Не удалось назначить'});await job;
+ assert.equal(v.document.activeElement,move?input:v.body.querySelector(success?'[data-task-assign]':'[data-task-choice]'));assert.equal(v.document.activeElement?.disabled,false);
+});
+
+test('TS-39.1 rebase: a reply during cached startup releases loading for the next confirmed status',async()=>{
+ const gate=deferred<any>();let hold=true;const v=view(async()=>hold?gate.promise:v.data());v.H.snapshotOnly=true;gate.resolve(v.data());await settled();assert.equal(v.ui.state.loading,false);assert.equal(v.ui.state.data,null);
+ hold=false;v.H.snapshotOnly=false;for(const fn of v.listeners.get('live:status')||[])fn();await settled();assert.ok(v.body.querySelector('[data-task-id]'));assert.equal(v.ui.state.loading,false);
+});
