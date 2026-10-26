@@ -134,11 +134,9 @@ test('36D: an A → B → A project change during /api/swarm discards the old re
  assert.match(v.root.textContent,/Новый проект/);assert.doesNotMatch(v.root.textContent,/Старый проект/);assert.equal(v.context.TEAM_LIVE.state.loading,false);assert.equal(v.context.TEAM_LIVE.state.queued,false);
 });
 
-test('36D: missing live data stays honest, while the queue is explicitly local mock state with working drag and drop',async()=>{
- const offline=teamUi('work',undefined,{H:{on:false,snapshotOnly:true,roleCatalog:[]}});await offline.settle();assert.match(offline.root.textContent,/Движок недоступен/);assert.doesNotMatch(offline.root.textContent,/Alpha-Test|Анна Ветрова/);assert.match(offline.root.textContent,/макет · компиляция OMG не подключена/);assert.equal(offline.root.querySelectorAll('.tc-card').length,0);assert.equal(offline.requests.length,0);
- const queue=teamUi('queue');await queue.settle();assert.match(queue.root.textContent,/в движке очереди нет/);assert.match(queue.root.textContent,/пример · не данные движка/);assert.equal(queue.requests.length,0);
- const transfer:any={value:'',effectAllowed:'',dropEffect:'',setData(_type:string,value:string){this.value=value},getData(){return this.value}},task=queue.find('[data-task="14"]'),target=queue.find('[data-key="mock-orch"]');await task.emit('dragstart',{dataTransfer:transfer});await target.emit('dragover',{dataTransfer:transfer});await target.emit('drop',{dataTransfer:transfer});
- const changed=queue.context.TEAM_LIVE.state.queue.find((row:any)=>row.n===14);assert.equal(changed.who,'Оркестратор');assert.equal(changed.st,'work');assert.match(target.textContent,/№14 назначена/);assert.equal(queue.requests.length,0);
+test('TS-39.1: missing live team data stays honest; the queue mounts the journal-backed surface, never QUEUE0',async()=>{
+ const offline=teamUi('work',async()=>{throw Error('нет связи')});await offline.settle();assert.match(offline.root.textContent,/нет связи/);assert.doesNotMatch(offline.root.textContent,/виджет лимитов|TS-35/);
+ const queue=teamUi('queue');await queue.settle();assert.ok(queue.root.querySelector('[data-task-queue="full"]'));assert.ok(queue.requests.some(row=>row.path==='/api/swarm'));assert.doesNotMatch(queue.root.textContent,/в движке очереди нет|пример · не данные движка/);assert.doesNotMatch(live,/QUEUE0|bindQueue/);
 });
 
 

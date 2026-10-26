@@ -20,6 +20,8 @@ export function ownerRoutes(r:Runtime):Route[]{return [
  {method:'POST',path:'/api/pins',handle:async({body})=>{if(body.project!==undefined&&body.project!==r.project.dir)throw new RuntimeError('project_changed','проект сменился',409);return json(await r.pinSet(body,OWNER))}},
  {method:'GET',path:'/api/settings',handle:()=>json(r.settingsGet(OWNER))},
  {method:'POST',path:'/api/settings',handle:async({request,body})=>{providerOwner(request);return json(await r.settingsPatch(body.scope,body.patch,OWNER))}},
+ {method:'POST',path:'/api/tasks',style:'J',handle:async({request,body})=>{providerOwner(request);return json(await r.taskChange('create',body,OWNER),201)}},
+ {method:'POST',path:'/api/tasks/:id/assign',style:'J',handle:async({request,body,params})=>{providerOwner(request);return json(await r.taskChange('assign',body,OWNER,params.id!))}},
  {method:'POST',path:'/api/autopilot',style:'J',handle:async({request,body})=>{providerOwner(request);return json(await r.autopilotSet(body,OWNER))}},
  {method:'GET',path:'/api/autopilot/decisions',style:'J',handle:({request})=>{providerOwner(request);return json(r.autopilotDecisions(OWNER))}},
  {method:'POST',path:'/api/autopilot/decisions/:id/cancel',style:'J',handle:async({request,body,params})=>{providerOwner(request);if(Object.keys(body).some(key=>!['project','effectVersion'].includes(key))||typeof body.project!=='string'||typeof body.effectVersion!=='string'||!body.effectVersion)throw new RuntimeError('decision_invalid','Нужны проект и версия применённого эффекта',400);return json(await r.autopilotCancelDecision(body.project,params.id!,body.effectVersion,OWNER))}},

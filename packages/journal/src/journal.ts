@@ -71,6 +71,7 @@ export class Journal {
  this.recover();requireKind(input.kind);const form=validateForm(input);let thread=input.thread??null,reply=input.reply_to??null;
  if(reply!==null){const target=this.get(reply);if(!target)throw new JournalError('reply_to_missing','нет записи #'+String(reply));if(thread===null)thread=target.thread??null}
  const now=this.now();const rec:Record_={seq:this.lastSeq+1,id:this.id(now.getTime()),ts:localIso(now),from:input.sender,to:form.to,kind:input.kind,thread,reply_to:reply,text:form.text,evidence:form.evidence,...(form.attachments.length?{attachments:form.attachments}:{}),policy:input.policy??0};
+ if(input.outcome!==undefined){const task=reply!==null?this.get(reply):null;if(!['done','blocked','partial'].includes(input.outcome)||input.kind!=='status'||task?.kind!=='task'||!task.to.includes(input.sender))throw new JournalError('outcome_invalid','Исход — done, blocked или partial в status исполнителя в ответ на task');rec.outcome=input.outcome}
  for(const key of ['score','round','origin','accepted','bounds','ack','sha','merged'] as const)if(input[key]!==null&&input[key]!==undefined)Object.assign(rec,{[key]:input[key]});
  if(input.attempt!==undefined)rec.attempt={...input.attempt};
  return this.write(rec)
@@ -89,8 +90,9 @@ export class Journal {
   const group=promotions.get(match[1]!)??[];group.push(record);promotions.set(match[1]!,group);
  }
  for(const marker of this.records){
-  if(marker.from!=='harness'||marker.kind!=='rejected'||marker.origin!=='autopilot-cancel'||marker.to.length!==1||marker.to[0]!=='owner'||marker.reply_to===null)continue;
+  if(marker.from!=='harness'||marker.kind!=='rejected'||!['autopilot-cancel','task-reassign'].includes(marker.origin??'')||marker.to.length!==1||marker.to[0]!=='owner'||marker.reply_to===null)continue;
   const target=bySeq.get(marker.reply_to);if(!target||target.seq>=marker.seq||target.to.length!==1||target.thread!==marker.thread)continue;
+  if(marker.origin==='task-reassign'){if(target.from==='owner'&&target.kind==='task'&&/^task:[0-9a-f]{64}$/.test(target.thread??''))revoked.add(target.seq);continue}
   if(target.from==='owner'&&target.kind==='decision'){revoked.add(target.seq);continue}
   const operation=/^promotion:(c[0-9a-f]+):(intro|task)$/.exec(target.thread??'')?.[1];
   const pair=(promotions.get(operation??'')??[]).filter(r=>r.seq<marker.seq&&r.to[0]===target.to[0]);
@@ -106,6 +108,7 @@ export class Journal {
  const deliverySeq=record.ack==='pending'?resolution!.seq:record.seq;if(deliverySeq>cursor)out.push({record,deliverySeq})}
  return out.sort((a,b)=>a.deliverySeq-b.deliverySeq)
  }
+ deliveryRevoked(seq:number):boolean {return this.revokedAutopilotRecords().has(seq)}
  autopilotReplyRevoked(seq:number):boolean {return this.revokedAutopilotRecords().has(seq)}
  autopilotPromotionRevoked(seq:number):boolean {return this.revokedAutopilotRecords().has(seq)}
  markAcked(seq:number){this.recover();const record=this.get(seq);if(!record)return;const resolution=ackResolution(record,this.repliesTo(seq));if(resolution)this.decisions.set(seq,resolution)}
