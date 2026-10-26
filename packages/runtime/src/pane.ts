@@ -3,9 +3,9 @@ import {randomBytes} from 'node:crypto';
 import {MODE_IDS,pyTruthy,legacyKind,seatKind,type SeatKind,type Mode,type Seat as TeamSeat} from '@harnessy/team';
 import {pythonTrim,Policy} from '@harnessy/journal';
 import {statSync} from 'node:fs';
-import {RuntimeError} from './errors.ts';
+import {RuntimeError,deepFreeze} from './errors.ts';
 import {systemClock,type Clock,type ModelCatalog,type RuntimeEvent} from './types.ts';
-import type {Vendor,TurnHandle,Usage,Seat} from '@harnessy/providers';
+import type {ToolApprovalRequest,Vendor,TurnHandle,Usage,Seat} from '@harnessy/providers';
 import type {EventBus} from './events.ts';
 import {numberTranscript,timestampMessage,type TranscriptMessage} from './state.ts';
 export const APPROVAL_TIMEOUT_MS=900_000;
@@ -14,9 +14,9 @@ export type DurableDecision=(decision:ApprovalDecision)=>{decision:ApprovalDecis
 export class Approval {
  readonly future:Promise<boolean>;private resolve!:(allow:boolean)=>void;private timer:unknown;private ended=false;
  private trace=currentTrace();
- readonly id:string;readonly pane:Pane;readonly title:string;readonly detail:string;private clock:Clock;private durable:DurableDecision|undefined;
- constructor(id:string,pane:Pane,title:string,detail:string,timeout:number,clock:Clock,durable?:DurableDecision){
- this.id=id;this.pane=pane;this.title=title;this.detail=detail;this.clock=clock;this.durable=durable;
+ readonly request:Readonly<ToolApprovalRequest>|undefined;readonly id:string;readonly pane:Pane;readonly title:string;readonly detail:string;private clock:Clock;private durable:DurableDecision|undefined;
+ constructor(id:string,pane:Pane,title:string,detail:string,timeout:number,clock:Clock,durable?:DurableDecision,request?:ToolApprovalRequest){
+ this.request=request?deepFreeze(structuredClone(request)):undefined;this.id=id;this.pane=pane;this.title=title;this.detail=detail;this.clock=clock;this.durable=durable;
  this.future=new Promise(r=>{this.resolve=r});this.timer=clock.setTimeout(()=>{try{this.finish('timeout')}catch{/* Durable failure keeps the card open; its handler published the error. */}},timeout)
  }
  finish(requested:ApprovalDecision):boolean {if(this.ended)return false;const saved=this.durable?.(requested)??{decision:requested};this.ended=true;this.clock.clearTimeout(this.timer);this.pane.approvals.delete(this.id);this.pane.publish({type:'approvalResolved',id:this.id,decision:saved.decision});this.resolve(saved.decision==='allow');if(saved.error)throw saved.error;return true}
@@ -39,7 +39,7 @@ export class Pane {
  return {id:this.id,vendor:this.vendor,label:this.label,role:this.role,model:this.model,mode:this.mode,cwd:this.cwd,sessionId:this.sessionId,digest:this.digest,busy:this.busy,writePaths:[...this.writePaths],worktree:this.worktree,branch:this.branch,touched:this.touched,pendingApprovals:this.approvals.size,kind:this.kind,...(transfer?{contextTransfer:{project:transfer.project,chat:transfer.chat,turnInstanceId:transfer.turnInstanceId,messages:transfer.messages,verbatim:transfer.verbatim,tokens:transfer.tokens,compressed:transfer.compressed,enabled:transfer.enabled,...(transfer.failure?{failure:{...transfer.failure}}:{})}}:{})}}
  persist(){return {model:this.model||null,mode:this.mode,sessionId:this.sessionId,digest:this.digest,vendor:this.vendor,...(this.id==='room'?{folderless:this.folderless}:{})}}
  providerSeat():Seat{if(this.vendor==='human')throw new RuntimeError('no_provider','нет провайдера: human');return {id:this.id,vendor:this.vendor,label:this.label,model:this.model,mode:this.mode,cwd:this.cwd,sessionId:this.sessionId,writePaths:[...this.writePaths],worktree:this.worktree}}
- askApproval(title:string,detail:string,timeout=APPROVAL_TIMEOUT_MS):Promise<boolean>{let id:string;do{id=randomBytes(6).toString('hex')}while(this.approvals.has(id));const a=new Approval(id,this,title,detail,timeout,this.clock);this.approvals.set(id,a);this.publish(a.event());return a.future}
+ askApproval(title:string,detail:string,timeout=APPROVAL_TIMEOUT_MS,request?:ToolApprovalRequest):Promise<boolean>{let id:string;do{id=randomBytes(6).toString('hex')}while(this.approvals.has(id));const a=new Approval(id,this,title,detail,timeout,this.clock,undefined,request);this.approvals.set(id,a);this.publish(a.event());return a.future}
  resolveApproval(id:string,allow:boolean):boolean{return this.approvals.get(id)?.finish(allow?'allow':'deny')??false}
  denyApprovals():void{for(const a of [...this.approvals.values()])try{a.finish('deny')}catch{/* A failed journal decision stays open; it must not prevent turn cancellation. */}}
 }

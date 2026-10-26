@@ -40,3 +40,10 @@ test('234: declined and invalid Codex permissions are rejected tool results, inc
  await serverRequest('item/commandExecution/requestApproval',{threadId:'t',turnId:'v',command:'fixture'},f.ctx,'t','v');await serverRequest('item/permissions/requestApproval',{threadId:'t',turnId:'v',permissions:{bad:true}},f.ctx,'t','v');await serverRequest('mcpServer/elicitation/request',{threadId:'t',turnId:'v',serverName:'other'},f.ctx,'t','v');assert.equal(traces.filter(e=>e.phase==='result').length,3);assert.ok(traces.filter(e=>e.phase==='result').every(e=>e.outcome==='rejected'&&e.reason==='approval_policy'));
  const before=traces.length;await assert.rejects(serverRequest('item/commandExecution/requestApproval',{threadId:'foreign',turnId:'v'},f.ctx,'t','v'));assert.equal(traces.length,before);
 });
+
+test('38.5 Codex forwards scoped native method and full parameters, never the reason as authority',async()=>{
+ const f=fixture(),requests:unknown[]=[];f.ctx.askApproval=async(_title,_detail,request)=>{requests.push(request);return false};
+ const method='item/commandExecution/requestApproval',parameters={threadId:'t',turnId:'v',command:['x'.repeat(500)],reason:'safe'};
+ await serverRequest(method,parameters,f.ctx,'t','v');assert.deepEqual(requests,[{provider:'codex',operation:method,parameters}]);
+ await assert.rejects(serverRequest(method,{...parameters,threadId:'foreign'},f.ctx,'t','v'));assert.equal(requests.length,1);
+});

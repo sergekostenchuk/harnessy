@@ -63,7 +63,7 @@ export function claudeOptions(seat:Seat,ctx:TurnContext,binary:string,env:NodeJS
  if(seat.model)options.model=seat.model;if(seat.sessionId)options.resume=seat.sessionId;
  if(seat.mode==='all')options.allowDangerouslySkipPermissions=true;
  else if(seat.mode!=='chat')options.canUseTool=async(name,input,{signal})=>{
- const allow=await approval(ctx,'Claude просит: '+name,toolDetail(input)||JSON.stringify(input).slice(0,300),signal);
+ const allow=await approval(ctx,'Claude просит: '+name,toolDetail(input)||JSON.stringify(input).slice(0,300),signal,{provider:'claude',operation:name,parameters:input});
  return allow&&!ctx.signal.aborted&&!signal.aborted?{behavior:'allow',updatedInput:input}:{behavior:'deny',message:'владелец отказал'}
  };
  return options;

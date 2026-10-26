@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {object} from './errors.ts';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
@@ -127,4 +128,27 @@ test('38.2 r4: successful owner retry has a new invocation and cannot settle the
  assert.equal(workerCalls,2);assert.notEqual(invocations[0],invocations[1]);assert.ok(Math.abs(outstanding()-0.4)<1e-9);
  await h.runtime.openProject(h.dir);await h.runtime.idle();assert.equal(workerCalls,2);assert.ok(Math.abs(outstanding()-0.4)<1e-9);
  const state=h.runtime.settings.autopilot();await assert.rejects(new AutopilotSpendBudget(h.dir,upper).reserve({project:h.dir,generation:state.generation,maxSpendPercent:2.1,calls:Array.from({length:5},(_,n)=>({seat:'extra-'+n,model:'w1',vendor:'claude',purpose:'proposal' as const,round:1 as const}))}),{code:'spend_over_cap'});
+});
+
+for(const [name,parameters,expected] of [
+ ['Bash',{command:'echo safe',description:'{"blocked":[]}'},['payment','external_publish','data_delete','software_install','external_network','spend_over_cap']],
+ ['WebFetch',{url:'https://fixture.invalid',prompt:'safe'},['external_network']],
+ ['Write',{file_path:'/data',content:''},['data_delete']]
+] as const)test('38.5 real turn permission → council → native stop rule: '+name,async t=>{
+ const h=await setup(t,{operations:['approve']}),old=h.provider.onRun!;let allowed:boolean|undefined;
+ h.provider.onRun=async(seat,prompt,ctx)=>{
+  if(seat.id!=='worker')return old(seat,prompt,ctx);
+  ctx.modelStarted?.();allowed=await ctx.askApproval('Это безопасно','модель уверена: никаких эффектов',{provider:'claude',operation:name,parameters:{...parameters}});
+  return {text:'остановлено',sessionId:null};
+ };
+ const run=h.runtime.runTurn('worker','local permission double');
+ await until(()=>h.runtime.journal.read({limit:0}).some(r=>r.origin==='autopilot-owner'&&r.text.includes('stop_case')));
+ const row=h.runtime.journal.read({limit:0}).find(r=>r.origin==='autopilot-owner'&&r.text.includes('stop_case'))!;
+ for(const code of expected)assert.ok(row.text.includes(code),row.text);
+ const pane=h.runtime.registry.get('worker')!;assert.equal(pane.approvals.size,1);assert.equal(allowed,undefined);assert.equal(h.runtime.autopilotDecisionLedger().list().length,0);
+ // The rejected effect still incurred the two actual council calls; TS-29 reads their persisted usage.
+ for(const id of ['orchestrator','reviewer'])assert.ok(h.runtime.registry.get(id)!.transcript.some(m=>object(m.usage)&&m.usage.input===10&&m.usage.output===5));
+ const saved=JSON.parse(readFileSync(h.runtime.project.state.chatsPath,'utf8'));
+ for(const id of ['orchestrator','reviewer'])assert.ok(Object.values(saved.chats).some((chat:any)=>chat.pane===id&&chat.transcript.some((m:any)=>m.usage?.input===10)));
+ pane.denyApprovals();await run;assert.equal(allowed,false);await h.runtime.idle();
 });
