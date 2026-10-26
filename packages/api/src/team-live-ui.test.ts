@@ -323,3 +323,30 @@ test('TS-44 r3: a pending send survives status; its receipt clears only the sent
 test('TS-44 r3: successful send clears its draft even if status replaced the input',async()=>{
  const receipt=deferred<any>();const v=teamUi('work',async path=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator','chat-orch')]):path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();v.find('[data-team-chat-input]').value='Отправлено';await v.find('[data-team-send]').emit('click');await v.window.emit('live:status');await v.settle();receipt.resolve({ok:true});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'');assert.equal(v.find('[data-team-chat-input]').disabled,false);
 });
+
+test('TS-44 r4: a late receipt clears its own chat draft without touching another chat',async()=>{
+ const receipt=deferred<any>();let activeChat='chat-orch';const v=teamUi('work',async path=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator',activeChat)]):path==='/api/chat'?receipt.promise:chat(activeChat,'orch'));await v.settle();v.find('[data-team-chat-input]').value='Отправлено в A';await v.find('[data-team-send]').emit('click');
+ activeChat='other-chat';await v.window.emit('live:status');await v.settle();v.find('[data-team-chat-input]').value='Черновик B';receipt.resolve({ok:true});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');
+ activeChat='chat-orch';await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'');activeChat='other-chat';await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');
+});
+
+test('TS-44 r4: project A → B → A before a late receipt clears only A',async()=>{
+ const receipt=deferred<any>();let project='/project-a';const v=teamUi('work',async path=>path==='/api/swarm'?snapshot(project,[pane('orch','orchestrator','chat-orch')]):path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();v.find('[data-team-chat-input]').value='Отправлено в A';await v.find('[data-team-send]').emit('click');
+ project=v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();v.find('[data-team-chat-input]').value='Черновик B';
+ project=v.H.project='/project-a';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Отправлено в A');receipt.resolve({ok:true});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'');
+ project=v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');
+});
+
+test('TS-44 r4: receipt in project B clears A without touching a same-named chat in B',async()=>{
+ const receipt=deferred<any>();let project='/project-a';const v=teamUi('work',async path=>path==='/api/swarm'?snapshot(project,[pane('orch','orchestrator','chat-orch')]):path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();v.find('[data-team-chat-input]').value='Отправлено в A';await v.find('[data-team-send]').emit('click');
+ project=v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();v.find('[data-team-chat-input]').value='Черновик B';receipt.resolve({ok:true});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');
+ project=v.H.project='/project-a';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'');project=v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');
+});
+
+test('TS-44 r4: a receipt never clears a newer revision or an unconfirmed draft',async()=>{
+ for(const result of [{ok:true},{ok:false,error:'Отказ'}]){const receipt=deferred<any>();const v=teamUi('work',async path=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator','chat-orch')]):path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();let input=v.find('[data-team-chat-input]');input.value='Первая редакция';await v.find('[data-team-send]').emit('click');input.value=result.ok?'Новая редакция':'Первая редакция';receipt.resolve(result);await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.value,result.ok?'Новая редакция':'Первая редакция')}
+});
+
+test('TS-44 r4: a late rejected receipt neither changes the other chat nor clears the unsent draft',async()=>{
+ const receipt=deferred<any>();let activeChat='chat-orch';const v=teamUi('work',async path=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator',activeChat)]):path==='/api/chat'?receipt.promise:chat(activeChat,'orch'));await v.settle();v.find('[data-team-chat-input]').value='Черновик A';await v.find('[data-team-send]').emit('click');activeChat='other-chat';await v.window.emit('live:status');await v.settle();v.find('[data-team-chat-input]').value='Черновик B';receipt.resolve({ok:false,error:'Отказ A'});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');assert.doesNotMatch(v.root.textContent,/Отказ A/);activeChat='chat-orch';await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик A');
+});
