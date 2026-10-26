@@ -49,9 +49,10 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  const fmtN=','  const ckBox=')+
   part(live,'  const bubble=','  const cols=')+
   part(live,'  function guidanceState(','  function render(')+
+  part(live,'  function closeLAMenus()','  // запись «контекст передан»')+
   '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
-  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw};',context);
+  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw,showOrchestratorOffer,laPath,projectPathValue};',context);
  const functions=(context as Data).testing as Data;
  function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
  function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
@@ -97,6 +98,19 @@ test('TS-34: new-chat guidance stays above the context row owned by the composer
  const view=ui(),d=dom('<div class="frame cur"><div class="nc"><h2>Чем займёмся?</h2><div class="cx-top">исходный контекст</div><div class="box"></div></div></div>');Object.assign(d.document,{body:d.body});view.sandbox.document=d.document;view.sandbox.PAGE='new';view.S.ui.pane='room';view.H.pane=view.H.panes[1];view.H.pane.model=null;
  view.functions.chatGuidanceDraw();const card=d.document.querySelector('[data-model-guidance]')!,contextRow=d.document.querySelector('.cx-top')!,box=d.document.querySelector('.box')!;
  assert.equal(box.previousElementSibling,contextRow);assert.equal(contextRow.previousElementSibling,card);contextRow.innerHTML='<span>Без проекта · Новый чат · Без роли</span>';assert.match(card.textContent,/Подключите модель, когда захотите/);
+});
+
+test('TS-47.1 F08: room guidance ignores a background project, explains an existing local orchestrator and validates the path',async()=>{
+ const view=ui(),d=dom('<div class="frame cur"><div class="main"><div class="feed"><div class="col"></div></div></div></div>');Object.assign(d.document,{body:d.body});view.sandbox.document=d.document;
+ view.S.ui.pane='room';view.H.pane=view.H.panes[1];view.H.active.room='room-chat';view.H.noProject=true;view.S.chat=[{src:'live',role:'ai',pane:'room'}];view.functions.chatGuidanceDraw();
+ assert.ok(d.document.querySelector('[data-orchestrator-guidance-accept]'),'background project must not suppress the offer');
+ view.H.noProject=false;assert.equal(view.functions.showOrchestratorOffer(),true);const unavailable=d.document.querySelector('[data-orchestrator-guidance]')!;
+ assert.match(unavailable.textContent,/В этом проекте уже есть оркестратор/);assert.equal(unavailable.querySelector('[data-orchestrator-guidance-accept]'),null);
+ view.H.chatList=[{id:'room-chat',promotion:{pending:true}}];view.functions.chatGuidanceDraw();assert.ok(d.document.querySelector('[data-orchestrator-guidance-accept]'),'an interrupted promotion remains resumable');view.H.chatList=[];
+ view.H.project='/project-b';view.H.panes=[view.H.pane];assert.equal(view.functions.showOrchestratorOffer(),true);assert.ok(d.document.querySelector('[data-orchestrator-guidance-accept]'),'project without an orchestrator remains eligible');
+ const anchor=d.document.createElement('div');d.body.appendChild(anchor);let submitted='';view.functions.laPath(anchor,'создать проект и git','',(path:string)=>{submitted=path});const input=anchor.querySelector('input')!;
+ await anchor.querySelector('[data-ok]')!.emit('click');assert.equal(submitted,'');assert.match(anchor.querySelector('[data-cx-path-error]')!.textContent,/Введите имя или путь папки проекта/);assert.equal(input.getAttribute('aria-invalid'),'true');
+ input.value=' /projects/new ';await input.emit('keydown',{key:'Enter'});assert.equal(submitted,'/projects/new');assert.equal(anchor.querySelector('.live-menu'),null);
 });
 
 test('TS-34: hiding sketch messages keeps live guidance cards visible',()=>{

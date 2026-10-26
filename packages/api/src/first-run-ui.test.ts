@@ -166,7 +166,7 @@ test('TS-34: pending send becomes a draft and first run never replays it',async 
 });
 
 test('TS-34: folder control still creates the selected project without a model turn',async t=>{
- const h=await fixture(t,{seats:'  {}'}),v=await ui(h);runInContext('globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,sendBinding,bindingCurrent,invalidateBinding,operationsDraw};',v.vm);runInContext(readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8'),v.vm);
+ const h=await fixture(t,{seats:'  {}'}),v=await ui(h);runInContext(part('  function projectPathValue(','  function laPath(')+'globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,sendBinding,bindingCurrent,invalidateBinding,operationsDraw,projectPathValue};',v.vm);runInContext(readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8'),v.vm);
  await v.find('[data-cx="folder"]').emit('click');await v.settle();await v.find('[data-cx-nav="mkdir"]').emit('click');v.find('input.cx-path').value=h.dir+'/first-project';await v.find('[data-cx-mkdir]').emit('click');await v.settle();v.f.draw();assert.equal(h.runtime.project.dir,h.dir+'/first-project');assert.equal(v.H.project,h.dir+'/first-project');assert.match(v.find('.st[data-s="1"] .pick small').textContent,/first-project/);assert.equal(h.provider.calls.length,0);
 });
 
