@@ -6,12 +6,12 @@ import {Journal} from './journal.ts';
 import {JournalError,KINDS} from './types.ts';
 import {localIso,compatJson,parseCompat,orderedClone,orderedKeys,pythonTrim} from './index.ts';
 import {PROTOCOL_TEXT} from './strings.ts';
-import {temp,fixture,fixtureDir,error} from './test-support.ts';
+import {temp,fixture,fixtureDir,error,copyPaginationJournal} from './test-support.ts';
 process.env.TZ='UTC';
 const fixed={now:()=>new Date('2026-10-09T00:00:00.123Z'),id:(ms:number)=>ms.toString(16)+'-abcdef'};
 
 test('79/107: exclusive before pages over 800 records have no gaps and retain existing read filters',()=>{
- const t=temp();try{const j=new Journal(t.root,fixed);for(let i=1;i<=805;i++)j.append({sender:'owner',to:'worker',kind:i%2?'question':'note',thread:i%3?'ordinary':'third',text:'record '+i});
+ const t=temp();try{copyPaginationJournal(t.root);const j=new Journal(t.root,fixed);
  const latest=j.read({limit:400}),older=j.read({limit:400,before:latest[0]!.seq}),oldest=j.read({limit:400,before:older[0]!.seq});
  assert.deepEqual([...oldest,...older,...latest].map(r=>r.seq),Array.from({length:805},(_,i)=>i+1));assert.deepEqual(j.read({before:1}),[]);assert.equal(new Journal(t.root).read({limit:400,before:406})[0]!.seq,6);
  assert.deepEqual(j.read({since:100,before:130,limit:0,thread:'third',kinds:['question']}).map(r=>r.seq),[105,111,117,123,129]);
@@ -174,4 +174,21 @@ test('[TS-04a:49] public state helpers retain Python JSON key order and whitespa
  const bytes=readFileSync(join(fixtureDir,'python-state/numeric-panes.json'),'utf8'),value=parseCompat(bytes) as Record<string,unknown>;
  assert.equal(compatJson(orderedClone(value),2),bytes);assert.deepEqual(orderedKeys(value),['2','1']);assert.deepEqual(orderedKeys(value['2'] as object),['9','1']);assert.deepEqual(orderedKeys(value['1'] as object),['__proto__']);
  assert.equal(pythonTrim('\u0085 текст \u001f'),'текст');assert.equal(pythonTrim('\ufeff'),'\ufeff')
+});
+
+
+test('TS-45.2: pagination seeds have independent bytes, retain the protocol and allow durable append/restart',()=>{
+ const a=temp(),b=temp();try{
+  copyPaginationJournal(a.root);copyPaginationJournal(b.root);
+  const one=new Journal(a.root,fixed),two=new Journal(b.root,fixed),original=readFileSync(two.channelPath,'utf8');
+  assert.equal(one.lastSeq,805);assert.equal(two.lastSeq,805);assert.equal(one.get(0)!.text,PROTOCOL_TEXT);
+  assert.equal(one.diagnostics.skipped,0);assert.equal(readFileSync(one.channelPath,'utf8').split('\n').length,807);
+  assert.deepEqual(one.read({limit:0}),two.read({limit:0}));
+  const added=one.append({sender:'owner',to:'worker',kind:'note',text:'only in first'});assert.equal(added.seq,806);
+  assert.equal(new Journal(a.root).get(806)!.text,'only in first');
+  assert.equal(new Journal(b.root).lastSeq,805);assert.equal(readFileSync(two.channelPath,'utf8'),original);
+  copyPaginationJournal(b.root,'http');const http=new Journal(b.root);assert.equal(http.lastSeq,805);assert.equal(http.diagnostics.skipped,0);
+  assert.equal(new Set(http.read({limit:0}).map(record=>record.id)).size,805);
+  assert.deepEqual(http.read({since:100,before:110,limit:0,thread:'odd'}).map(r=>r.seq),[101,103,105,107,109]);
+ }finally{a.close();b.close()}
 });

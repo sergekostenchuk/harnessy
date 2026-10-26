@@ -3,6 +3,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {Journal,type JournalOptions} from './journal.ts';
+import {compatJson} from './compat-json.ts';
 import {Policy} from './policy.ts';
 import {Channel,type ChannelDeps} from './channel.ts';
 import {JournalError,type JournalCode,type ChannelEvent,type CorePostInput,type AgentPostInput} from './types.ts';
@@ -27,3 +28,25 @@ export function fixture(source=template,options:JournalOptions={}){
 export const error=(code:JournalCode,text?:string)=>(e:unknown)=>e instanceof JournalError&&e.code===code&&(text===undefined||e.message===text);
 export const ackPolicy=template.replace('kinds: [report, question, answer, note, escalation]','kinds: [report, question, answer, note, escalation]\n    trigger: owner-ack');
 export const verdictAckPolicy=template.replace('trigger: reply-to:review-request','trigger: owner-ack');
+
+// Reader fixtures: prepare each historical shape once, retaining the current
+// writer's protocol/record form, then give every consumer an independent file.
+const paginationSeeds=new Map<'journal'|'http',string>();
+export function copyPaginationJournal(root:string,shape:'journal'|'http'='journal'):void {
+ let bytes=paginationSeeds.get(shape);
+ if(bytes===undefined){
+  const seed=temp();try{
+   const journal=new Journal(seed.root,{now:()=>new Date('2026-10-09T00:00:00.123Z'),id:ms=>ms.toString(16)+'-abcdef'});
+   const first=journal.append({sender:'owner',to:'worker',kind:'note',text:'record 1'});
+   const protocol=readFileSync(journal.channelPath,'utf8').split('\n')[0]!;
+   bytes=protocol+'\n'+Array.from({length:805},(_,index)=>{
+    const seq=index+1,kind=shape==='journal'&&seq%2?'question':'note',thread=shape==='journal'?(seq%3?'ordinary':'third'):(seq%2?'odd':'even');
+    const id=first.id.split('-')[0]+'-'+seq.toString(16).padStart(6,'0');
+    return compatJson({...first,seq,id,kind,thread,text:'record '+seq})+'\n';
+   }).join('');
+   paginationSeeds.set(shape,bytes);
+  }finally{seed.close()}
+ }
+ const state=join(root,'.harness','state');mkdirSync(state,{recursive:true});
+ writeFileSync(join(state,'channel.ndjson'),bytes);
+}

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,readdirSync,mkdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {createContext,runInContext} from 'node:vm';
-import {execFileSync} from 'node:child_process';
+import {testSite} from './site-test-helpers.ts';
+import {pathToFileURL} from 'node:url';
+const site=pathToFileURL(testSite()+'/');
 import {fixture,call,sse,deferred,until,OWNER,FakeProvider} from './test-helpers.ts';
 import {setImmediate as immediate} from 'node:timers/promises';
 import {dom} from './ui-dom-test-helpers.ts';
@@ -436,8 +438,7 @@ function historyDOM(v:ReturnType<typeof firstPaint>,html='<div class="frame"><di
 }
 
 test('141–143: every PROTO_PAGES page hides demo before delayed status; success paints real project, offline is labelled',async()=>{
- const directory=new URL('../../../ui/deploy/out/site/sketches/proto/',import.meta.url);
- execFileSync('python3',['ui/deploy/build.py'],{cwd:new URL('../../../',import.meta.url),stdio:'pipe'});
+ const directory=new URL('sketches/proto/',site);
  const build=readFileSync(new URL('../../../ui/deploy/build.py',import.meta.url),'utf8');
  const pages=builtProtoPages(build);
  assert.equal(pages.length,33);assert.ok(pages.includes('44-inbox'));assert.ok(readdirSync(directory).includes('01-chat.html'));assert.ok(readdirSync(directory).includes('41-team-constructor.html'));assert.ok(readdirSync(directory).includes('38-project-result.html'));
@@ -472,7 +473,7 @@ test('141–143: every PROTO_PAGES page hides demo before delayed status; succes
 });
 
 test('142: cached status and chat list render before HTTP; wrong project, corrupt or absent snapshot never renders',async()=>{
- const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/01-chat.html',import.meta.url),'utf8'),original=firstPaint(html);
+ const html=readFileSync(new URL('sketches/proto/01-chat.html',site),'utf8'),original=firstPaint(html);
  original.boot.save(realStatus(),[{id:'c-real',pane:'worker',title:'Сохранённый разговор',messages:1,active:true}],[{path:'/real/project',name:'project',current:true,seats:1}],[]);
  const restored=firstPaint(html,original.storage);restored.S.chat=[{text:'foreign conversation'}];restored.S.ui.openChat='c-real';
  assert.equal(restored.paint.restore(),true);assert.equal(restored.requests.length,0,'snapshot preview must not open a chat or call a model');assert.equal((await restored.functions.api('/api/chat',{pane:'worker',message:'keyboard send while pending'})).code,'live_pending');assert.equal(restored.requests.length,0,'preview is read-only even through keyboard or secondary controls');
@@ -490,7 +491,7 @@ test('142: cached status and chat list render before HTTP; wrong project, corrup
 
 
 test('141: offline deadline before body parsing waits to attach its label; accepted live data cancels deferred unavailable captions',()=>{
- const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/01-chat.html',import.meta.url),'utf8');
+ const html=readFileSync(new URL('sketches/proto/01-chat.html',site),'utf8');
  for(const recovered of [false,true]){
   const v=firstPaint(html),document=v.sandbox.document,body=document.body;let loaded!:()=>void;document.body=null;document.addEventListener=(kind:string,fn:()=>void)=>{if(kind==='DOMContentLoaded')loaded=fn};
   assert.doesNotThrow(()=>v.deadline());assert.ok(loaded);if(recovered)v.boot.ready();document.body=body;loaded();
@@ -500,7 +501,7 @@ test('141: offline deadline before body parsing waits to attach its label; accep
 
 
 test('142: cold cached journal executes the real startup after journal/Now state initialization, without model or chat mutations',async()=>{
- const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/21-journal.html',import.meta.url),'utf8'),seed=firstPaint(html);seed.boot.save(realStatus(),[{id:'c-real',pane:'worker',messages:1,title:'cached',active:true}],[{path:'/real/project',name:'project',current:true}],[]);
+ const html=readFileSync(new URL('sketches/proto/21-journal.html',site),'utf8'),seed=firstPaint(html);seed.boot.save(realStatus(),[{id:'c-real',pane:'worker',messages:1,title:'cached',active:true}],[{path:'/real/project',name:'project',current:true}],[]);
  const v=firstPaint(html,seed.storage,'log');Object.assign(v.sandbox,{stop(){},openPal(){},selStart(){},laMenu(){},laPath(){},laMulti(){},operationsDraw(){},operationAttention(){return false},restoreUI(){},wireSearch(){},refresh(){}});
  const tail=live.slice(live.indexOf('  function restoreLiveSnapshot('),live.lastIndexOf('})();'));
  assert.doesNotThrow(()=>runInContext(tail,v.context));assert.equal(v.H.snapshotOnly,true);assert.equal(v.H.project,'/real/project');assert.deepEqual(v.requests.map(r=>r.path),['/api/status']);
@@ -553,7 +554,7 @@ test('152: all PROTO_PAGES share history return, invalidate old bindings/status,
  const build=readFileSync(new URL('../../../ui/deploy/build.py',import.meta.url),'utf8'),pages=builtProtoPages(build);
  const mapping=runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data;assert.equal(pages.length,33);assert.ok(pages.includes('44-inbox'));assert.ok(pages.includes('41-team-constructor'));assert.ok(pages.includes('41-team-queue'));
  for(const page of pages){
-  const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/'+page+'.html',import.meta.url),'utf8'),key=Object.keys(mapping).find(k=>mapping[k]===page+'.html')||(/^(?:2[89]|3[0-8])-/.test(page)?'path':''),v=firstPaint(html,new Map(),key);
+  const html=readFileSync(new URL('sketches/proto/'+page+'.html',site),'utf8'),key=Object.keys(mapping).find(k=>mapping[k]===page+'.html')||(/^(?:2[89]|3[0-8])-/.test(page)?'path':''),v=firstPaint(html,new Map(),key);
   const body=html.match(/<body[^>]*>([\s\S]*?)<script\b/)![1]!,d=historyDOM(v,body),columns=d.document.querySelectorAll('.feed .col');
   v.paint.apply(realStatus(),v.boot.capture(),true);await immediate();v.S.chat=[{role:'ai',src:'live',text:'CACHED ANSWER FROM A',html:'CACHED ANSWER FROM A'}];for(const column of columns)column.innerHTML='<div class="ai live-msg">CACHED ANSWER FROM A</div>';
   v.S.ui.openChat='old-pinned-chat';v.S.pending={text:'unsent draft from A'};v.H.cur={text:'OLD STREAM',tools:[]};v.H.asks={old:{text:'OLD QUESTION'}};
@@ -627,9 +628,9 @@ test('153: the direct-to-orchestrator card selects verified kind and ignores an 
 });
 
 test('178: gallery preserves the sketch canvas and routes implemented pages to the live prototype',()=>{
- const gallery=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/gallery.html',import.meta.url),'utf8');
+ const gallery=readFileSync(new URL('sketches/proto/gallery.html',site),'utf8');
  assert.match(gallery,/href="05-spend.html"/);assert.match(gallery,/href="01-chat.html"/);assert.match(gallery,/href="\/sketches\/disarto\/00-design-code.html"/);assert.doesNotMatch(gallery,/location.replace/);
- const index=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/index.html',import.meta.url),'utf8');assert.match(index,/10-new-chat.html/);
+ const index=readFileSync(new URL('sketches/proto/index.html',site),'utf8');assert.match(index,/10-new-chat.html/);
 });
 
 test('210: every SCREENS entry is reachable from the untruncated palette by click, keyboard and search',async()=>{
@@ -702,7 +703,7 @@ test('TS-40 cost: icon and card round to three decimals without changing stored 
 });
 
 test('TS-43: reconnecting a busy chat keeps the answer already received over SSE',async()=>{
- const html=readFileSync(new URL('../../../ui/deploy/out/site/sketches/proto/01-chat.html',import.meta.url),'utf8'),v=firstPaint(html),status=realStatus();status.panes[0]!.busy=true;
+ const html=readFileSync(new URL('sketches/proto/01-chat.html',site),'utf8'),v=firstPaint(html),status=realStatus();status.panes[0]!.busy=true;
  v.H.project=status.project;v.H.panes=status.panes;v.H.pane=status.panes[0];v.H.cur={text:'PREFIX ',tools:[]};
  const pending=v.paint.connect();v.status.resolve(status);await pending;
  assert.equal(v.H.cur.text,'PREFIX ');v.functions.hEvent({type:'delta',text:'SUFFIX'});assert.equal(v.H.cur.text,'PREFIX SUFFIX');

@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {execFileSync,spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import {mkdtempSync,mkdirSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {deflateSync,gzipSync} from 'node:zlib';
+
+import {testSite,copyTestSite} from './site-test-helpers.ts';
 
 const root=fileURLToPath(new URL('../../../',import.meta.url));
 const guard=join(root,'ui/deploy/forbidden_guard.py');
@@ -64,5 +66,16 @@ test('TS-32: profile specifications are neutral and generated site passes its gu
  const files=['01-chat.html','06-settings.html','10-new-chat.html','11-connections.html','27-limits-widget.html'].map(name=>join(root,'ui/sketches/disarto',name));
  for(const file of files){const text=readFileSync(file,'utf8');assert.doesNotMatch(text,/9616166@gmail\.com|kostenchuksergey|>Serge</,file);assert.match(text,/Владелец|you@example\.com/,file)}
  const design=readFileSync(join(root,'ui/sketches/disarto/00-design-code.html'),'utf8');assert.match(design,/профиль · учётная запись движка/);assert.match(design,/Без подтверждённой учётной записи строка почты не рисуется/);
- execFileSync('python3',['ui/deploy/build.py'],{cwd:root,stdio:'pipe'});assert.equal(runGuard(join(root,'ui/deploy/out/site')).status,0);
+ assert.equal(runGuard(testSite()).status,0);
+});
+
+
+test('TS-45.1: damaging a private site copy cannot contaminate the shared guarded build',t=>{
+ const clean=testSite(),copy=copyTestSite();t.after(copy.close);
+ assert.notEqual(copy.site,clean);
+ const relative='sketches/proto/01-chat.html',original=readFileSync(join(clean,relative));
+ writeFileSync(join(copy.site,relative),'kostenchuksergey');
+ const blocked=runGuard(copy.site);assert.equal(blocked.status,1);assert.match(blocked.stderr,/01-chat\.html/);
+ assert.deepEqual(readFileSync(join(clean,relative)),original);
+ assert.equal(runGuard(clean).status,0);
 });
