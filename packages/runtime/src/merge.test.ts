@@ -5,6 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {GitOps,execute} from '@harnessy/projects';
+import {seedRepo} from '../../projects/src/test-support.ts';
 import {createActions,createRuntime,Runtime,RuntimeError,diskIO,type StateIO,type RuntimeDeps,type MergeResult} from './index.ts';
 import {harness,OWNER,FakeProvider,deferred,until} from './test-helpers.ts';
 const seats='  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read}\n  reviewer: {role: reviewer, vendor: claude, label: ревьюер, model: w1, mode: read}\n  orchestrator: {role: orchestrator, vendor: claude, label: оркестратор, model: w1, mode: read}';
@@ -13,7 +14,7 @@ async function setup(t:Parameters<typeof harness>[0],deps:Partial<RuntimeDeps>={
  let base='',sha='',merges=0;const g=new GitOps(async(args,cwd,timeout=60)=>{if(args[0]==='merge'&&args[1]==='--no-ff')merges++;const r=await execute('git',args,cwd,timeout*1000);return {...r,stdout:r.stdout.trim(),stderr:r.stderr.trim()}});
  const h=await harness(t,{seats,actions:createActions(),deps:{gitops:g,...deps},before:dir=>{
  fs.writeFileSync(join(dir,'.harness','comms-policy.yaml'),'version: 1\nroutes:\n  - {from: reviewer, to: executor, kinds: [verdict], '+(ack?'trigger: owner-ack, ':'')+'bounds: {accept_score: 9}}\n  - {from: "*", to: "*", kinds: "*"}\nobserve: {}\n');
- git(dir,'init','-q','-b','main');git(dir,'config','user.email','test@example.invalid');git(dir,'config','user.name','Test');git(dir,'config','commit.gpgsign','false');fs.writeFileSync(join(dir,'base.txt'),'base');git(dir,'add','base.txt','.harness/team.yaml','.harness/comms-policy.yaml');git(dir,'commit','-qm','base');base=git(dir,'rev-parse','HEAD');
+ base=seedRepo(dir,{'base.txt':'base','.harness/team.yaml':fs.readFileSync(join(dir,'.harness','team.yaml'),'utf8'),'.harness/comms-policy.yaml':fs.readFileSync(join(dir,'.harness','comms-policy.yaml'),'utf8')});
  git(dir,'checkout','-qb','feature');fs.writeFileSync(join(dir,'feature.txt'),'feature');git(dir,'add','feature.txt');git(dir,'commit','-qm','feature');sha=git(dir,'rev-parse','HEAD');git(dir,'checkout','-q','main');
  }});await h.runtime.halt(true,OWNER);
  return {...h,base,sha,merges:()=>merges};
