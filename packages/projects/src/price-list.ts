@@ -2,6 +2,13 @@ import {ProjectError} from './errors.ts';
 import {object} from './files.ts';
 
 export interface ModelPrice {vendor:string;model:string;inputPerM:number;outputPerM:number;cacheReadPerM:number;currency:string}
+export function priceUsage(turn:{vendor:string|null;model:string|null;usage:{input:number|null;output:number|null;cacheRead:number|null};usageIncomplete?:boolean},entry:ModelPrice|undefined){
+ const u=turn.usage;
+ let costReason=turn.vendor===null?'провайдер не сохранён':turn.model===null?'модель не сохранена':!entry?'нет цены модели':turn.usageIncomplete||Object.values(u).some(v=>v===null)?'измерения токенов неполны':null;
+ const cost=costReason===null?(u.input!/1e6*entry!.inputPerM+u.output!/1e6*entry!.outputPerM+u.cacheRead!/1e6*entry!.cacheReadPerM):null;
+ if(cost!==null&&!Number.isFinite(cost))costReason='стоимость вне числового диапазона';
+ return {cost:costReason===null?cost:null,currency:costReason===null?entry!.currency:null,costReason};
+}
 export function priceList(value:unknown):ModelPrice[] {
  const invalid=(reason:string):never=>{throw new ProjectError('invalid_settings','priceList: '+reason)};
  if(!Array.isArray(value))return invalid('ожидается список цен');

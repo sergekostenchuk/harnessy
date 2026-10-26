@@ -1,3 +1,4 @@
+import {turnUsage} from './turn-usage.ts';
 import {NetworkStats} from './network-stats.ts';
 import {NetworkProviderChecks} from './network-provider-checks.ts';
 import {NetworkRelay,NetworkError,type NetworkTurn} from './network-relay.ts';
@@ -512,7 +513,7 @@ export class Runtime {
  const checkDirectNetwork=()=>{if(options.directOnce){const generation=JSON.parse(options.directOnce).networkGeneration;if(!generation||generation!==this.networkGeneration(pane.vendor))throw new RuntimeError('network_changed','Настройки изменились — решите заново')}};
  const beginNetwork=()=>this.networkRelay.begin(vendor,p.dir+'\0'+id,controller.signal,(text,network)=>{if(!current())return;pane.publish({type:'networkRoute',text,network,chat:p.state.activeChat(pane)!.id,turnInstanceId:scope.turnInstanceId})},!!options.directOnce);
  networkTurn=beginNetwork();
- let attempt=0,earlySession:string|null=null,effected=false,sessionLost=false;const failedExits=new Set<string>();
+ let attempt=0,earlySession:string|null=null,effected=false,sessionLost=false,toolCalls=0;const failedExits=new Set<string>();
  const ctx:TurnContext={traceTool:(name,args,run)=>{effected=true;return p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId))},traceEvent:event=>{if(event.phase==='call')effected=true;if(current())this.traceProvider(p,id,scope.turnInstanceId,event)},signal:networkTurn.signal,modelResponded:()=>{effected=true},modelStarted:()=>{if(current()){
   const notices:TranscriptMessage[]=[];
   const teamNotice=knowledge&&teamText&&!teamSaved?{...timestampMessage('peer','[от харнесс] '+teamText,this.clock.now()),teamKnowledge:{project:p.dir,chat:knowledge.chat,team:knowledge.team,turnInstanceId:scope.turnInstanceId}}:null;
@@ -522,7 +523,7 @@ export class Runtime {
   turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
  }},publish:event=>{
  if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:turnFailure({message:event.text},p.dir,0).reason,sessionId:pane.sessionId}:event;return}
- if(turn.stopRequested)return;if(event.type==='tool'||event.type==='delta'&&event.text.length>0)effected=true;if(event.type==='toolError')event={...event,text:turnFailure({message:event.text},p.dir,0).reason};if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
+ if(event.type==='tool')toolCalls++;if(turn.stopRequested)return;if(event.type==='tool'||event.type==='delta'&&event.text.length>0)effected=true;if(event.type==='toolError')event={...event,text:turnFailure({message:event.text},p.dir,0).reason};if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
  },askApproval:(title,detail,request)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.askApproval(title,detail,undefined,request?.provider===vendor?request:undefined))},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;if(transfer&&!turn.started){earlySession=sid;return}pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
  if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(p,pane,handle)
  },beforeModel:async()=>{const route=apiRoute(vendor);if(route){const config=this.settings.llmProviders()[route];let local=false;try{local=!!config?.baseURL&&['127.0.0.1','localhost','[::1]'].includes(new URL(config.baseURL).hostname)}catch{}if(!local)await this.networkRelay.prepare(vendor,controller.signal,networkTurn)}else if(vendor!=='ollama'){const relay=await this.networkRelay.prepare(vendor,controller.signal,networkTurn);if(relay&&ctx.env.HARNESS_RELAY_PROXY!==relay.url)throw new NetworkError()}checkDirectNetwork()},env:apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,controller.signal,networkTurn)??this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[...p.registry.panes.values()].map(p=>({id:p.id,label:p.label,vendor:p.vendor as Vendor})),tools:new Proxy(this.toolsFor(scope),{get:(target,key)=>{const value=Reflect.get(target,key);return typeof value==='function'?(...args:unknown[])=>{effected=true;return value.apply(target,args)}:value}}),relayDepth:turn.relayDepth,projectDir:p.dir,appUrl:this.deps.appUrl,attachments:turnAttachments,
@@ -555,6 +556,7 @@ export class Runtime {
  }
  const connection=networkTurn?.receipt();if(connection)response.network=connection;
  response.vendor=launchVendor;response.outcome=interrupted?'interrupted':'ok';
+ response.usage=turnUsage({turnId:scope.turnInstanceId,model:response.model??null,vendor:launchVendor!,mode:launchSeat.mode,usage:response.usage,usageIncomplete:response.usageIncomplete===true,durationMs:response.durationMs??Math.max(0,this.clock.now()-(p.state.attempts[id]?.startedAt??this.clock.now())),toolCalls:turn.started?toolCalls:null,stopped:interrupted},this.settings.priceList());
  response.deliverySeq=turn.deliverySeq;response.runtime={turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),effectsPending:true,interrupted,nextSeen};turn.result=response;if(artifacts.size)response.artifacts={project:p.dir,chat:p.state.activeChat(pane)!.id,turnInstanceId:scope.turnInstanceId,paths:[...artifacts]};
  const transferNotice=transfer&&!interrupted?{...timestampMessage('peer','[от харнесс] '+transferLabel(transfer),this.clock.now()),contextTransfer:{...transfer,turnInstanceId:scope.turnInstanceId}}:null;
  if(transferNotice)pane.append(transferNotice);
@@ -565,7 +567,7 @@ export class Runtime {
  await this.recover(p,pane,true);
  const terminal=held?.type==='done'?held:{type:'done',sessionId:pane.sessionId,durationMs:0,usage:{input:null,output:null,cacheRead:null}};
  if(terminal.type==='done'&&object(terminal.usage))pane.tokens=terminal.usage as unknown as import('@harnessy/providers').Usage;
- pane.publish({...terminal,mode:launchSeat.mode,...(response.network?{network:response.network}:{}),seq:response.seq,chat:p.state.activeChat(pane)!.id,messages:injected.map(({seq,role,text,ts,attachments})=>({seq,role,text,ts,...(attachments?{attachments:structuredClone(attachments)}:{})})),...(response.artifacts?{artifacts:structuredClone(response.artifacts),turnInstanceId:scope.turnInstanceId}:{}),...(interrupted?{interrupted:true}:{})});terminalSent=true;
+ pane.publish({...terminal,turnUsage:response.usage,turnInstanceId:scope.turnInstanceId,mode:launchSeat.mode,...(response.network?{network:response.network}:{}),seq:response.seq,chat:p.state.activeChat(pane)!.id,messages:injected.map(({seq,role,text,ts,attachments})=>({seq,role,text,ts,...(attachments?{attachments:structuredClone(attachments)}:{})})),...(response.artifacts?{artifacts:structuredClone(response.artifacts),turnInstanceId:scope.turnInstanceId}:{}),...(interrupted?{interrupted:true}:{})});terminalSent=true;
  success=true;return result.text
  }catch(e){
  if(options.directOnce&&!p.closed&&!controller.signal.aborted&&JSON.parse(options.directOnce).networkGeneration!==this.networkGeneration(pane.vendor))e=new RuntimeError('network_changed','Настройки изменились — решите заново');

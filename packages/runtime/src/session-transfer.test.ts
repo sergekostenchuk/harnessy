@@ -14,7 +14,7 @@ for(const [from,to,model] of [['claude','codex','c1'],['codex','claude','w1']] a
  const events=collect(h.runtime);h.runtime.paneSet('worker',{model},OWNER);const provider=to==='claude'?claude:codex;provider.onRun=async(s,_m,ctx)=>done(ctx,s.model);
  await h.runtime.runTurn('worker','CURRENT');const prompt=provider.calls[0]!.message;assert.match(prompt,/Контекст этого разговора/);assert.match(prompt,/Новое сообщение:\nCURRENT$/);for(let i=4;i<16;i++)assert.ok(prompt.includes('SAVED-'+i+'\n> second '+i+'\n> OLDER-DETAIL-'+i));assert.doesNotMatch(prompt,/OLDER-DETAIL-0\n/);
  await until(()=>events.events.some(e=>e.type==='contextTransfer'));const event=events.events.find(e=>e.type==='contextTransfer')!,transfer=event.transfer as any;assert.equal(transfer.chat,p.state.chats.active.worker);assert.equal(transfer.project,h.dir);assert.equal(transfer.messages,16);assert.equal(transfer.verbatim,12);
- assert.equal(pane.transcript.filter(m=>m.contextTransfer).length,1);assert.deepEqual(pane.transcript.at(-1)!.usage,{input:345,output:12,cacheRead:9});assert.equal(pane.settings().contextTransfer?.messages,16);
+ assert.equal(pane.transcript.filter(m=>m.contextTransfer).length,1);const u=pane.transcript.at(-1)!.usage as import('@harnessy/providers').Usage;assert.deepEqual({input:u.input,output:u.output,cacheRead:u.cacheRead},{input:345,output:12,cacheRead:9});assert.equal(pane.settings().contextTransfer?.messages,16);
  await h.runtime.runTurn('worker','SECOND');assert.doesNotMatch(provider.calls[1]!.message,/Контекст этого разговора/);assert.equal(provider.calls[1]!.seat.sessionId,'new-session');events.sub.close();
 });
 test('245/249: same vendor model switch keeps session and does not repeat context',async t=>{

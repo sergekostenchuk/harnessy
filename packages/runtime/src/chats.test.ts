@@ -58,10 +58,11 @@ test('55: pins derive real chat metadata; title and unknown transcript fields ro
  const source=jsonClone(r.project.state.chats);await r.close();const f=new FakeProvider(),next=await createRuntime({...h.deps,providers:{claude:f}},completedActions);t.after(()=>next.close());assert.equal(next.chatGet(old.id,OWNER).messages[1]!.extra,'сохранить');assert.equal(next.chatGet(old.id,OWNER).chat.title,'Первая строка');assert.deepEqual(next.project.state.chats,source);
 });
 
+const tokenUsage=(m:Record<string,unknown>)=>{const u=m.usage as Record<string,unknown>;return {input:u.input,output:u.output,cacheRead:u.cacheRead}};
 test('57: durable final result stores current usage/duration, absent terminal never borrows previous usage',async t=>{
- const h=await harness(t),{runtime:r,provider:f}=h;await r.runTurn('worker','один');const first=r.registry.get('worker')!.transcript.at(-1)!;assert.deepEqual(first.usage,{input:20,output:3,cacheRead:7});assert.equal(first.durationMs,5);
- f.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();return {text:'два',sessionId:null}};await r.runTurn('worker','два');const second=r.registry.get('worker')!.transcript.at(-1)!;assert.equal(Object.hasOwn(second,'usage'),false);assert.equal(Object.hasOwn(second,'durationMs'),false);
- f.onRun=async(seat,_m,ctx)=>{ctx.modelStarted?.();ctx.publish({type:'done',sessionId:null,model:seat.model,durationMs:0,usage:{input:0,output:0,cacheRead:null}});return {text:'три',sessionId:null}};await r.runTurn('worker','три');const third=r.registry.get('worker')!.transcript.at(-1)!;assert.deepEqual(third.usage,{input:0,output:0,cacheRead:null});assert.equal(third.durationMs,0);
+ const h=await harness(t),{runtime:r,provider:f}=h;await r.runTurn('worker','один');const first=r.registry.get('worker')!.transcript.at(-1)!;assert.deepEqual(tokenUsage(first),{input:20,output:3,cacheRead:7});assert.equal(first.durationMs,5);
+ f.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();return {text:'два',sessionId:null}};await r.runTurn('worker','два');const second=r.registry.get('worker')!.transcript.at(-1)!;assert.deepEqual(tokenUsage(second),{input:null,output:null,cacheRead:null});assert.equal(Object.hasOwn(second,'durationMs'),false);
+ f.onRun=async(seat,_m,ctx)=>{ctx.modelStarted?.();ctx.publish({type:'done',sessionId:null,model:seat.model,durationMs:0,usage:{input:0,output:0,cacheRead:null}});return {text:'три',sessionId:null}};await r.runTurn('worker','три');const third=r.registry.get('worker')!.transcript.at(-1)!;assert.deepEqual(tokenUsage(third),{input:0,output:0,cacheRead:null});assert.equal(third.durationMs,0);
  const disk=JSON.parse(readFileSync(join(h.dir,'.harness','state','chats.json'),'utf8'));assert.deepEqual(disk.chats[disk.active.worker].transcript[0].usage,first.usage);
 });
 
@@ -74,8 +75,8 @@ test('57: session retry only copies final done and an interrupted result never b
  const {ProviderError}=await import('@harnessy/providers'),{runtime:r,provider:f}=await harness(t);r.registry.get('worker')!.sessionId='missing';let tries=0;
  f.onRun=async(s,_m,ctx)=>{tries++;ctx.modelStarted?.();if(s.sessionId){ctx.publish({type:'done',sessionId:s.sessionId,model:s.model,durationMs:99,usage:{input:99,output:99,cacheRead:99}});throw new ProviderError('session_missing','missing')}
  ctx.publish({type:'done',sessionId:null,model:s.model,durationMs:0,usage:{input:null,output:0,cacheRead:0}});return {text:'повтор',sessionId:null}};
- await r.runTurn('worker','повтор');assert.equal(tries,2);assert.deepEqual(r.registry.get('worker')!.transcript.at(-1)!.usage,{input:null,output:0,cacheRead:0});assert.equal(r.registry.get('worker')!.transcript.at(-1)!.durationMs,0);
- const gate=deferred<{text:string;sessionId:null}>();f.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();return gate.promise};const turn=r.runTurn('worker','стоп');await until(()=>r.registry.get('worker')!.busy);r.interrupt('worker',OWNER);gate.resolve({text:'часть',sessionId:null});await turn;const result=r.registry.get('worker')!.transcript.at(-1)!;assert.equal(Object.hasOwn(result,'usage'),false);assert.equal(Object.hasOwn(result,'durationMs'),false);assert.equal((result.runtime as {interrupted:boolean}).interrupted,true);
+ await r.runTurn('worker','повтор');assert.equal(tries,2);assert.deepEqual(tokenUsage(r.registry.get('worker')!.transcript.at(-1)!),{input:null,output:0,cacheRead:0});assert.equal(r.registry.get('worker')!.transcript.at(-1)!.durationMs,0);
+ const gate=deferred<{text:string;sessionId:null}>();f.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();return gate.promise};const turn=r.runTurn('worker','стоп');await until(()=>r.registry.get('worker')!.busy);r.interrupt('worker',OWNER);gate.resolve({text:'часть',sessionId:null});await turn;const result=r.registry.get('worker')!.transcript.at(-1)!;assert.deepEqual(tokenUsage(result),{input:null,output:null,cacheRead:null});assert.equal((result.usage as any).stopped,true);assert.equal(Object.hasOwn(result,'durationMs'),false);assert.equal((result.runtime as {interrupted:boolean}).interrupted,true);
 });
 
 test('20 ОКНА: in-flight session read cannot overwrite a chat reserved by a later new-chat operation',async t=>{

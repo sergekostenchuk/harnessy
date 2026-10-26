@@ -1,7 +1,7 @@
 import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {parseCompat} from '@harnessy/journal';
-import type {ModelPrice} from '@harnessy/projects';
+import {priceUsage,type ModelPrice} from '@harnessy/projects';
 import {providerId} from '@harnessy/providers';
 import {RuntimeError,type Runtime} from '@harnessy/runtime';
 import {text} from './responses.ts';
@@ -19,11 +19,7 @@ const measured=(value:unknown)=>number(value)?value:null;
 const pair=(vendor:string|null,model:string|null)=>JSON.stringify([vendor,model]);
 const fail=(reason:string):never=>{throw new RuntimeError('spend_unreadable','chats.json не читается: '+reason,409)};
 function price(turn:Omit<Turn,'cost'|'currency'|'costReason'>,prices:Map<string,ModelPrice>){
- const entry=prices.get(pair(turn.vendor,turn.model)),u=turn.usage;
- let costReason=turn.vendor===null?'провайдер не сохранён':turn.model===null?'модель не сохранена':!entry?'нет цены модели':turn.usageIncomplete||Object.values(u).some(v=>v===null)?'измерения токенов неполны':null;
- const cost=costReason===null?(u.input!/1e6*entry!.inputPerM+u.output!/1e6*entry!.outputPerM+u.cacheRead!/1e6*entry!.cacheReadPerM):null;
- if(cost!==null&&!Number.isFinite(cost))costReason='стоимость вне числового диапазона';
- return {cost:costReason===null?cost:null,currency:costReason===null?entry!.currency:null,costReason};
+ return priceUsage(turn,prices.get(pair(turn.vendor,turn.model)));
 }
 // Both public views use this immutable disk snapshot, never the mutable current pane's model/vendor.
 async function readSpend(runtime:Runtime,query:URLSearchParams){
