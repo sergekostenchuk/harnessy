@@ -712,7 +712,7 @@
     if(kind==='copy'){ try{ await navigator.clipboard.writeText(m.text||la.closest('.live-msg').innerText);const label=la.textContent;la.textContent='скопировано';setTimeout(()=>{if(la.isConnected)la.textContent=label},1200);toast('Скопировано'); }catch(x){ toast('Не удалось скопировать'); } return; }
     if(!H.on) { toast('Харнесс не подключён'); return; }
     if(kind==='handoff-none'){ toast('В команде пока один собеседник — сначала назначьте роль'); return; }
-    if(kind==='assign'){if(promotionBusy){operationAttention('promotion');return}showOrchestratorOffer();return}
+    if(kind==='assign'){if(promotionBusy){operationAttention('promotion');return}const binding=sendBinding();if(binding.chat&&(H.chatList||[]).some(c=>c.id===binding.chat&&c.promotion?.pending))await promoteConversation(anchor,binding);else showOrchestratorOffer();return}
     if(kind==='handoff'){ const me=H.pane?H.pane.id:'room'; const items=(H.panes||[]).filter(p=>p.id!=='room'&&p.id!==me).map(p=>({t:esc(paneName(p)),r:esc(modelName(p.model))+(p.busy?' · отвечает':''),id:p.id}));
       const binding=sendBinding();laMulti(anchor,'передать контекст в чат · адресат прочитает и ответит (один ход модели)',items,'Выбрать сообщения',picked=>{if(bindingCurrent(binding)&&!leftPage)selStart(picked.map(x=>x.id),{sw:false})});return;}
     // новые проекты — в корень проектов движка, не рядом с текущим (урок 08.10: проект лёг внутрь репозитория harnessy)
