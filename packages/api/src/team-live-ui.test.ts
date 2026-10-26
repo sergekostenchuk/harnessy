@@ -139,6 +139,16 @@ test('TS-39.1: missing live team data stays honest; the queue mounts the journal
  const queue=teamUi('queue');await queue.settle();assert.ok(queue.root.querySelector('[data-task-queue="full"]'));assert.ok(queue.requests.some(row=>row.path==='/api/swarm'));assert.doesNotMatch(queue.root.textContent,/в движке очереди нет|пример · не данные движка/);assert.doesNotMatch(live,/QUEUE0|bindQueue/);
 });
 
+test('TS-44 rebase: live queue and orchestrator draft survive the same canvas refresh',async()=>{
+ const v=teamUi('work');let draws=0;
+ v.context.HARNESS_TASK_QUEUE={draw(){const queue=v.root.querySelector('[data-task-queue="preview"]');if(queue){queue.textContent='Живая задача';draws++}}};
+ await v.settle();const queue=v.find('[data-task-queue="preview"]');assert.ok(draws>0);assert.match(queue.textContent,/Живая задача/);
+ const input=v.find('[data-team-chat-input]');input.value='Сохранённый черновик';input.focus();input.setSelectionRange(1,5);
+ await v.context.TEAM_LIVE.refresh(true);await v.settle();
+ assert.equal(v.find('[data-task-queue="preview"]'),queue);assert.match(queue.textContent,/Живая задача/);
+ const restored=v.find('[data-team-chat-input]');assert.equal(restored.value,'Сохранённый черновик');assert.equal(v.document.activeElement,restored);assert.deepEqual([restored.selectionStart,restored.selectionEnd],[1,5]);
+});
+
 
 test('TS-43: failed team read is unavailable rather than missing orchestrator; automatic retry restores data',async()=>{
  let broken=true;const ui=teamUi('work',async path=>{if(broken)throw Error('503');if(path==='/api/swarm')return snapshot();if(path==='/api/chats/chat-orch')return chat('chat-orch','orch');if(path==='/api/chats/chat-worker')return chat('chat-worker','worker');throw Error(path)});await ui.settle();
@@ -226,7 +236,7 @@ test('39.2: owner form has seven classes, keeps opId on retry and project draft 
 });
 
 test('39.2: constructor choices use the design menu, keyboard navigation and readable rights',async()=>{
- const v=constructorUi();await v.settle();assert.equal(v.root.querySelector('select'),null);assert.match(v.find('[data-team-mode]').textContent,/Только чтение/);
+ const v=constructorUi();await v.settle();assert.equal(v.root.querySelector('select'),null);assert.match(v.find('[data-team-mode]').textContent,/Чтение папки/);
  await v.find('[data-team-own-open]').emit('click');const control=v.find('[data-team-own-field="kind"]');v.context.innerWidth=390;Object.assign(v.html,{clientWidth:375});Object.assign(control,{getBoundingClientRect:()=>({left:192,bottom:532,width:160})});await control.emit('click');
  const menu=v.document.querySelector('.tc-choice-menu')!;assert.ok(menu);assert.ok(parseFloat(menu.style.left!)+parseFloat(menu.style.width!)<=367,'menu clears the scrollbar');const choices=menu.querySelectorAll('[data-team-option]');assert.equal(choices.length,7);assert.equal(control.getAttribute('aria-expanded'),'true');
  assert.equal(v.document.activeElement,choices[0]);await choices[0]!.emit('keydown',{key:'ArrowDown'});assert.equal(v.document.activeElement,choices[1]);
@@ -282,4 +292,71 @@ test('39.2 r2: both write forms explain a transport failure in Russian and prese
 test('39.2 r2: changing the custom role provider refreshes supported rights while keeping every other field',async()=>{
  const v=teamUi('constructor',undefined,{H:{models:{gemini:[{id:'g1',label:'Gemini'}],claude:[{id:'w1',label:'Claude'}]},turnModes:{gemini:{all:{ok:true}},claude:{read:{ok:true},edit:{ok:true},all:{ok:true},chat:{ok:true}}}}});await v.settle();await v.find('[data-team-own-open]').emit('click');for(const [field,value] of [['label','Аналитик'],['intro','Прочитай договор']] as const){const n=v.find('[data-team-own-field="'+field+'"]');n.value=value;await n.emit('input')}
  assert.equal(v.find('[data-team-own-field="mode"]').value,'all');await v.find('[data-team-own-field="model"]').emit('click');await v.document.querySelector('[data-team-option="claude/w1"]')!.emit('click');assert.deepEqual(JSON.parse(v.find('[data-team-own-field="mode"]').dataset.options!).map((row:any)=>row.value),['read','edit','all','chat']);assert.equal(v.find('[data-team-own-field="mode"]').value,'all');assert.equal(v.find('[data-team-own-field="label"]').value,'Аналитик');assert.equal(v.find('[data-team-own-field="intro"]').value,'Прочитай договор');assert.equal(v.find('[data-team-own-field="kind"]').value,'worker');assert.equal(v.document.activeElement,v.find('[data-team-own-field="model"]'));
+});
+
+test('TS-44: every canonical role has an icon and constructor rights use owner-facing words',async()=>{
+ const v=teamUi('constructor');await v.settle();const icons=['orchestrator','assistant','architect','worker','reviewer','tester','researcher'].map(kind=>v.context.TC.ico(kind));
+ for(const icon of icons)assert.match(icon,/<(?:path|circle|rect)\b/);assert.equal(new Set(icons).size,7);
+ const rights=v.find('[data-team-mode]');assert.equal(JSON.parse(rights.dataset.options!).find((row:any)=>row.value==='read').label,'Чтение папки');assert.equal(rights.value,'read');
+});
+
+
+for(const mode of ['work','constructor'] as const)test('TS-44 r2: '+mode+' canvas relayouts both ways without replacing focused controls or drafts',async()=>{
+ const v=teamUi(mode);await v.settle();const engine=v.context.TEAM_LIVE.state.engine,canvas=v.find('[data-canvas]');
+ Object.assign(canvas,{clientWidth:900,clientHeight:800});await v.window.emit('resize');const wide=engine.G.rects.worker.x;
+ const control=v.find(mode==='work'?'[data-team-chat-input]':'[data-team-pane="worker"] [data-team-model]');control.value='Черновик';control.focus();
+ Object.assign(canvas,{clientWidth:340,clientHeight:800});await v.window.emit('resize');const narrow=engine.G.rects.worker.x;assert.ok(narrow<wide);assert.equal(v.document.activeElement,control);assert.equal(control.value,'Черновик');assert.equal(control.isConnected,true);
+ Object.assign(canvas,{clientWidth:900,clientHeight:800});await v.window.emit('resize');assert.equal(engine.G.rects.worker.x,wide);assert.equal(v.document.activeElement,control);assert.equal(control.value,'Черновик');
+});
+
+
+test('TS-44 r3: fit bounds retain only mounted nodes after a missing orchestrator is replaced',async()=>{
+ const v=teamUi('work');await v.settle();const engine=v.context.TEAM_LIVE.state.engine,canvas=v.find('[data-canvas]');
+ assert.equal(engine.G.rects['missing-orchestrator'],undefined);
+ for(const width of [900,340,900]){Object.assign(canvas,{clientWidth:width,clientHeight:800});await v.window.emit('resize');assert.deepEqual(Object.keys(engine.G.rects).sort(),v.root.querySelectorAll('[data-key]').map(node=>node.dataset.key).sort())}
+});
+
+test('TS-44 r3: status retains the orchestrator draft, focus and selection; project and chat changes isolate it',async()=>{
+ const v=teamUi('work');await v.settle();let input=v.find('[data-team-chat-input]');input.value='Неотправленный текст';input.focus();input.setSelectionRange(2,9,'backward');
+ await v.window.emit('live:status');await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.value,'Неотправленный текст');assert.equal(v.document.activeElement,input);assert.deepEqual([input.selectionStart,input.selectionEnd,input.selectionDirection],[2,9,'backward']);
+ v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.value,'');assert.notEqual(v.document.activeElement,input);input.value='Проект Б';
+ v.H.project='/project-a';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Неотправленный текст');
+ assert.equal(v.requests.some(row=>row.path==='/api/chat'),false);
+});
+
+test('TS-44 r3: a pending send survives status; its receipt clears only the sent draft',async()=>{
+ const receipt=deferred<any>();let activeChat='chat-orch';const v=teamUi('work',async(path,body)=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator',activeChat)]):path==='/api/chat'?receipt.promise:chat(activeChat,'orch'));await v.settle();let input=v.find('[data-team-chat-input]');input.value='Отправлено';await v.find('[data-team-send]').emit('click');
+ await v.window.emit('live:status');await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.value,'Отправлено');assert.equal(input.disabled,true);assert.equal(v.find('[data-team-send]').disabled,true);
+ activeChat='other-chat';await v.window.emit('live:status');await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.value,'');input.value='Новый разговор';receipt.resolve({ok:true});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Новый разговор');assert.equal(v.find('[data-team-chat-input]').disabled,false);
+});
+
+test('TS-44 r3: successful send clears its draft even if status replaced the input',async()=>{
+ const receipt=deferred<any>();const v=teamUi('work',async path=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator','chat-orch')]):path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();v.find('[data-team-chat-input]').value='Отправлено';await v.find('[data-team-send]').emit('click');await v.window.emit('live:status');await v.settle();receipt.resolve({ok:true});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'');assert.equal(v.find('[data-team-chat-input]').disabled,false);
+});
+
+test('TS-44 r4: a late receipt clears its own chat draft without touching another chat',async()=>{
+ const receipt=deferred<any>();let activeChat='chat-orch';const v=teamUi('work',async path=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator',activeChat)]):path==='/api/chat'?receipt.promise:chat(activeChat,'orch'));await v.settle();v.find('[data-team-chat-input]').value='Отправлено в A';await v.find('[data-team-send]').emit('click');
+ activeChat='other-chat';await v.window.emit('live:status');await v.settle();v.find('[data-team-chat-input]').value='Черновик B';receipt.resolve({ok:true});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');
+ activeChat='chat-orch';await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'');activeChat='other-chat';await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');
+});
+
+test('TS-44 r4: project A → B → A before a late receipt clears only A',async()=>{
+ const receipt=deferred<any>();let project='/project-a';const v=teamUi('work',async path=>path==='/api/swarm'?snapshot(project,[pane('orch','orchestrator','chat-orch')]):path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();v.find('[data-team-chat-input]').value='Отправлено в A';await v.find('[data-team-send]').emit('click');
+ project=v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();v.find('[data-team-chat-input]').value='Черновик B';
+ project=v.H.project='/project-a';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Отправлено в A');receipt.resolve({ok:true});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'');
+ project=v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');
+});
+
+test('TS-44 r4: receipt in project B clears A without touching a same-named chat in B',async()=>{
+ const receipt=deferred<any>();let project='/project-a';const v=teamUi('work',async path=>path==='/api/swarm'?snapshot(project,[pane('orch','orchestrator','chat-orch')]):path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();v.find('[data-team-chat-input]').value='Отправлено в A';await v.find('[data-team-send]').emit('click');
+ project=v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();v.find('[data-team-chat-input]').value='Черновик B';receipt.resolve({ok:true});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');
+ project=v.H.project='/project-a';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'');project=v.H.project='/project-b';v.H.projectRequestGeneration++;v.H.confirmedProjectGeneration++;await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');
+});
+
+test('TS-44 r4: a receipt never clears a newer revision or an unconfirmed draft',async()=>{
+ for(const result of [{ok:true},{ok:false,error:'Отказ'}]){const receipt=deferred<any>();const v=teamUi('work',async path=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator','chat-orch')]):path==='/api/chat'?receipt.promise:chat('chat-orch','orch'));await v.settle();let input=v.find('[data-team-chat-input]');input.value='Первая редакция';await v.find('[data-team-send]').emit('click');input.value=result.ok?'Новая редакция':'Первая редакция';receipt.resolve(result);await v.settle();input=v.find('[data-team-chat-input]');assert.equal(input.value,result.ok?'Новая редакция':'Первая редакция')}
+});
+
+test('TS-44 r4: a late rejected receipt neither changes the other chat nor clears the unsent draft',async()=>{
+ const receipt=deferred<any>();let activeChat='chat-orch';const v=teamUi('work',async path=>path==='/api/swarm'?snapshot('/project-a',[pane('orch','orchestrator',activeChat)]):path==='/api/chat'?receipt.promise:chat(activeChat,'orch'));await v.settle();v.find('[data-team-chat-input]').value='Черновик A';await v.find('[data-team-send]').emit('click');activeChat='other-chat';await v.window.emit('live:status');await v.settle();v.find('[data-team-chat-input]').value='Черновик B';receipt.resolve({ok:false,error:'Отказ A'});await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик B');assert.doesNotMatch(v.root.textContent,/Отказ A/);activeChat='chat-orch';await v.window.emit('live:status');await v.settle();assert.equal(v.find('[data-team-chat-input]').value,'Черновик A');
 });

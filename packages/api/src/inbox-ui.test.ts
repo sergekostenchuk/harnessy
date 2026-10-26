@@ -17,11 +17,11 @@ const journal={project:'/a',records:[
 const chat={chat:{id:'chat-a',pane:'worker',title:'Сборка',last:Math.floor(now/1000)},messages:[{seq:1,role:'me',text:'Сделай',ts:Math.floor(now/1000)-20},{seq:2,role:'ai',text:'Готово',ts:Math.floor(now/1000)}]};
 const trace={ok:true,project:'/a',records:[{seq:9,kind:'network.failover',ts:stamp,data:{vendor:'claude',from:'exit-1',to:'exit-2'},reason:{text:'основной выход упал'}}]};
 const limits={ok:true,project:'/a',providers:[{vendor:'claude',label:'Claude',sourceConnected:true,fetchedAt:Math.floor(now/1000),windows:[{label:'неделя',percentUsed:83,resetsAt:Math.floor(now/1000)+86400}]}]};
-function view(owner:Record<string,unknown>={},decisionRows:any[]=[]){
+function view(owner:Record<string,unknown>={},decisionRows:any[]=[],proposalRows:any[]=[],records=journal.records,chatLast=chat.chat.last){
   const d=dom(sketch.slice(sketch.indexOf('<body>')+6,sketch.lastIndexOf('</body>')));Object.assign(d.document,{documentElement:d.html,body:d.body});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page','inbox');
   const calls:{path:string;body?:any}[]=[],panelCounts:any[]=[],H={on:true,snapshotOnly:false,project:'/a',confirmedProjectGeneration:1,active:{worker:'chat-a'}},S={ui:{pane:'room',fresh:false,switched:false}},events:{onmessage?:Function}[]=[];
-  const api=async(path:string,body?:any)=>{calls.push({path,body});if(path==='/api/status')return status;if(path==='/api/journal?limit=0')return journal;
-    if(path==='/api/chats')return {chats:[chat.chat]};if(path==='/api/chats/chat-a')return chat;if(path.startsWith('/api/trace?'))return trace;
+  const api=async(path:string,body?:any)=>{calls.push({path,body});if(path==='/api/status')return status;if(path==='/api/journal?limit=0')return {...journal,records};
+    if(path==='/api/seats/proposals')return {ok:true,project:'/a',proposals:proposalRows};if(path==='/api/chats')return {chats:[{...chat.chat,last:chatLast}]};if(path==='/api/chats/chat-a')return {...chat,messages:[...chat.messages,...proposalRows.map(q=>({runtime:{turnInstanceId:q.turnInstanceId},role:'ai',text:'Состав',seq:99,ts:1}))]};if(path.startsWith('/api/trace?'))return trace;
     if(path==='/api/limits')return limits;if(path==='/api/autopilot/decisions')return {ok:true,project:'/a',decisions:decisionRows};if(path==='/api/settings'&&!body)return {ok:true,owner};
     if(path.endsWith('/cancel'))return {ok:false,code:'cancel_unavailable',error:'Отмена решения Автопилота ещё не реализована'};
     if(path==='/api/settings'&&body){Object.assign(owner,body.patch);return {ok:true,saved:owner}};
@@ -159,4 +159,25 @@ test('TS-38.3: a temporary source failure keeps an already seen autopilot decisi
   const v=view({},rows);await v.refresh();assert.ok(v.context.HARNESS_INBOX.current.items.some((x:any)=>x.type==='autopilotDecision'));
   const initial=v.context.LIVE.api;v.context.LIVE.api=(path:string,body?:any)=>path==='/api/autopilot/decisions'?Promise.reject(Error('offline')):initial(path,body);
   await v.refresh();const feed=v.d.document.querySelector('[data-inbox-feed]')!;assert.match(feed.textContent,/Решения Автопилота недоступны/);assert.match(feed.textContent,/Автопилот решил: Да/);
+});
+
+
+test('TS-44: registered team proposal replaces technical question and opens its chat card',()=>{
+ const v=view(),proposal={proposalId:'team-1',version:2,from:'worker',questionSeq:22,turnInstanceId:'call-a',seats:[{},{}]};
+ const record={seq:22,kind:'question',from:'harness',to:['owner'],origin:'team-proposal',text:'technical parameters',ts:stamp};
+ const rows=v.context.HARNESS_INBOX.collect({project:'/a',status,journal:{project:'/a',records:[record]},proposals:[proposal],chats:[{chat:chat.chat,messages:[{runtime:{turnInstanceId:'call-a'}}]}]},now);
+ const row=rows.find((r:any)=>r.type==='teamProposal');assert.ok(row);assert.equal(row.title,'Состав команды · версия 2 · 2 роли');assert.equal(row.chat,'chat-a');assert.equal(rows.filter((r:any)=>r.record?.seq===22).length,0);
+ const forged=v.context.HARNESS_INBOX.collect({project:'/a',status,journal:{project:'/a',records:[{...record,from:'worker'}]},proposals:[proposal]},now);assert.equal(forged.some((r:any)=>r.type==='teamProposal'),false);
+});
+
+
+test('TS-44: old inbox proposal action opens the registered proposal instead of a reply editor',async()=>{
+ const proposal={proposalId:'p123',version:2,from:'worker',questionSeq:22,turnInstanceId:'call-a',seats:[{},{}]},record={seq:22,kind:'question',from:'harness',to:['owner'],origin:'team-proposal',text:'technical parameters',ts:stamp};
+ const v=view({},[],[proposal],[record],1);await v.refresh();const row=v.d.document.querySelectorAll('[data-inbox-id]').find(r=>r.textContent.includes('Состав команды · версия 2 · 2 роли'));assert.ok(row);assert.doesNotMatch(row.textContent,/technical parameters|Ответить/);
+ const button=row.querySelector('[data-inbox-action="open"]')!;assert.equal(button.textContent,'Открыть состав');await button.emit('click');await v.settle();assert.equal(v.context.location.href,'01-chat.html#team=p123');assert.equal(v.S.ui.pane,'worker');assert.equal(v.d.document.querySelector('[data-inbox-reply]'),null);
+});
+
+
+test('TS-44: missing proposal metadata cannot turn a team card into a technical reply',async()=>{
+ const record={seq:22,kind:'question',from:'harness',to:['owner'],origin:'team-proposal',text:'raw internal proposal data',ts:stamp},v=view({},[],[],[record]);await v.refresh();const row=v.d.document.querySelectorAll('[data-inbox-id]').find(r=>r.textContent.includes('Состав команды недоступен'));assert.ok(row);assert.doesNotMatch(row.textContent,/raw internal|Ответить/);assert.ok(row.querySelector('[data-inbox-retry]'));assert.equal(row.querySelector('[data-inbox-action]'),null);
 });

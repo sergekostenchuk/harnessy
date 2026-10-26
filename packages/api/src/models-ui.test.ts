@@ -69,7 +69,7 @@ for(const page of ['chat','new','first'])test('305/306: '+page+' lists every cat
 test('TS-36E: chat and rights menu choose the same discussion mode; leaving restores prior rights',async()=>{
  const v=ui();assert.ok(v.find('[data-cx-team-view]'));assert.equal(v.document.querySelector('[data-cx="folder"]'),null);
  assert.equal(v.find('[data-cx-discussion]').getAttribute('aria-checked'),'false');await v.find('[data-cx-discussion]').emit('click');
- assert.equal(v.H.pane.mode,'chat');assert.equal(v.find('[data-cx-discussion]').getAttribute('aria-checked'),'true');assert.equal(v.document.querySelector('.cx-discussion-state'),null);assert.doesNotMatch(v.find('.cx-bot').textContent,/проект не меняется/);assert.equal(v.find('[data-cx-discussion]').getAttribute('title'),'Только обсуждение: проект не меняется');
+ assert.equal(v.H.pane.mode,'chat');assert.equal(v.find('[data-cx-discussion]').getAttribute('aria-checked'),'true');assert.equal(v.document.querySelector('.cx-discussion-state'),null);assert.match(v.find('.cx-bot').textContent,/обсуждение · проект не меняется/);assert.equal(v.find('[data-cx-discussion]').getAttribute('title'),'Только обсуждение: проект не меняется');
  assert.deepEqual(v.requests.filter(r=>r.body).map(r=>r.body?.mode),['chat']);
  await v.find('[data-cx="rights"]').emit('click');assert.equal(v.find('[data-cx-mode]').dataset.cxMode,'chat');assert.match(v.find('[data-cx-mode]').textContent,/Только обсуждение/);
  await v.find('[data-cx-discussion]').emit('click');assert.equal(v.H.pane.mode,'read');await v.find('[data-cx="rights"]').emit('click');
@@ -396,4 +396,37 @@ test('23d: provider menu shows engine connection and typed unavailable cause, ke
 
 test('23d: menu login failure class, not free-form reason, labels unavailable providers',async()=>{
  const v=ui();await v.open();const next:any=catalogue();next.providers[0].login={state:'error',failure:'unresponsive',reason:'REGION BLOCKED'};await v.providers(next);assert.match(v.find('[data-cx-program="claude"] .proxy-model-path').textContent,/не отвечает/);assert.doesNotMatch(v.find('[data-cx-program="claude"] .proxy-model-path').textContent,/регион|блокиров/);assert.equal(v.select('claude','shared').disabled,false);
+});
+
+
+for(const page of ['new','chat','first'])test('TS-44 r2: '+page+' composer menu chooses rights by keyboard and Escape returns to the live chip',async()=>{
+ const v=ui({page});v.find('[data-cx="rights"]').focus();await v.find('[data-cx="rights"]').emit('click');
+ const first=v.find('[data-cx-mode="chat"]');assert.equal(v.document.activeElement,first);assert.equal(first.getAttribute('tabindex'),'0');
+ await first.emit('keydown',{key:'ArrowDown'});assert.equal(v.document.activeElement,v.find('[data-cx-mode="read"]'));
+ await v.document.activeElement!.emit('keydown',{key:'Home'});assert.equal(v.document.activeElement,first);
+ (first as any).click=()=>first.emit('click');await first.emit('keydown',{key:'Enter'});await v.flush();assert.equal(v.H.pane.mode,'chat');
+ await v.document.activeElement!.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('.cx-pop'),null);assert.equal(v.document.activeElement,v.find('[data-cx="rights"]'));
+ v.ctx.CX.render();assert.equal(v.document.activeElement,v.find('[data-cx="rights"]'));
+});
+
+test('TS-44 r2: composer search, filtered actions, nested menu and Tab form one keyboard path',async()=>{
+ const v=ui();await v.find('[data-cx="plus"]').emit('click');const search=v.find('.cx-find');assert.equal(v.document.activeElement,search);
+ search.value='команды';await search.emit('input');await search.emit('keydown',{key:'ArrowDown'});
+ const action=v.find('[data-cx-nav="cmds"]');assert.equal(v.document.activeElement,action);(action as any).click=()=>action.emit('click');await action.emit('keydown',{key:'Enter'});
+ const back=v.find('[data-cx-back]');const nextSearch=v.find('.cx-find');assert.equal(v.document.activeElement,nextSearch);
+ await nextSearch.emit('keydown',{key:'Tab',shiftKey:true});assert.equal(v.document.activeElement,back);
+ (back as any).click=()=>back.emit('click');await back.emit('keydown',{key:' '});assert.equal(v.document.activeElement,v.find('.cx-find'));
+ await v.document.activeElement!.emit('keydown',{key:'Escape'});assert.equal(v.document.activeElement,v.find('[data-cx="plus"]'));
+});
+
+
+for(const kind of ['model','group'])test('TS-44 r3: '+kind+' focus survives an unchanged status and injected action metadata',async()=>{
+ const v=ui();await v.open();const group=v.find('[data-cx-program="codex"]'),header=v.find('[data-cx-program="codex"] [data-cx-grp]');await header.emit('click');assert.equal(group.classList.contains('open'),true);
+ const target=kind==='model'?v.select('codex','shared'):header;target.dataset.action='auto-action';target.focus();await v.status();await v.flush();const restored=kind==='model'?v.select('codex','shared'):v.find('[data-cx-program="codex"] [data-cx-grp]');assert.equal(v.document.activeElement,restored);assert.equal(v.find('[data-cx-program="codex"]').classList.contains('open'),true);
+ await restored.emit('keydown',{key:'Escape'});assert.equal(v.document.activeElement,v.find('[data-cx="model"]'));
+});
+
+test('TS-44 r3: model focus is restored after the search filter, and removed choices fall back to search',async()=>{
+ const v=ui();await v.open();const input=v.find('.cx-find');input.value='codex';await input.emit('input');const model=v.select('codex','shared');model.dataset.action='auto-action';model.focus();await v.status();await v.flush();assert.equal(v.document.activeElement,v.select('codex','shared'));assert.equal(v.find('.cx-find').value,'codex');assert.equal(v.find('[data-cx-program="codex"]').classList.contains('open'),true);assert.equal(v.select('claude','shared').style.display,'none');
+ const next=catalogue();next.providers.find(p=>p.id==='codex')!.models=[];await v.providers(next);assert.equal(v.document.activeElement,v.find('.cx-find'));assert.equal(v.find('.cx-find').value,'codex');
 });

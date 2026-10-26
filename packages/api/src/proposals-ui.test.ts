@@ -107,3 +107,18 @@ for(const legacy of [false,true])test('TS-41 r2: '+(legacy?'legacy':'turn-bound'
  v.context.S.chat=[];v.f.show(proposal.proposalId);assert.ok(v.document.querySelector('[data-team-proposal]'),'explicit preview is allowed');
  v.H.active.analyst='another-chat';v.f.sync();assert.equal(v.document.querySelector('[data-team-proposal]'),null,'focused preview is bound to its chat');
 });
+
+
+for(const action of ['collapse','switch'] as const)test('TS-44 r2: inbox deep link is consumed once and preserves '+action,async()=>{
+ const proposal={...q(),turnInstanceId:'proposal-turn'},v=ui(async()=>({ok:true,project:'/a',proposals:[proposal]}));v.context.location={hash:'#team='+proposal.proposalId};await v.f.fetch();assert.equal(v.context.location.hash,'');assert.equal(v.find('[data-team-toggle]').getAttribute('aria-expanded'),'true');
+ if(action==='collapse')await v.find('[data-team-toggle]').emit('click');else {v.H.active.room='different-chat';v.context.S.chat=[];v.f.sync()}
+ await v.f.fetch();if(action==='collapse')assert.equal(v.find('[data-team-toggle]').getAttribute('aria-expanded'),'false');else assert.equal(v.document.querySelector('[data-team-proposal]'),null);
+});
+
+test('TS-44 r2: a deep link binds before HTTP, and cannot apply to a chat selected during the read',async()=>{
+ const gate=deferred<any>(),proposal={...q(),turnInstanceId:'proposal-turn'},v=ui(async()=>gate.promise);v.context.location={hash:'#team='+proposal.proposalId};const read=v.f.fetch();v.H.active.room='other-chat';gate.resolve({ok:true,project:'/a',proposals:[proposal]});await read;assert.equal(v.document.querySelector('[data-team-proposal]'),null);assert.equal(v.context.location.hash,'');await v.f.fetch();assert.equal(v.document.querySelector('[data-team-proposal]'),null);
+});
+
+test('TS-44 r2: a failed read can retry the pending deep link in its original chat',async()=>{
+ let failed=true;const proposal={...q(),turnInstanceId:'proposal-turn'},v=ui(async()=>failed?{ok:false,error:'Нет связи'}:{ok:true,project:'/a',proposals:[proposal]});v.context.location={hash:'#team='+proposal.proposalId};await v.f.fetch();assert.equal(v.context.location.hash,'#team='+proposal.proposalId);failed=false;await v.f.fetch();assert.equal(v.context.location.hash,'');assert.equal(v.find('[data-team-toggle]').getAttribute('aria-expanded'),'true');
+});

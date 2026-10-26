@@ -98,5 +98,40 @@ test('TS-43: background redraw keeps a mobile project menu bound to its drawer, 
  const v=view(),drawer=v.document.createElement('nav');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';v.body.appendChild(drawer);Object.assign(v.context,{innerWidth:390,mobileNav(){},mobileDefaults(){}});
  v.context.PS2.setData({projects:[{path:'/b',name:'beta',chats:[]}]});await v.find('.m-drawer [data-ps2-others]').emit('click');await v.find('.m-drawer [data-ps2-project-menu]').emit('click');
  assert.ok(v.find('.m-drawer [data-ps2-project-path="/b"]').classList.contains('open'));v.context.PS2.setInbox({need:1,info:0});
- assert.ok(v.find('.m-drawer [data-ps2-project-path="/b"]').classList.contains('open'));assert.equal(v.find('aside [data-ps2-project-path="/b"]').classList.contains('open'),false);assert.ok(v.document.querySelector('.ps2-flyout'));
+ assert.ok(v.find('.m-drawer [data-ps2-project-path="/b"]').classList.contains('open'));assert.equal(v.document.querySelector('aside [data-ps2-project-path="/b"]'),null,'mobile layout keeps projects in the drawer, not a duplicate panel');assert.ok(v.document.querySelector('.ps2-flyout'));
+});
+
+test('TS-44: layout keeps fixed viewport geometry and switches narrow desktop to rail',async()=>{
+ const v=view();const frame=v.find('.frame'),app=v.find('.app');
+ v.context.PS2.render();assert.equal(app.style.width,'1440px');assert.equal(app.style.height,'900px');assert.equal(app.style.transform,'none');
+ v.context.innerWidth=1050;v.context.PS2.render();assert.ok(v.document.querySelector('aside.rail'));assert.equal(frame.style.width,'1050px');await v.find('[data-ps2-mode="inbox"]').emit('click');assert.equal(v.location.href,'44-inbox.html');
+ v.context.innerWidth=1100;v.context.PS2.render();assert.ok(v.document.querySelector('aside.ps2-mode'));assert.equal(app.style.transform,'none');
+});
+test('TS-44: sidebar delegated controls are keyboard reachable and activate by Enter',async()=>{
+ const v=view();const button=v.find('[data-ps2-search]');assert.equal(button.getAttribute('tabindex'),'0');assert.equal(button.getAttribute('role'),'button');
+ let clicks=0;(button as any).click=()=>button.emit('click');button.addEventListener('click',()=>clicks++);await button.emit('keydown',{key:'Enter',preventDefault(){}});assert.equal(clicks,1);
+});
+
+test('TS-44: per-seat active chats do not all become the selected sidebar chat',()=>{
+ const start=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');const chunk=start.slice(start.indexOf('      const liveChats='),start.indexOf('      const projects=',start.indexOf('      const liveChats=')));
+ const context:any={S:{ui:{pane:'worker'}},H:{active:{worker:'w',lead:'l'},panes:[{id:'worker'},{id:'lead'},{id:'room'}]},seats:[{id:'worker'},{id:'lead'}],all:[{id:'w',pane:'worker',active:true},{id:'l',pane:'lead',active:true},{id:'r',pane:'room',active:true}],rooms:[{id:'r',pane:'room',active:true}],pins:[{kind:'chat',chat:'w',current:true,path:'/a'}],paneName:(p:any)=>p.id,point:()=>'',base:()=>'',};
+ runInContext(chunk+';globalThis.selected=[...liveChats,...roomRows,...pinRows].filter(row=>row.active).map(row=>row.id)',createContext(context));assert.deepEqual(JSON.parse(JSON.stringify(context.selected)),['w']);
+});
+
+
+test('TS-44 rebase: keyboard opens the TS-43 project folder once and preserves its chats',async()=>{
+ const v=view(),data={projects:[{path:'/b',name:'beta',current:false,chats:[{id:'b1',pane:'worker',title:'Проверить договор'}]}]};v.context.PS2.setData(data);await v.find('[data-ps2-others]').emit('click');
+ const row=v.find('[data-ps2-project-path="/b"]');(row as any).click=()=>row.emit('click');
+ await row.emit('keydown',{key:'Enter',preventDefault(){}});assert.equal(row.getAttribute('aria-expanded'),'true');assert.equal(v.find('[data-ps2-project-chats="/b"] [data-pin-chat="b1"]').dataset.pinPath,'/b');
+ await row.emit('keydown',{key:' ',preventDefault(){}});assert.equal(row.getAttribute('aria-expanded'),'false');assert.equal(v.document.querySelector('[data-ps2-project-chats="/b"]'),null);
+});
+
+
+test('TS-44 r2: sidebar redraw keeps focus on its project/chat identity, never a foreign chat with the same id',async()=>{
+ const v=view(),chat={id:'same-id',pane:'worker',title:'Первый чат',active:true};
+ v.context.PS2.setData({project:{path:'/a',name:'A'},chats:[chat]});v.find('[data-chat="same-id"]').focus();
+ v.context.PS2.setInbox({need:1,info:1});assert.equal(v.document.activeElement,v.find('[data-chat="same-id"]'));
+ v.context.PS2.setData({chats:[{id:'second',pane:'reviewer',title:'Соседний'},chat]});const current=v.find('[data-chat="same-id"]');assert.equal(v.document.activeElement,current);
+ let clicks=0;(current as any).click=()=>current.emit('click');current.addEventListener('click',()=>clicks++);await current.emit('keydown',{key:'Enter'});assert.equal(clicks,1);
+ v.context.PS2.setData({project:{path:'/b',name:'B'},chats:[chat]});assert.notEqual(v.document.activeElement,v.find('[data-chat="same-id"]'));
 });

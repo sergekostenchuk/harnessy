@@ -657,16 +657,16 @@ test('22d: reserve card belongs to its chat, escapes the label, deduplicates SSE
 });
 
 
-test('TS-41: proposal cards live inside the chat feed, collapsed, rather than a section above it',async()=>{
+for(const deepLink of [false,true])test('TS-41: proposal cards stay in the feed with '+(deepLink?'a deep link':'no browser location'),async()=>{
  const d=dom('<div class="frame cur"><div class="main"><div class="feed"><div class="col"><div class="live-msg" data-message-index="0">Ответ оркестратора</div><div class="live-msg" data-message-index="1">Следующий ответ</div></div></div><div class="box"></div></div></div>');
  const seat={sid:'worker-a',operationId:'caaaaa',kind:'worker',label:'Юрист',vendor:'codex',model:'w1',mode:'read',intro:'Проверь договор'},proposal={proposalId:'p'+'a'.repeat(24),version:1,from:'lead',turnInstanceId:'turn-proposal',confirmed:false,seats:[seat],team:[{id:seat.sid,kind:'worker',proposedKind:'worker',state:'proposed',chat:null}]};
- const context:Data={document:d.document,H:{on:true,project:'/test',snapshotOnly:false},sendBinding:()=>({project:'/test',pane:'lead',chat:'lead-chat'}),bindingCurrent:()=>true,S:{chat:[{role:'ai',pane:'lead',turnInstanceId:'turn-proposal'},{role:'ai',pane:'lead',turnInstanceId:'later'}]},PAGE:'chat',leftPage:false,addEventListener(){},esc:(v:unknown)=>String(v),api:async()=>({ok:true,project:'/test',proposals:[proposal]}),operationsTeams(){},OPS:{items:new Map()}};
+ const context:Data={document:d.document,H:{on:true,project:'/test',snapshotOnly:false},sendBinding:()=>({project:'/test',pane:'lead',chat:'lead-chat'}),bindingCurrent:()=>true,S:{ui:{pane:'lead'},chat:[{role:'ai',pane:'lead',turnInstanceId:'turn-proposal'},{role:'ai',pane:'lead',turnInstanceId:'later'}]},...(deepLink?{location:{hash:'#team='+proposal.proposalId}}:{}),PAGE:'chat',leftPage:false,addEventListener(){},esc:(v:unknown)=>String(v),api:async()=>({ok:true,project:'/test',proposals:[proposal]}),operationsTeams(){},OPS:{items:new Map()}};
  runInContext(part(live,'  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+'globalThis.fetchProposals=proposalsFetch;',createContext(context));
  await context.fetchProposals();
  const card=d.document.querySelector('[data-team-proposal]')!;
  assert.ok(card);assert.equal(card.parentElement,d.document.querySelector('.feed .col'));
  assert.equal(d.document.querySelector('.main > .team-proposals'),null);assert.equal(card.previousElementSibling?.dataset.messageIndex,'0');
- assert.equal(card.querySelector('[data-team-toggle]')!.getAttribute('aria-expanded'),'false');assert.ok(card.querySelector('.proposal-body')!.hasAttribute('hidden'));
+ assert.equal(card.querySelector('[data-team-toggle]')!.getAttribute('aria-expanded'),String(deepLink));assert.equal(card.querySelector('.proposal-body')!.hasAttribute('hidden'),!deepLink);
  assert.doesNotMatch(style,/\.team-proposals\{[^}]*max-height|html\[data-page="new"\] \.team-proposals\{position:absolute/);
  assert.match(style,/live-demo-off[^}]*:not\(\.team-proposals\)/,'connected mode must not hide a live proposal as demo content');
 });
