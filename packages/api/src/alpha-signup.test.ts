@@ -5,7 +5,7 @@ import test from 'node:test';
 
 const root=new URL('../../../',import.meta.url),read=(path:string)=>readFileSync(new URL(path,root),'utf8');
 
-test('TS-37: alpha endpoint accepts, deduplicates, traps bots, rate-limits and records owner decisions',()=>{
+test('TS-37: alpha endpoint accepts, deduplicates, traps bots, rate-limits and records owner decisions in one suite server',()=>{
  const run=spawnSync('python3',['-m','unittest','ui/deploy/auth/test_auth_alpha.py'],{cwd:root,encoding:'utf8'});
  assert.equal(run.status,0,`${run.stdout}\n${run.stderr}`);
 });

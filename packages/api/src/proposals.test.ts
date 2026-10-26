@@ -55,7 +55,7 @@ test('156: old/foreign version, missing input, unknown models and masquerades fa
  assert.deepEqual((await call(h.api,'/api/seats/proposals')).body.proposals,[]);
  const first=await h.propose(),second=await h.propose({proposalId:first.proposalId,version:1,seats:[member('Новая версия')]});assert.equal(second.version,2);
  assert.equal((await call(h.api,'/api/seats/confirm',{body:{proposalId:first.proposalId,version:1,project:h.dir}})).body.code,'proposal_stale');assert.equal((await h.post('/api/seats',{proposalId:'p'+'a'.repeat(24),version:1})).body.code,'proposal_not_found');
- assert.equal((await call(h.api,'/api/seats',{body:{proposalId:first.proposalId,version:2,from:'lead'}})).body.code,'token_invalid');assert.equal((await call(h.api,'/api/seats',{body:{}})).body.code,'proposal_required');
+ assert.equal((await call(h.api,'/api/seats',{body:{proposalId:first.proposalId,version:2,from:'lead'}})).body.code,'token_invalid');const closed=await call(h.api,'/api/seats',{body:{}});assert.equal(closed.status,409);assert.deepEqual(closed.body,{ok:false,code:'proposal_required',error:'участников создаёт оркестратор по подтверждённому предложению'});
  h.end.resolve({text:'done',sessionId:null});await h.run;assert.equal((await h.post('/api/seats/propose',{seats:[member()]})).body.code,'turn_ended');
 });
 
