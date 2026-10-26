@@ -6,17 +6,17 @@ import {dom} from './ui-dom-test-helpers.ts';
 import {fixture,call,deferred,until} from './test-helpers.ts';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),start=live.indexOf('  // TS-09b3: proposal cards'),end=live.indexOf('  // End TS-09b3 proposals.',start),block=live.slice(start,end);
 const mockTeam=(seats:any[])=>seats.map(s=>({id:s.sid,label:s.label,kind:s.kind,proposedKind:s.kind,model:s.model,mode:s.mode,task:s.intro,state:'proposed',chat:null,createdBy:null}));
-const q=(version=1)=>{const seats=[{sid:'worker-a',operationId:'caaaaa',kind:'worker',label:'Юрист <script>bad</script>',vendor:'claude',model:'w1',mode:'read',intro:'Проверь договор полностью'}];return {proposalId:'p'+'a'.repeat(24),version,confirmed:false,seats,team:mockTeam(seats)}};
+const q=(version=1)=>{const seats=[{sid:'worker-a',operationId:'caaaaa',kind:'worker',label:'Юрист <script>bad</script>',vendor:'claude',model:'w1',mode:'read',intro:'Проверь договор полностью'}];return {from:'room',proposalId:'p'+'a'.repeat(24),version,confirmed:false,seats,team:mockTeam(seats)}};
 function ui(fetcher:(path:string,body?:any)=>Promise<any>,page='chat'){
- const d=dom('<div class="frame cur"><main class="main"><div class="feed">Разговор остаётся</div></main></div>'),H:any={on:true,project:'/a',snapshotOnly:false},requests:any[]=[],toasts:string[]=[],pending=new Set<Promise<any>>();
- const context:any={H,S:{ui:{pane:'room'}},PAGE:page,document:d.document,leftPage:false,bindingNavigation:0,sendBinding:()=>({project:H.project,pane:'room',chat:null}),bindingCurrent:(b:any)=>b.project===H.project,addEventListener:d.window.addEventListener.bind(d.window),toast:(s:string)=>toasts.push(s),esc:(v:any)=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),api:async(path:string,body?:any)=>{requests.push({path,body});const job=fetcher(path,body);pending.add(job);try{return await job}finally{pending.delete(job)}}};
+ const d=dom('<div class="frame cur"><main class="main"><div class="feed">Разговор остаётся</div></main></div>'),H:any={on:true,project:'/a',snapshotOnly:false,pane:{id:'room'},active:{room:'chat-room'}},requests:any[]=[],toasts:string[]=[],pending=new Set<Promise<any>>();
+ const context:any={H,S:{ui:{pane:'room'}},PAGE:page,document:d.document,leftPage:false,bindingNavigation:0,sendBinding:()=>({project:H.project,pane:H.pane.id,chat:H.active[H.pane.id]??null}),bindingCurrent:(b:any)=>b.project===H.project,addEventListener:d.window.addEventListener.bind(d.window),toast:(s:string)=>toasts.push(s),esc:(v:any)=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),api:async(path:string,body?:any)=>{requests.push({path,body});const job=fetcher(path,body);pending.add(job);try{return await job}finally{pending.delete(job)}}};
  runInContext(live.slice(live.indexOf('  // TS-09b4: one progress view'),live.indexOf('  // TS-09b2:'))+block+'globalThis.proposals={fetch:proposalsFetch,sync:proposalsSync,reset:proposalsReset,show:showTeamProposal,state:TP,draw:operationsStatus};',createContext(context));
  const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};return {...d,H,context,requests,toasts,find,f:context.proposals,settle:async()=>{for(let i=0;i<12;i++){await Promise.all([...pending]);await new Promise(resolve=>setImmediate(resolve))}}};
 }
 for(const page of ['chat','now'])test('156 UI '+page+': displayed exact proposal confirmed through HTTP; fake transcript yes does not authorize',async t=>{
  const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: юрист, vendor: claude, model: w1, mode: read}'}),gate=deferred<{text:string;sessionId:null}>();h.provider.onRun=async(_s,_m,c)=>{c.modelStarted?.();return gate.promise};const run=h.runtime.runTurn('lead','team').catch(e=>{if(e.code!=='cancelled')throw e});t.after(async()=>{gate.resolve({text:'ok',sessionId:null});await run});await until(()=>h.provider.calls.length===1);
  const proposed=await h.provider.calls[0]!.ctx.tools.proposeSeats({seats:[{kind:'worker',label:'Юрист <script>bad</script>',vendor:'claude',model:'w1',mode:'read',intro:'Проверь договор полностью'}]});assert.equal(proposed.ok,true);
- const v=ui(async(path,body)=>(await call(h.api,path,body?{body}:{})).body,page);v.H.project=h.dir;await v.f.fetch();assert.match(v.find('#live-team-proposals').textContent,/Юрист|w1|read|Проверь договор полностью/);assert.equal(v.document.querySelector('script'),null);assert.match(v.find('.feed').textContent,/Разговор остаётся/);assert.ok(v.find('#live-team-proposals').closest('.feed'));
+ const v=ui(async(path,body)=>(await call(h.api,path,body?{body}:{})).body,page);v.H.project=h.dir;await v.f.fetch();v.f.show(v.f.state.data[0].proposalId);assert.match(v.find('#live-team-proposals').textContent,/Юрист|w1|read|Проверь договор полностью/);assert.equal(v.document.querySelector('script'),null);assert.match(v.find('.feed').textContent,/Разговор остаётся/);assert.ok(v.find('#live-team-proposals').closest('.feed'));
  await v.find('[data-team-confirm]').emit('click');assert.equal(v.requests.filter(r=>r.body).length,1);assert.deepEqual(Object.keys(v.requests.find(r=>r.body).body).sort(),['project','proposalId','version']);assert.equal(v.requests.find(r=>r.body).body.project,h.dir);assert.match(v.find('#live-team-proposals').textContent,/Версия подтверждена/);assert.equal(v.document.querySelector('[data-team-confirm]'),null);assert.equal(h.runtime.registry.ids.length,2);
 });
 
@@ -86,9 +86,9 @@ for(const change of ['refresh','project','pagehide'])test('222: retry holds its 
 
 for(const page of ['chat','new'])test('TS-41: '+page+' proposals are collapsed in the feed, anchored to the matching answer and keep their displayed version',async()=>{
  const proposal={...q(),from:'lead',turnInstanceId:'turn-team'},v=ui(async()=>({ok:true,project:'/a',proposals:[proposal]}),page);
- v.context.S.chat=[{role:'ai',pane:'lead',turnInstanceId:'turn-team'},{role:'ai',pane:'lead',turnInstanceId:'later'}];
+ v.H.pane={id:'lead'};v.H.active.lead='lead-chat';v.context.S.chat=[{role:'ai',pane:'lead',turnInstanceId:'turn-team'},{role:'ai',pane:'lead',turnInstanceId:'later'}];
  v.find('.feed').innerHTML='<div class="col"><div class="live-msg" data-message-index="0">Предлагаю команду</div><div class="live-msg" data-message-index="1">Следующий ответ</div></div>';
- await v.f.fetch();if(page==='new'){v.f.state.focus=proposal.proposalId;v.f.sync()}
+ await v.f.fetch();if(page==='new'){v.f.state.focus=proposal.proposalId;v.f.state.focusBinding=v.context.sendBinding();v.f.sync()}
  assert.ok(v.find('[data-team-proposal]').closest('.feed .col'));
  assert.equal(v.find('[data-team-toggle]').getAttribute('aria-expanded'),'false');assert.ok(v.find('.proposal-body').hasAttribute('hidden'));
  const children=v.find('.feed .col').children;assert.equal(children[1],v.find('[data-team-proposal]'));assert.equal(children[2]!.dataset.messageIndex,'1');
@@ -96,4 +96,14 @@ for(const page of ['chat','new'])test('TS-41: '+page+' proposals are collapsed i
  assert.equal(v.find('.proposal-intro').hasAttribute('open'),false);await v.f.fetch();assert.equal(v.find('[data-team-toggle]').getAttribute('aria-expanded'),'true');
  proposal.version=2;await v.f.fetch();assert.equal(v.find('[data-team-toggle]').getAttribute('aria-expanded'),'false');
  v.H.project='/b';v.f.reset();assert.equal(v.document.querySelector('[data-team-proposal]'),null);
+});
+
+for(const legacy of [false,true])test('TS-41 r2: '+(legacy?'legacy':'turn-bound')+' proposal never appears automatically in another role feed',async()=>{
+ const proposal={...q(),from:'lead',...(legacy?{}:{turnInstanceId:'author-turn'})},v=ui(async()=>({ok:true,project:'/a',proposals:[proposal]}));
+ v.H.pane={id:'analyst'};v.H.active.analyst='analyst-chat';v.context.S.chat=[];await v.f.fetch();assert.equal(v.document.querySelector('[data-team-proposal]'),null);
+ v.H.pane={id:'lead'};v.H.active.lead='lead-chat';v.f.sync();assert.equal(!!v.document.querySelector('[data-team-proposal]'),legacy,'a turn-bound card needs its answer even in the author feed');
+ v.context.S.chat=[{role:'ai',pane:'lead',turnInstanceId:'author-turn'}];v.find('.feed').innerHTML='<div class="col"><div data-message-index="0">Ответ автора</div></div>';v.f.sync();assert.ok(v.document.querySelector('[data-team-proposal]'));
+ v.H.pane={id:'analyst'};v.f.sync();assert.equal(v.document.querySelector('[data-team-proposal]'),null,'stale author messages cannot masquerade as the current feed');
+ v.context.S.chat=[];v.f.show(proposal.proposalId);assert.ok(v.document.querySelector('[data-team-proposal]'),'explicit preview is allowed');
+ v.H.active.analyst='another-chat';v.f.sync();assert.equal(v.document.querySelector('[data-team-proposal]'),null,'focused preview is bound to its chat');
 });

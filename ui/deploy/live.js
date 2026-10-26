@@ -1987,7 +1987,7 @@
   // End TS-09a.1 page lifecycle.
   window.LIVE={networkMenu,networkPath,networkWarning,profileDraw,firstModelsDraw:()=>{if(PAGE==='first')firstDraw()},subscribeLiveEvents,providerLimitHTML:(id,name,kind,supported)=>{if(!supported)return '<p class="conn-note">Провайдер лимиты не отдаёт.</p>';return spLimitHTML({id,name,kind},true)},stop,busy:()=>!!(H.cur||(H.pane&&H.pane.busy)),get S(){ return S; },save,H,api,esc,toast,log,paneName,hStatus,pickPane,openPal,md,refreshStatus,refreshChats,loadChat,promoteConversation,operationsDraw,operationAttention,selStart,laMenu,laPath,laMulti,sendBinding,bindingCurrent,invalidateBinding,configureSetting,composerState,attachmentsDraw,pickImages,get teamProposals(){return TP;},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};   // для cx.js (поле ввода)
   // TS-09b3: proposal cards always confirm the exact displayed project and version.
-  const TP={project:null,generation:0,data:[],loading:false,queued:false,sending:false,error:null,focus:null,kinds:{},expanded:{}};
+  const TP={project:null,generation:0,data:[],loading:false,queued:false,sending:false,error:null,focus:null,focusBinding:null,kinds:{},expanded:{}};
   const KN={request:0,data:null,binding:null,error:null};
   function knowledgeDraw(){let box=document.getElementById('live-role-knowledge');const active=KN.binding&&bindingCurrent(KN.binding)&&!leftPage;
     if(!active||!KN.data&&!KN.error){if(box)box.remove();return}const feed=document.querySelector('.frame.cur .main .feed')||document.querySelector('.frame .main .feed');if(!feed)return;
@@ -2043,23 +2043,25 @@
   function proposalsDraw(){proposalsNotify();if(!['chat','new','now','first'].includes(PAGE))return;
     const existing=[...document.querySelectorAll('.team-proposals')];
     const clear=()=>{existing.forEach(box=>box.remove());document.querySelectorAll('.team-proposal-feed').forEach(box=>box.remove())};
+    const binding=sendBinding();if(TP.focus&&(!TP.focusBinding||!bindingCurrent(TP.focusBinding)||!['project','pane','chat'].every(key=>TP.focusBinding[key]===binding[key]))){TP.focus=null;TP.focusBinding=null}
     if(!H.on||H.snapshotOnly||leftPage||TP.project!==H.project||PAGE==='new'&&!TP.focus||!TP.error&&!TP.data.length){clear();return}
     let host=PAGE==='first'?document.querySelector('[data-first-team]'):document.querySelector('.frame.cur .feed .col')||document.querySelector('.frame .feed .col')||document.querySelector('.frame .feed');
     if(!host&&PAGE==='new'){const main=document.querySelector('.frame .main');if(main){const feed=document.createElement('div');feed.className='feed team-proposal-feed';host=document.createElement('div');host.className='col';feed.appendChild(host);main.insertBefore(feed,main.querySelector('.nc')||main.firstChild)}}
     if(!host)host=document.querySelector('.frame .main');if(!host)return;
-    const rows=TP.error?[null]:TP.data.filter(q=>!TP.focus||q.proposalId===TP.focus),used=new Set();
+    const anchorFor=q=>{if(!q||q.from!==binding.pane||!q.turnInstanceId)return null;const index=(S.chat||[]).findIndex(m=>m.role==='ai'&&m.pane===q.from&&m.turnInstanceId===q.turnInstanceId);return index<0?null:host.querySelector('[data-message-index="'+index+'"]')};
+    const rows=TP.error?[null]:TP.data.filter(q=>TP.focus?q.proposalId===TP.focus:q.from===binding.pane&&(!q.turnInstanceId||anchorFor(q))),used=new Set();
     rows.forEach((q,index)=>{let box=existing.find(box=>q?box.dataset.teamProposal===q.proposalId:box.hasAttribute('data-team-error'));if(!box){box=document.createElement('article');box.className='team-proposals'}used.add(box);box.id=index===0?'live-team-proposals':'';
       if(q)box.setAttribute('data-team-proposal',q.proposalId);else box.setAttribute('data-team-error','');
       const content=q?proposalCard(q):'<p role="alert">'+esc(TP.error)+'</p><button class="btn ghost" data-team-refresh>Повторить чтение</button>';
       if(box.__proposalContent!==content){box.innerHTML=content;box.__proposalContent=content}
       // The engine's immutable turn id anchors the card to its orchestrator answer.
-      // Older proposals without that reference stay in the feed, never over it.
-      const message=q&&q.turnInstanceId?(S.chat||[]).findIndex(m=>m.role==='ai'&&m.pane===q.from&&m.turnInstanceId===q.turnInstanceId):-1,anchor=message>=0?host.querySelector('[data-message-index="'+message+'"]'):null;
+      // Only an explicit focused view may show a proposal outside its author's answer.
+      const anchor=anchorFor(q);
       const children=[...host.children],next=anchor?children[children.indexOf(anchor)+1]:null;
       if(anchor){if(next!==box)anchor.after(box)}else if(children.at(-1)!==box){box.remove();host.appendChild(box)}
     });existing.filter(box=>!used.has(box)).forEach(box=>box.remove());
   }
-  function proposalsReset(){TP.generation++;TP.project=null;TP.data=[];TP.error=null;TP.loading=false;TP.queued=false;TP.sending=false;TP.focus=null;TP.kinds={};TP.expanded={};proposalsDraw()}
+  function proposalsReset(){TP.generation++;TP.project=null;TP.data=[];TP.error=null;TP.loading=false;TP.queued=false;TP.sending=false;TP.focus=null;TP.focusBinding=null;TP.kinds={};TP.expanded={};proposalsDraw()}
   async function proposalsFetch(){if(!H.on||H.snapshotOnly||leftPage||!['chat','new','now','first'].includes(PAGE))return false;if(TP.project!==H.project){proposalsReset();TP.project=H.project}if(TP.loading){TP.queued=true;return false}
     const project=TP.project,generation=TP.generation;TP.loading=true;
     try{const r=await api('/api/seats/proposals');if(!proposalCurrent(project,generation))return false;if(!r||!r.ok||r.project!==project||!Array.isArray(r.proposals)||!r.proposals.every(proposalValid))throw Error(r&&r.error||'Не удалось прочитать состав команды');TP.data=r.proposals;TP.error=null;for(const q of TP.data)q.seats.forEach((_s,i)=>{if(q.ownerSeats&&q.ownerSeats[i])delete TP.kinds[proposalKindKey(q,i)]});if(typeof refreshStatus==='function')await refreshStatus();if(proposalCurrent(project,generation))operationsTeams(TP.data)}
@@ -2067,7 +2069,7 @@
     if(!proposalCurrent(project,generation))return false;TP.loading=false;proposalsDraw();if(KN.data)void knowledgeFetch();if(TP.queued){TP.queued=false;void proposalsFetch()}return !TP.error;
   }
   function proposalsSync(){if(!['chat','new','now','first'].includes(PAGE))return;if(TP.project!==H.project)void proposalsFetch();else proposalsDraw()}
-  function showTeamProposal(id){if(!proposalCurrent(TP.project,TP.generation)||!TP.data.some(q=>q.proposalId===id))return;TP.focus=id;const q=TP.data.find(q=>q.proposalId===id);TP.expanded[id+':'+q.version]=true;proposalsDraw();const box=document.getElementById('live-team-proposals');if(box&&box.scrollIntoView)box.scrollIntoView({block:'nearest'})}
+  function showTeamProposal(id){if(!proposalCurrent(TP.project,TP.generation)||!TP.data.some(q=>q.proposalId===id))return;TP.focus=id;TP.focusBinding=sendBinding();const q=TP.data.find(q=>q.proposalId===id);TP.expanded[id+':'+q.version]=true;proposalsDraw();const box=document.getElementById('live-team-proposals');if(box&&box.scrollIntoView)box.scrollIntoView({block:'nearest'})}
   async function requestTeamProposal(binding){if(!bindingCurrent(binding)||leftPage)return false;const o=(H.panes||[]).find(p=>p.kind==='orchestrator');if(!o){toast('Сначала назначьте оркестратора этому разговору');return false}
     invalidateBinding();S.ui.pane=o.id;save();pickPane();hStatus();const target=sendBinding();await loadChat({onboard:false});if(!bindingCurrent(target)||leftPage)return false;return onSend('зарегистрируй предложение',null,target);
   }
