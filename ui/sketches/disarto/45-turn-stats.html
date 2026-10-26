@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Скетч 45 · Статистика хода под ответом</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css">
+<style>
+.ts-app{width:1280px;height:760px;background:var(--bg);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:grid;grid-template-columns:60px 1fr;box-shadow:0 30px 80px rgba(0,0,0,.6);position:relative}
+.ts-side{background:var(--panel);border-right:1px solid var(--line);padding:12px 10px;display:flex;flex-direction:column;gap:6px;align-items:center}
+.ts-side i{width:36px;height:34px;border-radius:var(--rs);display:block}.ts-side i.on{background:var(--raised)}.ts-side i.logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(160deg,#2a2a2f,#151517);border:1px solid var(--line2);margin-bottom:8px}
+.ts-main{display:grid;grid-template-rows:44px 1fr auto;min-width:0}
+.ts-top{display:flex;align-items:center;gap:12px;padding:0 22px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink2)}.ts-top b{font-weight:500;color:var(--ink)}.ts-top .m{font:10px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink3)}.ts-top .r{margin-left:auto}
+.ts-feed{padding:22px 26px 10px 26px;overflow:hidden;display:grid;gap:18px;align-content:start;max-width:860px}
+.msg{position:relative;font:13.5px/1.55 var(--font);max-width:84%}
+.msg.me{justify-self:end;padding:10px 14px;border:1px solid var(--line2);border-radius:12px 12px 4px 12px;background:var(--raised)}
+.msg.ai{padding-left:24px}.msg.ai::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.msg p{margin:0 0 6px}.msg p:last-of-type{margin:0}
+.acts{display:flex;gap:6px;align-items:center;margin-top:8px;font:10px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink3);opacity:.35;transition:opacity .15s}
+.msg.hov .acts,.msg.open .acts,.msg:last-child .acts{opacity:1}
+.acts button{padding:0;border:0;background:none;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer}.acts button:hover{color:var(--ink)}
+.acts .st{display:inline-flex;align-items:center;gap:5px;padding:2px 6px;border-radius:6px;border:1px solid transparent}
+.acts .st svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+.msg.open .acts .st{border-color:var(--line2);background:var(--raised);color:var(--ink)}
+.acts .st .cost{color:var(--accent-hi);text-transform:none;letter-spacing:0}
+/* карточка статистики */
+.tstat{margin-top:10px;max-width:560px;border:1px solid var(--line2);border-radius:12px;background:var(--panel);overflow:hidden;box-shadow:0 14px 40px rgba(0,0,0,.45)}
+.tstat .hd{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.tstat .hd b{font-weight:500;color:var(--ink);font:12.5px var(--font)}.tstat .hd .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.tstat .hd .mode{padding:1px 6px;border-radius:5px;border:1px solid var(--line2);color:var(--ink2)}
+.tstat .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:12px 14px 10px}
+.tstat .cell{padding:0 8px 0 0}.tstat .cell+.cell{border-left:1px solid var(--line);padding-left:12px}
+.tstat .cell small{display:block;font:10px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px}
+.tstat .cell b{display:block;font:500 16px/1.1 var(--font);color:var(--ink);font-variant-numeric:tabular-nums}
+.tstat .cell b.acc{color:var(--accent-hi)}.tstat .cell b.dim{color:var(--ink3);font-weight:400;font-size:13px}
+.tstat .cell span{display:block;font:11px var(--font);color:var(--ink2);margin-top:3px}
+.ticks{display:flex;gap:2px;margin:6px 14px 10px}.ticks i{flex:1;height:8px;border-radius:1px;background:var(--line2)}.ticks i.in{background:var(--ink3)}.ticks i.cache{background:var(--accent-deep)}.ticks i.out{background:var(--accent)}
+.tstat .legend{display:flex;gap:14px;padding:0 14px 10px;font:10px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink3)}
+.tstat .legend i{display:inline-block;width:8px;height:8px;border-radius:1px;margin-right:5px;vertical-align:-1px;background:var(--line2)}
+.tstat .ft{display:flex;gap:14px;align-items:center;padding:8px 14px;border-top:1px solid var(--line);font:11px var(--font);color:var(--ink2)}
+.tstat .ft .r{margin-left:auto;display:flex;gap:10px}.tstat .ft button{padding:0;border:0;background:none;color:var(--ink3);font:10px var(--mono);letter-spacing:.04em;text-transform:uppercase;cursor:pointer}.tstat .ft button:hover{color:var(--ink)}
+.tstat.warn .hd{color:var(--warn)}.tstat .note{padding:10px 14px;font-size:12px;color:var(--ink2);border-top:1px solid var(--line)}
+.tstat .note b{color:var(--warn);font-weight:500}
+/* вариант Б — постоянная строка */
+.inline{margin-top:7px;display:flex;gap:10px;align-items:center;font:10.5px var(--mono);letter-spacing:.03em;color:var(--ink3);flex-wrap:wrap}
+.inline b{font-weight:500;color:var(--ink2)}.inline .c{color:var(--accent-hi)}.inline i{width:3px;height:3px;border-radius:50%;background:var(--line2);display:inline-block}
+.ts-comp{margin:0 26px 18px;max-width:860px;border:1px solid var(--line2);border-radius:14px;background:var(--panel);padding:12px 14px;color:var(--ink3);font-size:13px;display:grid;gap:10px}
+.ts-comp .foot{display:flex;gap:12px;align-items:center;font:10px var(--mono);letter-spacing:.04em;text-transform:uppercase}.ts-comp .foot .r{margin-left:auto;color:var(--ink2)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin:0 0 40px}
+.box{border:1px solid var(--line);border-radius:var(--r);background:var(--bg);padding:16px 18px}
+.cap{font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin:0 0 12px}
+.cap2{font:500 13px var(--font);color:var(--ink);margin:0 0 4px}
+.note-p{color:var(--ink2);font-size:12.5px;margin:10px 0 0;line-height:1.5}
+.phone{width:390px;border:1px solid var(--line);border-radius:28px;background:var(--bg);padding:18px 14px;margin:0 auto}
+.phone .tstat{max-width:100%}.phone .tstat .grid{grid-template-columns:1fr 1fr;row-gap:12px}.phone .tstat .cell:nth-child(3){border-left:0;padding-left:0}
+.badge{display:inline-block;font:9px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);border:1px solid var(--line2);border-radius:5px;padding:1px 6px;vertical-align:middle;margin-left:6px}
+</style></head><body><div class="sheet">
+<h1>Harnessy · статистика хода под ответом</h1>
+<p class="sub">Под каждым ответом модели — иконка в строке действий; по клику карточка хода: модель и права, токены вход / выход / из кэша, стоимость по прайс-листу, время и вызовы инструментов. Данные — из записи хода движка (`context.last` сегодня даёт только последний ход места; для каждого ответа запись расхода нужно прикладывать к сообщению). Повод — карточка «Response statistics» в Devin; наша отличается деньгами, тик-полосой и честным состоянием «провайдер не сообщил».</p>
+
+<div class="frame"><p class="cap">Кадр 1 · вариант А · иконка в строке действий, карточка раскрыта у последнего ответа</p>
+<div class="ts-app"><aside class="ts-side"><i class="logo"></i><i class="on"></i><i></i><i></i><i></i></aside><section class="ts-main">
+<div class="ts-top"><b>Юрист по договорам</b><span class="m">researcher · Claude Sonnet 5.5 · read</span><span class="r m">проект «Аренда склада»</span></div>
+<div class="ts-feed">
+  <div class="msg me">Сравни условия оплаты в двух редакциях договора и скажи, где риск для арендатора.</div>
+  <div class="msg ai"><p>В редакции от 12.10 срок оплаты 5 рабочих дней с даты счёта, в редакции от 20.10 — 3 календарных. Второй вариант хуже для арендатора: попадает на выходные.</p>
+    <div class="acts"><button type="button">Копировать</button><i>·</i><button type="button">Передать контекст</button><i>·</i><time>14 мин назад</time><i>·</i><button type="button" class="st" title="Статистика хода"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span class="cost">$0,018</span></button></div>
+  </div>
+  <div class="msg me">А пени?</div>
+  <div class="msg ai open"><p>Пени одинаковые: 0,1 % в день, но во второй редакции добавлен потолок — не более 10 % от суммы задолженности. Это в пользу арендатора.</p>
+    <div class="acts"><button type="button">Копировать</button><i>·</i><button type="button">Передать контекст</button><i>·</i><time>только что</time><i>·</i><button type="button" class="st" aria-expanded="true" title="Скрыть статистику"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span class="cost">$0,031</span></button></div>
+    <div class="tstat">
+      <div class="hd"><b>Ход · 14</b><span>Claude Sonnet 5.5</span><span class="mode">read</span><span class="r"><span>2 вызова инструментов</span><span>6,4 с</span></span></div>
+      <div class="grid">
+        <div class="cell"><small>вход</small><b>50 892</b><span>токенов</span></div>
+        <div class="cell"><small>из кэша</small><b>779 968</b><span>94 % входа · не оплачивается заново</span></div>
+        <div class="cell"><small>выход</small><b>17 413</b><span>токенов · 2 410 знаков</span></div>
+        <div class="cell"><small>стоимость</small><b class="acc">$0,031</b><span>по прайс-листу · за ночь $0,84</span></div>
+      </div>
+      <div class="ticks" aria-hidden="true"><i class="in"></i><i class="in"></i><i class="in"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="out"></i><i class="out"></i></div>
+      <div class="legend"><span><i style="background:var(--ink3)"></i>вход</span><span><i style="background:var(--accent-deep)"></i>из кэша</span><span><i style="background:var(--accent)"></i>выход</span></div>
+      <div class="ft"><span>Контекст после хода · 68 305 из 200 000</span><span class="r"><button type="button">Скопировать id хода</button><button type="button">Открыть в журнале</button></span></div>
+    </div>
+  </div>
+</div>
+<div class="ts-comp"><div>Написать юристу…</div><div class="foot"><span>Claude Sonnet 5.5</span><span>·</span><span>read</span><span class="r">сегодня $1,12 · лимит проекта $5 · контекст 34 %</span></div></div>
+</section></div></div>
+
+<div class="two">
+  <div class="box"><div class="cap">Состояния карточки</div>
+    <div class="cap2">Провайдер не сообщил токены</div>
+    <div class="tstat warn"><div class="hd"><b>Ход · 7</b><span>Codex gpt-6-luna</span><span class="mode">write</span><span class="r"><span>5 вызовов инструментов</span><span>41 с</span></span></div>
+      <div class="grid"><div class="cell"><small>вход</small><b class="dim">нет данных</b></div><div class="cell"><small>из кэша</small><b class="dim">нет данных</b></div><div class="cell"><small>выход</small><b>3 180</b><span>знаков ответа</span></div><div class="cell"><small>стоимость</small><b class="dim">—</b><span>в подписке Codex</span></div></div>
+      <div class="note"><b>Провайдер не сообщил расход.</b> Codex через CLI не отдаёт токены хода; считаем только время и объём ответа. Подписка учитывается в «Расходе и лимитах».</div>
+    </div>
+    <div class="cap2" style="margin-top:16px">Ход прерван</div>
+    <div class="tstat"><div class="hd"><b>Ход · 9</b><span>Claude Opus 5.5</span><span class="mode">write</span><span class="r"><span>остановлен владельцем</span><span>12 с</span></span></div>
+      <div class="grid"><div class="cell"><small>вход</small><b>12 040</b><span>токенов</span></div><div class="cell"><small>из кэша</small><b>0</b><span>кэш не использован</span></div><div class="cell"><small>выход</small><b>611</b><span>до остановки</span></div><div class="cell"><small>стоимость</small><b class="acc">$0,046</b><span>списано полностью</span></div></div>
+    </div>
+    <p class="note-p">Правила: иконка видна при наведении и у последнего ответа (как строка действий, дизайн-код «Сообщение»). Сумма у иконки — только если стоимость известна; иначе иконка без суммы. Раскрыта не больше одной карточки на чат. Числа — табличные цифры, тысячи через пробел. Неизвестное — слово «нет данных», не ноль.</p>
+  </div>
+  <div class="box"><div class="cap">Вариант Б · постоянная строка под ответом</div>
+    <div class="msg ai" style="max-width:100%"><p>Пени одинаковые: 0,1 % в день, но во второй редакции добавлен потолок — не более 10 % от суммы задолженности.</p>
+      <div class="inline"><b>Sonnet 5.5</b><i></i><span>50 892 → 17 413</span><i></i><span>кэш 94 %</span><i></i><span class="c">$0,031</span><i></i><span>6,4 с</span></div>
+      <div class="acts"><button type="button">Копировать</button><i>·</i><button type="button">Передать контекст</button><i>·</i><time>только что</time></div>
+    </div>
+    <p class="note-p">Всегда на виду, без клика. Минус: в длинном чате строка под каждым ответом шумит и спорит со строкой действий. Рекомендация — вариант А по умолчанию, Б как переключатель в настройках окна «показывать расход под каждым ответом».</p>
+    <div class="cap" style="margin-top:22px">Телефон 390 · вариант А раскрыт</div>
+    <div class="phone"><div class="msg ai open" style="max-width:100%"><p>Пени одинаковые: 0,1 % в день, но добавлен потолок 10 %.</p>
+      <div class="acts"><button type="button">Копировать</button><i>·</i><time>только что</time><i>·</i><button type="button" class="st"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span class="cost">$0,031</span></button></div>
+      <div class="tstat"><div class="hd"><b>Ход · 14</b><span>Sonnet 5.5</span><span class="r"><span>6,4 с</span></span></div>
+        <div class="grid"><div class="cell"><small>вход</small><b>50 892</b></div><div class="cell"><small>из кэша</small><b>779 968</b><span>94 %</span></div><div class="cell"><small>выход</small><b>17 413</b></div><div class="cell"><small>стоимость</small><b class="acc">$0,031</b></div></div>
+        <div class="ft"><span>Контекст 68 305 / 200 000</span></div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<div class="box"><div class="cap">Откуда данные · что есть в движке и чего нет</div>
+  <p class="note-p" style="margin:0"><b style="color:var(--ink)">Есть:</b> расход последнего хода места (`context.last`: input, output, cacheRead) и прайс-лист владельца (TS-29) — из них уже считается строка под полем ввода.<span class="badge">live</span><br>
+  <b style="color:var(--ink)">Нужно:</b> запись расхода у каждого ответа в `/api/chats` (`usage: {model, mode, input, output, cacheRead, durationMs, toolCalls, stopped}`), контекст после хода, стабильный id хода для «Открыть в журнале».<span class="badge">макет · нет в движке</span><br>
+  Codex / Antigravity / Copilot через CLI могут не отдавать токены — карточка показывает состояние «провайдер не сообщил», не нули.</p>
+</div>
+</div></body></html>

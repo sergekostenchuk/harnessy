@@ -923,6 +923,45 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
       </div>
     </section>
 
+    <section id="turn-stats-spec"><h2>Статистика хода · под ответом<i></i></h2>
+      <style>
+      .tstat-demo .message-actions .st{display:inline-flex;align-items:center;gap:5px;padding:2px 6px;border-radius:6px;border:1px solid transparent}
+      .tstat-demo .message-actions .st svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+      .tstat-demo .message-actions .st.open{border-color:var(--line2);background:var(--raised);color:var(--ink)}
+      .tstat-demo .message-actions .st .cost{color:var(--accent-hi);text-transform:none;letter-spacing:0}
+      .tstat{margin-top:10px;max-width:560px;border:1px solid var(--line2);border-radius:12px;background:var(--panel);overflow:hidden}
+      .tstat .hd{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+      .tstat .hd b{font:500 12.5px var(--font);color:var(--ink)}.tstat .hd .r{margin-left:auto;display:flex;gap:8px}.tstat .hd .mode{padding:1px 6px;border-radius:5px;border:1px solid var(--line2);color:var(--ink2)}
+      .tstat .grid{display:grid;grid-template-columns:repeat(4,1fr);padding:12px 14px 10px}.tstat .cell+.cell{border-left:1px solid var(--line);padding-left:12px}
+      .tstat .cell small{display:block;font:10px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px}
+      .tstat .cell b{display:block;font:500 16px/1.1 var(--font);color:var(--ink);font-variant-numeric:tabular-nums}.tstat .cell b.acc{color:var(--accent-hi)}.tstat .cell b.dim{color:var(--ink3);font-weight:400;font-size:13px}
+      .tstat .cell span{display:block;font:11px var(--font);color:var(--ink2);margin-top:3px}
+      .tstat .ticks{display:flex;gap:2px;margin:6px 14px 10px}.tstat .ticks i{flex:1;height:8px;border-radius:1px;background:var(--line2)}.tstat .ticks i.in{background:var(--ink3)}.tstat .ticks i.cache{background:var(--accent-deep)}.tstat .ticks i.out{background:var(--accent)}
+      .tstat .ft{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--line);font:11px var(--font);color:var(--ink2)}.tstat .ft .r{margin-left:auto;display:flex;gap:10px;font:10px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink3)}
+      .tstat .note{padding:10px 14px;font-size:12px;color:var(--ink2);border-top:1px solid var(--line)}.tstat .note b{color:var(--warn);font-weight:500}
+      </style>
+      <div class="two tstat-demo">
+        <div class="box"><div class="cap2">Иконка в строке действий → карточка хода</div>
+          <div class="message-action-demo"><article class="ai">Пени одинаковые, но добавлен потолок 10 % — в пользу арендатора.
+            <div class="message-actions"><button type="button">Копировать</button><i>·</i><button type="button">Передать контекст</button><i>·</i><time>только что</time><i>·</i><button type="button" class="st open" aria-expanded="true"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span class="cost">$0,031</span></button></div>
+            <div class="tstat"><div class="hd"><b>Ход · 14</b><span>Claude Sonnet 5.5</span><span class="mode">read</span><span class="r"><span>2 вызова инструментов</span><span>6,4 с</span></span></div>
+              <div class="grid"><div class="cell"><small>вход</small><b>50 892</b><span>токенов</span></div><div class="cell"><small>из кэша</small><b>779 968</b><span>94 % входа</span></div><div class="cell"><small>выход</small><b>17 413</b><span>токенов</span></div><div class="cell"><small>стоимость</small><b class="acc">$0,031</b><span>по прайс-листу</span></div></div>
+              <div class="ticks" aria-hidden="true"><i class="in"></i><i class="in"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="out"></i><i class="out"></i></div>
+              <div class="ft"><span>Контекст после хода · 68 305 из 200 000</span><span class="r"><button type="button">Скопировать id хода</button><button type="button">Открыть в журнале</button></span></div>
+            </div></article></div>
+          <p class="conn-note">Иконка — в строке действий сообщения, видна по наведению и у последнего ответа; сумма у иконки — только при известной стоимости. Раскрыта не больше одной карточки на чат. Карточка: заголовок (номер хода, модель, права, вызовы, время), четыре ячейки, тик-полоса долей вход / кэш / выход, подвал с контекстом и ссылкой в журнал. Табличные цифры, тысячи через пробел. Полный скетч — <a href="45-turn-stats.html">45</a>.</p>
+        </div>
+        <div class="box"><div class="cap2">Состояния · провайдер не сообщил · ход прерван</div>
+          <div class="tstat"><div class="hd" style="color:var(--warn)"><b>Ход · 7</b><span>Codex gpt-6-luna</span><span class="mode">write</span><span class="r"><span>41 с</span></span></div>
+            <div class="grid"><div class="cell"><small>вход</small><b class="dim">нет данных</b></div><div class="cell"><small>из кэша</small><b class="dim">нет данных</b></div><div class="cell"><small>выход</small><b>3 180</b><span>знаков ответа</span></div><div class="cell"><small>стоимость</small><b class="dim">—</b><span>в подписке</span></div></div>
+            <div class="note"><b>Провайдер не сообщил расход.</b> Неизвестное — слово «нет данных», не ноль; подписки учитываются в «Расходе и лимитах».</div></div>
+          <div class="tstat" style="margin-top:12px"><div class="hd"><b>Ход · 9</b><span>Claude Opus 5.5</span><span class="mode">write</span><span class="r"><span>остановлен владельцем</span><span>12 с</span></span></div>
+            <div class="grid"><div class="cell"><small>вход</small><b>12 040</b></div><div class="cell"><small>из кэша</small><b>0</b><span>кэш не использован</span></div><div class="cell"><small>выход</small><b>611</b><span>до остановки</span></div><div class="cell"><small>стоимость</small><b class="acc">$0,046</b><span>списано полностью</span></div></div></div>
+          <p class="conn-note">Данные: сегодня движок хранит расход только последнего хода места (`context.last`); для карточки под каждым ответом сообщению нужна запись `usage` (модель, права, вход, выход, кэш, длительность, вызовы, остановка) и id хода. Вариант Б (постоянная строка под ответом) — переключатель в настройках окна, не по умолчанию.</p>
+        </div>
+      </div>
+    </section>
+
     <section id="context-selection"><h2>Перенос контекста · явный выбор<i></i></h2>
       <div class="box"><div class="cap2">Макет · ни одного сообщения не выбрано</div>
         <p>Передать контекст → Ревьюер · выбрано <b>0 из 3 сообщений</b> · <b>0 знаков</b></p>
