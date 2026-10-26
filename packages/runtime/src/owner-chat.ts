@@ -24,7 +24,7 @@ export function chat(runtime:Runtime,input:Record<string,unknown>,initiator:Init
  const direct=!!input.direct,orchestrator=[...p.registry.panes.values()].some(x=>x.kind==='orchestrator');
  if(orchestrator&&pane.kind!=='orchestrator'&&pane.id!=='room'&&!direct)throw new RuntimeError('direct_required','«'+pane.label+'» — не оркестратор: обращение напрямую требует явного подтверждения',409,{fields:{needDirect:true}});
  p.registry.refreshPolicy();
- const rec=p.channel.postCore({to:[pane.id],kind:kind as typeof OWNER_KINDS[number],text,...(attachments.length?{attachments}:{}),thread,...(replyTo===null?{}:{reply_to:replyTo}),...(direct?{origin:'direct'}:{})},{seat:'owner',trust:'owner'});
+ const rec=p.channel.postCore({to:[pane.id],kind:kind as typeof OWNER_KINDS[number],text,...(attachments.length?{attachments}:{}),thread,...(replyTo===null?{}:{reply_to:replyTo}),...(initiator.source==='autopilot'?{origin:'autopilot:'+String((initiator as Initiator&{autopilotDecisionId?:string}).autopilotDecisionId??'unbound')}:(direct?{origin:'direct'}:{}))},{seat:'owner',trust:'owner'});
  const info=waiting(p,pane);if(info)runtime.publishState(pane.id);
  return {ok:true as const,seq:rec.seq,queued:pane.busy||!!info,thread:rec.thread,...(info?{waiting:info}:{})};
 }

@@ -43,6 +43,7 @@ import {Scopes,ProcessTokens} from './scope.ts';
 import {renderInbox,queueNote} from './inbox.ts';
 import {RuntimeError,message,slice,deepFreeze,object} from './errors.ts';
 import {systemClock,type RuntimeDeps,type RuntimeActions,type ProjectState,type TurnScope,type ActiveTurn,type ActionContext,type RuntimeEvent,type TurnRecords,type BridgeSendArgs,type BridgeFailure,type SendResult,type ReadPaneResult,type AskResult,type MergeResult,type AssignRoleResult} from './types.ts';
+import {RuntimeAutopilotEngine} from './autopilot-engine.ts';
 import type {AutopilotAgentReply,AutopilotAgentRequest} from './autopilot-council.ts';
 const OWNER:Initiator & {trust:'owner'}={seat:'owner',trust:'owner'},HARNESS:Initiator & {trust:'harness'}={seat:'harness',trust:'harness'};
 // Only valid inside withAutopilotGeneration. Existing owner API checks still apply.
@@ -88,6 +89,7 @@ export class Runtime {
  readonly clock;readonly connections;readonly projectRegistry;readonly settings;readonly pins;readonly defaultDir:string;readonly scopes=new Scopes();private tokens=new ProcessTokens(this.scopes);
  private traces=new Set<TraceStore>();private traceConfig={enabled:true,maxBytes:16*1024*1024};private generation=0;private current:ProjectState|null=null;private opening=Promise.resolve();private quotas=new WeakMap<ProjectState,LimitsStore>();private cliQuotas=new WeakMap<ProjectState,ProviderLimitsStore>();
  private programBinaryJobs=new Map<string,Promise<unknown>>();
+ private autopilotEngines=new WeakMap<ProjectState,RuntimeAutopilotEngine>();
  private autopilotTimers=new WeakMap<ProjectState,unknown>();
  private autopilotDecisionLedgers=new WeakMap<ProjectState,AutopilotDecisionLedger>();
  private autopilotApplication=new WeakMap<ProjectState,symbol>();private autopilotContext=new AsyncLocalStorage<symbol>();private autopilotJobs=new WeakMap<ProjectState,Set<Promise<unknown>>>();
@@ -125,7 +127,7 @@ export class Runtime {
  }
  private toolSpans=new WeakMap<ProjectState,Map<string,{span:TraceContext;started:number}>>();
  private finishTraceTools(p:ProjectState,turn:string){const spans=this.toolSpans.get(p);if(!spans)return;for(const [key,value] of spans)if(key.startsWith(turn+':')){p.trace.end(value.span,'tool.result',{actor:value.span.pane?'model:'+value.span.pane:'engine',outcome:p.closed?'cancelled':'failed',reason:{code:p.closed?'cancelled':'unavailable',text:'Источник не передал результат инструмента до завершения хода'},durationMs:this.clock.now()-value.started});spans.delete(key)}}
- private traceEvents(p:ProjectState){const approvals=new Map<string,TraceContext>();p.bus.observer=(pane,event)=>{const current=currentTrace(),parent=current?.store===p.trace?current:p.trace.forTurn(p.active.get(pane)?.scope.turnInstanceId);let span=parent;
+ private traceEvents(p:ProjectState){const approvals=new Map<string,TraceContext>();p.bus.observer=(pane,event)=>{if(event.type==='approval'||event.type==='autopilot'||event.type==='state')this.autopilotEngines.get(p)?.wake();const current=currentTrace(),parent=current?.store===p.trace?current:p.trace.forTurn(p.active.get(pane)?.scope.turnInstanceId);let span=parent;
   if(event.type==='approval'){span=p.trace.record('approval.shown',{pane,data:{name:event.title},refs:parent?.turnInstanceId?{attemptId:parent.turnInstanceId}:{}},parent);approvals.set(pane+':'+event.id,span)}
   else if(event.type==='approvalResolved'){const previous=approvals.get(pane+':'+event.id);span=p.trace.record('approval.resolved',{pane,outcome:event.decision==='allow'?'ok':event.decision==='timeout'?'timeout':'rejected',reason:{code:event.decision==='allow'?'none':event.decision==='timeout'?'timeout':'owner_denied',text:String(event.decision)}},previous??parent);approvals.delete(pane+':'+event.id)}
   else if(event.type==='queued'&&object(event.record)){span=p.trace.record('queue.enqueued',{pane,refs:{journalSeq:Number(event.record.seq)},data:{pending:event.pending}},p.trace.forJournal(Number(event.record.seq))??parent)}
@@ -165,7 +167,7 @@ export class Runtime {
  ownerAutopilotAction(p=this.project,initiator:Initiator=OWNER){this.same(p);if(initiator.source==='autopilot'){this.requireOwner(initiator);return}this.guardAutopilotApplication(p);const before=this.settings.autopilot();if(!before.on||before.until?.kind!=='reply')return;const state=this.settings.ownerAutopilotAction();this.scheduleAutopilot(p,state);p.owner.publish({type:'autopilot',autopilot:state})}
  async autopilotCouncilAgent(p:ProjectState,request:AutopilotAgentRequest):Promise<AutopilotAgentReply>{
   this.same(p);const participant=request.participant,pane=this.pane(participant.seat,p);
-  if(pane.kind!==participant.role||pane.model!==participant.model||!pane.model)throw new RuntimeError('participant_changed','Место консилиума изменилось',409);
+  if(pane.kind!==participant.role||pane.model!==participant.model||pane.vendor!==participant.vendor||!pane.model)throw new RuntimeError('participant_changed','Место консилиума изменилось',409);
   if(request.signal.aborted)throw new ProviderError('cancelled','Консилиум отменён');
   const hold=reserve(p,[pane],'место консилиума сейчас отвечает');
   let networkTurn:NetworkTurn|undefined,handle:import('@harnessy/providers').TurnHandle|null=null;
@@ -173,14 +175,14 @@ export class Runtime {
   try{
    const record=p.channel.postCore({to:[pane.id],kind:'task',text:request.prompt,thread:request.replyTo,origin:COUNCIL_ORIGIN},HARNESS);
    await this.waitVendor(p,pane.vendor);this.same(p);
-   if(p.registry.get(pane.id)!==pane||pane.kind!==participant.role||pane.model!==participant.model||request.signal.aborted)throw new RuntimeError('participant_changed','Место консилиума изменилось',409);
+   if(p.registry.get(pane.id)!==pane||pane.kind!==participant.role||pane.model!==participant.model||pane.vendor!==participant.vendor||request.signal.aborted)throw new RuntimeError('participant_changed','Место консилиума изменилось',409);
    this.validateTurn(pane.vendor,'chat');const seat={...pane.providerSeat(),mode:'chat' as const,sessionId:null,writePaths:[],worktree:null},provider=this.provider(pane.vendor),vendor=provider.vendor;
-   networkTurn=this.networkRelay.begin(vendor,'autopilot:'+request.requestId,request.signal);let terminalError:string|null=null;
+   networkTurn=this.networkRelay.begin(vendor,'autopilot:'+request.requestId,request.signal);let terminalError:string|null=null,usage:unknown=null,durationMs=0;const started=this.clock.now();
    const beforeModel=async()=>{const route=apiRoute(vendor);if(route){const config=this.settings.llmProviders()[route];let local=false;try{local=!!config?.baseURL&&['127.0.0.1','localhost','[::1]'].includes(new URL(config.baseURL).hostname)}catch{}if(!local)await this.networkRelay.prepare(vendor,request.signal,networkTurn)}else if(vendor!=='ollama')await this.networkRelay.prepare(vendor,request.signal,networkTurn);networkTurn!.assert()};
-   const ctx:TurnContext={signal:networkTurn.signal,beforeModel,publish:event=>{if(event.type==='error')terminalError=event.text},modelStarted:()=>{},modelResponded:()=>{},askApproval:async()=>false,session:()=>{},setHandle:value=>{handle=value;if(request.signal.aborted)interrupt()},env:apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,request.signal,networkTurn)??this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[],tools:councilTools(),relayDepth:0,projectDir:p.dir,appUrl:this.deps.appUrl,registerProcessToken:token=>{if(!p.closed)this.tokens.register(token,p.generation,pane.id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,pane.id,vendor),writableRoots:[],attachments:[]};
+   const ctx:TurnContext={signal:networkTurn.signal,beforeModel,publish:event=>{if(event.type==='error')terminalError=event.text;if(event.type==='done'){usage=event.usage;durationMs=event.durationMs}},modelStarted:()=>{},modelResponded:()=>{},askApproval:async()=>false,session:()=>{},setHandle:value=>{handle=value;if(request.signal.aborted)interrupt()},env:apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,request.signal,networkTurn)??this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[],tools:councilTools(),relayDepth:0,projectDir:p.dir,appUrl:this.deps.appUrl,registerProcessToken:token=>{if(!p.closed)this.tokens.register(token,p.generation,pane.id,vendor)},revokeProcessToken:token=>this.tokens.revoke(token,p.generation,pane.id,vendor),writableRoots:[],attachments:[]};
    if(!apiRoute(vendor)&&vendor!=='ollama')await beforeModel();
-   const result=await networkTurn.run(()=>provider.runTurn(seat,request.prompt,ctx));handle=null;if(terminalError)throw new ProviderError('turn_failed',terminalError);if(request.signal.aborted)throw new ProviderError('cancelled','Консилиум отменён');
-   this.same(p);if(p.registry.get(pane.id)!==pane||pane.kind!==participant.role||pane.model!==participant.model)throw new RuntimeError('participant_changed','Место консилиума изменилось',409);
+   let result:Awaited<ReturnType<typeof provider.runTurn>>;try{result=await networkTurn.run(()=>provider.runTurn(seat,request.prompt,ctx))}finally{if(!p.closed){pane.append({...timestampMessage('ai','[консилиум Автопилота]',this.clock.now()),vendor,model:seat.model,usage:usage??{input:null,output:null,cacheRead:null},durationMs:durationMs||this.clock.now()-started,outcome:request.signal.aborted?'interrupted':'ok',deliverySeq:record.seq,runtime:{turnInstanceId:'autopilot:'+request.requestId,recordSeqs:[],effectsPending:false,interrupted:request.signal.aborted,nextSeen:{}}});p.state.saveChats(p.registry)}}handle=null;if(terminalError)throw new ProviderError('turn_failed',terminalError);if(request.signal.aborted)throw new ProviderError('cancelled','Консилиум отменён');
+   this.same(p);if(p.registry.get(pane.id)!==pane||pane.kind!==participant.role||pane.model!==participant.model||pane.vendor!==participant.vendor)throw new RuntimeError('participant_changed','Место консилиума изменилось',409);
    p.registry.refreshPolicy();const response=p.channel.postAgentEffect({to:['owner'],kind:participant.role==='reviewer'?'status':'decision',text:result.text,thread:request.replyTo,reply_to:record.seq},{seat:pane.id,trust:'agent'},'auto');
    return Object.freeze({seat:pane.id,model:participant.model,requestId:request.requestId,replyTo:request.replyTo,token:request.token,text:response.text});
   }finally{request.signal.removeEventListener('abort',interrupt);interrupt();try{await networkTurn?.close()}finally{hold.release()}}
@@ -248,7 +250,7 @@ export class Runtime {
  else {await this.recover(p,pane)}
  }
  if(!lineErrors.some(text=>text.startsWith('chats.json не читается'))){if(freshRoom)state.savePanes(registry,journal);else state.saveChats(registry)}
- p.starting=false;try{await this.autopilotStatus()}catch(error){lineErrors.push('Автопилот: '+message(error))}this.quota(p).start();this.providerOperations.start(p);if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if((pane.status==='idle'||p.state.attempts[pane.id]?.unsent)&&!p.materializing.has(pane.id)&&!p.restoreFailed.has(pane.id))await this.resumeQueue(pane.id,p);
+ p.starting=false;this.autopilotEngines.set(p,new RuntimeAutopilotEngine(this,p));this.autopilotEngines.get(p)!.wake();try{await this.autopilotStatus()}catch(error){lineErrors.push('Автопилот: '+message(error))}this.quota(p).start();this.providerOperations.start(p);if(!halted&&!options.deferPumps)for(const pane of registry.panes.values())if((pane.status==='idle'||p.state.attempts[pane.id]?.unsent)&&!p.materializing.has(pane.id)&&!p.restoreFailed.has(pane.id))await this.resumeQueue(pane.id,p);
  }
  async projectSet(path:string,options:{reload?:boolean},initiator:Initiator){
  this.requireOwner(initiator);const p=this.project;
@@ -277,7 +279,7 @@ export class Runtime {
  }finally{hold.release();if(this.current===p&&!p.closed)for(const id of p.registry.ids)void this.kick(id)}
  })
  }
- async closeProject():Promise<void>{const p=this.current,jobs=p&&this.autopilotJobs.get(p);if(jobs?.size)await Promise.allSettled([...jobs]);return this.changeProject(()=>this.closeProjectLocked())}
+ async closeProject():Promise<void>{const active=this.current&&this.autopilotEngines.get(this.current);active?.close();await active?.idle();const p=this.current,jobs=p&&this.autopilotJobs.get(p);if(jobs?.size)await Promise.allSettled([...jobs]);return this.changeProject(()=>this.closeProjectLocked())}
  private async closeProjectLocked():Promise<void>{const p=this.current;if(!p||p.closed)return;if(p.state.undurable.size){try{p.state.saveChats(p.registry);p.state.undurable.clear()}catch(e){throw new RuntimeError('write_failed','ответ модели не сохранён: '+p.state.chatsPath+': '+message(e),409,{cause:e,fields:{path:p.state.chatsPath}})}}p.closed=true;const timer=this.autopilotTimers.get(p);if(timer!==undefined)this.clock.clearTimeout(timer);this.autopilotTimers.delete(p);this.actions.closeProject?.(p);const turns=[...p.active.values()];
  this.quotas.get(p)?.close();this.cliQuotas.get(p)?.close();for(const turn of turns)this.cancelTurn(turn.pane.id,'project_closed',p);
  await this.networkProviderChecks.closeProject(p);p.owner.denyApprovals();p.bus.close();this.tokens.clear();this.scopes.clear();await this.providerOperations.cancel(p);
@@ -291,7 +293,7 @@ export class Runtime {
  if(event.type==='rejected')p.registry.get(event.sender)?.publish({type:'toolError',text:'политика: '+event.reason});
  if(event.type==='pendingAck'){void this.actions.restorePendingAcks({runtime:this,project:p}).catch(e=>this.report(p,p.owner,e));return}
  if(event.type!=='delivered'||event.record.origin==='steer'||event.record.origin===COUNCIL_ORIGIN)return;
- for(const id of event.record.to){if(id==='owner'){p.owner.publish({type:'owner',record:event.record});continue}const pane=p.registry.get(id);if(!pane)continue;
+ for(const id of event.record.to){if(id==='owner'){p.owner.publish({type:'owner',record:event.record});if(['question','blocker','escalation'].includes(event.record.kind))this.autopilotEngines.get(p)?.wake();continue}const pane=p.registry.get(id);if(!pane)continue;
  pane.publish({type:'queued',record:event.record,pending:p.journal.pendingFor(id).length});
  if(event.record.kind==='stop')this.cancelTurn(id,'stop',p);
  if(pane.status==='uncertain'&&!(p.state.attempts[id]?.unsent&&event.record.from==='owner'&&['task','question','note'].includes(event.record.kind))){this.stateEvent(p,pane);continue}void this.kick(id)
@@ -307,7 +309,7 @@ export class Runtime {
   const entries:{record:Record_;done:Record_|null}[]=[];
   for(const record of p.journal.read({limit:0})){if(record.from!=='harness'||record.kind!=='note'||record.origin!=='attempt')continue;
    const a=record.attempt,invalid=()=>new RuntimeError('decision_invalid','решение попытки не читается: #'+record.seq,409);
-   if(!a||typeof a.pane!=='string'||!a.pane||typeof a.turnInstanceId!=='string'||!a.turnInstanceId||!['retry','skip','finish'].includes(a.action)||typeof a.done!=='boolean'||a.deliverySeq!==null&&(!Number.isSafeInteger(a.deliverySeq)||a.deliverySeq<0)||a.action==='skip'&&a.deliverySeq===null||record.thread!=='attempt:'+a.turnInstanceId||record.to.length!==1||record.to[0]!=='owner')throw invalid();
+   if(!a||a.autopilot!==undefined&&(!object(a.autopilot)||typeof a.autopilot.model!=='string'||!a.autopilot.model||typeof a.autopilot.vendor!=='string'||!a.autopilot.vendor)||typeof a.pane!=='string'||!a.pane||typeof a.turnInstanceId!=='string'||!a.turnInstanceId||!['retry','skip','finish'].includes(a.action)||typeof a.done!=='boolean'||a.deliverySeq!==null&&(!Number.isSafeInteger(a.deliverySeq)||a.deliverySeq<0)||a.action==='skip'&&a.deliverySeq===null||record.thread!=='attempt:'+a.turnInstanceId||record.to.length!==1||record.to[0]!=='owner')throw invalid();
    if(!a.done){if(record.reply_to!==null||entries.some(d=>d.record.attempt!.pane===a.pane&&d.record.attempt!.turnInstanceId===a.turnInstanceId))throw invalid();entries.push({record,done:null})}
    else {const decision=entries.find(d=>d.record.seq===record.reply_to&&d.record.attempt!.pane===a.pane&&d.record.attempt!.turnInstanceId===a.turnInstanceId&&d.record.attempt!.action===a.action&&d.record.attempt!.deliverySeq===a.deliverySeq);if(!decision)throw invalid();decision.done??=record}
   }return entries
@@ -341,7 +343,7 @@ export class Runtime {
     const direct=input.network==='direct_once';let grantedBinding:string|null=null;if(direct){const expected=this.paneBinding(id,p),binding=input.binding;if(!object(binding)||Object.entries(expected).some(([k,v])=>binding[k]!==v)||!expected.networkGeneration)throw new RuntimeError('binding_changed','Настройки изменились — решите заново',409,{fields:{pane:id,project:p.dir,waiting:info,settingsBinding:expected}});if(!info?.recordSeqs.length||!info.failure||!['network_unavailable','network_no_reserve','network_country_unverified','network_proxy_auth','network_changed'].includes(info.failure.code)||!['ssh','proxy'].includes(this.networkRelay.summary(pane.vendor)?.type??''))throw new RuntimeError('attempt_invalid','Для этого ожидания прямой повтор недоступен');grantedBinding=JSON.stringify(expected);}
     const action=input.action as AttemptDecision['action'],deliverySeq=previous?previous.record.attempt!.deliverySeq:action==='finish'?p.state.results(pane).find(r=>r.runtime?.turnInstanceId===input.turnInstanceId)!.deliverySeq:p.state.deliveryBoundary(id,p.journal);
     const seqs=info?.recordSeqs??[],range=seqs.length?' #'+seqs[0]+'–#'+seqs.at(-1):'',label=action==='retry'?'повторить':action==='skip'?'пропустить':'завершить восстановление';
-    const record=previous?.record??p.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'attempt',thread:'attempt:'+input.turnInstanceId,text:'владелец решил: '+label+range,attempt:{pane:id,turnInstanceId:input.turnInstanceId as string,action,...(direct?{network:'direct_once' as const}:{}),...(info?.status==='unsent'?{unsent:true as const}:{}),deliverySeq,done:false}});
+    const record=previous?.record??p.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'attempt',thread:'attempt:'+input.turnInstanceId,text:'владелец решил: '+label+range,attempt:{pane:id,turnInstanceId:input.turnInstanceId as string,action,...(initiator.source==='autopilot'?{autopilot:{model:pane.model,vendor:pane.vendor}}:{}),...(direct?{network:'direct_once' as const}:{}),...(info?.status==='unsent'?{unsent:true as const}:{}),deliverySeq,done:false}});
     await this.finishDecision(p,record);if(direct){let grants=this.directRetries.get(p);if(!grants)this.directRetries.set(p,grants=new Map());grants.set(id,{binding:grantedBinding!,seqs:[...seqs]})}return this.decisionResult(record)
    }catch(e){const pending=this.attemptDecisions(p).find(d=>d.record.attempt!.pane===id&&!d.done);if(pending){pane.status=pending.record.attempt!.action==='finish'?'recovering':'uncertain';this.report(p,pane,e)}throw e}finally{hold.release()}
   });this.ownerAutopilotAction(p,initiator);if(!p.closed)void this.kick(id);return result
@@ -351,7 +353,7 @@ export class Runtime {
  const promise=Promise.resolve().then(async()=>{do{p.wakeups.delete(id);again=await this.pump(p,pane)}while(again&&p.wakeups.has(id)&&!p.closed)}).catch(e=>{again=false;this.report(p,pane,e)}).finally(()=>{if(p.pumps.get(id)===promise)p.pumps.delete(id);if(again&&p.wakeups.has(id)&&!p.closed)void this.kick(id)});p.pumps.set(id,promise);return promise
  }
  async resumeQueue(id:string,p=this.project):Promise<void> {await p.pumps.get(id);if(this.current===p&&!p.closed)void this.kick(id)}
- async idle():Promise<void>{const p=this.project;while(p.pumps.size)await Promise.all([...p.pumps.values()])}
+ async idle():Promise<void>{const p=this.project;do{while(p.pumps.size)await Promise.all([...p.pumps.values()]);await this.autopilotEngines.get(p)?.idle()}while(p.pumps.size)}
  private async pump(p:ProjectState,pane:Pane):Promise<boolean>{
  if(p.closed||p.starting||pane.busy||p.editing.has(pane.id)||p.materializing.has(pane.id)||p.restoreFailed.has(pane.id))return false;
  if(firstOpenPending(p,pane))return false;
@@ -459,6 +461,13 @@ export class Runtime {
  const relayDepth=Math.max(options.relayDepth??0,askDeliveryDepth(p,records));
  if(!pane.model)throw new RuntimeError('model_required','Сначала выберите модель разговора',400);
  const launchSeat=pane.providerSeat();
+ const automatic=records.filter(record=>record.from==='owner'&&record.kind==='decision'&&record.origin?.startsWith('autopilot:')).map(record=>{
+  const saved=this.autopilotDecisionLedger(p).get(record.origin!.slice(10)),bound=saved?.capability.effectModelCall;
+  if(!object(bound)||bound.seat!==id||typeof bound.model!=='string')throw new RuntimeError('autopilot_binding_changed','Модель автоматического ответа не подтверждена; решение ждёт владельца',409);
+  if(typeof bound.vendor!=='string')throw new RuntimeError('autopilot_binding_changed','Провайдер автоматического ответа не подтверждён',409);return {model:bound.model,vendor:bound.vendor};
+ });
+ for(const {record} of this.attemptDecisions(p)){const a=record.attempt!;if(a.autopilot&&a.action==='retry'&&a.pane===id&&a.deliverySeq!==null&&records.some(r=>r.seq<=a.deliverySeq!))automatic.push(a.autopilot)}
+ if(automatic.some(bound=>bound.model!==launchSeat.model||bound.vendor!==launchSeat.vendor)||automatic.length&&launchSeat.mode!=='chat')throw new RuntimeError('autopilot_binding_changed','Модель или права места изменились после решения Автопилота; решение ждёт владельца',409);
  const attachmentRefs=records.flatMap(record=>normalizeAttachments(record.attachments));
  if(attachmentRefs.length&&!this.modelSupportsImages(p,launchSeat.vendor,launchSeat.model))throw new RuntimeError('images_unsupported','Выбранная модель не видит изображения',409);
  const verifiedAttachments=attachmentRefs.map(ref=>{const {id:_,size:__,w:___,h:____,...attachment}=this.attachmentStore(p).verify(ref);return attachment});
@@ -511,6 +520,7 @@ export class Runtime {
  // Failed history is never mixed with the current request (including a saved carry).
  const attemptPrompt=transfer?.failure?messageText:transfer?.content?transfer.content+'\n\n---\nНовое сообщение:\n'+prompt:prompt;
  const attemptNetwork=networkTurn,attemptSignal=ctx.signal,acceptResult=()=>activeAttempt()&&!attemptNetwork.failure&&!attemptNetwork.rejection,assertAttempt=()=>{if(!activeAttempt()||attemptSignal.aborted)throw new ProviderError('cancelled','Попытка завершена')};
+ if(automatic.length){ctx.tools=councilTools();ctx.askApproval=async()=>false}
  const attemptCtx:TurnContext={...ctx,modelResponded:()=>{if(activeAttempt()&&!attemptSignal.aborted)effected=true},beforeModel:async run=>{assertAttempt();await ctx.beforeModel?.(run);assertAttempt()},traceTool:(name,args,run)=>{assertAttempt();return ctx.traceTool!(name,args,run)},traceEvent:event=>{if(activeAttempt()&&!attemptSignal.aborted)ctx.traceEvent?.(event)},tools:new Proxy(ctx.tools,{get:(target,key)=>{const value=Reflect.get(target,key);return typeof value==='function'?(...args:unknown[])=>{if(!activeAttempt()||attemptSignal.aborted)return Promise.resolve({ok:false,code:'turn_ended',error:'ход не активен'});return value.apply(target,args)}:value}}),modelStarted:()=>{if(activeAttempt()&&!attemptSignal.aborted)ctx.modelStarted?.()},publish:e=>{if(acceptResult())ctx.publish(e)},session:s=>{if(acceptResult())ctx.session(s)},setHandle:h=>{if(acceptResult())ctx.setHandle(h)},askApproval:(title,detail)=>acceptResult()?ctx.askApproval(title,detail):Promise.resolve(false)};
  try{if(controller.signal.aborted)throw new ProviderError('cancelled','ход отменён');if(!apiRoute(vendor)&&vendor!=='ollama')await ctx.beforeModel?.({provider:vendor,model:seat.model});result=await Promise.race([networkTurn.run(async()=>{checkDirectNetwork();const output=await provider.runTurn(seat,attemptPrompt,attemptCtx);if(output.text&&!attemptSignal.aborted)effected=true;return output}),turn.resetWait.then(()=>{throw new ProviderError('cancelled','ход отменён')})]);break}
  catch(e){if(!options.directOnce&&networkTurn.failure&&!networkTurn.retryBlocked&&!effected&&!controller.signal.aborted){const failed=networkTurn.hop?.id;if(failed&&!failedExits.has(failed)&&failedExits.size<32){failedExits.add(failed);await networkTurn.close();networkTurn=beginNetwork();ctx.signal=networkTurn.signal;ctx.env=apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,controller.signal,networkTurn)??this.connections.proxyEnv(vendor);await networkTurn.ready();if(networkTurn.hop&&failedExits.has(networkTurn.hop.id))throw e;turn.started=false;turn.partial='';continue}}

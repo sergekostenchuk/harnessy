@@ -93,3 +93,6 @@ test('38.2: permission snapshot and exact proposal bind revision, operation and 
  const changed=fixture({state:{...permission,revision:4}}),b=await changed.council.consider(issue());owner(b,'stop_checks_missing');assert.equal(changed.applyCalls,0);
  const one=fixture(),two=fixture(),left=await one.council.consider(issue()),right=await two.council.consider(issue({source:{id:'channel:42:record',kind:'question',text:'Как продолжить?'}}));applied(left);applied(right);assert.notEqual(left.decisionId,right.decisionId);
 });
+test('38.2: every mandatory stop code individually prevents intent and effect',async()=>{
+ for(const code of stops){const f=fixture({safety:{checked:stops,blocked:[code]}});owner(await f.council.consider(issue()),'stop_case');assert.equal(f.applyCalls,0);assert.equal(f.records.size,0)}
+});

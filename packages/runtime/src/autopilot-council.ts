@@ -1,8 +1,9 @@
 import {createHash,randomBytes} from 'node:crypto';
 
-export const AUTOPILOT_COUNCIL_OPERATIONS=['answer_question','answer_blocker','answer_escalation','approve','deny','assign_role','continue_pane','stop_pane'] as const;
+import {AUTOPILOT_OPERATIONS,AUTOPILOT_STOP_CASES} from '@harnessy/projects';
+export const AUTOPILOT_COUNCIL_OPERATIONS=AUTOPILOT_OPERATIONS;
 export type AutopilotCouncilOperation=typeof AUTOPILOT_COUNCIL_OPERATIONS[number];
-export const AUTOPILOT_COUNCIL_STOP_CODES=['payment','external_publish','data_delete','software_install','external_network','spend_over_cap'] as const;
+export const AUTOPILOT_COUNCIL_STOP_CODES=AUTOPILOT_STOP_CASES;
 export type AutopilotCouncilStopCode=typeof AUTOPILOT_COUNCIL_STOP_CODES[number];
 
 export interface AutopilotPermissionSnapshot {
@@ -17,7 +18,7 @@ export interface AutopilotGenerationPort {
 export interface AutopilotCapability {
  readonly operation:AutopilotCouncilOperation;
  readonly parameters:Readonly<Record<string,unknown>>;
- readonly effectModelCall?:Readonly<{seat:string;model:string}>;
+ readonly effectModelCall?:Readonly<{seat:string;model:string;vendor?:string}>;
 }
 export interface AutopilotIssue {
  readonly project:string;
@@ -26,7 +27,7 @@ export interface AutopilotIssue {
  readonly source:Readonly<{id:string;kind:string;text:string}>;
  readonly capabilities:readonly AutopilotCapability[];
 }
-export interface AutopilotParticipant {readonly seat:string;readonly model:string;readonly role:'orchestrator'|'reviewer'}
+export interface AutopilotParticipant {readonly seat:string;readonly model:string;readonly vendor?:string;readonly role:'orchestrator'|'reviewer'}
 export interface AutopilotAgentRequest {
  readonly participant:AutopilotParticipant;
  readonly requestId:string;
@@ -48,7 +49,7 @@ export interface AutopilotAgentPort {
  participants(project:string):Promise<Readonly<{orchestrator:AutopilotParticipant|null;reviewer:AutopilotParticipant|null}>>|Readonly<{orchestrator:AutopilotParticipant|null;reviewer:AutopilotParticipant|null}>;
  run(request:AutopilotAgentRequest):Promise<AutopilotAgentReply>;
 }
-export interface AutopilotBudgetCall {readonly seat:string;readonly model:string;readonly purpose:'proposal'|'review'|'effect';readonly round:1|2}
+export interface AutopilotBudgetCall {readonly seat:string;readonly model:string;readonly vendor?:string;readonly purpose:'proposal'|'review'|'effect';readonly round:1|2}
 export interface AutopilotBudgetLease {
  use(call:AutopilotBudgetCall):Promise<void>|void;
  close(result:'applied'|'owner'):Promise<void>|void;
@@ -66,6 +67,9 @@ export interface AutopilotEffectPort {
  recover(input:Readonly<{decisionId:string;issue:AutopilotIssue;capability:BoundCapability;proposal:CouncilProposal}>):Promise<AutopilotEffectReceipt|null>;
 }
 export interface AutopilotDecisionBase {
+ readonly question:AutopilotIssue['source'];
+ readonly council:Readonly<{orchestrator:AutopilotParticipant;reviewer:AutopilotParticipant}>;
+ readonly cost:Readonly<{currency:'USD';amount:number|null;status:'measured'|'unavailable'}>;
  readonly decisionId:string;
  readonly proposalHash:string;
  readonly issueHash:string;
@@ -99,8 +103,8 @@ export interface AutopilotCouncilDeps {
  randomToken?:()=>string;
 }
 
-export interface BoundCapability extends AutopilotCapability {readonly id:string}
-export interface CouncilProposal {readonly requestHash:string;readonly capability:string;readonly answer:string|null;readonly reason:string}
+export interface BoundCapability extends AutopilotCapability {readonly id:string;readonly [key:string]:unknown}
+export interface CouncilProposal {readonly [key:string]:unknown;readonly requestHash:string;readonly capability:string;readonly answer:string|null;readonly reason:string}
 export interface CouncilReview {readonly proposalHash:string;readonly verdict:'agree'|'objection';readonly reason:string}
 export type AutopilotCouncilOutcome=
  |Readonly<{status:'applied';decisionId:string;proposalHash:string;operation:AutopilotCouncilOperation;receipt:AutopilotEffectReceipt;round:1|2;replayed:boolean}>
@@ -136,9 +140,9 @@ function normalizeIssue(raw:AutopilotIssue):Readonly<{issue:AutopilotIssue;capab
  const capabilities=raw.capabilities.map((entry,index)=>{
   if(!object(entry)||Object.keys(entry).some(key=>!['operation','parameters','effectModelCall'].includes(key))||!AUTOPILOT_COUNCIL_OPERATIONS.includes(entry.operation as AutopilotCouncilOperation)||!object(entry.parameters)||!jsonValue(entry.parameters))throw new CouncilError('capability_invalid','Разрешённая операция #'+(index+1)+' не читается');
   const effect=entry.effectModelCall;
-  if(effect!==undefined&&(!object(effect)||!exact(effect,['seat','model'])||!text(effect.seat,100)||!text(effect.model,300)))throw new CouncilError('capability_invalid','Вызов модели эффекта не связан с местом');
+  if(effect!==undefined&&(!object(effect)||Object.keys(effect).some(key=>!['seat','model','vendor'].includes(key))||effect.vendor!==undefined&&!text(effect.vendor,100)||!text(effect.seat,100)||!text(effect.model,300)))throw new CouncilError('capability_invalid','Вызов модели эффекта не связан с местом');
   const operation=entry.operation as AutopilotCouncilOperation,parameters=freezeRecord(entry.parameters),id=autopilotHash({operation,parameters});
-  return Object.freeze({operation,parameters,id,...(effect?{effectModelCall:Object.freeze({seat:String(effect.seat),model:String(effect.model)})}:{})});
+  return Object.freeze({operation,parameters,id,...(effect?{effectModelCall:Object.freeze({seat:String(effect.seat),model:String(effect.model),...(effect.vendor?{vendor:String(effect.vendor)}:{})})}:{})});
  });
  if(new Set(capabilities.map(value=>value.id)).size!==capabilities.length)throw new CouncilError('capability_invalid','Разрешённая операция повторяется');
  if(capabilities.some(value=>!permission.conditions.operations.includes(value.operation)))throw new CouncilError('operation_denied','Разрешённая операция не входит в условия Автопилота');
@@ -175,16 +179,20 @@ function proposalPrompt(issue:AutopilotIssue,capabilities:readonly BoundCapabili
  ].join('\n');
 }
 function reviewPrompt(issue:AutopilotIssue,proposalValue:CouncilProposal,proposalHash:string):string {
- return ['Ты независимый ревьюер. Проверь предложение для вопроса и разрешённую операцию.','Верни только JSON с точными ключами proposalHash, verdict, reason. verdict = agree или objection.','proposalHash: '+proposalHash,'Вопрос: '+issue.source.text,'Предложение: '+canonical(proposalValue)].join('\n');
+ return ['Ты независимый ревьюер. Проверь предложение для вопроса и разрешённую операцию.','Верни только JSON с точными ключами proposalHash, verdict, reason. verdict = agree или objection.','proposalHash: '+proposalHash,'Вопрос: '+issue.source.text,'Разрешённые операции: '+canonical(issue.capabilities),'Предложение: '+canonical(proposalValue)].join('\n');
 }
 
 export class AutopilotCouncil {
+ private controllers=new Set<AbortController>();
+ private closed=false;
+ close(){this.closed=true;for(const controller of this.controllers)controller.abort()}
  private jobs=new Map<string,Promise<AutopilotCouncilOutcome>>();
  private readonly timeoutMs:number;
  private readonly randomToken:()=>string;
  private readonly deps:AutopilotCouncilDeps;
  constructor(deps:AutopilotCouncilDeps){this.deps=deps;this.timeoutMs=deps.timeoutMs??120_000;this.randomToken=deps.randomToken??(()=>randomBytes(32).toString('hex'))}
  consider(raw:AutopilotIssue):Promise<AutopilotCouncilOutcome> {
+  if(this.closed)return Promise.resolve(this.owner(new CouncilError('cancelled','Консилиум отменён'),0));
   let normalized:ReturnType<typeof normalizeIssue>;try{normalized=normalizeIssue(raw)}catch(error){return Promise.resolve(this.owner(error,0))}
   const key=autopilotHash({project:normalized.issue.project,source:normalized.issue.source,generation:normalized.issue.generation}),existing=this.jobs.get(key);if(existing)return existing;
   const job=this.run(normalized).finally(()=>{if(this.jobs.get(key)===job)this.jobs.delete(key)});this.jobs.set(key,job);return job;
@@ -192,13 +200,16 @@ export class AutopilotCouncil {
  private owner(error:unknown,round:0|1|2,extra:Partial<Extract<AutopilotCouncilOutcome,{status:'owner'}>>={}):Extract<AutopilotCouncilOutcome,{status:'owner'}>{return Object.freeze({status:'owner',code:errorCode(error),reason:errorReason(error),round,...extra})}
  private async authenticatedCall(participant:AutopilotParticipant,prompt:string,replyTo:string,round:1|2,lease:AutopilotBudgetLease,purpose:'proposal'|'review'):Promise<string>{
   const requestId=autopilotHash({replyTo,seat:participant.seat,round,purpose,nonce:this.randomToken()}),token=this.randomToken(),controller=new AbortController();
-  await lease.use({seat:participant.seat,model:participant.model,purpose,round});
+  if(this.closed)throw new CouncilError('cancelled','Консилиум отменён');
+  await lease.use({seat:participant.seat,model:participant.model,...(participant.vendor?{vendor:participant.vendor}:{}),purpose,round});
+  if(this.closed)throw new CouncilError('cancelled','Консилиум отменён');this.controllers.add(controller);
   let timer:unknown;const timeout=new Promise<never>((_,reject)=>{timer=this.deps.clock.setTimeout(()=>{controller.abort('autopilot_timeout');reject(new CouncilError('council_timeout','Консилиум не ответил вовремя'))},this.timeoutMs)});
   try{
-   const response=await Promise.race([this.deps.agents.run({participant,requestId,replyTo,token,round,prompt,signal:controller.signal}),timeout]);
+   const cancelled=new Promise<never>((_,reject)=>{controller.signal.addEventListener('abort',()=>reject(new CouncilError(controller.signal.reason==='autopilot_timeout'?'council_timeout':'cancelled',controller.signal.reason==='autopilot_timeout'?'Консилиум не ответил вовремя':'Консилиум отменён')),{once:true})});
+   const response=await Promise.race([this.deps.agents.run({participant,requestId,replyTo,token,round,prompt,signal:controller.signal}),timeout,cancelled]);
    if(!object(response)||response.seat!==participant.seat||response.model!==participant.model||response.requestId!==requestId||response.replyTo!==replyTo||response.token!==token||typeof response.text!=='string')throw new CouncilError('sender_invalid','Ответ консилиума пришёл не от подтверждённого места');
    return response.text;
-  }finally{if(timer!==undefined)this.deps.clock.clearTimeout(timer)}
+  }finally{this.controllers.delete(controller);if(timer!==undefined)this.deps.clock.clearTimeout(timer)}
  }
  private async run({issue,capabilities,issueHash}:ReturnType<typeof normalizeIssue>):Promise<AutopilotCouncilOutcome>{
   let prior:AutopilotDecisionEntry|null;try{prior=await this.deps.decisions.findByIssue(issueHash)}catch(error){return this.owner(new CouncilError('decision_unreadable','Журнал решений Автопилота не читается: '+errorReason(error)),0)}
@@ -208,7 +219,7 @@ export class AutopilotCouncil {
   if(!orchestrator||orchestrator.role!=='orchestrator')return this.owner(new CouncilError('orchestrator_missing','В проекте нет подтверждённого оркестратора'),0);
   if(!reviewer||reviewer.role!=='reviewer')return this.owner(new CouncilError('reviewer_missing','В проекте нет подтверждённого ревьюера'),0);
   if(orchestrator.seat===reviewer.seat)return this.owner(new CouncilError('participants_invalid','Оркестратор и ревьюер должны быть разными местами'),0);
-  const calls:AutopilotBudgetCall[]=[{seat:orchestrator.seat,model:orchestrator.model,purpose:'proposal',round:1},{seat:reviewer.seat,model:reviewer.model,purpose:'review',round:1},{seat:orchestrator.seat,model:orchestrator.model,purpose:'proposal',round:2},{seat:reviewer.seat,model:reviewer.model,purpose:'review',round:2},...capabilities.filter(value=>value.effectModelCall).map(value=>({seat:value.effectModelCall!.seat,model:value.effectModelCall!.model,purpose:'effect' as const,round:1 as const}))];
+  const calls:AutopilotBudgetCall[]=[{seat:orchestrator.seat,model:orchestrator.model,...(orchestrator.vendor?{vendor:orchestrator.vendor}:{}),purpose:'proposal',round:1},{seat:reviewer.seat,model:reviewer.model,...(reviewer.vendor?{vendor:reviewer.vendor}:{}),purpose:'review',round:1},{seat:orchestrator.seat,model:orchestrator.model,...(orchestrator.vendor?{vendor:orchestrator.vendor}:{}),purpose:'proposal',round:2},{seat:reviewer.seat,model:reviewer.model,...(reviewer.vendor?{vendor:reviewer.vendor}:{}),purpose:'review',round:2},...capabilities.filter(value=>value.effectModelCall).map(value=>({...value.effectModelCall!,purpose:'effect' as const,round:1 as const}))];
   let lease:AutopilotBudgetLease;try{lease=await this.deps.budget.reserve({project:issue.project,generation:issue.generation,maxSpendPercent:issue.permission.conditions.maxSpendPercent,calls})}catch(error){return this.owner(new CouncilError(errorCode(error)==='autopilot_failed'?'spend_check_missing':errorCode(error),errorReason(error)),0)}
   let outcome:AutopilotCouncilOutcome=this.owner(new CouncilError('autopilot_failed','Консилиум не завершён'),0);
   try{
@@ -216,17 +227,19 @@ export class AutopilotCouncil {
    for(const round of [1,2] as const){
     let parsed:ReturnType<typeof proposal>,checked:CouncilReview;
     try{
+     await this.deps.state.withAutopilotGeneration(issue.generation,()=>{});
      const request='autopilot:'+issueHash+':proposal:'+round,answer=await this.authenticatedCall(orchestrator,proposalPrompt(issue,capabilities,issueHash,round,previous),request,round,lease,'proposal');parsed=proposal(answer,issueHash,capabilities);
+     await this.deps.state.withAutopilotGeneration(issue.generation,()=>{});
      const reviewRequest='autopilot:'+issueHash+':review:'+round+':'+parsed.hash,answerReview=await this.authenticatedCall(reviewer,reviewPrompt(issue,parsed.value,parsed.hash),reviewRequest,round,lease,'review');checked=review(answerReview,parsed.hash);
     }catch(error){outcome=this.owner(error,round);break}
     if(checked.verdict==='objection'){
      if(round===2){outcome=this.owner(new CouncilError('review_objection','Ревьюер возразил после повторного круга: '+checked.reason),2,{proposalHash:parsed.hash});break}
      previous=Object.freeze({proposal:parsed.value,objection:checked.reason});continue;
     }
-    outcome=await this.apply(issue,issueHash,parsed,round,lease);break;
+    outcome=await this.apply(issue,issueHash,parsed,round,lease,{orchestrator,reviewer});break;
    }
-   return outcome;
-  }finally{try{await lease.close(outcome.status==='applied'?'applied':'owner')}catch{/* Accounting already reserved the upper bound; cleanup failure cannot authorize an effect. */}}
+  }finally{try{await lease.close(outcome.status==='applied'?'applied':'owner')}catch(error){outcome=this.owner(error,outcome.round)}}
+  return outcome;
  }
  private async checkSafety(issue:AutopilotIssue,capability:BoundCapability,proposalValue:CouncilProposal,snapshot:AutopilotPermissionSnapshot):Promise<void>{
   if(snapshot.generation!==issue.generation||snapshot.revision!==issue.permission.revision||snapshot.conditions.maxSpendPercent!==issue.permission.conditions.maxSpendPercent||!Number.isSafeInteger(snapshot.revision)||!sameSet(snapshot.stopCodes,AUTOPILOT_COUNCIL_STOP_CODES)||!sameSet(snapshot.conditions.stopCases,snapshot.stopCodes))throw new CouncilError('stop_checks_missing','Полный набор стоп-случаев Автопилота не подтверждён');
@@ -251,8 +264,8 @@ export class AutopilotCouncil {
    await this.deps.decisions.applied({...entry,receipt:recovered});return Object.freeze({status:'applied' as const,decisionId:entry.decisionId,proposalHash:entry.proposalHash,operation:entry.operation,receipt:recovered,round:entry.round,replayed:true});
   })}catch(error){return this.owner(error,entry.round,{proposalHash:entry.proposalHash,decisionId:entry.decisionId})}
  }
- private async apply(issue:AutopilotIssue,issueHash:string,parsed:ReturnType<typeof proposal>,round:1|2,lease:AutopilotBudgetLease):Promise<AutopilotCouncilOutcome>{
-  const decisionId=autopilotHash({project:issue.project,question:issue.source,proposal:parsed.value,generation:issue.generation}),base:AutopilotDecisionBase=Object.freeze({decisionId,proposalHash:parsed.hash,issueHash,generation:issue.generation,operation:parsed.capability.operation,capability:parsed.capability,proposal:parsed.value,round});
+ private async apply(issue:AutopilotIssue,issueHash:string,parsed:ReturnType<typeof proposal>,round:1|2,lease:AutopilotBudgetLease,council:AutopilotDecisionBase['council']):Promise<AutopilotCouncilOutcome>{
+  const decisionId=autopilotHash({project:issue.project,question:issue.source,proposal:parsed.value,generation:issue.generation}),base:AutopilotDecisionBase=Object.freeze({question:issue.source,council,cost:{currency:'USD' as const,amount:null,status:'unavailable' as const},decisionId,proposalHash:parsed.hash,issueHash,generation:issue.generation,operation:parsed.capability.operation,capability:parsed.capability,proposal:parsed.value,round});
   try{return await this.deps.state.withAutopilotGeneration(issue.generation,async snapshot=>{
    await this.checkSafety(issue,parsed.capability,parsed.value,snapshot);
    if(parsed.capability.effectModelCall)await lease.use({...parsed.capability.effectModelCall,purpose:'effect',round});

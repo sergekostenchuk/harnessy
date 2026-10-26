@@ -34,6 +34,7 @@ export interface RuntimeActions {
  cancelAsks(scope:TurnScope,reason:string):void;
 }
 export interface RuntimeDeps {
+ autopilotSpendQuotes?:import('./autopilot-budget.ts').AutopilotSpendQuotes;
  networkStatsPath?:string;
  networkRelayOptions?:import('./network-relay.ts').RelayOptions;
  networkCheckOptions?:{execute?:typeof import('@harnessy/providers').executeCli;sshDir?:string};
