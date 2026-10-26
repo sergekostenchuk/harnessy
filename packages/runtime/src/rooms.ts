@@ -24,7 +24,7 @@ export function makeRoom(runtime:Runtime,model:string,mode:string,initiator:Init
  const p=owner(runtime,initiator),old=p.registry.get('room');if(old)free(p,old,'разговор без роли сейчас отвечает');
  const room=makeRoomIn(p,runtime,model,mode,vendor);if(!room)throw new RuntimeError('model_unknown','не удалось создать разговор без роли',400);
  if(folderless!==undefined)room.folderless=folderless;
- p.state.savePanes(p.registry,p.journal);void runtime.kick('room');return room.settings();
+ p.state.savePanes(p.registry,p.journal);runtime.ownerAutopilotAction(p,initiator);void runtime.kick('room');return room.settings();
 }
 export function roomSet(runtime:Runtime,input:{model?:unknown;folder?:unknown;vendor?:unknown},initiator:Initiator) {
  const p=owner(runtime,initiator),model=pythonTrim(String(input.model||'')),mode=input.folder===undefined||pyTruthy(input.folder)?'read':'chat';if(input.vendor!==undefined&&(typeof input.vendor!=='string'||!p.registry.providers.has(input.vendor)))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);const vendor=typeof input.vendor==='string'?input.vendor:vendorOf(p,model);if(vendor){const models=runtime.validateSelection(vendor,model,mode);if(models)p.registry.models[vendor]=models;}if(!model||!vendor||!p.registry.models[vendor]?.some(m=>m.id===model))throw new RuntimeError('model_unknown','модель не из каталога',400);
@@ -50,9 +50,9 @@ export async function roomMove(runtime:Runtime,input:{path?:unknown;create?:unkn
  const path=runtime.projectPath(requested),hold=reserve(p,[...p.registry.panes.values()],'идёт ход: переезд, когда все окна свободны',true),source=chatSnapshot(p,room);
  try {
   if(pyTruthy(input.create)){
-   try{await initProject(path,{git:input.git===undefined||pyTruthy(input.git),model:room.model,orchestrator:false},initDeps(runtime,p,room))}catch(e){throw new RuntimeError('project_failed','проект не создан: '+message(e),400,{cause:e})}
+   try{await initProject(path,{git:input.git===undefined||pyTruthy(input.git),model:room.model,orchestrator:false},{...initDeps(runtime,p,room),validatePath:()=>{same(runtime,p);runtime.assertOwner(initiator)}})}catch(e){if(e instanceof RuntimeError&&['project_changed','autopilot_busy','policy_denied'].includes(e.code))throw e;throw new RuntimeError('project_failed','проект не создан: '+message(e),400,{cause:e})}
   }
-  same(runtime,p);if(!validDir(path))throw new RuntimeError('path_invalid','папки нет: '+path,400);
+  same(runtime,p);runtime.assertOwner(initiator);if(!validDir(path))throw new RuntimeError('path_invalid','папки нет: '+path,400);
   await runtime.openProject(path,{expected:p,initialize:next=>{transferRoom(runtime,next,source,'read','разговор без роли не создан в новой папке')}});
   const next=runtime.project,newRoom=next.registry.get('room')!;return {ok:true as const,project:next.dir,pane:newRoom.settings(),carried:!!source.transcript.length};
  }finally{hold.release()}

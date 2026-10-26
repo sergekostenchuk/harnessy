@@ -3,12 +3,24 @@ import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {withPathLock} from '@harnessy/team';
+import type {Initiator} from '@harnessy/journal';
 import {AUTOPILOT_OWNER} from '@harnessy/runtime';
 import {fixture,call,OWNER,deferred,until} from './test-helpers.ts';
 
 const conditions={operations:['answer_question','answer_blocker','answer_escalation'],maxSpendPercent:5};
 const state=async(api:Parameters<typeof call>[0])=>{const response=await call(api,'/api/status');assert.equal(response.status,200,response.text);return response.body};
 const change=(status:any,on:boolean,until:'morning'|'reply'='morning')=>({project:status.project,instance:status.trace.instanceId,revision:status.autopilot.revision,on,...(on?{until,conditions}:{})});
+const proposedSeats='  lead: {kind: orchestrator, role: lead, label: Ведущий, vendor: claude, model: w1, mode: read}\n  worker: {kind: worker, role: worker, label: Воркер, vendor: claude, model: w1, mode: read}';
+async function ownerSeatProposal(t:Parameters<typeof fixture>[0]){
+ const h=await fixture(t,{seats:proposedSeats}),end=deferred<{text:string;sessionId:null}>();
+ h.provider.onRun=async(seat,_text,ctx)=>{ctx.modelStarted?.();if(seat.id==='lead'){ctx.registerProcessToken('lead-token');return end.promise}return {text:'готово',sessionId:null}};
+ const run=h.runtime.runTurn('lead','Предложи роль').catch(error=>{if(error.code!=='cancelled')throw error});
+ await until(()=>h.provider.calls.some(c=>c.seat.id==='lead'));
+ const proposal=await call(h.api,'/api/seats/propose',{body:{seats:[{kind:'worker',label:'Юрист',vendor:'claude',model:'w1',mode:'read',intro:'Проверь договор.'}],from:'lead'},headers:{'X-Pane-Token':'lead-token'}});
+ assert.equal(proposal.status,200,proposal.text);
+ t.after(async()=>{end.resolve({text:'готово',sessionId:null});await run});
+ return {...h,seat:{project:h.dir,proposalId:proposal.body.proposalId,version:proposal.body.version,seatIndex:0}};
+}
 
 test('TS-38.1: owner state is revisioned, persistent and cannot be forged from a pane or generic settings',async t=>{
  const h=await fixture(t),initial=await state(h.api);
@@ -121,4 +133,67 @@ test('TS-38.1/38.2: unreadable project state refuses both display and applicatio
  writeFileSync(path,'{"autopilot":{"on":true}}');
  await assert.rejects(h.runtime.autopilotStatus(),error=>(error as {code?:string}).code==='autopilot_unreadable');
  await assert.rejects(h.runtime.withAutopilotGeneration(1,()=>{throw Error('must not apply')}),error=>(error as {code?:string}).code==='autopilot_unreadable');
+});
+
+test('TS-38.1: every owner entry refuses a forged autopilot initiator and an external action during application',async t=>{
+ const h=await fixture(t),r=h.runtime,seat={project:h.dir,proposalId:'p'+'a'.repeat(24),version:1,seatIndex:0};
+ const paths:Array<[string,(initiator:Initiator)=>unknown]>=[
+  ['postOwner',who=>r.postOwner({to:'worker',kind:'note',text:'test'},who)],
+  ['assign',who=>r.assignRoomRole({role:'worker'},who)],
+  ['createOwnerSeat',who=>r.createOwnerSeat(seat,who)],
+  ['confirmTeam',who=>r.confirmTeam(seat,who)],
+  ['interrupt',who=>r.interrupt('worker',who)],
+  ['approve',who=>r.approve('worker','missing','allow',who)],
+  ['chat',who=>r.chat({pane:'worker',message:'test'},who)],
+  ['projectSet',who=>r.projectSet(h.dir,{},who)],
+  ['projectCreate',who=>r.projectCreate({path:h.dir+'/next'},who)],
+  ['paneSet',who=>r.paneSet('worker',{mode:'chat'},who)],
+  ['halt',who=>r.halt(true,who)],
+  ['roomSet',who=>r.roomSet({model:'w1',folder:false},who)],
+  ['chatsNew',who=>r.chatsNew({pane:'worker'},who)],
+  ['handoff',who=>r.handoff({to:'worker'},who)],
+  ['onboard',who=>r.onboard('worker',who)],
+  ['pinSet',who=>r.pinSet({} as Parameters<typeof r.pinSet>[0],who)],
+  ['openSession',who=>r.openSession('worker','old',who)],
+  ['setProgramBinary',who=>r.setProgramBinary('codex','/missing',who)],
+  ['settings',who=>r.settingsPatch('owner',{profileName:'Someone'},who)],
+ ];
+ for(const [name,run] of paths)await assert.rejects(Promise.resolve().then(()=>run(AUTOPILOT_OWNER)),error=>(error as {code?:string}).code==='policy_denied',name);
+ const before=await state(h.api),enabled=(await call(h.api,'/api/autopilot',{body:change(before,true,'reply')})).body.autopilot;
+ const entered=deferred(),release=deferred(),app=r.withAutopilotGeneration(enabled.generation,async()=>{entered.resolve();await release.promise});
+ try{await entered.promise;for(const [name,run] of paths)await assert.rejects(Promise.resolve().then(()=>run(OWNER)),error=>(error as {code?:string}).code==='autopilot_busy',name)}
+ finally{release.resolve();await app}
+ assert.equal((await state(h.api)).autopilot.generation,enabled.generation);
+});
+
+test('TS-38.1: a queued role decision rechecks owner authority after the project lock',async t=>{
+ const h=await ownerSeatProposal(t),initial=await state(h.api),enabled=(await call(h.api,'/api/autopilot',{body:change(initial,true,'reply')})).body.autopilot;
+ const locked=deferred(),unlock=deferred(),held=withPathLock(h.dir,async()=>{locked.resolve();await unlock.promise});await locked.promise;
+ const busy=(error:unknown)=>(error as {code?:string}).code==='autopilot_busy';
+ const create=assert.rejects(h.runtime.createOwnerSeat(h.seat,OWNER),busy),confirm=assert.rejects(h.runtime.confirmTeam(h.seat,OWNER),busy),patch=assert.rejects(h.runtime.settingsPatch('project',{note:'pending'},OWNER),busy);const entered=deferred(),release=deferred();
+ const app=h.runtime.withAutopilotGeneration(enabled.generation,async()=>{entered.resolve();await release.promise});
+ try{await entered.promise;unlock.resolve();await held;await Promise.all([create,confirm,patch]);assert.equal(h.runtime.registry.ids.length,2)}
+ finally{unlock.resolve();release.resolve();await app}
+ assert.equal((await call(h.api,'/api/settings')).body.project.note,undefined);
+});
+
+test('TS-38.1: accepted role creation and interruption revoke until-reply, rejected interruption does not',async t=>{
+ const h=await ownerSeatProposal(t),first=await state(h.api),enabled=(await call(h.api,'/api/autopilot',{body:change(first,true,'reply')})).body.autopilot;
+ const created=await call(h.api,'/api/seats/owner',{body:h.seat});assert.equal(created.status,200,created.text);assert.equal(created.body.ok,true);
+ const afterSeat=await state(h.api);assert.equal(afterSeat.autopilot.on,false);assert.equal(afterSeat.autopilot.generation,enabled.generation+1);
+ const second=(await call(h.api,'/api/autopilot',{body:change(afterSeat,true,'reply')})).body.autopilot;
+ const rejected=await call(h.api,'/api/interrupt',{body:{pane:'worker'}});assert.equal(rejected.body.ok,false);assert.equal((await state(h.api)).autopilot.generation,second.generation);
+ const end=deferred<{text:string;sessionId:null}>();h.provider.onRun=async(_seat,_text,ctx)=>{ctx.modelStarted?.();ctx.setHandle({async interrupt(){},async steer(){}});return end.promise};
+ const run=h.runtime.runTurn('worker','работай').catch(error=>{if(error.code!=='cancelled')throw error});t.after(async()=>{end.resolve({text:'готово',sessionId:null});await run});
+ await until(()=>!!h.runtime.registry.get('worker')?.handle);
+ const accepted=await call(h.api,'/api/interrupt',{body:{pane:'worker'}});assert.equal(accepted.body.ok,true);
+ const afterInterrupt=await state(h.api);assert.equal(afterInterrupt.autopilot.on,false);assert.equal(afterInterrupt.autopilot.generation,second.generation+1);
+});
+
+test('TS-38.1: an owner settings change revokes reply term, while a confirmed autopilot role does not',async t=>{
+ const h=await ownerSeatProposal(t),first=await state(h.api),enabled=(await call(h.api,'/api/autopilot',{body:change(first,true,'reply')})).body.autopilot;
+ const role=await h.runtime.withAutopilotGeneration(enabled.generation,()=>h.runtime.createOwnerSeat(h.seat,AUTOPILOT_OWNER));assert.equal(role.ok,true);
+ assert.equal((await state(h.api)).autopilot.generation,enabled.generation);
+ const changed=await call(h.api,'/api/settings',{body:{scope:'owner',patch:{profileName:'Вернулся'}}});assert.equal(changed.status,200,changed.text);
+ const after=await state(h.api);assert.equal(after.autopilot.on,false);assert.equal(after.autopilot.generation,enabled.generation+1);
 });

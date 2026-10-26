@@ -119,10 +119,10 @@ export class Settings {
  }
  private merged(owner:Record<string,unknown>,project:Record<string,unknown>){const overrides=orderedClone(project);for(const key of ['network','llmProviders','priceList','traceEnabled','traceMaxMiB',...BILLING_KEYS])delete overrides[key];return orderedClone(owner,overrides)}
  get(){const owner=this.readOwner(),path=this.projectPath(),project=path?readObject(path):{};this.prices(owner);return {ok:true as const,owner,project,effective:this.merged(owner,project),applies:SETTINGS_APPLIES}}
- async setProgramBinary(id:string,binary:string){const path=canonicalPath(this.ownerFile);return withPathLock(path,()=>{const owner=this.readOwner(true,path),saved=orderedClone(owner);saved['programBinary_'+id]=binary;writeJson(path,saved);return binary})}
+ async setProgramBinary(id:string,binary:string,beforeWrite:()=>void=()=>{},afterWrite:()=>void=()=>{}){const path=canonicalPath(this.ownerFile);return withPathLock(path,()=>{beforeWrite();const owner=this.readOwner(true,path),saved=orderedClone(owner);saved['programBinary_'+id]=binary;writeJson(path,saved);afterWrite();return binary})}
  // Broken prices must not prevent opening a project or reaching the owner's repair endpoint.
  effective(){const path=this.projectPath();return this.merged(readObject(this.ownerFile),path?readObject(path):{})}
- async patch(scope:unknown,patch:unknown){
+ async patch(scope:unknown,patch:unknown,beforeWrite:()=>void=()=>{},afterWrite:()=>void=()=>{}){
  scope=truthy(scope)?String(scope):'owner';if(!['owner','project'].includes(String(scope))||!object(patch)||!Object.keys(patch).length)throw new ProjectError('invalid_settings',SETTINGS_SCOPE);
  const changes=orderedClone(patch);
  if(Object.hasOwn(changes,'autopilot'))throw new ProjectError('autopilot_invalid','Автопилот меняется через /api/autopilot');
@@ -136,9 +136,10 @@ export class Settings {
  const project=this.currentProject(),selected=scope==='owner'?this.ownerFile:project?join(project,'.harness','state','settings.json'):null;if(!selected)throw new ProjectError('invalid_settings','папка не открыта');
  const path=canonicalPath(selected);
  return withPathLock(scope==='project'?project!:path,()=>{
+ beforeWrite();
  const cur=scope==='owner'?this.readOwner(true,path):readObject(path),saved=orderedClone(cur);for(const key of orderedKeys(changes)){if(changes[key]===null)delete saved[key];else Object.defineProperty(saved,key,{value:changes[key],enumerable:true,configurable:true,writable:true})}
  const ordered=orderedClone(cur,saved);for(const key of orderedKeys(ordered))if(!Object.hasOwn(saved,key))delete ordered[key];if(scope==='owner')this.prices(ordered);writeJson(path,ordered);
- return {ok:true as const,scope,saved:ordered,effective:this.effective(),applies:SETTINGS_APPLIES,ts:Math.floor(this.now()/1000)}
+ const result={ok:true as const,scope,saved:ordered,effective:this.effective(),applies:SETTINGS_APPLIES,ts:Math.floor(this.now()/1000)};afterWrite();return result
  })
  }
 }

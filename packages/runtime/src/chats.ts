@@ -122,9 +122,9 @@ export async function chatsNew(runtime:Runtime,input:{pane?:unknown;carry?:unkno
    try {
     if(old)p.state.sync(p.registry);
     if(pane.id!=='room'){if(carry==='summary'&&old?.transcript.length)old.closed=Math.floor(runtime.clock.now()/1000);else carryText=closeChat(p,pane,carry)}
-    const c=p.state.newChat(pane,carryText);p.state.savePanes(p.registry,p.journal);done=true;return {ok:true as const,chat:meta(p,c),pane:pane.settings(),carried:!!carryText};
+    const c=p.state.newChat(pane,carryText);p.state.savePanes(p.registry,p.journal);runtime.ownerAutopilotAction(p,initiator);done=true;return {ok:true as const,chat:meta(p,c),pane:pane.settings(),carried:!!carryText};
    }catch(e){p.state.chats=snapshot;Object.assign(pane,saved);throw e}
-  });
+  },initiator);
  }finally{hold.release();if(done&&!p.closed)await runtime.resumeQueue(pane.id,p)}
 }
 export async function chatsOpen(runtime:Runtime,input:{chat?:unknown;carry?:unknown},initiator:Initiator) {
@@ -138,7 +138,7 @@ export async function chatsOpen(runtime:Runtime,input:{chat?:unknown;carry?:unkn
    c.closed=null;p.state.chats.active[pane.id]=c.id;pane.sessionId=c.sessionId;pane.transcript=c.transcript;pane.transcriptSeq=c.transcriptSeq??0;pane.carry=pythonTrim((c.carry||'')+(carried?'\n\n'+carried:''));pane.seen={};pane.revision++;
    if(p.registry.providers.has(c.vendor))pane.vendor=c.vendor;
    if(c.model===null)pane.model='';else if(c.model)pane.model=c.model;
-   p.state.savePanes(p.registry,p.journal);done=true;return {ok:true as const,chat:meta(p,c),pane:pane.settings(),carried:!!carried};
+   p.state.savePanes(p.registry,p.journal);runtime.ownerAutopilotAction(p,initiator);done=true;return {ok:true as const,chat:meta(p,c),pane:pane.settings(),carried:!!carried};
   }catch(e){p.state.chats=snapshot;Object.assign(pane,saved);throw e}
- });}finally{hold.release();if(done&&!p.closed)await runtime.resumeQueue(pane.id,p)}
+ },initiator);}finally{hold.release();if(done&&!p.closed)await runtime.resumeQueue(pane.id,p)}
 }

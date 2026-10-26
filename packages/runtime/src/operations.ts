@@ -7,7 +7,7 @@ import type {ProjectState,Waiting} from './types.ts';
 import type {Pane} from './pane.ts';
 
 export function owner(runtime:Runtime,initiator:Initiator):ProjectState {
- if(initiator?.seat!=='owner'||initiator.trust!=='owner')throw new RuntimeError('policy_denied','действие доступно только владельцу',403);
+ runtime.assertOwner(initiator);
  return runtime.project;
 }
 export function same(runtime:Runtime,p:ProjectState):void {
@@ -40,6 +40,6 @@ export function reserve(p:ProjectState,panes:readonly Pane[],text?:string,changi
  const token=Symbol('owner operation');for(const pane of panes)p.editing.set(pane.id,token);
  return {token,release(){for(const pane of panes)if(p.editing.get(pane.id)===token)p.editing.delete(pane.id)}};
 }
-export function locked<T>(runtime:Runtime,p:ProjectState,fn:()=>T):Promise<T> {
- return withPathLock(p.dir,()=>{same(runtime,p);return fn()});
+export function locked<T>(runtime:Runtime,p:ProjectState,fn:()=>T,initiator?:Initiator):Promise<T> {
+ return withPathLock(p.dir,()=>{same(runtime,p);if(initiator)runtime.assertOwner(initiator);return fn()});
 }
