@@ -68,7 +68,8 @@ test('39.2: recorded owner intent completes after interruption without duplicate
 });
 
 test('39.2: pane credentials cannot enter either owner door; generation guard is rechecked after waiting',async t=>{
- const h=await setup(t);for(const [path,body] of [['/api/seats/propose',own(h)],['/api/panes/worker/instruction',{...binding(h),text:'forged',expectedHash:hash('Original instruction')}]] as const){const res=await call(h.api,path,{body,headers:{'X-Pane-Token':'agent-token'}});assert.equal(res.status,403,res.text)}
+ const h=await setup(t);for(const [path,body] of [['/api/seats/propose',own(h)],['/api/panes/worker/instruction',{...binding(h),text:'forged',expectedHash:hash('Original instruction')}]] as const){for(const headers of [{'X-Harness-Pane':'worker'},{'X-Pane-Token':'agent-token'},{'X-Harness-Pane':'worker','X-Pane-Token':'agent-token'}]){const res=await call(h.api,path,{body,headers});assert.equal(res.status,403,res.text);assert.equal(res.body.code,'owner_only')}}
+ assert.equal(h.runtime.registry.ids.length,3);assert.equal((await call(h.api,'/api/seats/proposals')).body.proposals.length,0);assert.equal(readFileSync(file(h),'utf8'),'Original instruction');
  const permission=await enable(h),held=deferred(),release=deferred();const guarded=h.runtime.withAutopilotGeneration(permission.generation,async()=>{held.resolve();await release.promise});await held.promise;
  for(const invoke of [()=>h.runtime.proposeOwnerSeat(own(h),OWNER),()=>h.runtime.updateInstruction('worker',{...binding(h),text:'x',expectedHash:hash('Original instruction')},OWNER)])await assert.rejects(invoke,{code:'autopilot_busy'});release.resolve();await guarded;
 });
