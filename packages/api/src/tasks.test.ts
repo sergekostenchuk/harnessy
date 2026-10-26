@@ -46,12 +46,12 @@ test('TS-39.1 states use typed current-assignment facts, not text, ack, old thre
 test('TS-39.1 missing/uncertain/recovering and skipped attempts are unknown and cannot be reassigned',async t=>{
  const h=await held(t),a=await create(h,1,{to:'worker'}),pane=h.runtime.registry.get('worker')!;
  for(const state of ['uncertain','recovering'] as const){pane.status=state;assert.equal((await list(h)).tasks[0].state,'unknown');assert.equal((await call(h.api,'/api/tasks/'+a.taskId+'/assign',{body:body(h.runtime,2,{to:'worker',expectedState:a.expectedState})})).body.code,'task_state_unknown')}
- pane.status='idle';h.runtime.journal.advance('worker',a.assignedSeq);h.runtime.journal.append({sender:'owner',to:['worker'],kind:'note',text:'skip',attempt:{pane:'worker',turnInstanceId:'test',action:'skip',deliverySeq:a.assignedSeq,done:true}});assert.equal((await list(h)).tasks[0].state,'unknown');
+ pane.status='idle';h.runtime.journal.advance('worker',a.assignedSeq);h.runtime.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'attempt',text:'skip',attempt:{pane:'worker',turnInstanceId:'test',action:'skip',recordSeqs:[a.assignedSeq],deliverySeq:a.assignedSeq,done:true}});assert.equal((await list(h)).tasks[0].state,'unknown');
  h.runtime.registry.panes.delete('worker');assert.equal((await list(h)).tasks[0].state,'unknown');
 });
 test('TS-39.1 real place tool sends outcome end-to-end; active delivery cannot reassign; owner legacy task is read-only',async t=>{
  const h=await held(t),a=await create(h,1,{to:'worker'}),gate=deferred(),seen=deferred();let result:any;
- h.provider.onRun=async(_seat,_message,ctx)=>{seen.resolve();await gate.promise;result=await ctx.tools.send({to:'owner',kind:'status',text:'Сделано',reply_to:a.assignedSeq,outcome:'done'});ctx.publish({type:'done',sessionId:'s',model:_seat.model,usage:{input:1,output:1,cacheRead:0},durationMs:1});return {text:'Сделано',sessionId:'s'}};
+ h.provider.onRun=async(_seat,message,ctx)=>{assert.match(message,/outcome=done\|blocked\|partial/);const seq=message.match(/\[#(\d+)\s*· task/)?.[1];assert.ok(seq,'actual provider context includes assigned sequence');seen.resolve();await gate.promise;result=await ctx.tools.send({to:'owner',kind:'status',text:'Сделано',reply_to:Number(seq),outcome:'done'});ctx.publish({type:'done',sessionId:'s',model:_seat.model,usage:{input:1,output:1,cacheRead:0},durationMs:1});return {text:'Сделано',sessionId:'s'}};
  await h.runtime.halt(false,OWNER);await seen.promise;assert.equal((await list(h)).tasks[0].state,'work');assert.equal((await call(h.api,'/api/tasks/'+a.taskId+'/assign',{body:body(h.runtime,2,{to:'worker',expectedState:a.expectedState})})).body.code,'task_active');gate.resolve();await h.runtime.idle();assert.equal(result.ok,true);assert.equal((await list(h)).tasks[0].state,'done');
  await h.runtime.halt(true,OWNER);h.runtime.postOwner({to:'worker',kind:'task',text:'Старая задача',thread:'task:legacy'},OWNER);const outside=(await list(h)).outsideQueue;assert.equal(outside.length,1);assert.equal(outside[0].n,null);assert.equal(outside[0].readonly,true);
  assert.ok(readFileSync(join(h.dir,'.harness/state/tasks.ndjson'),'utf8').includes('"event":"closed"'));await h.runtime.openProject(h.dir);const restored=(await list(h)).tasks[0];assert.equal(restored.state,'done');assert.equal(restored.replies.find((r:any)=>r.outcome==='done')?.reply_to,a.assignedSeq);
@@ -88,4 +88,13 @@ test('TS-39.1 accepted task actions revoke until-reply autopilot; rejected write
  const h=await held(t);async function enable(){const s=(await call(h.api,'/api/status')).body;const answer=await call(h.api,'/api/autopilot',{body:{project:h.dir,instance:s.trace.instanceId,revision:s.autopilot.revision,on:true,until:'reply',conditions:{operations:['answer_question'],maxSpendPercent:5}}});assert.equal(answer.status,200,JSON.stringify(answer.body))}
  await enable();assert.equal((await call(h.api,'/api/tasks',{body:body(h.runtime,1,{text:'x',instance:'forged'})})).body.code,'project_changed');assert.equal(h.runtime.settings.autopilot().on,true);
  const a=await create(h,1);assert.equal(h.runtime.settings.autopilot().on,false);await enable();assert.equal((await call(h.api,'/api/tasks/'+a.taskId+'/assign',{body:body(h.runtime,2,{to:'worker',expectedState:a.expectedState})})).status,200);assert.equal(h.runtime.settings.autopilot().on,false);
+});
+
+test('TS-39.1 skip only changes tasks in that attempt, including after restart',async t=>{
+ const h=await held(t),a=await create(h,201,{to:'worker'});
+ h.provider.onRun=async(seat,_message,ctx)=>{ctx.modelStarted?.();ctx.publish({type:'done',sessionId:'s',model:seat.model,durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'Без типизированного исхода',sessionId:'s'}};
+ await h.runtime.halt(false,OWNER);await h.runtime.idle();assert.equal((await list(h)).tasks[0].state,'work');
+ h.provider.onRun=async()=>{throw Error('Не начался второй ход')};const b=await create(h,202,{to:'worker'});await h.runtime.idle();const waiting=h.runtime.waiting('worker')!;assert.deepEqual(waiting.recordSeqs,[b.assignedSeq]);
+ assert.equal((await call(h.api,'/api/panes/worker/attempt',{body:{project:h.dir,turnInstanceId:waiting.turnInstanceId,action:'skip'}})).status,200);await h.runtime.idle();
+ for(const restart of [false,true]){if(restart)await h.runtime.openProject(h.dir);const rows=(await list(h)).tasks;assert.equal(rows.find((row:any)=>row.taskId===a.taskId).state,'work');assert.equal(rows.find((row:any)=>row.taskId===b.taskId).state,'unknown')}
 });
