@@ -39,6 +39,19 @@ test('TS-47.3 F03: growing an answer retains its readable nodes and respects the
  const jump=v.document.querySelector('.frame.cur .live-jump')!;assert.ok(jump);assert.equal((jump as any).hidden,false);await jump.emit('click');assert.equal(feed.scrollTop,1000);assert.equal((jump as any).hidden,true);
 });
 
+test('TS-47.8: trimming and reordering history retain surviving message nodes and current action indices',()=>{
+ const v=ui('/projects/a',{worker:'a'},async()=>({messages:[]}));
+ v.S.chat=Array.from({length:44},(_,i)=>({seq:i+1,role:'ai',src:'live',pane:'worker',who:'воркер',text:'Ответ '+i,html:'<div class="md-body"><p>Ответ '+i+'</p></div>'}));
+ v.functions.render();const selector='.frame.cur .live-msg[data-message-index]',original=v.document.querySelectorAll(selector),kept=original[12]!,text=kept.querySelector('.md-body p')!.firstChild!,action=kept.querySelector('[data-la]')!;action.focus();
+ v.S.chat=[...v.S.chat,{seq:45,role:'ai',src:'live',pane:'worker',who:'воркер',text:'Новый ответ',html:'<div class="md-body"><p>Новый ответ</p></div>'}].slice(-40);v.functions.render();
+ let rows=v.document.querySelectorAll(selector);assert.equal(rows.length,40);assert.equal(original[0]!.isConnected,false);assert.ok(rows[7]===kept,'surviving message is not replaced');assert.ok(kept.querySelector('.md-body p')!.firstChild===text);assert.ok(v.document.activeElement===action);assert.equal(kept.dataset.messageIndex,'7');assert.equal(action.dataset.i,'7');
+ const moved=rows[15]!;v.S.chat=[...v.S.chat.slice(0,4),v.S.chat[15],...v.S.chat.slice(4,15),...v.S.chat.slice(16)];v.functions.render();rows=v.document.querySelectorAll(selector);assert.ok(rows[4]===moved);assert.ok(rows[8]===kept);assert.ok(kept.querySelector('.md-body p')!.firstChild===text);assert.equal(kept.dataset.messageIndex,'8');assert.equal(action.dataset.i,'8');
+ v.H.project='/projects/b';v.functions.render();let scoped=v.document.querySelectorAll(selector)[8]!;assert.ok(scoped!==kept,'same seq in another project is a different message');
+ v.H.active.worker='other';v.functions.render();let next=v.document.querySelectorAll(selector)[8]!;assert.ok(next!==scoped,'same seq in another chat is a different message');
+ v.H.panes.push({id:'other',label:'другой',model:'w1'});v.H.pane=v.H.panes[1];v.H.active.other='other';v.S.ui.pane='other';v.functions.render();scoped=v.document.querySelectorAll(selector)[8]!;assert.ok(scoped!==next,'same seq in another pane is a different message');
+ v.S.chat=[{seq:1,role:'me',text:'вопрос'},{seq:1,role:'ai',src:'live',pane:'other',text:'ответ',html:'<div class="md-body"><p>ответ</p></div>'}];v.functions.render();const pair=v.document.querySelectorAll(selector);assert.equal(pair.length,2);assert.ok(pair[0]!==pair[1]);assert.match(pair[0]!.textContent,/вопрос/);assert.match(pair[1]!.textContent,/ответ/);
+});
+
 test('120 ОКНА: an old history request cannot repopulate a new binding; an unreadable new chat cannot show local duplicates',async()=>{
  const gate=deferred<any>(),v=ui('/projects/a',{worker:'a'},async path=>path==='/api/chats/a'?gate.promise:{error:'unavailable'});const pending=v.functions.load();assert.equal(v.S.chat.length,0);v.functions.invalidate();v.H.project='/projects/b';v.H.active={worker:'b'};await v.functions.load();assert.equal(v.S.chat.length,0);
  gate.resolve({messages:[{role:'ai',text:'old answer',ts:10}]});await pending;assert.equal(v.S.chat.length,0);assert.doesNotMatch(v.document.querySelector('.frame.cur .col')!.textContent,/old answer|browser duplicate/);
