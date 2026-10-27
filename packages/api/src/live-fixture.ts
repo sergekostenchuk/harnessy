@@ -1,7 +1,7 @@
 import {parse} from 'acorn';
 
 type Node = {type:string;start:number;end:number;[key:string]:any};
-export type FixtureEntry = string | {statement:string};
+export type FixtureEntry = string | {statement:string} | {conditional:{identifier:string;equals:string;declaration:string}};
 export type FixtureOptions = {filename?:string;wrapper?:number;scope?:string;block?:string};
 
 // Cache the parsed file per test process; every fixture still executes in its own VM.
@@ -35,6 +35,20 @@ export function fixtureWrapper(source:string,index:number,filename='live.js'):st
  return source.slice(wrapper.start,wrapper.end)+'\n';
 }
 
+/** Extract a top-level named assignment, including its complete IIFE if present. */
+export function fixtureAssignment(source:string,name:string,filename='app.js'):string{
+ function path(node:Node):string|null{
+  if(node.type==='Identifier')return node.name;
+  if(node.type==='MemberExpression'&&!node.computed&&node.property.type==='Identifier'){
+   const parent=path(node.object);return parent===null?null:parent+'.'+node.property.name;
+  }
+  return null;
+ }
+ const matches=(program(source).body as Node[]).filter(node=>node.type==='ExpressionStatement'&&node.expression.type==='AssignmentExpression'&&node.expression.operator==='='&&path(node.expression.left)===name);
+ if(matches.length!==1)throw Error(`Присваивание ${name} ${matches.length?'неоднозначно':'не найдено'} в ${filename}`);
+ return source.slice(matches[0]!.start,matches[0]!.end)+'\n';
+}
+
 function patternNames(pattern:Node|null|undefined):string[]{
  if(!pattern)return [];
  if(pattern.type==='Identifier')return [pattern.name];
@@ -49,6 +63,17 @@ function names(statement:Node):string[]{
  if((statement.type==='FunctionDeclaration'||statement.type==='ClassDeclaration')&&statement.id)return [statement.id.name];
  if(statement.type==='VariableDeclaration')return statement.declarations.flatMap((declaration:Node)=>patternNames(declaration.id));
  return [];
+}
+
+function testsEquality(test:Node,identifier:string,value:string):boolean{
+ if(test.type==='LogicalExpression')return testsEquality(test.left,identifier,value)||testsEquality(test.right,identifier,value);
+ if(test.type!=='BinaryExpression'||test.operator!=='===')return false;
+ const pair=(left:Node,right:Node)=>left.type==='Identifier'&&left.name===identifier&&right.type==='Literal'&&right.value===value;
+ return pair(test.left,test.right)||pair(test.right,test.left);
+}
+
+function isConditional(node:Node,selection:{identifier:string;equals:string;declaration:string}):boolean{
+ return node.type==='IfStatement'&&testsEquality(node.test,selection.identifier,selection.equals)&&node.consequent?.type==='BlockStatement'&&node.consequent.body.some((child:Node)=>names(child).includes(selection.declaration));
 }
 
 /**
@@ -72,8 +97,8 @@ export function fixtureSource(source:string,entries:readonly FixtureEntry[],opti
  }
  const selected:Node[]=[],seen=new Set<string>();
  for(const entry of entries){
-  const label=typeof entry==='string'?entry:entry.statement;
-  const candidates=scopes.flatMap(body=>body.filter(node=>typeof entry==='string'?names(node).includes(entry):source.slice(node.start,node.end).startsWith(entry.statement)));
+  const label=typeof entry==='string'?entry:'statement' in entry?entry.statement:`${entry.conditional.identifier} === ${JSON.stringify(entry.conditional.equals)} / ${entry.conditional.declaration}`;
+  const candidates=scopes.flatMap(body=>body.filter(node=>typeof entry==='string'?names(node).includes(entry):'statement' in entry?source.slice(node.start,node.end).startsWith(entry.statement):isConditional(node,entry.conditional)));
   if(candidates.length!==1)throw Error(`Функция, константа или оператор ${label} ${candidates.length?'неоднозначна':'не найдена'} в ${filename}`);
   const node=candidates[0]!,key=node.start+':'+node.end;
   if(!seen.has(key)){seen.add(key);selected.push(node)}

@@ -19,7 +19,6 @@ type Data=Record<string,any>;
 const cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');
 const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');
-const part=(s:string,a:string,b:string)=>{const start=s.indexOf(a),end=s.indexOf(b,start+a.length);assert.ok(start>=0&&end>start,a);return s.slice(start,end)};
 const plain=(value:unknown)=>JSON.parse(JSON.stringify(value));
 const esc=(value:unknown)=>String(value??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!));
 const catalogue=()=>({ok:true,providers:[
