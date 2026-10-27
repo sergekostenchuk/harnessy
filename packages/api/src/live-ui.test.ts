@@ -216,6 +216,33 @@ test('TS-47.2 and TS-47.3: a hidden stream keeps ordered tool groups and phases 
  view.S.ui.pane='worker';view.H.pane=worker;view.functions.streamSelect();const turn=view.H.cur;assert.equal(turn.phase,'write');assert.deepEqual(plain(turn.parts.map((part:Data)=>part.kind)),['text','tools','text']);assert.equal(turn.parts[1].tools.length,2);assert.equal(turn.parts[1].tools[1].err,true);assert.match(view.functions.curHTML(),/После инструментов/);
 });
 
+test('TS-47.2 r6: message identity survives history rereads but never crosses a binding or sequence',()=>{
+ const view=ui(),message={seq:12,role:'ai',src:'live',pane:'worker',text:'ответ',html:'<p>ответ</p>'},id=(row:Data)=>view.functions.bubble(row,0).match(/data-message-live-id="([^"]+)"/)![1];view.S.chat=[message];const first=id(message);assert.equal(id({...message}),first);
+ assert.notEqual(id({...message,seq:13}),first);assert.notEqual(id({...message,role:'me'}),first);view.H.active.worker='chat-b';assert.notEqual(id({...message}),first);view.H.active.worker='chat-a';view.H.project='/project-b';assert.notEqual(id({...message}),first);view.H.project='/project-a';view.H.liveStatus={trace:{instanceId:'new-instance'}};assert.equal(id({...message}),first,'saved history has the same identity after an engine restart');
+ const pending={...message,seq:undefined};const transient=id(pending);assert.equal(id(pending),transient);view.H.active.worker='chat-b';assert.notEqual(id(pending),transient,'an unsaved object cannot carry disclosure to another chat');view.H.active.worker='chat-a';assert.equal(id(pending),transient);view.H.liveStatus={trace:{instanceId:'another-instance'}};assert.notEqual(id(pending),transient,'an unsaved object cannot carry disclosure to a new engine instance');
+});
+
+test('TS-47.2 r6: history uses final chronological order on its first paint',async()=>{
+ const renders:number[][]=[],view=ui({fetch:async()=>({messages:[{seq:1,role:'ai',text:'позже',ts:20},{seq:2,role:'ai',text:'раньше',ts:10}]})});
+ view.sandbox.render=()=>{if(view.S.chat.length)renders.push(view.S.chat.map((row:Data)=>row.seq))};await view.functions.loadChat({onboard:false});
+ assert.deepEqual(renders,[[2,1]],'history is not temporarily painted in a different order before journal notes');
+});
+
+test('TS-47.2 r6: unknown timestamps never invent a history order',async()=>{
+ const view=ui({fetch:async()=>({messages:[{seq:1,role:'ai',text:'первый',ts:20},{seq:2,role:'ai',text:'время неизвестно'},{seq:3,role:'ai',text:'последний',ts:10}]})});
+ await view.functions.loadChat({onboard:false});assert.deepEqual(plain(view.S.chat.map((row:Data)=>row.seq)),[1,2,3]);
+ await view.functions.loadChat({onboard:false});assert.deepEqual(plain(view.S.chat.map((row:Data)=>row.seq)),[1,2,3]);
+});
+
+test('TS-47.2 r6: rereading the same chat retains its journal notes until refreshed',async()=>{
+ const renders:string[][]=[],view=ui({fetch:async()=>({messages:[{seq:1,role:'ai',text:'один',ts:10},{seq:2,role:'ai',text:'два',ts:30}]})});
+ view.sandbox.render=()=>{if(view.S.chat.length)renders.push(view.S.chat.map((row:Data)=>String(row.attemptId||row.seq)))};await view.functions.loadChat({onboard:false});
+ view.S.chat.splice(1,0,{attemptId:'note-a',role:'ai',src:'sys',text:'решение',html:'решение',t:20000});renders.length=0;
+ await view.functions.loadChat({onboard:false});assert.deepEqual(renders,[['1','note-a','2']]);
+ view.H.active.worker='chat-b';renders.length=0;await view.functions.loadChat({onboard:false});assert.deepEqual(renders,[['1','2']],'notes never cross a conversation');
+ view.H.active.worker='chat-a';await view.functions.loadChat({onboard:false});view.S.chat.splice(1,0,{attemptId:'note-a',role:'ai',src:'sys',text:'решение',html:'решение',t:20000});view.H.project='/project-b';renders.length=0;await view.functions.loadChat({onboard:false});assert.deepEqual(renders,[['1','2']],'notes never cross projects even if the chat id matches');
+});
+
 test('TS-47.3 F06: only a confirmed queued message gets a recipient and a delivery removes its marker',async()=>{
  const gate=deferred<Data>(),view=ui({fetch:async(path)=>path==='/api/chat'?gate.promise:{ok:true}}),sent={role:'me',text:'следующее'},binding=view.functions.sendBinding();view.S.chat=[sent];view.H.cur={text:'ответ',tools:[]};
  const send=view.functions.ask(sent.text,binding,[],sent);assert.doesNotMatch(view.functions.bubble(sent,0),/В очереди/);gate.resolve({ok:true,queued:true,seq:9});assert.equal(await send,true);assert.match(view.functions.bubble(sent,0),/В очереди · воркер · после текущего хода/);
