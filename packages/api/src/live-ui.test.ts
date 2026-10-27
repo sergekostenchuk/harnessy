@@ -38,7 +38,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
  const document={getElementById(id:string){if(!elements.has(id))elements.set(id,{innerHTML:'',textContent:'',dataset:{},remove(){elements.delete(id)},parentElement:{querySelector:()=>({textContent:''})},querySelector:()=>null,insertAdjacentHTML(){},replaceWith(){},cloneNode(){return this}});return elements.get(id)!},
   querySelectorAll(selector:string){if(selector==='.ps-folder[data-folder]')return rows;if(selector==='.feed .col')return [column];return []},querySelector:()=>null,
   addEventListener(type:string,fn:(event:Data)=>unknown){if(type==='click')clicks.push(fn)},documentElement:{hasAttribute:()=>false}};
- const sandbox:Data={H,S,document,window:{},localStorage:{getItem:(key:string)=>storage.get(key)??null,setItem:(key:string,value:string)=>storage.set(key,value)},location:{pathname:'/21-journal.html',href:''},PAGE:'chat',
+ const sandbox:Data={H,S,document,window:{},localStorage:{getItem:(key:string)=>storage.get(key)??null,setItem:(key:string,value:string)=>storage.set(key,value)},location:{pathname:'/21-journal.html',href:''},KEY:'harnessy-live-v1',PAGE:'chat',
   fetch:async(path:string,opts?:{body:string})=>{const body=opts?.body?JSON.parse(opts.body):undefined;requests.push({path,body});return {json:async()=>options.fetch?options.fetch(path,body):({ok:true,pane:{...H.pane,...body}})}},
   toast:(text:string)=>toasts.push(text),esc:(value:unknown)=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),paneName:(p:Data)=>p.label,save(){},log(){},render(){rendered++},cols:()=>[column],drawLive(){},scrollEnd(){},md:(text:string)=>text,mdFiles:new Map(),mdToolPaths:()=>[],knowledgeReset(){},knowledgeSet(){return true},knowledgeOpen:async()=>{},knowledgeFetch(){},KN:{data:null},hydrateArtifacts(){},mdMessageArtifacts(){return ""},toolLine:()=>'',hStatus(){},now:()=>1791500000125,hhmm:()=>'',costLine:()=>'',actsLine:()=>'',ckBox:()=>'',onboardOnce:async()=>{},LOADED:null,
   showWaiting(){},showRestore(){},renderWaiting(){},loadAttemptNotes:async()=>{},setTimeout(){},clearInterval(){},setInterval(){return 1},addEventListener(type:string,fn:(event:Data)=>unknown){if(type==='pagehide')pagehide.push(fn as ()=>void);if(type==='pageshow')pageshow.push(fn)},dispatchEvent(){},CustomEvent:class {},confirm:()=>false,sideChats(){},btoa:(raw:string)=>Buffer.from(raw,'binary').toString('base64'),URL:{createObjectURL:()=>"blob:test-image",revokeObjectURL(){}},
@@ -366,6 +366,7 @@ function attachmentComposer(view:ReturnType<typeof ui>){
 
 test('81/109: real HTTP setting and send are ordered; launch uses the accepted model',async t=>{
  const h=await fixture(t),view=ui({fetch:async(path,body)=>(await call(h.api,path,{...(body?{body}:{})})).body});
+ view.H.project=h.dir;view.H.active.worker=h.runtime.paneBinding('worker').chat;
  const gate=deferred<Data>(),original=view.sandbox.fetch;
  view.sandbox.fetch=async(path:string,opts?:{body:string})=>path==='/api/panes/worker'?{json:async()=>{await gate.promise;return (await original(path,opts)).json()}}:original(path,opts);
  const setting=view.functions.setSeat({model:'w2'},'Модель'),sending=view.functions.onSend('question',view.ta);await until(()=>view.S.draft==='question');
@@ -376,6 +377,7 @@ test('81/109: real HTTP setting and send are ordered; launch uses the accepted m
 
 test('81/109: Enter and button share a single send while configuration is pending',async t=>{
  const h=await fixture(t),gate=deferred(),view=ui({fetch:async(path,body)=>{if(path==='/api/panes/worker')await gate.promise;return (await call(h.api,path,{...(body?{body}:{})})).body}}),keys:Data={},clicks:Data={};
+ view.H.project=h.dir;view.H.active.worker=h.runtime.paneBinding('worker').chat;
  const ta={value:'question',style:{},focus(){},addEventListener(type:string,fn:(event:Data)=>void){keys[type]=fn}},input={textContent:'Написать',querySelector:()=>null,appendChild(){}},button={style:{},addEventListener(type:string,fn:()=>void){clicks[type]=fn}},box={querySelector:(selector:string)=>selector===':scope > .in'?input:button};
  view.sandbox.document.createElement=()=>ta;const all=view.sandbox.document.querySelectorAll;view.sandbox.document.querySelectorAll=(selector:string)=>selector==='.box'?[box]:all(selector);view.functions.composer();
  const setting=view.functions.setSeat({model:'w2'},'Модель');keys.keydown({key:'Enter',shiftKey:false,isComposing:false,preventDefault(){}});clicks.click();keys.keydown({key:'Enter',preventDefault(){}});
@@ -425,6 +427,11 @@ test('TS-49.2: confirmed model event survives history reload only in its origina
  view.S.ui.pane='worker';view.H.pane=view.H.panes[0];await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.filter((m:Data)=>m.src==='model-change').length,1);
 });
 
+test('TS-49.2: a receipt after pagehide merges into stored state without replacing the newer draft',()=>{
+ const view=ui(),binding=view.functions.sendBinding(),key='harnessy-live-v1',other=JSON.stringify(['/project-a','worker','other']);view.storage.set(key,JSON.stringify({v:1,draft:'новый несентый текст',attachmentDrafts:{other:['image']},modelChanges:{[other]:[{src:'model-change',from:'A',to:'B',scope:'место',t:1}]}}));view.hidePage();
+ view.functions.recordModelChange(binding,{from:'W1',to:'W2',scope:'место «воркер»'});const stored=JSON.parse(view.storage.get(key)!);assert.equal(stored.draft,'новый несентый текст');assert.deepEqual(stored.attachmentDrafts,{other:['image']});assert.equal(stored.modelChanges[other].length,1);assert.equal(stored.modelChanges[JSON.stringify(['/project-a','worker','chat-a'])].length,1);
+});
+
 test('TS-49.2: a new-chat model receipt never enters the previous chat and follows only its confirmed new chat',()=>{
  const view=ui();view.S.ui.pane='room';view.H.pane=view.H.panes[1];view.H.active.room='old';const old=view.functions.sendBinding(),key=JSON.stringify([old.project,old.pane,old.chat,'fresh']);
  view.functions.recordModelChange({...old,fresh:true},{from:'W1',to:'W2',scope:'этот разговор'});assert.equal(view.S.chat.length,0);
@@ -460,11 +467,11 @@ for(const change of ['pane','project','chat','away-back','pagehide'])test('TS-08
 });
 
 for(const mode of ['on','orch'] as const)for(const accepted of [false,true])test('TS-08 r2/2: '+mode+' card waits for '+(accepted?'accepted':'refused')+' model setting before sending',async t=>{
- const h=await fixture(t,{seats:directSeats}),history=deferred<Data>(),configuration=deferred(),id=mode==='on'?'worker':'orchestrator';
- const view=ui({fetch:async(path,body)=>{if(path==='/api/chats/c-orch')return history.promise;if(path==='/api/panes/'+id){await configuration.promise;if(!accepted)return {ok:false,error:'model setting denied'}}return (await call(h.api,path,{...(body?{body}:{})})).body}});
- withOrchestrator(view);view.S.ui.direct={};view.S.draft='confirmation question';const click=view.direct();let sending:Promise<boolean>,setting:Promise<boolean>;
+ const h=await fixture(t,{seats:directSeats}),history=deferred<Data>(),configuration=deferred(),id=mode==='on'?'worker':'orchestrator',orchChat=(await h.runtime.chatsNew({pane:'orchestrator',carry:'none'},OWNER)).chat.id;
+ const view=ui({fetch:async(path,body)=>{if(path==='/api/chats/'+orchChat)return history.promise;if(path==='/api/panes/'+id){await configuration.promise;if(!accepted)return {ok:false,error:'model setting denied'}}return (await call(h.api,path,{...(body?{body}:{})})).body}});
+ withOrchestrator(view);view.H.project=h.dir;view.H.active.worker=h.runtime.paneBinding('worker').chat;view.H.active.orchestrator=orchChat;view.S.ui.direct={};view.S.draft='confirmation question';const click=view.direct();let sending:Promise<boolean>,setting:Promise<boolean>;
  if(mode==='on'){setting=view.functions.setSeat({model:'w2'},'Модель');await until(()=>view.requests.some(r=>r.path==='/api/panes/worker'));sending=click(mode)}
- else {sending=click(mode);await until(()=>view.requests.some(r=>r.path==='/api/chats/c-orch'));setting=view.functions.setSeat({model:'w2'},'Модель');await until(()=>view.requests.some(r=>r.path==='/api/panes/orchestrator'));history.resolve({messages:[],chat:{model:'w1'}})}
+ else {sending=click(mode);await until(()=>view.requests.some(r=>r.path==='/api/chats/'+orchChat));setting=view.functions.setSeat({model:'w2'},'Модель');await until(()=>view.requests.some(r=>r.path==='/api/panes/orchestrator'));history.resolve({messages:[],chat:{model:'w1'}})}
  await immediate();assert.equal(view.requests.filter(r=>r.path==='/api/chat').length,0);assert.equal(h.provider.calls.length,0);assert.equal(view.S.draft,'confirmation question');
  configuration.resolve();assert.equal(await setting,accepted);assert.equal(await sending,accepted);await h.runtime.idle();
  assert.equal(view.requests.filter(r=>r.path==='/api/chat').length,accepted?1:0);assert.equal(h.provider.calls.length,accepted?1:0);

@@ -110,7 +110,7 @@
     const captured=Object.assign(operation||{},captureProjectOperation(p,body)),trace=typeof traceRequest==='function'?traceRequest(operation):null;let response=null;
     const init=body?{method:'POST',headers:{'Content-Type':'application/json',...(trace?trace.headers:{})},body:JSON.stringify(body)}:trace?{headers:trace.headers}:undefined;
     return fetch(p,operation?.signal?{...init,signal:operation.signal}:init).then(r=>{response=r;if(operation)operation.httpStatus=r.status;return r.json()}).then(r=>{
-      if(!projectOperationCurrent(captured,r)){if(trace)traceReply(trace,r,true,response);return {ok:false,code:'binding_changed',error:'Привязка изменилась; ответ относится к прежнему выбору'}}if(trace)traceReply(trace,r,false,response);
+      if(!projectOperationCurrent(captured,r)){if(typeof operation?.onStaleReceipt==='function')try{operation.onStaleReceipt(r)}catch{}if(trace)traceReply(trace,r,true,response);return {ok:false,code:'binding_changed',error:'Привязка изменилась; ответ относится к прежнему выбору'}}if(trace)traceReply(trace,r,false,response);
       if(changing&&(!r.ok||r.project===project))H.projectLinkChange=false;
       if(changing&&r.ok&&typeof r.project==='string'&&window.HARNESS_BOOT)window.HARNESS_BOOT.select(r.project);
       if(changing&&r.ok&&r.project!==project&&typeof sectionChanging==='function')sectionChanging();
@@ -229,8 +229,13 @@
   const modelChangeKey=b=>JSON.stringify([b.project||'',b.pane||'room',b.chat||null,...(b.fresh?['fresh']:[])]);
   function modelChanges(binding){const all=S.modelChanges;if(!all||typeof all!=='object'||Array.isArray(all))return [];const events=all[modelChangeKey(binding)];return Array.isArray(events)?events.filter(e=>e&&e.src==='model-change'&&typeof e.from==='string'&&typeof e.to==='string'&&typeof e.scope==='string'&&Number.isFinite(e.t)):[]}
   function recordModelChange(binding,change){if(!binding||!change||typeof change.from!=='string'||typeof change.to!=='string'||typeof change.scope!=='string')return;
-    if(!S.modelChanges||typeof S.modelChanges!=='object'||Array.isArray(S.modelChanges))S.modelChanges={};const key=modelChangeKey(binding),events=modelChanges(binding),event={role:'system',src:'model-change',from:change.from,to:change.to,scope:change.scope,t:now()};S.modelChanges[key]=events.concat(event);
-    if(!binding.fresh&&bindingCurrent(binding)){S.chat.push(event);orderChat(S.chat);render()}save(); }
+    const key=modelChangeKey(binding),event={role:'system',src:'model-change',from:change.from,to:change.to,scope:change.scope,t:now()};
+    // A page being left may have an older copy of the draft: merge only the
+    // receipt into the latest stored state instead of saving that stale copy.
+    if(leftPage){try{const latest=JSON.parse(localStorage.getItem(KEY)||'null');if(!latest||latest.v!==1)return;if(!latest.modelChanges||typeof latest.modelChanges!=='object'||Array.isArray(latest.modelChanges))latest.modelChanges={};const events=Array.isArray(latest.modelChanges[key])?latest.modelChanges[key]:[];latest.modelChanges[key]=events.concat(event);localStorage.setItem(KEY,JSON.stringify(latest))}catch{}return}
+    if(!S.modelChanges||typeof S.modelChanges!=='object'||Array.isArray(S.modelChanges))S.modelChanges={};const events=modelChanges(binding);S.modelChanges[key]=events.concat(event);
+    const current=sendBinding(),instance=H.pane?.settingsBinding?.instanceId||H.liveStatus?.trace?.instanceId;
+    if(!binding.fresh&&current.project===binding.project&&current.pane===binding.pane&&current.chat===binding.chat&&(!binding.instance||!instance||binding.instance===instance)){S.chat.push(event);orderChat(S.chat);render()}save(); }
   function bindFreshModelChanges(binding,key){let source;try{source=JSON.parse(key)}catch{return}if(!Array.isArray(source)||source.length!==4||source[3]!=='fresh'||source[0]!==binding.project||source[1]!==binding.pane||!binding.chat||binding.chat===source[2]||!bindingCurrent(binding))return;
     const store=S.modelChanges,events=store&&Array.isArray(store[key])?store[key]:[];if(!events.length)return;const accepted=events.filter(e=>e&&e.src==='model-change'&&typeof e.from==='string'&&typeof e.to==='string'&&typeof e.scope==='string'&&Number.isFinite(e.t));if(!accepted.length)return;
     store[modelChangeKey(binding)]=modelChanges(binding).concat(accepted);delete store[key];S.chat=orderChat(S.chat.concat(accepted));save(); }
