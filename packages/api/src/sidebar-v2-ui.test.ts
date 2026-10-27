@@ -189,3 +189,30 @@ test('TS-48.2 r2: other-project menus support keyboard navigation on desktop and
   v.context.PS2.setInbox({need:1,info:0});const refreshed=v.find('.ps2-flyout'),refreshedItems=refreshed.querySelectorAll('[role=menuitem]');assert.equal(v.document.activeElement,refreshedItems[1]);await refreshedItems[1]!.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(v.document.activeElement,v.find(prefix+' [data-ps2-project-path="/b"] [data-ps2-project-menu]'));assert.equal(v.document.activeElement.getAttribute('aria-expanded'),'false');
  }
 });
+
+test('TS-48.2 r3: focus survives mobile-to-rail status redraw and returns to the mobile entry on resize back',async()=>{
+ const v=view(),drawer=v.document.createElement('nav'),mobileButton=v.document.createElement('button');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';mobileButton.className='m-btn';v.body.appendChild(drawer);v.body.appendChild(mobileButton);Object.assign(v.context,{innerWidth:390,innerHeight:844,mobileNav(){},mobileDefaults(){}});v.html.classList.add('m-open');
+ v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},roles:2});await v.window.emit('resize');await v.find('.m-drawer .ps2-current-menu').emit('click');assert.equal(v.document.activeElement,v.find('.ps2-flyout [role=menuitem]'));
+ v.context.innerWidth=800;v.context.innerHeight=800;await v.window.emit('resize');assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(v.document.activeElement,v.find('aside.rail [data-ps2-mode="chats"]'));
+ v.context.PS2.setInbox({need:1,info:0});assert.equal(v.document.activeElement,v.find('aside.rail [data-ps2-mode="chats"]'));v.find('aside.rail [data-ps2-mode="inbox"]').focus();v.context.PS2.setInbox({need:2,info:0});assert.equal(v.document.activeElement,v.find('aside.rail [data-ps2-mode="inbox"]'));
+ v.context.innerWidth=390;v.context.innerHeight=844;await v.window.emit('resize');assert.equal(v.document.activeElement,mobileButton);v.context.PS2.setInbox({need:3,info:0});assert.equal(v.document.activeElement,mobileButton);
+});
+
+test('TS-48.2 r3: other-project menu trigger keeps its project, section and visible surface on redraw',async()=>{
+ for(const mobile of [false,true]){
+  const v=view();if(mobile){const drawer=v.document.createElement('nav'),mobileButton=v.document.createElement('button');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';mobileButton.className='m-btn';v.body.appendChild(drawer);v.body.appendChild(mobileButton);Object.assign(v.context,{innerWidth:390,innerHeight:844,mobileNav(){},mobileDefaults(){}});v.html.classList.add('m-open')}
+  v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},pinned:[{kind:'folder',name:'B',path:'/b',chats:[]}],projects:[{name:'A',path:'/a',current:true},{name:'B',path:'/b',current:false}]});if(mobile)await v.window.emit('resize');
+  const prefix=mobile?'.m-drawer':'aside.ps2-mode',selector=prefix+' .ps2-others-list [data-ps2-project-path="/b"] [data-ps2-project-menu]';await v.find(prefix+' [data-ps2-others]').emit('click');await v.find(selector).emit('click');await v.find('.ps2-flyout [role=menuitem]').emit('keydown',{key:'Escape'});assert.equal(v.document.activeElement,v.find(selector));
+  v.context.PS2.setInbox({need:1,info:0});assert.equal(v.document.activeElement,v.find(selector));
+  if(mobile){await v.find(selector).emit('click');v.context.innerWidth=1100;v.context.innerHeight=800;await v.window.emit('resize');const desktop='aside.ps2-mode .ps2-others-list [data-ps2-project-path="/b"] [data-ps2-project-menu]';assert.equal(v.document.activeElement,v.find(desktop));v.context.PS2.setInbox({need:2,info:0});assert.equal(v.document.activeElement,v.find(desktop));}
+ }
+});
+
+test('TS-48.2 r3: sidebar controls keep their action identity across redraws and panel toggles',async()=>{
+ const v=view();v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},projects:[{name:'B',path:'/b',current:false}]});
+ for(const selector of ['aside.ps2-mode .logo[data-go="new"]','aside.ps2-mode .newbtn[data-go="new"]','aside.ps2-mode [data-ps2-search]','aside.ps2-mode [data-ps2-mode="inbox"]','aside.ps2-mode [data-spend-limits]','aside.ps2-mode [data-ps2-profile]','aside.ps2-mode [data-ps2-others]']){
+  v.find(selector).focus();v.context.PS2.setInbox({need:1,info:0});assert.equal(v.document.activeElement,v.find(selector),selector);
+ }
+ await v.find('aside.ps2-mode [data-ps2-others]').emit('click');const rowSelector='aside.ps2-mode .ps2-others-list [data-ps2-project-path="/b"]';v.find(rowSelector).focus();v.context.PS2.setInbox({need:2,info:0});assert.equal(v.document.activeElement,v.find(rowSelector));
+ v.find('aside.ps2-mode [data-ps2-release]').focus();await v.find('aside.ps2-mode [data-ps2-release]').emit('click');assert.equal(v.document.activeElement,v.find('aside.rail [data-ps2-expand]'));await v.find('aside.rail [data-ps2-expand]').emit('click');assert.equal(v.document.activeElement,v.find('aside.ps2-mode [data-ps2-release]'));
+});
