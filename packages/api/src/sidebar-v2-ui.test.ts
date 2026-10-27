@@ -6,6 +6,7 @@ import {dom,type DomNode} from './ui-dom-test-helpers.ts';
 
 const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');
 const css=readFileSync(new URL('../../../ui/sketches/disarto/sidebar-v2.css',import.meta.url),'utf8');
+const protoCss=readFileSync(new URL('../../../ui/deploy/proto.css',import.meta.url),'utf8');
 const start=proto.indexOf('(function(){',proto.indexOf('/* LIVE_BOOT_END */'));
 const end=proto.indexOf('  // ── навигация телефона',start);
 assert.ok(start>=0&&end>start);
@@ -59,7 +60,7 @@ test('TS-36A: absent engine data stays neutral and never masquerades as a connec
  assert.doesNotMatch(panel.textContent,/Alpha-Test|Анна Ветрова|как ты будешь|ты готов/);assert.match(panel.textContent,/Без проекта|нет данных/);assert.match(panel.textContent,/Лимиты недоступны/);assert.equal(v.document.querySelector('.rail [data-ps2-mode="inbox"] .b'),null);assert.match(header.textContent,/нет связи/);assert.doesNotMatch(header.textContent,/подключено/);
 });
 test('TS-47.5 F14: role count comes from the project seats, not chat rows',async()=>{
- const v=view();v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},roles:2,chatTotal:1,chats:[{id:'a',pane:'worker'},{id:'',pane:'empty-role'}]});assert.match(v.find('.grp.ps2-prow').textContent,/чаты · A1/);
+ const v=view();v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},roles:2,chatTotal:1,chats:[{id:'a',pane:'worker'},{id:'',pane:'empty-role'}]});assert.match(v.find('.ps2-current-project').textContent,/A2 роли/);
  await v.find('[data-ps2-release]').emit('click');await v.find('[data-ps2-mode="team"]').emit('click');assert.match(v.find('.ps2-pcard').textContent,/2 роли · 1 чат/);
  v.context.PS2.setData({chatTotal:4,chats:[{id:'a',pane:'worker'},{id:'b',pane:'worker'},{id:'c',pane:'worker'},{id:'d',pane:'worker'}]});assert.match(v.find('.ps2-pcard').textContent,/2 роли · 4 чата/);
  v.context.PS2.setWorkspace({project:{name:'A',path:'/a'},roles:3});assert.match(v.find('.ps2-pcard').textContent,/3 роли · 4 чата/);
@@ -141,4 +142,77 @@ test('TS-44 r2: sidebar redraw keeps focus on its project/chat identity, never a
  v.context.PS2.setData({chats:[{id:'second',pane:'reviewer',title:'Соседний'},chat]});const current=v.find('[data-chat="same-id"]');assert.equal(v.document.activeElement,current);
  let clicks=0;(current as any).click=()=>current.emit('click');current.addEventListener('click',()=>clicks++);await current.emit('keydown',{key:'Enter'});assert.equal(clicks,1);
  v.context.PS2.setData({project:{path:'/b',name:'B'},chats:[chat]});assert.notEqual(v.document.activeElement,v.find('[data-chat="same-id"]'));
+});
+
+test('TS-48.2: current folder owns active chats and persists expansion by project without changing the role count',async()=>{
+ const storage=new Map<string,string>(),v=view('01-chat.html',storage),a={name:'Проект A',path:'/a'},b={name:'Проект B',path:'/b'};
+ const chats=[{id:'a1',pane:'worker',title:'Первый',active:true},{id:'a2',pane:'lead',title:'Второй'}];
+ v.context.PS2.setData({live:true,project:a,roles:2,chatTotal:2,chats,rooms:[{id:'solo',pane:'room',title:'Без проекта'}],projects:[{...a,current:true},{...b,current:false}]});
+ let toggle=v.find('.ps2-current-toggle'),body=v.find('.ps2-current-chats');assert.equal(toggle.getAttribute('aria-expanded'),'true');assert.equal(body.hasAttribute('hidden'),false);assert.ok(body.querySelector('[data-chat="a1"].act'));assert.equal(body.querySelector('[data-chat="solo"]'),null);assert.match(v.find('.ps2-current-project .m').textContent,/2 роли/);
+ await toggle.emit('click');assert.equal(toggle.getAttribute('aria-expanded'),'false');assert.equal(body.hasAttribute('hidden'),true);await toggle.emit('keydown',{key:'ArrowRight'});assert.equal(toggle.getAttribute('aria-expanded'),'true');await toggle.emit('keydown',{key:'ArrowLeft'});assert.equal(toggle.getAttribute('aria-expanded'),'false');
+ v.context.PS2.setData({chatTotal:5,chats:[...chats,{id:'a3',pane:'worker'},{id:'a4',pane:'worker'},{id:'a5',pane:'worker'}]});assert.match(v.find('.ps2-current-project .m').textContent,/2 роли/);assert.equal(v.find('.ps2-current-chats').hasAttribute('hidden'),true);
+ v.context.PS2.setData({project:b,roles:1,chats:[{id:'b1',pane:'worker'}]});assert.equal(v.find('.ps2-current-toggle').getAttribute('aria-expanded'),'true');assert.ok(v.find('.ps2-current-chats [data-chat="b1"]'));
+ v.context.PS2.setData({project:a,roles:2,chats});assert.equal(v.find('.ps2-current-toggle').getAttribute('aria-expanded'),'false');const restored=view('01-chat.html',storage);restored.context.PS2.setData({project:a,roles:2,chats,live:true});assert.equal(restored.find('.ps2-current-chats').hasAttribute('hidden'),true);
+});
+
+test('TS-48.2: current project menu is keyboard accessible and survives counter updates, including on the phone',async()=>{
+ const v=view(),drawer=v.document.createElement('nav');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';v.body.appendChild(drawer);Object.assign(v.context,{innerWidth:390,innerHeight:844,mobileNav(){},mobileDefaults(){}});
+ v.context.PS2.setData({live:true,project:{name:'Проект A',path:'/a'},roles:2,chats:[{id:'a1',pane:'worker',active:true}]});
+ const row=v.find('.m-drawer .ps2-current-project');(row as any).getBoundingClientRect=()=>({left:16,right:232,top:30,bottom:64,width:216,height:34});const trigger=v.find('.m-drawer .ps2-current-menu');trigger.focus();await trigger.emit('click');
+ let menu=v.find('.ps2-flyout'),items=menu.querySelectorAll('[role=menuitem]');assert.ok(items.length>1);assert.equal(v.document.activeElement,items[0]);assert.equal(trigger.getAttribute('aria-expanded'),'true');assert.equal(menu.getAttribute('role'),'menu');assert.ok(parseFloat(menu.style.left??'NaN')>=0);assert.ok(parseFloat(menu.style.left??'NaN')+parseFloat(menu.style.width??'NaN')<=390);assert.ok(parseFloat(menu.style.top??'NaN')>=0);
+ await items[0]!.emit('keydown',{key:'ArrowDown'});assert.equal(v.document.activeElement,items[1]);v.context.PS2.setData({roles:3});menu=v.find('.ps2-flyout');items=menu.querySelectorAll('[role=menuitem]');assert.equal(v.document.activeElement,items[1]);assert.match(v.find('.m-drawer .ps2-current-project .m').textContent,/3 роли/);assert.equal(v.find('.m-drawer .ps2-current-menu').getAttribute('aria-expanded'),'true');await v.find('.m-drawer .ps2-current-project .m').emit('click');assert.ok(v.document.querySelector('.ps2-flyout'));assert.equal(v.find('.m-drawer .ps2-current-toggle').getAttribute('aria-expanded'),'true');
+ await items[1]!.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(v.document.activeElement,v.find('.m-drawer .ps2-current-menu'));assert.equal(v.find('.m-drawer .ps2-current-menu').getAttribute('aria-expanded'),'false');
+ const events:any[]=[];v.context.LIVE={};v.context.dispatchEvent=(event:any)=>{events.push(event);return true};await v.find('.m-drawer .ps2-current-menu').emit('click');await v.find('.ps2-flyout [data-go="chat"]').emit('click');assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(events.at(-1).type,'ps2:project-page');assert.equal(events.at(-1).detail.path,'/a');assert.equal(events.at(-1).detail.key,'chat');
+});
+
+test('TS-48.2 r2: resizing closes the menu and moves focus to the visible surface, in both directions',async()=>{
+ const v=view(),drawer=v.document.createElement('nav'),mobileButton=v.document.createElement('button');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';mobileButton.className='m-btn';v.body.appendChild(drawer);v.body.appendChild(mobileButton);Object.assign(v.context,{innerWidth:390,innerHeight:844,mobileNav(){},mobileDefaults(){}});v.html.classList.add('m-open');
+ v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},roles:2,chats:[{id:'a1',pane:'worker'}]});await v.window.emit('resize');await v.find('.m-drawer .ps2-current-menu').emit('click');assert.equal(v.document.activeElement,v.find('.ps2-flyout [role=menuitem]'));
+ v.context.innerWidth=1100;v.context.innerHeight=800;await v.window.emit('resize');assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(v.document.activeElement,v.find('aside.ps2-mode .ps2-current-menu'));assert.equal(v.find('aside.ps2-mode .ps2-current-menu').getAttribute('aria-expanded'),'false');
+ await v.find('aside.ps2-mode .ps2-current-menu').emit('click');assert.equal(v.document.activeElement,v.find('.ps2-flyout [role=menuitem]'));v.context.innerWidth=390;v.context.innerHeight=844;await v.window.emit('resize');assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(v.document.activeElement,mobileButton);
+});
+
+test('TS-48.2 r2: mobile drawer includes standalone chats between the current and other projects',async()=>{
+ const v=view(),drawer=v.document.createElement('nav');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';v.body.appendChild(drawer);Object.assign(v.context,{innerWidth:390,mobileNav(){},mobileDefaults(){}});
+ v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},roles:2,chats:[{id:'project-chat',pane:'worker'}],rooms:[{id:'solo',pane:'room',title:'Без проекта',active:true}],projects:[{name:'B',path:'/b',current:false}]});
+ const folderChats=v.find('.m-drawer .ps2-current-chats'),label=folderChats.nextElementSibling!,rooms=label.nextElementSibling!;assert.ok(label.classList.contains('ps2-mobile-rooms-label'));assert.match(label.textContent,/чаты без проекта1/);assert.ok(rooms.querySelector('[data-chat="solo"][data-pane="room"].act'));assert.ok(rooms.nextElementSibling?.classList.contains('ps2-others'));
+ v.find('.m-drawer [data-chat="solo"]').focus();v.context.PS2.setInbox({need:1,info:0});assert.equal(v.document.activeElement,v.find('.m-drawer [data-chat="solo"]'));assert.match(protoCss,/\.m-drawer\s*\{[^}]*width:min\(232px,100vw\)/);assert.match(protoCss,/\.m-drawer \.ps-chat\[data-chat\][^{]*\{padding-left:26px\}/);
+});
+
+test('TS-48.2 r2: other-project menus support keyboard navigation on desktop and mobile',async()=>{
+ for(const mobile of [false,true]){
+  const v=view();if(mobile){const drawer=v.document.createElement('nav');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';v.body.appendChild(drawer);Object.assign(v.context,{innerWidth:390,innerHeight:844,mobileNav(){},mobileDefaults(){}})}
+  v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},projects:[{name:'A',path:'/a',current:true},{name:'B',path:'/b',current:false}]});
+  const prefix=mobile?'.m-drawer':'aside.ps2-mode';await v.find(prefix+' [data-ps2-others]').emit('click');const trigger=v.find(prefix+' [data-ps2-project-path="/b"] [data-ps2-project-menu]');trigger.focus();await trigger.emit('click');
+  const menu=v.find('.ps2-flyout'),items=menu.querySelectorAll('[role=menuitem]');assert.ok(items.length>2);assert.equal(v.document.activeElement,items[0]);assert.equal(trigger.getAttribute('aria-expanded'),'true');assert.equal(trigger.getAttribute('aria-haspopup'),'menu');
+  await items[0]!.emit('keydown',{key:'Tab'});assert.equal(v.document.activeElement,items[1]);await items[1]!.emit('keydown',{key:'Tab',shiftKey:true});assert.equal(v.document.activeElement,items[0]);await items[0]!.emit('keydown',{key:'ArrowDown'});assert.equal(v.document.activeElement,items[1]);
+  v.context.PS2.setInbox({need:1,info:0});const refreshed=v.find('.ps2-flyout'),refreshedItems=refreshed.querySelectorAll('[role=menuitem]');assert.equal(v.document.activeElement,refreshedItems[1]);await refreshedItems[1]!.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(v.document.activeElement,v.find(prefix+' [data-ps2-project-path="/b"] [data-ps2-project-menu]'));assert.equal(v.document.activeElement.getAttribute('aria-expanded'),'false');
+ }
+});
+
+test('TS-48.2 r3: focus survives mobile-to-rail status redraw and returns to the mobile entry on resize back',async()=>{
+ const v=view(),drawer=v.document.createElement('nav'),mobileButton=v.document.createElement('button');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';mobileButton.className='m-btn';v.body.appendChild(drawer);v.body.appendChild(mobileButton);Object.assign(v.context,{innerWidth:390,innerHeight:844,mobileNav(){},mobileDefaults(){}});v.html.classList.add('m-open');
+ v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},roles:2});await v.window.emit('resize');await v.find('.m-drawer .ps2-current-menu').emit('click');assert.equal(v.document.activeElement,v.find('.ps2-flyout [role=menuitem]'));
+ v.context.innerWidth=800;v.context.innerHeight=800;await v.window.emit('resize');assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(v.document.activeElement,v.find('aside.rail [data-ps2-mode="chats"]'));
+ v.context.PS2.setInbox({need:1,info:0});assert.equal(v.document.activeElement,v.find('aside.rail [data-ps2-mode="chats"]'));v.find('aside.rail [data-ps2-mode="inbox"]').focus();v.context.PS2.setInbox({need:2,info:0});assert.equal(v.document.activeElement,v.find('aside.rail [data-ps2-mode="inbox"]'));
+ v.context.innerWidth=390;v.context.innerHeight=844;await v.window.emit('resize');assert.equal(v.document.activeElement,mobileButton);v.context.PS2.setInbox({need:3,info:0});assert.equal(v.document.activeElement,mobileButton);
+});
+
+test('TS-48.2 r3: other-project menu trigger keeps its project, section and visible surface on redraw',async()=>{
+ for(const mobile of [false,true]){
+  const v=view();if(mobile){const drawer=v.document.createElement('nav'),mobileButton=v.document.createElement('button');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';mobileButton.className='m-btn';v.body.appendChild(drawer);v.body.appendChild(mobileButton);Object.assign(v.context,{innerWidth:390,innerHeight:844,mobileNav(){},mobileDefaults(){}});v.html.classList.add('m-open')}
+  v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},pinned:[{kind:'folder',name:'B',path:'/b',chats:[]}],projects:[{name:'A',path:'/a',current:true},{name:'B',path:'/b',current:false}]});if(mobile)await v.window.emit('resize');
+  const prefix=mobile?'.m-drawer':'aside.ps2-mode',selector=prefix+' .ps2-others-list [data-ps2-project-path="/b"] [data-ps2-project-menu]';await v.find(prefix+' [data-ps2-others]').emit('click');await v.find(selector).emit('click');await v.find('.ps2-flyout [role=menuitem]').emit('keydown',{key:'Escape'});assert.equal(v.document.activeElement,v.find(selector));
+  v.context.PS2.setInbox({need:1,info:0});assert.equal(v.document.activeElement,v.find(selector));
+  if(mobile){await v.find(selector).emit('click');v.context.innerWidth=1100;v.context.innerHeight=800;await v.window.emit('resize');const desktop='aside.ps2-mode .ps2-others-list [data-ps2-project-path="/b"] [data-ps2-project-menu]';assert.equal(v.document.activeElement,v.find(desktop));v.context.PS2.setInbox({need:2,info:0});assert.equal(v.document.activeElement,v.find(desktop));}
+ }
+});
+
+test('TS-48.2 r3: sidebar controls keep their action identity across redraws and panel toggles',async()=>{
+ const v=view();v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},projects:[{name:'B',path:'/b',current:false}]});
+ for(const selector of ['aside.ps2-mode .logo[data-go="new"]','aside.ps2-mode .newbtn[data-go="new"]','aside.ps2-mode [data-ps2-search]','aside.ps2-mode [data-ps2-mode="inbox"]','aside.ps2-mode [data-spend-limits]','aside.ps2-mode [data-ps2-profile]','aside.ps2-mode [data-ps2-others]']){
+  v.find(selector).focus();v.context.PS2.setInbox({need:1,info:0});assert.equal(v.document.activeElement,v.find(selector),selector);
+ }
+ await v.find('aside.ps2-mode [data-ps2-others]').emit('click');const rowSelector='aside.ps2-mode .ps2-others-list [data-ps2-project-path="/b"]';v.find(rowSelector).focus();v.context.PS2.setInbox({need:2,info:0});assert.equal(v.document.activeElement,v.find(rowSelector));
+ v.find('aside.ps2-mode [data-ps2-release]').focus();await v.find('aside.ps2-mode [data-ps2-release]').emit('click');assert.equal(v.document.activeElement,v.find('aside.rail [data-ps2-expand]'));await v.find('aside.rail [data-ps2-expand]').emit('click');assert.equal(v.document.activeElement,v.find('aside.ps2-mode [data-ps2-release]'));
 });

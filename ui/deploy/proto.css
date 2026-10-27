@@ -77,7 +77,7 @@ html[data-m] .m-scroll { overflow-x:auto; scrollbar-width:none; -webkit-overflow
 .m-btn, .m-bg, .m-drawer { display:none; }
 html[data-m] .m-btn { display:grid; place-items:center; position:fixed; left:10px; top:8px; z-index:60; width:34px; height:34px; border-radius:9px; border:1px solid #2d2d32; background:#1b1b1e; color:#ececee; font-size:15px; padding:0; cursor:pointer; }
 html[data-m] .m-bg { display:block; position:fixed; inset:0; z-index:80; background:rgba(6,6,8,.6); opacity:0; pointer-events:none; transition:opacity .22s; }
-html[data-m] .m-drawer { display:flex; flex-direction:column; position:fixed; left:0; top:0; bottom:0; z-index:81; width:min(292px,84vw); background:#141416; border-right:1px solid #242428; transform:translateX(-102%); transition:transform .26s cubic-bezier(.2,.7,.2,1); overflow-y:auto; padding:12px 10px 16px; }
+html[data-m] .m-drawer { display:flex; flex-direction:column; position:fixed; left:0; top:0; bottom:0; z-index:81; width:min(232px,100vw); background:#141416; border-right:1px solid #242428; transform:translateX(-102%); transition:transform .26s cubic-bezier(.2,.7,.2,1); overflow-y:auto; padding:12px 10px 16px; }
 html[data-m].m-open .m-bg { opacity:1; pointer-events:auto; } html[data-m].m-open .m-drawer { transform:none; }
 .m-drawer .m-h { display:flex; align-items:center; gap:10px; font:500 14px "Inter",sans-serif; color:#ececee; padding:4px 6px 12px; }
 .m-drawer .m-h i { width:28px; height:28px; border-radius:8px; background:linear-gradient(160deg,#2a2a2f,#151517); border:1px solid #2d2d32; display:grid; place-items:center; }
@@ -1051,8 +1051,26 @@ html[data-proto] .m-drawer .ps-chat{position:relative;display:flex;align-items:c
 html[data-proto] .m-drawer .ps-chat svg{width:16px;height:16px;flex:none}
 html[data-proto] .m-drawer .ps-chat .s{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 html[data-proto] .m-drawer .ps-chat .m{color:var(--dim);font:10px var(--mono)}
+html[data-proto] .m-drawer .ps-chat[data-chat],html[data-proto] .m-drawer .ps-chat[data-pin-chat]{padding-left:26px}
+html[data-proto] .m-drawer .ps2-mobile-rooms-label{display:flex;align-items:center;justify-content:space-between}
+html[data-proto] .m-drawer .ps2-mobile-rooms-label .m{font:10px var(--mono);color:var(--ink3)}
 html[data-proto] .m-drawer .ps2-others{margin:4px 8px}
 html[data-proto] .m-drawer .ps2-project-chats{margin:0 8px 4px 24px}
+/* Current-project folder follows the sidebar-v2 A1 component. */
+html[data-proto] .ps2-current-project.ps2-prow{height:34px;min-height:34px;gap:5px;padding:0 4px 0 0}
+html[data-proto] .ps2-current-toggle{display:flex;align-items:center;gap:5px;flex:1;min-width:0;height:100%;padding:0 0 0 8px;border:0;border-radius:7px;background:transparent;color:inherit;text-align:left;cursor:pointer;font:inherit}
+html[data-proto] .ps2-current-toggle svg{width:13px;height:13px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6}
+html[data-proto] .ps2-current-toggle .s{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html[data-proto] .ps2-current-project .ps2-current-chevron{width:10px;flex:none;color:var(--ink3);font-size:10px}
+html[data-proto] .ps2-current-project .ps2-current-toggle:focus-visible{outline:1px solid var(--accent);outline-offset:-1px}
+html[data-proto] .ps-chat.ps2-prow.ps2-current-project.open .m,html[data-proto] .ps-chat.ps2-prow.ps2-current-project:hover .m{visibility:visible}
+html[data-proto] .ps2-current-project .ps2-current-menu{flex:none;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--ink2);font-size:18px;line-height:1;cursor:pointer}
+html[data-proto] .ps2-current-project .ps2-current-menu:hover,html[data-proto] .ps2-current-project .ps2-current-menu:focus-visible{background:var(--raised);outline:1px solid var(--accent)}
+html[data-proto] .ps2-current-chats{padding-left:11px}
+html[data-proto] .ps2-current-chats[hidden]{display:none}
+html[data-proto] .ps2-pmenu.ps2-flyout .it{width:100%;flex:none;border:0;background:transparent;text-align:left;font-family:inherit}
+html[data-proto] .ps2-pmenu.ps2-flyout .it:hover{background:var(--panel)}
+html[data-proto] .ps2-pmenu.ps2-flyout .it:focus-visible{outline:1px solid var(--accent);outline-offset:-1px}
 
 /* The feed owns spare height; composer and its status are a single normal-flow footer. */
 html[data-proto][data-page="chat"] .main>.feed{flex:1 1 0;min-height:0;overflow-y:auto!important}
