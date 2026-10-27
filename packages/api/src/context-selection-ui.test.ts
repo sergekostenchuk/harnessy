@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,7 +7,6 @@ import {dom} from './ui-dom-test-helpers.ts';
 import {fixture,call,deferred} from './test-helpers.ts';
 type Data=Record<string,any>;
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');
-const part=(a:string,b:string)=>{const i=live.indexOf(a),j=live.indexOf(b,i+a.length);assert.ok(i>=0&&j>i);return live.slice(i,j)};
 const messages=()=>[{role:'me',text:'Первое сообщение'},{role:'ai',src:'sys',text:'Служебная строка'},{role:'ai',src:'live',who:'Модель',text:'Ответ модели'},{role:'me',text:'Третье <img src=x> сообщение 🧠'}].map((m,i)=>({...m,seq:i+1}));
 function ui(send?:(body:Data)=>Promise<Data>){
  const d=dom('<div class="frame cur"><div class="main"><div class="feed"></div><div class="box"><div class="in"></div><div class="bar2"></div></div></div></div>');Object.assign(d.document,{body:d.body,documentElement:d.html});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page','chat');
@@ -16,8 +16,8 @@ function ui(send?:(body:Data)=>Promise<Data>){
   api:async(path:string,body:Data)=>{assert.equal(path,'/api/handoff');requests.push(JSON.parse(JSON.stringify(body)));return send?send(body):{ok:true,seq:1}},
   render(){d.document.querySelector('.feed')!.innerHTML=S.chat.map((m:Data,i:number)=>ctx.selection.ckBox(m,i)+(m.src==='live'?'<div class="live-acts"><button type="button" data-la="handoff" data-i="'+i+'">передать контекст</button></div>':'')).join('');ctx.selection.selBar()}};
  ctx.window=ctx;const context=createContext(ctx);
- runInContext(part('  let bindingGeneration','  function md(')+part('  const ckBox=','  const bubble=')+
-  part('  let SEL=null;','  // меню действий под ответом')+part('  function closeLAMenus()','  // TS-09b4: one progress view')+part('  function hEvent(ev)','  const isDirect=')+part("  document.addEventListener('click',async e=>{ const la=",'  function reply(')+'\nglobalThis.selection={selStart,selBar,selChars,ckBox,hEvent,noteHandoff,sendBinding,bindingCurrent,invalidateBinding,configureSetting};',context);
+ runInContext(fixtureSource(live,fixtureGroups.live_bindingGeneration_to_settingsReady,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_ckBox_to_ckBox,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_SEL_to_document,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_closeLAMenus_to_laMulti,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_hEvent_to_hEvent,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_document_to_document,{filename:'live.js',wrapper:0})+'\nglobalThis.selection={selStart,selBar,selChars,ckBox,hEvent,noteHandoff,sendBinding,bindingCurrent,invalidateBinding,configureSetting};',context);
  ctx.LIVE={H,S,...ctx.selection,api:ctx.api,esc:ctx.esc,save(){},log(){},toast:ctx.toast,paneName:ctx.paneName,hStatus:ctx.hStatus,pickPane:ctx.pickPane,busy:()=>false,loadChat:ctx.loadChat,refreshStatus:async()=>{}};const ta=d.document.createElement('textarea');d.document.querySelector('.in')!.appendChild(ta);(d.document.querySelector('.box') as any).__cx={ta};runInContext(readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8'),context);
  const find=(selector:string)=>{const node=d.document.querySelector(selector);assert.ok(node,selector);return node};
  const select=async(index:number,on=true)=>{const input:any=find('.live-sel-list [data-ck="'+index+'"]');input.checked=on;await input.emit('click')};
@@ -120,7 +120,7 @@ test('260: the actual role-switch context door opens empty and sends only explic
 
 test('261: streamed owner and model replies retain engine ids for selection; an unbound result is not selectable',async()=>{
  const v=ui();Object.assign(v.ctx,{mdFiles:new Map(),now:()=>1,md:String,mdMessageArtifacts:()=>'',toolLine:()=>''});
- runInContext(part('  const statNumber=','  let turnStatsOpen=')+part('  function finish(ev)','  function hEvent(ev)')+'globalThis.finish=finish;',v.ctx);
+ runInContext(fixtureSource(live,fixtureGroups.live_statNumber_to_messageUsage,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_finish_to_updateTurn,{filename:'live.js',wrapper:0})+'globalThis.finish=finish;',v.ctx);
  v.S.chat=[{role:'me',text:'Новый вопрос'}];v.H.cur={text:'Новый ответ',tools:[]};v.ctx.finish({type:'done',chat:'chat-a',seq:9,messages:[{role:'me',text:'Новый вопрос',seq:8}]});v.start();await v.find('[data-sel="all"]').emit('click');await v.find('[data-sel="go"]').emit('click');assert.deepEqual(v.requests[0]!.seqs,[8,9]);
  v.S.chat=[];v.H.cur={text:'Без привязки',tools:[]};v.ctx.finish({type:'done',seq:10});v.start();assert.equal(v.document.querySelector('.live-selbar'),null);assert.equal(v.requests.length,1);
 });

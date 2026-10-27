@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -7,7 +8,6 @@ import {dom} from './ui-dom-test-helpers.ts';
 import {diskIO,type StateIO} from '@harnessy/runtime';
 import {fixture,call,deferred,until,OWNER} from './test-helpers.ts';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
-const part=(a:string,b:string)=>live.slice(live.indexOf(a),live.indexOf(b,live.indexOf(a)));
 async function setup(t:Parameters<typeof fixture>[0],proposed=true,options:Parameters<typeof fixture>[1]={}){
  const h=await fixture(t,{...options,seats:'  lead: {kind: orchestrator, role: orchestrator, label: Ведущий, vendor: claude, model: w1, mode: read}'}),gate=deferred<{text:string;sessionId:null}>();
  h.provider.onRun=async(s,_m,c)=>{c.modelStarted?.();if(s.id==='lead')return gate.promise;return {text:'готов',sessionId:null}};
@@ -24,7 +24,7 @@ function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body:any,r
  async refreshStatus(){const status=await box.api('/api/status');H.project=status.project;H.panes=status.panes;box.pickPane()},
  async onSend(text:string,_ta:any,binding:any){if(!box.LIVE.bindingCurrent(binding)||box.leftPage)return false;return box.api('/api/chat',{pane:binding.pane,message:text})}};
  box.window=box;const vm=createContext(box);
- runInContext(part('  let bindingGeneration','  function md(')+part('  // TS-09b4: one progress view','  // TS-09b2:')+part('  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+'globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,sendBinding,bindingCurrent,invalidateBinding,get teamProposals(){return TP},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};globalThis.resetProposals=proposalsReset;',vm);
+ runInContext(fixtureSource(live,fixtureGroups.live_bindingGeneration_to_settingsReady,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_OPS_to_moveConversation,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_TP_to_addEventListener,{filename:'live.js',wrapper:0})+'globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,sendBinding,bindingCurrent,invalidateBinding,get teamProposals(){return TP},proposalsFetch,showTeamProposal,requestTeamProposal,createTeamRole,proposalStateText,proposalMember};globalThis.resetProposals=proposalsReset;',vm);
  runInContext(cx,vm);
  const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};
  const settle=async()=>{do{await Promise.all([...pending]);await immediate()}while(pending.size)};

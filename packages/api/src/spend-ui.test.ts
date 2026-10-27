@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
@@ -22,7 +23,7 @@ function ui(fetch?:(path:string,body?:any)=>Promise<any>,on=true){
   URL:{createObjectURL(blob:Blob){blobs.push(blob);return 'blob:test'},revokeObjectURL(){}},localStorage:{setItem(...v:any[]){writes.push(v)},getItem:()=>null}};
  const create=d.document.createElement.bind(d.document);d.document.createElement=(tag:string)=>{const n:any=create(tag);if(tag==='a')n.click=()=>downloaded.push(n.download);return n};context.window=context;
  const vm=createContext(context);runInContext(read('ui/sketches/disarto/app.js'),vm);runInContext(part(raw,'<script>','</script>').slice('<script>'.length),vm);
- runInContext(part(live,'  // The visible stream is a projection','  const settingJobs=')+part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  function closeLAMenus(','  // запись «контекст передан»')+part(live,'  const statics=','  // ══ ПЛАН:')+part(live,'  // TS-14b: spend blocks','  // ══ ПОДКЛЮЧЕНИЯ')+'\nglobalThis.testing={fetch:spendFetch,draw:spendDraw,csv:spendCsv,state:SP,limits:limitsFetch,limitState:LIM,limitDraw:limitsDraw,limitEvent:limitsEvent,subscribe:subscribeLiveEvents,syncEvents:syncLiveEvents,history:spendHistory,windows:spendWindows};restoreUI();',vm);
+ runInContext(fixtureSource(live,fixtureGroups.live_streams_to_queueDelivered,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_LIVE_EVENTS_to_addEventListener,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_closeLAMenus_to_laPath,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_statics_to_document,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_spendPeriod_to_if,{filename:'live.js',wrapper:0})+'\nglobalThis.testing={fetch:spendFetch,draw:spendDraw,csv:spendCsv,state:SP,limits:limitsFetch,limitState:LIM,limitDraw:limitsDraw,limitEvent:limitsEvent,subscribe:subscribeLiveEvents,syncEvents:syncLiveEvents,history:spendHistory,windows:spendWindows};restoreUI();',vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  return {...d,H,S,context,requests,blobs,downloaded,logs,writes,toasts,find,response,functions:context.testing};
 }
@@ -211,7 +212,7 @@ function connectedQuotaPage(page:string){
  const v=ui(),streams:any[]=[];let percent=18,revision=1;const quota=()=>({ok:true,project:v.H.project,revision,updatedAt:Date.now()/1000,providers:[{vendor:'claude',status:'ok',sourceConnected:true,windows:[{label:'неделя',percentUsed:percent,windowMinutes:10080,resetsAt:Date.now()/1000+3600}]}]});v.context.PAGE=page;v.S.ui.pane='room';v.context.location.pathname=page==='log'?'/21-journal.html':'/page.html';
  Object.assign(v.context,{firstSelectPane(){},firstDraw(){},NOW:{es:null,alive:true},nowFetch:async()=>true,nowDraw(){},hStatus(){},render(){},liveFirstPaint(){},hEvent(){},consumeState(){},refreshChats:async()=>{},loadChat:async()=>{},journalLive(){},applyStatus(st:any){Object.assign(v.H,{on:true,snapshotOnly:false,project:st.project,panes:st.panes})},EventSource:class{closed=false;onmessage:any;onopen:any;onerror:any;constructor(){streams.push(this)}close(){this.closed=true}}});
  v.context.api=async(p:string)=>{v.requests.push(p);return p==='/api/status'?{project:v.H.project,panes:[]}:p==='/api/limits'?quota():v.response(p)};
- runInContext(part(live,'  async function hConnect(){','  // ── чат: настоящее поле ввода')+part(live,'  function nowLive(){','  // TS-15c Now lifecycle.')+'\nglobalThis.quotaConnect=hConnect;',v.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_hConnect_to_hConnect,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_nowLive_to_nowLive,{filename:'live.js',wrapper:0})+'\nglobalThis.quotaConnect=hConnect;',v.context);
  return {...v,streams,quota,setPercent(n:number){percent=n;revision++}};
 }
 
@@ -234,7 +235,7 @@ for(const page of ['chat'])for(const delay of [false,true])for(const statusFirst
   constructor(url:string){sources.push(this);this.req=request(h.api.url+url,res=>{this.res=res;this.onopen?.({});let pending='';res.on('error',()=>{});res.on('data',chunk=>{pending+=chunk.toString();let end;while((end=pending.indexOf('\n\n'))>=0){const block=pending.slice(0,end);pending=pending.slice(end+2);if(block.startsWith('data: ')){const data=block.slice(6);this.frames.push(JSON.parse(data));this.onmessage?.({data})}}})});this.req.on('error',()=>{});this.req.end();t.after(()=>this.close())}
   close(){this.req.destroy();this.res?.destroy()}
  }});
- runInContext(part(live,'  function hEvent(','  const isDirect=')+part(live,'  async function hConnect(){','  // ── чат: настоящее поле ввода')+part(live,'  function nowLive(){','  // TS-15c Now lifecycle.')+'\nglobalThis.connectReplay=hConnect;',v.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_hEvent_to_hEvent,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_hConnect_to_hConnect,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_nowLive_to_nowLive,{filename:'live.js',wrapper:0})+'\nglobalThis.connectReplay=hConnect;',v.context);
  if(statusFirst){await v.window.emit('live:status');assert.equal(sources.length,0,'replay must not start before the page consumer exists')}
  const connecting=v.context.connectReplay();await until(()=>sources.length===1&&sources[0].frames.some((e:any)=>e.type==='approval'));const count=()=>page==='chat'?Object.keys(v.H.asks).length:v.context.NOW.cards.size;
  assert.equal(pane.approvals.size,1);assert.equal(count(),1,'the card must already exist while refreshChats is pending');gate.resolve();await connecting;assert.equal(count(),1);assert.equal(sources.length,1);

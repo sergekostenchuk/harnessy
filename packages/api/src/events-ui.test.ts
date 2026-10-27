@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups,fixtureWrapper} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -14,8 +15,8 @@ function ui(fetch?:(path:string)=>Promise<any>){
  const context:any={H,PAGE:'events',KEY:'events',document:d.document,URLSearchParams,location:{},refreshStatus:async()=>true,
   esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),api:async(path:string)=>{requests.push(path);return fetch?fetch(path):snapshot(H.project)},
   addEventListener:d.window.addEventListener.bind(d.window),EventSource:class{onmessage:any;onopen:any;onerror:any;closed=false;path:string;constructor(path:string){this.path=path;streams.push(this)}close(){this.closed=true}}};context.window=context;
- const vm=createContext(context);runInContext(part(proto,'  // TS-15a specification','  // End TS-15a specification'),vm);
- runInContext(part(live,'  function md(','  const paneName=')+part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  // TS-15a: journal-backed','  // End TS-15a events.')+'\nglobalThis.testing={state:EV,sync:eventsSync,fetch:eventsFetch,reset:eventsReset,draw:eventsDraw};',vm);
+ const vm=createContext(context);runInContext(fixtureSource(proto,fixtureGroups.proto_SPEC_to_specificationLabels,{filename:'proto.js',wrapper:1}),vm);
+ runInContext(fixtureSource(live,fixtureGroups.live_md_to_addEventListener,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_LIVE_EVENTS_to_addEventListener,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_EV_to_if,{filename:'live.js',wrapper:0})+'\nglobalThis.testing={state:EV,sync:eventsSync,fetch:eventsFetch,reset:eventsReset,draw:eventsDraw};',vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  const switchProject=(project:string)=>{H.project=project;context.testing.reset();return context.testing.sync()};
  return {...d,H,context,requests,streams,find,switchProject,functions:context.testing};
@@ -67,9 +68,9 @@ for(const [key,file,state] of [['plan','02-plan','макет'],['swarm','04-swar
  const html=read('ui/sketches/disarto/'+file+'.html'),d=dom(part(html,'<body>','</body>'));Object.assign(d.document,{documentElement:d.html,body:d.body});
  const frames=[...d.document.querySelectorAll('.frame')],original=frames.map(f=>[...f.querySelectorAll('.top,.nums,.feed,.co,.views,.grid')]);
  const context:any={KEY:key,document:d.document,sessionStorage:{getItem:()=>null,setItem(){}},setTimeout:()=>1,clearTimeout(){}};context.window=context;const vm=createContext(context);
- runInContext(part(proto,'  // TS-15a specification','  // End TS-15a specification'),vm);const labels=d.document.querySelectorAll('.spec-banner');assert.ok(labels.length>0);assert.equal(d.html.getAttribute('data-spec-state'),state);
+ runInContext(fixtureSource(proto,fixtureGroups.proto_SPEC_to_specificationLabels,{filename:'proto.js',wrapper:1}),vm);const labels=d.document.querySelectorAll('.spec-banner');assert.ok(labels.length>0);assert.equal(d.html.getAttribute('data-spec-state'),state);
  for(const label of labels)assert.match(label.textContent,/Макет · образец данных/);
- runInContext(part(proto,'(function(){','/* LIVE_BOOT_END */'),vm);const token=context.HARNESS_BOOT.capture();assert.equal(context.HARNESS_BOOT.confirm('/a',token),true);context.HARNESS_BOOT.ready();
+ runInContext(fixtureWrapper(proto,0,'proto.js'),vm);const token=context.HARNESS_BOOT.capture();assert.equal(context.HARNESS_BOOT.confirm('/a',token),true);context.HARNESS_BOOT.ready();
  assert.equal(d.html.hasAttribute('data-live-pending'),false);assert.equal(d.html.getAttribute('data-spec-state'),state);assert.deepEqual(d.document.querySelectorAll('.spec-banner'),labels);
  for(let i=0;i<frames.length;i++)for(const node of original[i]!)assert.equal(frames[i]!.contains(node),true,node.className);
  if(key==='events'){assert.equal(d.document.querySelectorAll('[data-spec-mock] .spec-block').length,2);assert.match(d.document.querySelector('[data-spec-mock]')!.textContent,/94 %/)}
@@ -94,7 +95,7 @@ test('168/190 ОКНА: real SSE during a captured HTTP snapshot triggers a seco
  const captured=deferred(),release=deferred();t.after(()=>release.resolve());let delay=false;
  const v=ui(async path=>{const response=(await call(h.api,path)).body;if(delay&&path.startsWith('/api/journal')){delay=false;captured.resolve();await release.promise}return response});v.H.project=h.dir;
  Object.assign(v.context,{leftPage:false,S:{ui:{pane:'worker'},chat:[]},sendBinding:()=>({}),bindingCurrent:()=>true,sideChats:async()=>{},hStatus(){},badges(){},pickPane(){},renderWaiting(){},save(){},modelName:(s:any)=>s,toast(){},setTimeout:(fn:any)=>queueMicrotask(fn),CustomEvent:class{type:string;constructor(type:string){this.type=type}},dispatchEvent:(e:any)=>{void v.window.emit(e.type)}});
- runInContext(part(live,'  // The visible stream is a projection','  const settingJobs=')+part(live,'  function applyStatus(','  // лента активного чата'),v.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_streams_to_queueDelivered,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_applyStatus_to_refreshStatus,{filename:'live.js',wrapper:0}),v.context);
  await v.functions.sync();const stream=await sse(h.api);t.after(()=>stream.close());await until(()=>stream.raw.includes(': ok'));let seen=0;
  const deliver=()=>{while(seen<stream.frames.length)v.streams.at(-1).onmessage({data:JSON.stringify(stream.frames[seen++])})};delay=true;
  h.runtime.registry.get('worker')!.publish({type:'note',text:'refresh'});await until(()=>stream.frames.length===1);deliver();await captured.promise;

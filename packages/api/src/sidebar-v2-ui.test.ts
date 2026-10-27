@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -7,10 +8,7 @@ import {dom,type DomNode} from './ui-dom-test-helpers.ts';
 const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');
 const css=readFileSync(new URL('../../../ui/sketches/disarto/sidebar-v2.css',import.meta.url),'utf8');
 const protoCss=readFileSync(new URL('../../../ui/deploy/proto.css',import.meta.url),'utf8');
-const start=proto.indexOf('(function(){',proto.indexOf('/* LIVE_BOOT_END */'));
-const end=proto.indexOf('  // ── навигация телефона',start);
-assert.ok(start>=0&&end>start);
-const sidebarSource=proto.slice(start,end).replace('/*IC*/','const IC={};')+'\n})();';
+const sidebarSource='(function(){const IC={};\n'+fixtureSource(proto,fixtureGroups.proto_if_to_renderWorkspaceHeader,{filename:'proto.js',wrapper:1})+'\n})();';
 
 function view(file='01-chat.html',storage=new Map<string,string>()){
  const d=dom('<div class="frame"><div class="app"><aside class="side ps"></aside><section class="main"><div class="top"><b>Alpha</b></div><div class="body"></div></section></div></div>');
@@ -121,7 +119,7 @@ test('TS-44: sidebar delegated controls are keyboard reachable and activate by E
 });
 
 test('TS-44: per-seat active chats do not all become the selected sidebar chat',()=>{
- const start=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');const chunk=start.slice(start.indexOf('      const liveChats='),start.indexOf('      const projects=',start.indexOf('      const liveChats=')));
+ const start=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');const chunk=fixtureSource(start,['liveChats','roomRows','pinRows'],{filename:'live.js',wrapper:0,scope:'sideChats',block:"if(window.PS2&&typeof window.PS2.setData"});
  const context:any={S:{ui:{pane:'worker'}},H:{active:{worker:'w',lead:'l'},panes:[{id:'worker'},{id:'lead'},{id:'room'}]},seats:[{id:'worker'},{id:'lead'}],all:[{id:'w',pane:'worker',active:true},{id:'l',pane:'lead',active:true},{id:'r',pane:'room',active:true}],rooms:[{id:'r',pane:'room',active:true}],pins:[{kind:'chat',chat:'w',current:true,path:'/a'}],paneName:(p:any)=>p.id,point:()=>'',base:()=>'',};
  runInContext(chunk+';globalThis.selected=[...liveChats,...roomRows,...pinRows].filter(row=>row.active).map(row=>row.id)',createContext(context));assert.deepEqual(JSON.parse(JSON.stringify(context.selected)),['w']);
 });

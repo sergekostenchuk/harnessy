@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
@@ -17,8 +18,8 @@ export function nowUI(fetch?:(path:string,body?:any)=>Promise<any>){
   addEventListener:d.window.addEventListener.bind(d.window),EventSource:class{onmessage:any;onopen:any;onerror:any;closed=false;constructor(){streams.push(this)}close(){this.closed=true}}};context.window=context;
  context.refreshStatus=async()=>{const result=await context.api('/api/status');if(!result||!result.project||!Array.isArray(result.panes))return false;if(H.project!==result.project){H.confirmedProjectGeneration++;H.project=result.project}H.liveStatus=result;H.panes=result.panes;return true};
  const vm=createContext(context);runInContext(read('ui/sketches/disarto/app.js'),vm);runInContext(part(raw,'<script>','</script>').slice('<script>'.length),vm);
- runInContext(part(read('ui/deploy/proto.js'),'  // TS-15a specification','  // End TS-15a specification'),vm);
- runInContext(part(live,'  // TS-23d:','  // TS-07: waiting controls')+part(live,'  // ── «Сейчас»: решение','  // ── мост')+part(live,'  function md(','  const paneName=')+part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  function waitingControls(','  // End TS-07 waiting controls.')+part(live,'  function eventsValid(','  function eventsDraw(')+part(live,'  const NOW=','  // End TS-15c Now.')+'\nglobalThis.testing={state:NOW,live:nowLive,fetch:nowFetch,reset:nowReset,draw:nowDraw,items:nowItems,waitingControls,oldRefresh:refresh};',vm);
+ runInContext(fixtureSource(read('ui/deploy/proto.js'),fixtureGroups.proto_SPEC_to_specificationLabels,{filename:'proto.js',wrapper:1}),vm);
+ runInContext(fixtureSource(live,fixtureGroups.live_networkCodes_to_networkWaiting,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_curD_to_document,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_md_to_addEventListener,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_LIVE_EVENTS_to_addEventListener,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_waitingControls_to_document,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_eventsValid_to_eventsValid,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_NOW_to_document,{filename:'live.js',wrapper:0})+'\nglobalThis.testing={state:NOW,live:nowLive,fetch:nowFetch,reset:nowReset,draw:nowDraw,items:nowItems,waitingControls,oldRefresh:refresh};',vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  const start=async()=>{await context.refreshStatus();return context.testing.live()};
  const switchProject=async(project:string)=>{H.project=project;H.confirmedProjectGeneration++;H.liveStatus=status(project);H.panes=H.liveStatus.panes;return d.window.emit('live:status')};

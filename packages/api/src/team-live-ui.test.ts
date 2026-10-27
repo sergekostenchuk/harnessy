@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -10,7 +11,6 @@ const canvas=read('ui/sketches/disarto/team-canvas.js');
 const live=read('ui/deploy/team-live.js');
 const legacy=read('ui/deploy/live.js');
 const proto=read('ui/deploy/proto.js');
-const part=(source:string,start:string,end:string)=>source.slice(source.indexOf(start),source.indexOf(end,source.indexOf(start)));
 const escape=(value:unknown)=>String(value??'').replace(/[&<>"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[char]!));
 const tick=()=>new Promise<void>(resolve=>setImmediate(resolve));
 const settle=async()=>{for(let i=0;i<8;i++)await tick()};
@@ -85,13 +85,13 @@ test('TS-47.3 F01: team cards keep each running status on its own place',async()
 
 test('36D: a page without a historical top bar keeps the SPEC banner inside main, outside the sidebar grid',()=>{
  const d=dom('<div class="frame"><div class="app"><aside class="side ps"></aside><section class="main" data-team-live="work"></section></div></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});
- const context:any={KEY:'swarm',document:d.document};context.window=context;runInContext(part(proto,'  // TS-15a specification','  // End TS-15a specification'),createContext(context));
+ const context:any={KEY:'swarm',document:d.document};context.window=context;runInContext(fixtureSource(proto,fixtureGroups.proto_SPEC_to_specificationLabels,{filename:'proto.js',wrapper:1}),createContext(context));
  const banner=d.document.querySelector('.spec-banner')!,main=d.document.querySelector('.main')!,app=d.document.querySelector('.app')!;assert.equal(banner.parentElement,main);assert.equal(app.children.includes(banner),false);
 });
 
 test('39.2: the live constructor has no page-wide mock banner; only editing connections is mocked',async()=>{
  const d=dom('<div class="frame"><div class="app"><section class="main" data-team-live="constructor"></section></div></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});
- const context:any={KEY:'teamcons',document:d.document};context.window=context;runInContext(part(proto,'  // TS-15a specification','  // End TS-15a specification'),createContext(context));assert.equal(d.document.querySelector('.spec-banner'),null);
+ const context:any={KEY:'teamcons',document:d.document};context.window=context;runInContext(fixtureSource(proto,fixtureGroups.proto_SPEC_to_specificationLabels,{filename:'proto.js',wrapper:1}),createContext(context));assert.equal(d.document.querySelector('.spec-banner'),null);
  const v=constructorUi();await v.settle();assert.match(v.find('[data-team-policy]').textContent,/макет · редактирование связей/);assert.doesNotMatch(v.find('[data-team-instruction]').textContent,/макет/);
 });
 
@@ -99,7 +99,7 @@ test('36D: clean live team boot never enters the historical swarm overlay contro
  const d=dom('<div class="frame"><section class="main" data-team-live="work"></section></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});let overlayQueries=0;
  const query=d.document.querySelector.bind(d.document);d.document.querySelector=(selector:string)=>{if(selector.includes('#ovl'))overlayQueries++;return query(selector)};
  const sandbox:any={PAGE:'swarm',document:d.document,H:{on:true,snapshotOnly:false,project:'/project-a',projectRequestGeneration:0,confirmedProjectGeneration:0}};sandbox.window=sandbox;
- const context=createContext(sandbox);runInContext(part(legacy,'  const swarmRoot=','  const swCount=')+'\nglobalThis.historicalSwarmRoot=swarmRoot;',context);
+ const context=createContext(sandbox);runInContext(fixtureSource(legacy,['swarmRoot'],{filename:'live.js',wrapper:0})+'\nglobalThis.historicalSwarmRoot=swarmRoot;',context);
  assert.equal(context.historicalSwarmRoot(),null);assert.equal(overlayQueries,0,'new live DOM must not query the missing historical overlay');
 });
 

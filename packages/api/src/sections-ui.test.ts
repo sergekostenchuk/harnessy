@@ -1,3 +1,4 @@
+import {fixtureAssignment,fixtureSource,fixtureGroups,fixtureWrapper} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
@@ -12,8 +13,8 @@ const app=readFileSync(new URL('../../../ui/sketches/disarto/app.js',import.meta
 const screens={doc:'17-doc',art:'15-artifacts',mem:'16-memory',res:'12-research'} as const;
 const sections={doc:'docs',art:'artifacts',mem:'memory',res:'research'} as const;
 type Page=keyof typeof screens;
-const part=(s:string,a:string,b:string)=>{const x=s.indexOf(a),y=s.indexOf(b,x+a.length);assert.ok(x>=0&&y>x,a);return s.slice(x,y)};
-function view(page:Page,fetch:(path:string,body?:any)=>Promise<any>,boot=false){
+const legacyDeclarations={doc:['apply','vb'],art:['apply','applyShow'],mem:['apply'],res:['apply','applyPast']} as const;
+function view(page:Page,fetch:(path:string,body?:any)=>Promise<any>,boot=false,windowSource=live){
  const raw=readFileSync(new URL('../../../ui/sketches/disarto/'+screens[page]+'.html',import.meta.url),'utf8');
  const d=dom(raw.slice(raw.indexOf('<div class="frame"'),raw.indexOf('<script')));Object.assign(d.document,{documentElement:d.html,body:d.body});
  const H:any={on:false,project:'/projects/a',panes:[],pane:null,snapshotOnly:false,active:{}},S:any={ui:{pane:'room'},chat:[],dec:{}},hooks:Function[]=[],requests:any[]=[],toasts:string[]=[],pending=new Set<Promise<any>>(),timers:Function[]=[];
@@ -23,18 +24,34 @@ function view(page:Page,fetch:(path:string,body?:any)=>Promise<any>,boot=false){
   addEventListener:d.window.addEventListener.bind(d.window),dispatchEvent(){},CustomEvent:class{},setTimeout:(f:Function)=>{timers.push(f)},clearTimeout(){},
   api:async(path:string,body?:any)=>{requests.push({path,body});const p=fetch(path,body);pending.add(p);try{return await p}finally{pending.delete(p)}}};sandbox.window=sandbox;
  const storage=new Map<string,string>(),context=createContext(sandbox);
- runInContext(app.slice(0,app.indexOf('})();')+5),context);
+ runInContext(fixtureAssignment(app,'window.HX','app.js'),context);
  for(const script of raw.matchAll(/<script>([\s\S]*?)<\/script>/g))runInContext(script[1]!,context);
- if(boot)runInContext(proto.split('/* LIVE_BOOT_END */')[0]!,context);
- runInContext(part(live,'  function connectionFailed()','  // TS-18:')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function rememberLive(','  // лента активного чата')+part(live,'  // TS-09a.1: one lifecycle','  // End TS-09a.1 page lifecycle.')+'\nglobalThis.sections={fetch:sectionFetch,draw:sectionDraw,sync:sectionSync,changing:sectionChanging,request:sectionRequest,applyStatus,refreshStatus,resumePage,sendBinding,bindingCurrent,PS};',context);
+ if(boot)runInContext(fixtureWrapper(proto,0,'proto.js'),context);
+ runInContext(fixtureSource(windowSource,fixtureGroups.live_connectionFailed_to_connectionFailed,{filename:'live.js',wrapper:0})+fixtureSource(windowSource,fixtureGroups.live_bindingGeneration_to_settingsReady,{filename:'live.js',wrapper:0})+fixtureSource(windowSource,fixtureGroups.live_rememberLive_to_refreshStatus,{filename:'live.js',wrapper:0})+fixtureSource(windowSource,fixtureGroups.live_suspendPage_to_addEventListener,{filename:'live.js',wrapper:0})+'\nglobalThis.sections={fetch:sectionFetch,draw:sectionDraw,sync:sectionSync,changing:sectionChanging,request:sectionRequest,applyStatus,refreshStatus,resumePage,sendBinding,bindingCurrent,PS};',context);
  // Register the actual old hooks too: they must stay harmless after the engine connects.
- const lines=live.split('\n');for(let i=0;i<lines.length;i++)if(lines[i]!.startsWith('  if(')&&lines[i]!.includes("PAGE==='"+page+"'")){const end=lines.indexOf('  }',i+1);assert.ok(end>i);runInContext(lines.slice(i,end+1).join('\n'),context);i=end}
+ runInContext(fixtureSource(windowSource,legacyDeclarations[page].map(declaration=>({conditional:{identifier:'PAGE',equals:page,declaration}})),{filename:'live.js',wrapper:0}),context);
  H.on=true;
  const find=(selector:string)=>{const el=d.document.querySelector(selector);assert.ok(el,selector);return el};
  const settle=async()=>{do{await Promise.allSettled([...pending]);await immediate()}while(pending.size)};
  return {...d,H,S,hooks,requests,toasts,timers,sandbox,context,storage,functions:sandbox.sections,find,settle};
 }
 const data=(page:Page,project='/projects/a',orch:any=null)=>({ok:true,project,section:sections[page],empty:true,items:[],limited:[],limits:SECTION_LIMITS,orchestrator:orch,memoryState:page==='mem'?'template':null});
+
+for(const [page,count] of Object.entries({doc:1,art:2,mem:1,res:2}) as Array<[Page,number]>)test('TS-52 r2: '+page+' registers real legacy hooks even if conditional indentation changes',async()=>{
+ const indented=live.replace(/^(  )(if\((?:MEM&&)?PAGE==='(?:doc|art|mem|res)'\)\{)/gm,'     $2');
+ assert.notEqual(indented,live);
+ const v=view(page,async()=>data(page),false,indented);
+ assert.equal(v.hooks.length,count);
+ await v.functions.fetch();const before=v.find('.frame .main').innerHTML;
+ for(const hook of v.hooks)hook();
+ assert.equal(v.find('.frame .main').innerHTML,before,'real legacy hooks cannot restore demo data');
+});
+
+test('TS-52 r2: missing document legacy handler fails instead of silently skipping hooks',()=>{
+ const missing=live.replace(/^  if\(PAGE==='doc'\)\{/m,"  if(PAGE==='missing'){");
+ assert.notEqual(missing,live);
+ assert.throws(()=>view('doc',async()=>data('doc'),false,missing),/PAGE === "doc" \/ apply.*не найдена.*live\.js/);
+});
 
 for(const page of Object.keys(screens) as Page[])test('136–140: '+page+' actual screen reads HTTP materials with empty team, labels unsupported blocks, and opens the original conversation without posting',async t=>{
  const h=await fixture(t,{seats:'  {}'}),v=view(page,async(path,body)=>(await call(h.api,path,body?{body}:{})).body);v.H.project=h.dir;
@@ -80,7 +97,7 @@ test('137/136: template memory and truncation have distinct, honest captions',as
 
 test('87/139: sidebar, rail, mobile and palette all route Documents to the same real screen, including cold reload',async()=>{
  const d=dom('<aside class="side"><div data-go="doc">Документы проекта</div></aside>'),location={href:''},context:any={document:d.document,window:{},location,KEY:'chat',PAGES:{doc:'17-doc.html'},frames:[],cur:0,show(){},renderSide(){},renderWorkspaceHeader(){},closeProjectMenu(){}};
- runInContext(part(proto,"  document.addEventListener('click',e=>{const menuButton=e.target.closest('[data-ps2-project-menu]');",'  // ── навигация телефона'),createContext({...context,addEventListener(){}}));await d.document.querySelector('[data-go="doc"]')!.emit('click');assert.equal(location.href,'17-doc.html');
+ runInContext(fixtureSource(proto,fixtureGroups.proto_document_to_renderWorkspaceHeader,{filename:'proto.js',wrapper:1}),createContext({...context,addEventListener(){}}));await d.document.querySelector('[data-go="doc"]')!.emit('click');assert.equal(location.href,'17-doc.html');
  assert.match(proto,/\['doc','Документы',count\(project,'docs'\)\]/);assert.match(proto,/item\('doc','Документы проекта'\)/);assert.match(live,/\['Документы проекта','17-doc.html'\]/);assert.doesNotMatch(proto,/Документ стадии/);
  const cold=view('doc',async()=>data('doc'));await cold.functions.fetch();assert.match(cold.document.title,/Документы проекта · a/);assert.equal(cold.find('[data-project-section]').dataset.projectSection,'docs');
 });
@@ -95,7 +112,7 @@ test('140: actual applyStatus and project POST evict old documents before repain
  const h=await fixture(t,{seats:'  {}'}),other=join(h.dir,'second');mkdirSync(join(h.dir,'.harness','docs'),{recursive:true});writeFileSync(join(h.dir,'.harness','docs','old.md'),'OLD PROJECT DOCUMENT');mkdirSync(join(other,'.harness','docs'),{recursive:true});writeFileSync(join(other,'.harness','docs','new.md'),'NEW PROJECT DOCUMENT');
  const v=view('doc',async(path,body)=>(await call(h.api,path,body?{body}:{})).body);v.H.project='';v.functions.applyStatus((await call(h.api,'/api/status')).body);await v.settle();assert.match(v.find('.main').textContent,/OLD PROJECT DOCUMENT/);
  v.sandbox.fetch=async(path:string,options:any)=>({json:()=>v.sandbox.api(path,options?JSON.parse(options.body):undefined)});
- runInContext(part(live,'  const api=','  // TS-07: waiting controls')+'\nglobalThis.changeProject=api;',v.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_api_to_networkWaiting,{filename:'live.js',wrapper:0})+'\nglobalThis.changeProject=api;',v.context);
  await v.sandbox.changeProject('/api/project',{path:other});assert.doesNotMatch(v.find('.main').textContent,/OLD PROJECT DOCUMENT/);
  v.functions.applyStatus((await call(h.api,'/api/status')).body);await v.settle();assert.match(v.find('.main').textContent,/NEW PROJECT DOCUMENT/);assert.doesNotMatch(v.find('.main').textContent,/OLD PROJECT DOCUMENT/);assert.equal(h.provider.calls.length,0);
 });

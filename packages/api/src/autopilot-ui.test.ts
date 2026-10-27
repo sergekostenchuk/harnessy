@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync} from 'node:fs';
@@ -10,7 +11,7 @@ const state=(on=true,generation=2)=>({on,generation,startedAt:'2026-10-26T01:00:
 const row=(id='a',project='/a',generation=2,status='applied',at='2026-10-26T02:00:00Z')=>({version:1,project,at,entry:{state:status,generation,decisionId:id.repeat(64)}});
 function view(live?:any){const window:any=live?{LIVE:live}:{},listeners=new Map<string,Function[]>(),context=createContext({window,Date,Set,JSON,Number,addEventListener:(name:string,fn:Function)=>listeners.set(name,[...listeners.get(name)||[],fn])});runInContext(source,context);return {ui:window.HARNESS_AUTOPILOT_UI,listeners}}
 test('TS-47.5 F12: off is compact with a stable disclosure; on shows confirmed conditions and errors',()=>{
- const script=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),chunk=script.slice(script.indexOf('  function guidanceState()'),script.indexOf('  function showOrchestratorOffer()'));
+ const script=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),chunk=fixtureSource(script,fixtureGroups.live_guidanceState_to_chatGuidanceDraw,{filename:'live.js',wrapper:0});
  const d=dom('<div class="frame cur"><div class="feed"><div class="col"></div></div></div>'),ap=state(false),H:any={on:true,snapshotOnly:false,panes:[{id:'orch',kind:'orchestrator',model:'m'}],chatList:[],liveStatus:{autopilot:ap}},S:any={chat:[]};
  const context:any=createContext({document:d.document,H,S,PAGE:'chat',sendBinding:()=>({project:'/a',pane:'orch',chat:'c'}),autopilotText:(s:any)=>s?.on?'Стоп-случаи и отказ движка':'Решения и стоп-случаи проекта',esc:(s:any)=>String(s),save(){}});
  runInContext(chunk+';globalThis.draw=chatGuidanceDraw',context);context.draw();let card=d.document.querySelector('[data-autopilot-guidance]')!,details=card.querySelector('details')!;assert.match(card.textContent,/Автопилот выключен.*Настроить.*Условия/);assert.equal(card.querySelector('a')!.getAttribute('href'),'18-overlays.html#leave');

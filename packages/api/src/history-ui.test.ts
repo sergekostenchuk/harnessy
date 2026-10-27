@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -6,14 +7,13 @@ import {dom} from './ui-dom-test-helpers.ts';
 import {fixture,call,deferred,OWNER} from './test-helpers.ts';
 process.env.TZ='Europe/Istanbul';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');
-const part=(start:string,end:string)=>{const a=live.indexOf(start),b=live.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return live.slice(a,b)};
 function ui(project:string,active:Record<string,string>,fetch:(path:string)=>Promise<any>){
  const d=dom('<div class="frame cur"><div class="feed"><div class="col"><div class="ai static-example">six fake replies OMG</div></div></div></div><div class="frame"><div class="feed"><div class="col"><div class="ai static-example">old demo</div></div></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});
  const H:any={on:true,project,panes:[{id:'worker',label:'воркер',model:'configured-later'}],active,asks:{},cur:null};H.pane=H.panes[0];const S:any={chat:[{role:'me',text:'browser duplicate'},{role:'ai',src:'live',html:'browser duplicate'}],ui:{pane:'worker',demo:true},cx:{}},requests:string[]=[],storage=new Map<string,string>();
  const timers=new Map<number,()=>void>();let timerId=0;
  const context:any={H,S,document:d.document,window:{},PAGE:'chat',LOADED:null,SEL:null,md:(s:string)=>s,knowledgeReset(){},knowledgeSet(){return true},knowledgeOpen:async()=>{},knowledgeFetch(){},KN:{data:null},hydrateArtifacts(){},mdMessageArtifacts(){return ""},esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),paneName:(p:any)=>p.label,now:()=>1,hhmm:(n:number)=>new Date(n).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),save(){storage.set('state',JSON.stringify(S))},
   api:async(path:string)=>{requests.push(path);return fetch(path)},setTimeout(fn:()=>void){timers.set(++timerId,fn);return timerId},clearTimeout(id:number){timers.delete(id)},showWaiting(){},showRestore(){},renderWaiting(){},loadAttemptNotes:async()=>{},renderAll(){},selBar(){},drawLive(){},onboardOnce:async()=>{},addEventListener:d.window.addEventListener.bind(d.window)};
- const vm=createContext(context);runInContext(part('  // TS-23d:','  // TS-07: waiting controls')+part('  let bindingGeneration','  function md(')+part('  async function loadChat(','  // подключение к движку')+part('  const fmtN=',"  document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]');")+'\nglobalThis.testing={load:loadChat,render,bubble,invalidate:invalidateBinding};',vm);
+ const vm=createContext(context);runInContext(fixtureSource(live,fixtureGroups.live_networkCodes_to_networkWaiting,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_bindingGeneration_to_settingsReady,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_loadChat_to_recoverStoppedTurn,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_fmtN_to_document_2,{filename:'live.js',wrapper:0})+'\nglobalThis.testing={load:loadChat,render,bubble,invalidate:invalidateBinding};',vm);
  return {...d,H,S,context,requests,storage,timers,functions:context.testing};
 }
 
