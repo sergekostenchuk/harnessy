@@ -158,7 +158,7 @@ test('TS-47.2: stop remains requested until an actual terminal event, including 
 
 test('TS-47.2: reconnect reconciles an interrupted turn only against the same confirmed idle chat',async()=>{
  const status={project:'/project-a',activeChats:{worker:'chat-a'},panes:[{id:'worker',busy:false}]};
- const receipt={chat:{id:'chat-a',pane:'worker'},messages:[{role:'me',text:'вопрос',seq:1},{role:'ai',text:'сохранённый итог',seq:2}]};
+ const receipt={project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'me',text:'вопрос',seq:1},{role:'ai',text:'сохранённый итог',seq:2}]};
  const generation={stream:0,busy:0,epoch:0};
  const gate=deferred<Data>(),v=ui({fetch:async path=>path==='/api/chats/chat-a'?gate.promise:{records:[]}});v.H.link='ok';v.H.cur={text:'часть',tools:[],stopping:true};const old=v.H.cur,binding=v.functions.sendBinding();v.S.chat=[{role:'me',text:'старый снимок'}];
  const recovery=v.functions.recoverStoppedTurn(old,binding,status,generation);assert.equal(v.H.cur,old);assert.equal(v.requests.filter(r=>r.path==='/api/chats/chat-a').length,1);gate.resolve(receipt);assert.equal(await recovery,true);assert.equal(v.H.cur,null);assert.deepEqual(v.S.chat.map((m:Data)=>m.text),['вопрос','сохранённый итог']);
@@ -179,7 +179,97 @@ function stopRecoveryUI(fetch:(path:string,body:Data|undefined)=>Promise<Data>){
  return {...view,connection:(view.context as Data).reconnect,refresh:(view.context as Data).readRecoveryStatus};
 }
 const stoppedStatus=()=>({project:'/project-a',activeChats:{worker:'chat-a'},panes:[{id:'worker',label:'воркер',busy:false}]});
-const stoppedHistory=()=>({chat:{id:'chat-a',pane:'worker'},messages:[{role:'me',text:'вопрос',seq:1},{role:'ai',text:'подтверждённый итог',seq:2}]});
+const stoppedHistory=()=>({project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'me',text:'вопрос',seq:1},{role:'ai',text:'подтверждённый итог',seq:2}]});
+
+test('TS-47.9 r2: a foreign failed attempt with the same journal sequence never confirms this turn',async()=>{
+ let foreign:unknown=['11111111-1111-4111-8111-111111111111'];const id='11111111-1111-4111-8111-111111111111',history=()=>({project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[],turns:[{turnInstanceId:id,outcome:'error',ts:1,recordSeqs:[17]}],...(foreign===undefined?{}:{foreignAttemptInputs:foreign,unavailableAttemptInputs:[id]})});
+ const v=stopRecoveryUI(async path=>path==='/api/chat'?{ok:true,seq:17}:path==='/api/status'?stoppedStatus():path==='/api/chats/chat-a'?history():{records:[]});v.H.cur=null;await v.functions.ask('Новый вопрос');const turn=v.H.cur;
+ v.connection.onerror();await v.connection.onopen();assert.equal(v.H.cur,turn);assert.equal(turn.acceptedSeq,17);
+ foreign='invalid';await v.refresh();assert.equal(v.H.cur,turn,'malformed foreign-attempt metadata is not proof');foreign=undefined;await v.refresh();assert.equal(v.H.cur,null,'the same sequence in a local failed attempt is valid evidence');
+});
+
+test('TS-47.9 r2: a stopped hidden seat reconciles without disturbing the selected conversation',async()=>{
+ const status={project:'/project-a',activeChats:{worker:'chat-a',room:'chat-room'},panes:[{id:'worker',label:'воркер',busy:false},{id:'room',label:'без роли',busy:false}]},history={project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'ai',text:'ответ места',seq:2,runtime:{recordSeqs:[17]}}]};
+ const v=stopRecoveryUI(async path=>path==='/api/chat'?{ok:true,seq:17}:path==='/api/interrupt'?{ok:true}:path==='/api/status'?status:path==='/api/chats/chat-a'?history:{records:[]});v.H.cur=null;await v.functions.ask('Вопрос');await v.functions.stop();const scope=v.functions.streamScope();
+ v.S.ui.pane='room';v.H.active.room='chat-room';v.H.pane=v.H.panes[1];v.functions.streamSelect();v.S.chat=[{role:'me',text:'другой разговор'}];v.connection.onerror();await v.connection.onopen();assert.equal(v.functions.streamGet(scope),undefined);assert.equal(v.S.chat[0].text,'другой разговор');
+ v.S.ui.pane='worker';v.H.pane=v.H.panes[0];v.functions.streamSelect();await v.functions.loadChat({onboard:false});assert.equal(v.H.cur,null);assert.equal(v.S.chat.at(-1).text,'ответ места');
+});
+
+test('TS-47.9 r2: reading history again after failure completes the same recovery',async()=>{
+ let reads=0;const history={project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'ai',text:'подтверждённый ответ',seq:2,runtime:{recordSeqs:[17]}}]};
+ const v=stopRecoveryUI(async path=>path==='/api/chat'?{ok:true,seq:17}:path==='/api/status'?stoppedStatus():path==='/api/chats/chat-a'?(++reads===1?{ok:false}:history):{records:[]});v.H.cur=null;await v.functions.ask('Вопрос');const turn=v.H.cur;
+ v.connection.onerror();await v.connection.onopen();assert.equal(v.H.cur,turn);await v.functions.loadChat({onboard:false});assert.equal(v.H.cur,null);assert.equal(v.S.chat.at(-1).text,'подтверждённый ответ');assert.equal(reads,2);
+});
+
+for(const condition of ['busy','status unavailable'])test('TS-47.9 r2: '+condition+' retains the active turn while displaying confirmed history',async()=>{
+ let statusAvailable=true,reads=0;const status=stoppedStatus(),history={project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'me',text:'сохранённое сообщение',seq:1,ts:1}]};if(condition==='busy')status.panes[0]!.busy=true;
+ const v=stopRecoveryUI(async path=>path==='/api/chat'?{ok:true,seq:17}:path==='/api/status'?(statusAvailable?status:{ok:false}):path==='/api/chats/chat-a'?(++reads===1&&condition==='status unavailable'?{ok:false}:history):{records:[]});v.H.cur=null;await v.functions.ask('Вопрос');const turn=v.H.cur;
+ v.connection.onerror();await v.connection.onopen();if(condition==='status unavailable')statusAvailable=false;await v.functions.loadChat({onboard:false});assert.equal(v.H.cur,turn);assert.equal(v.S.chat.at(-1).text,'сохранённое сообщение');
+});
+
+test('TS-47.9: reconnect restores a completed accepted turn only from its own history',async()=>{
+ const status=stoppedStatus(),history={...stoppedHistory(),project:'/project-a',messages:[{role:'me',text:'вопрос',seq:1,journalSeq:17},{role:'ai',text:'ответ после обрыва',seq:2,runtime:{recordSeqs:[17]}}]};
+ const v=stopRecoveryUI(async path=>path==='/api/chat'?{ok:true,seq:17,queued:false}:path==='/api/status'?status:path==='/api/chats/chat-a'?history:{records:[]});
+ v.H.cur=null;assert.equal(await v.functions.ask('вопрос'),true);const turn=v.H.cur;assert.equal(turn.acceptedSeq,17);
+ v.connection.onerror();await v.connection.onopen();assert.equal(v.H.cur,null);assert.equal(v.S.chat.at(-1).text,'ответ после обрыва');
+});
+
+test('TS-47.9: the first-run chat also renders recovered history',async()=>{
+ const history={project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'ai',text:'ответ первого запуска',seq:2,runtime:{recordSeqs:[17]}}]},v=stopRecoveryUI(async path=>path==='/api/chat'?{ok:true,seq:17,queued:false}:path==='/api/status'?stoppedStatus():path==='/api/chats/chat-a'?history:{records:[]});v.sandbox.PAGE='first';v.H.cur=null;await v.functions.ask('вопрос');v.connection.onerror();await v.connection.onopen();assert.equal(v.H.cur,null);assert.equal(v.S.chat.at(-1).text,'ответ первого запуска');
+});
+
+test('TS-47.9: recovery neither trusts unrelated history nor overwrites a new event or turn',async()=>{
+ for(const change of ['unrelated','event','turn','instance']){const entered=deferred<void>(),hold=deferred<Data>(),status=stoppedStatus(),v=stopRecoveryUI(async path=>path==='/api/chat'?{ok:true,seq:17,queued:false}:path==='/api/status'?status:path==='/api/chats/chat-a'?(entered.resolve(),hold.promise):{records:[]});
+  v.H.cur=null;await v.functions.ask('вопрос');const original=v.H.cur;v.connection.onerror();const reconnect=v.connection.onopen();await entered.promise;
+  if(change==='event')v.functions.hEvent({type:'delta',text:'новый фрагмент'});if(change==='turn')v.H.cur={text:'новый ход',tools:[]};if(change==='instance')v.H.liveStatus={trace:{instanceId:'other'}};
+  hold.resolve({project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'ai',text:'ответ',seq:2,runtime:{recordSeqs:[change==='unrelated'?18:17]}}]});await reconnect;
+  if(change==='turn')assert.equal(v.H.cur.text,'новый ход');else assert.equal(v.H.cur,original,change);if(change==='event')assert.match(original.text,/новый фрагмент/);
+ }
+});
+
+test('TS-47.9: a pending send is not reconciled with an older idle snapshot',async()=>{
+ const receipt=deferred<Data>(),history={project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'ai',text:'старый ответ',seq:1,runtime:{recordSeqs:[3]}}]};let reads=0;
+ const v=stopRecoveryUI(async path=>path==='/api/chat'?receipt.promise:path==='/api/status'?stoppedStatus():path==='/api/chats/chat-a'?(reads++,history):{records:[]});v.H.cur=null;
+ const sending=v.functions.ask('новый вопрос'),turn=v.H.cur;v.connection.onerror();await v.connection.onopen();assert.equal(v.H.cur,turn);assert.equal(reads,0);
+ receipt.resolve({ok:true,seq:17,queued:false});await sending;await immediate();await immediate();assert.equal(v.H.cur,turn);assert.equal(reads,1);
+});
+
+test('TS-47.9: a rejected or queued send during the outage keeps the stopped turn',async()=>{
+ for(const reply of [{ok:false,error:'нет связи'},{ok:true,queued:true,seq:18}]){const v=stopRecoveryUI(async path=>path==='/api/chat'?reply:{records:[]});v.H.link='lost';v.H.cur={text:'старый ход',tools:[],stopping:true};v.functions.streamSelect();const old=v.H.cur;
+  await v.functions.ask('другое сообщение');assert.equal(v.H.cur,old);assert.equal(v.functions.streamGet(v.functions.streamScope()).cur,old);
+ }
+});
+
+test('TS-47.9: a queued receipt after switching chats clears only its old placeholder',async()=>{
+ const receipt=deferred<Data>(),v=stopRecoveryUI(async path=>path==='/api/chat'?receipt.promise:{records:[]});v.H.cur=null;v.functions.streamSelect();const sending=v.functions.ask('сообщение'),scope=v.functions.streamScope(),row=v.functions.streamGet(scope);assert.ok(row.cur);
+ v.H.active.worker='chat-b';v.functions.streamSelect();v.S.chat=[{role:'me',text:'другая лента'}];receipt.resolve({ok:true,queued:true,seq:18});await sending;assert.equal(row.cur,null);assert.equal(v.H.cur,null);assert.equal(v.S.chat[0].text,'другая лента');
+});
+
+test('TS-47.9: recovery of a hidden seat never replaces the visible chat',async()=>{
+ const status={project:'/project-a',activeChats:{worker:'chat-a',room:'chat-room'},panes:[{id:'worker',label:'воркер',busy:false},{id:'room',label:'без роли',busy:false}]},history={project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'ai',text:'ответ места',seq:2,runtime:{recordSeqs:[17]}}]};
+ const v=stopRecoveryUI(async path=>path==='/api/chat'?{ok:true,seq:17,queued:false}:path==='/api/status'?status:path==='/api/chats/chat-a'?history:{records:[]});v.H.cur=null;await v.functions.ask('вопрос');const scope=v.functions.streamScope();
+ v.S.ui.pane='room';v.H.active.room='chat-room';v.H.pane=v.H.panes[1];v.functions.streamSelect();v.S.chat=[{role:'me',text:'чужая лента'}];v.connection.onerror();await v.connection.onopen();
+ assert.equal(v.functions.streamGet(scope),undefined);assert.equal(v.H.cur,null);assert.equal(v.S.chat[0].text,'чужая лента');
+ v.S.ui.pane='worker';v.H.pane=v.H.panes[0];v.functions.streamSelect();await v.functions.loadChat({onboard:false});assert.equal(v.S.chat.at(-1).text,'ответ места');
+});
+
+test('TS-47.9: changing chats during recovery preserves the original recovery for return',async()=>{
+ const entered=deferred<void>(),hold=deferred<Data>();let reads=0;const status=stoppedStatus(),history={project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'ai',text:'свой ответ',seq:2,runtime:{recordSeqs:[17]}}]};
+ const v=stopRecoveryUI(async path=>path==='/api/chat'?{ok:true,seq:17,queued:false}:path==='/api/status'?status:path==='/api/chats/chat-a'?(++reads===1?(entered.resolve(),hold.promise):history):{records:[]});v.H.cur=null;await v.functions.ask('вопрос');const old=v.H.cur,scope=v.functions.streamScope();v.connection.onerror();const reconnect=v.connection.onopen();await entered.promise;
+ status.activeChats.worker='chat-b';v.H.active.worker='chat-b';v.functions.streamSelect();v.S.chat=[{role:'me',text:'другой разговор'}];hold.resolve(history);await reconnect;assert.equal(v.S.chat[0].text,'другой разговор');assert.equal(v.functions.streamGet(scope).cur,old);
+ status.activeChats.worker='chat-a';v.H.active.worker='chat-a';v.functions.streamSelect();await v.refresh();assert.equal(v.H.cur,null);assert.equal(v.S.chat.at(-1).text,'свой ответ');assert.equal(reads,2);
+});
+
+test('TS-47.9: a status request started before reconnect cannot certify its recovery',async()=>{
+ const stale=deferred<Data>(),fresh=deferred<Data>(),started=deferred<void>();let statuses=0,reads=0;const v=stopRecoveryUI(async path=>path==='/api/chat'?{ok:true,seq:17,queued:false}:path==='/api/status'?(++statuses===1?(started.resolve(),stale.promise):fresh.promise):path==='/api/chats/chat-a'?(reads++,{project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'ai',text:'новый ответ',seq:2,runtime:{recordSeqs:[17]}}]}):{records:[]});
+ v.H.cur=null;await v.functions.ask('вопрос');const turn=v.H.cur,oldRequest=v.refresh();await started.promise;v.connection.onerror();const reconnect=v.connection.onopen();stale.resolve(stoppedStatus());await oldRequest;assert.equal(v.H.cur,turn);assert.equal(reads,0);fresh.resolve(stoppedStatus());await reconnect;assert.equal(v.H.cur,null);assert.equal(reads,1);
+});
+
+test('TS-47.9: an unavailable status or history retries without losing the turn',async()=>{
+ for(const failure of ['status','history']){let statuses=0,reads=0;const v=stopRecoveryUI(async path=>path==='/api/chat'?{ok:true,seq:17,queued:false}:path==='/api/status'?(++statuses===1&&failure==='status'?{ok:false}:stoppedStatus()):path==='/api/chats/chat-a'?(++reads===1&&failure==='history'?{ok:false}:{project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'ai',text:'сохранённый ответ',seq:2,runtime:{recordSeqs:[17]}}]}):{records:[]});
+  v.H.cur=null;await v.functions.ask('вопрос');const turn=v.H.cur;v.connection.onerror();await v.connection.onopen();assert.equal(v.H.cur,turn,failure);await v.refresh();assert.equal(v.H.cur,null,failure);assert.equal(v.S.chat.at(-1).text,'сохранённый ответ');
+ }
+});
 
 test('TS-47.2: failed recovery history retries on the next status or history read',async()=>{
  for(const retry of ['status','history']){let reads=0;const v=stopRecoveryUI(async path=>path==='/api/interrupt'?{ok:true}:path==='/api/status'?stoppedStatus():path==='/api/chats/chat-a'?(++reads===1?{ok:false,code:'unavailable'}:stoppedHistory()):{records:[]});

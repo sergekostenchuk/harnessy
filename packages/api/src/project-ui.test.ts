@@ -94,7 +94,7 @@ function connection(respond:(path:string,body?:any)=>Promise<any>){
  const v=ui(respond),streams:any[]=[];v.context.PAGE='chat';v.context.location.pathname='/01-chat.html';v.context.consumeState=()=>{};v.context.hEvent=()=>{};v.context.proposalsFetch=async()=>{};v.context.render=()=>{};v.context.liveFirstPaint=()=>{};
  v.context.fetch=(path:string,opts?:{body?:string})=>Promise.resolve({json:()=>respond(path,opts?.body?JSON.parse(opts.body):undefined)});
  v.context.EventSource=class {constructor(){streams.push(this)}close(){}};
- runInContext(fixtureSource(live,fixtureGroups.live_api_to_networkWaiting,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_LIVE_EVENTS_to_addEventListener,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_hConnect_to_hConnect,{filename:'live.js',wrapper:0})+'\nglobalThis.linkTesting={api,hConnect};',v.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_api_to_networkWaiting,{filename:'live.js',wrapper:0})+fixtureSource(live,['beginActiveRecovery','recoverActiveTurns'],{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_LIVE_EVENTS_to_addEventListener,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_hConnect_to_hConnect,{filename:'live.js',wrapper:0})+'\nglobalThis.linkTesting={api,hConnect};',v.context);
  return {...v,streams,link:v.context.linkTesting};
 }
 function linkStatus(project:string){return {project,panes:[{id:'room',label:'без роли',model:'w1'}],models:{},activeChats:{}}}

@@ -1,0 +1,32 @@
+const {app,BrowserWindow}=require('electron');
+const fs=require('node:fs');
+const path=require('node:path');
+const base=process.env.RECONNECT_BROWSER_BASE;
+if(!base||!process.env.RECONNECT_BROWSER_USER_DATA)throw Error('Missing isolated browser fixture');
+app.setPath('userData',process.env.RECONNECT_BROWSER_USER_DATA);
+app.commandLine.appendSwitch('disable-background-networking');
+app.whenReady().then(async()=>{
+ if(app.setActivationPolicy)app.setActivationPolicy('prohibited');app.dock?.hide();
+ const win=new BrowserWindow({width:1440,height:900,show:false,webPreferences:{contextIsolation:false,nodeIntegration:false,backgroundThrottling:false,preload:path.join(__dirname,'reconnect-browser-preload.cjs')}});
+ win.webContents.session.webRequest.onBeforeRequest((request,done)=>done({cancel:/^https?:/.test(request.url)&&!request.url.startsWith(base+'/')}));
+ const evaluate=code=>win.webContents.executeJavaScript(code,true);
+ const wait=async expression=>{for(let n=0;n<200;n++){if(await evaluate('(async()=>Boolean(await ('+expression+')))()'))return;await new Promise(resolve=>setTimeout(resolve,50))}throw Error('Timed out: '+expression)};
+ const send=async text=>{await evaluate(`(()=>{const input=document.querySelector('.frame.cur .live-in');input.value=${JSON.stringify(text)};input.dispatchEvent(new Event('input',{bubbles:true}));input.focus()})()`);win.webContents.sendInputEvent({type:'keyDown',keyCode:'Enter'});win.webContents.sendInputEvent({type:'keyUp',keyCode:'Enter'})};
+ await win.loadURL(base+'/sketches/proto/01-chat.html');
+ await wait("window.LIVE?.H.on&&!LIVE.H.snapshotOnly&&!document.documentElement.hasAttribute('data-live-pending')");
+ await evaluate("(async()=>{LIVE.S.ui.pane='worker';LIVE.S.ui.direct={worker:true};LIVE.pickPane();LIVE.hStatus();await LIVE.loadChat({onboard:false});CX.render()})()");
+ await wait("LIVE.H.pane?.id==='worker'&&!!document.querySelector('.frame.cur .live-in')");
+ await send('Остановить первый ход');await wait("LIVE.H.cur?.text.includes('начальный фрагмент')");
+ await evaluate("(()=>{document.querySelector('.frame.cur [data-cx=stop]').click();window.__dropHarnessEvents()})()");
+ await wait("LIVE.H.link==='lost'");
+ await wait("(async()=>{const s=await(await fetch('/api/status')).json();return s.panes.find(p=>p.id==='worker')?.busy===false})()");
+ await send('Новый ход при разрыве');
+ await wait("LIVE.H.cur&&LIVE.H.cur.requestPending===false&&Number.isSafeInteger(LIVE.H.cur.acceptedSeq)");
+ await wait("(async()=>{const s=await(await fetch('/api/status')).json(),c=await(await fetch('/api/chats/'+s.activeChats.worker)).json();return s.panes.find(p=>p.id==='worker')?.busy===false&&c.messages.some(m=>m.text==='Ответ после восстановления')})()");
+ if(!await evaluate("LIVE.H.cur&&LIVE.H.link==='lost'"))throw Error('Fixture did not retain the turn during the actual SSE outage');
+ await evaluate('window.__restoreHarnessEvents()');
+ await wait("LIVE.H.link==='ok'&&!LIVE.H.cur&&LIVE.S.chat.some(m=>m.text==='Ответ после восстановления')");
+ await wait("document.querySelector('.frame.cur .feed')?.textContent.includes('Ответ после восстановления')&&!document.querySelector('.frame.cur .live-cur')");
+ if(process.env.HARNESSY_TEST_SHOTS){fs.mkdirSync(process.env.HARNESSY_TEST_SHOTS,{recursive:true});for(const [width,height] of [[1440,900],[1440,760],[1100,800],[390,844]]){win.setContentSize(width,height);await wait(`innerWidth===${width}&&innerHeight===${height}`);await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');const image=await win.webContents.capturePage();fs.writeFileSync(path.join(process.env.HARNESSY_TEST_SHOTS,`reconnect-${width}x${height}.png`),image.resize({width,height}).toPNG())}}
+ console.log('TS-47.9: completed offline turn restored without reload');win.destroy();app.quit();
+}).catch(error=>{console.error(error);app.exit(1)});
