@@ -44,6 +44,13 @@ app.whenReady().then(async()=>{
     const mobile=await js(`(()=>{const box=document.querySelector('.frame.cur .box'),status=box.querySelector('.cx-model-status'),chip=box.querySelector('[data-cx=model]'),rect=status.getBoundingClientRect();return {text:status.textContent,hidden:status.hidden,display:getComputedStyle(status).display,width:rect.width,aria:chip.getAttribute('aria-label'),page:document.documentElement.scrollWidth}})()`);
     if(mobile.hidden||mobile.display==='none'||mobile.width<=0||mobile.page>390||!mobile.text.includes('Fable 5.1 · Claude Code')||!mobile.aria.includes('Fable 5.1 · Claude Code'))throw Error('mobile reload confirmed model: '+JSON.stringify(mobile));
     if(out)fs.writeFileSync(path.join(out,'confirmed-reload-390x844.png'),(await win.webContents.capturePage()).toPNG());
+    // The busy mobile row keeps the confirmed model and provider accessible,
+    // even though the extra visible line is temporarily compacted.
+    await js('LIVE.busy=()=>true;CX.render()');
+    const busy=await js(`(()=>{const box=document.querySelector('.frame.cur .box'),bar=box.querySelector('.cx-bot'),model=bar.querySelector('[data-cx=model]'),queue=bar.querySelector('.cx-queue-label'),status=box.querySelector('.cx-model-status'),rects=[...bar.children].map(n=>n.getBoundingClientRect()),stop=bar.querySelector('.cx-stop').getBoundingClientRect();return {aria:model.getAttribute('aria-label'),title:model.title,queue:queue.getAttribute('aria-label'),role:queue.getAttribute('role'),status:getComputedStyle(status).display,oneRow:rects.every(r=>Math.abs((r.top+r.bottom-stop.top-stop.bottom)/2)<2),width:bar.scrollWidth,client:bar.clientWidth}})()`);
+    if(!busy.aria.includes('Fable 5.1 · Claude Code')||busy.title!==busy.aria||busy.queue!=='Отправить после текущего хода'||busy.role!=='img'||busy.status!=='none'||!busy.oneRow||busy.width>busy.client+1)throw Error('mobile busy model: '+JSON.stringify(busy));
+    await js('LIVE.busy=()=>false;CX.render()');
+    if(await js("getComputedStyle(document.querySelector('.frame.cur .cx-model-status')).display==='none'"))throw Error('mobile confirmed model did not return after the turn');
     console.log('model change: saving, confirmed, refusal and four layouts verified; mobile reload confirmed');
   }finally{win.close()}
   app.quit();
