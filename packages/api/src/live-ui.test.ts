@@ -103,6 +103,14 @@ test('TS-50.B: failed partial response keeps its own reason, identity and tools 
  assert.equal(old.text,'Часть ответа');assert.match(old.html,/ход не завершён/);assert.match(old.html,/Нет связи/);assert.match(old.html,/инструменты/);assert.equal(old.failed,true);assert.doesNotMatch(v.functions.actsLine(old,0),/передать контекст/);assert.equal(next.text,'Новый ответ');assert.doesNotMatch(next.html,/инструменты|Часть ответа/);assert.deepEqual(v.S.chat.map((m:Data)=>m.text),['Вопрос','Часть ответа','Новый ответ']);
 });
 
+test('TS-50.B r2: a peer task precedes both failed fragments and the successful retry in history',async()=>{
+ const turns=[{turnInstanceId:'attempt-1',ts:10,outcome:'error',partialText:'Фрагмент 1',recordSeqs:[42]},{turnInstanceId:'attempt-2',ts:11,outcome:'error',partialText:'Фрагмент 2',recordSeqs:[42]}];
+ const messages=[{seq:1,role:'peer',text:'[от Руководитель] Поручение',journalSeq:42,journalTs:9,ts:13},{seq:2,role:'ai',text:'Итог',journalSeq:42,journalTs:5,ts:14,runtime:{turnInstanceId:'attempt-3'}}];
+ const v=ui({fetch:async path=>path==='/api/chats/chat-a'?{messages,turns}:{records:[]}});await v.functions.loadChat({onboard:false});
+ assert.deepEqual(v.S.chat.map((m:Data)=>m.text),['[от Руководитель] Поручение','Фрагмент 1','Фрагмент 2','Итог']);
+ assert.equal(v.S.chat[0].journalSeq,42);assert.equal(v.S.chat[0].t,9000);assert.equal(v.S.chat[3].t,14000,'model output keeps its own timestamp');
+});
+
 test('TS-47.2: stop remains requested until an actual terminal event, including late and failed receipts',async()=>{
  const reply=deferred<Data>(),view=ui({fetch:async path=>path==='/api/interrupt'?reply.promise:{ok:true}}),timers:{ms:number;fn:()=>void}[]=[];
  view.sandbox.setTimeout=(fn:()=>void,ms:number)=>timers.push({fn,ms});const turn={text:'ответ',tools:[],phase:'write',startedAt:Date.now(),pane:'worker'};view.H.cur=turn;view.H.pane.busy=true;

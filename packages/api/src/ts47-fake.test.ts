@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {ProviderError} from '@harnessy/providers';
 import {ScenarioProvider,fakeScenario} from '../tools/ts47-fake.ts';
 import type {} from '../tools/ts47-stand.ts';
 import {fakeContext,seat} from './ts47-stand-test-helper.ts';
@@ -79,4 +82,14 @@ test('TS-50.B: failed fragment and tools stay in their attempt, and only the com
  assert.equal(answer.text,'Завершённый ответ второй попытки.');assert.notEqual(answer.runtime.turnInstanceId,failed.turnInstanceId);assert.equal(answer.toolEvents,undefined);assert.equal(after.turns.at(-1).partialText,failed.partialText);
  assert.deepEqual(failed.recordSeqs,[question.journalSeq]);assert.ok(Number.isFinite(question.journalTs));assert.ok(question.journalTs<=failed.ts);
  await h.runtime.chatsNew({pane:'worker',carry:'text'},owner);const carry=h.runtime.registry.get('worker')!.carry;assert.match(carry,/Завершённый ответ второй попытки/);assert.doesNotMatch(carry,/Незавершённый фрагмент первой попытки/);
+});
+
+test('TS-50.B r2: repeated failures retain the original peer task identity through retry and restart',async t=>{
+ const seats='  worker: {role: executor, vendor: claude, model: w1, mode: read}\n  peer: {role: orchestrator, vendor: claude, model: w1, mode: read}';
+ const h=await fixture(t,{seats,before:dir=>writeFileSync(join(dir,'.harness','comms-policy.yaml'),'version: 1\nroutes: [{from: "*", to: "*", kinds: "*"}]\nobserve: {}\n')});let attempt=0;
+ h.provider.onRun=async(seat,_prompt,ctx)=>{assert.equal(seat.id,'worker');h.clock.advance(1000);ctx.modelStarted?.();attempt++;const text=attempt<3?'Фрагмент '+attempt:'Итог';ctx.publish({type:'delta',text});if(attempt<3)throw new ProviderError('turn_failed','Сбой '+attempt);ctx.publish({type:'done',sessionId:'peer-retry',model:seat.model,durationMs:1,usage:{input:0,output:0,cacheRead:0}});return {text,sessionId:'peer-retry'}};
+ const task=h.runtime.channel.post({to:'worker',kind:'task',text:'Поручение от руководителя'},{seat:'peer',trust:'agent'});await h.runtime.idle();const chat=h.runtime.chatsList({seat:'owner',trust:'owner'}).active.worker!;
+ for(let n=0;n<2;n++){const waiting=h.runtime.waiting('worker');assert.ok(waiting);const response=await call(h.api,'/api/panes/worker/attempt',{body:{project:h.dir,turnInstanceId:waiting.turnInstanceId,action:'retry'}});assert.equal(response.status,200,response.text);await h.runtime.idle()}
+ await h.runtime.openProject(h.dir);const history=(await call(h.api,'/api/chats/'+chat)).body,peer=history.messages.find((m:any)=>m.role==='peer'&&m.text.includes('Поручение от руководителя')),answer=history.messages.find((m:any)=>m.role==='ai'&&m.text==='Итог');
+ assert.ok(peer);assert.ok(answer);assert.equal(peer.journalSeq,task.seq);assert.ok(Number.isFinite(peer.journalTs));assert.deepEqual(history.turns.map((turn:any)=>turn.partialText),['Фрагмент 1','Фрагмент 2']);assert.ok(history.turns.every((turn:any)=>turn.recordSeqs.includes(task.seq)&&turn.ts>=peer.journalTs));assert.ok(peer.ts>=history.turns[1].ts);assert.ok(answer.ts>=peer.ts);
 });
