@@ -60,6 +60,17 @@ test('36D: live work canvas uses project seats, chats, usage and channel, and th
  await v.find('[data-team-open-chat]').emit('click');assert.equal(v.state.ui.pane,'orch');assert.equal(v.location.href,'01-chat.html');
  assert.equal(v.subscriptions.length,1);await v.window.emit('pagehide');assert.equal(v.subscriptions[0].closed,true);await v.window.emit('pageshow',{persisted:true});await v.settle();assert.equal(v.subscriptions.length,2);
 });
+test('TS-51.D r2: team canvas never treats partial usage as a completed measurement',async()=>{
+ const rows=[pane('orch','orchestrator','chat-orch'),pane('worker','worker','chat-worker')];
+ const setUsage=(row:any,measured:unknown,last:unknown)=>{row.context={...row.context,measured,last}};
+ setUsage(rows[0],false,{input:0,output:null,cacheRead:null});setUsage(rows[1],false,{input:120,output:null,cacheRead:null});
+ const v=teamUi('work',async path=>{if(path==='/api/swarm')return snapshot('/project-a',rows);if(path==='/api/chats/chat-orch')return chat('chat-orch','orch');if(path==='/api/chats/chat-worker')return chat('chat-worker','worker');throw Error('unexpected '+path)});await v.settle();
+ const spend=()=>[v.find('[data-key="orch"] .ft b').textContent,v.find('[data-key="worker"] .l4 b').textContent];
+ assert.deepEqual(spend(),['нет данных','нет данных']);assert.match(v.find('[data-key="worker"] .l4').getAttribute('title')!,/ход · нет данных · последний ход/);
+ setUsage(rows[0],true,{input:0,output:0,cacheRead:0});setUsage(rows[1],true,{input:100,output:20,cacheRead:30});await v.context.TEAM_LIVE.refresh(true);await v.settle();assert.deepEqual(spend(),['0 ток','150 ток']);assert.match(v.find('[data-key="worker"] .l4').getAttribute('title')!,/ход · 150 ток · последний ход/);
+ setUsage(rows[0],false,{input:0,output:0,cacheRead:0});setUsage(rows[1],true,{input:120,output:null,cacheRead:null});await v.context.TEAM_LIVE.refresh(true);await v.settle();assert.deepEqual(spend(),['нет данных','нет данных']);
+ setUsage(rows[0],undefined,{input:0,output:0,cacheRead:0});setUsage(rows[1],true,{input:1e308,output:1e308,cacheRead:0});await v.context.TEAM_LIVE.refresh(true);await v.settle();assert.deepEqual(spend(),['нет данных','нет данных']);
+});
 test('TS-47.5 F11/F13: work canvas labels its action and places the legend outside the viewport',async()=>{
  const v=teamUi('work');await v.settle();const canvas=v.find('[data-canvas]'),legend=v.find('.tc-work > .tc-legend');assert.equal(canvas.contains(legend),false);assert.match(v.find('[data-team-open-chat]').textContent,/Открыть чат/);assert.ok(v.find('[data-team-open-chat]').classList.contains('btn'));assert.match(v.find('.tc-orch .hd').textContent,/Оркестратор/);assert.doesNotMatch(v.find('.tc-orch .hd').textContent,/orchestrator/);
 });
