@@ -88,6 +88,19 @@ test('TS-47.3 F01: streams stay with their project, instance, place and chat acr
  view.S.ui.pane='worker';view.H.pane=a;view.H.active.worker='new-chat';a.busy=true;view.functions.streamSelect();assert.equal(view.H.cur,null,'a different chat never inherits the old stream');assert.equal(view.functions.selectedBusy(),false,'the same busy place does not mark a different chat busy');view.H.liveStatus.trace.instanceId='instance-2';view.H.active.worker='chat-a';a.busy=false;view.functions.streamSelect();assert.equal(view.H.cur,null,'a new engine instance never inherits it either');
 });
 
+test('TS-47.3 r2: a late rejected send clears only its own hidden placeholder',async()=>{
+ const gate=deferred<Data>(),view=ui({fetch:async path=>path==='/api/chat'?gate.promise:{ok:true}}),other={id:'reviewer',label:'ревьюер',model:'w1',busy:false};view.H.panes.push(other);view.H.active.reviewer='chat-b';
+ const send=view.functions.ask('текст',view.functions.sendBinding());view.S.ui.pane='reviewer';view.H.pane=other;view.functions.streamSelect();view.functions.hEvent({type:'delta',text:'чужой ответ'});const otherCurrent=view.H.cur;
+ gate.resolve({ok:false,code:'binding_changed'});assert.equal(await send,false);assert.equal(view.H.cur,otherCurrent,'a late refusal does not touch the other visible stream');
+ view.S.ui.pane='worker';view.H.pane=view.H.panes[0];view.functions.streamSelect();assert.equal(view.H.cur,null,'the refused hidden placeholder is gone');assert.equal(view.functions.selectedBusy(),false);
+ const later=deferred<Data>(),newer=ui({fetch:async path=>path==='/api/chat'?later.promise:{ok:true}}),peer={id:'reviewer',label:'ревьюер',model:'w1',busy:false};newer.H.panes.push(peer);newer.H.active.reviewer='chat-b';const oldSend=newer.functions.ask('старый запрос',newer.functions.sendBinding());newer.S.ui.pane='reviewer';newer.H.pane=peer;newer.functions.streamSelect();newer.functions.streamHidden({pane:'worker',chat:'chat-a',type:'delta',text:'новый ответ'});later.resolve({ok:false,code:'pane_busy'});assert.equal(await oldSend,false);newer.S.ui.pane='worker';newer.H.pane=newer.H.panes[0];newer.functions.streamSelect();assert.equal(newer.H.cur?.text,'новый ответ','a newer real stream is not cleared by the old rejection');
+});
+
+test('TS-47.3 r2: hidden tool failures retain the same reason and details as visible failures',()=>{
+ const view=ui(),worker=view.H.pane,peer={id:'reviewer',label:'ревьюер',model:'w1',busy:false},event={type:'toolError',pane:'worker',chat:'chat-a',text:JSON.stringify({error:'Ошибка чтения файла',code:'denied'})};view.H.panes.push(peer);view.H.active.reviewer='chat-b';
+ view.functions.hEvent(event);const expected=plain(view.H.cur.tools[0]);view.functions.streamClear();view.S.ui.pane='reviewer';view.H.pane=peer;view.functions.streamSelect();view.functions.streamHidden(event);assert.equal(view.H.cur,null,'the other conversation is not updated');view.S.ui.pane='worker';view.H.pane=worker;view.functions.streamSelect();assert.deepEqual(plain((view.H.cur as Data | null)?.tools[0]),expected);
+});
+
 test('TS-47.3 F06: only a confirmed queued message gets a recipient and a delivery removes its marker',async()=>{
  const gate=deferred<Data>(),view=ui({fetch:async(path)=>path==='/api/chat'?gate.promise:{ok:true}}),sent={role:'me',text:'следующее'},binding=view.functions.sendBinding();view.S.chat=[sent];view.H.cur={text:'ответ',tools:[]};
  const send=view.functions.ask(sent.text,binding,[],sent);assert.doesNotMatch(view.functions.bubble(sent,0),/В очереди/);gate.resolve({ok:true,queued:true,seq:9});assert.equal(await send,true);assert.match(view.functions.bubble(sent,0),/В очереди · воркер · после текущего хода/);
