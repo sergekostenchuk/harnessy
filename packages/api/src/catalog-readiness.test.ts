@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,realpathSync} from 'node:fs';
 import {join} from 'node:path';
 import {cliEntry,ProviderCatalog} from '@harnessy/providers';
 import {geminiFixture} from '../../providers/src/gemini-test-helpers.ts';
@@ -50,6 +50,10 @@ test('310: unknown Gemini login permits selection; actual CLI refusal is a turn 
  const h=await fixture(t,{deps:{providerCatalog:new ProviderCatalog([g.entry])}});await call(h.api,'/api/providers/'+h.runtime.providerOperations.catalog.ids()[0]+'/check',{body:{}});
  const r=await call(h.api,'/api/panes/worker',{body:{vendor:'gemini',model:'default',mode:'all',binding:h.runtime.paneBinding('worker')}});assert.equal(r.status,200,r.text);
  const pane=h.runtime.registry.get('worker')!;pane.sessionId='ab123456-1234-1234-1234-123456789abc';h.runtime.project.state.savePanes(h.runtime.registry,h.runtime.project.journal);
+ // A resumable CLI conversation exists independently of the pane's session ID.
+ // Keep this test on the expired-login process path, rather than missing history.
+ const chats=join(g.config,'tmp','fixture','chats');mkdirSync(chats,{recursive:true});writeFileSync(join(g.config,'projects.json'),JSON.stringify({projects:{[realpathSync(pane.cwd)]:'fixture'}}));
+ writeFileSync(join(chats,'session-2026-ab123456.jsonl'),JSON.stringify({sessionId:pane.sessionId})+'\n');
  const selected=()=>({vendor:pane.vendor,model:pane.model,mode:pane.mode,session:pane.sessionId}),before=selected();
  // The process double exits 99 on any turn, just like a saved but expired login.
  await assert.rejects(h.runtime.runTurn('worker','fixture refusal'),{code:'transport_lost'});

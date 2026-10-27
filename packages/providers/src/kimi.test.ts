@@ -5,6 +5,14 @@ import {ProviderCatalog,CLI_DESCRIPTORS,cliEntry} from './catalog.ts';
 import {KIMI,kimiVersion,KIMI_UNAVAILABLE,KIMI_LOGIN_UNKNOWN,KIMI_MODELS_UNAVAILABLE} from './kimi.ts';
 import {kimiFixture} from './kimi-test-helpers.ts';
 
+test('47.11: Kimi subscription denial is distinct from missing login and unknown failure',()=>{
+ const failure=(stderr:string)=>KIMI.failure!({stderr,stdout:'',code:1,signal:null})!;
+ assert.deepEqual(failure('provider.auth_error: 403 Your current subscription does not have access to Kimi Code right now.'),{code:'permission_denied',text:'Подписка/тариф не даёт доступа к Kimi Code. Провайдер: Your current subscription does not have access to Kimi Code right now.'});
+ assert.equal(failure('provider.auth_error: 401 Unauthorized').code,'not_logged_in');
+ assert.match(failure('Authentication required').text,/kimi login/);
+ for(const text of ['provider.auth_error: 403 forbidden','network unavailable',''])assert.equal(failure(text).code,'turn_failed');
+});
+
 test('264 Kimi: live version, explicit unknown login, default model and full access only; metadata only invokes --version',async t=>{
  const f=kimiFixture(t),catalog=new ProviderCatalog([f.entry]);const row=(await catalog.read('kimi')).row;
  assert.ok(CLI_DESCRIPTORS.includes(KIMI));assert.equal(row.version,'2.1.1');assert.equal(row.installed,true);assert.equal(row.login.state,'unknown');assert.equal(row.login.reason,KIMI_LOGIN_UNKNOWN);assert.equal(row.login.account,undefined);assert.deepEqual(row.models,[{id:'default',label:'по умолчанию программы'}]);assert.equal(row.modelsReason,KIMI_MODELS_UNAVAILABLE);

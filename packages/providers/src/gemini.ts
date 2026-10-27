@@ -1,8 +1,8 @@
-import {homedir} from 'node:os';
-import {join,resolve} from 'node:path';
+import {join} from 'node:path';
 import {geminiStream} from './gemini-stream.ts';
 import {ProviderError,record} from './types.ts';
 import type {CliProbe,CliDescriptor,CliAuth} from './cli/types.ts';
+import {geminiHome,prepareGeminiSettings} from './gemini-settings.ts';
 
 // Installed 0.63.0, docs/reference/configuration.md: system settings override lower scopes; mcp.allowed intersects across scopes.
 // Plan can exit to YOLO in headless mode, so read/edit are deliberately not advertised.
@@ -21,8 +21,14 @@ export const GEMINI:CliDescriptor={
  modes:{all:()=>['--approval-mode','yolo']},
  turn:{format:'stream-json',command:i=>({args:['--output-format','stream-json','--prompt',i.roleNote+'\n\n'+i.message]}),decoder:geminiStream},
  resume:id=>{if(!/^[0-9a-f-]{36}$/i.test(id))throw new ProviderError('session_missing','Gemini: неверная сессия');return ['--resume',id]},
- mcp:{serialize:server=>JSON.stringify({mcp:{allowed:['harnessy']},mcpServers:{harnessy:server},hooksConfig:{enabled:false},tools:{discoveryCommand:''}}),args:()=>[],env:path=>({GEMINI_CLI_SYSTEM_SETTINGS_PATH:path})},
- auth:{file:env=>join(env.GEMINI_CLI_HOME?resolve(env.GEMINI_CLI_HOME):join(homedir(),'.gemini'),'google_accounts.json'),parse:(raw:string|null):CliAuth=>{
+ mcp:{serialize:server=>JSON.stringify({mcp:{allowed:['harnessy']},mcpServers:{harnessy:server},hooksConfig:{enabled:false},tools:{discoveryCommand:''}}),args:()=>['--allowed-mcp-server-names','harnessy'],prepare:prepareGeminiSettings},
+ failure:r=>{
+  const tier=r.stderr.match(/This client is no longer supported for Gemini Code Assist for individuals\./);
+  if(/IneligibleTierError/.test(r.stderr)&&tier)return {code:'permission_denied',text:'Подписка/тариф не даёт доступа к Gemini Code Assist через этот клиент. Провайдер: '+tier[0]};
+  if(r.code===41&&/login required|no authentication method selected|please authenticate/i.test(r.stderr))return {code:'not_logged_in',text:'Нужен вход в Gemini CLI: откройте программу gemini и выполните вход'};
+  return undefined;
+ },
+ auth:{file:env=>join(geminiHome(env),'.gemini','google_accounts.json'),parse:(raw:string|null):CliAuth=>{
   if(raw===null)return {loggedIn:false};const value:unknown=JSON.parse(raw);
   if(!record(value))throw new ProviderError('protocol','Gemini: неверная запись аккаунта');
   if(value.active===undefined||value.active===null||value.active==='')return {loggedIn:false};
