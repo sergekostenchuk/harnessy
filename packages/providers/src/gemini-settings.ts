@@ -6,6 +6,7 @@ import {CliStateStore} from './cli/state.ts';
 import {ProviderError} from './types.ts';
 import type {CliTurnInput} from './cli/types.ts';
 import {importGeminiSession} from './gemini-session.ts';
+import {geminiSettingsGuard} from './gemini-settings-guard.ts';
 
 export const geminiHome=(env:NodeJS.ProcessEnv)=>resolve(env.GEMINI_CLI_HOME||homedir());
 const unavailable=()=>new ProviderError('capability_unsupported','Gemini: настройки проекта могут включить hooks; изолированный ход недоступен');
@@ -15,11 +16,13 @@ function workspace(input:CliTurnInput){try{lstatSync(join(input.seat.cwd,'.gemin
 // Only the existing Google login is projected; no ambient settings/extensions/MCP.
 export async function prepareGeminiSettings(configPath:string,input:CliTurnInput,env:NodeJS.ProcessEnv,stateRoot?:string){
  workspace(input);
- const lease=new CliStateStore('gemini',stateRoot).acquire(input.seat.cwd,input.seat.id),config=join(lease.path,'.gemini'),settings=join(config,'settings.json');
- const privateDirectory=()=>{lease.validate();const stat=lstatSync(config);if(!stat.isDirectory()||stat.isSymbolicLink())throw new ProviderError('protocol','Gemini: небезопасный каталог настроек')};
+ const lease=new CliStateStore('gemini',stateRoot).acquire(input.seat.cwd,input.seat.id),config=join(lease.path,'.gemini');
+ let guard:ReturnType<typeof geminiSettingsGuard>|undefined;
+ const privateDirectory=()=>{lease.validate();guard?.directories()};
  const validate=()=>{privateDirectory();workspace(input)};
  try{
   await mkdir(config,{mode:0o700,recursive:true});
+  guard=geminiSettingsGuard(config);
   await importGeminiSession(join(geminiHome(env),'.gemini'),config,input.seat.cwd,input.seat.sessionId,validate);
   for(const name of ['oauth_creds.json','google_accounts.json']){
    const source=await open(join(geminiHome(env),'.gemini',name),constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK).catch(e=>{if(e.code==='ENOENT')return null;throw e});
@@ -30,7 +33,7 @@ export async function prepareGeminiSettings(configPath:string,input:CliTurnInput
    }finally{await source.close()}
   }
   const value=JSON.parse(await readFile(configPath,'utf8'));value.security={auth:{selectedType:'oauth-personal'}};
-  validate();const target=await open(settings,constants.O_WRONLY|constants.O_CREAT|constants.O_TRUNC|constants.O_NOFOLLOW,0o600);try{await target.chmod(0o600);await target.writeFile(JSON.stringify(value))}finally{await target.close()}
-  return {env:{GEMINI_CLI_HOME:lease.path,GEMINI_CLI_SYSTEM_SETTINGS_PATH:'',GEMINI_CLI_SYSTEM_DEFAULTS_PATH:''},validate,dispose:async()=>{try{privateDirectory();await unlink(settings)}finally{lease.release()}}};
- }catch(e){lease.release();throw e}
+  validate();guard.write(JSON.stringify(value));
+  return {env:{GEMINI_CLI_HOME:lease.path,GEMINI_CLI_SYSTEM_SETTINGS_PATH:'',GEMINI_CLI_SYSTEM_DEFAULTS_PATH:''},validate:()=>{validate();guard!.validate()},dispose:async()=>{try{guard?.dispose()}finally{lease.release()}}};
+ }catch(e){try{guard?.dispose()}finally{lease.release()}throw e}
 }
