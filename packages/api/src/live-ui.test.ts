@@ -61,9 +61,9 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  function markupNode(','  function guidanceState(')+
   part(live,'  function guidanceState(','  function render(')+
   part(live,'  function closeLAMenus()','  // запись «контекст передан»')+
-  '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
+  '\nconst L={api,sendBinding,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
-  '\ndrawLive=()=>{if(window.CX&&CX.setBusy)CX.setBusy(!!H.cur)};globalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,stop,curHTML,footerUpdate,finish,loadChat,recoverStoppedTurn,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,streamScope,streamGet,streamEnd,streamSelect,streamHidden,streamClear,selectedBusy,queueDelivered,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw,showOrchestratorOffer,laPath,projectPathValue};',context);
+  '\ndrawLive=()=>{if(window.CX&&CX.setBusy)CX.setBusy(!!H.cur)};globalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,recordModelChange,bindFreshModelChanges,ask,stop,curHTML,footerUpdate,finish,loadChat,recoverStoppedTurn,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,streamScope,streamGet,streamEnd,streamSelect,streamHidden,streamClear,selectedBusy,queueDelivered,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw,showOrchestratorOffer,laPath,projectPathValue};',context);
  const functions=(context as Data).testing as Data;
  function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
  function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
@@ -414,6 +414,24 @@ test('81/109: current answer keeps its launch label; history uses only saved don
  view.H.cur={text:'no model terminal',tools:[],model:'launch',pane:'worker',who:'воркер'};view.functions.finish({type:'done'});assert.equal(view.S.chat.at(-1).model,null);
 });
 
+test('TS-49.2: confirmed model event survives history reload only in its original project, place and chat',async()=>{
+ const view=ui({fetch:async path=>path.startsWith('/api/chats/')?{chat:{id:path.split('/').at(-1),pane:view.H.pane.id},messages:[{role:'me',text:'hello',ts:1}]}:{ok:true}});
+ const binding=view.functions.sendBinding();view.functions.recordModelChange(binding,{from:'Fable · Claude',to:'Fable · Codex',scope:'место «воркер»'});
+ assert.equal(view.S.chat.length,1);const html=view.functions.bubble(view.S.chat[0],0);assert.match(html,/Fable · Claude/);assert.match(html,/Fable · Codex/);assert.match(html,/место «воркер»/);assert.match(html,/<time /);
+ await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.filter((m:Data)=>m.src==='model-change').length,1);await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.filter((m:Data)=>m.src==='model-change').length,1);
+ view.H.active.worker='chat-b';await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.some((m:Data)=>m.src==='model-change'),false);
+ view.H.active.worker='chat-a';view.H.project='/project-b';await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.some((m:Data)=>m.src==='model-change'),false);
+ view.H.project='/project-a';view.S.ui.pane='room';view.H.pane=view.H.panes[1];view.H.active.room='chat-a';await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.some((m:Data)=>m.src==='model-change'),false);
+ view.S.ui.pane='worker';view.H.pane=view.H.panes[0];await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.filter((m:Data)=>m.src==='model-change').length,1);
+});
+
+test('TS-49.2: a new-chat model receipt never enters the previous chat and follows only its confirmed new chat',()=>{
+ const view=ui();view.S.ui.pane='room';view.H.pane=view.H.panes[1];view.H.active.room='old';const old=view.functions.sendBinding(),key=JSON.stringify([old.project,old.pane,old.chat,'fresh']);
+ view.functions.recordModelChange({...old,fresh:true},{from:'W1',to:'W2',scope:'этот разговор'});assert.equal(view.S.chat.length,0);
+ view.functions.bindFreshModelChanges(old,key);assert.equal(view.S.chat.length,0);view.H.active.room='new';const created=view.functions.sendBinding();view.functions.bindFreshModelChanges(created,JSON.stringify(['/other','room','old','fresh']));assert.equal(view.S.chat.length,0);
+ view.functions.bindFreshModelChanges(created,key);assert.equal(view.S.chat.length,1);assert.equal(view.S.chat[0].scope,'этот разговор');view.functions.bindFreshModelChanges(created,key);assert.equal(view.S.chat.length,1);
+});
+
 test('81/109: busy room uses pane setting and explains next-turn application',async()=>{
  const view=ui();view.S.ui.pane='room';view.H.pane=view.H.panes[1];view.H.pane.busy=true;view.sandbox.fetch=async(path:string,opts:{body:string})=>{view.requests.push({path,body:JSON.parse(opts.body)});return {json:async()=>({ok:true,pane:{...view.H.pane,model:'w2'},appliesFrom:'next'})}};
  assert.equal(await view.functions.setSeat({model:'w2'},'Модель'),true);assert.equal(view.requests[0]!.path,'/api/panes/room');assert.match(view.toasts.at(-1)!,/применится со следующего хода/);
@@ -424,7 +442,7 @@ for(const place of ['worker','room'])for(const page of ['chat','new'])test('135/
  const view=ui();view.H.project='/projects/chat-test';view.H.noProject=false;view.H.pane=view.H.panes.find((p:Data)=>p.id===place);view.S.ui.pane=place;view.S.cx={noFolder:true,att:[],modes:{}};view.sandbox.PAGE=page;
  view.sandbox.svg=()=>'';view.sandbox.seats=()=>view.H.panes.filter((p:Data)=>p.id!=='room');
  const top={innerHTML:''},bot={innerHTML:''},att={innerHTML:'',style:{}},box={__cx:{ta:view.ta},previousElementSibling:top,querySelector:(s:string)=>s==='.cx-bot'?bot:s==='.cx-att'?att:null};
- runInContext('(function(){const S=()=>globalState,seat=()=>H.pane,cx=()=>globalState.cx;'+cx.match(/const base=[^;]+;/)![0]+part(cx,'  const chip=','  // ── строка:')+part(cx,'  function render(box)','  function setBusy(')+'globalThis.renderCX=render;})();',view.context);
+ runInContext('(function(){const S=()=>globalState,seat=()=>H.pane,cx=()=>globalState.cx;'+cx.match(/const base=[^;]+;/)![0]+part(cx,'  const allModels=','  // ── строка:')+part(cx,'  function render(box)','  function setBusy(')+'globalThis.renderCX=render;})();',view.context);
  const render=(view.context as Data).renderCX;render(box);assert.doesNotMatch(top.innerHTML,/data-cx="folder"|<b>chat-test<\/b>/);assert.equal(view.S.cx.noFolder,false);
  view.H.project='/projects/next';render(box);assert.doesNotMatch(top.innerHTML,/data-cx="folder"|<b>chat-test<\/b>/);assert.equal(view.S.cx.noFolder,false);
  view.H.noProject=true;view.S.cx.noFolder=false;render(box);assert.doesNotMatch(top.innerHTML,/data-cx="folder"|<b>Без проекта<\/b>/);assert.equal(view.S.cx.noFolder,true);

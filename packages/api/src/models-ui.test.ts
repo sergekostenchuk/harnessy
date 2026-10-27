@@ -8,6 +8,11 @@ import {deferred,fixture,call,sse,until} from './test-helpers.ts';
 import {ProviderCatalog,cliEntry} from '../../providers/src/index.ts';
 import {cliFixture} from '../../providers/src/cli/test-support.ts';
 import {collect} from '../../runtime/src/test-helpers.ts';
+import {spawn} from 'node:child_process';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {createApi} from './server.ts';
+import {testSite} from './site-test-helpers.ts';
 
 type Data=Record<string,any>;
 const cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
@@ -34,14 +39,14 @@ function ui(options:{apiRoutes?:Data[];page?:string;room?:boolean;statusFetch?:(
  pane.settingsBinding={project:H.project,instanceId:'project-instance',pane:pane.id,chat:H.active[pane.id],revision:0,mode:pane.mode};
  const S:Data={ui:{pane:pane.id},cx:{folder:'',noFolder:false,modes:{},att:[],conn:{}},chat:[]},requests:{path:string;body?:Data}[]=[],toasts:string[]=[],waiting:Data[]=[],listeners=new Set<Data>();
  let snapshot:Data=catalogue(),lastPane:Data|null=null,serverModels:Data|null=null;
- const ctx:Data={document:d.document,H,S,PAGE:options.page??'chat',location:{href:''},esc,toast:(s:string)=>toasts.push(s),setTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),
+ const ctx:Data={document:d.document,H,S,PAGE:options.page??'chat',location:{href:''},esc,now:()=>Date.now(),render(){},toast:(s:string)=>toasts.push(s),setTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),
   showWaiting:(p:Data,info:Data,project:string)=>waiting.push({pane:p.id,info,project}),showRestore(){},badges(){},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)},renderWaiting(){},save(){},
   fetch:async(path:string,opts?:{body?:string})=>{const body=opts?.body?JSON.parse(opts.body):undefined;requests.push({path,body});
    const result=path==='/api/status'?(options.statusFetch?await options.statusFetch():{project:H.project,panes:H.panes,models:serverModels??H.models,turnModes:H.turnModes}):options.fetch?await options.fetch(path,body):path==='/api/providers/catalog'?snapshot:{ok:true,pane:{...H.pane,...body}};
    if(body&&result.ok)lastPane=result.pane;return {status:result.code==='capability_unsupported'?409:200,json:async()=>result};}};
  ctx.window=ctx;const context=createContext(ctx);
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function applyStatus(','  async function refreshChats(')+part(live,'  function projectPathValue(','  function laPath(')+
-  '\nglobalThis.binding={networkMenu,networkPath,networkWarning,api,sendBinding,bindingCurrent,invalidateBinding,configureSetting,applyStatus,projectPathValue};',context);
+  '\nglobalThis.binding={networkMenu,networkPath,networkWarning,api,sendBinding,bindingCurrent,invalidateBinding,configureSetting,recordModelChange,applyStatus,projectPathValue};',context);
  ctx.LIVE={H,S,esc,...ctx.binding,...(options.apiRoutes?{apiRoutes:options.apiRoutes,loadLlmRoutes:async()=>true}:{}),save(){},log(){},toast:ctx.toast,paneName:(p:Data)=>p.label,busy:()=>false,hStatus(){},
   refreshStatus:async()=>{if(lastPane){Object.assign(H.pane,lastPane);await d.window.emit('live:status')}},
   subscribeLiveEvents(onmessage:(event:Data)=>void){const listener={onmessage,close(){listeners.delete(listener)}};listeners.add(listener);return listener}};
@@ -55,6 +60,43 @@ function ui(options:{apiRoutes?:Data[];page?:string;room?:boolean;statusFetch?:(
  return {...d,H,S,ctx,requests,toasts,waiting,listeners,find,open,select,flush,providers,
   status:()=>d.window.emit('live:status'),hide:()=>d.window.emit('pagehide')};
 }
+
+for(const room of [false,true])test('TS-49.2: '+(room?'conversation':'seat')+' model is confirmed before chip and feed change',async()=>{
+ const gate=deferred<Data>();let v:ReturnType<typeof ui>;v=ui({room,fetch:async(path,body)=>path==='/api/providers/catalog'?catalogue():body?gate.promise:{}});
+ v.H.models.claude=[{id:'shared',label:'Fable'}];v.H.models.codex=[{id:'shared',label:'Fable'}];await v.open();
+ const choosing=v.select('codex','shared').emit('click');await until(()=>v.requests.some(r=>!!r.body));
+ assert.equal(v.H.pane.vendor,'claude');assert.match(v.find('[data-cx="model"]').textContent,/Fable · Claude Code/);assert.equal(v.find('[data-cx="model"]').getAttribute('aria-busy'),'true');assert.match(v.find('.cx-model-status').textContent,/Сохраняем/);assert.equal(v.S.chat.length,0);
+ gate.resolve({ok:true,pane:{...v.H.pane,vendor:'codex',model:'shared'}});await choosing;
+ assert.equal(v.H.pane.vendor,'codex');assert.match(v.find('[data-cx="model"]').textContent,/Fable · Codex/);assert.equal(v.find('[data-cx="model"]').getAttribute('aria-busy'),null);assert.equal(v.S.chat.length,1);
+ const e=v.S.chat[0];assert.equal(e.from,'Fable · Claude Code');assert.equal(e.to,'Fable · Codex');assert.equal(e.scope,room?'этот разговор':'место «воркер»');assert.ok(e.t>0);
+ assert.deepEqual(v.requests.filter(r=>r.body).map(r=>r.path),[room?'/api/room':'/api/panes/worker']);
+});
+
+for(const failure of ['denied','unconfirmed'])test('TS-49.2: '+failure+' keeps the confirmed chip and creates no successful event',async()=>{
+ let v:ReturnType<typeof ui>;v=ui({fetch:async(path,body)=>path==='/api/providers/catalog'?catalogue():body?(failure==='denied'?{ok:false,error:'нет доступа'}:{ok:true,pane:{...v.H.pane}}):{}});await v.open();await v.select('codex','shared').emit('click');
+ assert.equal(v.H.pane.vendor,'claude');assert.equal(v.find('[data-cx="model"] b').textContent,'Claude model');assert.match(v.find('.cx-model-status').textContent,/Модель не изменена/);assert.match(v.toasts.at(-1)!,/Модель не изменена/);assert.equal(v.S.chat.length,0);
+});
+
+test('TS-49.2: a delayed model receipt never updates the newly selected conversation',async()=>{
+ const gate=deferred<Data>();let v:ReturnType<typeof ui>;v=ui({fetch:async(path,body)=>path==='/api/providers/catalog'?catalogue():body?gate.promise:{}});await v.open();const choosing=v.select('codex','shared').emit('click');await until(()=>v.requests.some(r=>!!r.body));
+ v.H.active.worker='chat-b';v.ctx.binding.invalidateBinding();v.ctx.CX.render();gate.resolve({ok:true,pane:{...v.H.pane,vendor:'codex',model:'shared'}});await choosing;
+ assert.equal(v.H.pane.vendor,'claude');assert.equal(v.S.chat.length,0);assert.equal(v.find('.cx-model-status').textContent,'');
+});
+
+test('TS-49.2: a status refresh during saving does not leave the current pane on the old model',async()=>{
+ const gate=deferred<Data>();let v:ReturnType<typeof ui>;v=ui({fetch:async(path,body)=>path==='/api/providers/catalog'?catalogue():body?gate.promise:{}});await v.open();const choosing=v.select('codex','shared').emit('click');await until(()=>v.requests.some(r=>!!r.body));
+ const previous=v.H.pane;v.H.pane={...previous};v.H.panes=[v.H.pane];gate.resolve({ok:true,pane:{...previous,vendor:'codex',model:'shared'}});await choosing;
+ assert.equal(v.H.pane.vendor,'codex');assert.equal(v.H.panes[0],v.H.pane);assert.match(v.find('[data-cx="model"]').textContent,/Codex model/);assert.equal(v.S.chat.length,1);
+});
+
+const electron=process.env.HARNESSY_TEST_ELECTRON||fileURLToPath(new URL('../../../ui/desktop/node_modules/.bin/electron',import.meta.url));
+test('TS-49.2: hidden Electron shows saving, confirmed receipt and refusal at four sizes',{timeout:60_000,skip:existsSync(electron)?false:'Electron is not installed; set HARNESSY_TEST_ELECTRON'},async t=>{
+ const models=[{id:'w1',label:'Первая модель'},{id:'w2',label:'Вторая модель'}],h=await fixture(t,{deps:{models:{claude:models,codex:[{id:'c1'}]}}}),r=h.runtime;h.provider.models=async()=>models;await r.settingsPatch('owner',{releaseUnderstood_0_1_0_alpha:true},{seat:'owner',trust:'owner'});
+ const api=createApi({runtime:r,siteDir:join(testSite(),'sketches'),port:0});await api.listen();t.after(()=>api.close());h.deps.appUrl=api.url;
+ const env:NodeJS.ProcessEnv={...process.env,HARNESSY_TEST_WINDOW:'hidden',MODEL_CHANGE_BASE:api.url,MODEL_CHANGE_PROFILE:join(h.dir,'model-change-electron')};delete env.ELECTRON_RUN_AS_NODE;
+ const child=spawn(electron,[fileURLToPath(new URL('./model-change-browser.cjs',import.meta.url))],{env,stdio:['ignore','pipe','pipe']});t.after(()=>{if(child.exitCode===null)child.kill('SIGTERM')});let stdout='',stderr='';child.stdout.on('data',data=>stdout+=data);child.stderr.on('data',data=>stderr+=data);
+ const exit=await new Promise<number|null>((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve)});assert.equal(exit,0,stderr+'\n'+stdout);assert.match(stdout,/four layouts verified/);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+});
 
 test('TS-47.1 F07: direct-mode close uses mouse and keyboard without opening rights, and the next request is routed normally',async()=>{
  for(const action of ['click','Enter',' ']){
