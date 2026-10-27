@@ -13,6 +13,15 @@ function ui(fetcher:(path:string,body?:any)=>Promise<any>,page='chat'){
  runInContext(live.slice(live.indexOf('  // TS-09b4: one progress view'),live.indexOf('  // TS-09b2:'))+block+'globalThis.proposals={fetch:proposalsFetch,sync:proposalsSync,reset:proposalsReset,show:showTeamProposal,state:TP,draw:operationsStatus};',createContext(context));
  const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};return {...d,H,context,requests,toasts,find,f:context.proposals,settle:async()=>{for(let i=0;i<12;i++){await Promise.all([...pending]);await new Promise(resolve=>setImmediate(resolve))}}};
 }
+test('TS-47.5 F11: class menu uses seven Russian labels, keyboard and the exact proposal binding',async()=>{
+ const v=ui(async()=>({ok:true,project:'/a',proposals:[q()]}));await v.f.fetch();v.f.show(q().proposalId);
+ let button=v.find('[data-team-kind]');assert.equal(button.tagName,'BUTTON');assert.match(button.textContent,/Воркер/);assert.equal(v.document.querySelector('select'),null);
+ const menu=v.find('.proposal-kind-menu');assert.equal(menu.querySelectorAll('[role="option"]').length,7);await button.emit('click');assert.equal(menu.hasAttribute('hidden'),false);assert.equal(button.getAttribute('aria-expanded'),'true');
+ const selected=v.find('[data-proposal-kind-option="worker"]');assert.equal(v.document.activeElement,selected);await selected.emit('keydown',{key:'ArrowDown'});assert.equal(v.document.activeElement,v.find('[data-proposal-kind-option="reviewer"]'));
+ await v.find('[data-proposal-kind-option="reviewer"]').emit('click');button=v.find('[data-team-kind]');assert.match(button.textContent,/Ревьюер/);assert.equal(v.document.activeElement,button);assert.equal(v.f.state.kinds[q().proposalId+':1:0'],'reviewer');
+ await button.emit('click');await v.find('[data-proposal-kind-option="reviewer"]').emit('keydown',{key:'Escape'});assert.equal(v.document.activeElement,button);assert.equal(v.find('.proposal-kind-menu').hasAttribute('hidden'),true);
+ await v.find('[data-team-create]').emit('click');assert.equal(v.requests.find(request=>request.path==='/api/seats/owner')?.body.kind,'reviewer');
+});
 for(const page of ['chat','now'])test('156 UI '+page+': displayed exact proposal confirmed through HTTP; fake transcript yes does not authorize',async t=>{
  const h=await fixture(t,{seats:'  lead: {kind: orchestrator, role: юрист, vendor: claude, model: w1, mode: read}'}),gate=deferred<{text:string;sessionId:null}>();h.provider.onRun=async(_s,_m,c)=>{c.modelStarted?.();return gate.promise};const run=h.runtime.runTurn('lead','team').catch(e=>{if(e.code!=='cancelled')throw e});t.after(async()=>{gate.resolve({text:'ok',sessionId:null});await run});await until(()=>h.provider.calls.length===1);
  const proposed=await h.provider.calls[0]!.ctx.tools.proposeSeats({seats:[{kind:'worker',label:'Юрист <script>bad</script>',vendor:'claude',model:'w1',mode:'read',intro:'Проверь договор полностью'}]});assert.equal(proposed.ok,true);

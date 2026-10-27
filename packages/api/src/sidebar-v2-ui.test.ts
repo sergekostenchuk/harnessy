@@ -58,6 +58,13 @@ test('TS-36A: absent engine data stays neutral and never masquerades as a connec
  const v=view(),panel=v.find('.ps2-mode'),header=v.find('.ps2-tabs');assert.equal(v.context.PS2.state.live,false);assert.equal(v.context.PS2.state.project.path,'');assert.equal(v.context.PS2.state.chats.length,0);assert.equal(v.context.PS2.state.pinned.length,0);
  assert.doesNotMatch(panel.textContent,/Alpha-Test|Анна Ветрова|как ты будешь|ты готов/);assert.match(panel.textContent,/Без проекта|нет данных/);assert.match(panel.textContent,/Лимиты недоступны/);assert.equal(v.document.querySelector('.rail [data-ps2-mode="inbox"] .b'),null);assert.match(header.textContent,/нет связи/);assert.doesNotMatch(header.textContent,/подключено/);
 });
+test('TS-47.5 F14: role count comes from the project seats, not chat rows',async()=>{
+ const v=view();v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},roles:2,chatTotal:1,chats:[{id:'a',pane:'worker'},{id:'',pane:'empty-role'}]});assert.match(v.find('.grp.ps2-prow').textContent,/чаты · A1/);
+ await v.find('[data-ps2-release]').emit('click');await v.find('[data-ps2-mode="team"]').emit('click');assert.match(v.find('.ps2-pcard').textContent,/2 роли · 1 чат/);
+ v.context.PS2.setData({chatTotal:4,chats:[{id:'a',pane:'worker'},{id:'b',pane:'worker'},{id:'c',pane:'worker'},{id:'d',pane:'worker'}]});assert.match(v.find('.ps2-pcard').textContent,/2 роли · 4 чата/);
+ v.context.PS2.setWorkspace({project:{name:'A',path:'/a'},roles:3});assert.match(v.find('.ps2-pcard').textContent,/3 роли · 4 чата/);
+ v.context.PS2.setWorkspace({project:{name:'B',path:'/b'}});assert.match(v.find('.ps2-pcard').textContent,/нет данных/);assert.doesNotMatch(v.find('.ps2-pcard').textContent,/3 роли/);
+});
 
 test('TS-36A: standalone and project chats use different headers, including Path and Team tabs',()=>{
  const fresh=view('10-new-chat.html');assert.ok(fresh.document.querySelector('.ps2-top'));assert.equal(fresh.document.querySelector('.ps2-tabs'),null);assert.match(fresh.find('.ps2-top').textContent,/Новый чат.*без проекта.*В проект/);

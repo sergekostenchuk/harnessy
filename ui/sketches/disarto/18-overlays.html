@@ -30,7 +30,7 @@
     <section class="main">
       <div class="top"><span class="orb"></span><b>Автопилот</b><span class="st">Состояние Автопилота подтверждается движком</span>
         <div class="r"><span class="btn sm ghost" id="k">⌘K Найти</span><span class="btn sm ghost" id="leave">☾ Автопилот</span><span class="btn sm ghost" data-passport>ⓘ Паспорт</span></div></div>
-      <div class="feed"><div class="away-intro"><p>Настройте период отсутствия и заместителя в мастере «Автопилот». Разговоры команды открываются в списке чатов проекта.</p></div></div>
+      <div class="feed"><div class="away-intro"><p>Настройте срок и условия в мастере «Автопилот». Разговоры команды открываются в списке чатов проекта.</p></div></div>
     </section>
   </div>
   <div class="cap"><span>18 · оверлеи поверх чата · Автопилот / показать окно / ⌘K / паспорт</span><span>1280 × 860</span></div>
@@ -41,16 +41,16 @@
 <script>
 (function(){
   const {kv,blk,acts,tl}=HX;
-  // ── Автопилот: выбор условий в три шага; запуск пока недоступен
+  // ── Автопилот: выбор срока и условий в три шага
   HX.bind('#leave',()=>'<div class="from">Автопилот · делегировать · шаг <span data-stepn>1</span> из 3</div><div class="steps"><i class="on"></i><i></i><i></i></div>'+
-    '<div data-step="1" class="fh"><h4>Настройка Автопилота</h4><p>На следующем экране вы выберете период отсутствия и заместителя. Затем сможете проверить условия.</p>'+
-      blk('состояние','<p>Срок и условия сохраняются в проекте. Автоматическое исполнение решений появится на следующем этапе.</p>')+
+    '<div data-step="1" class="fh"><h4>Настройка Автопилота</h4><p>На следующем экране вы выберете срок и виды решений. Затем сможете проверить условия.</p>'+
+      blk('состояние','<p>Срок и условия сохраняются в проекте. Консилиум проверяет решения в пределах выбранных условий.</p>')+
       '<div class="ft"><span class="btn ghost" data-close>Отмена</span><span class="btn p" data-go="2" style="margin-left:auto">Дальше</span></div></div>'+
-    '<div data-step="2" class="fh"><h4>На сколько и какие решения</h4><p>Стоп-случаи всегда остаются за вами. После подключения исполнения оркестратор будет предлагать решение, а ревьюер — проверять.</p>'+
+    '<div data-step="2" class="fh"><h4>На сколько и какие решения</h4><p>Стоп-случаи всегда остаются за вами. Оркестратор предлагает решение, а ревьюер проверяет его.</p>'+
       blk('когда остановить','<div class="opt"><div>Срок Автопилота<small>до утра — 07:00 по местному времени; до ответа — первое ваше действие в проекте</small></div><span class="seg"><span data-pick class="on">до утра · 07:00</span><span data-pick>до ответа</span></span></div>')+
       blk('какие решения можно передать','<div class="opt" data-auto-ops="answer_question,answer_blocker,answer_escalation"><div>Ответы на вопросы и блокировки</div><span class="tog on"></span></div><div class="opt" data-auto-ops="approve,deny"><div>Разрешить или отклонить запрос</div><span class="tog"></span></div><div class="opt" data-auto-ops="assign_role"><div>Назначить роль из команды</div><span class="tog"></span></div><div class="opt" data-auto-ops="continue_pane,stop_pane"><div>Продолжить или остановить место</div><span class="tog"></span></div><div class="opt"><label for="autopilot-cap">Потолок расхода за ночь · % недельного лимита</label><input id="autopilot-cap" data-autopilot-cap type="number" min="0" max="100" step="0.1" value="5"></div>')+
       '<div class="ft"><span class="btn ghost" data-go="1">Назад</span><span class="btn p" data-go="3" style="margin-left:auto">Дальше</span></div></div>'+
-    '<div data-step="3" class="fh"><h4>Включить Автопилот</h4><p>Утром — раздел «Входящие · Пока вас не было»: что сделано, что решил заместитель, что ждёт вас.</p>'+
+    '<div data-step="3" class="fh"><h4>Включить Автопилот</h4><p>Во Входящих видно, что решил Автопилот и что ждёт вас.</p>'+
       blk('итог',kv([['срок','до утра · 07:00'],['решения','выбранные виды · только по условиям'],['стоп-случаи','платёж, публикация, удаление, установка, сеть наружу, расход сверх потолка'],['исполнение','консилиум проверяет операцию, параметры и расход']]))+
       '<p role="status" data-autopilot-result>Срок и условия сохраняются в проекте. Решения принимает консилиум в пределах условий; стоп-случаи ждут владельца.</p><div class="ft"><span class="btn ghost" data-go="2">Назад</span><span class="btn ghost" data-close>Отмена</span><button type="button" class="btn ghost" data-autopilot-off hidden>Выключить</button><button type="button" class="btn p" data-autopilot-on style="margin-left:auto">Включить Автопилот</button></div></div>',{w:720,h:640,hide:false});
   // ── Показать окно
