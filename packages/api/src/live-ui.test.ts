@@ -98,7 +98,7 @@ test('TS-51.C: failed transfer appears with reason from both live event and save
 });
 
 test('TS-51.E: unified context receipts render live and from history, preserve nulls and reject foreign binding',async()=>{
- const v=ui(),kinds=['transfer','truncate','manual_summary','provider_compaction'];
+ const v=ui({fetch:async()=>({project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[]})}),kinds=['transfer','truncate','manual_summary','provider_compaction'];await v.functions.loadChat({onboard:false});
  const changes=kinds.map((kind,i)=>({id:'change-'+i,project:'/project-a',chat:'chat-a',turnInstanceId:'turn-'+i,kind,source:kind==='provider_compaction'?'claude':'harness',ts:1791500000+i,before:kind==='provider_compaction'?120000:null,after:kind==='provider_compaction'?0:null,...(['transfer','truncate'].includes(kind)?{transfer:{enabled:true,compressed:kind==='truncate',messages:4,verbatim:kind==='truncate'?2:4,tokens:900}}:{})}));
  v.H.cur={text:'ответ продолжается',tools:[],phase:'write'};for(const [i,change] of changes.entries()){v.functions.hEvent({type:'contextChanged',pane:'worker',seq:i+1,change});v.functions.hEvent({type:'contextChanged',pane:'worker',seq:i+1,change})}
  assert.equal(v.S.chat.length,4);assert.equal(v.H.cur.text,'ответ продолжается');assert.match(v.S.chat[2].html,/Ручная выжимка перенесена/);assert.match(v.S.chat[2].html,/До: нет данных · после: нет данных/);assert.match(v.S.chat[3].html,/Контекст сжат провайдером/);assert.match(v.S.chat[3].html,/120.?000 токенов · после: 0 токенов/);
@@ -108,6 +108,14 @@ test('TS-51.E: unified context receipts render live and from history, preserve n
  v.sandbox.fetch=async()=>({json:async()=>({project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:changes.map((change,i)=>({seq:i+1,role:'peer',text:'[от харнесс] контекст изменён',ts:change.ts,contextChanged:change}))})});await v.functions.loadChat({onboard:false});
  assert.deepEqual(v.S.chat.map((m:Data)=>m.html),liveHTML);assert.ok(v.S.chat.every((m:Data)=>m.src==='sys'));assert.deepEqual(v.S.chat.map((m:Data)=>m.contextChangeId),changes.map(c=>c.id));
  assert.match(v.functions.transferHTML('',{kind:'provider_compaction',before:null,after:null}),/До: нет данных · после: нет данных/);
+});
+
+test('TS-51.E r2: receipt waits for its loaded conversation, including an older in-flight snapshot',async()=>{
+ const change={id:'receipt-b',project:'/project-a',chat:'chat-b',turnInstanceId:'turn-b',kind:'provider_compaction',source:'claude',ts:1791500000,before:200,after:80};
+ const v=ui({fetch:async(path)=>({project:'/project-a',chat:{id:path.endsWith('chat-a')?'chat-a':'chat-b',pane:'worker'},messages:path.endsWith('chat-a')?[{seq:1,role:'me',text:'Только разговор А',ts:1}]:[]})});
+ await v.functions.loadChat({onboard:false});v.H.active.worker='chat-b';v.functions.hEvent({type:'contextChanged',pane:'worker',seq:2,change});assert.equal(v.S.chat.length,1);assert.equal(v.S.chat[0].text,'Только разговор А');
+ await v.functions.loadChat({onboard:false});assert.equal(v.S.chat.length,1);assert.equal(v.S.chat[0].contextChangeId,'receipt-b');await v.functions.loadChat({onboard:false});assert.equal(v.S.chat.length,1);
+ v.H.active.worker='chat-a';await v.functions.loadChat({onboard:false});assert.equal(v.S.chat.length,1);assert.equal(v.S.chat[0].text,'Только разговор А');assert.equal(v.S.chat.some((m:Data)=>m.contextChangeId),false);
 });
 
 test('TS-47.2 F02: receipt and events define one phase; failure has one readable decision card',async()=>{

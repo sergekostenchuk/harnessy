@@ -26,7 +26,7 @@ test('Claude stream, tool error, usage and early session without duplicate text'
  assert.equal(f.handle,null);assert.equal(h.closed,1);assert.equal(h.options[0]?.options?.env?.ANTHROPIC_API_KEY,undefined);
 });
 test('TS-51.E: Claude compact boundary reports only known volumes in the main session',async()=>{
- const messages=[init,{type:'system',subtype:'compact_boundary',session_id:'foreign',compact_metadata:{pre_tokens:9,post_tokens:1}},{type:'system',subtype:'compact_boundary',session_id:'session',parent_tool_use_id:'child',compact_metadata:{pre_tokens:9,post_tokens:1}},
+ const unbound={type:'system',subtype:'compact_boundary',compact_metadata:{pre_tokens:9,post_tokens:1}},messages=[unbound,init,unbound,{...unbound,session_id:''},{...unbound,session_id:null},{type:'system',subtype:'compact_boundary',session_id:'foreign',compact_metadata:{pre_tokens:9,post_tokens:1}},{type:'system',subtype:'compact_boundary',session_id:'session',parent_tool_use_id:'child',compact_metadata:{pre_tokens:9,post_tokens:1}},
  {type:'system',subtype:'compact_boundary',session_id:'session',compact_metadata:{pre_tokens:120000}},
  {type:'system',subtype:'compact_boundary',session_id:'session',compact_metadata:{pre_tokens:5,post_tokens:0}},done];
  const f=fixture('claude');await new ClaudeProvider(harness(messages).deps).runTurn(f.seat,'x',f.ctx);

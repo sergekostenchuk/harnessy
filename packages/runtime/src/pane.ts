@@ -1,4 +1,5 @@
 import {currentTrace} from './trace.ts';
+import {isConversationMessage} from '@harnessy/context';
 import {randomBytes} from 'node:crypto';
 import {MODE_IDS,pyTruthy,legacyKind,seatKind,type SeatKind,type Mode,type Seat as TeamSeat} from '@harnessy/team';
 import {pythonTrim,Policy} from '@harnessy/journal';
@@ -71,5 +72,5 @@ export class Registry {
  if(Object.hasOwn(body,'sessionId')){const next=typeof body.sessionId==='string'&&body.sessionId?body.sessionId:null;if(next!==pane.sessionId){pane.transcript=[];pane.seen={}}pane.sessionId=next}
  if(Object.hasOwn(body,'digest'))pane.digest=pyTruthy(body.digest);return true
  }
- transcriptOf(id:string,lastN=20):string {const pane=this.get(id);if(!pane)return '';const msgs=pane.transcript.slice(-lastN),out=[pane.id+' · '+pane.label+' · '+pane.vendor+' · '+pane.model+' · режим '+pane.mode+' · последние '+msgs.length+' реплик'];for(const m of msgs){const who=m.role==='me'?'владелец':m.role==='ai'?'агент':m.role==='peer'?'сосед':m.role;out.push(who+': '+[...m.text].slice(0,2000).join(''))}return out.join('\n')}
+ transcriptOf(id:string,lastN=20):string {const pane=this.get(id);if(!pane)return '';const msgs=pane.transcript.filter(isConversationMessage).slice(-lastN),out=[pane.id+' · '+pane.label+' · '+pane.vendor+' · '+pane.model+' · режим '+pane.mode+' · последние '+msgs.length+' реплик'];for(const m of msgs){const who=m.role==='me'?'владелец':m.role==='ai'?'агент':m.role==='peer'?'сосед':m.role;out.push(who+': '+[...m.text].slice(0,2000).join(''))}return out.join('\n')}
 }

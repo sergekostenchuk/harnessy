@@ -109,6 +109,7 @@ export class ClaudeProvider implements Provider {
  }
  if(!main||typeof m.session_id==='string'&&sessionId!==null&&m.session_id!==sessionId)continue;
  if(m.type==='system'&&m.subtype==='compact_boundary'){
+ if(typeof m.session_id!=='string'||!m.session_id||m.session_id!==sessionId)continue;
  const metadata=record(m.compact_metadata)?m.compact_metadata:{},tokens=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)&&v>=0?v:null;
  ctx.publish({type:'contextChanged',kind:'provider_compaction',before:tokens(metadata.pre_tokens),after:tokens(metadata.post_tokens),source:'claude'});
  }else if(m.type==='stream_event'){
