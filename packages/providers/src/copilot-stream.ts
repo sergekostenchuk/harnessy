@@ -29,7 +29,7 @@ export class CopilotStream {
    return [{type:'tool.result',id:d.toolCallId,outcome:d.success?'ok':record(d.error)&&d.error.code==='permission_denied'?'rejected':'failed',...(d.success?{output:d.result}:{reason:(d.error as {message:string}).message})}];
   }
   if(['assistant.reasoning','assistant.reasoning_delta'].includes(v.type))return [{type:'response'}];
-  if(['user.message','session.resume','assistant.turn_start','assistant.turn_end','assistant.reasoning','assistant.reasoning_delta','tool.execution_progress','tool.execution_partial_result','session.info','subagent.started','subagent.completed','subagent.failed','subagent.selected','abort'].includes(v.type))return [];
+  if(['user.message','session.resume','assistant.turn_start','assistant.turn_end','assistant.reasoning','assistant.reasoning_delta','tool.execution_progress','tool.execution_partial_result','session.info','session.mcp_server_status_changed','session.mcp_servers_loaded','session.tools_updated','subagent.started','subagent.completed','subagent.failed','subagent.selected','abort'].includes(v.type))return [];
   throw invalid();
  }
 }
