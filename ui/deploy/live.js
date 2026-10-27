@@ -361,7 +361,7 @@
   const isDirect=()=>!!(S.ui.direct&&H.pane&&S.ui.direct[H.pane.id]);
   async function ask(q,binding=sendBinding(),attachments=[],sent=null,startedAt=Date.now()){ if(!bindingCurrent(binding)) return false; const target=(H.panes||[]).find(p=>p.id===binding.pane)||H.pane;
     const scope=streamScope(),row=streamGet(scope,true),recovery=H.cur?.stopRecovery,confirmed=recovery?.status;
-    const stopped=(H.cur?.stopping||H.cur?.stopUncertain)&&(H.link==='lost'||recovery&&H.link==='ok'&&target?.busy===false&&confirmed?.project===binding.project&&confirmed?.activeChats?.[binding.pane]===binding.chat&&Array.isArray(confirmed?.panes)&&confirmed.panes.some(p=>p.id===binding.pane&&p.busy===false)&&bindingCurrent(recovery.binding)&&(H.streamGeneration||0)===recovery.generation.stream&&(H.stopRecoveryBusy||0)===recovery.generation.busy&&(H.stopRecoveryEpoch||0)===recovery.generation.epoch)?H.cur:null;
+    const stopped=(H.cur?.stopping||H.cur?.stopUncertain)&&(H.link==='lost'||recovery?.binding&&recovery.generation&&H.link==='ok'&&target?.busy===false&&confirmed?.project===binding.project&&confirmed?.activeChats?.[binding.pane]===binding.chat&&Array.isArray(confirmed?.panes)&&confirmed.panes.some(p=>p.id===binding.pane&&p.busy===false)&&bindingCurrent(recovery.binding)&&(H.streamGeneration||0)===recovery.generation.stream&&(H.stopRecoveryBusy||0)===recovery.generation.busy&&(H.stopRecoveryEpoch||0)===recovery.generation.epoch)?H.cur:null;
     const pending=H.cur&&!stopped?null:(row.cur=H.cur={text:'',tools:[],phase:'sending',requestPending:true,startedAt,model:target&&target.model,mode:target&&target.mode,pane:binding.pane,who:target&&(target.id==='room'?'Без роли':paneName(target))}),generation=row.version;
     // A reply owns only its original placeholder, even if another conversation is visible.
     const clearPending=()=>{if(pending&&streamGet(scope)===row&&row.cur===pending&&row.version===generation){row.cur=stopped;if(streamCurrent(scope)&&H.cur===pending){H.cur=stopped;drawLive()}}};if(pending)drawLive();
@@ -498,7 +498,7 @@
     if(PAGE==='new'){ S.ui.pane='room'; S.ui.fresh=true; S.ui.switched=false; save(); }   // стартовый экран — ВСЕГДА без роли · новый чат; выбор роли или чата отсюда = переход в чат (слово владельца 08.10)
     if(!S.ui.pane){ S.ui.pane='room'; save(); } pickPane(); renderWaiting();if(typeof chatGuidanceDraw==='function')chatGuidanceDraw(); }
   async function refreshChats(){ const binding=sendBinding();try{ const r=await api('/api/chats');if(!bindingCurrent(binding))return; H.chatList=r.chats||[]; H.active=r.active||H.active||{}; }catch(e){ H.chatList=H.chatList||[]; } if(typeof sideChats==='function') await sideChats();if(window.HARNESS_BOOT)rememberLive(); }
-  async function refreshStatus(connected=false,recoveryHistory=null){ const turn=H.cur,recovery=turn?.stopRecovery,activeRecoveries=[...streams.values()].filter(row=>row.recovery).map(row=>[row,row.recovery]);if(recovery)recovery.status=null;const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){} if(!st||!Array.isArray(st.panes)){if(window.HARNESS_BOOT&&request&&!window.HARNESS_BOOT.current(request))return null;connectionFailed();return null;} if(applyStatus(st,request,connected)===false)return null; await refreshChats(); hStatus(); if(window.CX) CX.render();if(recovery&&H.cur===turn&&turn.stopRecovery===recovery){recovery.status=st;if(turn.stopping||turn.stopUncertain)await recoverStoppedTurn(turn,recovery.binding,st,recovery.generation,recoveryHistory)}if(activeRecoveries.length)await recoverActiveTurns(st,activeRecoveries);return st; }
+  async function refreshStatus(connected=false,recoveryHistory=null){ const activeRecoveries=[...streams.values()].filter(row=>row.recovery).map(row=>[row,row.recovery]);for(const [,recovery] of activeRecoveries)recovery.status=null;const request=window.HARNESS_BOOT&&window.HARNESS_BOOT.capture();let st=null; try{ st=await api('/api/status'); }catch(e){} if(!st||!Array.isArray(st.panes)){if(window.HARNESS_BOOT&&request&&!window.HARNESS_BOOT.current(request))return null;connectionFailed();return null;} if(applyStatus(st,request,connected)===false)return null; await refreshChats(); hStatus(); if(window.CX) CX.render();for(const [row,recovery] of activeRecoveries)if(row.recovery===recovery)recovery.status=st;if(activeRecoveries.length)await recoverActiveTurns(st,activeRecoveries,recoveryHistory);return st; }
   // лента активного чата — из харнесса (один источник правды для Electron, браузера и сервера); цена хода у старых реплик неизвестна
   let LOADED=null; const ONB={};
   document.addEventListener('click',event=>{if(event.target.closest('[data-chat-read-retry]'))void loadChat({onboard:false})});
@@ -525,17 +525,19 @@
     const feed=document.querySelector('.frame.cur .feed .col');if(feed){const box=document.createElement('div');box.className='live-guidance';box.setAttribute('data-chat-read-error','');box.innerHTML='<b>'+esc(message)+'</b><p>'+(S.chat.length?'Последний снимок устарел.':'История пока не прочитана.')+'</p><button class="btn sm" data-chat-read-retry>Повторить</button>';feed.insertBefore(box,feed.firstChild);feed.querySelectorAll('.live-sep').forEach(node=>node.remove())}
     H.chatReadTimer=setTimeout(()=>{if(bindingCurrent(binding))void loadChat({onboard:false})},3000);
   }
-    if(!H.on||PAGE!=='chat'&&!(visible&&cols().length)) return;const noteRequest=H.attemptNotesRequest=(H.attemptNotesRequest||0)+1;streamSelect();knowledgeReset();const p=H.pane, cid=p?(H.active||{})[p.id]:null,binding=sendBinding(),loadKey=streamKey(streamScope(p?.id,cid)),loadTurn=H.cur,loadRecovery=loadTurn?.stopRecovery,loadStatus=loadRecovery?.status;
+    if(!H.on||PAGE!=='chat'&&!(visible&&cols().length)) return;const noteRequest=H.attemptNotesRequest=(H.attemptNotesRequest||0)+1;streamSelect();knowledgeReset();const p=H.pane, cid=p?(H.active||{})[p.id]:null,binding=sendBinding(),loadKey=streamKey(streamScope(p?.id,cid)),loadTurn=H.cur,loadRow=streamGet(streamScope(p?.id,cid)),loadRecovery=loadRow?.recovery,loadVersion=loadRow?.version;
     if(!cid){chatReadError(null); S.chat=modelChanges(binding); save(); LOADED=null;renderWaiting();render();if(!bindingCurrent(binding))return;if(onboard&&p&&!p.busy) await onboardOnce(p); return; }
     if(LOADED!==loadKey){S.chat=[];save();render()}
     let r=history;if(!r)try{ r=await api('/api/chats/'+cid); }catch(e){} if(!bindingCurrent(binding)||H.attemptNotesRequest!==noteRequest)return;if(!r||!Array.isArray(r.messages)){chatReadError('Не удалось прочитать чат',binding);return;}chatReadError(null);
     if(!history&&H.cur!==loadTurn)return;
-    const recovery=H.cur?.stopRecovery;if(!history&&(H.cur?.stopping||H.cur?.stopUncertain)&&recovery&&bindingCurrent(recovery.binding)){
-      const pane=Array.isArray(loadStatus?.panes)?loadStatus.panes.find(item=>item.id===binding.pane):null;
-      const fresh=loadRecovery===recovery&&loadStatus?.project===binding.project&&loadStatus?.activeChats?.[binding.pane]===binding.chat&&pane?.busy===false;
-      await refreshStatus(false,fresh?r:null);return;
+    const row=streamGet(streamScope(p?.id,cid)),recovery=row?.recovery;if(!history&&recovery){
+      // A read begun before reconnect cannot certify that recovery's later turn.
+      const sameRead=loadRow===row&&loadRecovery===recovery;await refreshStatus(false,sameRead?r:null);
+      // If the turn is still running or status is unavailable, keep rendering
+      // its confirmed history, but never reuse an old or foreign snapshot.
+      if(!sameRead||!bindingCurrent(binding)||H.attemptNotesRequest!==noteRequest||H.cur!==loadTurn||streamGet(streamScope(p?.id,cid))!==row||row.version!==loadVersion||r.project!==binding.project||r.chat?.id!==binding.chat||r.chat.pane!==binding.pane)return;
     }
-    if(!history&&loadRecovery&&H.cur?.stopRecovery!==loadRecovery)return;
+    if(!history&&loadRecovery&&recovery!==loadRecovery)return;
     const who=p.id==='room'?'Без роли':paneName(p);
     const hsys=m=>m.role==='peer'&&/^\[от харнесс\]/.test(m.text);   // заметки харнесса (вводная, передача) — системные: без модели, расхода и действий
     if(!bindingCurrent(binding)) return;
@@ -560,26 +562,26 @@
 
   // Retain each interrupted stream's identity, including streams that are not visible.
   function beginActiveRecovery(){const scope=streamScope();if(H.cur){const row=streamGet(scope,true);if(!row.cur){row.cur=H.cur;row.asks=H.asks||{}}}
-    for(const row of streams.values()){const turn=row.cur;if(!turn||turn.stopping||turn.stopPending||turn.stopUncertain||row.scope.project!==H.project||row.scope.instance!==(H.liveStatus?.trace?.instanceId||null))continue;row.recovery={turn,version:row.version,epoch:H.stopRecoveryEpoch||0,reading:false}}
+    for(const row of streams.values()){const turn=row.cur;if(!turn||row.scope.project!==H.project||row.scope.instance!==(H.liveStatus?.trace?.instanceId||null))continue;const generation={stream:H.streamGeneration||0,busy:H.stopRecoveryBusy||0,epoch:H.stopRecoveryEpoch||0},recovery={turn,version:row.version,epoch:generation.epoch,reading:false,status:null};
+      if(turn.stopping||turn.stopPending||turn.stopUncertain){recovery.binding=turn.stopBinding;recovery.generation=generation;turn.stopRecovery=recovery}row.recovery=recovery}
   }
-  async function recoverActiveTurns(status,recoveries){for(const [row,recovery] of recoveries){if(!recovery||recovery.reading)continue;const scope=row.scope,turn=recovery.turn,pane=Array.isArray(status?.panes)?status.panes.find(p=>p.id===scope.pane):null;
-      const sameTurn=()=>H.link==='ok'&&(H.stopRecoveryEpoch||0)===recovery.epoch&&streamGet(scope)===row&&row.recovery===recovery&&row.cur===turn&&row.version===recovery.version&&(!streamCurrent(scope)||H.cur===turn)&&H.project===scope.project&&(H.liveStatus?.trace?.instanceId||null)===scope.instance;
+  async function recoverActiveTurns(status,recoveries,suppliedHistory=null,guard=null){for(const [row,recovery] of recoveries){if(!recovery)continue;const scope=row.scope,turn=recovery.turn,pane=Array.isArray(status?.panes)?status.panes.find(p=>p.id===scope.pane):null,supplied=suppliedHistory?.project===scope.project&&suppliedHistory.chat?.id===scope.chat&&suppliedHistory.chat.pane===scope.pane&&Array.isArray(suppliedHistory.messages);
+      if(recovery.reading&&!supplied)continue;
+      const sameTurn=()=>H.link==='ok'&&(H.stopRecoveryEpoch||0)===recovery.epoch&&streamGet(scope)===row&&row.recovery===recovery&&row.cur===turn&&row.version===recovery.version&&(!streamCurrent(scope)||H.cur===turn)&&H.project===scope.project&&(H.liveStatus?.trace?.instanceId||null)===scope.instance&&(!guard||guard());
       const current=()=>sameTurn()&&H.active?.[scope.pane]===scope.chat&&(H.panes||[]).some(p=>p.id===scope.pane&&p.busy===false);
       if(!sameTurn()){if(row.recovery===recovery)delete row.recovery;continue}if(!current())continue;
-      if(!scope.chat||status.project!==scope.project||(status.trace?.instanceId||null)!==scope.instance||status.activeChats?.[scope.pane]!==scope.chat||pane?.busy!==false||turn.requestPending||Object.hasOwn(turn,'requestPending')&&!Number.isSafeInteger(turn.acceptedSeq))continue;
-      recovery.reading=true;let history=null;try{history=await api('/api/chats/'+encodeURIComponent(scope.chat))}catch(e){}finally{recovery.reading=false}
+      if(!scope.chat||status?.project!==scope.project||(status?.trace?.instanceId||null)!==scope.instance||status?.activeChats?.[scope.pane]!==scope.chat||pane?.busy!==false||turn.stopPending||turn.requestPending||Object.hasOwn(turn,'requestPending')&&!Number.isSafeInteger(turn.acceptedSeq))continue;
+      let history=supplied?suppliedHistory:null;if(!history){recovery.reading=true;try{history=await api('/api/chats/'+encodeURIComponent(scope.chat))}catch(e){}finally{recovery.reading=false}}
       if(!current()||history?.project!==scope.project||history.chat?.id!==scope.chat||history.chat.pane!==scope.pane||!Array.isArray(history.messages))continue;
-      if(Number.isSafeInteger(turn.acceptedSeq)){const seq=turn.acceptedSeq,matched=history.messages.some(m=>m?.role==='ai'&&m.origin!=='transferred'&&Array.isArray(m.runtime?.recordSeqs)&&m.runtime.recordSeqs.includes(seq))||(Array.isArray(history.turns)&&history.turns.some(t=>t?.outcome==='error'&&Array.isArray(t.recordSeqs)&&t.recordSeqs.includes(seq)))||(Array.isArray(pane.waiting?.recordSeqs)&&pane.waiting.recordSeqs.includes(seq));if(!matched)continue}
-      const visible=streamCurrent(scope)&&H.cur===turn;delete row.recovery;streamEnd(scope);if(visible){H.cur=null;H.asks={};await loadChat({onboard:false,visible:PAGE==='first',history})}
+      if(Number.isSafeInteger(turn.acceptedSeq)){if(history.foreignAttemptInputs!==undefined&&(!Array.isArray(history.foreignAttemptInputs)||history.foreignAttemptInputs.some(id=>typeof id!=='string'||!id)))continue;const seq=turn.acceptedSeq,foreign=new Set(history.foreignAttemptInputs||[]),matched=history.messages.some(m=>m?.role==='ai'&&m.origin!=='transferred'&&Array.isArray(m.runtime?.recordSeqs)&&m.runtime.recordSeqs.includes(seq))||(Array.isArray(history.turns)&&history.turns.some(t=>t?.outcome==='error'&&typeof t.turnInstanceId==='string'&&t.turnInstanceId&&!foreign.has(t.turnInstanceId)&&Array.isArray(t.recordSeqs)&&t.recordSeqs.includes(seq)))||(Array.isArray(pane.waiting?.recordSeqs)&&pane.waiting.recordSeqs.includes(seq));if(!matched)continue}
+      const visible=streamCurrent(scope)&&H.cur===turn;delete row.recovery;if(turn.stopRecovery===recovery)delete turn.stopRecovery;streamEnd(scope);if(visible){H.cur=null;H.asks={};await loadChat({onboard:false,visible:PAGE==='first',history})}
     }}
 
   async function recoverStoppedTurn(turn,binding,status,generation,history=null){
     const current=()=>H.link==='ok'&&H.cur===turn&&(turn?.stopping||turn?.stopUncertain)&&binding.chat&&bindingCurrent(binding)&&(!turn.stopScope||streamCurrent(turn.stopScope))&&H.pane?.id===binding.pane&&H.pane.busy===false&&(H.streamGeneration||0)===generation.stream&&(H.stopRecoveryBusy||0)===generation.busy&&(H.stopRecoveryEpoch||0)===generation.epoch;
-    const pane=Array.isArray(status?.panes)?status.panes.find(p=>p.id===binding.pane):null;
-    if(!current()||status?.project!==binding.project||status?.activeChats?.[binding.pane]!==binding.chat||pane?.busy!==false)return false;
-    if(!history)try{history=await api('/api/chats/'+encodeURIComponent(binding.chat))}catch(e){}
-    if(!current()||history?.chat?.id!==binding.chat||history.chat.pane!==binding.pane||!Array.isArray(history.messages))return false;
-    delete turn.stopRecovery;streamEnd(streamScope());H.cur=null;await loadChat({onboard:false,history});return true;
+    if(!current())return false;const scope=turn.stopScope||streamScope(binding.pane,binding.chat),row=streamGet(scope,true);if(row.cur&&row.cur!==turn)return false;row.cur=turn;
+    let recovery=row.recovery;if(!recovery||recovery.turn!==turn){recovery=turn.stopRecovery||{};Object.assign(recovery,{turn,version:row.version,epoch:generation.epoch,reading:false});row.recovery=recovery}
+    await recoverActiveTurns(status,[[row,recovery]],history,current);return row.cur!==turn;
   }
 
   // подключение к движку на всех экранах: боковая панель, настройки, подключения живут его данными (08.10)
@@ -611,7 +613,7 @@
     if(PAGE==='chat'||PAGE==='first'){ streamSelect();
       let linkedProject=H.project;const es=H.events||(H.events=subscribeLiveEvents()); es.onmessage=e=>{ let ev; try{ ev=JSON.parse(e.data); }catch(x){ return; } if(ev.type==='autopilot'){void refreshStatus();return} if(ev.type==='teamProposals'&&ev.project===H.project){void proposalsFetch();void knowledgeFetch();} if(ev.type==='state'&&KN.data)void knowledgeFetch();if(ev.project&&ev.project!==H.project)return;queueDelivered(ev);if(ev.type==='state')return;const pane=(H.panes||[]).find(p=>p.id===ev.pane),scope=streamScope(ev.pane,ev.chat||pane?.settingsBinding?.chat);if(!H.pane||!streamCurrent(scope)){streamHidden(ev);return} hEvent(ev); };
       es.onerror=()=>{ if(H.link!=='lost'){ H.stopRecoveryEpoch=(H.stopRecoveryEpoch||0)+1;H.link='lost';hStatus();if(H.cur)drawLive();if(!H.projectLinkChange)toast('Связь с движком потеряна — переподключаюсь…'); } };   // плановая смена проекта тоже закрывает SSE — это не потеря движка
-      es.onopen=async()=>{ if(H.link==='lost'){ const switching=H.projectLinkChange,turn=H.cur,binding=turn?.stopBinding,generation={stream:H.streamGeneration||0,busy:H.stopRecoveryBusy||0,epoch:H.stopRecoveryEpoch||0};if(binding&&(turn.stopping||turn.stopPending||turn.stopUncertain))turn.stopRecovery={binding,status:null,generation};if(!switching)beginActiveRecovery();H.link='ok';hStatus();if(H.cur)drawLive();const status=await refreshStatus();void proposalsFetch();if(status&&H.link==='ok'&&(H.stopRecoveryEpoch||0)===generation.epoch){if(!switching&&H.project===linkedProject)toast('Связь восстановлена');linkedProject=H.project;H.projectLinkChange=false} }else void proposalsFetch(); };
+      es.onopen=async()=>{ if(H.link==='lost'){ const switching=H.projectLinkChange,epoch=H.stopRecoveryEpoch||0;if(!switching)beginActiveRecovery();H.link='ok';hStatus();if(H.cur)drawLive();const status=await refreshStatus();void proposalsFetch();if(status&&H.link==='ok'&&(H.stopRecoveryEpoch||0)===epoch){if(!switching&&H.project===linkedProject)toast('Связь восстановлена');linkedProject=H.project;H.projectLinkChange=false} }else void proposalsFetch(); };
       hStatus(); }
     if(PAGE==='new'){const es=H.proposalEvents||(H.proposalEvents=subscribeLiveEvents());es.onmessage=e=>{let ev;try{ev=JSON.parse(e.data)}catch{return}if(ev.type==='teamProposals'&&ev.project===H.project)void proposalsFetch()};es.onopen=()=>proposalsFetch()}
     if(PAGE==='now') nowLive();
