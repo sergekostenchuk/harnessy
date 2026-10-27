@@ -9,6 +9,7 @@ const site=pathToFileURL(testSite()+'/');
 import {fixture,call,sse,deferred,until,OWNER,FakeProvider} from './test-helpers.ts';
 import {setImmediate as immediate} from 'node:timers/promises';
 import {dom} from './ui-dom-test-helpers.ts';
+import {contextCard} from '../../context/src/card.ts';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');
 const cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
 const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');
@@ -29,6 +30,9 @@ test('TS-47.4 F05: unknown windows and incompatible estimates never become measu
  const unknown=sandbox.views.html(sample);assert.match(unknown,/окно модели: нет данных/);assert.match(unknown,/распределение не определено/);assert.match(unknown,/оценка/);assert.doesNotMatch(unknown,/1619|class="ctx-mx"/);assert.doesNotMatch(sandbox.views.tip(sample,'instructions'),/1619|\d+ %/);
  const mixed={...sample,window:1000,pct:16};assert.doesNotMatch(sandbox.views.html(mixed),/class="ctx-mx"|261 %/);
  const valid={...sample,window:1000,used:200,pct:20,parts:[{key:'instructions',label:'Инструкции',tokens:50,est:false},{key:'history',label:'История',tokens:150,est:false}]};assert.match(sandbox.views.html(valid),/class="ctx-mx"/);assert.match(sandbox.views.html(valid),/5 %/);
+ const partial=contextCard({id:'worker',label:'Исполнитель',model:'unknown-model',busy:false,tokens:{input:12,output:null,cacheRead:null},transcript:[]},{instructionText:'Текст',roleNote:'',chat:null});
+ const rendered=sandbox.views.html(partial);assert.match(rendered,/оценка · нет данных/);assert.match(rendered,/окно модели: нет данных/);assert.match(rendered,/свободно<\/span><b>нет данных<\/b>/);assert.doesNotMatch(rendered,/NaN|undefined|class="ctx-mx"|появится после хода/);
+ assert.match(sandbox.views.html({...partial,last:null}),/оценка · нет данных/);assert.doesNotMatch(sandbox.views.html({...partial,last:null}),/хода не было/);
 });
 function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;storage?:Map<string,string>}={}){
  const storage=options.storage??new Map<string,string>(),requests:{path:string;body:Data|undefined}[]=[],toasts:string[]=[],clicks:((event:Data)=>unknown)[]=[],pagehide:(()=>void)[]=[],pageshow:((event:Data)=>unknown)[]=[],elements=new Map<string,Data>(),rows:Data[]=[];

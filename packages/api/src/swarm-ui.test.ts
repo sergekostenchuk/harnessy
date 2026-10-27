@@ -43,6 +43,14 @@ test('166: original canvas, cards, channel, composition and comparison survive r
  await v.find('#seg [data-v="cmp"]').emit('click');assert.match(v.find('#v-cmp').textContent,/Макет.*A\/B/);assert.match(v.find('#v-cmp').textContent,/Fable 5.1/);await v.find('#ab').emit('click');assert.match(v.sheets[0]!,/Макет.*сравнение/);assert.match(v.sheets[0]!,/disabled/);assert.match(v.find('#board .waits').textContent,/Макет.*цену простоя/);
 });
 
+test('TS-51.D: a real partial context with null counters remains visible in the team',async t=>{
+ const h=await fixture(t);h.runtime.registry.get('worker')!.tokens={input:17,output:null,cacheRead:null};
+ const card=await call(h.api,'/api/context/worker');assert.equal(card.status,200);assert.equal(card.body.measured,false);assert.deepEqual(card.body.last,{input:17,output:null,cacheRead:null});assert.equal(card.body.pct,null);assert.equal(card.body.parts.find((part:any)=>part.key==='free').tokens,null);
+ const v=ui(async path=>(await call(h.api,path)).body);v.H.project=h.dir;await v.functions.sync();
+ const context=v.functions.state.data.panes[0].context;assert.equal(context.measured,false);assert.deepEqual(context.last,{input:17,output:null,cacheRead:null});assert.equal(context.window,null);assert.equal(context.pct,null);
+ assert.equal(v.document.querySelectorAll('#board [data-swarm-seat]').length,1);await v.find('#board [data-swarm-seat]').emit('click');assert.match(v.find('#ovl .load').textContent,/Нет данных об окне/);
+});
+
 test('166/190: empty team keeps all blocks and routes + place to the existing conversation without fabricating a seat',async()=>{
  const v=ui(async path=>path==='/api/swarm'?{...snapshot('/a',[]),journal:{records:[],total:0,lastSeq:0}}:{ok:true,project:'/a',proposals:[]});await v.functions.sync();
  assert.equal(v.document.querySelectorAll('[data-swarm-seat]').length,0);assert.match(v.find('#board').textContent,/Нет данных.*нет мест/);assert.match(v.find('#v-chan .msgs').textContent,/канал пока пуст/);assert.match(v.find('#v-seats .note').textContent,/неподписанных предложений нет/);assert.equal(v.document.querySelectorAll('#board svg path').length,0);
@@ -56,7 +64,7 @@ test('166/185: real waiting and tools have no invented age or progress; cold too
  await v.window.emit('keydown',{key:'Escape'});assert.equal(v.find('#ovl').classList.contains('on'),false);await v.window.emit('keydown',{key:'3'});assert.equal(v.find('#v-chan').classList.contains('on'),true);
 });
 
-for(const corrupt of [null,{...snapshot(),project:'/foreign'},{...snapshot(),panes:[{...pane(),queue:undefined}]},{...snapshot(),panes:[{...pane(),context:undefined}]},{...snapshot(),panes:[pane(),pane()]},{...snapshot(),journal:{records:[{...record(),to:null}],total:1,lastSeq:1}}])test('166/190: malformed snapshots are read errors, retain the last good project, and never become a false empty team: '+JSON.stringify(corrupt),async()=>{
+for(const corrupt of [null,{...snapshot(),project:'/foreign'},{...snapshot(),panes:[{...pane(),queue:undefined}]},{...snapshot(),panes:[{...pane(),context:undefined}]},{...snapshot(),panes:[{...pane(),context:{...pane().context,measured:false,last:{input:17,cacheRead:null}}}]},{...snapshot(),panes:[{...pane(),context:{...pane().context,measured:false,last:{input:17,output:-1,cacheRead:null}}}]},{...snapshot(),panes:[{...pane(),context:{...pane().context,measured:true,last:{input:17,output:null,cacheRead:null}}}]},{...snapshot(),panes:[{...pane(),context:{...pane().context,measured:true,last:null}}]},{...snapshot(),panes:[pane(),pane()]},{...snapshot(),journal:{records:[{...record(),to:null}],total:1,lastSeq:1}}])test('166/190: malformed snapshots are read errors, retain the last good project, and never become a false empty team: '+JSON.stringify(corrupt),async()=>{
  let bad=false;const v=ui(async path=>path==='/api/swarm'?(bad?corrupt:snapshot()):{ok:true,project:'/a',proposals:[]});await v.functions.sync();bad=true;await v.functions.fetch();assert.match(v.find('[data-swarm-notice]').textContent,/Не удалось прочитать.*предыдущий снимок/);assert.equal(v.document.querySelectorAll('#board [data-swarm-seat]').length,1);
  v.functions.reset();await v.functions.fetch();assert.match(v.find('#board').textContent,/Данные не прочитаны/);assert.doesNotMatch(v.find('#board').textContent,/в проекте пока нет мест/);
 });

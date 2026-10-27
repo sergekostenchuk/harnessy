@@ -10,5 +10,5 @@ export interface DigestPane {readonly id:string;readonly label:string;readonly v
 export interface ContextUsage {readonly input?:number|null;readonly output?:number|null;readonly cacheRead?:number|null}
 export interface CardPane {readonly id:string;readonly label:string;readonly model:string;readonly busy:boolean;readonly tokens:ContextUsage|null;readonly transcript:readonly TranscriptMessage[]}
 export interface CardDeps {readonly instructionText:string;readonly roleNote:string;readonly chat:Readonly<Record<string,unknown>>|null}
-export interface ContextPart {key:string;label:string;tokens:number;est:boolean;count?:number;residual?:boolean}
+export interface ContextPart {key:string;label:string;tokens:number|null;est:boolean;count?:number;residual?:boolean}
 export interface ContextItem {i:number;title:string;tokens:number;ts:number;role?:string}
