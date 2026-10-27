@@ -69,6 +69,14 @@ test('TS-47.1 F07: direct-mode close uses mouse and keyboard without opening rig
  }
 });
 
+test('TS-47.4 F10: plus opens the real image picker and does not advertise unavailable commands',async()=>{
+ const v=ui();let images=0,search=0;v.ctx.LIVE.pickImages=()=>images++;v.ctx.LIVE.openPal=()=>search++;
+ await v.find('[data-cx="plus"]').emit('click');assert.match(v.find('.cx-pop').textContent,/PNG, JPEG, WebP, GIF/);assert.match(v.find('.cx-pop').textContent,/передача файлов и папок недоступна/);await v.find('[data-cx-shot]').emit('click');assert.equal(images,1);
+ await v.find('[data-cx="plus"]').emit('click');await v.find('[data-cx-nav="cmds"]').emit('click');assert.match(v.find('.cx-pop').textContent,/Команды и навыки пока недоступны/);assert.doesNotMatch(v.find('.cx-pop').textContent,/Режим планирования|D8\.4|Записать навык/);await v.find('[data-cx-cmd="search"]').emit('click');assert.equal(search,1);
+ await v.find('[data-cx="info"]').emit('click');assert.match(v.find('.cx-pop').textContent,/поиск экранов/);assert.doesNotMatch(v.find('.cx-pop').textContent,/создание места из чата пока недоступно|Примеры запросов|команды и поиск/);
+ v.H.on=false;v.ctx.CX.render();await v.find('[data-cx="plus"]').emit('click');assert.equal(v.document.querySelector('[data-cx-shot]'),null);assert.match(v.find('.cx-pop').textContent,/движок не подключён/);
+});
+
 test('TS-47.1 F08: role menu distinguishes a background orchestrator from one in the selected project',async()=>{
  const v=ui({room:true});v.H.panes.push({id:'lead',kind:'orchestrator',role:'orchestrator',label:'Оркестратор',vendor:'claude',model:'shared',mode:'read'});
  v.H.roleCatalog=[{role:'orchestrator',kind:'orchestrator',label:'оркестратор',multi:false}];v.H.noProject=true;v.ctx.CX.render();await v.find('[data-cx="role"]').emit('click');

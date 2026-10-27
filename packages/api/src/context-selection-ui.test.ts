@@ -14,10 +14,10 @@ function ui(send?:(body:Data)=>Promise<Data>){
  const ctx:Data={document:d.document,PAGE:'chat',H,S,setTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),esc:(s:unknown)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),fmtN:String,paneName:(p:Data)=>p.label,
   quoteBlock:(text:string,index=1)=>text.split('\n').map((line,i)=>(i?'':'['+index+'] ') +'> '+line).join('\n'),modelName:String,warningEvent:()=>false,now:()=>1,laMulti:(_anchor:any,_title:any,_items:any,_label:any,choose:any)=>{ctx.choose=choose},toast:(s:string)=>toasts.push(s),save(){},log(){},hStatus(){},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)},loadChat:async()=>{},noteHandoff:(r:Data)=>notices.push(r),
   api:async(path:string,body:Data)=>{assert.equal(path,'/api/handoff');requests.push(JSON.parse(JSON.stringify(body)));return send?send(body):{ok:true,seq:1}},
-  render(){d.document.querySelector('.feed')!.innerHTML=S.chat.map((m:Data,i:number)=>ctx.selection.ckBox(m,i)).join('');ctx.selection.selBar()}};
+  render(){d.document.querySelector('.feed')!.innerHTML=S.chat.map((m:Data,i:number)=>ctx.selection.ckBox(m,i)+(m.src==='live'?'<div class="live-acts"><button type="button" data-la="handoff" data-i="'+i+'">передать контекст</button></div>':'')).join('');ctx.selection.selBar()}};
  ctx.window=ctx;const context=createContext(ctx);
  runInContext(part('  let bindingGeneration','  function md(')+part('  const ckBox=','  const bubble=')+
-  part('  let SEL=null;','  // меню действий под ответом')+part('  function closeLAMenus()','  // TS-09b4: one progress view')+part('  function hEvent(ev)','  const isDirect=')+part("  document.addEventListener('click',async e=>{ const la=",'  function reply(')+'\nglobalThis.selection={selStart,selBar,selChars,ckBox,hEvent,sendBinding,bindingCurrent,invalidateBinding,configureSetting};',context);
+  part('  let SEL=null;','  // меню действий под ответом')+part('  function closeLAMenus()','  // TS-09b4: one progress view')+part('  function hEvent(ev)','  const isDirect=')+part("  document.addEventListener('click',async e=>{ const la=",'  function reply(')+'\nglobalThis.selection={selStart,selBar,selChars,ckBox,hEvent,noteHandoff,sendBinding,bindingCurrent,invalidateBinding,configureSetting};',context);
  ctx.LIVE={H,S,...ctx.selection,api:ctx.api,esc:ctx.esc,save(){},log(){},toast:ctx.toast,paneName:ctx.paneName,hStatus:ctx.hStatus,pickPane:ctx.pickPane,busy:()=>false,loadChat:ctx.loadChat,refreshStatus:async()=>{}};const ta=d.document.createElement('textarea');d.document.querySelector('.in')!.appendChild(ta);(d.document.querySelector('.box') as any).__cx={ta};runInContext(readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8'),context);
  const find=(selector:string)=>{const node=d.document.querySelector(selector);assert.ok(node,selector);return node};
  const select=async(index:number,on=true)=>{const input:any=find('.live-sel-list [data-ck="'+index+'"]');input.checked=on;await input.emit('click')};
@@ -54,6 +54,12 @@ test('259: Select all is explicit; unchecking one sends all except that message'
 test('259: clear and cancel do not preserve a selection; feed checkboxes and summary stay in sync',async()=>{
  const v=ui();v.start();const feed:any=v.find('.feed [data-ck="3"]');feed.checked=true;await feed.emit('click');assert.equal((v.find('.live-sel-list [data-ck="3"]') as any).checked,true);assert.equal(v.find('[data-sel="go"]').disabled,false);
  await v.find('[data-sel="none"]').emit('click');assert.equal(v.find('[data-sel="go"]').disabled,true);await v.select(4);await v.find('[data-sel="cancel"]').emit('click');v.start();assert.equal(v.document.querySelectorAll('[data-ck][checked]').length,0);assert.equal(v.requests.length,0);
+});
+
+test('TS-47.4 r2: selecting and clearing all preserves the focused controls and synchronizes both lists',async()=>{
+ const v=ui();v.start();const all=v.find('[data-sel="all"]'),none=v.find('[data-sel="none"]'),prompt=v.find('.live-f');prompt.value='Сохранить вводную';
+ all.focus();await all.emit('click');assert.equal(v.document.activeElement,all);assert.equal(v.find('[data-sel="all"]'),all);assert.equal(v.find('.live-f'),prompt);assert.equal(prompt.value,'Сохранить вводную');assert.match(v.find('.live-selbar .n').textContent,/3 из 3/);assert.ok([...v.document.querySelectorAll('[data-ck]')].every((n:any)=>n.checked));assert.equal(v.find('[data-sel="go"]').disabled,false);
+ none.focus();await none.emit('click');assert.equal(v.document.activeElement,none);assert.equal(v.find('[data-sel="none"]'),none);assert.match(v.find('.live-selbar .n').textContent,/0 из 3/);assert.ok([...v.document.querySelectorAll('[data-ck]')].every((n:any)=>!n.checked));assert.equal(v.find('[data-sel="go"]').disabled,true);
 });
 
 test('259: selection and volume refer to the visible snapshot, not new or edited messages',async()=>{
@@ -112,4 +118,46 @@ test('261: streamed owner and model replies retain engine ids for selection; an 
  runInContext(part('  const statNumber=','  let turnStatsOpen=')+part('  function finish(ev)','  function hEvent(ev)')+'globalThis.finish=finish;',v.ctx);
  v.S.chat=[{role:'me',text:'Новый вопрос'}];v.H.cur={text:'Новый ответ',tools:[]};v.ctx.finish({type:'done',chat:'chat-a',seq:9,messages:[{role:'me',text:'Новый вопрос',seq:8}]});v.start();await v.find('[data-sel="all"]').emit('click');await v.find('[data-sel="go"]').emit('click');assert.deepEqual(v.requests[0]!.seqs,[8,9]);
  v.S.chat=[];v.H.cur={text:'Без привязки',tools:[]};v.ctx.finish({type:'done',seq:10});v.start();assert.equal(v.document.querySelector('.live-selbar'),null);assert.equal(v.requests.length,1);
+});
+
+test('TS-47.4 F09: recipient controls restore focus and a transfer receipt is shown once',async()=>{
+ const gate=deferred<Data>(),v=ui(async()=>gate.promise);v.H.panes.push({id:'tester',label:'Тестер'});v.ctx.render();const opener=v.find('[data-la="handoff"]');opener.focus();await opener.emit('click');
+ let recipient=v.find('.la.multi [data-k="0"]');assert.equal(recipient.tagName,'BUTTON');assert.equal(recipient.getAttribute('role'),'checkbox');assert.equal(recipient.getAttribute('aria-checked'),'false');assert.equal(v.document.activeElement,recipient);
+ await recipient.emit('click');recipient=v.find('.la.multi [data-k="0"]');assert.equal(recipient.getAttribute('aria-checked'),'true');assert.equal(v.document.activeElement,recipient);const second=v.find('.la.multi [data-k="1"]');second.focus();await second.emit('click');assert.equal(v.find('.la.multi [data-k="1"]').getAttribute('aria-checked'),'true');assert.match(v.find('.la.multi [data-go]').textContent,/\(2\)/);
+ await v.find('.la.multi [data-x]').emit('click');assert.equal(v.document.activeElement,opener);
+ await opener.emit('click');await v.find('.la.multi [data-k="0"]').emit('click');await v.find('.la.multi [data-go]').emit('click');await v.find('[data-sel="cancel"]').emit('click');assert.equal(v.document.activeElement,v.find('[data-la="handoff"]'));
+ const current=v.find('[data-la="handoff"]');current.focus();await current.emit('click');await v.find('.la.multi [data-k="0"]').emit('click');await v.find('.la.multi [data-go]').emit('click');await v.select(3);
+ const sending=v.find('[data-sel="go"]').emit('click');v.ctx.selection.hEvent({type:'note',text:'контекст передан: Ревьюер · запись №31'});assert.equal(v.S.chat.some((m:Data)=>String(m.text).includes('запись №31')),false);gate.resolve({ok:true,seq:31,names:'Ревьюер'});await sending;
+ v.ctx.selection.hEvent({type:'note',text:'контекст передан: Ревьюер · запись №31'});assert.equal(v.S.chat.filter((m:Data)=>m.handoffSeq==='31').length,1);assert.equal(v.document.activeElement,v.find('[data-la="handoff"]'));
+ v.S.chat.push({role:'ai',src:'sys',text:'[от харнесс] контекст передан: Ревьюер · запись №32'});v.ctx.selection.noteHandoff({seq:32,names:'Ревьюер'});assert.equal(v.S.chat.filter((m:Data)=>String(m.text).includes('запись №32')).length,1);
+ v.H.active.worker='chat-b';v.S.chat=[];v.ctx.selection.hEvent({type:'note',text:'контекст передан: Ревьюер · запись №31'});assert.equal(v.S.chat.length,0,'an unbound late event cannot appear in another chat');
+});
+
+test('TS-47.4 r2: late receipt never steals focus from a new draft',async()=>{
+ const gate=deferred<Data>(),v=ui(()=>gate.promise);v.ctx.render();v.start();await v.select(1);const go=v.find('[data-sel="go"]');go.focus();const sending=go.emit('click');assert.equal(v.document.activeElement,v.find('.live-selbar'));
+ const input=v.find('.box textarea');input.focus();input.value='Новый черновик';gate.resolve({ok:true,seq:42,names:'Ревьюер'});await sending;assert.equal(v.document.activeElement,input);assert.equal(input.value,'Новый черновик');
+});
+
+for(const moved of [false,true])test('TS-47.4 r2: failed transfer '+(moved?'respects an external focus':'focuses retry inside the operation'),async()=>{
+ const gate=deferred<Data>(),v=ui(()=>gate.promise);v.start();await v.select(1);const go=v.find('[data-sel="go"]');go.focus();const sending=go.emit('click');const input=v.find('.box textarea');if(moved)input.focus();gate.resolve({ok:false,error:'Временный отказ'});await sending;
+ assert.equal(v.document.activeElement,moved?input:v.find('[data-sel="go"]'));assert.equal(v.find('[data-sel="go"]').disabled,false);assert.match(v.find('.live-selbar .n').textContent,/1 из 3/);
+});
+
+test('TS-47.4 r3: an SSE redraw keeps the focused introduction and its caret',async()=>{
+ const v=ui();v.start();const prompt=v.find('.live-selbar .live-f');prompt.focus();prompt.value='Личная вводная';prompt.setSelectionRange(3,7);await prompt.emit('input');
+ v.ctx.selection.hEvent({type:'note',text:'событие во время ввода'});const restored=v.find('.live-selbar .live-f');assert.notEqual(restored,prompt);assert.equal(v.document.activeElement,restored);assert.equal(restored.value,'Личная вводная');assert.equal(restored.selectionStart,3);assert.equal(restored.selectionEnd,7);
+});
+
+for(const ok of [false,true])for(const moved of [false,true])test('TS-47.4 r3: SSE during '+(ok?'success':'refusal')+' '+(moved?'does not steal the draft focus':'keeps the operation focus'),async()=>{
+ const gate=deferred<Data>(),v=ui(()=>gate.promise);v.ctx.render();const opener=v.find('[data-la="handoff"]');opener.focus();v.start();await v.select(1);const go=v.find('[data-sel="go"]');go.focus();const sending=go.emit('click');
+ const input=v.find('.box textarea');if(moved){await input.emit('pointerdown');input.focus();input.value='Новый черновик';await input.emit('focusin')}
+ const old=v.find('.live-selbar');v.ctx.selection.hEvent({type:'note',text:'событие во время передачи'});assert.notEqual(v.find('.live-selbar'),old);assert.equal(v.document.activeElement,moved?input:v.find('.live-selbar'));
+ gate.resolve(ok?{ok:true,seq:44,names:'Ревьюер'}:{ok:false,error:'Временный отказ'});await sending;
+ assert.equal(v.document.activeElement,moved?input:ok?v.find('[data-la="handoff"]'):v.find('[data-sel="go"]'));if(moved)assert.equal(input.value,'Новый черновик');
+});
+
+test('TS-47.4 r3: an outside pointer action revokes focus ownership even without a focusout',async()=>{
+ const gate=deferred<Data>(),v=ui(()=>gate.promise);v.start();await v.select(1);const go=v.find('[data-sel="go"]');go.focus();const sending=go.emit('click');
+ await v.find('.box').emit('pointerdown');v.ctx.selection.hEvent({type:'note',text:'событие после действия вне панели'});gate.resolve({ok:false,error:'Временный отказ'});await sending;
+ assert.notEqual(v.document.activeElement,v.find('[data-sel="go"]'));
 });

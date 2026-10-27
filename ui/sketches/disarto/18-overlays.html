@@ -59,12 +59,7 @@
     blk('снимки в этом проекте',kv([['последний','Workbench · OM-VIEW · 19:57'],['агент считает открытым','порт 3000 отдаёт 200, карта отрисована'],['всего за сегодня','4 снимка']]))+
     acts([['Отправить снимок','p','data-close'],['Показать агенту его же снимок','','data-close'],['Отмена','ghost','data-close']]),{w:720,h:600,hide:false});
   // ── ⌘K
-  const pal=()=>'<div class="pal-in">⌕ D8.4<span style="color:var(--accent)">|</span><span class="kbd k">esc</span></div>'+
-    [['задачи',[['задача','D8.4e · владение завершением','падает · 4/6'],['задача','D8.4d · круг 2','ждёт подпись M0']]],
-     ['решения и разговоры',[['решение','Подписать M0 по D8.4d','ждёт вас · 40 мин'],['разговор','Оркестратор · H1.5 и прогон','сегодня']]],
-     ['остальное',[['артефакт','D8.4d · круг 2 · дифф','готово к проверке'],['правило','Третий возврат подряд — решение владельца','проект OMG'],['агент','Воркер 2 · D8.4e','работает'],['настройка','Разрешения и стоп-случаи','везде']]]]
-    .map(([g,rows],gi)=>'<div class="pal-g">'+g+'</div>'+rows.map(([k,t,m],i)=>'<div class="pal-r'+(gi===0&&i===0?' on':'')+'" data-pick><span class="kd">'+k+'</span><span>'+t+'</span><span class="m">'+m+'</span></div>').join('')).join('')+
-    '<div class="note-bar" style="margin-top:10px"><span>↑ ↓ выбрать · ⏎ открыть · ⌘⏎ открыть карточкой</span><span>8 результатов · 7 видов</span></div>';
+  const pal=()=>'<div class="pal-in">Поиск экранов <span class="kbd k">esc</span></div><p class="note-bar">Поиск экранов доступен в окне приложения.</p>';
   const kBtn=document.getElementById('k');
   HX.bind('#k',pal,{w:640,h:520,hide:false});
   addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); HX.open(kBtn,pal(),{w:640,h:520,hide:false}); } });
