@@ -51,6 +51,18 @@ test('TS-52: scoped blocks extract only the requested local declarations',()=>{
  assert.throws(()=>fixtureSource(source,['item'],{scope:'missing'}),/Область.*не найдена/);
 });
 
+test('TS-52.1: nested event handlers select their block by condition, not source formatting',()=>{
+ const block={identifier:'PAGE',equals:'chat'};
+ for(const source of ["(function(){function connect(){if(PAGE==='chat'||PAGE==='first'){es.onopen=()=>42} if(PAGE==='new'){es.onopen=()=>0}}})();", "(function(){function connect(){if ( 'chat' === PAGE || PAGE === 'first' ) { es.onopen=()=>42 }}})();"]){
+  const context=createContext({es:{}});runInContext(fixtureSource(source,[{statement:'es.onopen='}],{scope:'connect',block}),context);
+  assert.equal((context.es as {onopen:()=>number}).onopen(),42);
+ }
+ const absent="(function(){function connect(){if(PAGE==='new'){es.onopen=()=>0}}})();";
+ assert.throws(()=>fixtureSource(absent,[{statement:'es.onopen='}],{scope:'connect',block}),/Блок PAGE === "chat" не найден/);
+ const duplicate="(function(){function connect(){if(PAGE==='chat'){es.onopen=()=>1} if(PAGE==='chat'){es.onopen=()=>2}}})();";
+ assert.throws(()=>fixtureSource(duplicate,[{statement:'es.onopen='}],{scope:'connect',block}),/Блок PAGE === "chat" неоднозначен/);
+});
+
 test('TS-52: boot fixture extracts a complete selected IIFE and rejects an absent wrapper',()=>{
  const source='(function(){globalThis.boot=1})(); (function(){globalThis.boot=2})();';
  const context=createContext({});runInContext(fixtureWrapper(source,1,'proto.js'),context);

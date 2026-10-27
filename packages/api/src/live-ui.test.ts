@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups,fixtureWrapper} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,readdirSync,mkdirSync} from 'node:fs';
@@ -16,16 +17,16 @@ const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),
 const style=readFileSync(new URL('../../../ui/deploy/proto.css',import.meta.url),'utf8');
 const away=readFileSync(new URL('../../../ui/sketches/disarto/18-overlays.html',import.meta.url),'utf8');
 process.env.TZ='Europe/Istanbul';
-function part(source:string,start:string,end:string){const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return source.slice(a,b)}
 function builtProtoPages(build:string){const a=build.indexOf('PROTO_PAGES ='),b=build.indexOf('PROTO_SRC =',a);assert.ok(a>=0&&b>a);const block=build.slice(a,b);return [...new Set([...block.matchAll(/"([0-9][^"]+)"\s*:/g),...block.matchAll(/PROTO_PAGES\["([0-9][^"]+)"\]/g)].map(match=>match[1]!))]}
 const plain=(value:unknown)=>JSON.parse(JSON.stringify(value));
+function protoPages():Data{const context=createContext({});runInContext(fixtureSource(proto,['PAGES'],{filename:'proto.js',wrapper:1})+'globalThis.pages=PAGES;',context);return context.pages as Data}
 type Data=Record<string,any>;
 const imageRef=(hex='a')=>({id:hex.repeat(64),mime:'image/png',size:4,w:1,h:1});
 const imageFile=(value=1)=>{const bytes=Uint8Array.of(value,2,3,4);return {name:'screen.png',type:'image/png',size:bytes.byteLength,arrayBuffer:async()=>bytes.buffer}};
 test('TS-47.4 F05: unknown windows and incompatible estimates never become measured percentages',()=>{
- const source=readFileSync(new URL('../../../ui/deploy/ctx.js',import.meta.url),'utf8'),start=source.indexOf('  const fmt='),end=source.indexOf('  async function openCard(anchor)');assert.ok(start>=0&&end>start);
+ const source=readFileSync(new URL('../../../ui/deploy/ctx.js',import.meta.url),'utf8');
  const sandbox:Data={L:{H:{pane:{id:'worker',label:'Исполнитель'},project:'/a'},paneName:(p:Data)=>p.label,esc:String},Date,Math};sandbox.globalThis=sandbox;
- const context=createContext(sandbox);runInContext(source.slice(start,end)+'\nglobalThis.views={html,tip,matrix,list};',context);
+ const context=createContext(sandbox);runInContext(fixtureSource(source,fixtureGroups.ctx_fmt_to_trackCardFocus,{filename:'ctx.js',wrapper:0})+'\nglobalThis.views={html,tip,matrix,list};',context);
  const sample={window:null,used:161,pct:null,measured:true,busy:false,turns:1,parts:[{key:'instructions',label:'Инструкции',tokens:2607,est:true},{key:'history',label:'История',tokens:161,est:false}],history:[],handoff:[]};
  const unknown=sandbox.views.html(sample);assert.match(unknown,/окно модели: нет данных/);assert.match(unknown,/распределение не определено/);assert.match(unknown,/оценка/);assert.doesNotMatch(unknown,/1619|class="ctx-mx"/);assert.doesNotMatch(sandbox.views.tip(sample,'instructions'),/1619|\d+ %/);
  const mixed={...sample,window:1000,pct:16};assert.doesNotMatch(sandbox.views.html(mixed),/class="ctx-mx"|261 %/);
@@ -51,31 +52,31 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   refreshStatus:async()=>{},refreshChats:async()=>{},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)||null},close(){},renderAll(){},draw(){},base:()=>'',modeLabel:(s:string)=>s,modelLabel:(s:string)=>s,ROOM:'room',isRoom:(p:Data)=>p.id==='room',ico:()=>'',pl:(n:number)=>String(n)};
  const context=createContext(sandbox);
  runInContext(readFileSync(new URL('../../../ui/deploy/autopilot-ui.js',import.meta.url),'utf8'),context);
- runInContext(part(live,'  const api=','  // TS-07: waiting controls')+
-  part(live,'  const warningSeen=','  function waitingControls(')+
-  part(live,'  let bindingGeneration','  function md(')+
-  part(live,'  async function ask(','  function applyStatus(')+
-  part(live,'  function reply(','  function composer(')+
-  part(live,'  function composer(','  const SCREENS=')+
-  part(live,'  async function stop(','  const toolLine=')+
-  part(live,'  function curHTML(','  function hEvent(')+
-  part(live,'  function hEvent(','  const isDirect=')+
-  part(live,'  async function loadChat(','  // подключение к движку')+
-  part(live,'  // TS-09b2:','  // End TS-09b2 promotion.')+
-  part(live,'  const fmtN=','  const ckBox=')+
-  part(live,'  const bubble=','  const cols=')+
-  part(live,'  function markupNode(','  function guidanceState(')+
-  part(live,'  function guidanceState(','  function render(')+
-  part(live,'  function closeLAMenus()','  // запись «контекст передан»')+
+ runInContext(fixtureSource(live,fixtureGroups.live_api_to_networkWaiting,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_warningSeen_to_consumeState,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_bindingGeneration_to_settingsReady,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_ask_to_autopilotDraw,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_reply_to_onSend,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_composer_to_document,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_stop_to_stop,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_curHTML_to_updateTurn,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_hEvent_to_hEvent,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_loadChat_to_recoverStoppedTurn,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_promotionBusy_to_promoteConversation,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_fmtN_to_actsLine,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_bubble_to_if,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_markupNode_to_feedRestore,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_guidanceState_to_document,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_closeLAMenus_to_laPath,{filename:'live.js',wrapper:0})+
   '\nconst L={api,sendBinding,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
-  '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
+  '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+fixtureSource(cx,fixtureGroups.cx_setSeat_to_setSeat,{filename:'cx.js',wrapper:0})+'globalThis.setSeat=setSeat;})();'+
   '\ndrawLive=()=>{if(window.CX&&CX.setBusy)CX.setBusy(!!H.cur)};globalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,recordModelChange,bindFreshModelChanges,ask,stop,curHTML,footerUpdate,finish,loadChat,recoverStoppedTurn,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,transferHTML,streamScope,streamGet,streamEnd,streamSelect,streamHidden,streamClear,selectedBusy,queueDelivered,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw,showOrchestratorOffer,laPath,projectPathValue};',context);
  const functions=(context as Data).testing as Data;
- function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
- function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
-  part(live,"  document.addEventListener('click',async e=>{ const toggle=",'  // меню профиля')+
+ function journal(){runInContext(fixtureSource(live,fixtureGroups.live_JR_to_document,{filename:'live.js',wrapper:0})+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
+ function sidebar(){runInContext(fixtureSource(live,fixtureGroups.live_PROJECT_FOLD_KEY_to_pinJobs,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_document_to_document_2,{filename:'live.js',wrapper:0})+
   '\nglobalThis.sidebar={expanded:projectExpanded,folder:projectFolder,toggle:toggleProjectFolder};',context);return (context as Data).sidebar as Data}
- function direct(){runInContext(part(live,"  document.addEventListener('click',e=>{ const d=e.target.closest('[data-direct]');",'  // ── переключение собеседника'),context);const listener=clicks.at(-1)!;
+ function direct(){runInContext(fixtureSource(live,fixtureGroups.live_document_to_document_3,{filename:'live.js',wrapper:0}),context);const listener=clicks.at(-1)!;
   return (mode:'on'|'orch')=>listener({target:{closest:(selector:string)=>selector==='[data-direct]'?{dataset:{direct:mode}}:null}}) as Promise<boolean>}
  return {H,S,ta,requests,toasts,storage,elements,rows,column,sandbox,context,functions,journal,sidebar,direct,clicks,hidePage:()=>pagehide.forEach(fn=>fn()),showPage:(event:Data)=>Promise.all(pageshow.map(fn=>fn(event))),get rendered(){return rendered}};
 }
@@ -107,7 +108,7 @@ test('TS-47.2 F02: receipt and events define one phase; failure has one readable
  const waiting={turnInstanceId:'turn-a',status:'uncertain',failure:{code:'turn_failed',reason:'Провайдер отказал',durationMs:42},recordSeqs:[1],queuedSeqs:[],actions:['retry','skip']};
  view.functions.hEvent({type:'note',warning:'worker:turn-a:uncertain',text:'место ждёт итога хода'});view.functions.hEvent({type:'error',warning:'worker:turn-a:error',message:'Провайдер отказал',code:'turn_failed',waiting});view.functions.hEvent({type:'note',text:'1 запись остались в очереди и уйдут со следующим ходом'});
  assert.equal(view.S.chat.filter((m:Data)=>m.src==='err'||m.src==='sys').length,0);assert.equal(view.S.chat.filter((m:Data)=>m.src==='live').length,1);assert.equal(view.H.pane.waiting,waiting);
- const ctx=createContext({networkWaiting:()=>null,paneName:()=> 'Воркер',esc:view.sandbox.esc});runInContext(part(live,'  function waitingControls(','  function showWaiting(')+'globalThis.card=waitingControls;',ctx);const html=(ctx as Data).card(view.H.pane,waiting,view.H.project);assert.match(html,/Провайдер отказал/);assert.match(html,/Повторить/);assert.match(html,/Пропустить/);assert.match(html,/<details><summary>Технические детали<\/summary>turn_failed/);
+ const ctx=createContext({networkWaiting:()=>null,paneName:()=> 'Воркер',esc:view.sandbox.esc});runInContext(fixtureSource(live,fixtureGroups.live_waitingControls_to_waitingControls,{filename:'live.js',wrapper:0})+'globalThis.card=waitingControls;',ctx);const html=(ctx as Data).card(view.H.pane,waiting,view.H.project);assert.match(html,/Провайдер отказал/);assert.match(html,/Повторить/);assert.match(html,/Пропустить/);assert.match(html,/<details><summary>Технические детали<\/summary>turn_failed/);
  const d=dom('<div class="frame"><div class="status"><span></span><span></span></div></div>');view.sandbox.document=d.document;view.functions.footerUpdate();assert.match(d.document.querySelector('.status span')!.textContent,/ждёт вашего решения/);assert.doesNotMatch(d.document.querySelector('.status span')!.textContent,/готов/);
  view.H.pane.waiting=null;view.H.cur=null;view.S.chat.push({role:'ai',src:'err',html:'отказ'});view.functions.footerUpdate();assert.match(d.document.querySelector('.status span')!.textContent,/ход не завершён/);assert.doesNotMatch(d.document.querySelector('.status span')!.textContent,/готов/);
  const queued=ui({fetch:async()=>({ok:true,queued:true})});assert.equal(await queued.functions.ask('в очередь',queued.functions.sendBinding()),true);assert.equal(queued.H.cur,null);
@@ -173,8 +174,8 @@ test('TS-47.2: reconnect reconciles an interrupted turn only against the same co
 function stopRecoveryUI(fetch:(path:string,body:Data|undefined)=>Promise<Data>){
  const view=ui({fetch});view.H.link='ok';view.H.cur={text:'часть',tools:[]};view.sandbox.proposalsFetch=async()=>{};view.sandbox.connectionFailed=()=>{view.H.connectionFailed=true};
  view.sandbox.applyStatus=(st:Data)=>{view.H.project=st.project;view.H.active=st.activeChats;view.H.panes=st.panes;view.H.pane=st.panes.find((p:Data)=>p.id===view.S.ui.pane)||null;view.H.connectionFailed=false};
- runInContext(part(live,'  async function refreshStatus(','  // лента активного чата')+'\nglobalThis.readRecoveryStatus=refreshStatus;',view.context);
- runInContext('globalThis.reconnect=(function(){let linkedProject=H.project;const es={};'+part(live,'      es.onerror=()=>{','      hStatus(); }')+'return es;})();',view.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_refreshStatus_to_refreshStatus,{filename:'live.js',wrapper:0})+'\nglobalThis.readRecoveryStatus=refreshStatus;',view.context);
+ runInContext('globalThis.reconnect=(function(){let linkedProject=H.project;const es={};'+fixtureSource(live,[{statement:'es.onerror='},{statement:'es.onopen='}],{filename:'live.js',wrapper:0,scope:'hConnect',block:{identifier:'PAGE',equals:'first'}})+'return es;})();',view.context);
  return {...view,connection:(view.context as Data).reconnect,refresh:(view.context as Data).readRecoveryStatus};
 }
 const stoppedStatus=()=>({project:'/project-a',activeChats:{worker:'chat-a'},panes:[{id:'worker',label:'воркер',busy:false}]});
@@ -243,7 +244,7 @@ test('TS-36E: sidebar profile uses only the owner name from the engine, never a 
 
 test('TS-36A: offline badges never pass demo decisions off as live Inbox data',()=>{
  let inbox:Data|null=null;const sandbox:Data={DEC:{m0:'demo one',limit:'demo two'},waiting:()=>['m0','limit'],window:{LIVE:{H:{on:false,panes:[]}},PS2:{setInbox:(value:Data)=>inbox=value}},document:{querySelectorAll:()=>[]},paneName:(pane:Data)=>pane.label};sandbox.globalThis=sandbox;
- const context=createContext(sandbox);runInContext(part(live,'  function waitList()','  // ── «Сейчас»')+'\nglobalThis.badges=badges;',context);sandbox.badges();assert.deepEqual(plain(inbox),{need:0,info:0,unavailable:true});
+ const context=createContext(sandbox);runInContext(fixtureSource(live,fixtureGroups.live_waitList_to_badges,{filename:'live.js',wrapper:0})+'\nglobalThis.badges=badges;',context);sandbox.badges();assert.deepEqual(plain(inbox),{need:0,info:0,unavailable:true});
  sandbox.window.LIVE.H={on:true,panes:[{id:'worker',label:'воркер',waiting:true,pendingApprovals:0}]};sandbox.badges();assert.deepEqual(plain(inbox),{need:1,info:0});
 });
 
@@ -362,7 +363,7 @@ test('TS-27: real mousedown, mouseup and click keep the same reply control alive
  const d=dom('<div class="frame cur"><div class="live-msg" data-message-index="0"><span class="live-message-text">выделенная цитата</span></div><textarea class="live-in"></textarea></div>');Object.assign(d.document,{body:d.body});const content=d.document.querySelector('.live-message-text')!,ta:any=d.document.querySelector('.live-in')!;ta.value='Комментарий';ta.scrollHeight=40;let collapsed=false;
  const selection:any={isCollapsed:false,rangeCount:1,anchorNode:content.firstChild,focusNode:content.firstChild,toString:()=>collapsed?'':'выделенная цитата',getRangeAt:()=>({getBoundingClientRect:()=>({left:20,right:130,bottom:60})}),removeAllRanges(){collapsed=true;this.isCollapsed=true}};
  let choose:(picked:Data[])=>void=()=>assert.fail('chooser not opened'),transferred:Data|null=null;const sandbox:Data={document:d.document,window:{},S:{chat:[{seq:1,role:'ai',src:'live',who:'Воркер',text:'выделенная цитата',t:1791500000000}],draft:null},H:{on:true,pane:{id:'worker',label:'Воркер'},panes:[{id:'worker',label:'Воркер'},{id:'reviewer',label:'Ревьюер'}]},getSelection:()=>selection,innerWidth:1440,innerHeight:920,setTimeout:(fn:Function)=>fn(),addEventListener:d.window.addEventListener.bind(d.window),Event:class {},save(){},paneName:(p:Data)=>p.label,fullMessageTime:()=>'',toast(){},modelName:String,esc:String,sendBinding:()=>({}),laMulti:(_a:any,_b:any,_c:any,_d:any,next:(picked:Data[])=>void)=>choose=next,bindingCurrent:()=>true,leftPage:false,selStart:(to:string[],opts:Data)=>transferred={to,opts}};sandbox.globalThis=sandbox;const context=createContext(sandbox);
- runInContext(part(live,'  const selectionElement=','  const cols=')+'\nglobalThis.quoteUi={messageSelectionText,insertQuote};',context);await d.document.emit('selectionchange');const actions=d.document.querySelector('.live-quote-selection')!,reply=actions.querySelector('[data-selection-reply]')!;
+ runInContext(fixtureSource(live,fixtureGroups.live_selectionElement_to_if,{filename:'live.js',wrapper:0})+'\nglobalThis.quoteUi={messageSelectionText,insertQuote};',context);await d.document.emit('selectionchange');const actions=d.document.querySelector('.live-quote-selection')!,reply=actions.querySelector('[data-selection-reply]')!;
  const transfer=actions.querySelector('[data-selection-transfer]')!;await transfer.emit('mousedown');await transfer.emit('mouseup');assert.equal(d.document.querySelector('.live-quote-selection'),actions);await transfer.emit('click');choose([{id:'reviewer'}]);assert.deepEqual(plain(transferred),{to:['reviewer'],opts:{sw:false,quotes:[{seq:1,text:'выделенная цитата',comment:'',source:'из ответа Воркер'}]}});
  await reply.emit('mousedown');await reply.emit('mouseup');assert.equal(d.document.querySelector('.live-quote-selection'),actions);assert.equal(actions.isConnected,true);await reply.emit('click');assert.equal(ta.value,'Комментарий\n[1] > выделенная цитата\n\n');assert.equal(d.document.querySelector('.live-quote-selection'),null);
 });
@@ -481,7 +482,7 @@ for(const place of ['worker','room'])for(const page of ['chat','new'])test('135/
  const view=ui();view.H.project='/projects/chat-test';view.H.noProject=false;view.H.pane=view.H.panes.find((p:Data)=>p.id===place);view.S.ui.pane=place;view.S.cx={noFolder:true,att:[],modes:{}};view.sandbox.PAGE=page;
  view.sandbox.svg=()=>'';view.sandbox.seats=()=>view.H.panes.filter((p:Data)=>p.id!=='room');
  const top={innerHTML:''},bot={innerHTML:''},att={innerHTML:'',style:{}},box={__cx:{ta:view.ta},previousElementSibling:top,querySelector:(s:string)=>s==='.cx-bot'?bot:s==='.cx-att'?att:null};
- runInContext('(function(){const S=()=>globalState,seat=()=>H.pane,cx=()=>globalState.cx;'+cx.match(/const base=[^;]+;/)![0]+part(cx,'  const allModels=','  // ── строка:')+part(cx,'  function render(box)','  function setBusy(')+'globalThis.renderCX=render;})();',view.context);
+ runInContext('(function(){const S=()=>globalState,seat=()=>H.pane,cx=()=>globalState.cx;'+fixtureSource(cx,['base'],{filename:'cx.js',wrapper:0})+fixtureSource(cx,fixtureGroups.cx_allModels_to_chip,{filename:'cx.js',wrapper:0})+fixtureSource(cx,fixtureGroups.cx_render_to_render,{filename:'cx.js',wrapper:0})+'globalThis.renderCX=render;})();',view.context);
  const render=(view.context as Data).renderCX;render(box);assert.doesNotMatch(top.innerHTML,/data-cx="folder"|<b>chat-test<\/b>/);assert.equal(view.S.cx.noFolder,false);
  view.H.project='/projects/next';render(box);assert.doesNotMatch(top.innerHTML,/data-cx="folder"|<b>chat-test<\/b>/);assert.equal(view.S.cx.noFolder,false);
  view.H.noProject=true;view.S.cx.noFolder=false;render(box);assert.doesNotMatch(top.innerHTML,/data-cx="folder"|<b>Без проекта<\/b>/);assert.equal(view.S.cx.noFolder,true);
@@ -536,7 +537,7 @@ for(const source of ['carry','digest','carry + digest'])test('129: EventBus → 
  t.after(()=>{first.resolve();last.resolve();stream.close()});await until(()=>stream.raw.includes(': ok'));
  const view=ui(),busy:boolean[]=[];view.H.project=h.dir;view.H.active={...h.runtime.project.state.chats.active};view.H.liveStatus={trace:{instanceId:h.runtime.project.trace.instanceId}};view.sandbox.CX=view.sandbox.window.CX={setBusy:(value:boolean)=>busy.push(value)};
  view.sandbox.selBar=()=>{};view.sandbox.cols=()=>[];
- runInContext(part(live,'  function render(){',"  document.addEventListener('click',e=>{ if(e.target.closest('a[data-demo]'))"),view.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_render_to_render,{filename:'live.js',wrapper:0}),view.context);
  const binding=plain(view.functions.sendBinding()),active:{snapshot:Data|null}={snapshot:null};let delivered=0;
  const deliver=()=>{while(delivered<stream.frames.length){const event=stream.frames[delivered++];
   if(event.type==='state')view.functions.consumeState(event);
@@ -571,7 +572,7 @@ test('129: note preserves an unknown start model; provider error still finishes 
 test('TS-08 r2/2: pending new-chat transition shares the setting wait and preserves a refused draft',async t=>{
  const h=await fixture(t),gate=deferred(),view=ui({fetch:async path=>{if(path==='/api/panes/worker'){await gate.promise;return {ok:false,error:'model setting denied'}}return (await call(h.api,path)).body}});
  view.S.pending={text:'pending question',target:view.functions.sendBinding()};const setting=view.functions.setSeat({model:'w2'},'Модель');await until(()=>view.requests.length===1);
- view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+part(live,'  hConnect().finally(',"  addEventListener('resize',()=>{ wireSearch();"),view.context);
+ view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+fixtureSource(live,fixtureGroups.live_hConnect_to_hConnect_2,{filename:'live.js',wrapper:0}),view.context);
  await immediate();assert.equal(view.requests.filter(r=>r.path==='/api/chat').length,0);gate.resolve();assert.equal(await setting,false);await (view.context as Data).pendingSend;
  assert.equal(h.provider.calls.length,0);assert.equal(view.S.draft,'pending question');assert.equal(view.S.chat.length,0);
 });
@@ -613,18 +614,18 @@ test('TS-24c: oversize and non-image upload errors stay in the field without a c
 
 test('TS-24c: a new-chat transition carries images once and does not restore the sent draft',async()=>{
  const ref=imageRef('d'),view=ui({fetch:async path=>path==='/api/attachments'?ref:{ok:true}});view.functions.attachmentFiles([imageFile()]);await until(()=>view.functions.attachmentState(null).ready.length===1);view.sandbox.cols=()=>[];view.ta.value='Первый вопрос';assert.equal(await view.functions.onSend('Первый вопрос',view.ta),true);assert.deepEqual(plain(view.S.pending.attachments),[ref]);assert.equal(view.S.draft,null);assert.equal(view.ta.value,'');
- view.sandbox.cols=()=>[view.column];view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+part(live,'  hConnect().finally(',"  addEventListener('resize',()=>{ wireSearch();"),view.context);await (view.context as Data).pendingSend;
+ view.sandbox.cols=()=>[view.column];view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+fixtureSource(live,fixtureGroups.live_hConnect_to_hConnect_2,{filename:'live.js',wrapper:0}),view.context);await (view.context as Data).pendingSend;
  const chat=view.requests.find(r=>r.path==='/api/chat');assert.deepEqual(chat?.body?.attachments,[ref.id]);assert.equal(view.S.pending,null);assert.equal(view.S.draft,null);assert.equal(view.functions.attachmentState(null).ready.length,0);
 });
 
 for(const change of ['chat','project'] as const)test('TS-24c: pending images return only to the original draft after '+change+' changes',async()=>{
  const ref=imageRef('e'),view=ui({fetch:async path=>path==='/api/attachments'?ref:{ok:true}});view.functions.attachmentFiles([imageFile()]);await until(()=>view.functions.attachmentState(null).ready.length===1);const original=view.functions.attachmentKey();view.sandbox.cols=()=>[];view.ta.value='Исходное сообщение';assert.equal(await view.functions.onSend(view.ta.value,view.ta),true);
- if(change==='chat')view.H.active.worker='chat-b';else{view.H.project='/project-b';view.H.confirmedProjectGeneration=2}view.functions.sendBinding();const target=view.functions.attachmentKey();assert.notEqual(target,original);view.sandbox.cols=()=>[view.column];view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+part(live,'  hConnect().finally(',"  addEventListener('resize',()=>{ wireSearch();"),view.context);await (view.context as Data).pendingSend;
+ if(change==='chat')view.H.active.worker='chat-b';else{view.H.project='/project-b';view.H.confirmedProjectGeneration=2}view.functions.sendBinding();const target=view.functions.attachmentKey();assert.notEqual(target,original);view.sandbox.cols=()=>[view.column];view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+fixtureSource(live,fixtureGroups.live_hConnect_to_hConnect_2,{filename:'live.js',wrapper:0}),view.context);await (view.context as Data).pendingSend;
  assert.equal(view.requests.some(r=>r.path==='/api/chat'),false);assert.equal(view.S.draft,'Исходное сообщение');assert.equal(view.functions.attachmentRefs(target).length,0);assert.deepEqual(plain(view.functions.attachmentRefs(original)),[ref]);
 });
 
 test('TS-24c: pending text and images return to their original draft after capability refusal',async()=>{
- const ref=imageRef('7'),view=ui({fetch:async path=>path==='/api/attachments'?ref:{ok:true}});view.functions.attachmentFiles([imageFile()]);await until(()=>view.functions.attachmentState(null).ready.length===1);const original=view.functions.attachmentKey();view.sandbox.cols=()=>[];view.ta.value='Исходное сообщение';assert.equal(await view.functions.onSend(view.ta.value,view.ta),true);view.H.models.claude[0].images=false;view.sandbox.cols=()=>[view.column];view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+part(live,'  hConnect().finally(',"  addEventListener('resize',()=>{ wireSearch();"),view.context);await (view.context as Data).pendingSend;
+ const ref=imageRef('7'),view=ui({fetch:async path=>path==='/api/attachments'?ref:{ok:true}});view.functions.attachmentFiles([imageFile()]);await until(()=>view.functions.attachmentState(null).ready.length===1);const original=view.functions.attachmentKey();view.sandbox.cols=()=>[];view.ta.value='Исходное сообщение';assert.equal(await view.functions.onSend(view.ta.value,view.ta),true);view.H.models.claude[0].images=false;view.sandbox.cols=()=>[view.column];view.sandbox.hConnect=async()=>{};runInContext('globalThis.pendingSend='+fixtureSource(live,fixtureGroups.live_hConnect_to_hConnect_2,{filename:'live.js',wrapper:0}),view.context);await (view.context as Data).pendingSend;
  assert.equal(view.requests.some(r=>r.path==='/api/chat'),false);assert.equal(view.S.draft,'Исходное сообщение');assert.deepEqual(plain(view.functions.attachmentRefs(original)),[ref]);
 });
 
@@ -660,18 +661,18 @@ test('78/106: arrows never switch projects; state is keyed by full path and surv
 
 test('TS-38.1: profile entry opens the Autopilot master and submits typed conditions',()=>{
  const listeners:((e:Data)=>void)[]=[],location={href:''};let reopened=0;const document={addEventListener(_t:string,fn:(e:Data)=>void){listeners.push(fn)},getElementById:()=>({click(){reopened++}})};
- const context=createContext({document,location,KEY:'chat',PAGES:{away:'18-overlays.html'},window:{}});runInContext(part(proto,"  document.addEventListener('click',e=>{const menuButton=","  document.addEventListener('click',e=>{if(!e.target.closest('.ps-foot'))"),context);
+ const context=createContext({document,location,KEY:'chat',PAGES:{away:'18-overlays.html'},window:{}});runInContext(fixtureSource(proto,fixtureGroups.proto_document_to_document,{filename:'proto.js',wrapper:1}),context);
  const target={closest:(selector:string)=>selector==='aside.side'?{}:selector==='[data-go]'?{dataset:{go:'away'}}:null};
  for(const side of ['wide','rail']){listeners[0]!({target,preventDefault(){},stopPropagation(){}});assert.equal(location.href,'18-overlays.html#leave',side)}
  (context as Data).KEY='away';listeners[0]!({target,preventDefault(){},stopPropagation(){}});assert.equal(reopened,1);
- const templates:string[]=[];runInContext(part(away,"  HX.bind('#leave'",'  // ── Показать окно'),createContext({HX:{bind(_s:string,fn:()=>string){templates.push(fn())}},blk:(_label:string,html:string)=>html,kv:()=>''}));
+ const templates:string[]=[];runInContext(fixtureSource(away.match(/<script>([\s\S]*?)<\/script>/)![1]!,[{statement:"HX.bind('#leave'"}],{filename:'18-overlays.html'}),createContext({HX:{bind(_s:string,fn:()=>string){templates.push(fn())}},blk:(_label:string,html:string)=>html,kv:()=>''}));
  assert.match(proto,/class="it ap" data-go="away" href="18-overlays\.html#leave"/);
  assert.match(templates[0]!,/до утра · 07:00/);assert.match(templates[0]!,/до ответа/);
  assert.match(templates[0]!,/data-autopilot-on/);assert.match(templates[0]!,/data-autopilot-off/);assert.match(templates[0]!,/data-autopilot-cap/);assert.doesNotMatch(templates[0]!,/<button[^>]+disabled[^>]*>Включить Автопилот<\/button>/);
  assert.match(live,/api\('\/api\/autopilot',body\)/);assert.match(live,/status\?\.trace\?\.instanceId/);
  assert.match(proto,/PAGES\[k\]\+\(k==='away'\?'#leave':''\)/);assert.doesNotMatch(away,/<div class="comp"|<div class="col"><div class="me"/);
  const view=ui();view.S.away={deputy:'fake'};
- const cleaned=createContext({KEY:'k',localStorage:{getItem:()=>JSON.stringify({...view.S,v:1})}});runInContext(part(live,'  let S;','  const now=')+'load();globalThis.cleaned=S;',cleaned);assert.equal(Object.hasOwn((cleaned as Data).cleaned,'away'),false);
+ const cleaned=createContext({KEY:'k',localStorage:{getItem:()=>JSON.stringify({...view.S,v:1})}});runInContext(fixtureSource(live,fixtureGroups.live_S_to_save,{filename:'live.js',wrapper:0})+'load();globalThis.cleaned=S;',cleaned);assert.equal(Object.hasOwn((cleaned as Data).cleaned,'away'),false);
 });
 
 test('TS-42: orchestrator chat shows engine conditions and retains the same master',()=>{
@@ -695,14 +696,14 @@ function firstPaint(html:string,storage=new Map<string,string>(),page='chat'){
  const original=view.sandbox.document.querySelectorAll;
  view.sandbox.document.querySelectorAll=(q:string)=>q==='aside.side.ps'?[side]:q==='aside.side.ps .ps-folders'?[folders]:q==='aside.side.ps .ps-proj:not(.ps2-prow)'?[project]:q==='.frame .top > b'?[head]:original(q);
  Object.assign(view.sandbox,{setTimeout:(fn:()=>void,ms:number)=>{timers.set(++timerId,{fn,ms});return timerId},clearTimeout:(id:number)=>timers.delete(id),sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,v:string)=>storage.set(k,v)},badges(){},limitsDraw(){},firstSelectPane(){},firstDraw(){},EventSource:class {close(){}},nowLive(){},journalLive(){},journalFetch:async()=>{},SP:{generation:0},JR:{epoch:0},base:(path:string)=>path.split('/').pop(),PROJ_ITEMS:[],PIN:'',PAGE:page});
- view.sandbox.window=view.sandbox;view.sandbox.psKey=page;view.sandbox.location.pathname='/sketches/proto/'+(runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data)[page];view.H.on=false;view.H.panes=[];view.H.project=undefined;view.H.pane=null;
+ view.sandbox.window=view.sandbox;view.sandbox.psKey=page;view.sandbox.location.pathname='/sketches/proto/'+protoPages()[page];view.H.on=false;view.H.panes=[];view.H.project=undefined;view.H.pane=null;
  const first=html.match(/<head>\s*<script>([\s\S]*?)<\/script>/);assert.ok(first,'first head script precedes styles and all frames');runInContext(first[1]!,view.context);
- runInContext(part(live,'  function applyStatus(','  // лента активного чата')+
-  part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+
-  part(live,'  async function hConnect(','  // ── чат: настоящее')+
-  part(live,'  const PROJECT_FOLD_KEY=','  async function openChatRow(')+
-  part(live,'  function restoreLiveSnapshot(','  // End TS-11 snapshot.')+
-  part(live,'  // TS-09a.1: one lifecycle','  // End TS-09a.1 page lifecycle.')+
+ runInContext(fixtureSource(live,fixtureGroups.live_applyStatus_to_refreshStatus,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_LIVE_EVENTS_to_addEventListener,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_hConnect_to_hConnect,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_PROJECT_FOLD_KEY_to_sideChats,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_restoreLiveSnapshot_to_liveFirstPaint,{filename:'live.js',wrapper:0})+
+  fixtureSource(live,fixtureGroups.live_suspendPage_to_addEventListener,{filename:'live.js',wrapper:0})+
   '\nglobalThis.paint={restore:restoreLiveSnapshot,connect:hConnect,refresh:refreshStatus,apply:applyStatus,ready:liveFirstPaint,remember:rememberLive};',view.context);
  return {...view,root,attrs,timers,nodes,side,folders,project,head,status,storage,boot:view.sandbox.HARNESS_BOOT,paint:view.sandbox.paint,
   demoVisible:()=>!attrs.has('data-live-pending')&&!attrs.has('data-live-unavailable'),deadline(){for(const [id,timer] of timers)if(timer.ms===1500){timers.delete(id);timer.fn()}}};
@@ -715,7 +716,7 @@ function historyDOM(v:ReturnType<typeof firstPaint>,html='<div class="frame"><di
  v.sandbox.document.querySelectorAll=(q:string)=>['.feed .col','.feed','.frame .top > b','.frame .top .st'].includes(q)?d.document.querySelectorAll(q):all(q);
  v.sandbox.document.querySelector=(q:string)=>d.document.querySelector(q)||one(q);
  v.sandbox.cols=()=>d.document.querySelectorAll('.feed .col');v.sandbox.selBar=()=>{};
- runInContext(part(live,'  const paneName=','  function pickMenu(')+part(live,'  function render(){',"  document.addEventListener('click',e=>{ if(e.target.closest('a[data-demo]'))"),v.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_paneName_to_hStatus,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_render_to_render,{filename:'live.js',wrapper:0}),v.context);
  return d;
 }
 
@@ -728,7 +729,7 @@ test('141–143: every PROTO_PAGES page hides demo before delayed status; succes
  for(const page of pages){
   const html=readFileSync(new URL(page+'.html',directory),'utf8'),frames=html.match(/<div class="frame[^"]*"[^>]*>/g)||[];
   assert.ok(frames.length,page);assert.ok(frames.every(tag=>/data-demo(?:[ >])/.test(tag)),page+': all frames marked before scripts');
-  const mapping=runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data,key=Object.keys(mapping).find(key=>mapping[key]===page+'.html')||(/^(?:2[89]|3[0-8])-/.test(page)?'path':'');
+  const mapping=protoPages(),key=Object.keys(mapping).find(key=>mapping[key]===page+'.html')||(/^(?:2[89]|3[0-8])-/.test(page)?'path':'');
   if(key==='path'){assert.match(html,/path\.css\?v=/,page);assert.match(html,/path\.js\?v=/,page);assert.match(html,/sidebar-v2\.css\?v=/,page);assert.match(html,/<html lang="ru" data-proto class="ps2-root">/,page)}
   const v=firstPaint(html,new Map(),key);assert.equal(v.demoVisible(),false,page);assert.equal(v.paint.restore(),false);
   const connecting=v.paint.connect().finally(()=>{v.sandbox.render();v.paint.ready()});await until(()=>v.requests.some(r=>r.path==='/api/status'));
@@ -785,12 +786,12 @@ test('141: offline deadline before body parsing waits to attach its label; accep
 test('142: cold cached journal executes the real startup after journal/Now state initialization, without model or chat mutations',async()=>{
  const html=readFileSync(new URL('sketches/proto/21-journal.html',site),'utf8'),seed=firstPaint(html);seed.boot.save(realStatus(),[{id:'c-real',pane:'worker',messages:1,title:'cached',active:true}],[{path:'/real/project',name:'project',current:true}],[]);
  const v=firstPaint(html,seed.storage,'log');Object.assign(v.sandbox,{stop(){},openPal(){},selStart(){},laMenu(){},laPath(){},laMulti(){},operationsDraw(){},operationAttention(){return false},restoreUI(){},wireSearch(){},refresh(){}});
- const tail=live.slice(live.indexOf('  function restoreLiveSnapshot('),live.lastIndexOf('})();'));
+ const tail=fixtureSource(live,fixtureGroups.live_snapshot_boot,{filename:'live.js',wrapper:0});
  assert.doesNotThrow(()=>runInContext(tail,v.context));assert.equal(v.H.snapshotOnly,true);assert.equal(v.H.project,'/real/project');assert.deepEqual(v.requests.map(r=>r.path),['/api/status']);
  v.status.resolve(realStatus());await immediate();assert.equal(v.attrs.has('data-live-pending'),false);assert.equal(v.H.connected,true);assert.equal(v.requests.some(r=>r.path==='/api/onboard'||r.path==='/api/chats/open'||r.path==='/api/chat'),false);
 });
 
-const bootHtml='<head><script>'+proto.split('/* LIVE_BOOT_END */')[0]+'</script></head>';
+const bootHtml='<head><script>'+fixtureWrapper(proto,0,'proto.js')+'</script></head>';
 const projectStatus=(project:string,label:string)=>({...realStatus(),project,panes:[{...realStatus().panes[0]!,label}]});
 for(const older of ['refresh','connect'])for(const newer of ['refresh','connect'])test('TS-11 r2: late '+older+' cannot undo confirmed project from '+newer,async()=>{
  const v=firstPaint(bootHtml,new Map(),'set'),old=deferred<Data>(),next=deferred<Data>();let calls=0;
@@ -834,7 +835,7 @@ test('TS-11 r2: rejected startup response leaves a cached preview read-only unti
 
 test('152: all PROTO_PAGES share history return, invalidate old bindings/status, and confirm before accepting writes',async()=>{
  const build=readFileSync(new URL('../../../ui/deploy/build.py',import.meta.url),'utf8'),pages=builtProtoPages(build);
- const mapping=runInContext('('+proto.match(/const PAGES=(\{[^;]+\})/)![1]+')',createContext({})) as Data;assert.equal(pages.length,33);assert.ok(pages.includes('44-inbox'));assert.ok(pages.includes('41-team-constructor'));assert.ok(pages.includes('41-team-queue'));
+ const mapping=protoPages();assert.equal(pages.length,33);assert.ok(pages.includes('44-inbox'));assert.ok(pages.includes('41-team-constructor'));assert.ok(pages.includes('41-team-queue'));
  for(const page of pages){
   const html=readFileSync(new URL('sketches/proto/'+page+'.html',site),'utf8'),key=Object.keys(mapping).find(k=>mapping[k]===page+'.html')||(/^(?:2[89]|3[0-8])-/.test(page)?'path':''),v=firstPaint(html,new Map(),key);
   const body=html.match(/<body[^>]*>([\s\S]*?)<script\b/)![1]!,d=historyDOM(v,body),columns=d.document.querySelectorAll('.feed .col');
@@ -870,7 +871,7 @@ test('TS-09a.1 r2: real HTTP return replaces project A feed with B history and r
  const oldGate=deferred(),newGate=deferred(),oldEntered=deferred(),newEntered=deferred();let holdOld=false,newPath='';t.after(()=>{oldGate.resolve();newGate.resolve()});
  v.sandbox.fetch=async(path:string,options?:{body:string})=>{const body=options?.body?JSON.parse(options.body):undefined;v.requests.push({path,body});const result=(await call(h.api,path,body?{body}:{})).body;
   if(path===oldPath&&holdOld){oldEntered.resolve();await oldGate.promise}if(path===newPath){newEntered.resolve();await newGate.promise}return {json:async()=>result}};
- runInContext(part(live,'  // лента активного чата','  // подключение к движку'),v.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_LOADED_to_recoverStoppedTurn,{filename:'live.js',wrapper:0}),v.context);
  v.paint.apply(a,v.boot.capture(),true);await v.functions.loadChat({onboard:false});assert.match(d.document.querySelector('.feed')!.textContent,/ANSWER FROM A/);
  holdOld=true;const pending=v.functions.loadChat({onboard:false});await oldEntered.promise;v.hidePage();
  const b=join(h.dir,'project-b');mkdirSync(join(b,'.harness'),{recursive:true});writeFileSync(join(b,'.harness','team.yaml'),readFileSync(join(h.dir,'.harness','team.yaml')));
@@ -886,7 +887,7 @@ for(const current of ['no-active-chat','empty-active-chat','no-pane'])test('TS-0
  if(current==='no-pane'){h.runtime.registry.panes.clear();h.runtime.project.state.chats={chats:{},active:{}}} // Explicit legacy absence; an empty project now has a saved room.
  if(current==='empty-active-chat')assert.equal((await call(h.api,'/api/chats/new',{body:{pane:'worker',carry:'none'}})).body.ok,true);
  v.sandbox.fetch=async(path:string,options?:{body:string})=>{const body=options?.body?JSON.parse(options.body):undefined;v.requests.push({path,body});return {json:async()=>(await call(h.api,path,body?{body}:{})).body}};
- runInContext(part(live,'  // лента активного чата','  // подключение к движку'),v.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_LOADED_to_recoverStoppedTurn,{filename:'live.js',wrapper:0}),v.context);
  v.paint.apply((await call(h.api,'/api/status')).body,v.boot.capture(),true);d.document.querySelector('.col')!.innerHTML='<div class="ai live-msg">OLD ANSWER</div>';v.S.chat=[{role:'ai',text:'OLD ANSWER',html:'OLD ANSWER'}];
  v.hidePage();await v.showPage({persisted:true});await h.runtime.idle();
  assert.doesNotMatch(d.document.querySelector('.feed')!.textContent,/OLD ANSWER/);assert.equal(v.S.chat.length,0);assert.equal(h.provider.calls.length,0);assert.equal(v.requests.some(r=>r.body||r.path==='/api/onboard'),false);
@@ -918,7 +919,7 @@ test('178: gallery preserves the sketch canvas and routes implemented pages to t
 test('210: every SCREENS entry is reachable from the untruncated palette by click, keyboard and search',async()=>{
  const d=dom('<aside class="side"><div class="search">Найти</div></aside>');Object.assign(d.document,{documentElement:d.html,body:d.body});
  const context:Data={document:d.document,location:{href:''},waiting:()=>[],DEC:{},addEventListener:d.window.addEventListener.bind(d.window),esc:(v:unknown)=>String(v),localStorage:{removeItem(){}},S:{chat:[]},save(){},render(){},toast(){}};context.window=context;
- runInContext(part(live,'  const SCREENS=','  // ── переключатели и сегменты')+'\nglobalThis.screens=SCREENS;wireSearch();',createContext(context));
+ runInContext(fixtureSource(live,fixtureGroups.live_SCREENS_to_reset,{filename:'live.js',wrapper:0})+'\nglobalThis.screens=SCREENS;wireSearch();',createContext(context));
  const screens=plain(context.screens) as [string,string][];assert.ok(screens.some(([name])=>name==='События'));assert.ok(screens.some(([name])=>name==='Журнал'));assert.ok(screens.length>12);
  const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};
  await d.window.emit('keydown',{key:'k',metaKey:true});assert.equal(find('.live-pal').classList.contains('on'),true);
@@ -943,7 +944,7 @@ for(const deepLink of [false,true])test('TS-41: proposal cards stay in the feed 
  const d=dom('<div class="frame cur"><div class="main"><div class="feed"><div class="col"><div class="live-msg" data-message-index="0">Ответ оркестратора</div><div class="live-msg" data-message-index="1">Следующий ответ</div></div></div><div class="box"></div></div></div>');
  const seat={sid:'worker-a',operationId:'caaaaa',kind:'worker',label:'Юрист',vendor:'codex',model:'w1',mode:'read',intro:'Проверь договор'},proposal={proposalId:'p'+'a'.repeat(24),version:1,from:'lead',turnInstanceId:'turn-proposal',confirmed:false,seats:[seat],team:[{id:seat.sid,kind:'worker',proposedKind:'worker',state:'proposed',chat:null}]};
  const context:Data={document:d.document,H:{on:true,project:'/test',snapshotOnly:false},sendBinding:()=>({project:'/test',pane:'lead',chat:'lead-chat'}),bindingCurrent:()=>true,S:{ui:{pane:'lead'},chat:[{role:'ai',pane:'lead',turnInstanceId:'turn-proposal'},{role:'ai',pane:'lead',turnInstanceId:'later'}]},...(deepLink?{location:{hash:'#team='+proposal.proposalId}}:{}),PAGE:'chat',leftPage:false,addEventListener(){},esc:(v:unknown)=>String(v),api:async()=>({ok:true,project:'/test',proposals:[proposal]}),operationsTeams(){},OPS:{items:new Map()}};
- runInContext(part(live,'  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+'globalThis.fetchProposals=proposalsFetch;',createContext(context));
+ runInContext(fixtureSource(live,fixtureGroups.live_TP_to_addEventListener,{filename:'live.js',wrapper:0})+'globalThis.fetchProposals=proposalsFetch;',createContext(context));
  await context.fetchProposals();
  const card=d.document.querySelector('[data-team-proposal]')!;
  assert.ok(card);assert.equal(card.parentElement,d.document.querySelector('.feed .col'));
@@ -956,7 +957,7 @@ function turnStatsUI(){
  const d=dom('<main></main>'),H:any={project:'/project-a',pane:{id:'worker'},active:{worker:'chat-a'}},S:any={chat:[]},copied:string[]=[];
  const context:any={H,S,document:d.document,esc:(value:any)=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),navigator:{clipboard:{writeText:async(value:string)=>{copied.push(value)}}},toast(){}};
  context.render=()=>{d.document.querySelector('main')!.innerHTML=S.chat.map((m:any,i:number)=>'<article>'+context.stats.button(m,i)+context.stats.card(m,i)+'</article>').join('')};
- runInContext(part(live,'  const fmtN=','  const timePart=')+'globalThis.stats={parse:messageUsage,button:turnStatsButton,card:turnStatsCard};',createContext(context));
+ runInContext(fixtureSource(live,fixtureGroups.live_fmtN_to_document,{filename:'live.js',wrapper:0})+'globalThis.stats={parse:messageUsage,button:turnStatsButton,card:turnStatsCard};',createContext(context));
  return {...d,H,S,copied,render:context.render,stats:context.stats};
 }
 const statsUsage={turnId:'12345678-1234-1234-1234-123456789012',model:'claude-test',vendor:'claude',mode:'read',input:50892,cacheRead:779968,output:17413,durationMs:6400,toolCalls:2,stopped:false,contextAfter:{used:68305,window:200000},cost:.031,currency:'USD'};
