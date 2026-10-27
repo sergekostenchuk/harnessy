@@ -93,6 +93,16 @@ test('TS-47.2 F02: receipt and events define one phase; failure has one readable
  const finalDom=dom('<div class="frame cur">'+bubble+'</div>');done.sandbox.document=finalDom.document;const timer=timers.find(t=>t.ms===3000);assert.ok(timer);timer.fn();assert.equal(finalDom.document.querySelector('.live-completion'),null);assert.ok(finalDom.document.querySelector('.live-acts'));message.completedUntil=0;assert.doesNotMatch(done.functions.bubble(message,done.S.chat.length-1),/>завершено</);
 });
 
+test('TS-50.B: failed partial response keeps its own reason, identity and tools across history without becoming transferable',async()=>{
+ const turn={turnInstanceId:'attempt-old',ts:10,model:'w1',outcome:'error',errorCode:'turn_failed',partialText:'Часть ответа',recordSeqs:[42],failure:{reason:'Нет связи'},toolEvents:[{type:'tool',name:'Read',detail:'file',status:'unknown',offset:null,order:0}]};
+ const v=ui({fetch:async path=>path==='/api/chats/chat-a'?{messages:[{role:'me',text:'Вопрос',ts:10.5,journalTs:9,journalSeq:42,seq:1},{role:'ai',text:'Новый ответ',ts:11,seq:2,runtime:{turnInstanceId:'attempt-new'}}],turns:[turn]}:{records:[]}});
+ v.H.cur={text:'Часть ответа',tools:[],parts:[{kind:'text',text:'Часть ответа'}],model:'w1',pane:'worker'};
+ v.functions.finish({type:'error',turnInstanceId:'attempt-old',message:'Нет связи',code:'turn_failed',waiting:{turnInstanceId:'attempt-old'}});
+ const live=v.S.chat[0];assert.equal(live.failed,true);assert.equal(live.failedTurnId,'attempt-old');assert.match(live.html,/ход не завершён/);assert.match(live.html,/Нет связи/);assert.doesNotMatch(v.functions.actsLine(live,0),/передать контекст/);
+ await v.functions.loadChat({onboard:false});const old=v.S.chat.find((m:Data)=>m.failedTurnId==='attempt-old'),next=v.S.chat.find((m:Data)=>m.turnInstanceId==='attempt-new');
+ assert.equal(old.text,'Часть ответа');assert.match(old.html,/ход не завершён/);assert.match(old.html,/Нет связи/);assert.match(old.html,/инструменты/);assert.equal(old.failed,true);assert.doesNotMatch(v.functions.actsLine(old,0),/передать контекст/);assert.equal(next.text,'Новый ответ');assert.doesNotMatch(next.html,/инструменты|Часть ответа/);assert.deepEqual(v.S.chat.map((m:Data)=>m.text),['Вопрос','Часть ответа','Новый ответ']);
+});
+
 test('TS-47.2: stop remains requested until an actual terminal event, including late and failed receipts',async()=>{
  const reply=deferred<Data>(),view=ui({fetch:async path=>path==='/api/interrupt'?reply.promise:{ok:true}}),timers:{ms:number;fn:()=>void}[]=[];
  view.sandbox.setTimeout=(fn:()=>void,ms:number)=>timers.push({fn,ms});const turn={text:'ответ',tools:[],phase:'write',startedAt:Date.now(),pane:'worker'};view.H.cur=turn;view.H.pane.busy=true;

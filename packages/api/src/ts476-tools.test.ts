@@ -40,13 +40,19 @@ test('TS-47.6: a result-only provider error records its own position without inv
 for(const failure of ['throw','terminal'] as const)test('TS-47.6 r2: '+failure+' retains failed turn events without asserting text position',async t=>{
  const h=await fixture(t);h.provider.onRun=async(seat,_message,ctx)=>{ctx.modelStarted?.();ctx.publish({type:'delta',text:'неподтверждённый текст'});ctx.publish({type:'tool',name:'Read',detail:'file'});ctx.publish({type:'toolError',text:'Ошибка чтения'});ctx.traceEvent?.({id:'read-failed',name:'Read',phase:'result',outcome:'failed',error:'Ошибка чтения'});if(failure==='throw')throw new ProviderError('transport_lost','Связь потеряна');ctx.publish({type:'error',text:'Провайдер отказал'});return {text:'неподтверждённый текст',sessionId:null}};
  await assert.rejects(h.runtime.runTurn('worker','проверка'));const id=h.runtime.chatsList({seat:'owner',trust:'owner'}).active.worker!;await h.runtime.openProject(h.dir);
- const history=(await call(h.api,'/api/chats/'+id)).body,turn=history.turns.at(-1);assert.equal(turn.outcome,'error');assert.ok(turn.turnInstanceId);assert.deepEqual(turn.toolEvents.map((e:any)=>[e.type,e.offset]),[['tool',null],['toolError',null]]);assert.deepEqual(turn.toolResults.map((e:any)=>[e.status,e.offset]),[['error',null]]);assert.equal(turn.toolEvents[1].reason,'Ошибка чтения');assert.equal(turn.toolResults[0].reason,'Ошибка чтения');assert.equal(history.messages.some((m:any)=>m.text==='неподтверждённый текст'),false);
+ const history=(await call(h.api,'/api/chats/'+id)).body,turn=history.turns.at(-1);assert.equal(turn.outcome,'error');assert.equal(turn.partialText,'неподтверждённый текст');assert.ok(turn.turnInstanceId);assert.deepEqual(turn.toolEvents.map((e:any)=>[e.type,e.offset]),[['tool',null],['toolError',null]]);assert.deepEqual(turn.toolResults.map((e:any)=>[e.status,e.offset]),[['error',null]]);assert.equal(turn.toolEvents[1].reason,'Ошибка чтения');assert.equal(turn.toolResults[0].reason,'Ошибка чтения');assert.equal(history.messages.some((m:any)=>m.text==='неподтверждённый текст'),false);
 });
 
 test('TS-47.6 r2: a network refusal before model start keeps the existing failed-turn record',async t=>{
  const h=await fixture(t);h.provider.onRun=async()=>{throw new ProviderError('network_unavailable','Связь недоступна')};
  await assert.rejects(h.runtime.runTurn('worker','проверка'));const id=h.runtime.chatsList({seat:'owner',trust:'owner'}).active.worker!;await h.runtime.openProject(h.dir);
  const history=(await call(h.api,'/api/chats/'+id)).body;assert.equal(history.turns.at(-1).errorCode,'network_unavailable');assert.equal(history.turns.at(-1).toolEvents,undefined);
+});
+
+test('TS-50: partial text is retained even if a provider omits modelStarted and tool events',async t=>{
+ const h=await fixture(t);h.provider.onRun=async(_seat,_message,ctx)=>{ctx.publish({type:'delta',text:'частичный ответ'});throw new ProviderError('transport_lost','Связь потеряна')};
+ await assert.rejects(h.runtime.runTurn('worker','проверка'));const id=h.runtime.chatsList({seat:'owner',trust:'owner'}).active.worker!;await h.runtime.openProject(h.dir);
+ const history=(await call(h.api,'/api/chats/'+id)).body,turn=history.turns.at(-1);assert.equal(turn.outcome,'error');assert.equal(turn.partialText,'частичный ответ');assert.equal(history.messages.some((m:any)=>m.text==='частичный ответ'),false);
 });
 
 test('TS-47.6: changed final text never assigns unconfirmed tool positions',async t=>{

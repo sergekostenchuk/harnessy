@@ -26,6 +26,15 @@ test('TS-47.F: errors and lost transport are distinct; retry succeeds only on ne
  assert.match((await provider.runTurn(seat,'ignored',fakeContext().ctx)).text,/тестового провайдера/);
  await assert.rejects(provider.runTurn(seat,'ignored',fakeContext().ctx),e=>(e as {code?:string}).code==='turn_failed');
 });
+test('TS-50.A: partial failure emits text and one tool before failure; manual retry is a separate successful response',async()=>{
+ const provider=new ScenarioProvider('claude',fakeScenario({HARNESS_FAKE_OUTCOME:'partial-retry'})),first=fakeContext(),second=fakeContext();
+ await assert.rejects(provider.runTurn(seat,'ignored',first.ctx),e=>(e as {code?:string}).code==='turn_failed');
+ assert.deepEqual(first.events.map(e=>e.type),['delta','tool']);
+ const firstEvent=first.events[0]!;assert.equal(firstEvent.type,'delta');if(firstEvent.type!=='delta')throw Error('expected delta');assert.match(firstEvent.text,/Незавершённый фрагмент/);
+ const response=await provider.runTurn(seat,'ignored',second.ctx);
+ assert.deepEqual(second.events.map(e=>e.type),['delta','done']);
+ assert.equal(response.text,'Завершённый ответ второй попытки.');
+});
 test('TS-47.F: interrupt during TTFT emits no later tool or answer',async()=>{
  const controller=new AbortController(),provider=new ScenarioProvider('codex',{ttftMs:15000,outcome:'ok',tools:2}),h=fakeContext(controller.signal);
  const work=provider.runTurn({...seat,vendor:'codex'},'ignored',h.ctx);controller.abort();
@@ -58,4 +67,16 @@ test('TS-47.F: retry goes through the real owner retry API after a failed attemp
  const retried=await call(h.api,'/api/panes/worker/attempt',{body:{project:h.dir,turnInstanceId:failure.turnInstanceId,action:'retry'}});
  assert.equal(retried.status,200,retried.text);await h.runtime.idle();assert.equal(h.runtime.waiting('worker'),null);
  assert.match(h.runtime.registry.get('worker')!.transcript.at(-1)!.text,/тестового провайдера/);
+});
+test('TS-50.B: failed fragment and tools stay in their attempt, and only the completed retry enters carried context',async t=>{
+ const fake=new ScenarioProvider('claude',{ttftMs:0,outcome:'partial-retry',tools:0}),h=await fixture(t,{deps:{providers:{claude:fake}}}),owner={seat:'owner',trust:'owner'} as const;
+ assert.equal((await call(h.api,'/api/chat',{body:{pane:'worker',message:'повтор'}})).status,200);await h.runtime.idle();
+ const waiting=h.runtime.waiting('worker');assert.ok(waiting);const chat=h.runtime.chatsList(owner).active.worker!;
+ const before=(await call(h.api,'/api/chats/'+chat)).body,failed=before.turns.at(-1);
+ assert.equal(failed.turnInstanceId,waiting.turnInstanceId);assert.equal(failed.partialText,'Незавершённый фрагмент первой попытки.');assert.equal(failed.toolEvents.length,1);
+ assert.equal((await call(h.api,'/api/panes/worker/attempt',{body:{project:h.dir,turnInstanceId:waiting.turnInstanceId,action:'retry'}})).status,200);await h.runtime.idle();
+ const after=(await call(h.api,'/api/chats/'+chat)).body,answer=after.messages.find((m:any)=>m.role==='ai'),question=after.messages.find((m:any)=>m.role==='me');
+ assert.equal(answer.text,'Завершённый ответ второй попытки.');assert.notEqual(answer.runtime.turnInstanceId,failed.turnInstanceId);assert.equal(answer.toolEvents,undefined);assert.equal(after.turns.at(-1).partialText,failed.partialText);
+ assert.deepEqual(failed.recordSeqs,[question.journalSeq]);assert.ok(Number.isFinite(question.journalTs));assert.ok(question.journalTs<=failed.ts);
+ await h.runtime.chatsNew({pane:'worker',carry:'text'},owner);const carry=h.runtime.registry.get('worker')!.carry;assert.match(carry,/Завершённый ответ второй попытки/);assert.doesNotMatch(carry,/Незавершённый фрагмент первой попытки/);
 });
