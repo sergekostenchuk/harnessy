@@ -6,6 +6,7 @@ import {dom,type DomNode} from './ui-dom-test-helpers.ts';
 
 const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');
 const css=readFileSync(new URL('../../../ui/sketches/disarto/sidebar-v2.css',import.meta.url),'utf8');
+const protoCss=readFileSync(new URL('../../../ui/deploy/proto.css',import.meta.url),'utf8');
 const start=proto.indexOf('(function(){',proto.indexOf('/* LIVE_BOOT_END */'));
 const end=proto.indexOf('  // ── навигация телефона',start);
 assert.ok(start>=0&&end>start);
@@ -162,4 +163,18 @@ test('TS-48.2: current project menu is keyboard accessible and survives counter 
  await items[0]!.emit('keydown',{key:'ArrowDown'});assert.equal(v.document.activeElement,items[1]);v.context.PS2.setData({roles:3});menu=v.find('.ps2-flyout');items=menu.querySelectorAll('[role=menuitem]');assert.equal(v.document.activeElement,items[1]);assert.match(v.find('.m-drawer .ps2-current-project .m').textContent,/3 роли/);assert.equal(v.find('.m-drawer .ps2-current-menu').getAttribute('aria-expanded'),'true');await v.find('.m-drawer .ps2-current-project .m').emit('click');assert.ok(v.document.querySelector('.ps2-flyout'));assert.equal(v.find('.m-drawer .ps2-current-toggle').getAttribute('aria-expanded'),'true');
  await items[1]!.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(v.document.activeElement,v.find('.m-drawer .ps2-current-menu'));assert.equal(v.find('.m-drawer .ps2-current-menu').getAttribute('aria-expanded'),'false');
  const events:any[]=[];v.context.LIVE={};v.context.dispatchEvent=(event:any)=>{events.push(event);return true};await v.find('.m-drawer .ps2-current-menu').emit('click');await v.find('.ps2-flyout [data-go="chat"]').emit('click');assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(events.at(-1).type,'ps2:project-page');assert.equal(events.at(-1).detail.path,'/a');assert.equal(events.at(-1).detail.key,'chat');
+});
+
+test('TS-48.2 r2: resizing closes the menu and moves focus to the visible surface, in both directions',async()=>{
+ const v=view(),drawer=v.document.createElement('nav'),mobileButton=v.document.createElement('button');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';mobileButton.className='m-btn';v.body.appendChild(drawer);v.body.appendChild(mobileButton);Object.assign(v.context,{innerWidth:390,innerHeight:844,mobileNav(){},mobileDefaults(){}});v.html.classList.add('m-open');
+ v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},roles:2,chats:[{id:'a1',pane:'worker'}]});await v.window.emit('resize');await v.find('.m-drawer .ps2-current-menu').emit('click');assert.equal(v.document.activeElement,v.find('.ps2-flyout [role=menuitem]'));
+ v.context.innerWidth=1100;v.context.innerHeight=800;await v.window.emit('resize');assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(v.document.activeElement,v.find('aside.ps2-mode .ps2-current-menu'));assert.equal(v.find('aside.ps2-mode .ps2-current-menu').getAttribute('aria-expanded'),'false');
+ await v.find('aside.ps2-mode .ps2-current-menu').emit('click');assert.equal(v.document.activeElement,v.find('.ps2-flyout [role=menuitem]'));v.context.innerWidth=390;v.context.innerHeight=844;await v.window.emit('resize');assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(v.document.activeElement,mobileButton);
+});
+
+test('TS-48.2 r2: mobile drawer includes standalone chats between the current and other projects',async()=>{
+ const v=view(),drawer=v.document.createElement('nav');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';v.body.appendChild(drawer);Object.assign(v.context,{innerWidth:390,mobileNav(){},mobileDefaults(){}});
+ v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},roles:2,chats:[{id:'project-chat',pane:'worker'}],rooms:[{id:'solo',pane:'room',title:'Без проекта',active:true}],projects:[{name:'B',path:'/b',current:false}]});
+ const folderChats=v.find('.m-drawer .ps2-current-chats'),label=folderChats.nextElementSibling!,rooms=label.nextElementSibling!;assert.ok(label.classList.contains('ps2-mobile-rooms-label'));assert.match(label.textContent,/чаты без проекта1/);assert.ok(rooms.querySelector('[data-chat="solo"][data-pane="room"].act'));assert.ok(rooms.nextElementSibling?.classList.contains('ps2-others'));
+ v.find('.m-drawer [data-chat="solo"]').focus();v.context.PS2.setInbox({need:1,info:0});assert.equal(v.document.activeElement,v.find('.m-drawer [data-chat="solo"]'));assert.match(protoCss,/\.m-drawer\s*\{[^}]*width:min\(232px,100vw\)/);assert.match(protoCss,/\.m-drawer \.ps-chat\[data-chat\][^{]*\{padding-left:26px\}/);
 });
