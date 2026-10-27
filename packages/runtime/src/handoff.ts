@@ -1,4 +1,4 @@
-import {handoffPrompt,markdownVisible} from '@harnessy/context';
+import {handoffPrompt,markdownVisible,isConversationMessage} from '@harnessy/context';
 import {pythonTrim,type Initiator} from '@harnessy/journal';
 import {RuntimeError,slice} from './errors.ts';
 import {owner} from './operations.ts';
@@ -31,7 +31,7 @@ export function handoff(runtime:Runtime,input:{to?:unknown;from?:unknown;kind?:u
  let answers=0,text:string;
  if(quoteMode){
   if(!Array.isArray(input.quotes)||!input.quotes.length||input.quotes.length>100)throw new RuntimeError('selection_invalid','выберите от одной до ста цитат',400);
-  const bySeq=new Map(chat.transcript.map(message=>[message.seq,message])),quotes:QuoteInput[]=input.quotes.map(value=>{
+  const bySeq=new Map(chat.transcript.filter(isConversationMessage).map(message=>[message.seq,message])),quotes:QuoteInput[]=input.quotes.map(value=>{
    if(!value||typeof value!=='object'||!Number.isSafeInteger((value as any).seq)||(value as any).seq<=0||typeof (value as any).text!=='string'||typeof ((value as any).comment??'')!=='string')throw new RuntimeError('selection_invalid','неверная форма выбранной цитаты',400);
    const selected=normalized(pythonTrim((value as any).text)),comment=normalized(pythonTrim((value as any).comment??''));
    if(!selected||[...selected].length>10000||[...comment].length>4000)throw new RuntimeError('selection_invalid','цитата или комментарий слишком длинные',400);
@@ -42,7 +42,7 @@ export function handoff(runtime:Runtime,input:{to?:unknown;from?:unknown;kind?:u
   text='--- выбранные цитаты ---\n'+quotes.map((quote,index)=>{const message=bySeq.get(quote.seq)!,time=quoteTime(message.ts),source=message.role==='me'?'из вопроса владельца':'из ответа '+src.label;answers+=message.role==='ai'?1:0;return quoteBlock(quote.text,index+1)+(quote.comment?'\n'+quote.comment:'')+'\nИсточник: '+source+(time?', '+time:'')}).join('\n\n');
   if([...text].length>60000)throw new RuntimeError('selection_invalid','выбранные цитаты и комментарии длиннее 60000 знаков',400);
  }else{
-  const wanted=new Set(input.seqs as number[]),messages=chat.transcript.filter(m=>m.seq!==undefined&&wanted.has(m.seq));
+  const wanted=new Set(input.seqs as number[]),messages=chat.transcript.filter(m=>isConversationMessage(m)&&m.seq!==undefined&&wanted.has(m.seq));
   if(messages.length!==wanted.size)throw new RuntimeError('selection_invalid','выбранная реплика не принадлежит этому разговору',400);
   answers=messages.filter(m=>m.role==='ai').length;const prompt=input.prompt===undefined?handoffPrompt(src):pythonTrim(input.prompt as string);
   text=(prompt?prompt+'\n\n':'')+'--- контекст чата ---\n'+messages.map(m=>(m.role==='me'?'Владелец':m.role==='ai'?'Ответ':'Сосед')+': '+m.text).join('\n\n');

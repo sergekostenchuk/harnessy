@@ -25,6 +25,13 @@ test('Claude stream, tool error, usage and early session without duplicate text'
  const last=f.events.at(-1);assert.ok(last?.type==='done');assert.deepEqual(last.usage,{input:10,output:3,cacheRead:2});
  assert.equal(f.handle,null);assert.equal(h.closed,1);assert.equal(h.options[0]?.options?.env?.ANTHROPIC_API_KEY,undefined);
 });
+test('TS-51.E: Claude compact boundary reports only known volumes in the main session',async()=>{
+ const unbound={type:'system',subtype:'compact_boundary',compact_metadata:{pre_tokens:9,post_tokens:1}},messages=[unbound,init,unbound,{...unbound,session_id:''},{...unbound,session_id:null},{type:'system',subtype:'compact_boundary',session_id:'foreign',compact_metadata:{pre_tokens:9,post_tokens:1}},{type:'system',subtype:'compact_boundary',session_id:'session',parent_tool_use_id:'child',compact_metadata:{pre_tokens:9,post_tokens:1}},
+ {type:'system',subtype:'compact_boundary',session_id:'session',compact_metadata:{pre_tokens:120000}},
+ {type:'system',subtype:'compact_boundary',session_id:'session',compact_metadata:{pre_tokens:5,post_tokens:0}},done];
+ const f=fixture('claude');await new ClaudeProvider(harness(messages).deps).runTurn(f.seat,'x',f.ctx);
+ assert.deepEqual(f.events.filter(e=>e.type==='contextChanged'),[{type:'contextChanged',kind:'provider_compaction',before:120000,after:null,source:'claude'},{type:'contextChanged',kind:'provider_compaction',before:5,after:0,source:'claude'}]);
+});
 test('Claude fallback uses assistant text, result text when assistant absent',async()=>{
  for(const messages of [[init,{type:'assistant',session_id:'session',message:{content:[{type:'text',text:'answer'}]}},done],[init,done]]){
  const f=fixture('claude');const result=await new ClaudeProvider(harness(messages).deps).runTurn(f.seat,'x',f.ctx);

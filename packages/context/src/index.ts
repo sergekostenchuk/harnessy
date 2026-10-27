@@ -3,7 +3,7 @@ export {DIGEST_MARK,DIGEST_ITEM_CHARS,DIGEST_MAX_CHARS,HANDOFF_MARKS} from './st
 export {memorySections} from './memory.ts';
 export {onboarding,promotionIntro} from './onboarding.ts';
 export {roleNote} from './role-note.ts';
-export {handoffPrompt,transcriptText} from './transcript.ts';
+export {handoffPrompt,transcriptText,isConversationMessage} from './transcript.ts';
 export {digest} from './digest.ts';
 export {estTokens,contextWindow,CONTEXT_WINDOWS} from './tokens.ts';
 export {contextCard} from './card.ts';

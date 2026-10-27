@@ -71,7 +71,7 @@ export class CodexProvider implements Provider {
  const active:Active={seat,ctx,client:null,threadId:null,turnId:null,stopRequested:false,reject};this.active.set(seat.id,active);
  let ready!:(id:string|null)=>void;const turnReady=new Promise<string|null>(r=>{ready=r});
  let terminal=false,settled=false,sessionId=seat.sessionId,text='',streamed=false;const items:string[]=[];
- let usage:Usage={input:null,output:null,cacheRead:null};let unsubscribe=()=>{},unfailure=()=>{};
+ let usage:Usage={input:null,output:null,cacheRead:null};let unsubscribe=()=>{},unfailure=()=>{};const compactions=new Set<string>();
  const started=Date.now(),lifetime=new AbortController(),startup=new AbortController();
  const startupContext={...ctx,signal:AbortSignal.any([ctx.signal,startup.signal])};
  const approvalContext={...ctx,signal:AbortSignal.any([ctx.signal,lifetime.signal])};
@@ -105,6 +105,10 @@ export class CodexProvider implements Provider {
  else if(method==='item/reasoning/textDelta'||method==='item/reasoning/summaryTextDelta'){if(typeof p.delta!=='string')throw new ProviderError('protocol','missing reasoning delta',sessionId);if(p.delta)ctx.modelResponded?.()}
  else if(method==='item/started'||method==='item/completed'){
  const item=requireRecord(p.item,'item');if(item.type==='reasoning'||item.type==='agentMessage'&&typeof item.text==='string'&&item.text)ctx.modelResponded?.();
+ if(method==='item/completed'&&item.type==='contextCompaction'){
+ if(typeof item.id!=='string'||!item.id)throw new ProviderError('protocol','missing compaction item id',sessionId);
+ if(!compactions.has(item.id)){compactions.add(item.id);ctx.publish({type:'contextChanged',kind:'provider_compaction',before:null,after:null,source:'codex'})}
+ }
  if(['commandExecution','fileChange','mcpToolCall','webSearch'].includes(String(item.type))&&typeof item.id==='string'){
  const name=item.type==='mcpToolCall'?String(item.server)+'.'+String(item.tool):String(item.type),status=String(item.status??'').toLowerCase(),error=typeof item.error==='string'?item.error:record(item.error)?String(item.error.message??''):'';
  const denied=/declin|deni|reject|approval|permission/.test(status+' '+error.toLowerCase()),failed=denied||status.includes('fail')||!!error||typeof item.exitCode==='number'&&item.exitCode!==0;

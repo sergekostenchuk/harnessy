@@ -1,4 +1,4 @@
-export interface TranscriptMessage {readonly role:string;readonly text:string;readonly ts?:number}
+export interface TranscriptMessage {readonly role:string;readonly text:string;readonly ts?:number;readonly contextChanged?:unknown;readonly contextTransfer?:unknown}
 export interface SeatView {readonly id:string;readonly role:string;readonly kind?:string|null;readonly label:string;readonly model:string;readonly mode:string;readonly writePaths:readonly string[];readonly worktree:string|null;readonly branch:string|null}
 export interface TeamView {readonly integrationBranch:string;readonly mergeRoles:readonly string[]}
 export interface RoleNoteDeps {readonly projectDir:string;readonly repoRoot:string|null;readonly team:TeamView|null;readonly instructionText:string;readonly policySummary:string|null}

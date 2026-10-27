@@ -2,6 +2,7 @@ import {readFileSync,mkdirSync,openSync,fsyncSync,closeSync,renameSync,statSync}
 import {dirname,join} from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
 import {atomicWrite} from '@harnessy/team';
+import {isConversationMessage} from '@harnessy/context';
 import {compatJson,parseCompat,orderedClone,orderedKeys,pythonTrim,type Journal} from '@harnessy/journal';
 import {object,message,RuntimeError,slice} from './errors.ts';
 import type {Pane,Registry} from './pane.ts';
@@ -42,7 +43,7 @@ export function jsonClone<T>(value:T):T{return parseCompat(compatJson(value)) as
 const CONVERSATION_FIELDS=new Set(['role','text','ts','model','vendor','usage','durationMs']);
 // Execution receipts belong to the source seat and journal, never to transferred history.
 export function conversationHistory(messages:readonly TranscriptMessage[]):TranscriptMessage[] {
- return jsonClone(messages.map(message=>{
+ return jsonClone(messages.filter(isConversationMessage).map(message=>{
   const copy=orderedClone(message);
   for(const key of orderedKeys(copy))if(!CONVERSATION_FIELDS.has(key))delete copy[key];
   if(copy.role==='ai')copy.origin='transferred';

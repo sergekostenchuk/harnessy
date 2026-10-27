@@ -1,4 +1,5 @@
 import {turnUsage} from './turn-usage.ts';
+import {contextChange,appendContextChange} from './context-changed.ts';
 import {instructionFile,updateInstruction} from './instructions.ts';
 import {TaskStore} from './tasks.ts';
 import {NetworkStats} from './network-stats.ts';
@@ -544,7 +545,7 @@ export class Runtime {
   if(teamNotice){teamSaved=true;pane.publish({type:'roleKnowledge',knowledge})}
   turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
  }},publish:event=>{
- if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:turnFailure({message:event.text},p.dir,0).reason,sessionId:pane.sessionId}:event;return}
+ if(!current())return;if(event.type==='contextChanged'){if(event.kind!=='provider_compaction')throw new RuntimeError('context_event_invalid','неизвестное изменение контекста провайдера',409);appendContextChange(p,pane,contextChange(p,pane,{kind:'provider_compaction',chat:turnChatId!,turnInstanceId:scope.turnInstanceId,before:event.before,after:event.after,source:vendor},this.clock.now()));return}if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:turnFailure({message:event.text},p.dir,0).reason,sessionId:pane.sessionId}:event;return}
  if(event.type==='tool')toolCalls++;if(turn.stopRequested)return;if(event.type==='tool'||event.type==='delta'&&event.text.length>0)effected=true;if(event.type==='toolError')event={...event,text:turnFailure({message:event.text},p.dir,0).reason};if(event.type==='tool'){for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);toolEvents.push({type:'tool',name:safeDiagnostic(event.name,{project:p.dir,limit:200}),detail:safeDiagnostic(event.detail,{project:p.dir,limit:300}),status:'unknown',offset:visibleText.length,order:toolOrder++})}if(event.type==='toolError')toolEvents.push({type:'toolError',reason:event.text,status:'error',offset:visibleText.length,order:toolOrder++});if(event.type==='delta'){turn.partial+=event.text;visibleText+=event.text}p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
  },askApproval:(title,detail,request)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.askApproval(title,detail,undefined,request?.provider===vendor?request:undefined))},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;if(transfer&&!turn.started){earlySession=sid;return}pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
  if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(p,pane,handle)
@@ -582,10 +583,12 @@ export class Runtime {
  response.usage=turnUsage({turnId:scope.turnInstanceId,model:response.model??null,vendor:launchVendor!,mode:launchSeat.mode,usage:response.usage,usageIncomplete:response.usageIncomplete===true,durationMs:response.durationMs??Math.max(0,this.clock.now()-(p.state.attempts[id]?.startedAt??this.clock.now())),toolCalls:turn.started?toolCalls:null,stopped:interrupted},this.settings.priceList());
  response.deliverySeq=turn.deliverySeq;response.runtime={turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),effectsPending:true,interrupted,nextSeen};turn.result=response;if(artifacts.size)response.artifacts={project:p.dir,chat:p.state.activeChat(pane)!.id,turnInstanceId:scope.turnInstanceId,paths:[...artifacts]};
  const transferNotice=transfer&&!interrupted?{...timestampMessage('peer','[от харнесс] '+transferLabel(transfer),this.clock.now()),contextTransfer:{...transfer,turnInstanceId:scope.turnInstanceId}}:null;
+ const changed=transferNotice?contextChange(p,pane,{kind:transfer!.compressed?'truncate':'transfer',chat:turnChatId!,turnInstanceId:scope.turnInstanceId,before:null,after:null,source:'harness',transfer:transferNotice.contextTransfer},this.clock.now()):null;
+ if(transferNotice&&changed)Object.assign(transferNotice,{contextChanged:changed});
  if(transferNotice)pane.append(transferNotice);
  try{p.state.commitResult(pane,p.registry,response)}catch(e){if(transferNotice)pane.transcript=pane.transcript.filter(m=>m!==transferNotice);throw e}
  if(options.combined?.length){const note=injected.find(m=>m.role==='peer'&&m.text.includes('Отправлено вместе'));if(note)pane.publish({type:'note',text:note.text,seq:note.seq})}
- if(transferNotice)pane.publish({type:'contextTransfer',text:transferLabel(transfer!),transfer:transferNotice.contextTransfer,ts:transferNotice.ts});
+ if(transferNotice&&changed)pane.publish({type:'contextChanged',change:changed,chat:changed.chat,turnInstanceId:changed.turnInstanceId,seq:transferNotice.seq,ts:changed.ts});
  const receipt=p.state.attempts[id];if(receipt?.turnInstanceId===scope.turnInstanceId)p.state.clearAttempt(id);
  await this.recover(p,pane,true);
  const terminal=held?.type==='done'?held:{type:'done',sessionId:pane.sessionId,durationMs:0,usage:{input:null,output:null,cacheRead:null}};

@@ -20,6 +20,7 @@ export type ProviderLimits={ok:true;plan:string|null;planLevel?:'5x'|'20x'|null;
 
 export function limitPlan(value:unknown):string|null {const plans:Record<string,string>={max:'Max',pro:'Pro',plus:'Plus',team:'Team',business:'Business',enterprise:'Enterprise',edu:'Edu',free:'Free',go:'Go'};return typeof value==='string'&&Object.hasOwn(plans,value.toLowerCase())?plans[value.toLowerCase()]!:null}
 export type TurnEvent =
+ | {type:'contextChanged';kind:'provider_compaction';before:number|null;after:number|null;source:string}
  | {type:'delta';text:string}|{type:'tool';name:string;detail:string}|{type:'toolError';text:string}
  | {type:'approval';id:string;title:string;detail:string}|{type:'approvalResolved';id:string;decision:'allow'|'deny'|'timeout'}
  | {type:'done';sessionId:string|null;model:string;durationMs:number;usage:Usage;usageIncomplete?:true}|{type:'error';text:string};

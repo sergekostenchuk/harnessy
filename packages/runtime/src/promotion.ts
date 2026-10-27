@@ -2,7 +2,7 @@ import {existsSync,realpathSync,statSync,readFileSync} from 'node:fs';
 import {join,relative,isAbsolute,sep} from 'node:path';
 import {providerId,withPathLock,loadTeam,readManifest,addSeatLocked,ensureSeatFileLocked,canonicalPath,MODE_IDS,type PathLock,type Mode,type Vendor} from '@harnessy/team';
 import {initProject,projectsRoot,projectNameFrom} from '@harnessy/projects';
-import {transcriptText,promotionIntro} from '@harnessy/context';
+import {transcriptText,promotionIntro,isConversationMessage} from '@harnessy/context';
 import type {Initiator} from '@harnessy/journal';
 import {RuntimeError,object,deepFreeze,message} from './errors.ts';
 import {owner,free,reserve,same} from './operations.ts';
@@ -85,7 +85,7 @@ function materialize(runtime:Runtime,p:ProjectState,lock:PathLock,op:Promotion){
  if(seat.vendor!==op.vendor||seat.model!==op.model||seat.mode!==op.mode)invalid('настройки сохранённого места изменились');
  p.team=loadTeam(p.team.harnessDir);const pane=p.registry.add(seat);
  if(c.pane!==op.sid){
-  const moved=op.source.cwd!==p.dir,history=moved?conversationHistory(op.source.chat.transcript).map((m,i)=>{const seq=op.source.chat.transcript[i]!.seq;return seq===undefined?m:{...m,seq}}):jsonClone(op.source.chat.transcript).map(m=>({...m,provenance:{project:op.input.project,pane:op.source.pane,chat:c!.id}}));
+  const moved=op.source.cwd!==p.dir,sourceMessages=op.source.chat.transcript.filter(isConversationMessage),history=moved?conversationHistory(sourceMessages).map((m,i)=>{const seq=sourceMessages[i]!.seq;return seq===undefined?m:{...m,seq}}):jsonClone(op.source.chat.transcript).map(m=>({...m,provenance:{project:op.input.project,pane:op.source.pane,chat:c!.id}}));
   const sourcePane=p.registry.get(op.source.pane);if(sourcePane&&p.state.chats.active[sourcePane.id]===c.id)p.state.newChat(sourcePane);
   c.pane=op.sid;c.transcript=history;c.transcriptSeq=op.source.chat.transcriptSeq??0;c.documents=jsonClone(op.input.documents);c.sessionId=!moved?op.source.chat.sessionId:null;c.carry=op.source.chat.carry;
   if(moved){const carry=transcriptText(conversationHistory(op.source.chat.transcript));if(carry&&!c.carry.endsWith(carry))c.carry=(c.carry?c.carry+'\n\n':'')+carry}
