@@ -316,6 +316,7 @@
     const more=e.target.closest('.ps2-current-menu');if(more){const row=more.closest('.ps2-current-project'),was=row.classList.contains('open');closeAll();if(!was){row.classList.add('open');more.setAttribute('aria-expanded','true');const m=row.querySelector(':scope>.ps2-pmenu[popover]');m.showPopover();positionCurrentMenu(row);m.querySelector('[role=menuitem]').focus();}return;}
     const projectMenu=e.target.closest('.ps2-current-project>.ps2-pmenu');if(projectMenu){if(e.target.closest('[role=menuitem]')){const trigger=projectMenu.parentElement.querySelector('.ps2-current-menu');closeAll();trigger.focus();}return;}
     if(e.target.closest('.ps2-pmenu')) return;
+    if(e.target.closest('.ps2-current-project')) return;
     const row=e.target.closest('.ps2-prow'); if(row){ const was=row.classList.contains('open'); closeAll(); if(!row.dataset.keep) row.classList.toggle('open',!was); return; }
     closeAll();
   });
