@@ -357,6 +357,8 @@ html[data-proto][data-page="chat"] .cx-top { width:auto; max-width:760px; margin
 .cx-row:hover, .cx-row.on { background:var(--panel); } .cx-row.dis { color:var(--ink3); cursor:default; } .cx-row.dis:hover { background:transparent; } .cx-row.dis svg { color:var(--ink3); }
 .cx-row svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex:none; color:var(--ink2); }
 .cx-row b { font-weight:500; overflow:hidden; text-overflow:ellipsis; flex:none; max-width:60%; } .cx-row small { margin-left:auto; font:10px var(--mono); color:var(--ink3); padding-left:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; } .cx-row .ck { margin-left:auto; color:var(--accent); font-size:12px; } .cx-row .ck + small { margin-left:8px; padding-left:0; }
+.cx-row.cx-unavailable { flex-wrap:wrap; gap:2px 9px; white-space:normal; padding-top:5px; padding-bottom:5px; }
+.cx-row.cx-unavailable small { flex-basis:calc(100% - 23px); margin-left:23px; padding:0; white-space:normal; overflow:visible; }
 .cx-row .cx-busy { margin-left:6px; font:9.5px var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--accent); font-style:normal; }
 .cx-row.grp { color:var(--ink2); font-weight:500; } .cx-row.grp .cv { color:var(--ink3); width:10px; font-size:11px; transition:transform .15s; display:inline-block; } .cx-grp.open .cv { transform:rotate(90deg); } .cx-row.grp em { margin-left:8px; font:10px var(--mono); color:var(--ink3); font-style:normal; flex:none; } .cx-row.grp small { margin-left:auto; flex:0 1 auto; }
 .cx-grp .cx-sub { display:none; } .cx-grp.open .cx-sub { display:block; } .cx-sub .cx-row { padding-left:32px; } .cx-grp.dis .cx-row { color:var(--ink3); cursor:default; }
@@ -409,7 +411,7 @@ html[data-proto][data-page="new"] .starts, html[data-proto][data-page="new"] .hi
 html[data-m] .cx-pop { position:fixed; left:12px !important; right:12px; width:auto; top:auto !important; bottom:12px; max-height:70vh; }
 /* действия под живым ответом и разговор без роли */
 .live-acts { display:flex; gap:6px; align-items:center; margin-top:8px; font:10.5px var(--mono); letter-spacing:.05em; text-transform:uppercase; color:var(--ink3); position:relative; flex-wrap:wrap; }
-.live-acts span { cursor:pointer; } .live-acts span:hover { color:var(--ink); } .live-acts i { font-style:normal; color:var(--line2); }
+.live-acts span { cursor:pointer; } .live-acts span:hover { color:var(--ink); } .live-acts button[data-la] { border:0; padding:0; background:none; color:inherit; font:inherit; text-transform:inherit; letter-spacing:inherit; cursor:pointer; } .live-acts button[data-la]:hover { color:var(--ink); } .live-acts i { font-style:normal; color:var(--line2); }
 .live-msg .live-acts { opacity:0; pointer-events:none; transition:opacity .12s ease; }
 .live-msg:hover .live-acts,.live-msg:focus-within .live-acts,.live-msg.live-last .live-acts { opacity:1; pointer-events:auto; }
 .me.live-msg .live-acts { justify-content:flex-end; }
@@ -457,7 +459,15 @@ html[data-proto][data-page="chat"] .live-selbar { width:auto; max-width:760px; m
 .recent .ps-chat { display:inline-flex; height:26px; padding:0 9px 0 20px; border:1px solid var(--line2); border-radius:7px; background:var(--raised); } .recent .ps-chat i { left:8px; } .recent .ps-chat small { color:var(--ink3); font:9.5px var(--mono); margin-left:4px; }
 
 /* меню с несколькими адресатами (передать контекст в чат/чаты) */
-.live-menu.la.multi div[data-k] { position:relative; padding-left:28px; }
+.live-menu.la.multi { position:fixed; z-index:150; display:flex; flex-direction:column; width:360px; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px); overflow:hidden; box-sizing:border-box; white-space:normal; }
+.live-menu.la.multi .h { white-space:normal; overflow-wrap:anywhere; }
+.live-menu.la.multi .h,.live-menu.la.multi .ft { flex:none; }
+.live-menu.la.multi .la-options { flex:1 1 auto; min-height:0; overflow-y:auto; padding:0; border-radius:0; cursor:default; white-space:normal; }
+.live-menu.la.multi .la-options:hover { background:transparent; }
+@media (max-width:600px) { .live-menu.la.multi { left:12px !important; right:12px; top:auto !important; bottom:12px; width:auto; max-width:none; min-width:0; max-height:60vh; } }
+.live-menu.la.multi button[data-k] { display:block; width:100%; position:relative; text-align:left; padding:7px 10px 7px 28px; border:0; border-radius:6px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.live-menu.la.multi button[data-k]:hover,.live-menu.la.multi button[data-k]:focus-visible { background:var(--tile); }
+.live-menu.la.multi button[data-k]:disabled { color:var(--ink3); cursor:default; }
 .live-menu.la.multi .ck { position:absolute; left:9px; top:50%; width:11px; height:11px; margin-top:-6px; border:1px solid var(--line2); border-radius:3px; }
 .live-menu.la.multi .on .ck { background:#c27a34; border-color:#c27a34; }
 .live-menu.la .ft { display:flex; gap:6px; padding:8px 4px 2px; cursor:default; } .live-menu.la .ft:hover { background:none; }

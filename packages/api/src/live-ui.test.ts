@@ -21,6 +21,15 @@ const plain=(value:unknown)=>JSON.parse(JSON.stringify(value));
 type Data=Record<string,any>;
 const imageRef=(hex='a')=>({id:hex.repeat(64),mime:'image/png',size:4,w:1,h:1});
 const imageFile=(value=1)=>{const bytes=Uint8Array.of(value,2,3,4);return {name:'screen.png',type:'image/png',size:bytes.byteLength,arrayBuffer:async()=>bytes.buffer}};
+test('TS-47.4 F05: unknown windows and incompatible estimates never become measured percentages',()=>{
+ const source=readFileSync(new URL('../../../ui/deploy/ctx.js',import.meta.url),'utf8'),start=source.indexOf('  const fmt='),end=source.indexOf('  function openCard(anchor)');assert.ok(start>=0&&end>start);
+ const sandbox:Data={L:{H:{pane:{id:'worker',label:'Исполнитель'},project:'/a'},paneName:(p:Data)=>p.label,esc:String},Date,Math};sandbox.globalThis=sandbox;
+ const context=createContext(sandbox);runInContext(source.slice(start,end)+'\nglobalThis.views={html,tip,matrix};',context);
+ const sample={window:null,used:161,pct:null,measured:true,busy:false,turns:1,parts:[{key:'instructions',label:'Инструкции',tokens:2607,est:true},{key:'history',label:'История',tokens:161,est:false}],history:[],handoff:[]};
+ const unknown=sandbox.views.html(sample);assert.match(unknown,/окно модели: нет данных/);assert.match(unknown,/распределение не определено/);assert.match(unknown,/оценка/);assert.doesNotMatch(unknown,/1619|class="ctx-mx"/);assert.doesNotMatch(sandbox.views.tip(sample,'instructions'),/1619|\d+ %/);
+ const mixed={...sample,window:1000,pct:16};assert.doesNotMatch(sandbox.views.html(mixed),/class="ctx-mx"|261 %/);
+ const valid={...sample,window:1000,used:200,pct:20,parts:[{key:'instructions',label:'Инструкции',tokens:50,est:false},{key:'history',label:'История',tokens:150,est:false}]};assert.match(sandbox.views.html(valid),/class="ctx-mx"/);assert.match(sandbox.views.html(valid),/5 %/);
+});
 function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;storage?:Map<string,string>}={}){
  const storage=options.storage??new Map<string,string>(),requests:{path:string;body:Data|undefined}[]=[],toasts:string[]=[],clicks:((event:Data)=>unknown)[]=[],pagehide:(()=>void)[]=[],pageshow:((event:Data)=>unknown)[]=[],elements=new Map<string,Data>(),rows:Data[]=[];
  const H:Data={on:true,project:'/project-a',active:{worker:'chat-a'},panes:[{id:'worker',label:'воркер',model:'w1',vendor:'claude',role:'orchestrator',kind:'orchestrator',busy:false},{id:'room',label:'без роли',model:'w1',vendor:'claude'}],models:{claude:[{id:'w1',label:'W1',images:true}]},cur:null,asks:{},kinds:['question','note','verdict'],projects:[]};H.pane=H.panes[0];
