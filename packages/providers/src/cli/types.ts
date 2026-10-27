@@ -47,11 +47,12 @@ export interface CliDescriptor {
  state?:{namespace:string;args(directory:string):string[]};
  resume?:((sessionId:string)=>string[]);
  /** A private per-turn file; serialize receives only Harnessy's MCP server. */
- mcp?:{serialize(server:CliMcpServer,input:CliTurnInput):string;args(configPath:string,server:CliMcpServer,input:CliTurnInput):string[];env?(configPath:string):NodeJS.ProcessEnv};
+ mcp?:{serialize(server:CliMcpServer,input:CliTurnInput):string;args(configPath:string,server:CliMcpServer,input:CliTurnInput):string[];env?(configPath:string):NodeJS.ProcessEnv;
+  prepare?(configPath:string,input:CliTurnInput,env:NodeJS.ProcessEnv,stateRoot?:string):Promise<{env:NodeJS.ProcessEnv;validate():void;dispose():Promise<void>}>};
  limits?:CliProbe<ProviderLimits>;
  sessions?:{list(cwd:string):CliProbe<{id:string;title:string;updated:number}[]>;messages(cwd:string,id:string):CliProbe<{role:'me'|'ai';text:string}[]>};
  /** Provider-specific exit status classification; stdout is never assumed to be a successful answer. */
- failure?(result:CliProcessResult):{code:ErrorCode;text:string};
+ failure?(result:CliProcessResult):{code:ErrorCode;text:string}|undefined;
 }
 export interface CliDependencies {execute:CliExecutor;env:NodeJS.ProcessEnv;cwd:string;temporaryDirectory:string;probeTimeoutMs:number;loginTimeoutMs:number;turnTimeoutMs:number;maxBytes:number;stateRoot?:string}
 

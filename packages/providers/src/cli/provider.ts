@@ -96,6 +96,7 @@ export class CliProvider {
   const active={abort,done:new Promise<void>(r=>{release=r})};this.active.set(seat.id,active);
   let sessionId=seat.sessionId,answer='',pending='',pendingText='',directory='',token='',registered=false,terminal=false,result:Extract<CliEvent,{type:'done'}>|null=null,lease:ReturnType<CliStateStore['acquire']>|undefined;
   let decodeValue:CliDecoder|undefined,lifecycleStarted=false,processStarted=false,successful=false;
+  let prepared:Awaited<ReturnType<NonNullable<NonNullable<CliDescriptor['mcp']>['prepare']>>>|undefined;
   const started=Date.now(),calls=new Map<string,string>(),secrets=this.d.forbiddenEnv.map(k=>this.deps.env[k]).filter((v):v is string=>!!v);
   const clean=(s:string)=>[...secrets,token].filter(Boolean).reduce((out,secret)=>out.replaceAll(secret,'[redacted]'),s);
   // Keep a short suffix so credentials split across process chunks cannot leak through deltas.
@@ -103,7 +104,7 @@ export class CliProvider {
    for(const key of keys){let at=pendingText.indexOf(key);while(at>=0){if(at<end&&at+key.length>end)end=at;at=pendingText.indexOf(key,at+1)}}
    const out=clean(pendingText.slice(0,end));pendingText=pendingText.slice(end);if(out){answer+=out;ctx.publish({type:'delta',text:out})}};
   const safe=(v:unknown):unknown=>typeof v==='string'?clean(v):Array.isArray(v)?v.map(safe):record(v)?Object.fromEntries(Object.entries(v).map(([k,value])=>[clean(k),safe(value)])):v;
-  const dispose=async()=>{try{if(registered){ctx.revokeProcessToken(token);registered=false}}finally{if(directory){await rm(directory,{recursive:true,force:true});directory=''}}};
+  const dispose=async()=>{try{if(registered){ctx.revokeProcessToken(token);registered=false}}finally{try{if(prepared){const current=prepared;prepared=undefined;await current.dispose()}}finally{if(directory){await rm(directory,{recursive:true,force:true});directory=''}}}};
   const session=(id:string)=>{if(!text(id)||!id||clean(id)!==id||sessionId!==null&&sessionId!==id)throw protocol('несовпадение сессии');if(sessionId===null){sessionId=id;ctx.session(id)}};
   const consume=(events:CliEvent[])=>{
    if(!Array.isArray(events))throw protocol('неверный поток событий');
@@ -142,6 +143,7 @@ export class CliProvider {
     const config=this.d.mcp.serialize(server,input);mcpArgs=this.d.mcp.args(path,server,input);configEnv=this.d.mcp.env?.(path)??{};
     if(!text(config)||!config||!strings(mcpArgs))throw protocol('нет конфигурации MCP');
     await writeFile(path,config,{encoding:'utf8',mode:0o600,flag:'wx'});
+    if(this.d.mcp.prepare){prepared=await this.d.mcp.prepare(path,input,this.deps.env,this.deps.stateRoot);configEnv={...configEnv,...prepared.env}}
    }
    let sessionFile='',sessionArgs:string[]=[];
    if(this.d.turn.sessionFile){
@@ -154,6 +156,7 @@ export class CliProvider {
    if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),signal);
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    lease?.validate(); // No await between the final path check and process creation.
+   prepared?.validate();
    // Register the attempt immediately before process creation; no other turn can
    // observe its counters in the gap before the asynchronous spawn callback.
    lifecycleStarted=true;decodeValue?.started?.();

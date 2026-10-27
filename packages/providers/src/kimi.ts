@@ -22,5 +22,10 @@ export const KIMI:CliDescriptor={
  modes:{all:i=>['--prompt',i.roleNote+'\n\n'+i.message]},
  turn:{format:'stream-json',command:()=>({args:['--output-format','stream-json']}),decoder:kimiStream},
  resume:id=>{if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(id))throw new ProviderError('session_missing','Kimi: неверная сессия');return ['--session',id]},
- failure:()=>({code:'turn_failed',text:'Kimi Code: ход не выполнен; проверьте вход в программе'}),
+ failure:r=>{
+  const tier=r.stderr.match(/Your current subscription does not have access to Kimi Code(?: right now)?\./i);
+  if(/provider\.auth_error:\s*403/.test(r.stderr)&&tier)return {code:'permission_denied',text:'Подписка/тариф не даёт доступа к Kimi Code. Провайдер: '+tier[0]};
+  if(/provider\.auth_error:\s*401|not logged in|authentication required/i.test(r.stderr))return {code:'not_logged_in',text:'Нужен вход в Kimi Code: выполните kimi login'};
+  return {code:'turn_failed',text:'Kimi Code: ход не выполнен; причина входа или доступа не подтверждена'};
+ },
 };
