@@ -1,4 +1,4 @@
-import test,{type TestContext} from 'node:test';
+import test,{describe,type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
@@ -62,9 +62,14 @@ test('TS-47.T r2: an SSE redirect cannot borrow another origin marker to authori
   assert.equal(markedRequests,0);assert.equal(ordinaryPosts,0);
 });
 
-for(const ms of [0,2000,15000])test('TS-47.T: real engine with FakeProvider measures '+ms+' ms delay',{timeout:45_000},async t=>{
+// Each sample owns its project, server and provider; overlap the real delays
+// without shortening them or sharing state between measurements.
+const delayWindows=new Map<number,{start:number;end:number|null}>();
+describe('TS-53: independent latency samples',{concurrency:3},()=>{
+for(const ms of [15000,2000,0])test('TS-47.T: real engine with FakeProvider measures '+ms+' ms delay',{timeout:45_000},async t=>{
   const h=await fixture(t,{noRepository:true});markDouble(h.api);h.provider.onRun=async(seat,_message,ctx)=>{
-    ctx.modelStarted?.();if(ms)await delay(ms);ctx.publish({type:'delta',text:'Готово'});
+    ctx.modelStarted?.();const window={start:performance.now(),end:null as number|null};delayWindows.set(ms,window);
+    if(ms)await delay(ms);window.end=performance.now();ctx.publish({type:'delta',text:'Готово'});
     ctx.publish({type:'done',sessionId:null,model:seat.model,durationMs:ms,usage:{input:1,output:1,cacheRead:0}});return {text:'Готово',sessionId:null};
   };
   const row=await measure({url:h.api.url,pane:'worker',message:'Проверка',mode:'double',timeoutMs:30_000});
@@ -73,6 +78,13 @@ for(const ms of [0,2000,15000])test('TS-47.T: real engine with FakeProvider meas
   assert.ok(row.firstOutputEvent);assert.ok(row.firstOutputEvent.elapsedMs>=ms-100,JSON.stringify(row));
   assert.ok(row.firstCharacter);assert.ok(row.firstCharacter.elapsedMs>=ms-100,JSON.stringify(row));
   assert.ok(row.end.elapsedMs>=row.firstCharacter.elapsedMs);assert.equal(h.provider.calls.length,1);
+});
+});
+
+test('TS-53: independent real delays overlap rather than waiting serially',()=>{
+  const slow=delayWindows.get(15000),short=delayWindows.get(2000);
+  assert.ok(slow&&short&&slow.end!==null&&short.end!==null);
+  assert.ok(slow.start<short.end&&short.start<slow.end);
 });
 
 test('TS-47.T: early frames are retained, foreign and replay frames do not complete the sample',async t=>{
