@@ -1053,6 +1053,21 @@ html[data-proto] .m-drawer .ps-chat .s{min-width:0;flex:1;overflow:hidden;text-o
 html[data-proto] .m-drawer .ps-chat .m{color:var(--dim);font:10px var(--mono)}
 html[data-proto] .m-drawer .ps2-others{margin:4px 8px}
 html[data-proto] .m-drawer .ps2-project-chats{margin:0 8px 4px 24px}
+/* Current-project folder follows the sidebar-v2 A1 component. */
+html[data-proto] .ps2-current-project.ps2-prow{height:34px;min-height:34px;gap:5px;padding:0 4px 0 0}
+html[data-proto] .ps2-current-toggle{display:flex;align-items:center;gap:5px;flex:1;min-width:0;height:100%;padding:0 0 0 8px;border:0;border-radius:7px;background:transparent;color:inherit;text-align:left;cursor:pointer;font:inherit}
+html[data-proto] .ps2-current-toggle svg{width:13px;height:13px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6}
+html[data-proto] .ps2-current-toggle .s{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html[data-proto] .ps2-current-project .ps2-current-chevron{width:10px;flex:none;color:var(--ink3);font-size:10px}
+html[data-proto] .ps2-current-project .ps2-current-toggle:focus-visible{outline:1px solid var(--accent);outline-offset:-1px}
+html[data-proto] .ps-chat.ps2-prow.ps2-current-project.open .m,html[data-proto] .ps-chat.ps2-prow.ps2-current-project:hover .m{visibility:visible}
+html[data-proto] .ps2-current-project .ps2-current-menu{flex:none;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--ink2);font-size:18px;line-height:1;cursor:pointer}
+html[data-proto] .ps2-current-project .ps2-current-menu:hover,html[data-proto] .ps2-current-project .ps2-current-menu:focus-visible{background:var(--raised);outline:1px solid var(--accent)}
+html[data-proto] .ps2-current-chats{padding-left:11px}
+html[data-proto] .ps2-current-chats[hidden]{display:none}
+html[data-proto] .ps2-pmenu.ps2-flyout .it{width:100%;flex:none;border:0;background:transparent;text-align:left;font-family:inherit}
+html[data-proto] .ps2-pmenu.ps2-flyout .it:hover{background:var(--panel)}
+html[data-proto] .ps2-pmenu.ps2-flyout .it:focus-visible{outline:1px solid var(--accent);outline-offset:-1px}
 
 /* The feed owns spare height; composer and its status are a single normal-flow footer. */
 html[data-proto][data-page="chat"] .main>.feed{flex:1 1 0;min-height:0;overflow-y:auto!important}
