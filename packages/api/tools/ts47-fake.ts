@@ -33,7 +33,7 @@ export class ScenarioProvider implements Provider {
    this.retrySeats.add(seat.id);
    throw new ProviderError('turn_failed','Тестовая ошибка: повторите ход');
   }
-  for(let i=0;i<this.scenario.tools;i++)ctx.publish({type:'tool',name:'Проверка '+(i+1),detail:'Тестовый инструмент, без выполнения'});
+  for(let i=0;i<this.scenario.tools;i++){const id='ts47-tool-'+i,name='Проверка '+(i+1);ctx.publish({type:'tool',name,detail:'Тестовый инструмент, без выполнения'});ctx.traceEvent?.({id,name,phase:'call'});ctx.traceEvent?.({id,name,phase:'result',outcome:'ok'})}
   const chunks=['Это ответ тестового провайдера. ','Поток и инструменты созданы для аудита окна.'];
   for(const text of chunks){if(ctx.signal.aborted)throw new ProviderError('cancelled','Ход остановлен');ctx.publish({type:'delta',text})}
   ctx.publish({type:'done',sessionId:'ts47-fake',model:seat.model,durationMs:Date.now()-started,usage:{input:20,output:12,cacheRead:0}});

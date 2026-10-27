@@ -865,6 +865,15 @@ function turnStatsUI(){
  return {...d,H,S,copied,render:context.render,stats:context.stats};
 }
 const statsUsage={turnId:'12345678-1234-1234-1234-123456789012',model:'claude-test',vendor:'claude',mode:'read',input:50892,cacheRead:779968,output:17413,durationMs:6400,toolCalls:2,stopped:false,contextAfter:{used:68305,window:200000},cost:.031,currency:'USD'};
+test('TS-47.6: history replays observed groups, keeps anonymous errors visible and refuses invented positions',async()=>{
+ const tools=[{type:'tool',name:'Read',detail:'<файл>',status:'unknown',offset:3},{type:'toolError',reason:'ошибка',status:'error',offset:3},{type:'tool',name:'Bash',detail:'команда',status:'unknown',offset:8}];
+ const messages:Data[]=[{seq:1,role:'ai',text:'До после!',ts:1,usage:{...statsUsage,toolCalls:2},toolEvents:tools},{seq:2,role:'ai',text:'Старый',ts:1,usage:{...statsUsage,toolCalls:2}},{seq:3,role:'ai',text:'Другой',ts:1,usage:{...statsUsage,toolCalls:1},toolEvents:[{...tools[0],offset:null}]},{seq:4,role:'ai',text:'Повреждён',ts:1,usage:{...statsUsage,toolCalls:1},toolEvents:[{...tools[0],offset:999}]}];
+ const v=ui({fetch:async path=>path==='/api/chats/chat-a'?{chat:{id:'chat-a',pane:'worker'},messages}:{records:[]}});v.sandbox.toolLine=(item:Data)=>v.sandbox.esc(item.text);await v.functions.loadChat({onboard:false});
+ const [observed,legacy,uncertain,invalid]=v.S.chat.map((m:Data)=>m.html);
+ assert.equal((observed.match(/data-live-tool-group=/g)||[]).length,2);assert.match(observed,/&lt;файл&gt;/);assert.match(observed,/ошибка/);assert.doesNotMatch(observed,/подробности доступны только/);
+ assert.ok(observed.indexOf('До ')<observed.indexOf('&lt;файл&gt;'));assert.ok(observed.indexOf('ошибка')<observed.indexOf('после'));assert.ok(observed.indexOf('после')<observed.indexOf('команда'));
+ assert.match(legacy,/подробности доступны только в живом ходе/);assert.match(uncertain,/Положение инструментов относительно текста не подтверждено/);assert.match(invalid,/подробности доступны только в живом ходе/);
+});
 test('TS-47.2 history: only a confirmed tool count is shown, without inventing details or ordering',async()=>{
  const counts=[1,2,5,21,0,null,-1,1.5,'3',Number.MAX_SAFE_INTEGER+1],messages:Data[]=counts.map((toolCalls,i)=>({seq:i+1,role:'ai',text:'Ответ '+i,ts:1,usage:{...statsUsage,toolCalls}}));
  messages.push({seq:11,role:'peer',text:'Сосед',ts:1,usage:statsUsage},{seq:12,role:'ai',origin:'transferred',text:'Перенос',ts:1,usage:statsUsage},{seq:13,role:'me',text:'Вопрос',ts:1,usage:statsUsage});
