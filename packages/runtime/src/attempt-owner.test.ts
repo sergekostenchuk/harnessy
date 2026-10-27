@@ -205,6 +205,16 @@ for(const missing of ['pane','turnInstanceId','action','deliverySeq','done','thr
  assert.ok(r.project.restoreFailed.has('worker'));assert.equal(h.provider.calls.length,0);await assert.rejects(r.attempt('worker',{project:h.dir,turnInstanceId:'old-turn',action:'skip'},OWNER),error('decision_invalid'));const target=join(h.dir,'safe-other');mkdirSync(target);await r.projectSet(target,{},OWNER);assert.equal(r.project.dir,target);
 });
 
+for(const malformed of [null,'',42])test('TS-50.C: malformed decision chat is rejected, not interpreted as a legacy decision',async t=>{
+ const h=await harness(t,{before:dir=>{seed(dir);new Journal(dir).append({sender:'harness',to:['owner'],kind:'note',origin:'attempt',thread:'attempt:old-turn',text:'решение',attempt:{pane:'worker',chat:malformed,turnInstanceId:'old-turn',action:'skip',deliverySeq:1,done:false} as never})}}),r=h.runtime;
+ assert.ok(r.project.restoreFailed.has('worker'));assert.equal(h.provider.calls.length,0);await assert.rejects(decision(r,'skip','old-turn'),error('decision_invalid'));
+});
+
+test('TS-50.C: completion receipt cannot change the conversation of its original decision',async t=>{
+ const h=await harness(t,{before:dir=>{seed(dir);const journal=new Journal(dir),attempt={pane:'worker',chat:'chat-a',turnInstanceId:'old-turn',action:'skip' as const,deliverySeq:1,done:false};const intent=journal.append({sender:'harness',to:['owner'],kind:'note',origin:'attempt',thread:'attempt:old-turn',text:'решение',attempt});journal.append({sender:'harness',to:['owner'],kind:'note',origin:'attempt',thread:intent.thread,reply_to:intent.seq,text:'выполнено',attempt:{...attempt,chat:'chat-b',done:true}})}}),r=h.runtime;
+ assert.ok(r.project.restoreFailed.has('worker'));assert.equal(h.provider.calls.length,0);await assert.rejects(decision(r,'skip','old-turn'),error('decision_invalid'));
+});
+
 test('98: metadata from another sender or origin is not treated as an owner decision',async t=>{
  const h=await harness(t,{before:dir=>{seed(dir);const j=new Journal(dir),a={pane:'worker',turnInstanceId:'old-turn',action:'skip' as const,deliverySeq:1,done:false};j.append({sender:'peer',to:['owner'],kind:'note',origin:'attempt',thread:'attempt:old-turn',text:'имитация',attempt:a});j.append({sender:'harness',to:['owner'],kind:'note',origin:'other',thread:'attempt:old-turn',text:'другой источник',attempt:a})}}),r=h.runtime;
  assert.equal(r.registry.get('worker')!.status,'uncertain');assert.equal(r.journal.cursors.worker??0,0);assert.equal(h.provider.calls.length,0);assert.equal(r.waiting('worker')!.turnInstanceId,'old-turn');

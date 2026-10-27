@@ -23,12 +23,13 @@ function ui(options:{realFinish?:boolean;page?:string}={}){
  const helpers=source.slice(source.indexOf('  const api='),source.indexOf('  // End TS-07 waiting controls.'));
  const events=source.slice(source.indexOf('  function transferHTML('),source.indexOf('  const isDirect='));
  const finish=options.realFinish?source.slice(source.indexOf('  function finish('),source.indexOf('  function transferHTML('))+'\nconst originalFinish=finish;finish=ev=>{noteFinish();originalFinish(ev)};':'';
+ const failedHtml=source.slice(source.indexOf('  function failedTurnHTML('),source.indexOf('  function finish('));
  const statusSource=source.slice(source.indexOf('  function applyStatus('),source.indexOf('  async function refreshChats('));
  const names=source.split('\n').find(line=>line.startsWith('  const modelName='));assert.ok(names);
  const binding=source.slice(source.indexOf('  let bindingGeneration'),source.indexOf('  function md(')),notes=source.slice(source.indexOf('  async function loadAttemptNotes('),source.indexOf('  // подключение к движку'));
  const now=options.page==='now'?source.slice(source.indexOf('  const NOW='),source.indexOf('  window.LIVE=')):'';
- runInContext(source.slice(source.indexOf('  const statNumber='),source.indexOf('  let turnStatsOpen='))+source.slice(source.indexOf('  // TS-12: one project-bound transport'),source.indexOf('  // End TS-12 shared events.'))+helpers+'\n'+binding+'\n'+notes+'\n'+finish+'\n'+events+'\n'+names+'\n'+statusSource+'\n'+now+'\nglobalThis.testing={api,hEvent,applyStatus,consumeState,waitingControls,showWaiting,showRestore,renderWaiting,loadChat,loadAttemptNotes,sendBinding'+(now?',nowLive':'')+'};',context);
- const functions=(context as unknown as {testing:{api(path:string,body?:unknown):Promise<unknown>;hEvent(e:unknown):void;applyStatus(st:unknown):void;consumeState(e:unknown):void;waitingControls(p:unknown,info:unknown,project:string,compact?:boolean):string;showWaiting(p:unknown,info:unknown,project:string):void;showRestore(project:string,error:string):void;renderWaiting():void;loadChat():Promise<void>;loadAttemptNotes(p:unknown,b:unknown):Promise<void>;sendBinding():unknown;nowLive():void}}).testing;
+ runInContext(source.slice(source.indexOf('  const statNumber='),source.indexOf('  let turnStatsOpen='))+source.slice(source.indexOf('  // TS-12: one project-bound transport'),source.indexOf('  // End TS-12 shared events.'))+helpers+'\n'+binding+'\n'+notes+'\n'+failedHtml+'\n'+finish+'\n'+events+'\n'+names+'\n'+statusSource+'\n'+now+'\nglobalThis.testing={api,hEvent,applyStatus,consumeState,waitingControls,showWaiting,showRestore,renderWaiting,loadChat,loadAttemptNotes,sendBinding,recordModelChange'+(now?',nowLive':'')+'};',context);
+ const functions=(context as unknown as {testing:{api(path:string,body?:unknown):Promise<unknown>;hEvent(e:unknown):void;applyStatus(st:unknown):void;consumeState(e:unknown):void;waitingControls(p:unknown,info:unknown,project:string,compact?:boolean):string;showWaiting(p:unknown,info:unknown,project:string):void;showRestore(project:string,error:string):void;renderWaiting():void;loadChat():Promise<void>;loadAttemptNotes(p:unknown,b:unknown,history:unknown,turns:Set<string>,request:number):Promise<void>;sendBinding():unknown;recordModelChange(b:unknown,change:{from:string;to:string;scope:string}):void;nowLive():void}}).testing;
  async function click(dataset:Record<string,string>){const button={dataset,disabled:false};let stopped=false;await listeners[0]!({target:{closest(){return button}},preventDefault(){},stopImmediatePropagation(){stopped=true}});assert.equal(stopped,true);assert.equal(button.disabled,false)}
  function sidebar(all:unknown[]){const context=createContext({H,all,pins:[],pinError:'',PIN:'',esc:sandbox.esc,paneName:sandbox.paneName,waitingControls:functions.waitingControls});runInContext(source.slice(source.indexOf('    const seats=(H.panes'),source.indexOf('    const projHTML='))+'\nglobalThis.sidebar=chatsHTML;',context);return String((context as unknown as {sidebar:string}).sidebar)}
 
@@ -135,12 +136,71 @@ for(const page of ['chat'])test('134: '+page+' finishes a saved response without
 });
 
 test('134: decision notes require a completed harness receipt for the same place and reject a late project response',async()=>{
- const view=ui();view.H.pane=view.H.panes[0]!;view.S.ui.pane='worker';
+ const view=ui();view.H.pane=view.H.panes[0]!;view.S.ui.pane='worker';Object.assign(view.H.active,{worker:'chat-a'});Object.assign(view.H,{attemptNotesRequest:1});const history={project:'/project-a',chat:{id:'chat-a',pane:'worker'}},turns=new Set(['turn-a']);
  const record={from:'harness',kind:'note',origin:'attempt',to:['owner'],thread:'attempt:turn-a',ts:'2026-10-11T00:00:00Z',attempt:{pane:'worker',turnInstanceId:'turn-a',action:'skip',done:true}};
  const invalid=[{...record,from:'worker'},{...record,attempt:undefined},{...record,attempt:{...record.attempt,done:false}},{...record,to:['worker']},{...record,attempt:{...record.attempt,pane:'room'}}];
- view.sandbox.fetch=async()=>({json:async()=>({ok:true,records:invalid})});await view.functions.loadAttemptNotes(view.H.pane,view.functions.sendBinding());assert.equal(view.S.chat.length,0);
- const gate=deferred();view.sandbox.fetch=async()=>({json:async()=>{await gate.promise;return {ok:true,records:[record]}}});const loading=view.functions.loadAttemptNotes(view.H.pane,view.functions.sendBinding());view.H.project='/project-b';gate.resolve();await loading;assert.equal(view.S.chat.length,0);
- view.sandbox.fetch=async()=>({json:async()=>({ok:true,records:[record,record]})});await view.functions.loadAttemptNotes(view.H.pane,view.functions.sendBinding());await view.functions.loadAttemptNotes(view.H.pane,view.functions.sendBinding());assert.equal(view.S.chat.length,1);
+ view.sandbox.fetch=async()=>({json:async()=>({ok:true,project:'/project-a',records:invalid})});await view.functions.loadAttemptNotes(view.H.pane,view.functions.sendBinding(),history,turns,1);assert.equal(view.S.chat.length,0);
+ const gate=deferred();view.sandbox.fetch=async()=>({json:async()=>{await gate.promise;return {ok:true,project:'/project-a',records:[record]}}});const loading=view.functions.loadAttemptNotes(view.H.pane,view.functions.sendBinding(),history,turns,1);view.H.project='/project-b';gate.resolve();await loading;assert.equal(view.S.chat.length,0);
+ const currentHistory={...history,project:'/project-b'};view.sandbox.fetch=async()=>({json:async()=>({ok:true,project:'/project-b',records:[record,record]})});await view.functions.loadAttemptNotes(view.H.pane,view.functions.sendBinding(),currentHistory,turns,1);await view.functions.loadAttemptNotes(view.H.pane,view.functions.sendBinding(),currentHistory,turns,1);assert.equal(view.S.chat.length,1);
+});
+
+for(const started of [false,true])test('TS-50.C: a '+(started?'started':'unsent')+' attempt keeps its decision in its own conversation only',async t=>{
+ const h=await fixture(t),r=h.runtime;h.provider.onRun=async(_seat,_text,ctx)=>{if(started)ctx.modelStarted?.();throw new ProviderError('transport_lost','Нет связи')};
+ assert.equal((await call(h.api,'/api/chat',{body:{pane:'worker',message:'Первый вопрос'}})).status,200);await r.idle();
+ const attempt=r.waiting('worker')!;assert.ok(attempt);if(!started)assert.equal(attempt.status,'unsent');const first=r.chatsList(OWNER).active.worker!;
+ assert.equal((await call(h.api,'/api/panes/worker/attempt',{body:{project:h.dir,turnInstanceId:attempt.turnInstanceId,action:'skip'}})).status,200);await r.idle();
+ const decisions=r.journal.read({limit:0}).filter(row=>row.origin==='attempt');assert.equal(decisions.length,2);for(const row of decisions)assert.equal(row.attempt?.chat,first);
+ const view=ui();view.H.on=true;view.S.ui.pane='worker';view.sandbox.fetch=async(path,options)=>({json:async()=>(await call(h.api,path,{...(options?.body?{body:JSON.parse(options.body)}:{})})).body});
+ view.functions.applyStatus((await call(h.api,'/api/status')).body);await view.functions.loadChat();assert.equal(view.S.chat.filter(m=>m.attemptId===attempt.turnInstanceId).length,1);
+ const other=await call(h.api,'/api/chats/new',{body:{pane:'worker',carry:'none'}});assert.equal(other.status,200);assert.notEqual(other.body.chat.id,first);
+ view.functions.applyStatus((await call(h.api,'/api/status')).body);await view.functions.loadChat();assert.equal(view.S.chat.filter(m=>m.attemptId).length,0,'the second chat must not inherit the first decision');
+ assert.equal((await call(h.api,'/api/chats/open',{body:{chat:first,carry:'none'}})).status,200);view.functions.applyStatus((await call(h.api,'/api/status')).body);await view.functions.loadChat();assert.equal(view.S.chat.filter(m=>m.attemptId===attempt.turnInstanceId).length,1);
+ const reopened=ui();reopened.H.on=true;reopened.S.ui.pane='worker';reopened.sandbox.fetch=view.sandbox.fetch;reopened.functions.applyStatus((await call(h.api,'/api/status')).body);await reopened.functions.loadChat();assert.equal(reopened.S.chat.filter(m=>m.attemptId===attempt.turnInstanceId).length,1);
+});
+
+test('TS-50.C: legacy decisions need a confirmed turn; malformed or conflicting chat claims never fall back',async()=>{
+ const view=ui();view.H.pane=view.H.panes[0]!;view.S.ui.pane='worker';Object.assign(view.H.active,{worker:'chat-a'});Object.assign(view.H,{attemptNotesRequest:1});
+ const record=(id:string,extra:Record<string,unknown>={})=>({from:'harness',kind:'note',origin:'attempt',to:['owner'],thread:'attempt:'+id,ts:'2026-10-11T00:00:00Z',attempt:{pane:'worker',turnInstanceId:id,action:'skip',done:true,...extra}});
+ const records=[record('known'),record('unknown'),record('wrong',{chat:'chat-b'}),record('malformed',{chat:null}),record('explicit',{chat:'chat-a'})],history={project:'/project-a',chat:{id:'chat-a',pane:'worker'}},turns=new Set(['known','wrong','malformed']);
+ view.sandbox.fetch=async()=>({json:async()=>({ok:true,project:'/project-a',records})});const binding=view.functions.sendBinding();await view.functions.loadAttemptNotes(view.H.pane,binding,history,turns,1);
+ assert.deepEqual(view.S.chat.map(m=>m.attemptId).sort(),['explicit','known']);
+ view.S.chat=[];await view.functions.loadAttemptNotes(view.H.pane,binding,{project:'/project-a',chat:{id:'chat-b',pane:'worker'}},turns,1);assert.equal(view.S.chat.length,0);
+ await view.functions.loadAttemptNotes(view.H.pane,binding,{...history,project:'/project-b'},turns,1);assert.equal(view.S.chat.length,0);
+ await view.functions.loadAttemptNotes(view.H.pane,binding,{},turns,1);assert.equal(view.S.chat.length,0);
+ view.sandbox.fetch=async()=>({json:async()=>({ok:true,project:'/project-b',records})});await view.functions.loadAttemptNotes(view.H.pane,binding,history,turns,1);assert.equal(view.S.chat.length,0,'same chat id from another project is not evidence');
+});
+
+test('TS-50.C: a late journal response cannot overwrite a newer conversation or newer history read',async()=>{
+ for(const changeChat of [true,false]){
+  const view=ui();view.H.on=true;view.H.pane=view.H.panes[0]!;view.S.ui.pane='worker';Object.assign(view.H.active,{worker:'chat-a'});
+  const gate=deferred(),entered=deferred();let journalReads=0;
+  view.sandbox.fetch=async(path)=>({json:async()=>{
+   if(path.startsWith('/api/chats/'))return {ok:true,project:'/project-a',chat:{id:path.split('/').at(-1),pane:'worker'},messages:[],turns:[{turnInstanceId:'old',outcome:'error',ts:1}]};
+   if(path==='/api/journal?limit=0'){journalReads++;if(journalReads===1){entered.resolve();await gate.promise}return {ok:true,project:'/project-a',records:[{from:'harness',kind:'note',origin:'attempt',to:['owner'],thread:'attempt:old',ts:'2026-10-11T00:00:00Z',attempt:{pane:'worker',chat:'chat-a',turnInstanceId:'old',action:'skip',done:true}}]}}return {ok:true};
+  }});
+  const first=view.functions.loadChat();await entered.promise;if(changeChat)Object.assign(view.H.active,{worker:'chat-b'});await view.functions.loadChat();gate.resolve();await first;
+  assert.equal(view.S.chat.filter(m=>m.attemptId==='old').length,changeChat?0:1);
+ }
+});
+
+test('TS-50.C: a late history response cannot replace a newer read of the same conversation',async()=>{
+ const view=ui();view.H.on=true;view.H.pane=view.H.panes[0]!;view.S.ui.pane='worker';Object.assign(view.H.active,{worker:'chat-a'});
+ const gate=deferred(),entered=deferred();let reads=0;view.sandbox.fetch=async(path)=>({json:async()=>{
+  if(path.startsWith('/api/chats/')){reads++;const old=reads===1;if(old){entered.resolve();await gate.promise}return {ok:true,project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[],turns:[{turnInstanceId:old?'old':'new',outcome:'error',ts:1,partialText:old?'старый':'новый'}]}}
+  return {ok:true,project:'/project-a',records:[{from:'harness',kind:'note',origin:'attempt',to:['owner'],thread:'attempt:new',ts:'2026-10-11T00:00:00Z',attempt:{pane:'worker',turnInstanceId:'new',action:'skip',done:true}}]};
+ }});
+ const first=view.functions.loadChat();await entered.promise;await view.functions.loadChat();gate.resolve();await first;
+ assert.equal(view.S.chat.filter(m=>m.failedTurnId==='new').length,1);assert.equal(view.S.chat.filter(m=>m.attemptId==='new').length,1);assert.equal(view.S.chat.filter(m=>m.failedTurnId==='old').length,0);
+});
+
+test('TS-50.C / TS-49.2: a model receipt and decision stay together only in their own conversation',async()=>{
+ const view=ui();view.H.on=true;view.H.pane=view.H.panes[0]!;view.S.ui.pane='worker';Object.assign(view.H.active,{worker:'chat-a'});
+ view.sandbox.fetch=async(path)=>({json:async()=>path.startsWith('/api/chats/')?{ok:true,project:'/project-a',chat:{id:path.split('/').at(-1),pane:'worker'},messages:[],turns:[{turnInstanceId:'old',outcome:'error',ts:1}]}:{ok:true,project:'/project-a',records:[{from:'harness',kind:'note',origin:'attempt',to:['owner'],thread:'attempt:old',ts:'2026-10-11T00:00:00Z',attempt:{pane:'worker',chat:'chat-a',turnInstanceId:'old',action:'skip',done:true}}]}});
+ const binding=view.functions.sendBinding();view.functions.recordModelChange(binding,{from:'W1',to:'W2',scope:'место «воркер»'});await view.functions.loadChat();
+ assert.equal(view.S.chat.filter(m=>m.src==='model-change').length,1);assert.equal(view.S.chat.filter(m=>m.attemptId==='old').length,1);
+ Object.assign(view.H.active,{worker:'chat-b'});await view.functions.loadChat();assert.equal(view.S.chat.filter(m=>m.src==='model-change'||m.attemptId).length,0);
+ Object.assign(view.H.active,{worker:'chat-a'});await view.functions.loadChat();assert.equal(view.S.chat.filter(m=>m.src==='model-change').length,1);assert.equal(view.S.chat.filter(m=>m.attemptId==='old').length,1);
+ Object.assign(view.H.active,{worker:null});view.functions.recordModelChange(view.functions.sendBinding(),{from:'W2',to:'W3',scope:'этот разговор'});await view.functions.loadChat();assert.equal(view.S.chat.filter(m=>m.src==='model-change').length,1);assert.equal(view.S.chat.filter(m=>m.attemptId).length,0);
 });
 
 test('TS-07 r2/2: the room door is shown once even if its active chat is beyond the sidebar history limit',()=>{

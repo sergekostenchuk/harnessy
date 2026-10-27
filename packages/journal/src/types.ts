@@ -11,7 +11,7 @@ export class JournalError extends Error {
  readonly code:JournalCode;readonly maybeWritten?:true;
  constructor(code:JournalCode,message:string,maybeWritten?:true){super(message);this.name='JournalError';this.code=code;if(maybeWritten)this.maybeWritten=maybeWritten}
 }
-export interface AttemptDecision {pane:string;turnInstanceId:string;action:'retry'|'skip'|'finish';network?:'direct_once';autopilot?:{model:string;vendor:string};unsent?:true;recordSeqs?:number[];deliverySeq:number|null;done:boolean}
+export interface AttemptDecision {pane:string;chat?:string;turnInstanceId:string;action:'retry'|'skip'|'finish';network?:'direct_once';autopilot?:{model:string;vendor:string};unsent?:true;recordSeqs?:number[];deliverySeq:number|null;done:boolean}
 export type TaskOutcome='done'|'blocked'|'partial';
 export interface Record_ {outcome?:TaskOutcome;seq:number;id:string;ts:string;from:string;to:string[];kind:string;thread:string|null;reply_to:number|null;text:string;evidence:string[];attachments?:AttachmentRef[];policy:number;score?:number;round?:number;origin?:string;accepted?:boolean;bounds?:Bounds|null;ack?:'pending';sha?:string;merged?:string;version?:number;kinds?:string[];attempt?:AttemptDecision}
 export type Bounds=Readonly<Record<string,unknown>>;
