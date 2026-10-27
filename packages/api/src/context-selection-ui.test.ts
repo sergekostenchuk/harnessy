@@ -1,12 +1,18 @@
 import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync,existsSync} from 'node:fs';
+import {spawn} from 'node:child_process';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
-import {fixture,call,deferred} from './test-helpers.ts';
+import {fixture,call,deferred,OWNER} from './test-helpers.ts';
+import {createApi} from './server.ts';
+import {testSite} from './site-test-helpers.ts';
 type Data=Record<string,any>;
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');
+const ctxSource=readFileSync(new URL('../../../ui/deploy/ctx.js',import.meta.url),'utf8');
 const messages=()=>[{role:'me',text:'Первое сообщение'},{role:'ai',src:'sys',text:'Служебная строка'},{role:'ai',src:'live',who:'Модель',text:'Ответ модели'},{role:'me',text:'Третье <img src=x> сообщение 🧠'}].map((m,i)=>({...m,seq:i+1}));
 function ui(send?:(body:Data)=>Promise<Data>){
  const d=dom('<div class="frame cur"><div class="main"><div class="feed"></div><div class="box"><div class="in"></div><div class="bar2"></div></div></div></div>');Object.assign(d.document,{body:d.body,documentElement:d.html});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page','chat');
@@ -24,6 +30,38 @@ function ui(send?:(body:Data)=>Promise<Data>){
  const start=(sw=false)=>ctx.selection.selStart('reviewer',{sw});
  return {...d,H,S,ctx,requests,toasts,notices,find,start,select};
 }
+
+test('TS-51.C: context parts use bound facts, report missing data and ignore late foreign snapshots',async()=>{
+ let binding:Data={project:'/a',pane:'worker',chat:'chat-a',generation:1,instance:'instance-a'};
+ const H:Data={on:true,project:'/a',pane:{id:'worker'},liveStatus:{trace:{instanceId:'instance-a'}}};
+ let chat:Data={project:'/a',chat:{id:'chat-a',pane:'worker',active:true,documents:[{project:'/a',path:'docs/one & two.md'}]},messages:[{role:'me',attachments:[{mime:'image/png'}]},{role:'ai',attachments:[{mime:'image/jpeg'}]}]};
+ let swarm:Data={ok:true,project:'/a',instance:'instance-a',panes:[{id:'worker',chat:'chat-a',instructionPath:'.harness/roles/worker.md',digest:true}]};
+ let metadata:Data={ok:true,project:'/a',path:'.harness/roles/worker.md'};let delay:Promise<void>|null=null;
+ const L:Data={H,esc:(s:unknown)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),paneName:()=> 'Исполнитель',sendBinding:()=>({...binding}),bindingCurrent:(b:Data)=>['project','pane','chat','generation'].every(k=>b[k]===binding[k]),api:async(path:string)=>{if(path.startsWith('/api/chats/')){if(delay)await delay;return chat}if(path==='/api/swarm')return swarm;if(path.startsWith('/api/project/file?'))return metadata;throw Error(path)}};
+ const sandbox:Data={L,Date,Math,URL};const context=createContext(sandbox);
+ runInContext(fixtureSource(ctxSource,['fmt','instance','current','contextParts','readFacts'],{filename:'ctx.js',wrapper:0})+'\nglobalThis.views={readFacts,contextParts};',context);
+ const card={parts:[{key:'instructions',tokens:2600,est:true}]},facts=await sandbox.views.readFacts(binding),html=sandbox.views.contextParts(facts,card);
+ assert.match(html,/Инструкция роли <span>есть/);assert.match(html,/\.harness\/roles\/worker\.md/);assert.match(html,/docs\/one &amp; two\.md/);assert.match(html,/project=%2Fa&amp;path=docs%2Fone%20%26%20two\.md/);
+ assert.match(html,/Сохранённые сообщения <span>2/);assert.match(html,/Вложения в сообщениях <span>2/);assert.match(html,/PNG · JPEG/);assert.match(html,/Сводка соседей <span>включена/);assert.match(html,/оценка текста|Оценка текста/);assert.match(html,/не токенизатор модели/);
+ chat={project:'/a',chat:{id:'chat-a',pane:'worker',active:true},messages:null};swarm={...swarm,panes:[{...swarm.panes[0],digest:false}]};metadata={ok:false,code:'file_missing'};
+ const missing=sandbox.views.contextParts(await sandbox.views.readFacts(binding),{parts:[]});assert.match(missing,/Инструкция роли <span>не найдена/);assert.match(missing,/Выбранные документы <span>нет данных/);assert.match(missing,/Сохранённые сообщения <span>нет данных/);assert.match(missing,/Вложения в сообщениях <span>нет данных/);assert.match(missing,/Сводка соседей <span>выключена/);
+ const held=deferred();delay=held.promise;const stale=sandbox.views.readFacts(binding);binding={...binding,chat:'chat-b',generation:2};held.resolve();assert.deepEqual(JSON.parse(JSON.stringify(await stale)),{});
+ binding={...binding,chat:'chat-a',generation:3};swarm={...swarm,instance:'other-instance'};delay=null;assert.deepEqual(JSON.parse(JSON.stringify(await sandbox.views.readFacts(binding))),{});
+});
+
+const electron=process.env.HARNESSY_TEST_ELECTRON||fileURLToPath(new URL('../../../ui/desktop/node_modules/.bin/electron',import.meta.url));
+test('TS-51.C: real context card and transfer history fit four sizes with isolated engine data',{timeout:60_000,skip:existsSync(electron)?false:'Electron is not installed'},async t=>{
+ const h=await fixture(t,{seats:'  worker: {role: executor, vendor: claude, label: Исполнитель, model: w1, mode: read, digest: true, instructions: roles/worker.md}',before:dir=>{mkdirSync(join(dir,'.harness','roles'),{recursive:true});mkdirSync(join(dir,'docs'));writeFileSync(join(dir,'.harness','roles','worker.md'),'Инструкция роли');writeFileSync(join(dir,'docs','пример.md'),'Документ');}}),r=h.runtime,pane=r.registry.get('worker')!;
+ await r.settingsPatch('owner',{releaseUnderstood_0_1_0_alpha:true},OWNER);pane.record('me','Первый вопрос');pane.record('ai','Сохранённый ответ');
+ const image=await call(h.api,'/api/attachments',{body:{base64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='}});assert.equal(image.status,201);pane.transcript[0]!.attachments=[image.body];r.project.state.saveChats(r.registry);const cid=r.project.state.chats.active.worker!;
+ r.project.state.chats.chats[cid]!.documents=[{project:h.dir,path:'docs/пример.md'}];pane.record('peer','[от харнесс] контекст передан новой модели');
+ pane.transcript.at(-1)!.contextTransfer={project:h.dir,chat:cid,turnInstanceId:'fixture-transfer',messages:2,verbatim:1,compressed:true,tokens:90,content:'Сохранённый текст',enabled:true};
+ pane.record('peer','[от харнесс] контекст не передан');pane.transcript.at(-1)!.contextTransfer={project:h.dir,chat:cid,turnInstanceId:'fixture-failed',messages:0,verbatim:0,compressed:false,tokens:0,content:'',enabled:true,failure:{code:'unavailable',reason:'Не удалось прочитать историю'}};r.project.state.saveChats(r.registry);
+ const api=createApi({runtime:r,siteDir:join(testSite(),'sketches'),port:0});await api.listen();t.after(()=>api.close());h.deps.appUrl=api.url;
+ const env:NodeJS.ProcessEnv={...process.env,HARNESSY_TEST_WINDOW:'hidden',CONTEXT_BROWSER_BASE:api.url,CONTEXT_BROWSER_USER_DATA:join(h.dir,'electron-profile')};delete env.ELECTRON_RUN_AS_NODE;
+ const child=spawn(electron,[fileURLToPath(new URL('./context-facts-browser-driver.cjs',import.meta.url))],{env,stdio:['ignore','pipe','pipe']});t.after(()=>{if(child.exitCode===null)child.kill('SIGTERM')});let stdout='',stderr='';child.stdout.on('data',d=>stdout+=d);child.stderr.on('data',d=>stderr+=d);
+ const exit=await new Promise<number|null>((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve)});assert.equal(exit,0,stderr+'\n'+stdout);assert.match(stdout,/CONTEXT_BROWSER_OK/);assert.equal(h.provider.calls.length,0);
+});
 
 test('259: dialog opens with concrete messages, none checked, zero volume and disabled Send',async()=>{
  const v=ui();v.start();assert.equal(v.document.querySelectorAll('.live-sel-list input').length,3);assert.equal(v.document.querySelectorAll('[data-ck][checked]').length,0);

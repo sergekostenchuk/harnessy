@@ -23,9 +23,9 @@ type Data=Record<string,any>;
 const imageRef=(hex='a')=>({id:hex.repeat(64),mime:'image/png',size:4,w:1,h:1});
 const imageFile=(value=1)=>{const bytes=Uint8Array.of(value,2,3,4);return {name:'screen.png',type:'image/png',size:bytes.byteLength,arrayBuffer:async()=>bytes.buffer}};
 test('TS-47.4 F05: unknown windows and incompatible estimates never become measured percentages',()=>{
- const source=readFileSync(new URL('../../../ui/deploy/ctx.js',import.meta.url),'utf8'),start=source.indexOf('  const fmt='),end=source.indexOf('  function openCard(anchor)');assert.ok(start>=0&&end>start);
+ const source=readFileSync(new URL('../../../ui/deploy/ctx.js',import.meta.url),'utf8'),start=source.indexOf('  const fmt='),end=source.indexOf('  async function openCard(anchor)');assert.ok(start>=0&&end>start);
  const sandbox:Data={L:{H:{pane:{id:'worker',label:'Исполнитель'},project:'/a'},paneName:(p:Data)=>p.label,esc:String},Date,Math};sandbox.globalThis=sandbox;
- const context=createContext(sandbox);runInContext(source.slice(start,end)+'\nglobalThis.views={html,tip,matrix};',context);
+ const context=createContext(sandbox);runInContext(source.slice(start,end)+'\nglobalThis.views={html,tip,matrix,list};',context);
  const sample={window:null,used:161,pct:null,measured:true,busy:false,turns:1,parts:[{key:'instructions',label:'Инструкции',tokens:2607,est:true},{key:'history',label:'История',tokens:161,est:false}],history:[],handoff:[]};
  const unknown=sandbox.views.html(sample);assert.match(unknown,/окно модели: нет данных/);assert.match(unknown,/распределение не определено/);assert.match(unknown,/оценка/);assert.doesNotMatch(unknown,/1619|class="ctx-mx"/);assert.doesNotMatch(sandbox.views.tip(sample,'instructions'),/1619|\d+ %/);
  const mixed={...sample,window:1000,pct:16};assert.doesNotMatch(sandbox.views.html(mixed),/class="ctx-mx"|261 %/);
@@ -33,6 +33,8 @@ test('TS-47.4 F05: unknown windows and incompatible estimates never become measu
  const partial=contextCard({id:'worker',label:'Исполнитель',model:'unknown-model',busy:false,tokens:{input:12,output:null,cacheRead:null},transcript:[]},{instructionText:'Текст',roleNote:'',chat:null});
  const rendered=sandbox.views.html(partial);assert.match(rendered,/оценка · нет данных/);assert.match(rendered,/окно модели: нет данных/);assert.match(rendered,/свободно<\/span><b>нет данных<\/b>/);assert.doesNotMatch(rendered,/NaN|undefined|class="ctx-mx"|появится после хода/);
  assert.match(sandbox.views.html({...partial,last:null}),/оценка · нет данных/);assert.doesNotMatch(sandbox.views.html({...partial,last:null}),/хода не было/);
+ const noCard=sandbox.views.html({parts:[],history:[],handoff:[],used:null,window:null,pct:null,measured:false,busy:false,turns:'нет данных',unavailable:true});assert.match(noCard,/История и передачи · нет данных/);assert.doesNotMatch(noCard,/история · 0|реплик ещё нет|истории мало/);
+ const history=sandbox.views.list({...sample,history:[{role:'me',title:'Текст',tokens:9},{role:'ai',title:'Без числа',tokens:null}]},'history');assert.match(history,/≈ 9/);assert.match(history,/Оценка, не токенизатор модели/);assert.match(history,/нет данных/);assert.doesNotMatch(history,/NaN/);
 });
 function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;storage?:Map<string,string>}={}){
  const storage=options.storage??new Map<string,string>(),requests:{path:string;body:Data|undefined}[]=[],toasts:string[]=[],clicks:((event:Data)=>unknown)[]=[],pagehide:(()=>void)[]=[],pageshow:((event:Data)=>unknown)[]=[],elements=new Map<string,Data>(),rows:Data[]=[];
@@ -67,7 +69,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  function closeLAMenus()','  // запись «контекст передан»')+
   '\nconst L={api,sendBinding,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
-  '\ndrawLive=()=>{if(window.CX&&CX.setBusy)CX.setBusy(!!H.cur)};globalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,recordModelChange,bindFreshModelChanges,ask,stop,curHTML,footerUpdate,finish,loadChat,recoverStoppedTurn,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,streamScope,streamGet,streamEnd,streamSelect,streamHidden,streamClear,selectedBusy,queueDelivered,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw,showOrchestratorOffer,laPath,projectPathValue};',context);
+  '\ndrawLive=()=>{if(window.CX&&CX.setBusy)CX.setBusy(!!H.cur)};globalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,recordModelChange,bindFreshModelChanges,ask,stop,curHTML,footerUpdate,finish,loadChat,recoverStoppedTurn,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,transferHTML,streamScope,streamGet,streamEnd,streamSelect,streamHidden,streamClear,selectedBusy,queueDelivered,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw,showOrchestratorOffer,laPath,projectPathValue};',context);
  const functions=(context as Data).testing as Data;
  function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
  function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
@@ -77,6 +79,22 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   return (mode:'on'|'orch')=>listener({target:{closest:(selector:string)=>selector==='[data-direct]'?{dataset:{direct:mode}}:null}}) as Promise<boolean>}
  return {H,S,ta,requests,toasts,storage,elements,rows,column,sandbox,context,functions,journal,sidebar,direct,clicks,hidePage:()=>pagehide.forEach(fn=>fn()),showPage:(event:Data)=>Promise.all(pageshow.map(fn=>fn(event))),get rendered(){return rendered}};
 }
+
+test('TS-51.C: transfer events show estimates, safe reasons and unknown values without claiming provider compaction',()=>{
+ const v=ui(),render=v.functions.transferHTML;
+ const done=render('старый текст',{enabled:true,compressed:true,messages:18,verbatim:12,tokens:2400,content:'<script>история</script>'});
+ assert.match(done,/Контекст перенесён · сокращён/);assert.match(done,/Дословно 12 из 18/);assert.match(done,/часть сообщений|Часть сообщений/);assert.match(done,/оценка, не токенизатор модели/);assert.match(done,/&lt;script&gt;/);assert.doesNotMatch(done,/<script>|компакц/i);
+ const failed=render('',{enabled:true,failure:{code:'unavailable',reason:'Нет &lt;доступа&gt;'}});assert.match(failed,/data-context-transfer="failed"/);assert.match(failed,/Контекст не передан/);assert.match(failed,/Нет &amp;lt;доступа&amp;gt;/);assert.match(failed,/Объём до и после · нет данных/);assert.doesNotMatch(failed,/≈|перенесён/);
+ const unknown=render('',{enabled:true});assert.match(unknown,/Количество сообщений · нет данных/);assert.match(unknown,/объём · нет данных/);assert.doesNotMatch(unknown,/≈ 0/);
+ assert.match(render('',{enabled:false}),/Перенос выключен в настройках/);assert.match(style,/\.ctx51-event\.failed\s*\{[^}]*var\(--bad\)/);assert.doesNotMatch(style,/\.ctx51-event\.failed\s*\{[^}]*bad-fill/);
+});
+
+test('TS-51.C: failed transfer appears with reason from both live event and saved history',async()=>{
+ const transfer={project:'/project-a',chat:'chat-a',turnInstanceId:'failed-1',enabled:true,failure:{code:'unavailable',reason:'Не удалось прочитать историю'}},v=ui();
+ v.functions.hEvent({type:'contextTransfer',pane:'worker',ts:1791500000,text:'отказ',transfer});assert.equal(v.S.chat.length,1);assert.match(v.S.chat[0].html,/data-context-transfer="failed"/);assert.match(v.S.chat[0].html,/Не удалось прочитать историю/);assert.match(v.S.chat[0].html,/<time datetime=/);
+ v.sandbox.fetch=async()=>({json:async()=>({project:'/project-a',chat:{id:'chat-a',pane:'worker'},messages:[{role:'peer',text:'[от харнесс] контекст не передан',ts:1791500000,contextTransfer:transfer}]})});await v.functions.loadChat({onboard:false});
+ assert.equal(v.S.chat.length,1);assert.match(v.S.chat[0].html,/data-context-transfer="failed"/);assert.match(v.S.chat[0].html,/Не удалось прочитать историю/);assert.match(v.S.chat[0].html,/<time datetime=/);
+});
 
 test('TS-47.2 F02: receipt and events define one phase; failure has one readable decision card',async()=>{
  const receipt=deferred<Data>(),view=ui({fetch:async(path)=>path==='/api/chat'?receipt.promise:{ok:true}}),sending=view.functions.ask('проверить',view.functions.sendBinding());
