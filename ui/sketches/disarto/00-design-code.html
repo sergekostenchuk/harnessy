@@ -915,6 +915,68 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
       </div>
     </section>
 
+    <section id="model-change-spec" class="tc-root"><h2>Смена модели · лента и композер<i></i></h2>
+      <style>
+        #model-change-spec{min-width:0;max-width:calc(100vw - 40px)}
+        #model-change-spec *{box-sizing:border-box}
+        #model-change-spec .mc-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:14px;align-items:start}
+        #model-change-spec .mc-grid>.box{min-width:0}
+        #model-change-spec .mc-feed{display:grid;gap:12px;margin:14px 0}
+        #model-change-spec .mc-event{border-left:2px solid var(--accent);padding:3px 0 3px 12px;min-width:0;font:12.5px/1.5 var(--font);color:var(--ink2);overflow-wrap:anywhere}
+        #model-change-spec .mc-event strong{font-weight:500;color:var(--ink)}
+        #model-change-spec .mc-event small{display:block;margin-top:3px;font:11px/1.4 var(--font);color:var(--ink3)}
+        #model-change-spec .mc-event time{white-space:nowrap}
+        #model-change-spec .mc-state{padding:12px 0;border-top:1px solid var(--line)}
+        #model-change-spec .mc-state:first-of-type{border-top:0;padding-top:0}
+        #model-change-spec .mc-label{margin:0 0 8px;font:10px var(--mono);letter-spacing:.04em;color:var(--ink3)}
+        #model-change-spec .tc-cx{width:100%;max-width:760px;min-width:0;container-type:inline-size}
+        #model-change-spec .tc-cx .box{width:100%;padding:10px 12px 9px}
+        #model-change-spec .tc-cx .box .in{min-height:38px;padding:2px 2px 8px;font-size:13px}
+        #model-change-spec .tc-cx .cx-top{flex-wrap:nowrap;min-width:0}
+        #model-change-spec .tc-cx .cx-bot{flex-wrap:nowrap;min-width:0;gap:5px}
+        #model-change-spec .tc-cx .cx-chip{font-family:var(--font);flex:none}
+        #model-change-spec .tc-cx .mc-model{min-width:0;max-width:240px;flex:0 1 auto}
+        #model-change-spec .mc-model b{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        #model-change-spec .mc-model .mc-save{white-space:nowrap;color:var(--accent);font:10px var(--font)}
+        #model-change-spec .mc-model:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+        #model-change-spec .mc-status{margin:7px 2px 0;color:var(--ink2);font:11px/1.45 var(--font);overflow-wrap:anywhere}
+        #model-change-spec .mc-confirmed{display:none}
+        #model-change-spec .mc-status.error{color:var(--bad)}
+        #model-change-spec .mc-icon{flex:none;width:26px;height:26px;display:grid;place-items:center;border:1px solid var(--line2);border-radius:50%;color:var(--ink2);font:12px var(--font)}
+        #model-change-spec .mc-go{border:0;font-size:15px}
+        @container(max-width:490px){#model-change-spec .mc-rights b,#model-change-spec .mc-discussion b{display:none}#model-change-spec .mc-rights,#model-change-spec .mc-discussion{width:28px;padding:0;justify-content:center}#model-change-spec .tc-cx .cx-bot{gap:4px}#model-change-spec .mc-confirmed{display:block}}
+        @media(max-width:700px){#model-change-spec .mc-grid{grid-template-columns:minmax(0,1fr)}}
+      </style>
+      <p class="conn-note">Макет · пример подтверждённых данных. Событие появляется только после подтверждения смены; время — время события. При одинаковых названиях рядом с каждой моделью показан провайдер.</p>
+      <div class="mc-grid">
+        <div class="box"><div class="cap2">Лента · после подтверждения</div>
+          <div class="mc-feed">
+            <div class="mc-event" data-mc-event="chat">Модель: <strong>Fable · Claude Code</strong> → <strong>Fable · Codex</strong><small>этот разговор · <time datetime="2026-10-27T10:24:00" title="27 октября 2026, 10:24">10:24</time></small></div>
+            <div class="mc-event" data-mc-event="seat">Модель: <strong>Fable · Codex</strong> → <strong>Vera · Codex</strong><small>место «Воркер» · <time datetime="2026-10-27T10:26:00" title="27 октября 2026, 10:26">10:26</time></small></div>
+          </div>
+          <p class="conn-note">Для разговора и для места — та же строка, меняется область. Ожидание и отказ не создают события об успешной смене.</p>
+        </div>
+        <div class="box"><div class="cap2">Композер · вариант (в)</div>
+          <div class="mc-state" data-mc-state="confirmed"><p class="mc-label">подтверждено</p>
+            <div class="tc-cx"><div class="cx-top"><span class="tc-seg"><span class="on">Чат</span><span>Команда</span></span><span class="cx-sp"></span><span class="cx-chip acc">Оркестратор ▾</span></div>
+              <div class="box"><div class="in">Написать сообщение…</div><div class="cx-bot"><span class="cx-plus" aria-hidden="true">＋</span><span class="cx-chip mc-rights"><span aria-hidden="true">◇</span><b>Только чтение</b></span><span class="cx-chip mc-discussion"><span aria-hidden="true">☏</span><b>Обсуждение</b></span><span class="cx-sp"></span><button type="button" class="cx-chip acc mc-model" aria-label="Модель: Fable, Codex" title="Fable · Codex"><span aria-hidden="true">○</span><b>Fable · Codex</b><i aria-hidden="true">▾</i></button><span class="mc-icon" aria-hidden="true">i</span><span class="cx-go off mc-go" aria-hidden="true">↑</span></div><p class="mc-status mc-confirmed">Модель: Fable · Codex.</p></div>
+            </div>
+          </div>
+          <div class="mc-state" data-mc-state="saving"><p class="mc-label">сохранение · прежняя модель остаётся подтверждённой</p>
+            <div class="tc-cx"><div class="cx-top"><span class="tc-seg"><span class="on">Чат</span><span>Команда</span></span><span class="cx-sp"></span><span class="cx-chip acc">Оркестратор ▾</span></div>
+              <div class="box"><div class="in">Написать сообщение…</div><div class="cx-bot"><span class="cx-plus" aria-hidden="true">＋</span><span class="cx-chip mc-rights"><span aria-hidden="true">◇</span><b>Только чтение</b></span><span class="cx-chip mc-discussion"><span aria-hidden="true">☏</span><b>Обсуждение</b></span><span class="cx-sp"></span><button type="button" class="cx-chip acc mc-model" aria-busy="true" aria-describedby="mc-saving-note" aria-label="Модель: Fable, Claude Code; сохраняем изменение" title="Подтверждённая модель: Fable · Claude Code"><span aria-hidden="true">○</span><b>Fable · Claude Code</b><span class="mc-save">сохраняем…</span></button><span class="mc-icon" aria-hidden="true">i</span><span class="cx-go off mc-go" aria-hidden="true">↑</span></div><p class="mc-status" role="status" id="mc-saving-note">Сохраняем выбор · пока действует Fable · Claude Code.</p></div>
+            </div>
+          </div>
+          <div class="mc-state" data-mc-state="failed"><p class="mc-label">отказ · прежняя модель не изменилась</p>
+            <div class="tc-cx"><div class="cx-top"><span class="tc-seg"><span class="on">Чат</span><span>Команда</span></span><span class="cx-sp"></span><span class="cx-chip acc">Оркестратор ▾</span></div>
+              <div class="box"><div class="in">Написать сообщение…</div><div class="cx-bot"><span class="cx-plus" aria-hidden="true">＋</span><span class="cx-chip mc-rights"><span aria-hidden="true">◇</span><b>Только чтение</b></span><span class="cx-chip mc-discussion"><span aria-hidden="true">☏</span><b>Обсуждение</b></span><span class="cx-sp"></span><button type="button" class="cx-chip acc mc-model" aria-describedby="mc-failed-note" aria-label="Модель: Fable, Claude Code" title="Fable · Claude Code"><span aria-hidden="true">○</span><b>Fable · Claude Code</b><i aria-hidden="true">▾</i></button><span class="mc-icon" aria-hidden="true">i</span><span class="cx-go off mc-go" aria-hidden="true">↑</span></div><p class="mc-status error" role="alert" id="mc-failed-note">Не удалось сохранить модель · осталась Fable · Claude Code. Повторите выбор.</p></div>
+            </div>
+          </div>
+          <p class="conn-note">Модель в чипе меняется только после квитанции. Пока ответ не получен, показываем «сохраняем»; при отказе называем его и оставляем подтверждённую модель. На узком экране полное имя и провайдер остаются в строке состояния и подписи чипа.</p>
+        </div>
+      </div>
+    </section>
+
     <section id="model-full-access"><h2>Модель · смена прав с подтверждением<i></i></h2>
       <div class="two">
         <div class="box"><div class="cap2">Группа модели · макет</div><b>Antigravity</b><p class="tm">подписка · 2 модели</p>
