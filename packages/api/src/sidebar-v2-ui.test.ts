@@ -178,3 +178,14 @@ test('TS-48.2 r2: mobile drawer includes standalone chats between the current an
  const folderChats=v.find('.m-drawer .ps2-current-chats'),label=folderChats.nextElementSibling!,rooms=label.nextElementSibling!;assert.ok(label.classList.contains('ps2-mobile-rooms-label'));assert.match(label.textContent,/чаты без проекта1/);assert.ok(rooms.querySelector('[data-chat="solo"][data-pane="room"].act'));assert.ok(rooms.nextElementSibling?.classList.contains('ps2-others'));
  v.find('.m-drawer [data-chat="solo"]').focus();v.context.PS2.setInbox({need:1,info:0});assert.equal(v.document.activeElement,v.find('.m-drawer [data-chat="solo"]'));assert.match(protoCss,/\.m-drawer\s*\{[^}]*width:min\(232px,100vw\)/);assert.match(protoCss,/\.m-drawer \.ps-chat\[data-chat\][^{]*\{padding-left:26px\}/);
 });
+
+test('TS-48.2 r2: other-project menus support keyboard navigation on desktop and mobile',async()=>{
+ for(const mobile of [false,true]){
+  const v=view();if(mobile){const drawer=v.document.createElement('nav');drawer.className='m-drawer';drawer.innerHTML='<div data-ps2-mobile-projects></div>';v.body.appendChild(drawer);Object.assign(v.context,{innerWidth:390,innerHeight:844,mobileNav(){},mobileDefaults(){}})}
+  v.context.PS2.setData({live:true,project:{name:'A',path:'/a'},projects:[{name:'A',path:'/a',current:true},{name:'B',path:'/b',current:false}]});
+  const prefix=mobile?'.m-drawer':'aside.ps2-mode';await v.find(prefix+' [data-ps2-others]').emit('click');const trigger=v.find(prefix+' [data-ps2-project-path="/b"] [data-ps2-project-menu]');trigger.focus();await trigger.emit('click');
+  const menu=v.find('.ps2-flyout'),items=menu.querySelectorAll('[role=menuitem]');assert.ok(items.length>2);assert.equal(v.document.activeElement,items[0]);assert.equal(trigger.getAttribute('aria-expanded'),'true');assert.equal(trigger.getAttribute('aria-haspopup'),'menu');
+  await items[0]!.emit('keydown',{key:'Tab'});assert.equal(v.document.activeElement,items[1]);await items[1]!.emit('keydown',{key:'Tab',shiftKey:true});assert.equal(v.document.activeElement,items[0]);await items[0]!.emit('keydown',{key:'ArrowDown'});assert.equal(v.document.activeElement,items[1]);
+  v.context.PS2.setInbox({need:1,info:0});const refreshed=v.find('.ps2-flyout'),refreshedItems=refreshed.querySelectorAll('[role=menuitem]');assert.equal(v.document.activeElement,refreshedItems[1]);await refreshedItems[1]!.emit('keydown',{key:'Escape'});assert.equal(v.document.querySelector('.ps2-flyout'),null);assert.equal(v.document.activeElement,v.find(prefix+' [data-ps2-project-path="/b"] [data-ps2-project-menu]'));assert.equal(v.document.activeElement.getAttribute('aria-expanded'),'false');
+ }
+});
