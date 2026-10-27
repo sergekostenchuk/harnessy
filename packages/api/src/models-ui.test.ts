@@ -4,10 +4,15 @@ import {readFileSync,existsSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {setImmediate as immediate} from 'node:timers/promises';
 import {dom} from './ui-dom-test-helpers.ts';
-import {deferred,fixture,call,sse,until} from './test-helpers.ts';
+import {deferred,fixture,call,sse,until,OWNER} from './test-helpers.ts';
 import {ProviderCatalog,cliEntry} from '../../providers/src/index.ts';
 import {cliFixture} from '../../providers/src/cli/test-support.ts';
 import {collect} from '../../runtime/src/test-helpers.ts';
+import {spawn} from 'node:child_process';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {createApi} from './server.ts';
+import {testSite} from './site-test-helpers.ts';
 
 type Data=Record<string,any>;
 const cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
@@ -29,19 +34,19 @@ const modes=()=>Object.fromEntries(catalogue().providers.map(p=>[p.id,Object.fro
 function ui(options:{apiRoutes?:Data[];page?:string;room?:boolean;statusFetch?:()=>Promise<Data>;fetch?:(path:string,body:Data|undefined)=>Promise<Data>}={}){
  const d=dom('<div class="frame cur"><div class="main"><div class="feed"></div><div class="box"><input class="in live-in"><div class="bar2"></div></div></div></div>');
  d.html.setAttribute('data-proto','');d.html.setAttribute('data-page',options.page??'chat');Object.assign(d.document,{documentElement:d.html,body:d.body});
- const pane:Data={id:options.room?'room':'worker',label:options.room?'без роли':'воркер',vendor:'claude',model:'shared',mode:'read',busy:false};
+ const pane:Data={id:options.room?'room':'worker',label:options.room?'без роли':'воркер',vendor:'claude',model:'shared',mode:'read',busy:false,cwd:'/project-a'};
  const H:Data={on:true,project:'/project-a',pane,panes:[pane],active:{[pane.id]:'chat-a'},models:Object.fromEntries(catalogue().providers.map(p=>[p.id,p.id==='gemini'?[{id:'default',label:'по умолчанию программы'}]:p.models])),turnModes:modes(),modes:[{id:'read',label:'Чтение'},{id:'edit',label:'Правка'},{id:'all',label:'Полный доступ'},{id:'chat',label:'Без проекта'}],chatList:[]};
  pane.settingsBinding={project:H.project,instanceId:'project-instance',pane:pane.id,chat:H.active[pane.id],revision:0,mode:pane.mode};
  const S:Data={ui:{pane:pane.id},cx:{folder:'',noFolder:false,modes:{},att:[],conn:{}},chat:[]},requests:{path:string;body?:Data}[]=[],toasts:string[]=[],waiting:Data[]=[],listeners=new Set<Data>();
  let snapshot:Data=catalogue(),lastPane:Data|null=null,serverModels:Data|null=null;
- const ctx:Data={document:d.document,H,S,PAGE:options.page??'chat',location:{href:''},esc,toast:(s:string)=>toasts.push(s),setTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),
+ const ctx:Data={document:d.document,H,S,LOADED:JSON.stringify([H.project,null,pane.id,H.active[pane.id]]),PAGE:options.page??'chat',location:{href:''},esc,now:()=>Date.now(),render(){},toast:(s:string)=>toasts.push(s),setTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),
   showWaiting:(p:Data,info:Data,project:string)=>waiting.push({pane:p.id,info,project}),showRestore(){},badges(){},pickPane(){H.pane=H.panes.find((p:Data)=>p.id===S.ui.pane)},renderWaiting(){},save(){},
   fetch:async(path:string,opts?:{body?:string})=>{const body=opts?.body?JSON.parse(opts.body):undefined;requests.push({path,body});
-   const result=path==='/api/status'?(options.statusFetch?await options.statusFetch():{project:H.project,panes:H.panes,models:serverModels??H.models,turnModes:H.turnModes}):options.fetch?await options.fetch(path,body):path==='/api/providers/catalog'?snapshot:{ok:true,pane:{...H.pane,...body}};
+   const result=path==='/api/status'?(options.statusFetch?await options.statusFetch():{project:H.project,panes:H.panes,models:serverModels??H.models,turnModes:H.turnModes}):options.fetch?await options.fetch(path,body):path==='/api/providers/catalog'?snapshot:{ok:true,pane:{...H.pane,...body},...(path==='/api/room'?{previousModel:{model:H.pane?.model||'',vendor:H.pane?.vendor||''}}:{})};
    if(body&&result.ok)lastPane=result.pane;return {status:result.code==='capability_unsupported'?409:200,json:async()=>result};}};
  ctx.window=ctx;const context=createContext(ctx);
  runInContext(part(live,'  const api=','  // TS-07: waiting controls')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function applyStatus(','  async function refreshChats(')+part(live,'  function projectPathValue(','  function laPath(')+
-  '\nglobalThis.binding={networkMenu,networkPath,networkWarning,api,sendBinding,bindingCurrent,invalidateBinding,configureSetting,applyStatus,projectPathValue};',context);
+  '\nglobalThis.binding={networkMenu,networkPath,networkWarning,api,sendBinding,bindingCurrent,invalidateBinding,configureSetting,recordModelChange,applyStatus,projectPathValue};',context);
  ctx.LIVE={H,S,esc,...ctx.binding,...(options.apiRoutes?{apiRoutes:options.apiRoutes,loadLlmRoutes:async()=>true}:{}),save(){},log(){},toast:ctx.toast,paneName:(p:Data)=>p.label,busy:()=>false,hStatus(){},
   refreshStatus:async()=>{if(lastPane){Object.assign(H.pane,lastPane);await d.window.emit('live:status')}},
   subscribeLiveEvents(onmessage:(event:Data)=>void){const listener={onmessage,close(){listeners.delete(listener)}};listeners.add(listener);return listener}};
@@ -55,6 +60,75 @@ function ui(options:{apiRoutes?:Data[];page?:string;room?:boolean;statusFetch?:(
  return {...d,H,S,ctx,requests,toasts,waiting,listeners,find,open,select,flush,providers,
   status:()=>d.window.emit('live:status'),hide:()=>d.window.emit('pagehide')};
 }
+
+for(const room of [false,true])test('TS-49.2: '+(room?'conversation':'seat')+' model is confirmed before chip and feed change',async()=>{
+ const gate=deferred<Data>();let v:ReturnType<typeof ui>;v=ui({room,fetch:async(path,body)=>path==='/api/providers/catalog'?catalogue():body?gate.promise:{}});
+ v.H.models.claude=[{id:'shared',label:'Fable'}];v.H.models.codex=[{id:'shared',label:'Fable'}];await v.open();
+ const choosing=v.select('codex','shared').emit('click');await until(()=>v.requests.some(r=>!!r.body));
+ assert.equal(v.H.pane.vendor,'claude');assert.match(v.find('[data-cx="model"]').textContent,/Fable · Claude Code/);assert.equal(v.find('[data-cx="model"]').getAttribute('aria-busy'),'true');assert.match(v.find('.cx-model-status').textContent,/Сохраняем/);assert.equal(v.S.chat.length,0);
+ gate.resolve({ok:true,pane:{...v.H.pane,vendor:'codex',model:'shared'},...(room?{previousModel:{model:'shared',vendor:'claude'}}:{})});await choosing;
+ assert.equal(v.H.pane.vendor,'codex');assert.match(v.find('[data-cx="model"]').textContent,/Fable · Codex/);assert.equal(v.find('[data-cx="model"]').getAttribute('aria-busy'),null);assert.equal(v.S.chat.length,1);
+ const e=v.S.chat[0];assert.equal(e.from,'Fable · Claude Code');assert.equal(e.to,'Fable · Codex');assert.equal(e.scope,room?'этот разговор':'место «воркер»');assert.ok(e.t>0);
+ assert.deepEqual(v.requests.filter(r=>r.body).map(r=>r.path),[room?'/api/room':'/api/panes/worker']);
+});
+
+for(const failure of ['denied','unconfirmed'])test('TS-49.2: '+failure+' keeps the confirmed chip and creates no successful event',async()=>{
+ let v:ReturnType<typeof ui>;v=ui({fetch:async(path,body)=>path==='/api/providers/catalog'?catalogue():body?(failure==='denied'?{ok:false,error:'нет доступа'}:{ok:true,pane:{...v.H.pane}}):{}});await v.open();await v.select('codex','shared').emit('click');
+ assert.equal(v.H.pane.vendor,'claude');assert.equal(v.find('[data-cx="model"] b').textContent,'Claude model');assert.match(v.find('.cx-model-status').textContent,/Модель не изменена/);assert.match(v.toasts.at(-1)!,/Модель не изменена/);assert.equal(v.S.chat.length,0);
+});
+
+for(const room of [false,true])for(const outcome of ['confirmed','denied','unconfirmed','foreign-binding','foreign-instance','missing-binding','missing-chat','missing-instance',...(room?['foreign-cwd','missing-cwd','missing-previous']:[])])test('TS-49.2: '+(room?'room':'seat')+' late '+outcome+' belongs only to the original chat',async()=>{
+ const gate=deferred<Data>();let v:ReturnType<typeof ui>;v=ui({room,fetch:async(path,body)=>path==='/api/providers/catalog'?catalogue():body?gate.promise:{}});const pane=room?'room':'worker',original={...v.H.pane};await v.open();const choosing=v.select('codex','shared').emit('click');await until(()=>v.requests.some(r=>!!r.body));
+ v.H.active[pane]='chat-b';v.ctx.binding.invalidateBinding();v.S.draft='неотправленный текст';v.ctx.CX.render();v.H.models.codex=[{id:'shared',label:'Чужой каталог'}];
+ const receipt=outcome==='denied'?{ok:false,error:'нет доступа'}:{ok:true,pane:{...original,vendor:outcome==='unconfirmed'?'claude':'codex',model:'shared',...(outcome==='foreign-binding'?{settingsBinding:{...original.settingsBinding,project:'/project-b'}}:outcome==='foreign-instance'?{settingsBinding:{...original.settingsBinding,instanceId:'other-instance'}}:outcome==='missing-binding'?{settingsBinding:undefined}:outcome==='missing-chat'?{settingsBinding:{...original.settingsBinding,chat:null}}:outcome==='missing-instance'?{settingsBinding:{...original.settingsBinding,instanceId:undefined}}:outcome==='foreign-cwd'?{cwd:'/project-b'}:outcome==='missing-cwd'?{cwd:undefined}:{})},...(room&&outcome!=='missing-previous'?{previousModel:{model:'shared',vendor:'claude'}}:{})};gate.resolve(receipt);await choosing;
+ assert.equal(v.H.pane.vendor,'claude');assert.equal(v.S.chat.length,0);assert.equal(v.S.draft,'неотправленный текст');assert.equal(v.find('.cx-model-status').textContent,'Модель: Claude model');assert.equal(v.toasts.length,0);
+ const key=JSON.stringify(['/project-a',pane,'chat-a']),events=v.S.modelChanges?.[key]??[];assert.equal(events.length,outcome==='confirmed'?1:0,JSON.stringify(v.S.modelChanges));if(events.length){assert.equal(events[0].from,'Claude model');assert.equal(events[0].to,'Codex model');assert.equal(events[0].scope,room?'этот разговор':'место «воркер»')}
+});
+
+test('TS-49.2 r3: request held before server handling records the actual room chat and its previous model',async t=>{
+ const h=await fixture(t,{noRepository:true,deps:{models:{claude:[{id:'shared'},{id:'other'}],codex:[{id:'shared'}]}}});
+ h.runtime.roomSet({model:'shared',vendor:'claude',folder:true},OWNER);const original=h.runtime.chatsList(OWNER).active.room!;
+ const gate=deferred();let receipt:Data|null=null;
+ const v=ui({room:true,fetch:async(path,body)=>{if(path==='/api/providers/catalog')return catalogue();if(body){await gate.promise;const response=await call(h.api,path,{body});assert.equal(response.status,200,response.text);receipt=response.body;return response.body}return {}}});
+ v.H.project=h.dir;v.H.active.room=original;Object.assign(v.H.pane,{cwd:h.dir,settingsBinding:h.runtime.paneBinding('room')});
+ await v.open();const sending=v.select('claude','other').emit('click');await until(()=>v.requests.some(r=>!!r.body));
+ const next=await h.runtime.chatsNew({pane:'room',carry:'none'},OWNER);h.runtime.roomSet({model:'shared',vendor:'codex',folder:true},OWNER);
+ v.H.active.room=next.chat.id;v.H.pane.settingsBinding=h.runtime.paneBinding('room');v.ctx.LOADED=JSON.stringify([h.dir,null,'room',next.chat.id]);v.ctx.binding.invalidateBinding();v.S.draft='Новый черновик';v.ctx.CX.render();
+ gate.resolve();await sending;
+ const old=(await call(h.api,'/api/chats/'+original)).body.chat,changed=(await call(h.api,'/api/chats/'+next.chat.id)).body.chat;
+ assert.equal(old.model,'shared');assert.equal(old.vendor,'claude');assert.equal(changed.model,'other');assert.equal(changed.vendor,'claude');
+ assert.equal(receipt!.pane.settingsBinding.chat,next.chat.id);assert.deepEqual(receipt!.previousModel,{model:'shared',vendor:'codex'});
+ assert.equal(v.S.modelChanges?.[JSON.stringify([h.dir,'room',original])]?.length??0,0);
+ const events=v.S.modelChanges?.[JSON.stringify([h.dir,'room',next.chat.id])]??[];assert.equal(events.length,1);assert.equal(events[0].from,'Codex model');assert.equal(events[0].to,'Other Claude');assert.equal(v.S.chat.filter((m:Data)=>m.src==='model-change').length,1);assert.equal(v.S.draft,'Новый черновик');
+});
+
+for(const alreadySelected of [false,true])test('TS-49.2 r3: server switched chats while the old screen remains visible'+(alreadySelected?' with no actual change':''),async()=>{
+ const gate=deferred<Data>();let v:ReturnType<typeof ui>;v=ui({room:true,fetch:async(path,body)=>path==='/api/providers/catalog'?catalogue():body?gate.promise:{}});const original={...v.H.pane};await v.open();const sending=v.select('codex','shared').emit('click');await until(()=>v.requests.some(r=>!!r.body));
+ gate.resolve({ok:true,pane:{...original,vendor:'codex',model:'shared',settingsBinding:{...original.settingsBinding,chat:'chat-b'}},previousModel:{model:'shared',vendor:alreadySelected?'codex':'claude'}});await sending;
+ assert.equal(v.H.pane.vendor,'claude');assert.equal(v.S.chat.length,0);assert.equal(v.S.modelChanges?.[JSON.stringify(['/project-a','room','chat-a'])]?.length??0,0);
+ assert.equal(v.S.modelChanges?.[JSON.stringify(['/project-a','room','chat-b'])]?.length??0,alreadySelected?0:1);assert.match(v.toasts.at(-1)!,/не подтвердил/);
+});
+
+test('TS-49.2: returning to the original chat before a late receipt shows its event',async()=>{
+ const gate=deferred<Data>();let v:ReturnType<typeof ui>;v=ui({fetch:async(path,body)=>path==='/api/providers/catalog'?catalogue():body?gate.promise:{}});const original={...v.H.pane};await v.open();const choosing=v.select('codex','shared').emit('click');await until(()=>v.requests.some(r=>!!r.body));
+ v.H.active.worker='chat-b';v.ctx.binding.invalidateBinding();v.H.active.worker='chat-a';v.ctx.binding.invalidateBinding();gate.resolve({ok:true,pane:{...original,vendor:'codex',model:'shared'}});await choosing;
+ assert.equal(v.S.chat.filter((m:Data)=>m.src==='model-change').length,1);assert.equal(v.S.modelChanges[JSON.stringify(['/project-a','worker','chat-a'])].length,1);
+});
+
+test('TS-49.2: a status refresh during saving does not leave the current pane on the old model',async()=>{
+ const gate=deferred<Data>();let v:ReturnType<typeof ui>;v=ui({fetch:async(path,body)=>path==='/api/providers/catalog'?catalogue():body?gate.promise:{}});await v.open();const choosing=v.select('codex','shared').emit('click');await until(()=>v.requests.some(r=>!!r.body));
+ const previous=v.H.pane;v.H.pane={...previous};v.H.panes=[v.H.pane];gate.resolve({ok:true,pane:{...previous,vendor:'codex',model:'shared'}});await choosing;
+ assert.equal(v.H.pane.vendor,'codex');assert.equal(v.H.panes[0],v.H.pane);assert.match(v.find('[data-cx="model"]').textContent,/Codex model/);assert.equal(v.S.chat.length,1);
+});
+
+const electron=process.env.HARNESSY_TEST_ELECTRON||fileURLToPath(new URL('../../../ui/desktop/node_modules/.bin/electron',import.meta.url));
+test('TS-49.2: hidden Electron shows saving, confirmed receipt and refusal at four sizes',{timeout:60_000,skip:existsSync(electron)?false:'Electron is not installed; set HARNESSY_TEST_ELECTRON'},async t=>{
+ const models=[{id:'w1',label:'Первая модель'},{id:'claude-fable-5-1',label:'Fable 5.1'}],otherModels=[{id:'c1',label:'Fable 5.1'}],h=await fixture(t,{deps:{models:{claude:models,codex:otherModels}}}),r=h.runtime;h.provider.models=async()=>models;h.codex.models=async()=>otherModels;await r.settingsPatch('owner',{releaseUnderstood_0_1_0_alpha:true},{seat:'owner',trust:'owner'});
+ const api=createApi({runtime:r,siteDir:join(testSite(),'sketches'),port:0});await api.listen();t.after(()=>api.close());h.deps.appUrl=api.url;
+ const env:NodeJS.ProcessEnv={...process.env,HARNESSY_TEST_WINDOW:'hidden',MODEL_CHANGE_BASE:api.url,MODEL_CHANGE_PROFILE:join(h.dir,'model-change-electron')};delete env.ELECTRON_RUN_AS_NODE;
+ const child=spawn(electron,[fileURLToPath(new URL('./model-change-browser.cjs',import.meta.url))],{env,stdio:['ignore','pipe','pipe']});t.after(()=>{if(child.exitCode===null)child.kill('SIGTERM')});let stdout='',stderr='';child.stdout.on('data',data=>stdout+=data);child.stderr.on('data',data=>stderr+=data);
+ const exit=await new Promise<number|null>((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve)});assert.equal(exit,0,stderr+'\n'+stdout);assert.match(stdout,/four layouts verified/);assert.equal(h.provider.calls.length+h.codex.calls.length,0);
+});
 
 test('TS-47.1 F07: direct-mode close uses mouse and keyboard without opening rights, and the next request is routed normally',async()=>{
  for(const action of ['click','Enter',' ']){
@@ -294,7 +368,7 @@ for(const response of [{ok:true}, {ok:true,providers:[{id:'claude',title:'Claude
 });
 
 for(const page of ['chat','new','first'])for(const failure of ['slow','404','network'])test('309: '+page+' selects from status while catalogue is '+failure,async()=>{
- const gate=deferred<Data>();const v=ui({page,fetch:async(path,body)=>{if(path!=='/api/providers/catalog')return {ok:true,pane:{id:'worker',label:'воркер',mode:'read',...body}};if(failure==='slow')return gate.promise;if(failure==='network')throw Error('offline');return {ok:false,code:'not_found',error:'маршрут каталога недоступен'}}});
+ const gate=deferred<Data>();let v:ReturnType<typeof ui>;v=ui({page,fetch:async(path,body)=>{if(path!=='/api/providers/catalog')return {ok:true,pane:{...v.H.pane,...body}};if(failure==='slow')return gate.promise;if(failure==='network')throw Error('offline');return {ok:false,code:'not_found',error:'маршрут каталога недоступен'}}});
  await v.open();assert.equal(v.document.querySelectorAll('[data-cx-program]').length,6);assert.equal(v.select('codex','shared').disabled,false);assert.equal(v.select('agy','agy-model').disabled,true);if(failure!=='slow')assert.ok(v.find('[data-cx-model-retry]'));
  await v.select('codex','shared').emit('click');assert.equal(v.H.pane.vendor,'codex');assert.deepEqual(v.requests.filter(r=>r.body),[{path:'/api/panes/worker',body:{vendor:'codex',model:'shared'}}]);gate.resolve(catalogue());await v.flush();
 });
