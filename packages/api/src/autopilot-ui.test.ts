@@ -4,10 +4,20 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {join} from 'node:path';
 import {deferred,until,fixture,call,OWNER} from './test-helpers.ts';
+import {dom} from './ui-dom-test-helpers.ts';
 const source=readFileSync(new URL('../../../ui/deploy/autopilot-ui.js',import.meta.url),'utf8');
 const state=(on=true,generation=2)=>({on,generation,startedAt:'2026-10-26T01:00:00Z',until:{kind:'morning',at:'2026-10-27T04:00:00Z'},conditions:{operations:['answer_question','answer_blocker','answer_escalation'],stopCases:['payment','external_publish','data_delete','software_install','external_network','spend_over_cap'],maxSpendPercent:7}});
 const row=(id='a',project='/a',generation=2,status='applied',at='2026-10-26T02:00:00Z')=>({version:1,project,at,entry:{state:status,generation,decisionId:id.repeat(64)}});
 function view(live?:any){const window:any=live?{LIVE:live}:{},listeners=new Map<string,Function[]>(),context=createContext({window,Date,Set,JSON,Number,addEventListener:(name:string,fn:Function)=>listeners.set(name,[...listeners.get(name)||[],fn])});runInContext(source,context);return {ui:window.HARNESS_AUTOPILOT_UI,listeners}}
+test('TS-47.5 F12: off is compact with a stable disclosure; on shows confirmed conditions and errors',()=>{
+ const script=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),chunk=script.slice(script.indexOf('  function guidanceState()'),script.indexOf('  function showOrchestratorOffer()'));
+ const d=dom('<div class="frame cur"><div class="feed"><div class="col"></div></div></div>'),ap=state(false),H:any={on:true,snapshotOnly:false,panes:[{id:'orch',kind:'orchestrator',model:'m'}],chatList:[],liveStatus:{autopilot:ap}},S:any={chat:[]};
+ const context:any=createContext({document:d.document,H,S,PAGE:'chat',sendBinding:()=>({project:'/a',pane:'orch',chat:'c'}),autopilotText:(s:any)=>s?.on?'Стоп-случаи и отказ движка':'Решения и стоп-случаи проекта',esc:(s:any)=>String(s),save(){}});
+ runInContext(chunk+';globalThis.draw=chatGuidanceDraw',context);context.draw();let card=d.document.querySelector('[data-autopilot-guidance]')!,details=card.querySelector('details')!;assert.match(card.textContent,/Автопилот выключен.*Настроить.*Условия/);assert.equal(card.querySelector('a')!.getAttribute('href'),'18-overlays.html#leave');
+ Reflect.set(details,'open',true);context.draw();assert.equal(d.document.querySelector('details'),details);assert.equal(Reflect.get(details,'open'),true);
+ H.liveStatus.autopilot=state(true);context.draw();card=d.document.querySelector('[data-autopilot-guidance]')!;assert.match(card.textContent,/Стоп-случаи и отказ движка/);assert.equal(card.querySelector('details'),null);
+ H.on=false;context.draw();assert.equal(d.document.querySelector('[data-autopilot-guidance]'),null);
+});
 test('TS-42 conditions and time use engine fields; missing data is not off or zero',()=>{
  const {ui}=view();assert.match(ui.format(null),/не подтверждено/);assert.match(ui.format({on:false}),/условия не подтверждены.*потолок не подтверждён/);
  const off=ui.format(state(false));for(const word of ['выключен','вопросы','блокеры','эскалации','деньги','публикация','удаление','установка','сеть','сверх потолка','7 %'])assert.ok(off.includes(word),word);

@@ -60,6 +60,9 @@ test('36D: live work canvas uses project seats, chats, usage and channel, and th
  await v.find('[data-team-open-chat]').emit('click');assert.equal(v.state.ui.pane,'orch');assert.equal(v.location.href,'01-chat.html');
  assert.equal(v.subscriptions.length,1);await v.window.emit('pagehide');assert.equal(v.subscriptions[0].closed,true);await v.window.emit('pageshow',{persisted:true});await v.settle();assert.equal(v.subscriptions.length,2);
 });
+test('TS-47.5 F11/F13: work canvas labels its action and places the legend outside the viewport',async()=>{
+ const v=teamUi('work');await v.settle();const canvas=v.find('[data-canvas]'),legend=v.find('.tc-work > .tc-legend');assert.equal(canvas.contains(legend),false);assert.match(v.find('[data-team-open-chat]').textContent,/Открыть чат/);assert.ok(v.find('[data-team-open-chat]').classList.contains('btn'));assert.match(v.find('.tc-orch .hd').textContent,/Оркестратор/);assert.doesNotMatch(v.find('.tc-orch .hd').textContent,/orchestrator/);
+});
 
 test('TS-47.3 F01: team cards keep each running status on its own place',async()=>{
  let data=snapshot('/project-a',[{...pane('orch','orchestrator','chat-orch'),busy:true},{...pane('worker','worker','chat-worker'),busy:false}]);
