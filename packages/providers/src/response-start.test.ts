@@ -24,7 +24,11 @@ for(const type of ['response','delta','done','metadata'] as const)test('22d: CLI
  }});t.after(()=>provider.close());await assert.rejects(provider.runTurn(f.seat,'test',f.ctx));
 });
 test('22d: CLI reasoning decoders signal output without exposing thinking',options,()=>{
- for(const kind of ['assistant.reasoning','assistant.reasoning_delta'])assert.deepEqual(new CopilotStream().push({type:kind,data:{}}),[{type:'response'}]);
+ for(const kind of ['assistant.reasoning','assistant.reasoning_delta']){
+  const stream=new CopilotStream();assert.deepEqual(stream.push({type:kind,data:{}}),[]);
+  assert.deepEqual(stream.push({type:'session.start',data:{sessionId:'s'}}),[{type:'session',id:'s'},{type:'response'}]);
+  assert.deepEqual(stream.push({type:kind,data:{}}),[{type:'response'}]);
+ }
  assert.deepEqual(opencodeStream()({type:'reasoning',sessionID:'s',part:{type:'reasoning',sessionID:'s'}}),[{type:'session',id:'s'},{type:'response'}]);
  const qwen=qwenStream();qwen({type:'system',subtype:'init',session_id:'s'});assert.deepEqual(qwen({type:'assistant',session_id:'s',message:{role:'assistant',content:[{type:'thinking',thinking:'private'}]}}),[{type:'response'}]);
  assert.deepEqual(qwen({type:'assistant',session_id:'s',parent_tool_use_id:'child',message:{role:'assistant',content:[{type:'thinking',thinking:'private'}]}}),[]);
