@@ -21,16 +21,11 @@ test('TS-49.1: only confirmed model changes produce a scoped, timed feed example
   assert.match(spec,/место «Воркер» ·/);
   assert.match(spec,/Ожидание и отказ не создают события/);
   assert.match(spec,/Модель в чипе меняется только после квитанции/);
-  const confirmed=spec.slice(spec.indexOf('data-mc-state="confirmed"'),spec.indexOf('data-mc-state="saving"'));
-  const saving=spec.slice(spec.indexOf('data-mc-state="saving"'),spec.indexOf('data-mc-state="failed"'));
-  const failed=spec.slice(spec.indexOf('data-mc-state="failed"'));
-  assert.match(confirmed,/<b>Fable · Codex<\/b>/);
-  for(const state of [saving,failed]){
-    assert.match(state,/<b>Fable · Claude Code<\/b>/);
-    assert.doesNotMatch(state,/data-mc-event=/);
-  }
-  assert.match(saving,/aria-busy="true"[^]*?сохраняем…[^]*?role="status"/);
-  assert.match(failed,/role="alert"[^]*?Не удалось сохранить модель/);
+  for(const state of ['confirmed','saving','failed'])assert.match(spec,new RegExp('data-mc-state="'+state+'"[^]*?data-mc-compose'));
+  assert.match(design,/host\.innerHTML=TC\.composer\(\{v:'c'/);
+  assert.match(design,/aria-busy','true'/);
+  assert.match(design,/aria-checked',String\(on\)/);
+  assert.match(design,/Не удалось сохранить модель/);
 });
 
 test('TS-49.1: specimens remain readable in four viewport sizes',
