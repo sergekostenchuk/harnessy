@@ -1121,7 +1121,8 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
     <section id="context-selection"><h2>Перенос контекста · явный выбор<i></i></h2>
       <style>
         #context-selection,#context-uncertain-spec,#role-knowledge-spec{min-width:0;max-width:calc(100vw - 40px)}
-        .ctx51-event{max-width:600px;margin:10px 0;padding:10px 12px;border-left:2px solid var(--accent);border-radius:0 8px 8px 0;background:var(--raised);font:12.5px/1.5 var(--font);color:var(--ink2)}
+        .ctx51-event{max-width:600px;margin:10px 0;padding:10px 12px;border-left:2px solid var(--ink3);border-radius:0 8px 8px 0;background:var(--raised);font:12.5px/1.5 var(--font);color:var(--ink2)}
+        .ctx51-event[data-context-transfer="failed"]{border-left-color:var(--bad)}
         .ctx51-event b{color:var(--ink);font-weight:500}.ctx51-event small{display:block;margin-top:3px;color:var(--ink2);font:11px/1.5 var(--font)}.ctx51-event time{font:10px var(--mono);color:var(--ink3)}
         .ctx51-trigger{display:inline-flex;align-items:center;gap:7px;cursor:pointer;list-style:none;border:1px solid var(--line2);border-radius:7px;background:var(--raised);padding:6px 9px;color:var(--ink2);font:11px var(--mono)}
         .ctx51-trigger::-webkit-details-marker,.ctx51-part summary::-webkit-details-marker{display:none}.ctx51-trigger::after{content:'▾';color:var(--ink3)}.ctx51-disclosure[open]>.ctx51-trigger::after{content:'▴'}
