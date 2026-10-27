@@ -915,6 +915,62 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
       </div>
     </section>
 
+    <section id="model-change-spec" class="tc-root"><h2>Смена модели · лента и композер<i></i></h2>
+      <style>
+        #model-change-spec{min-width:0;max-width:calc(100vw - 40px)}
+        #model-change-spec *{box-sizing:border-box}
+        #model-change-spec .mc-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:14px;align-items:start}
+        #model-change-spec .mc-grid>.box{min-width:0}
+        #model-change-spec .mc-feed{display:grid;gap:12px;margin:14px 0}
+        #model-change-spec .mc-event{border-left:2px solid var(--accent);padding:3px 0 3px 12px;min-width:0;font:12.5px/1.5 var(--font);color:var(--ink2);overflow-wrap:anywhere}
+        #model-change-spec .mc-event strong{font-weight:500;color:var(--ink)}
+        #model-change-spec .mc-event small{display:block;margin-top:3px;font:11px/1.4 var(--font);color:var(--ink3)}
+        #model-change-spec .mc-event time{white-space:nowrap}
+        #model-change-spec .mc-state{padding:12px 0;border-top:1px solid var(--line)}
+        #model-change-spec .mc-state:first-of-type{border-top:0;padding-top:0}
+        #model-change-spec .mc-label{margin:0 0 8px;font:10px var(--mono);letter-spacing:.04em;color:var(--ink3)}
+        #model-change-spec .tc-cx{width:100%;max-width:760px;min-width:0;container-type:inline-size}
+        #model-change-spec .tc-cx .box{width:100%;padding:10px 12px 9px}
+        #model-change-spec .tc-cx .box .in{min-height:38px;padding:2px 2px 8px;font-size:13px}
+        #model-change-spec .tc-cx .cx-top{flex-wrap:nowrap;min-width:0}
+        #model-change-spec .tc-cx .cx-top>.cx-chip{min-width:0;flex:0 1 auto}
+        #model-change-spec .tc-cx .cx-bot{flex-wrap:nowrap;min-width:0;gap:5px}
+        #model-change-spec .tc-cx .cx-chip{font-family:var(--font);flex:none}
+        #model-change-spec .tc-pin{display:none}
+        #model-change-spec .tc-cx .mc-model{min-width:0;max-width:240px;flex:0 1 auto}
+        #model-change-spec .mc-model b{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        #model-change-spec .mc-model .mc-save{flex:none;white-space:nowrap;color:var(--accent);font:10px var(--font)}
+        #model-change-spec :is([role="button"],[role="switch"]):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+        #model-change-spec .mc-status{margin:7px 2px 0;color:var(--ink2);font:11px/1.45 var(--font);overflow-wrap:anywhere}
+        #model-change-spec .mc-status.error{color:var(--bad)}
+        @container(max-width:760px){#model-change-spec .mc-effort b,#model-change-spec .mc-effort i{display:none}#model-change-spec .mc-effort{width:28px;min-width:28px;padding:0;justify-content:center}}
+        @container(max-width:650px){#model-change-spec .mc-rights b,#model-change-spec .mc-rights i,#model-change-spec .mc-discussion svg,#model-change-spec .mc-discussion-label,#model-change-spec .cx-top>.cx-chip b,#model-change-spec .cx-top>.cx-chip i,#model-change-spec .mc-model[aria-busy="true"] svg,#model-change-spec .mc-model[aria-busy="true"] b,#model-change-spec .mc-model[aria-busy="true"] i{display:none}#model-change-spec .mc-rights,#model-change-spec .mc-discussion,#model-change-spec .cx-top>.cx-chip{width:28px;min-width:28px;padding:0;justify-content:center}#model-change-spec .mc-discussion .tog{width:18px;height:12px}#model-change-spec .mc-discussion .tog::after{width:8px;height:8px;top:2px;left:2px}#model-change-spec .mc-discussion .tog.on::after{left:8px}#model-change-spec .tc-cx .cx-bot{gap:4px}}
+        @media(max-width:700px){#model-change-spec .mc-grid{grid-template-columns:minmax(0,1fr)}}
+      </style>
+      <p class="conn-note">Макет · пример подтверждённых данных. Событие появляется только после подтверждения смены; время — время события. При одинаковых названиях рядом с каждой моделью показан провайдер.</p>
+      <div class="mc-grid">
+        <div class="box"><div class="cap2">Лента · после подтверждения</div>
+          <div class="mc-feed">
+            <div class="mc-event" data-mc-event="chat">Модель: <strong>Fable · Claude Code</strong> → <strong>Fable · Codex</strong><small>этот разговор · <time datetime="2026-10-27T10:24:00" title="27 октября 2026, 10:24">10:24</time></small></div>
+            <div class="mc-event" data-mc-event="seat">Модель: <strong>Fable · Codex</strong> → <strong>Vera · Codex</strong><small>место «Воркер» · <time datetime="2026-10-27T10:26:00" title="27 октября 2026, 10:26">10:26</time></small></div>
+          </div>
+          <p class="conn-note">Для разговора и для места — та же строка, меняется область. Ожидание и отказ не создают события об успешной смене.</p>
+        </div>
+        <div class="box"><div class="cap2">Композер · вариант (в)</div>
+          <div class="mc-state" data-mc-state="confirmed"><p class="mc-label">подтверждено</p>
+            <div data-mc-compose></div>
+          </div>
+          <div class="mc-state" data-mc-state="saving"><p class="mc-label">сохранение · прежняя модель остаётся подтверждённой</p>
+            <div data-mc-compose></div>
+          </div>
+          <div class="mc-state" data-mc-state="failed"><p class="mc-label">отказ · прежняя модель не изменилась</p>
+            <div data-mc-compose></div>
+          </div>
+          <p class="conn-note">Модель в чипе меняется только после квитанции. Пока ответ не получен, показываем «сохраняем»; при отказе называем его и оставляем подтверждённую модель. На узком экране полное имя и провайдер остаются в строке состояния и подписи чипа.</p>
+        </div>
+      </div>
+    </section>
+
     <section id="model-full-access"><h2>Модель · смена прав с подтверждением<i></i></h2>
       <div class="two">
         <div class="box"><div class="cap2">Группа модели · макет</div><b>Antigravity</b><p class="tm">подписка · 2 модели</p>
@@ -1741,6 +1797,36 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
   document.querySelectorAll('[data-tc-long-name]').forEach(el=>el.innerHTML=TC.card({...TC.ROLES[0],name:'Аналитик договора поставки оборудования'}));
   document.querySelectorAll('[data-tc-long-node]').forEach(el=>el.innerHTML=TC.node({id:'long-name-example',name:'Аналитик договора поставки оборудования',ic:'worker',role:'воркер',model:'Opus 5.5',rights:'Только чтение',file:'roles/worker.md'}));
   document.querySelectorAll('[data-tc-long-reason]').forEach(el=>el.innerHTML=TC.revealText('Участников создаёт оркестратор по подтверждённому предложению'));
+
+  // TS-49: тот же вариант (в), что и в образцах команды; меняется только модель.
+  document.querySelectorAll('#model-change-spec [data-mc-state]').forEach(sample=>{
+    const state=sample.dataset.mcState,host=sample.querySelector('[data-mc-compose]');
+    host.innerHTML=TC.composer({v:'c',role:'Оркестратор',ph:'Написать сообщение…'});
+    const bot=host.querySelector('.cx-bot'),[rights,model,effort]=bot.querySelectorAll('.cx-chip'),discussion=bot.querySelector('.tc-tg');
+    const named=(el,name)=>{el.setAttribute('role','button');el.setAttribute('tabindex','0');el.setAttribute('aria-label',name);el.title=name};
+    rights.classList.add('mc-rights');named(rights,'Права · Всё без вопросов');
+    effort.classList.add('mc-effort');named(effort,'Усилие · недоступно');
+    named(bot.querySelector('.cx-plus'),'Добавить и настроить');named(bot.querySelector('.cx-info'),'Информация');named(bot.querySelector('.cx-go'),'Отправить');
+    const top=host.querySelectorAll('.cx-top>.cx-chip');named(top[0],'Разговор · Кто ты? какая ты модель…');named(top[1],'Собеседник · Оркестратор');
+    discussion.classList.add('mc-discussion');discussion.setAttribute('role','switch');discussion.setAttribute('tabindex','0');discussion.setAttribute('aria-label','Обсуждение');
+    const text=[...discussion.childNodes].find(node=>node.nodeType===3&&node.textContent.trim());
+    const label=document.createElement('span');label.className='mc-discussion-label';label.textContent='Обсуждение';if(text)text.replaceWith(label);
+    const setDiscussion=on=>{discussion.classList.toggle('on',on);discussion.querySelector('.tog').classList.toggle('on',on);discussion.setAttribute('aria-checked',String(on));discussion.title='Обсуждение · '+(on?'включено':'выключено')};
+    const toggle=()=>setDiscussion(discussion.getAttribute('aria-checked')!=='true');
+    discussion.addEventListener('click',toggle);discussion.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();toggle()}});setDiscussion(false);
+    const current=state==='confirmed'?'Fable · Codex':'Fable · Claude Code';
+    model.classList.add('mc-model');model.querySelector('b').textContent=current;named(model,'Модель: '+current+(state==='saving'?'; сохраняем изменение':''));
+    const note=document.createElement('p');note.className='mc-status';
+    if(state==='confirmed'){note.classList.add('mc-confirmed');note.textContent='Модель: '+current+'.'}
+    else if(state==='saving'){
+      model.setAttribute('aria-busy','true');model.setAttribute('aria-describedby','mc-saving-note');
+      const saving=document.createElement('span');saving.className='mc-save';saving.textContent='сохраняем…';model.insertBefore(saving,model.querySelector('i'));
+      note.id='mc-saving-note';note.setAttribute('role','status');note.textContent='Сохраняем выбор · пока действует '+current+'.';
+    }else{
+      model.setAttribute('aria-describedby','mc-failed-note');note.id='mc-failed-note';note.classList.add('error');note.setAttribute('role','alert');note.textContent='Не удалось сохранить модель · осталась '+current+'. Повторите выбор.';
+    }
+    bot.after(note);
+  });
 
   /* режим снимка одного раздела: #only=<id> — прячутся соседи по всей цепочке предков, лист без полей */
   const m=location.hash.match(/only=([\w-]+)/); if(!m) return; const el=document.getElementById(m[1]); if(!el) return;
