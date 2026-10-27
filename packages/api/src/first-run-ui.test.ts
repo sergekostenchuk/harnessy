@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -9,7 +10,6 @@ const fixture=(t:Parameters<typeof apiFixture>[0],options:Parameters<typeof apiF
 import {dom} from './ui-dom-test-helpers.ts';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8');
 const sketch=readFileSync(new URL('../../../ui/sketches/disarto/19-first-run.html',import.meta.url),'utf8');
-const part=(a:string,b:string)=>{const start=live.indexOf(a),end=live.indexOf(b,start+a.length);assert.ok(start>=0&&end>start,a);return live.slice(start,end)};
 async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body:any)=>Promise<void>,saved:Record<string,any>={},transform?:(path:string,response:any)=>any){
  const d=dom(sketch.slice(sketch.indexOf('<div class="frame"'),sketch.indexOf('<script>')));Object.assign(d.document,{documentElement:d.html,body:d.body});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page','first');d.document.querySelector('.frame')!.classList.add('cur');
  const H:any={on:true,panes:[],active:{},project:h.dir},S:any={ui:{pane:'room'},chat:[],cx:{noFolder:false},...saved},requests:any[]=[],toasts:string[]=[],pending=new Set<Promise<any>>(),streams:any[]=[];
@@ -21,7 +21,7 @@ async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body
   ,subscribeLiveEvents(onmessage:any){const stream={onmessage,closed:false,close(){this.closed=true}};streams.push(stream);return stream}
  };
  c.window=c;await c.refreshStatus();const vm=createContext(c);
- runInContext(part('  function captureProjectOperation','  // TS-07: waiting controls')+part('  let bindingGeneration','  function md(')+part('  const isDirect=','  function rememberLive(')+part('  // TS-09b4: one progress view','  // TS-09b2:')+part('  // TS-09b2:','  // End TS-09b2 promotion.')+part('  function autopilotText(','  function autopilotDraw(')+part('  function guidanceState(','  function render(')+part("  document.addEventListener('click',async e=>{ const la=",'  function reply(')+part('  function reply(','  function composer(')+part('  // TS-09b3: proposal cards','  // End TS-09b3 proposals.')+part('  // TS-15f:','  // End TS-15f first run.')+'globalThis.first={draw:firstDraw,next:firstNext,send:firstSend,sendNow:onSend,state:FIRST,go:firstGo,binding:sendBinding,invalidate:invalidateBinding,proposals:proposalsFetch,proposalsReset,TP,catalog:firstCatalog,models:FIRST_MODELS,guidance:chatGuidanceDraw,offer:showOrchestratorOffer};',vm);
+ runInContext(fixtureSource(live,fixtureGroups.live_captureProjectOperation_to_networkWaiting,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_bindingGeneration_to_settingsReady,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_isDirect_to_ask,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_OPS_to_moveConversation,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_promotionBusy_to_promoteConversation,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_autopilotText_to_autopilotText,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_guidanceState_to_document,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_document_to_document,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_reply_to_onSend,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_TP_to_addEventListener,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_FIRST_to_if,{filename:'live.js',wrapper:0})+'globalThis.first={draw:firstDraw,next:firstNext,send:firstSend,sendNow:onSend,state:FIRST,go:firstGo,binding:sendBinding,invalidate:invalidateBinding,proposals:proposalsFetch,proposalsReset,TP,catalog:firstCatalog,models:FIRST_MODELS,guidance:chatGuidanceDraw,offer:showOrchestratorOffer};',vm);
  const recoveryOpens:any[]=[];c.LIVE={H,esc:c.esc,network:{openAdd:(options:any)=>recoveryOpens.push(options)},networkAdd:{close(){}},firstModelsDraw:c.first.draw};runInContext(readFileSync(new URL('../../../ui/deploy/network-recovery.js',import.meta.url),'utf8'),vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  const settle=async()=>{do{await Promise.all([...pending]);await immediate()}while(pending.size)};
@@ -166,7 +166,7 @@ test('TS-34: pending send becomes a draft and first run never replays it',async 
 });
 
 test('TS-34: folder control still creates the selected project without a model turn',async t=>{
- const h=await fixture(t,{seats:'  {}'}),v=await ui(h);runInContext(part('  function projectPathValue(','  function laPath(')+'globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,sendBinding,bindingCurrent,invalidateBinding,operationsDraw,projectPathValue};',v.vm);runInContext(readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8'),v.vm);
+ const h=await fixture(t,{seats:'  {}'}),v=await ui(h);runInContext(fixtureSource(live,fixtureGroups.live_projectPathValue_to_projectPathValue,{filename:'live.js',wrapper:0})+'globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,sendBinding,bindingCurrent,invalidateBinding,operationsDraw,projectPathValue};',v.vm);runInContext(readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8'),v.vm);
  await v.find('[data-cx="folder"]').emit('click');await v.settle();await v.find('[data-cx-nav="mkdir"]').emit('click');v.find('input.cx-path').value=h.dir+'/first-project';await v.find('[data-cx-mkdir]').emit('click');await v.settle();v.f.draw();assert.equal(h.runtime.project.dir,h.dir+'/first-project');assert.equal(v.H.project,h.dir+'/first-project');assert.match(v.find('.st[data-s="1"] .pick small').textContent,/first-project/);assert.equal(h.provider.calls.length,0);
 });
 
@@ -188,7 +188,7 @@ for(const change of ['project','aba','pagehide'])test('TS-34: delayed missing-ro
 
 function restoredLifecycle(v:Awaited<ReturnType<typeof ui>>){
  Object.assign(v.c,{CustomEvent:class {type:string;constructor(type:string){this.type=type}},dispatchEvent:(event:any)=>v.window.emit(event.type,event),setTimeout:(fn:()=>void)=>queueMicrotask(fn),PS:{alive:true,generation:0},JR:{epoch:0},SP:{generation:0},sectionChanging(){},sectionDraw(){},liveFirstPaint(){},badges(){},renderWaiting(){},sideChats:async()=>{}});v.f.TP.project=v.H.project;
- runInContext(part('  function applyStatus(','  // лента активного чата')+part('  // TS-09a.1: one lifecycle','  // End TS-09a.1 page lifecycle.'),v.vm);
+ runInContext(fixtureSource(live,fixtureGroups.live_applyStatus_to_refreshStatus,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_suspendPage_to_addEventListener,{filename:'live.js',wrapper:0}),v.vm);
 }
 
 test('320: persisted page restore rereads first-run models after project confirmation and renews one subscription',async t=>{

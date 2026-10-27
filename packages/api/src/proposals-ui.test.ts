@@ -1,16 +1,17 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
 import {fixture,call,deferred,until} from './test-helpers.ts';
-const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),start=live.indexOf('  // TS-09b3: proposal cards'),end=live.indexOf('  // End TS-09b3 proposals.',start),block=live.slice(start,end);
+const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),block=fixtureSource(live,fixtureGroups.live_TP_to_addEventListener,{filename:'live.js',wrapper:0});
 const mockTeam=(seats:any[])=>seats.map(s=>({id:s.sid,label:s.label,kind:s.kind,proposedKind:s.kind,model:s.model,mode:s.mode,task:s.intro,state:'proposed',chat:null,createdBy:null}));
 const q=(version=1)=>{const seats=[{sid:'worker-a',operationId:'caaaaa',kind:'worker',label:'Юрист <script>bad</script>',vendor:'claude',model:'w1',mode:'read',intro:'Проверь договор полностью'}];return {from:'room',proposalId:'p'+'a'.repeat(24),version,confirmed:false,seats,team:mockTeam(seats)}};
 function ui(fetcher:(path:string,body?:any)=>Promise<any>,page='chat'){
  const d=dom('<div class="frame cur"><main class="main"><div class="feed">Разговор остаётся</div></main></div>'),H:any={on:true,project:'/a',snapshotOnly:false,pane:{id:'room'},active:{room:'chat-room'}},requests:any[]=[],toasts:string[]=[],pending=new Set<Promise<any>>();
  const context:any={H,S:{ui:{pane:'room'}},PAGE:page,document:d.document,leftPage:false,bindingNavigation:0,sendBinding:()=>({project:H.project,pane:H.pane.id,chat:H.active[H.pane.id]??null}),bindingCurrent:(b:any)=>b.project===H.project,addEventListener:d.window.addEventListener.bind(d.window),toast:(s:string)=>toasts.push(s),esc:(v:any)=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),api:async(path:string,body?:any)=>{requests.push({path,body});const job=fetcher(path,body);pending.add(job);try{return await job}finally{pending.delete(job)}}};
- runInContext(live.slice(live.indexOf('  // TS-09b4: one progress view'),live.indexOf('  // TS-09b2:'))+block+'globalThis.proposals={fetch:proposalsFetch,sync:proposalsSync,reset:proposalsReset,show:showTeamProposal,state:TP,draw:operationsStatus};',createContext(context));
+ runInContext(fixtureSource(live,fixtureGroups.live_OPS_to_moveConversation,{filename:'live.js',wrapper:0})+block+'globalThis.proposals={fetch:proposalsFetch,sync:proposalsSync,reset:proposalsReset,show:showTeamProposal,state:TP,draw:operationsStatus};',createContext(context));
  const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};return {...d,H,context,requests,toasts,find,f:context.proposals,settle:async()=>{for(let i=0;i<12;i++){await Promise.all([...pending]);await new Promise(resolve=>setImmediate(resolve))}}};
 }
 test('TS-47.5 F11: class menu uses seven Russian labels, keyboard and the exact proposal binding',async()=>{
@@ -50,9 +51,8 @@ test('156 UI: notification during read schedules another read; incomplete snapsh
 
 for(const page of ['chat','now','new'])test('156 UI '+page+': stream notifications and reconnect refresh the proposal cards',async()=>{
  let version=1;const v=ui(async path=>path==='/api/status'?{project:'/a',panes:[]}:{ok:true,project:'/a',proposals:[q(version)]},page),streams:any[]=[];
- const part=(a:string,b:string)=>live.slice(live.indexOf(a),live.indexOf(b,live.indexOf(a)));
  Object.assign(v.context,{window:v.context,location:{pathname:''},S:{ui:{pane:'room'}},NOW:{es:null,alive:true},nowFetch:async()=>true,EventSource:class{onopen:any;onmessage:any;onerror:any;constructor(){streams.push(this)}close(){}},nowDraw(){},hStatus(){},render(){},liveFirstPaint(){},hEvent(){},consumeState(){},loadChat:async()=>{},refreshChats:async()=>{},refreshStatus:async()=>{},applyStatus(st:any){v.H.project=st.project;v.H.panes=st.panes}});
- runInContext(part('  // The visible stream is a projection','  const settingJobs=')+part('  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part('  function nowLive(){','  // TS-15c Now lifecycle.')+part('  async function hConnect(){','  // ── чат: настоящее поле ввода')+'globalThis.connect=hConnect;',v.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_streams_to_queueDelivered,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_LIVE_EVENTS_to_addEventListener,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_nowLive_to_nowLive,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_hConnect_to_hConnect,{filename:'live.js',wrapper:0})+'globalThis.connect=hConnect;',v.context);
  await v.context.connect();assert.equal(streams.length,1);await streams[0].onopen();await until(()=>v.f.state.data[0]?.version===1);if(page==='new')v.f.show(q().proposalId);
  version=2;streams[0].onmessage({data:JSON.stringify({type:'teamProposals',project:'/a'})});await v.settle();assert.equal(v.find('[data-team-confirm]').dataset.teamVersion,'2');
  streams[0].onerror();version=3;await streams[0].onopen();await v.settle();assert.equal(v.find('[data-team-confirm]').dataset.teamVersion,'3');assert.equal(streams.length,1);

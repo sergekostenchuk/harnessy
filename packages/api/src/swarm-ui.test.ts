@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -15,10 +16,10 @@ function ui(fetch?:(path:string)=>Promise<any>){
  const context:any={H,PAGE:'swarm',KEY:'swarm',document:d.document,location:{href:''},modelName:(x:string)=>x,toast(){},openChatRow:(chat:string,id:string)=>{opened.push({chat,id})},HX:{open:(_anchor:any,html:string)=>sheets.push(html)},
   esc:(s:any)=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),api:async(path:string)=>{requests.push(path);return fetch?fetch(path):path==='/api/swarm'?snapshot(H.project):{ok:true,project:H.project,proposals:[]}},refreshStatus:async()=>true,
   addEventListener:d.window.addEventListener.bind(d.window),EventSource:class{onmessage:any;onopen:any;onerror:any;closed=false;constructor(){streams.push(this)}close(){this.closed=true}}};context.window=context;
- const vm=createContext(context);runInContext(part(proto,'  // TS-15a specification','  // End TS-15a specification'),vm);
+ const vm=createContext(context);runInContext(fixtureSource(proto,fixtureGroups.proto_SPEC_to_specificationLabels,{filename:'proto.js',wrapper:1}),vm);
  // The sketch keeps its own handlers only on the reference page, never alongside the live controller.
  for(const script of raw.matchAll(/<script>([\s\S]*?)<\/script>/g))runInContext(script[1]!,vm);
- runInContext(part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  const TEAM_KINDS=','  function proposalsDraw(')+part(live,'  // TS-15b: project-bound','  // End TS-15b swarm.')+'\nglobalThis.testing={state:SWARM,sync:swarmSync,fetch:swarmFetch,refresh:swarmRefresh,reset:swarmReset,draw:swarmDraw};',vm);
+ runInContext(fixtureSource(live,fixtureGroups.live_LIVE_EVENTS_to_addEventListener,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_TEAM_KINDS_to_proposalCard,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_SWARM_to_if,{filename:'live.js',wrapper:0})+'\nglobalThis.testing={state:SWARM,sync:swarmSync,fetch:swarmFetch,refresh:swarmRefresh,reset:swarmReset,draw:swarmDraw};',vm);
  const find=(selector:string)=>{const node=d.document.querySelector(selector);assert.ok(node,selector);return node};
  const switchProject=(project:string)=>{H.project=project;H.confirmedProjectGeneration++;return context.testing.sync()};
  return {...d,H,context,requests,streams,opened,sheets,find,switchProject,functions:context.testing};

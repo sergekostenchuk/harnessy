@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups,fixtureWrapper} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
@@ -6,7 +7,6 @@ import {setImmediate as immediate} from 'node:timers/promises';
 import {fixture,noRepositoryFixture,call,OWNER,deferred,sse,until} from './test-helpers.ts';
 import {dom} from './ui-dom-test-helpers.ts';
 const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),cx=readFileSync(new URL('../../../ui/deploy/cx.js',import.meta.url),'utf8');
-const part=(s:string,a:string,b:string)=>{const from=s.indexOf(a),to=s.indexOf(b,from+a.length);assert.ok(from>=0&&to>from,a);return s.slice(from,to)};
 async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body:any)=>Promise<void>,options:{prepare?:boolean;pane?:string;page?:string}={}){
  const d=dom('<div class="frame cur"><div class="feed"><div class="col"><div class="main"><span data-cx="role">Роль</span><div class="ai"><div class="live-acts"><button data-la="assign" data-i="0">Назначить</button><button data-la="move" data-i="0">Перенести</button><button data-la="mkdir" data-i="0">Создать проект</button></div></div></div></div></div></div><div id="toast"></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});d.html.setAttribute('data-proto','');d.html.setAttribute('data-page',options.page??'chat');
  if(options.prepare!==false){h.runtime.roomSet({model:'w1'},OWNER);h.runtime.registry.get('room')!.record('me','Юридическая команда')}const paneId=options.pane??'room',chats=h.runtime.chatsList(OWNER),pane=h.runtime.registry.get(paneId)!.settings();
@@ -14,8 +14,8 @@ async function ui(h:Awaited<ReturnType<typeof fixture>>,pause?:(path:string,body
  const box:any={H,S,knowledgeReset(){},PAGE:options.page??'chat',document:d.document,window:null,location:{href:''},navigator:{},save(){},log(){},esc:(v:any)=>String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),toast(html:string){d.document.querySelector('#toast')!.innerHTML=html},hStatus(){},badges(){},renderWaiting(){},loadChat:async()=>{},pickPane(){H.pane=H.panes.find((p:any)=>p.id===S.ui.pane)},render(){},setTimeout(){},clearTimeout(){},addEventListener:d.window.addEventListener.bind(d.window),removeEventListener:d.window.removeEventListener.bind(d.window),
  api(path:string,body?:any){requests.push({path,body});const job=(async()=>{await pause?.(path,body);return (await call(h.api,path,body?{body}:{})).body})();pending.add(job);job.finally(()=>pending.delete(job));return job},
  async refreshStatus(){H.project=h.runtime.project.dir;H.panes=(await box.api('/api/status')).panes;const c=h.runtime.chatsList(OWNER);H.active=c.active;H.chatList=c.chats;box.pickPane()},closeLAMenus(){d.document.querySelectorAll('.live-menu').forEach(n=>n.remove())},dismissLAMenu(m:any){return ()=>m.remove()},rolesN:(n:number)=>n+' ролей',modelName:(m:string)=>m,paneName:(p:any)=>p.label};
- box.window=box;const context=createContext(box);runInContext(part(live,'  function captureProjectOperation','  // TS-07: waiting controls')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function laMenu(','  // запись «контекст передан»')+part(live,'  // TS-09b4: one progress view','  // TS-09b2:')+part(live,'  // TS-09b2:','  function reply(')+part(live,'  function autopilotText(','  function autopilotDraw(')+part(live,'  function guidanceState(','  function render('),context);
- runInContext(part(live,'  function applyStatus(','  // лента активного чата'),context);
+ box.window=box;const context=createContext(box);runInContext(fixtureSource(live,fixtureGroups.live_captureProjectOperation_to_networkWaiting,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_bindingGeneration_to_settingsReady,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_laMenu_to_laPath,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_OPS_to_moveConversation,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_promotionBusy_to_document,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_autopilotText_to_autopilotText,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_guidanceState_to_document,{filename:'live.js',wrapper:0}),context);
+ runInContext(fixtureSource(live,fixtureGroups.live_applyStatus_to_refreshStatus,{filename:'live.js',wrapper:0}),context);
  runInContext('globalThis.LIVE={H,S,save,api,esc,toast,log,paneName,hStatus,pickPane,refreshStatus,loadChat,promoteConversation,operationsDraw,operationAttention,sendBinding,bindingCurrent,invalidateBinding,configureSetting,busy:()=>false};',context);runInContext(cx,context);
  const find=(s:string)=>{const n=d.document.querySelector(s);assert.ok(n,s);return n};
  const click=async(entry:string)=>{if(entry==='composer'){await find('[data-cx="role"]').emit('click');await find('[data-cx-newseat="orchestrator"]').emit('click')}else {await find('[data-la="assign"]').emit('click');await find('[data-orchestrator-guidance-accept]').emit('click')}};
@@ -39,7 +39,7 @@ for(const page of ['chat','new'])test('154 UI '+page+': conflict opens existing 
 
 test('157: tool failure shows a readable reason and preserves escaped technical details',()=>{
  const context:any={H:{cur:null},warningEvent:()=>false,drawLive(){},esc:(v:string)=>v.replaceAll('<','&lt;').replaceAll('>','&gt;')};const vm=createContext(context);
- runInContext(part(live,'  // The visible stream is a projection','  const settingJobs=')+live.split('\n').find(l=>l.startsWith('  const toolLine='))!+part(live,'  function toolErrorEntry(','  const isDirect=')+'globalThis.event=hEvent;globalThis.html=()=>toolLine(H.cur.tools[0]);',vm);
+ runInContext(fixtureSource(live,fixtureGroups.live_streams_to_queueDelivered,{filename:'live.js',wrapper:0})+fixtureSource(live,['toolLine'],{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_toolErrorEntry_to_hEvent,{filename:'live.js',wrapper:0})+'globalThis.event=hEvent;globalThis.html=()=>toolLine(H.cur.tools[0]);',vm);
  context.event({type:'toolError',text:JSON.stringify({error:'Документ не прочитан',code:'ENOENT',path:'<script>unsafe</script>'})});assert.match(context.H.cur.tools[0].text,/Документ не прочитан/);assert.match(context.html(),/Технические детали/);assert.match(context.html(),/ENOENT/);assert.doesNotMatch(context.html(),/<script>/);
 });
 
@@ -69,11 +69,11 @@ for(const nextChoice of ['other','back','pagehide'])test('154 ОКНА: executed
  const h=await fixture(t),v=await ui(h),storage=new Map<string,string>(),entered=deferred(),release=deferred();
  await h.runtime.settingsPatch('owner',{projectsRoot:h.dir+'/projects'},OWNER);v.H.noProject=true;
  Object.assign(v.context,{rememberLive(){},sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,value:string)=>storage.set(k,value)}});
- const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');runInContext(proto.slice(0,proto.indexOf('/* LIVE_BOOT_END */')),v.context);
+ const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');runInContext(fixtureWrapper(proto,0,'proto.js'),v.context);
  const boot=v.context.HARNESS_BOOT;boot.select(h.dir);boot.confirm(h.dir,boot.capture());let sections=0;
  v.context.sectionChanging=()=>{sections++};
  v.context.fetch=async(path:string,opts?:{body:string})=>{const response=await call(h.api,path,opts?{body:JSON.parse(opts.body)}:{});if(path.endsWith('/orchestrator')){await h.runtime.idle();entered.resolve();await release.promise}return {json:async()=>response.body}};
- runInContext('globalThis.api=(()=>{'+part(live,'  const api=','  // TS-07: waiting controls')+'return api;})();',v.context);
+ runInContext('globalThis.api=(()=>{'+fixtureSource(live,fixtureGroups.live_api_to_networkWaiting,{filename:'live.js',wrapper:0})+'return api;})();',v.context);
  const promoting=v.context.LIVE.promoteConversation(v.find('.live-acts'),v.context.LIVE.sendBinding());await entered.promise;
  if(nextChoice==='pagehide')await v.window.emit('pagehide');
  else {
@@ -89,10 +89,10 @@ for(const nextChoice of ['other','back','pagehide'])test('154 ОКНА: executed
 for(const returns of [false,true])test('154 round 3 ОКНА: another client confirms '+(returns?'A → B → A':'B')+' before a delayed promotion reply',async t=>{
  const h=await noRepositoryFixture(t),v=await ui(h),storage=new Map<string,string>(),entered=deferred(),release=deferred();
  Object.assign(v.context,{rememberLive(){},sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,value:string)=>storage.set(k,value)}});
- const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');runInContext(proto.slice(0,proto.indexOf('/* LIVE_BOOT_END */')),v.context);
+ const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');runInContext(fixtureWrapper(proto,0,'proto.js'),v.context);
  const boot=v.context.HARNESS_BOOT;boot.select(h.dir);boot.confirm(h.dir,boot.capture());let sections=0;v.context.sectionChanging=()=>sections++;
  v.context.fetch=async(path:string,opts?:{body:string})=>{const response=await call(h.api,path,opts?{body:JSON.parse(opts.body)}:{});if(path.endsWith('/orchestrator')){await h.runtime.idle();entered.resolve();await release.promise}return {json:async()=>response.body}};
- runInContext('globalThis.api=(()=>{'+part(live,'  const api=','  // TS-07: waiting controls')+'return api;})();',v.context);
+ runInContext('globalThis.api=(()=>{'+fixtureSource(live,fixtureGroups.live_api_to_networkWaiting,{filename:'live.js',wrapper:0})+'return api;})();',v.context);
  const promoting=v.context.LIVE.promoteConversation(v.find('.live-acts'),v.context.LIVE.sendBinding());await entered.promise;
  // This HTTP client never calls this window's api(), boot.select() or invalidateBinding().
  const next=h.dir+'/other-project';mkdirSync(next);assert.equal((await call(h.api,'/api/project',{body:{path:next}})).status,200);await v.context.refreshStatus(true);
@@ -106,9 +106,9 @@ for(const returns of [false,true])test('154 round 3 ОКНА: another client con
 for(const scenario of ['late','early','foreign','round-trip','wrong-operation','missing-operation'])test('154 round 4: promotion binding classifies '+scenario+' status before its POST receipt',async t=>{
  const h=await fixture(t),v=await ui(h),storage=new Map<string,string>(),entered=deferred(),release=deferred();await h.runtime.settingsPatch('owner',{projectsRoot:h.dir+'/projects'},OWNER);v.H.noProject=true;
  Object.assign(v.context,{rememberLive(){},sessionStorage:{getItem:(k:string)=>storage.get(k)??null,setItem:(k:string,value:string)=>storage.set(k,value)}});
- const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');runInContext(proto.slice(0,proto.indexOf('/* LIVE_BOOT_END */')),v.context);const boot=v.context.HARNESS_BOOT;boot.select(h.dir);boot.confirm(h.dir,boot.capture());
+ const proto=readFileSync(new URL('../../../ui/deploy/proto.js',import.meta.url),'utf8');runInContext(fixtureWrapper(proto,0,'proto.js'),v.context);const boot=v.context.HARNESS_BOOT;boot.select(h.dir);boot.confirm(h.dir,boot.capture());
  v.context.fetch=async(path:string,opts?:{body:string})=>{const response=await call(h.api,path,opts?{body:JSON.parse(opts.body)}:{});if(path.endsWith('/orchestrator')){await h.runtime.idle();entered.resolve();await release.promise}return {json:async()=>response.body}};
- runInContext('globalThis.api=(()=>{'+part(live,'  const api=','  // TS-07: waiting controls')+'return api;})();',v.context);
+ runInContext('globalThis.api=(()=>{'+fixtureSource(live,fixtureGroups.live_api_to_networkWaiting,{filename:'live.js',wrapper:0})+'return api;})();',v.context);
  const promoting=v.context.LIVE.promoteConversation(v.find('.live-acts'),v.context.LIVE.sendBinding());await entered.promise;const created=h.runtime.project.dir;assert.notEqual(created,h.dir);
  if(scenario!=='late')await v.context.refreshStatus(true);
  if(['foreign','round-trip'].includes(scenario)){const other=h.dir+'/unrelated';mkdirSync(other);assert.equal((await call(h.api,'/api/project',{body:{path:other}})).status,200);await v.context.refreshStatus(true);if(scenario==='round-trip'){assert.equal((await call(h.api,'/api/project',{body:{path:created}})).status,200);await v.context.refreshStatus(true)}}

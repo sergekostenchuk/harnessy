@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,rmSync} from 'node:fs';
@@ -20,21 +21,21 @@ function ui(options:{realFinish?:boolean;page?:string}={}){
  const sandbox={H,S,document,fetch:async(path:string,options?:{body:string})=>{requests.push({path,body:options?.body?JSON.parse(options.body):null});return {json:async()=>({ok:true})}},esc:(s:unknown)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]!)),paneName:(p:{label:string})=>p.label,
  finish(){finishes++;H.cur=null},noteFinish(){finishes++},refreshStatus:async()=>{refreshes++},refreshChats:async()=>{},sideChats(){},toast:(s:string)=>toasts.push(s),now:()=>1,save(){},render(){},drawLive(){busy=!!H.cur},log(){},setTimeout(){},addEventListener(){},PAGE:options.page??'chat',badges(){},pickPane(){H.pane=H.panes.find(p=>p.id===S.ui.pane)??H.panes[0]!},window:{CX},CX,toolLine:()=>'',md:(text:string)=>text,mdFiles:new Map(),mdToolPaths:()=>[],knowledgeReset(){},knowledgeSet(){return true},knowledgeOpen:async()=>{},knowledgeFetch(){},KN:{data:null},hydrateArtifacts(){},mdMessageArtifacts(){return ""},onboardOnce:async()=>{},LOADED:null,plural:(n:number)=>n===1?'ждёт':'ждут',who:(id:string)=>id,EventSource:class {onmessage:any;onerror:any;url:string;constructor(url:string){this.url=url}}};
  const context=createContext(sandbox);
- const helpers=source.slice(source.indexOf('  const api='),source.indexOf('  // End TS-07 waiting controls.'));
- const events=source.slice(source.indexOf('  function transferHTML('),source.indexOf('  const isDirect='));
- const finish=options.realFinish?source.slice(source.indexOf('  function finish('),source.indexOf('  function transferHTML('))+'\nconst originalFinish=finish;finish=ev=>{noteFinish();originalFinish(ev)};':'';
- const failedHtml=source.slice(source.indexOf('  function failedTurnHTML('),source.indexOf('  function finish('));
- const statusSource=source.slice(source.indexOf('  function applyStatus('),source.indexOf('  async function refreshChats('));
- const names=source.split('\n').find(line=>line.startsWith('  const modelName='));assert.ok(names);
- const binding=source.slice(source.indexOf('  let bindingGeneration'),source.indexOf('  function md(')),notes=source.slice(source.indexOf('  async function loadAttemptNotes('),source.indexOf('  // подключение к движку'));
- const now=options.page==='now'?source.slice(source.indexOf('  const NOW='),source.indexOf('  window.LIVE=')):'';
- runInContext(source.slice(source.indexOf('  const statNumber='),source.indexOf('  let turnStatsOpen='))+source.slice(source.indexOf('  // TS-12: one project-bound transport'),source.indexOf('  // End TS-12 shared events.'))+helpers+'\n'+binding+'\n'+notes+'\n'+failedHtml+'\n'+finish+'\n'+events+'\n'+names+'\n'+statusSource+'\n'+now+'\nglobalThis.testing={api,hEvent,applyStatus,consumeState,waitingControls,showWaiting,showRestore,renderWaiting,loadChat,loadAttemptNotes,sendBinding,recordModelChange'+(now?',nowLive':'')+'};',context);
+ const helpers=fixtureSource(source,fixtureGroups.live_api_to_document,{filename:'live.js',wrapper:0});
+ const events=fixtureSource(source,fixtureGroups.live_transferHTML_to_hEvent,{filename:'live.js',wrapper:0});
+ const finish=options.realFinish?fixtureSource(source,fixtureGroups.live_finish_to_finish,{filename:'live.js',wrapper:0})+'\nconst originalFinish=finish;finish=ev=>{noteFinish();originalFinish(ev)};':'';
+ const failedHtml=fixtureSource(source,fixtureGroups.live_failedTurnHTML_to_failedTurnHTML,{filename:'live.js',wrapper:0});
+ const statusSource=fixtureSource(source,fixtureGroups.live_applyStatus_to_applyStatus,{filename:'live.js',wrapper:0});
+ const names=fixtureSource(source,['modelName'],{filename:'live.js',wrapper:0});
+ const binding=fixtureSource(source,fixtureGroups.live_bindingGeneration_to_settingsReady,{filename:'live.js',wrapper:0}),notes=fixtureSource(source,fixtureGroups.live_loadAttemptNotes_to_recoverStoppedTurn,{filename:'live.js',wrapper:0});
+ const now=options.page==='now'?fixtureSource(source,fixtureGroups.live_NOW_to_addEventListener,{filename:'live.js',wrapper:0}):'';
+ runInContext(fixtureSource(source,fixtureGroups.live_statNumber_to_messageUsage,{filename:'live.js',wrapper:0})+fixtureSource(source,fixtureGroups.live_LIVE_EVENTS_to_addEventListener,{filename:'live.js',wrapper:0})+helpers+'\n'+binding+'\n'+notes+'\n'+failedHtml+'\n'+finish+'\n'+events+'\n'+names+'\n'+statusSource+'\n'+now+'\nglobalThis.testing={api,hEvent,applyStatus,consumeState,waitingControls,showWaiting,showRestore,renderWaiting,loadChat,loadAttemptNotes,sendBinding,recordModelChange'+(now?',nowLive':'')+'};',context);
  const functions=(context as unknown as {testing:{api(path:string,body?:unknown):Promise<unknown>;hEvent(e:unknown):void;applyStatus(st:unknown):void;consumeState(e:unknown):void;waitingControls(p:unknown,info:unknown,project:string,compact?:boolean):string;showWaiting(p:unknown,info:unknown,project:string):void;showRestore(project:string,error:string):void;renderWaiting():void;loadChat():Promise<void>;loadAttemptNotes(p:unknown,b:unknown,history:unknown,turns:Set<string>,request:number):Promise<void>;sendBinding():unknown;recordModelChange(b:unknown,change:{from:string;to:string;scope:string}):void;nowLive():void}}).testing;
  async function click(dataset:Record<string,string>){const button={dataset,disabled:false};let stopped=false;await listeners[0]!({target:{closest(){return button}},preventDefault(){},stopImmediatePropagation(){stopped=true}});assert.equal(stopped,true);assert.equal(button.disabled,false)}
- function sidebar(all:unknown[]){const context=createContext({H,all,pins:[],pinError:'',PIN:'',esc:sandbox.esc,paneName:sandbox.paneName,waitingControls:functions.waitingControls});runInContext(source.slice(source.indexOf('    const seats=(H.panes'),source.indexOf('    const projHTML='))+'\nglobalThis.sidebar=chatsHTML;',context);return String((context as unknown as {sidebar:string}).sidebar)}
+ function sidebar(all:unknown[]){const context=createContext({H,all,pins:[],pinError:'',PIN:'',esc:sandbox.esc,paneName:sandbox.paneName,waitingControls:functions.waitingControls});runInContext(fixtureSource(source,['seats','pinned','pinBtn','roleRow','roomRow','shown','waitingRoom','chatsHTML'],{filename:'live.js',wrapper:0,scope:'sideChats'})+'\nglobalThis.sidebar=chatsHTML;',context);return String((context as unknown as {sidebar:string}).sidebar)}
 
  async function sidebarClick(chat:string,pane:string){
-  runInContext(source.slice(source.indexOf('  async function openChatRow('),source.indexOf('  async function sideSwitchProject('))+'\n'+source.slice(source.indexOf("  document.addEventListener('click',async e=>{ const toggle="),source.indexOf('  // меню профиля')),context);
+  runInContext(fixtureSource(source,fixtureGroups.live_openChatRow_to_openChatRow,{filename:'live.js',wrapper:0})+'\n'+fixtureSource(source,fixtureGroups.live_document_to_document_2,{filename:'live.js',wrapper:0}),context);
   const row={dataset:{chat,pane},classList:{contains:()=>false}};
   await listeners.at(-1)!({target:{closest:(selector:string)=>selector==='.ps-chat[data-pane]'?row:null},preventDefault(){},stopPropagation(){}});
  }
@@ -63,7 +64,7 @@ test('133/134 window: decision controls carry immutable project/pane/episode and
 
 test('133 window: role and room sidebar rows show only waiting labels; the decision door is in the chat',()=>{
  const view=ui();for(const pane of view.H.panes)pane.waiting=waiting;const rooms={H:view.H,all:[{pane:'worker',id:'cw',active:true,title:'роль'},{pane:'room',id:'cr',active:true,title:'разговор'}],cur:'/project-a',esc:(s:unknown)=>String(s),paneName:(p:{label:string})=>p.label,pinBtn:()=>'',waitingControls:view.functions.waitingControls};
- const context=createContext(rooms);runInContext(source.slice(source.indexOf('    const roleRow='),source.indexOf('    const shown='))+'\nglobalThis.testingRows={roleRow,roomRow};',context);const rows=(context as unknown as {testingRows:{roleRow(p:unknown):string;roomRow(c:unknown):string}}).testingRows;
+ const context=createContext(rooms);runInContext(fixtureSource(source,['roleRow','roomRow'],{filename:'live.js',wrapper:0,scope:'sideChats'})+'\nglobalThis.testingRows={roleRow,roomRow};',context);const rows=(context as unknown as {testingRows:{roleRow(p:unknown):string;roomRow(c:unknown):string}}).testingRows;
  for(const html of [rows.roleRow(view.H.panes[0]),rows.roomRow(rooms.all[1])]){assert.match(html,/ждёт решения/);assert.doesNotMatch(html,/data-attempt|live-attempt-controls|Повторить|Пропустить|движок перезапускался|Записи №/)}
  assert.match(rows.roleRow(view.H.panes[0]),/data-pane="worker"/);assert.match(rows.roomRow(rooms.all[1]),/data-pane="room"/);assert.doesNotMatch(rows.roomRow({...rooms.all[1],active:false}),/ждёт решения|data-attempt-action/);
 });
@@ -311,7 +312,7 @@ test('23d r2: direct connection and absent generation never offer a direct retry
 
 test('23d r2: rejected stale direct click refreshes the existing card with a new network generation',async t=>{
  const h=await fixture(t,{deps:{networkRelayOptions:{timeoutMs:100}}});await h.runtime.settings.changeNetwork(async c=>{c.migrated=true;c.exits.p={id:'p',type:'proxy',label:'Proxy',url:'http://127.0.0.1:1'};c.chains.claude=['p'];return {result:undefined}});await call(h.api,'/api/chat',{body:{pane:'worker',message:'blocked'}});await h.runtime.idle();
- const status=(await call(h.api,'/api/status')).body,v=ui(),paths:string[]=[];v.H.on=true;v.S.ui.pane='worker';(v.sandbox.window.CX as any).render=()=>{};Object.assign(v.sandbox,{hStatus(){}});runInContext(source.slice(source.indexOf('  async function refreshStatus('),source.indexOf('  // лента активного чата')),v.sandbox);v.functions.applyStatus(status);const pane=status.panes.find((p:any)=>p.id==='worker'),old=pane.settingsBinding;
+ const status=(await call(h.api,'/api/status')).body,v=ui(),paths:string[]=[];v.H.on=true;v.S.ui.pane='worker';(v.sandbox.window.CX as any).render=()=>{};Object.assign(v.sandbox,{hStatus(){}});runInContext(fixtureSource(source,fixtureGroups.live_refreshStatus_to_refreshStatus,{filename:'live.js',wrapper:0}),v.sandbox);v.functions.applyStatus(status);const pane=status.panes.find((p:any)=>p.id==='worker'),old=pane.settingsBinding;
  await h.runtime.settings.changeNetwork(async c=>{const exit=c.exits.p!;if(exit.type==='proxy')exit.url='http://127.0.0.1:2';return {result:undefined}});
  v.sandbox.fetch=async(path,options)=>{paths.push(path);return {json:async()=>(await call(h.api,path,options?.body?{body:JSON.parse(options.body)}:{})).body}};await v.click({attemptProject:h.dir,attemptPane:'worker',attemptId:pane.waiting.turnInstanceId,attemptAction:'retry',attemptNetwork:'direct_once',attemptBinding:JSON.stringify(old)});
  const binding=h.runtime.paneBinding('worker');assert.notEqual(binding.networkGeneration,old.networkGeneration);assert.ok(paths.includes('/api/status'));assert.match(v.cards.get('live-waiting')!.innerHTML,new RegExp(binding.networkGeneration!));assert.equal(h.provider.calls.length,0);
@@ -325,14 +326,14 @@ test('TS-26 window: unsent card uses plain reason, bound retry/remove and techni
 test('TS-26 window: late chat HTTP response cannot restore an unsent card after done SSE',async()=>{
  const pane={id:'room',model:'w1',waiting:null as unknown},H={pane,panes:[pane],cur:{} as unknown},S={chat:[{role:'me',text:'новое'}],ui:{}};let reads=0;
  const context=createContext({H,S,sendBinding:()=>({pane:'room'}),bindingCurrent:()=>true,drawLive(){},render(){},renderWaiting(){},toast(){},save(){},api:async()=>({ok:true,seq:2,waiting:{...waiting,status:'unsent'}}),refreshStatus:async()=>{reads++;pane.waiting=null},log(){},esc:String});
- runInContext(source.slice(source.indexOf('  // The visible stream is a projection'),source.indexOf('  const settingJobs='))+source.slice(source.indexOf('  async function ask('),source.indexOf('  function rememberLive('))+'\nglobalThis.askTest=ask;',context);
+ runInContext(fixtureSource(source,fixtureGroups.live_streams_to_queueDelivered,{filename:'live.js',wrapper:0})+fixtureSource(source,fixtureGroups.live_ask_to_ask,{filename:'live.js',wrapper:0})+'\nglobalThis.askTest=ask;',context);
  assert.equal(await (context as any).askTest('новое'),true);assert.equal(reads,1);assert.equal(pane.waiting,null);
 });
 
 function sendingWindow(){
  const response=deferred<unknown>(),pane={id:'room',model:'w1',waiting:null as unknown},H={pane,panes:[pane],active:{room:'chat-a'},cur:null as any},S={chat:[{role:'me',text:'новое'}] as any[],ui:{},cx:{}};
  const context=createContext({H,S,sendBinding:()=>({pane:'room'}),bindingCurrent:()=>true,drawLive(){},render(){},renderWaiting(){},toast(){},save(){},api:()=>response.promise,refreshStatus:async()=>{pane.waiting=null},log(){},esc:String,md:(text:string)=>text,mdFiles:new Map(),toolLine:()=>'',paneName:()=>'',now:()=>1,window:{},setTimeout(){},warningEvent:()=>false,networkCodes:new Set()});
- runInContext(source.slice(source.indexOf('  // The visible stream is a projection'),source.indexOf('  const settingJobs='))+source.slice(source.indexOf('  const statNumber='),source.indexOf('  let turnStatsOpen='))+source.slice(source.indexOf('  function finish('),source.indexOf('  const isDirect='))+source.slice(source.indexOf('  async function ask('),source.indexOf('  function rememberLive('))+'\nglobalThis.askTest=ask;globalThis.eventTest=hEvent;',context);
+ runInContext(fixtureSource(source,fixtureGroups.live_streams_to_queueDelivered,{filename:'live.js',wrapper:0})+fixtureSource(source,fixtureGroups.live_statNumber_to_messageUsage,{filename:'live.js',wrapper:0})+fixtureSource(source,fixtureGroups.live_finish_to_hEvent,{filename:'live.js',wrapper:0})+fixtureSource(source,fixtureGroups.live_ask_to_ask,{filename:'live.js',wrapper:0})+'\nglobalThis.askTest=ask;globalThis.eventTest=hEvent;',context);
  return {H,S,ask:()=>(context as any).askTest('новое'),event:(event:unknown)=>(context as any).eventTest(event),respond:()=>response.resolve({ok:true,seq:2,waiting:{...waiting,status:'unsent'}})};
 }
 for(const stream of ['after-send','before-send','replacement','finished'] as const)test('TS-26 r2: late unsent HTTP preserves SSE response '+stream,async()=>{

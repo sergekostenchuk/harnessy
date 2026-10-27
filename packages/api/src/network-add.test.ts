@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import {createContext,runInContext} from 'node:vm';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -74,7 +75,7 @@ test('23b UI: malformed commands, ports and absent keys never reach the engine',
 test('23b: shared API keeps ordinary GET unchanged and forwards the optional abort signal',async()=>{
  const source=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),seen:any[]=[];
  const context:any={H:{project:'/fixture',confirmedProjectGeneration:1},fetch:async(path:string,init?:any)=>{seen.push({path,init});return {json:async()=>({ok:true})}}};
- runInContext(source.slice(source.indexOf('  const api='),source.indexOf('  // TS-07: waiting controls'))+'globalThis.call=api;',createContext(context));
+ runInContext(fixtureSource(source,fixtureGroups.live_api_to_networkWaiting,{filename:'live.js',wrapper:0})+'globalThis.call=api;',createContext(context));
  await context.call('/api/status');assert.equal(seen[0].init,undefined);
  const abort=new AbortController();await context.call('/api/network/preview',{config:proxy},{signal:abort.signal});assert.equal(seen[1].init.signal,abort.signal);assert.equal(seen[1].init.method,'POST');assert.deepEqual(JSON.parse(seen[1].init.body),{config:proxy});
 });

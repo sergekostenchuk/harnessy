@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
@@ -26,7 +27,7 @@ function view(page:Page,fetch:(path:string,body?:any)=>Promise<any>,boot=false){
  runInContext(app.slice(0,app.indexOf('})();')+5),context);
  for(const script of raw.matchAll(/<script>([\s\S]*?)<\/script>/g))runInContext(script[1]!,context);
  if(boot)runInContext(proto.split('/* LIVE_BOOT_END */')[0]!,context);
- runInContext(part(live,'  function connectionFailed()','  // TS-18:')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function rememberLive(','  // лента активного чата')+part(live,'  // TS-09a.1: one lifecycle','  // End TS-09a.1 page lifecycle.')+'\nglobalThis.sections={fetch:sectionFetch,draw:sectionDraw,sync:sectionSync,changing:sectionChanging,request:sectionRequest,applyStatus,refreshStatus,resumePage,sendBinding,bindingCurrent,PS};',context);
+ runInContext(fixtureSource(live,fixtureGroups.live_connectionFailed_to_connectionFailed,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_bindingGeneration_to_settingsReady,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_rememberLive_to_refreshStatus,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_suspendPage_to_addEventListener,{filename:'live.js',wrapper:0})+'\nglobalThis.sections={fetch:sectionFetch,draw:sectionDraw,sync:sectionSync,changing:sectionChanging,request:sectionRequest,applyStatus,refreshStatus,resumePage,sendBinding,bindingCurrent,PS};',context);
  // Register the actual old hooks too: they must stay harmless after the engine connects.
  const lines=live.split('\n');for(let i=0;i<lines.length;i++)if(lines[i]!.startsWith('  if(')&&lines[i]!.includes("PAGE==='"+page+"'")){const end=lines.indexOf('  }',i+1);assert.ok(end>i);runInContext(lines.slice(i,end+1).join('\n'),context);i=end}
  H.on=true;
@@ -80,7 +81,7 @@ test('137/136: template memory and truncation have distinct, honest captions',as
 
 test('87/139: sidebar, rail, mobile and palette all route Documents to the same real screen, including cold reload',async()=>{
  const d=dom('<aside class="side"><div data-go="doc">Документы проекта</div></aside>'),location={href:''},context:any={document:d.document,window:{},location,KEY:'chat',PAGES:{doc:'17-doc.html'},frames:[],cur:0,show(){},renderSide(){},renderWorkspaceHeader(){},closeProjectMenu(){}};
- runInContext(part(proto,"  document.addEventListener('click',e=>{const menuButton=e.target.closest('[data-ps2-project-menu]');",'  // ── навигация телефона'),createContext({...context,addEventListener(){}}));await d.document.querySelector('[data-go="doc"]')!.emit('click');assert.equal(location.href,'17-doc.html');
+ runInContext(fixtureSource(proto,fixtureGroups.proto_document_to_renderWorkspaceHeader,{filename:'proto.js',wrapper:1}),createContext({...context,addEventListener(){}}));await d.document.querySelector('[data-go="doc"]')!.emit('click');assert.equal(location.href,'17-doc.html');
  assert.match(proto,/\['doc','Документы',count\(project,'docs'\)\]/);assert.match(proto,/item\('doc','Документы проекта'\)/);assert.match(live,/\['Документы проекта','17-doc.html'\]/);assert.doesNotMatch(proto,/Документ стадии/);
  const cold=view('doc',async()=>data('doc'));await cold.functions.fetch();assert.match(cold.document.title,/Документы проекта · a/);assert.equal(cold.find('[data-project-section]').dataset.projectSection,'docs');
 });
@@ -95,7 +96,7 @@ test('140: actual applyStatus and project POST evict old documents before repain
  const h=await fixture(t,{seats:'  {}'}),other=join(h.dir,'second');mkdirSync(join(h.dir,'.harness','docs'),{recursive:true});writeFileSync(join(h.dir,'.harness','docs','old.md'),'OLD PROJECT DOCUMENT');mkdirSync(join(other,'.harness','docs'),{recursive:true});writeFileSync(join(other,'.harness','docs','new.md'),'NEW PROJECT DOCUMENT');
  const v=view('doc',async(path,body)=>(await call(h.api,path,body?{body}:{})).body);v.H.project='';v.functions.applyStatus((await call(h.api,'/api/status')).body);await v.settle();assert.match(v.find('.main').textContent,/OLD PROJECT DOCUMENT/);
  v.sandbox.fetch=async(path:string,options:any)=>({json:()=>v.sandbox.api(path,options?JSON.parse(options.body):undefined)});
- runInContext(part(live,'  const api=','  // TS-07: waiting controls')+'\nglobalThis.changeProject=api;',v.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_api_to_networkWaiting,{filename:'live.js',wrapper:0})+'\nglobalThis.changeProject=api;',v.context);
  await v.sandbox.changeProject('/api/project',{path:other});assert.doesNotMatch(v.find('.main').textContent,/OLD PROJECT DOCUMENT/);
  v.functions.applyStatus((await call(h.api,'/api/status')).body);await v.settle();assert.match(v.find('.main').textContent,/NEW PROJECT DOCUMENT/);assert.doesNotMatch(v.find('.main').textContent,/OLD PROJECT DOCUMENT/);assert.equal(h.provider.calls.length,0);
 });

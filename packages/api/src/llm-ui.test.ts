@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import {keySlot,LlmError} from '@harnessy/llm';
 import {builtinProviders} from '@earendil-works/pi-ai/providers/all';
 import test from 'node:test';
@@ -93,6 +94,6 @@ test('21g: Ollama Cloud preset discovers with draft key, saves to Keychain and r
 
 test('21g: cloud recovery button opens a prefilled API draft without sending a key or calling a model',opts,async t=>{
  const h=await fixture(t,{deps:{llmKeys:new MemoryKeys()}}),v=ui(async(path,body)=>(await call(h.api,path,body?{body}:{})).body);await v.L.loadLlmRoutes();
- const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),start=live.indexOf('  function finish('),end=live.indexOf('  function transferHTML(',start),state:{chat:any[]}={chat:[]},ctx={H:{cur:null},S:state,mdFiles:new Map(),window:{},esc:v.L.esc,save(){},render(){},setTimeout(){},now:()=>0};runInContext(live.slice(live.indexOf('  // The visible stream is a projection'),live.indexOf('  const settingJobs='))+live.slice(start,end)+`finish({type:'error',code:'cloud_api_required',message:'облачные модели — через Ollama Cloud по API'})`,createContext(ctx));const html=state.chat[0].html;v.body.insertAdjacentHTML('beforeend',html);
+ const live=readFileSync(new URL('../../../ui/deploy/live.js',import.meta.url),'utf8'),state:{chat:any[]}={chat:[]},ctx={H:{cur:null},S:state,mdFiles:new Map(),window:{},esc:v.L.esc,save(){},render(){},setTimeout(){},now:()=>0};runInContext(fixtureSource(live,fixtureGroups.live_streams_to_queueDelivered,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_finish_to_finish,{filename:'live.js',wrapper:0})+`finish({type:'error',code:'cloud_api_required',message:'облачные модели — через Ollama Cloud по API'})`,createContext(ctx));const html=state.chat[0].html;v.body.insertAdjacentHTML('beforeend',html);
  await v.click('[data-llm-ollama-cloud]');assert.equal(v.find('[data-llm-field="url"]').value,'https://ollama.com/v1');assert.equal(v.find('[data-llm-field="api"]').value,'openai-completions');assert.equal(v.find('[data-llm-field="name"]').value,'Ollama Cloud');assert.equal(v.find('[data-llm-field="secret"]').getAttribute('type'),'password');assert.equal(v.requests.some(r=>r.body),false);
 });

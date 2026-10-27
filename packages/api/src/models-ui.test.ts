@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
@@ -45,7 +46,7 @@ function ui(options:{apiRoutes?:Data[];page?:string;room?:boolean;statusFetch?:(
    const result=path==='/api/status'?(options.statusFetch?await options.statusFetch():{project:H.project,panes:H.panes,models:serverModels??H.models,turnModes:H.turnModes}):options.fetch?await options.fetch(path,body):path==='/api/providers/catalog'?snapshot:{ok:true,pane:{...H.pane,...body},...(path==='/api/room'?{previousModel:{model:H.pane?.model||'',vendor:H.pane?.vendor||''}}:{})};
    if(body&&result.ok)lastPane=result.pane;return {status:result.code==='capability_unsupported'?409:200,json:async()=>result};}};
  ctx.window=ctx;const context=createContext(ctx);
- runInContext(part(live,'  const api=','  // TS-07: waiting controls')+part(live,'  let bindingGeneration','  function md(')+part(live,'  function applyStatus(','  async function refreshChats(')+part(live,'  function projectPathValue(','  function laPath(')+
+ runInContext(fixtureSource(live,fixtureGroups.live_api_to_networkWaiting,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_bindingGeneration_to_settingsReady,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_applyStatus_to_applyStatus,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_projectPathValue_to_projectPathValue,{filename:'live.js',wrapper:0})+
   '\nglobalThis.binding={networkMenu,networkPath,networkWarning,api,sendBinding,bindingCurrent,invalidateBinding,configureSetting,recordModelChange,applyStatus,projectPathValue};',context);
  ctx.LIVE={H,S,esc,...ctx.binding,...(options.apiRoutes?{apiRoutes:options.apiRoutes,loadLlmRoutes:async()=>true}:{}),save(){},log(){},toast:ctx.toast,paneName:(p:Data)=>p.label,busy:()=>false,hStatus(){},
   refreshStatus:async()=>{if(lastPane){Object.assign(H.pane,lastPane);await d.window.emit('live:status')}},
@@ -132,12 +133,12 @@ test('TS-49.2: hidden Electron shows saving, confirmed receipt and refusal at fo
 
 test('TS-47.1 F07: direct-mode close uses mouse and keyboard without opening rights, and the next request is routed normally',async()=>{
  for(const action of ['click','Enter',' ']){
-  const v=ui();v.S.ui.direct={worker:true};v.ctx.CX.render();runInContext(part(proto,'  const keyboardActions=','  renderSide();renderWorkspaceHeader();'),v.ctx);
+  const v=ui();v.S.ui.direct={worker:true};v.ctx.CX.render();runInContext(fixtureSource(proto,fixtureGroups.proto_keyboardActions_to_document,{filename:'proto.js',wrapper:1}),v.ctx);
   const close=v.find('[data-cx-direct-off]');assert.equal(close.tagName,'SPAN');assert.match(close.parentElement!.textContent,/напрямую/);assert.equal(close.getAttribute('role'),'button');assert.equal(close.getAttribute('tabindex'),'0');assert.equal(close.getAttribute('aria-label'),'Снова через оркестратора');
   if(action==='click')await close.emit('click');else{(close as any).click=()=>close.emit('click');await close.emit('keydown',{key:action});await v.flush()}
   assert.equal(!!v.S.ui.direct.worker,false,action);assert.equal(v.document.querySelector('.cx-pop'),null,action);
   Object.assign(v.ctx,{paneName:v.ctx.LIVE.paneName,drawLive(){},render(){},log(){},cols:()=>[],scrollEnd(){},renderWaiting(){},refreshStatus:async()=>{}});
-  runInContext(part(live,'  async function ask(','  function rememberLive()')+'\nglobalThis.realAsk=ask;',v.ctx);await v.ctx.realAsk('следующий ход',v.ctx.binding.sendBinding());
+  runInContext(fixtureSource(live,fixtureGroups.live_ask_to_ask,{filename:'live.js',wrapper:0})+'\nglobalThis.realAsk=ask;',v.ctx);await v.ctx.realAsk('следующий ход',v.ctx.binding.sendBinding());
   assert.equal(v.requests.find(r=>r.path==='/api/chat')?.body?.direct,false,action);
   await v.find('.cx-bot [data-cx="rights"]').emit('click');assert.ok(v.document.querySelector('[data-cx-mode="read"]'),action);
  }
@@ -288,7 +289,7 @@ for(const page of ['chat','new'])for(const door of ['rights','model'])test('358:
  const initial=(await call(h.api,'/api/status')).body,v=ui({page,fetch:async(path,body)=>{if(path==='/api/providers/catalog')return catalogue();receipt=await call(h.api,path,{body});return receipt.body}});
  Object.assign(v.H,{project:initial.project,panes:plain(initial.panes),active:plain(initial.activeChats)});v.H.pane=v.H.panes.find((p:Data)=>p.id==='worker');v.S.ui.pane='worker';await v.status();
  const sources:Data[]=[];v.ctx.drawLive=()=>{};v.ctx.paneName=(p:Data)=>p.label;v.ctx.EventSource=class{onmessage:((e:Data)=>void)|null=null;constructor(){sources.push(this)}close(){}};v.H.events={onmessage(){}};
- runInContext('var warningSeen=new Set();\n'+part(live,'  function consumeState(','  function waitingControls(')+part(live,'  const LIVE_EVENTS=','  async function hConnect(')+'\nsyncLiveEvents();',v.ctx);
+ runInContext('var warningSeen=new Set();\n'+fixtureSource(live,fixtureGroups.live_consumeState_to_consumeState,{filename:'live.js',wrapper:0})+fixtureSource(live,fixtureGroups.live_LIVE_EVENTS_to_addEventListener,{filename:'live.js',wrapper:0})+'\nsyncLiveEvents();',v.ctx);
  await h.runtime.runTurn('worker','fixture turn');const states=events.events.filter(e=>e.type==='state'&&e.pane==='worker');assert.ok(states.length>=2);
  for(const event of events.events){if(event.type==='state')sources[0]!.onmessage({data:JSON.stringify(event)});if(event.type==='done')v.H.cur=null}await v.status();
  assert.deepEqual(plain(v.H.pane.settingsBinding),h.runtime.paneBinding('worker'));assert.notEqual(v.H.pane.settingsBinding.revision,initial.panes[0].settingsBinding.revision);

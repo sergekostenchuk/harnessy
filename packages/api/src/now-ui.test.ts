@@ -1,3 +1,4 @@
+import {fixtureSource,fixtureGroups} from './live-fixture.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Approval,createRuntime} from '@harnessy/runtime';
@@ -168,7 +169,7 @@ for(const delay of [false,true])for(const statusFirst of [false,true])test('167/
   onmessage?:((e:any)=>void);onopen?:((e:any)=>void);onerror?:((e:any)=>void);frames:any[]=[];req:any;res:any;
   constructor(url:string){sources.push(this);this.req=request(h.api.url+url,res=>{this.res=res;this.onopen?.({});let pending='';res.on('error',()=>{});res.on('data',chunk=>{pending+=chunk.toString();let end;while((end=pending.indexOf('\n\n'))>=0){const block=pending.slice(0,end);pending=pending.slice(end+2);if(block.startsWith('data: ')){const data=block.slice(6);this.frames.push(JSON.parse(data));this.onmessage?.({data})}}})});this.req.on('error',()=>{});this.req.end();t.after(()=>this.close())}close(){this.req.destroy();this.res?.destroy()}
  }});
- runInContext(live.slice(live.indexOf('  async function hConnect(){'),live.indexOf('  // ── чат: настоящее поле ввода'))+'globalThis.connect=hConnect;',v.context);
+ runInContext(fixtureSource(live,fixtureGroups.live_hConnect_to_hConnect,{filename:'live.js',wrapper:0})+'globalThis.connect=hConnect;',v.context);
  if(statusFirst){await v.window.emit('live:status');assert.equal(sources.length,0)}const connecting=v.context.connect();await until(()=>sources.length===1&&sources[0].frames.some((e:any)=>e.type==='approval'));await settled(v);
  assert.equal(v.functions.items().pending.length,1);assert.match(v.find('#v-turn .lst').textContent,/Real confirmation/);gate.resolve();await connecting;h.clock.advance(1000);assert.equal(await approved,false);await until(()=>sources[0].frames.some((e:any)=>e.type==='approvalResolved'));await settled(v);assert.equal(v.functions.items().pending.length,0);assert.equal(sources.length,1);
 });
