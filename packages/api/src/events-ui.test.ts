@@ -94,7 +94,7 @@ test('168/190 ОКНА: real SSE during a captured HTTP snapshot triggers a seco
  const captured=deferred(),release=deferred();t.after(()=>release.resolve());let delay=false;
  const v=ui(async path=>{const response=(await call(h.api,path)).body;if(delay&&path.startsWith('/api/journal')){delay=false;captured.resolve();await release.promise}return response});v.H.project=h.dir;
  Object.assign(v.context,{leftPage:false,S:{ui:{pane:'worker'},chat:[]},sendBinding:()=>({}),bindingCurrent:()=>true,sideChats:async()=>{},hStatus(){},badges(){},pickPane(){},renderWaiting(){},save(){},modelName:(s:any)=>s,toast(){},setTimeout:(fn:any)=>queueMicrotask(fn),CustomEvent:class{type:string;constructor(type:string){this.type=type}},dispatchEvent:(e:any)=>{void v.window.emit(e.type)}});
- runInContext(part(live,'  function applyStatus(','  // лента активного чата'),v.context);
+ runInContext(part(live,'  // The visible stream is a projection','  const settingJobs=')+part(live,'  function applyStatus(','  // лента активного чата'),v.context);
  await v.functions.sync();const stream=await sse(h.api);t.after(()=>stream.close());await until(()=>stream.raw.includes(': ok'));let seen=0;
  const deliver=()=>{while(seen<stream.frames.length)v.streams.at(-1).onmessage({data:JSON.stringify(stream.frames[seen++])})};delay=true;
  h.runtime.registry.get('worker')!.publish({type:'note',text:'refresh'});await until(()=>stream.frames.length===1);deliver();await captured.promise;

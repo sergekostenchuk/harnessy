@@ -757,6 +757,14 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
       </div>
     </section>
 
+    <section id="conversation-flow-spec"><h2>Поток и очередь сообщений<i></i></h2>
+      <div class="two">
+        <div class="box"><div class="cap2">Сообщение принято в очередь</div><p>Проверь ещё и второй вариант.</p><small class="t3">В очереди · Ревьюер · после текущего хода</small><p class="conn-note">Состояние и адресат показываются только после квитанции движка. При доставке отметка исчезает; отказ и неизвестность не изображаются как доставка.</p></div>
+        <div class="box"><div class="cap2">Действия во время ответа</div><div class="act"><button type="button" class="btn sm ghost">■ Стоп</button><button type="button" class="btn sm p">После текущего хода ↑</button></div><p class="conn-note">Остановка отдельна от отправки в существующую очередь. Enter отправляет написанное после текущего хода; пустое поле не отправляет.</p></div>
+      </div>
+      <div class="box"><div class="cap2">Чтение во время потока</div><button type="button" class="btn sm ghost">К новым сообщениям ↓</button><p class="conn-note">Прокручиваем только когда читатель у конца ленты. Выделенный текст и читаемые узлы не заменяются при новых символах и завершении; действие возвращает к последним сообщениям мышью или клавиатурой.</p></div>
+    </section>
+
     <section id="tool-group-spec"><h2>Группа инструментов · свёрнутый итог внутри хода<i></i></h2>
       <style>
       #tool-group-spec{max-width:calc(100vw - 40px);min-width:0}#tool-group-spec .box{min-width:0;container-type:inline-size}

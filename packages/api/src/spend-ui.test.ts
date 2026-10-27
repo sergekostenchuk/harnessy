@@ -6,7 +6,7 @@ import {createContext,runInContext} from 'node:vm';
 import {dom} from './ui-dom-test-helpers.ts';
 import {record,ProviderCatalog,ProviderError,type CatalogEntry,type ProviderLimits} from '@harnessy/providers';
 import {copilotFixture} from '../../providers/src/copilot-test-helpers.ts';
-import {fixture,call,deferred,until,sse,FakeProvider,FakeClock} from './test-helpers.ts';
+import {fixture,call,deferred,until,sse,FakeProvider,FakeClock,OWNER} from './test-helpers.ts';
 const read=(path:string)=>readFileSync(new URL('../../../'+path,import.meta.url),'utf8'),live=read('ui/deploy/live.js'),raw=read('ui/sketches/disarto/05-spend.html');
 const part=(source:string,start:string,end:string)=>{const a=source.indexOf(start),b=source.indexOf(end,a+start.length);assert.ok(a>=0&&b>a,start);return source.slice(a,b)};
 const metrics=(turns=1)=>({turns,input:2,output:3,cacheRead:0,durationMs:10,averageDurationMs:10,durationSamples:1,p50DurationMs:10,p95DurationMs:10,errorRate:0,outcomes:{ok:turns,interrupted:0,error:0,unknown:0},missingMeasurements:0,cost:null,costByCurrency:[],unpricedTurns:turns,pricedTurns:0,costReason:'нет цены'});
@@ -22,7 +22,7 @@ function ui(fetch?:(path:string,body?:any)=>Promise<any>,on=true){
   URL:{createObjectURL(blob:Blob){blobs.push(blob);return 'blob:test'},revokeObjectURL(){}},localStorage:{setItem(...v:any[]){writes.push(v)},getItem:()=>null}};
  const create=d.document.createElement.bind(d.document);d.document.createElement=(tag:string)=>{const n:any=create(tag);if(tag==='a')n.click=()=>downloaded.push(n.download);return n};context.window=context;
  const vm=createContext(context);runInContext(read('ui/sketches/disarto/app.js'),vm);runInContext(part(raw,'<script>','</script>').slice('<script>'.length),vm);
- runInContext(part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  function closeLAMenus(','  // запись «контекст передан»')+part(live,'  const statics=','  // ══ ПЛАН:')+part(live,'  // TS-14b: spend blocks','  // ══ ПОДКЛЮЧЕНИЯ')+'\nglobalThis.testing={fetch:spendFetch,draw:spendDraw,csv:spendCsv,state:SP,limits:limitsFetch,limitState:LIM,limitDraw:limitsDraw,limitEvent:limitsEvent,subscribe:subscribeLiveEvents,syncEvents:syncLiveEvents,history:spendHistory,windows:spendWindows};restoreUI();',vm);
+ runInContext(part(live,'  // The visible stream is a projection','  const settingJobs=')+part(live,'  // TS-12: one project-bound transport','  // End TS-12 shared events.')+part(live,'  function closeLAMenus(','  // запись «контекст передан»')+part(live,'  const statics=','  // ══ ПЛАН:')+part(live,'  // TS-14b: spend blocks','  // ══ ПОДКЛЮЧЕНИЯ')+'\nglobalThis.testing={fetch:spendFetch,draw:spendDraw,csv:spendCsv,state:SP,limits:limitsFetch,limitState:LIM,limitDraw:limitsDraw,limitEvent:limitsEvent,subscribe:subscribeLiveEvents,syncEvents:syncLiveEvents,history:spendHistory,windows:spendWindows};restoreUI();',vm);
  const find=(selector:string)=>{const n=d.document.querySelector(selector);assert.ok(n,selector);return n};
  return {...d,H,S,context,requests,blobs,downloaded,logs,writes,toasts,find,response,functions:context.testing};
 }
@@ -228,7 +228,7 @@ test('TS-12 r2: project A → B → A and pagehide cancel old streams and late H
 // TS-15c: Now replay is covered with HTTP snapshots in now-ui.test.ts. Chat still consumes approval payloads.
 for(const page of ['chat'])for(const delay of [false,true])for(const statusFirst of [false,true])test('TS-12 r3: '+page+' retains approval replay with '+(delay?'slow':'immediate')+' chat loading'+(statusFirst?' and an early live:status':''),async t=>{
  const h=await fixture(t),pane=h.runtime.registry.get('worker')!,approved=pane.askApproval('Разрешить тестовое действие','только дублёр',1000),gate=deferred(),sources:any[]=[];
- const v=ui(async path=>(await call(h.api,path)).body);v.context.PAGE=page;v.H.project=h.dir;v.H.pane=pane.settings();v.H.asks={};v.S.ui.pane='worker';
+ const v=ui(async path=>(await call(h.api,path)).body);v.context.PAGE=page;v.H.project=h.dir;v.H.pane=pane.settings();v.H.active=h.runtime.chatsList(OWNER).active;v.H.asks={};v.S.ui.pane='worker';
  Object.assign(v.context,{firstSelectPane(){},firstDraw(){},NOW:{es:null,alive:true},nowFetch:async()=>true,nowDraw(){},hStatus(){},render(){},liveFirstPaint(){},drawLive(){},warningEvent:()=>false,consumeState(){},refreshChats:async()=>{if(delay)await gate.promise},loadChat:async()=>{},applyStatus(st:any){Object.assign(v.H,{on:true,project:st.project,panes:st.panes});if(statusFirst)void v.window.emit('live:status')},EventSource:class{
   onmessage?:((event:any)=>void);onopen?:((event:any)=>void);onerror?:((event:any)=>void);frames:any[]=[];req:any;res:any;
   constructor(url:string){sources.push(this);this.req=request(h.api.url+url,res=>{this.res=res;this.onopen?.({});let pending='';res.on('error',()=>{});res.on('data',chunk=>{pending+=chunk.toString();let end;while((end=pending.indexOf('\n\n'))>=0){const block=pending.slice(0,end);pending=pending.slice(end+2);if(block.startsWith('data: ')){const data=block.slice(6);this.frames.push(JSON.parse(data));this.onmessage?.({data})}}})});this.req.on('error',()=>{});this.req.end();t.after(()=>this.close())}

@@ -265,14 +265,14 @@ test('TS-26 window: unsent card uses plain reason, bound retry/remove and techni
 test('TS-26 window: late chat HTTP response cannot restore an unsent card after done SSE',async()=>{
  const pane={id:'room',model:'w1',waiting:null as unknown},H={pane,panes:[pane],cur:{} as unknown},S={chat:[{role:'me',text:'новое'}],ui:{}};let reads=0;
  const context=createContext({H,S,sendBinding:()=>({pane:'room'}),bindingCurrent:()=>true,drawLive(){},render(){},renderWaiting(){},toast(){},save(){},api:async()=>({ok:true,seq:2,waiting:{...waiting,status:'unsent'}}),refreshStatus:async()=>{reads++;pane.waiting=null},log(){},esc:String});
- runInContext(source.slice(source.indexOf('  async function ask('),source.indexOf('  function rememberLive('))+'\nglobalThis.askTest=ask;',context);
+ runInContext(source.slice(source.indexOf('  // The visible stream is a projection'),source.indexOf('  const settingJobs='))+source.slice(source.indexOf('  async function ask('),source.indexOf('  function rememberLive('))+'\nglobalThis.askTest=ask;',context);
  assert.equal(await (context as any).askTest('новое'),true);assert.equal(reads,1);assert.equal(pane.waiting,null);
 });
 
 function sendingWindow(){
  const response=deferred<unknown>(),pane={id:'room',model:'w1',waiting:null as unknown},H={pane,panes:[pane],active:{room:'chat-a'},cur:null as any},S={chat:[{role:'me',text:'новое'}] as any[],ui:{},cx:{}};
  const context=createContext({H,S,sendBinding:()=>({pane:'room'}),bindingCurrent:()=>true,drawLive(){},render(){},renderWaiting(){},toast(){},save(){},api:()=>response.promise,refreshStatus:async()=>{pane.waiting=null},log(){},esc:String,md:(text:string)=>text,mdFiles:new Map(),toolLine:()=>'',paneName:()=>'',now:()=>1,window:{},setTimeout(){},warningEvent:()=>false,networkCodes:new Set()});
- runInContext(source.slice(source.indexOf('  const statNumber='),source.indexOf('  let turnStatsOpen='))+source.slice(source.indexOf('  function finish('),source.indexOf('  const isDirect='))+source.slice(source.indexOf('  async function ask('),source.indexOf('  function rememberLive('))+'\nglobalThis.askTest=ask;globalThis.eventTest=hEvent;',context);
+ runInContext(source.slice(source.indexOf('  // The visible stream is a projection'),source.indexOf('  const settingJobs='))+source.slice(source.indexOf('  const statNumber='),source.indexOf('  let turnStatsOpen='))+source.slice(source.indexOf('  function finish('),source.indexOf('  const isDirect='))+source.slice(source.indexOf('  async function ask('),source.indexOf('  function rememberLive('))+'\nglobalThis.askTest=ask;globalThis.eventTest=hEvent;',context);
  return {H,S,ask:()=>(context as any).askTest('новое'),event:(event:unknown)=>(context as any).eventTest(event),respond:()=>response.resolve({ok:true,seq:2,waiting:{...waiting,status:'unsent'}})};
 }
 for(const stream of ['after-send','before-send','replacement','finished'] as const)test('TS-26 r2: late unsent HTTP preserves SSE response '+stream,async()=>{

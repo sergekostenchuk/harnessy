@@ -61,6 +61,14 @@ test('36D: live work canvas uses project seats, chats, usage and channel, and th
  assert.equal(v.subscriptions.length,1);await v.window.emit('pagehide');assert.equal(v.subscriptions[0].closed,true);await v.window.emit('pageshow',{persisted:true});await v.settle();assert.equal(v.subscriptions.length,2);
 });
 
+test('TS-47.3 F01: team cards keep each running status on its own place',async()=>{
+ let data=snapshot('/project-a',[{...pane('orch','orchestrator','chat-orch'),busy:true},{...pane('worker','worker','chat-worker'),busy:false}]);
+ const v=teamUi('work',async path=>{if(path==='/api/swarm')return data;if(path==='/api/chats/chat-orch')return chat('chat-orch','orch');if(path==='/api/chats/chat-worker')return chat('chat-worker','worker');throw Error('unexpected '+path)});await v.settle();
+ assert.match(v.find('[data-key="orch"]').textContent,/пишет/);assert.doesNotMatch(v.find('[data-key="worker"]').textContent,/пишет/);
+ data=snapshot('/project-a',[{...pane('orch','orchestrator','chat-orch'),busy:false},{...pane('worker','worker','chat-worker'),busy:true}]);await v.window.emit('live:status');await v.settle();
+ assert.doesNotMatch(v.find('[data-key="orch"]').textContent,/пишет/);assert.match(v.find('[data-key="worker"]').textContent,/пишет/);
+});
+
 test('36D: a page without a historical top bar keeps the SPEC banner inside main, outside the sidebar grid',()=>{
  const d=dom('<div class="frame"><div class="app"><aside class="side ps"></aside><section class="main" data-team-live="work"></section></div></div>');Object.assign(d.document,{documentElement:d.html,body:d.body});
  const context:any={KEY:'swarm',document:d.document};context.window=context;runInContext(part(proto,'  // TS-15a specification','  // End TS-15a specification'),createContext(context));

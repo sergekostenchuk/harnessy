@@ -39,7 +39,7 @@ for(const page of ['chat','new'])test('154 UI '+page+': conflict opens existing 
 
 test('157: tool failure shows a readable reason and preserves escaped technical details',()=>{
  const context:any={H:{cur:null},warningEvent:()=>false,drawLive(){},esc:(v:string)=>v.replaceAll('<','&lt;').replaceAll('>','&gt;')};const vm=createContext(context);
- runInContext(live.split('\n').find(l=>l.startsWith('  const toolLine='))!+part(live,'  function hEvent(','  const isDirect=')+'globalThis.event=hEvent;globalThis.html=()=>toolLine(H.cur.tools[0]);',vm);
+ runInContext(part(live,'  // The visible stream is a projection','  const settingJobs=')+live.split('\n').find(l=>l.startsWith('  const toolLine='))!+part(live,'  function toolErrorEntry(','  const isDirect=')+'globalThis.event=hEvent;globalThis.html=()=>toolLine(H.cur.tools[0]);',vm);
  context.event({type:'toolError',text:JSON.stringify({error:'Документ не прочитан',code:'ENOENT',path:'<script>unsafe</script>'})});assert.match(context.H.cur.tools[0].text,/Документ не прочитан/);assert.match(context.html(),/Технические детали/);assert.match(context.html(),/ENOENT/);assert.doesNotMatch(context.html(),/<script>/);
 });
 
