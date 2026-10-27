@@ -2,7 +2,7 @@ import {currentTurnPrice} from './turn-usage.ts';
 import {transcriptText,type ConversationSnapshot} from '@harnessy/context';
 import {realpathSync} from 'node:fs';
 import {join,relative,isAbsolute,sep} from 'node:path';
-import {orderedClone,pythonTrim,type Initiator} from '@harnessy/journal';
+import {normalizeAttachments,orderedClone,pythonTrim,type Initiator} from '@harnessy/journal';
 import {RuntimeError,message,slice,object} from './errors.ts';
 import {owner,place,free,reserve,locked,same} from './operations.ts';
 import type {Runtime} from './runtime.ts';
@@ -96,8 +96,30 @@ export function chatsList(runtime:Runtime,initiator:Initiator) {
  const p=owner(runtime,initiator);p.state.saveChats(p.registry);
  return {active:orderedClone(p.state.chats.active),chats:Object.values(p.state.chats.chats).map(c=>meta(p,c)).sort((a,b)=>b.last-a.last)};
 }
+// Failed inputs are journal entries, not committed transcript messages: never
+// add them to the transcript used for context transfer or model replay.
+function failedAttemptInputs(runtime:Runtime,p:ProjectState,c:Chat) {
+ const represented=new Set(c.transcript.flatMap(m=>['me','peer'].includes(m.role)&&Number.isSafeInteger(m.journalSeq)?[Number(m.journalSeq)]:[]));
+ const promotion=object(c.promotion)?c.promotion:null,source=promotion&&object(promotion.source)?promotion.source:null,sourceChat=source&&object(source.chat)&&source.chat.id===c.id?source.chat:null;
+ if(promotion&&(c.turns??[]).some(turn=>turn.outcome==='error'&&turn.recordSeqs!==undefined)&&(!source||!sourceChat||typeof source.pane!=='string'||typeof source.cwd!=='string'||!object(promotion.input)||typeof promotion.input.project!=='string'||!Array.isArray(sourceChat.transcript)||sourceChat.turns!==undefined&&!Array.isArray(sourceChat.turns)))throw new RuntimeError('context_binding_invalid','источник незавершённого хода повреждён',409);
+ const sourceTurns=sourceChat&&Array.isArray(sourceChat.turns)?sourceChat.turns:[],seqs=new Map<number,string>(),foreign=new Set<string>(),unavailable=new Set<string>();
+ for(const turn of c.turns??[])if(turn.outcome==='error'&&turn.recordSeqs!==undefined){if(!Array.isArray(turn.recordSeqs))throw new RuntimeError('context_binding_invalid','записи незавершённого хода повреждены',409);
+  const original=sourceTurns.find(item=>object(item)&&item.turnInstanceId===turn.turnInstanceId);let pane=c.pane;
+  if(original){if(!source||!sourceChat||typeof source.pane!=='string'||typeof source.cwd!=='string'||!promotion||!object(promotion.input)||typeof promotion.input.project!=='string'||!object(original)||JSON.stringify(original.recordSeqs)!==JSON.stringify(turn.recordSeqs))throw new RuntimeError('context_binding_invalid','источник незавершённого хода повреждён',409);
+   if(source.cwd!==p.dir||promotion.input.project!==p.dir){foreign.add(turn.turnInstanceId);const sourceMessages=Array.isArray(sourceChat.transcript)?sourceChat.transcript:[];
+    for(const seq of turn.recordSeqs){if(!Number.isSafeInteger(seq)||seq<=0)throw new RuntimeError('context_binding_invalid','номер записи незавершённого хода повреждён',409);const prior=sourceMessages.find(m=>object(m)&&['me','peer'].includes(String(m.role))&&m.journalSeq===seq);if(!object(prior)||!Number.isSafeInteger(prior.seq)||!c.transcript.some(m=>m.seq===prior.seq&&m.role===prior.role&&m.text===prior.text&&m.ts===prior.ts))unavailable.add(turn.turnInstanceId)}continue;
+   }pane=source.pane}
+  for(const seq of turn.recordSeqs){if(!Number.isSafeInteger(seq)||seq<=0||seqs.has(seq)&&seqs.get(seq)!==pane)throw new RuntimeError('context_binding_invalid','номер записи незавершённого хода повреждён',409);if(!represented.has(seq))seqs.set(seq,pane)}
+ }
+ const inputs=[...seqs].sort((a,b)=>a[0]-b[0]).map(([seq,pane])=>{
+  const record=p.journal.get(seq);if(!record||typeof record.text!=='string'||typeof record.ts!=='string'||record.from===pane||record.origin==='steer'||['protocol','rejected','ack','policy'].includes(record.kind)||!record.to.some(to=>to===pane||to==='*'))throw new RuntimeError('context_binding_invalid','запись незавершённого хода не соответствует разговору',409);
+  const attachments=normalizeAttachments(record.attachments),stamp=Date.parse(record.ts),ts=Number.isFinite(stamp)?stamp/1000:0;
+  return {role:record.from==='owner'?'me':'peer',text:record.from==='owner'?record.text:'[от '+runtime.labelOf(record.from,p)+'] '+record.text,journalSeq:seq,ts,...(ts?{journalTs:ts}:{}),...(attachments.length?{attachments}:{})};
+ });
+ return {inputs,foreign:[...foreign],unavailable:[...unavailable]};
+}
 export function chatGet(runtime:Runtime,id:string,initiator:Initiator) {
- const p=owner(runtime,initiator),c=find(p,id);p.state.saveChats(p.registry);const knowledge=roleKnowledge(p,c),prices=runtime.settings.priceList();return {chat:meta(p,c),messages:jsonClone(c.transcript.map(message=>currentTurnPrice(message,prices))),...(c.turns?.length?{turns:jsonClone(c.turns)}:{}),...(knowledge?{knowledge,firstOpenPending:firstOpenPending(p,p.registry.get(c.pane)!)}:{})};
+ const p=owner(runtime,initiator),c=find(p,id);p.state.saveChats(p.registry);const knowledge=roleKnowledge(p,c),prices=runtime.settings.priceList(),attemptInputs=failedAttemptInputs(runtime,p,c);return {chat:meta(p,c),messages:jsonClone(c.transcript.map(message=>currentTurnPrice(message,prices))),...(c.turns?.length?{turns:jsonClone(c.turns)}:{}),...(attemptInputs.inputs.length?{attemptInputs:attemptInputs.inputs}:{}),...(attemptInputs.foreign.length?{foreignAttemptInputs:attemptInputs.foreign}:{}),...(attemptInputs.unavailable.length?{unavailableAttemptInputs:attemptInputs.unavailable}:{}),...(knowledge?{knowledge,firstOpenPending:firstOpenPending(p,p.registry.get(c.pane)!)}:{})};
 }
 export async function chatsNew(runtime:Runtime,input:{pane?:unknown;carry?:unknown},initiator:Initiator) {
  const p=owner(runtime,initiator),pid=String(input.pane||'');if(pid==='room'&&!p.registry.get('room'))makeRoomIn(p,runtime,'',p.dir===runtime.defaultDir?'chat':'read');const pane=place(p,pid),carry=String(input.carry||'text');free(p,pane);

@@ -111,6 +111,17 @@ test('TS-50.B r2: a peer task precedes both failed fragments and the successful 
  assert.equal(v.S.chat[0].journalSeq,42);assert.equal(v.S.chat[0].t,9000);assert.equal(v.S.chat[3].t,14000,'model output keeps its own timestamp');
 });
 
+test('TS-50.B r2: failed input survives reload before retry, is not duplicated afterwards, and belongs to its attempt',async()=>{
+ const turns=[{turnInstanceId:'attempt-1',ts:10,outcome:'error',partialText:'Фрагмент 1',recordSeqs:[42]},{turnInstanceId:'attempt-2',ts:11,outcome:'error',partialText:'Фрагмент 2',recordSeqs:[42]}];
+ let done=false;const v=ui({fetch:async path=>path==='/api/chats/chat-a'?{messages:done?[{seq:1,role:'me',text:'Вопрос',journalSeq:42,journalTs:9,ts:12},{seq:2,role:'ai',text:'Итог',ts:13}]:[],turns,attemptInputs:[{role:'me',text:'Вопрос',journalSeq:42,journalTs:9,ts:9},{role:'me',text:'Чужой вопрос',journalSeq:99,journalTs:8,ts:8}]}:{records:[]}});
+ await v.functions.loadChat();assert.deepEqual(v.S.chat.map((m:Data)=>m.text),['Вопрос','Фрагмент 1','Фрагмент 2']);assert.equal(v.requests.some(r=>r.path==='/api/onboard'),false);
+ const identity=v.functions.bubble(v.S.chat[0],0).match(/data-message-live-id="([^"]+)"/)?.[1];await v.functions.loadChat({onboard:false});assert.equal(v.functions.bubble(v.S.chat[0],0).match(/data-message-live-id="([^"]+)"/)?.[1],identity);
+ done=true;await v.functions.loadChat({onboard:false});assert.deepEqual(v.S.chat.map((m:Data)=>m.text),['Вопрос','Фрагмент 1','Фрагмент 2','Итог']);
+ const image={id:'a'.repeat(64),mime:'image/png',size:1,w:1,h:1},peer=ui({fetch:async path=>path==='/api/chats/chat-a'?{messages:[],turns,attemptInputs:[{role:'peer',text:'[от Руководитель] Поручение',journalSeq:42,journalTs:9,ts:9,attachments:[image]}]}:{records:[]}});await peer.functions.loadChat({onboard:false});assert.equal(peer.S.chat[0].journalSeq,42);assert.doesNotMatch(peer.functions.actsLine(peer.S.chat[0],0),/передать контекст/);assert.match(peer.functions.bubble(peer.S.chat[0],0),/data-attachment-view/);
+ const moved=ui({fetch:async path=>path==='/api/chats/chat-a'?{messages:[],turns,unavailableAttemptInputs:['attempt-1']}:{records:[]}});await moved.functions.loadChat({onboard:false});assert.match(moved.S.chat[0].html,/Исходная запись недоступна/);
+ const collision=ui({fetch:async path=>path==='/api/chats/chat-a'?{messages:[{seq:4,role:'me',text:'Новый вопрос',journalSeq:42,journalTs:20,ts:22}],turns,foreignAttemptInputs:['attempt-1','attempt-2']}:{records:[]}});await collision.functions.loadChat({onboard:false});assert.equal(collision.S.chat.find((m:Data)=>m.text==='Новый вопрос').t,22000);
+});
+
 test('TS-47.2: stop remains requested until an actual terminal event, including late and failed receipts',async()=>{
  const reply=deferred<Data>(),view=ui({fetch:async path=>path==='/api/interrupt'?reply.promise:{ok:true}}),timers:{ms:number;fn:()=>void}[]=[];
  view.sandbox.setTimeout=(fn:()=>void,ms:number)=>timers.push({fn,ms});const turn={text:'ответ',tools:[],phase:'write',startedAt:Date.now(),pane:'worker'};view.H.cur=turn;view.H.pane.busy=true;
