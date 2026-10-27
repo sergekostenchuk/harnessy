@@ -54,5 +54,28 @@ app.whenReady().then(async()=>{
  if(await evaluate("window.__ctxInterrupts!==0||document.activeElement.getAttribute('aria-expanded')!=='false'"))throw Error('Escape interrupted the turn or failed to return focus');
  await evaluate("LIVE.H.cur=null;window.fetch=window.__ctxFetch;true");key('Tab');if(await evaluate("!!document.activeElement.closest('.ovl:not(.on)')"))throw Error('Tab entered the closed context card');
  await evaluate("document.querySelector('.frame.cur [data-ctx]').focus()");key('Enter');await wait("document.querySelector('.ovl.on [data-context-parts]')&&!document.querySelector('.ovl.on').inert");key('Escape');await wait("document.querySelector('.ovl:not(.on)')?.inert&&document.activeElement.matches('.frame.cur [data-ctx]')");
+ const mouse=({x,y})=>{win.webContents.sendInputEvent({type:'mouseMove',x,y});win.webContents.sendInputEvent({type:'mouseDown',x,y,button:'left',clickCount:1});win.webContents.sendInputEvent({type:'mouseUp',x,y,button:'left',clickCount:1})};
+ for(const [width,height] of [[1440,900],[1440,760],[1100,800],[390,844]]){
+  win.setContentSize(width,height);await wait(`innerWidth===${width}&&innerHeight===${height}`);await wait(`document.documentElement.hasAttribute('data-m')===${width<760}`);
+  for(const close of ['cross','outside']){
+   await evaluate("document.querySelector('.frame.cur [data-ctx]').focus()");key('Enter');
+   try{await wait("document.querySelector('.ovl.on .panel.open [data-context-parts]')&&Number(getComputedStyle(document.querySelector('.ovl.on')).opacity)>0.99")}catch(error){throw Error(error.message+'; '+width+'x'+height+' '+close+'; '+JSON.stringify(await evaluate("({active:document.activeElement?.outerHTML?.slice(0,250),indicator:document.querySelector('.frame.cur [data-ctx]')?.outerHTML,overlay:document.querySelector('.frame.cur .ovl')?.outerHTML?.slice(0,300),binding:LIVE.sendBinding()})")))}
+   await evaluate("document.querySelector('[data-context-part=messages] summary').focus()");
+   const pointExpr=`(()=>{const overlay=document.querySelector('.ovl.on'),panel=overlay.querySelector('.panel');if(${JSON.stringify(close)}==='cross'){const r=panel.querySelector('.x').getBoundingClientRect(),x=Math.round(r.left+r.width/2),y=Math.round(r.top+r.height/2);return document.elementFromPoint(x,y)?.closest('.x')?{x,y}:null}const r=overlay.getBoundingClientRect();for(const [x,y] of [[r.left+5,r.top+5],[r.right-5,r.top+5],[r.left+5,r.bottom-5],[r.right-5,r.bottom-5]])if(document.elementFromPoint(x,y)===overlay)return {x:Math.round(x),y:Math.round(y)};return null})()`;
+   await wait(pointExpr);const point=await evaluate(pointExpr);
+   if(!point)throw Error('No clickable '+close+' at '+width+'x'+height);mouse(point);
+   await wait("document.querySelector('.ovl:not(.on)')?.inert&&document.activeElement.matches('.frame.cur [data-ctx]')");
+   if(await evaluate("document.activeElement.getAttribute('aria-expanded')!=='false'"))throw Error(close+' did not reset the indicator');key('Tab');
+   await wait("!document.activeElement.matches('.frame.cur [data-ctx]')");if(await evaluate("!!document.activeElement.closest('.ovl:not(.on)')"))throw Error('Tab entered the card closed by '+close);
+  }
+ }
+ await evaluate("document.querySelector('.frame.cur [data-ctx]').focus()");key('Enter');await wait("document.querySelector('.ovl.on [data-context-parts]')");
+ await evaluate("(()=>{const a=document.querySelector('.frame.cur [data-ctx]');HX.open(a,'<button type=button data-other-card>Другая карточка</button>',{hide:false});document.querySelector('[data-other-card]').focus()})()");
+ await wait("document.querySelector('.frame.cur [data-ctx]').getAttribute('aria-expanded')==='false'");
+ if(!await evaluate("document.activeElement.matches('[data-other-card]')"))throw Error('Closing context stole focus from a replacement card');
+ await evaluate('HX.close()');await wait("document.querySelector('.ovl:not(.on)')?.inert");
+ await evaluate("document.querySelector('.frame.cur [data-ctx]').focus()");key('Enter');await wait("document.querySelector('.ovl.on [data-context-parts]')");
+ await evaluate("(()=>{LIVE.invalidateBinding();HX.close();document.querySelector('.frame.cur .live-in').focus()})()");
+ await wait("document.querySelector('.ovl:not(.on)')?.inert");if(!await evaluate("document.activeElement.matches('.frame.cur .live-in')"))throw Error('Stale context stole focus from the new conversation');
  console.log('CONTEXT_BROWSER_OK');win.close();app.quit();
 }).catch(error=>{console.error(error);app.exit(1)});
