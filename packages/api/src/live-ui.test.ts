@@ -273,12 +273,12 @@ test('TS-47.2 r6: unknown timestamps never invent a history order',async()=>{
 });
 
 test('TS-47.2 r6: rereading the same chat retains its journal notes until refreshed',async()=>{
- const renders:string[][]=[],view=ui({fetch:async()=>({messages:[{seq:1,role:'ai',text:'один',ts:10},{seq:2,role:'ai',text:'два',ts:30}]})});
+ const renders:string[][]=[],view=ui({fetch:async(path)=>({project:'/project-a',chat:{id:path.endsWith('chat-b')?'chat-b':'chat-a',pane:'worker'},messages:[{seq:1,role:'ai',text:'один',ts:10},{seq:2,role:'ai',text:'два',ts:30}]})});
  view.sandbox.render=()=>{if(view.S.chat.length)renders.push(view.S.chat.map((row:Data)=>String(row.attemptId||row.seq)))};await view.functions.loadChat({onboard:false});
- view.S.chat.splice(1,0,{attemptId:'note-a',role:'ai',src:'sys',text:'решение',html:'решение',t:20000});renders.length=0;
+ view.S.chat.splice(1,0,{attemptId:'note-a',attemptChat:'chat-a',attemptEvidence:'journal',role:'ai',src:'sys',text:'решение',html:'решение',t:20000});renders.length=0;
  await view.functions.loadChat({onboard:false});assert.deepEqual(renders,[['1','note-a','2']]);
  view.H.active.worker='chat-b';renders.length=0;await view.functions.loadChat({onboard:false});assert.deepEqual(renders,[['1','2']],'notes never cross a conversation');
- view.H.active.worker='chat-a';await view.functions.loadChat({onboard:false});view.S.chat.splice(1,0,{attemptId:'note-a',role:'ai',src:'sys',text:'решение',html:'решение',t:20000});view.H.project='/project-b';renders.length=0;await view.functions.loadChat({onboard:false});assert.deepEqual(renders,[['1','2']],'notes never cross projects even if the chat id matches');
+ view.H.active.worker='chat-a';await view.functions.loadChat({onboard:false});view.S.chat.splice(1,0,{attemptId:'note-a',attemptChat:'chat-a',attemptEvidence:'journal',role:'ai',src:'sys',text:'решение',html:'решение',t:20000});view.H.project='/project-b';renders.length=0;await view.functions.loadChat({onboard:false});assert.deepEqual(renders,[['1','2']],'notes never cross projects even if the chat id matches');
 });
 
 test('TS-47.3 F06: only a confirmed queued message gets a recipient and a delivery removes its marker',async()=>{
