@@ -1,4 +1,5 @@
 import {currentTurnPrice} from './turn-usage.ts';
+import {contextChange,contextChangeMessage} from './context-changed.ts';
 import {transcriptText,type ConversationSnapshot} from '@harnessy/context';
 import {realpathSync} from 'node:fs';
 import {join,relative,isAbsolute,sep} from 'node:path';
@@ -40,7 +41,7 @@ export function transferSnapshot(p:ProjectState,pane:Pane,records:readonly impor
  // Opt-out needs only the binding for its receipt. Do not inspect history or side files.
  if(!enabled)return {project:p.dir,chat:id,messages:[],facts:[]};
  chatMetadata(c);
- const messages=c.transcript.filter(m=>!pane.uncommitted.has(m)&&!m.contextTransfer&&['me','ai','peer'].includes(m.role));
+ const messages=c.transcript.filter(m=>!pane.uncommitted.has(m)&&!m.contextTransfer&&!m.contextChanged&&['me','ai','peer'].includes(m.role));
  if(!messages.length&&!c.turns?.length)return null;
  // Explicit foreign provenance is never accepted as this chat's history. Promotion
  // within the same chat legitimately changes pane identity, not project/chat identity.
@@ -125,7 +126,7 @@ export async function chatsNew(runtime:Runtime,input:{pane?:unknown;carry?:unkno
  const p=owner(runtime,initiator),pid=String(input.pane||'');if(pid==='room'&&!p.registry.get('room'))makeRoomIn(p,runtime,'',p.dir===runtime.defaultDir?'chat':'read');const pane=place(p,pid),carry=String(input.carry||'text');free(p,pane);
  if(!['text','summary','none'].includes(carry))throw new RuntimeError('carry_invalid','carry: text, summary или none',400);
  const hold=reserve(p,[pane]),old=p.state.activeChat(pane,false),oldId=old?.id,revision=pane.revision;
- let carryText='',done=false;
+ let carryText='',done=false,summaryTurn:string|null=null;
  try {
   if(pane.id!=='room'&&carry==='summary'&&old?.transcript.length){
    let summary:string;
@@ -135,6 +136,8 @@ export async function chatsNew(runtime:Runtime,input:{pane?:unknown;carry?:unkno
    if(p.registry.get(pane.id)!==pane||p.state.chats.active[pane.id]!==oldId)throw new RuntimeError('stale_chat','чат изменился во время выжимки');
    const last=pane.transcript.at(-1);
    if(last&&object(last.runtime)&&last.runtime.interrupted)throw new RuntimeError('summary_failed','выжимка не получилась: ход отменён',400);
+   if(!last||!object(last.runtime)||typeof last.runtime.turnInstanceId!=='string')throw new RuntimeError('summary_failed','ход выжимки не подтверждён',409);
+   summaryTurn=last.runtime.turnInstanceId;
    if(pane.status!=='idle')throw new RuntimeError('recovering','ответ модели сохранён; завершается восстановление доставки');
    carryText='Выжимка прежнего чата «'+pane.label+'»'+(old.title?' ('+old.title+')':'')+':\n\n'+pythonTrim(summary);
   }
@@ -145,7 +148,11 @@ export async function chatsNew(runtime:Runtime,input:{pane?:unknown;carry?:unkno
    try {
     if(old)p.state.sync(p.registry);
     if(pane.id!=='room'){if(carry==='summary'&&old?.transcript.length)old.closed=Math.floor(runtime.clock.now()/1000);else carryText=closeChat(p,pane,carry)}
-    const c=p.state.newChat(pane,carryText);p.state.savePanes(p.registry,p.journal);runtime.ownerAutopilotAction(p,initiator);done=true;return {ok:true as const,chat:meta(p,c),pane:pane.settings(),carried:!!carryText};
+    const c=p.state.newChat(pane,carryText),changed=summaryTurn?contextChange(p,pane,{kind:'manual_summary',chat:c.id,sourceChat:oldId!,turnInstanceId:summaryTurn,before:null,after:null,source:'harness'},runtime.clock.now()):null;
+    const notice=changed?contextChangeMessage(changed):null;if(notice)pane.append(notice);
+    p.state.savePanes(p.registry,p.journal);runtime.ownerAutopilotAction(p,initiator);done=true;
+    if(changed)pane.publish({type:'contextChanged',change:changed,chat:changed.chat,turnInstanceId:changed.turnInstanceId,seq:notice!.seq,ts:changed.ts});
+    return {ok:true as const,chat:meta(p,c),pane:pane.settings(),carried:!!carryText};
    }catch(e){p.state.chats=snapshot;Object.assign(pane,saved);throw e}
   },initiator);
  }finally{hold.release();if(done&&!p.closed)await runtime.resumeQueue(pane.id,p)}

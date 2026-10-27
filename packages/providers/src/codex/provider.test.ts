@@ -24,6 +24,16 @@ test('Codex stream, tools, usage and duplicate/foreign terminals',async()=>{
  const start=h.transports[0]!.requests.find(r=>r.method==='thread/start')!.params as Record<string,unknown>;assert.equal(typeof start.developerInstructions,'string');assert.equal(start.sandbox,'workspace-write');
  const turn=h.transports[0]!.requests.find(r=>r.method==='turn/start')!.params as Record<string,unknown>;assert.equal((turn.sandboxPolicy as {type:string}).type,'workspaceWrite');assert.equal(f.handle,null);await p.close();
 });
+for(const failure of [false,true])test('TS-51.E: Codex compaction completion binds to thread/turn and survives terminal failure '+failure,async()=>{
+ const h=codexHarness(t=>{const base=t.responder;t.responder=(m,p,t)=>{if(m!=='turn/start')return base(m,p,t);const id='turn-'+(++t.turn);queueMicrotask(()=>{
+ t.notify('item/completed',{threadId:'foreign',turnId:id,item:{type:'contextCompaction',id:'other'}});t.notify('thread/compacted',{threadId:'thread',turnId:'old'});
+ t.notify('item/started',{threadId:'thread',turnId:id,item:{type:'contextCompaction',id:'compact'}});
+ t.notify('thread/compacted',{threadId:'thread',turnId:id});
+ for(let n=0;n<2;n++)t.notify('item/completed',{threadId:'thread',turnId:id,item:{type:'contextCompaction',id:'compact'}});
+ t.notify('turn/completed',{threadId:'thread',turn:{id,status:failure?'failed':'completed',error:failure?{message:'transport lost'}:null}});
+ });return {turn:{id}}}}),f=fixture(),provider=new CodexProvider(h.deps);if(failure)await assert.rejects(provider.runTurn(f.seat,'x',f.ctx));else await provider.runTurn(f.seat,'x',f.ctx);await provider.close();
+ assert.deepEqual(f.events.filter(e=>e.type==='contextChanged'),[{type:'contextChanged',kind:'provider_compaction',before:null,after:null,source:'codex'}]);
+});
 test('Codex fallback and failure preserve session and vendor text',async()=>{
  for(const failure of [false,true]){
  const h=codexHarness(t=>{const base=t.responder;t.responder=(m,p,t)=>{if(m!=='turn/start')return base(m,p,t);

@@ -108,7 +108,10 @@ export class ClaudeProvider implements Provider {
  sessionId=m.session_id;sessionSeen=true;ctx.session(sessionId)
  }
  if(!main||typeof m.session_id==='string'&&sessionId!==null&&m.session_id!==sessionId)continue;
- if(m.type==='stream_event'){
+ if(m.type==='system'&&m.subtype==='compact_boundary'){
+ const metadata=record(m.compact_metadata)?m.compact_metadata:{},tokens=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)&&v>=0?v:null;
+ ctx.publish({type:'contextChanged',kind:'provider_compaction',before:tokens(metadata.pre_tokens),after:tokens(metadata.post_tokens),source:'claude'});
+ }else if(m.type==='stream_event'){
  if(!record(m.event))throw new ProviderError('protocol','invalid stream event',sessionId);
  const block=m.event.content_block;if(m.event.type==='content_block_start'&&record(block)&&(block.type==='text'&&typeof block.text==='string'&&block.text||['thinking','redacted_thinking','tool_use'].includes(String(block.type))))ctx.modelResponded?.();
  const delta=m.event.delta;if(m.event.type==='content_block_delta'&&record(delta)&&delta.type==='text_delta'){

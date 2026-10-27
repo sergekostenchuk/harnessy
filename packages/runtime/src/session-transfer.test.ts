@@ -13,7 +13,7 @@ for(const [from,to,model] of [['claude','codex','c1'],['codex','claude','w1']] a
  const claude=new FakeProvider('claude'),codex=new FakeProvider('codex'),h=await harness(t,{deps:{providers:{claude,codex}}}),pane=seed(h.runtime),p=h.runtime.project;pane.vendor=from;pane.model=from==='claude'?'w1':'c1';p.state.savePanes(p.registry,p.journal);
  const events=collect(h.runtime);h.runtime.paneSet('worker',{model},OWNER);const provider=to==='claude'?claude:codex;provider.onRun=async(s,_m,ctx)=>done(ctx,s.model);
  await h.runtime.runTurn('worker','CURRENT');const prompt=provider.calls[0]!.message;assert.match(prompt,/Контекст этого разговора/);assert.match(prompt,/Новое сообщение:\nCURRENT$/);for(let i=4;i<16;i++)assert.ok(prompt.includes('SAVED-'+i+'\n> second '+i+'\n> OLDER-DETAIL-'+i));assert.doesNotMatch(prompt,/OLDER-DETAIL-0\n/);
- await until(()=>events.events.some(e=>e.type==='contextTransfer'));const event=events.events.find(e=>e.type==='contextTransfer')!,transfer=event.transfer as any;assert.equal(transfer.chat,p.state.chats.active.worker);assert.equal(transfer.project,h.dir);assert.equal(transfer.messages,16);assert.equal(transfer.verbatim,12);
+ await until(()=>events.events.some(e=>e.type==='contextChanged'));const event=events.events.find(e=>e.type==='contextChanged')!,transfer=(event.change as any).transfer as any;assert.equal(transfer.chat,p.state.chats.active.worker);assert.equal(transfer.project,h.dir);assert.equal(transfer.messages,16);assert.equal(transfer.verbatim,12);
  assert.equal(pane.transcript.filter(m=>m.contextTransfer).length,1);const u=pane.transcript.at(-1)!.usage as import('@harnessy/providers').Usage;assert.deepEqual({input:u.input,output:u.output,cacheRead:u.cacheRead},{input:345,output:12,cacheRead:9});assert.equal(pane.settings().contextTransfer?.messages,16);
  await h.runtime.runTurn('worker','SECOND');assert.doesNotMatch(provider.calls[1]!.message,/Контекст этого разговора/);assert.equal(provider.calls[1]!.seat.sessionId,'new-session');events.sub.close();
 });
@@ -94,7 +94,7 @@ for(const vendor of ['claude','codex'] as const)for(const lost of [false,true])t
  provider.onRun=async(s,_m,ctx)=>{if(s.sessionId==='old')throw new ProviderError('session_missing','expired');return done(ctx,s.model)};
  const events=collect(h.runtime);await h.runtime.runTurn('worker','CURRENT');assert.equal(provider.calls.length,lost?2:1);assert.ok(provider.calls.every(c=>c.message==='CURRENT'));assert.equal(proposalReads,0);assert.equal(materializationReads,0);
  const notes=pane.transcript.filter(m=>m.contextTransfer);assert.equal(notes.length,1);assert.match(notes[0]!.text,/контекст не передан по настройке/);const meta=notes[0]!.contextTransfer as any;assert.equal(meta.enabled,false);assert.equal(meta.content,'');assert.equal(meta.chat,p.state.chats.active.worker);assert.equal(meta.project,h.dir);
- await until(()=>events.events.some(e=>e.type==='contextTransfer'));assert.equal((events.events.find(e=>e.type==='contextTransfer')!.transfer as any).enabled,false);events.sub.close();
+ await until(()=>events.events.some(e=>e.type==='contextChanged'));assert.equal((events.events.find(e=>e.type==='contextChanged')!.change as any).transfer.enabled,false);events.sub.close();
  const id=p.state.chats.active.worker!;p.state.chats.active.worker='wrong';assert.throws(()=>transferSnapshot(p,pane,[],false),(e:any)=>e.code==='context_binding_invalid');p.state.chats.active.worker=id;
 });
 
@@ -102,7 +102,7 @@ test('350: failed transfer never publishes success; saved failure survives reope
  const h=await harness(t),pane=seed(h.runtime);pane.sessionId=null;const gate=deferred(),started=deferred(),events=collect(h.runtime);t.after(()=>{gate.resolve();events.sub.close()});
  h.provider.onRun=async(_s,_m,ctx)=>{ctx.modelStarted?.();started.resolve();await gate.promise;throw new ProviderError('transport_lost','upstream unavailable; api_key=HIDDEN-CREDENTIAL')};
  const failed=assert.rejects(h.runtime.runTurn('worker','REQUEST'),{code:'transport_lost'});await started.promise;
- assert.equal(events.events.some(e=>e.type==='contextTransfer'),false);assert.equal(pane.transcript.some(m=>m.contextTransfer),false);gate.resolve();await failed;
+ assert.equal(events.events.some(e=>e.type==='contextChanged'),false);assert.equal(pane.transcript.some(m=>m.contextTransfer),false);gate.resolve();await failed;
  assert.equal(pane.transcript.some(m=>m.contextTransfer),false);const waiting=h.runtime.waiting('worker')!;assert.equal(waiting.failure?.code,'transport_lost');assert.match(waiting.failure!.reason,/upstream unavailable/);assert.doesNotMatch(JSON.stringify(waiting),/HIDDEN-CREDENTIAL/);
  await h.runtime.close();const r=await createRuntime(h.deps,h.runtime.actions);t.after(()=>r.close());assert.deepEqual(r.waiting('worker')?.failure,waiting.failure);
  h.provider.onRun=async(s,_m,ctx)=>done(ctx,s.model);await r.attempt('worker',{project:h.dir,turnInstanceId:waiting.turnInstanceId,action:'retry'},OWNER);await r.idle();await r.runTurn('worker','RETRY');assert.equal(r.registry.get('worker')!.transcript.filter(m=>m.contextTransfer).length,1);
