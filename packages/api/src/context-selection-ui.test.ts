@@ -31,6 +31,11 @@ test('259: dialog opens with concrete messages, none checked, zero volume and di
  await v.find('[data-sel="go"]').emit('click');assert.equal(v.requests.length,0);assert.match(v.find('.live-sel-list').textContent,/Третье <img src=x> сообщение/);assert.equal(v.document.querySelector('img'),null);assert.doesNotMatch(v.find('.live-sel-list').textContent,/Служебная/);
 });
 
+test('TS-50.B: a failed partial answer is never offered for context transfer, even with a sequence number',async()=>{
+ const v=ui();v.S.chat.push({seq:99,role:'ai',src:'live',failed:true,text:'Незавершённый ответ'});v.start();
+ assert.equal(v.document.querySelector('[data-ck="99"]'),null);assert.doesNotMatch(v.find('.live-sel-list').textContent,/Незавершённый ответ/);assert.ok(v.document.querySelector('[data-ck="3"]'));
+});
+
 test('259: selecting two sends exactly those two through HTTP; the next dialog is empty again',async t=>{
  const h=await fixture(t,{seats:'  worker: {role: worker, vendor: claude, model: w1, mode: read}\n  reviewer: {role: reviewer, vendor: claude, model: w1, mode: read}'});
  for(const m of messages())h.runtime.registry.get('worker')!.record(m.src==='sys'?'peer':m.role,m.text);const chat=h.runtime.chatsList({seat:'owner',trust:'owner'}).active.worker;
