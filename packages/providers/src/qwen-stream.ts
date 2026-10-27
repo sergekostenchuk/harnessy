@@ -2,15 +2,22 @@ import {ProviderError,record} from './types.ts';
 import type {CliEvent} from './cli/types.ts';
 
 // Qwen 0.24.0 BaseJsonOutputAdapter/buildSystemMessage; no partial messages requested.
-export function qwenStream(){let session:string|null=null,finished=false;return (value:unknown):CliEvent[]=>{
+export function qwenStream(expected:string|null=null){let session:string|null=null,finished=false;return (value:unknown):CliEvent[]=>{
  const invalid=():never=>{throw new ProviderError('protocol','Qwen: неверный поток ответа')};
  if(!record(value)||finished||typeof value.session_id!=='string'||!value.session_id)return invalid();
+ if(expected!==null&&value.session_id!==expected)return invalid();
  if(value.type==='system'&&['init','session_start'].includes(value.subtype as string)){
   if(session!==null)return invalid();session=value.session_id;return [{type:'session',id:session}];
  }
- if(session===null||value.session_id!==session)return invalid();
  const child=value.parent_tool_use_id!==undefined&&value.parent_tool_use_id!==null;
  if(child&&typeof value.parent_tool_use_id!=='string')return invalid();
+ // Qwen can reject OAuth before emitting init. This is only a failure receipt:
+ // it cannot establish a new session or authorize a successful answer.
+ if(session===null){
+  if(value.type!=='result'||value.subtype!=='error_during_execution'||value.is_error!==true||child||!record(value.error)||typeof value.error.message!=='string'||!value.error.message.trim())return invalid();
+  finished=true;return [{type:'error',code:'turn_failed',text:value.error.message}];
+ }
+ if(value.session_id!==session)return invalid();
  if(value.type==='assistant'||value.type==='user'){
   if(!record(value.message)||value.message.role!==value.type||!Array.isArray(value.message.content))return invalid();
   return value.message.content.flatMap((block:unknown):CliEvent[]=>{
