@@ -32,6 +32,13 @@ test('120: a connected chat with no server history clears saved browser history 
  const v=ui('/projects/a',{},async()=>{throw Error('no request expected')});await v.functions.load();assert.deepEqual(v.requests,[]);assert.equal(v.S.chat.length,0);assert.equal(v.document.querySelectorAll('.live-msg').length,0);assert.match(v.document.querySelector('.live-sep')!.textContent,/разговор пуст/);
 });
 
+test('TS-47.3 F03: growing an answer retains its readable nodes and respects the reader scroll position',async()=>{
+ const v=ui('/projects/a',{worker:'a'},async()=>({messages:[{role:'ai',text:'Первая строка',ts:1}]}));await v.functions.load();v.S.chat[0].html='<div class="md-body"><p>Первая строка</p></div>';v.functions.render();
+ const feed:any=v.document.querySelector('.frame.cur .feed')!,body=v.document.querySelector('.frame.cur .md-body')!,paragraph=body.querySelector('p')!,text=paragraph.firstChild!;feed.scrollHeight=1000;feed.clientHeight=400;feed.scrollTop=120;
+ v.S.chat[0].html='<div class="md-body"><p>Первая строка и продолжение</p></div>';v.functions.render();assert.equal(v.document.querySelector('.frame.cur .md-body'),body);assert.equal(body.querySelector('p'),paragraph);assert.equal(paragraph.firstChild,text);assert.match(body.textContent,/продолжение/);assert.equal(feed.scrollTop,120);
+ const jump=v.document.querySelector('.frame.cur .live-jump')!;assert.ok(jump);assert.equal((jump as any).hidden,false);await jump.emit('click');assert.equal(feed.scrollTop,1000);assert.equal((jump as any).hidden,true);
+});
+
 test('120 ОКНА: an old history request cannot repopulate a new binding; an unreadable new chat cannot show local duplicates',async()=>{
  const gate=deferred<any>(),v=ui('/projects/a',{worker:'a'},async path=>path==='/api/chats/a'?gate.promise:{error:'unavailable'});const pending=v.functions.load();assert.equal(v.S.chat.length,0);v.functions.invalidate();v.H.project='/projects/b';v.H.active={worker:'b'};await v.functions.load();assert.equal(v.S.chat.length,0);
  gate.resolve({messages:[{role:'ai',text:'old answer',ts:10}]});await pending;assert.equal(v.S.chat.length,0);assert.doesNotMatch(v.document.querySelector('.frame.cur .col')!.textContent,/old answer|browser duplicate/);

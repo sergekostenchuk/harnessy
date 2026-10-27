@@ -48,11 +48,12 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  // TS-09b2:','  // End TS-09b2 promotion.')+
   part(live,'  const fmtN=','  const ckBox=')+
   part(live,'  const bubble=','  const cols=')+
+  part(live,'  function markupNode(','  function guidanceState(')+
   part(live,'  function guidanceState(','  function render(')+
   part(live,'  function closeLAMenus()','  // запись «контекст передан»')+
   '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
-  '\nglobalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw,showOrchestratorOffer,laPath,projectPathValue};',context);
+  '\ndrawLive=()=>{if(window.CX&&CX.setBusy)CX.setBusy(!!H.cur)};globalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,streamScope,streamGet,streamEnd,streamSelect,streamHidden,streamClear,selectedBusy,queueDelivered,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw,showOrchestratorOffer,laPath,projectPathValue};',context);
  const functions=(context as Data).testing as Data;
  function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
  function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
@@ -76,6 +77,23 @@ test('TS-36A: offline badges never pass demo decisions off as live Inbox data',(
  let inbox:Data|null=null;const sandbox:Data={DEC:{m0:'demo one',limit:'demo two'},waiting:()=>['m0','limit'],window:{LIVE:{H:{on:false,panes:[]}},PS2:{setInbox:(value:Data)=>inbox=value}},document:{querySelectorAll:()=>[]},paneName:(pane:Data)=>pane.label};sandbox.globalThis=sandbox;
  const context=createContext(sandbox);runInContext(part(live,'  function waitList()','  // ── «Сейчас»')+'\nglobalThis.badges=badges;',context);sandbox.badges();assert.deepEqual(plain(inbox),{need:0,info:0,unavailable:true});
  sandbox.window.LIVE.H={on:true,panes:[{id:'worker',label:'воркер',waiting:true,pendingApprovals:0}]};sandbox.badges();assert.deepEqual(plain(inbox),{need:1,info:0});
+});
+
+test('TS-47.3 F01: streams stay with their project, instance, place and chat across selection',()=>{
+ const view=ui(),a=view.H.panes[0],b={id:'reviewer',label:'ревьюер',model:'w1',busy:false};view.H.panes.push(b);view.H.active.reviewer='chat-b';view.H.liveStatus={trace:{instanceId:'instance-1'}};
+ view.functions.consumeState({pane:'worker',busy:true,settingsBinding:{project:'/project-a',instanceId:'instance-1',chat:'chat-a'}});view.functions.hEvent({type:'delta',text:'Ответ A'});assert.equal(view.H.cur.text,'Ответ A');
+ view.S.ui.pane='reviewer';view.H.pane=b;view.functions.streamSelect();assert.equal(view.H.cur,null,'another place is not busy');view.functions.streamHidden({pane:'worker',type:'delta',text:' ещё'});
+ view.S.ui.pane='worker';view.H.pane=a;view.functions.streamSelect();assert.equal(view.H.cur.text,'Ответ A ещё','the original conversation keeps its stream');
+ view.S.ui.pane='reviewer';view.H.pane=b;view.functions.streamSelect();view.functions.streamHidden({pane:'worker',type:'done',chat:'chat-a'});assert.equal(view.H.cur,null,'hidden completion does not leave the selected composer busy');
+ view.S.ui.pane='worker';view.H.pane=a;view.H.active.worker='new-chat';a.busy=true;view.functions.streamSelect();assert.equal(view.H.cur,null,'a different chat never inherits the old stream');assert.equal(view.functions.selectedBusy(),false,'the same busy place does not mark a different chat busy');view.H.liveStatus.trace.instanceId='instance-2';view.H.active.worker='chat-a';a.busy=false;view.functions.streamSelect();assert.equal(view.H.cur,null,'a new engine instance never inherits it either');
+});
+
+test('TS-47.3 F06: only a confirmed queued message gets a recipient and a delivery removes its marker',async()=>{
+ const gate=deferred<Data>(),view=ui({fetch:async(path)=>path==='/api/chat'?gate.promise:{ok:true}}),sent={role:'me',text:'следующее'},binding=view.functions.sendBinding();view.S.chat=[sent];view.H.cur={text:'ответ',tools:[]};
+ const send=view.functions.ask(sent.text,binding,[],sent);assert.doesNotMatch(view.functions.bubble(sent,0),/В очереди/);gate.resolve({ok:true,queued:true,seq:9});assert.equal(await send,true);assert.match(view.functions.bubble(sent,0),/В очереди · воркер · после текущего хода/);
+ view.functions.queueDelivered({type:'delivered',pane:'worker',records:[{seq:9}]});assert.doesNotMatch(view.functions.bubble(sent,0),/В очереди/);
+ const later=deferred<Data>(),early=ui({fetch:async(path)=>path==='/api/chat'?later.promise:{ok:true}}),message={role:'me',text:'ранняя доставка'};early.S.chat=[message];early.H.cur={text:'',tools:[]};const pending=early.functions.ask(message.text,early.functions.sendBinding(),[],message);early.functions.queueDelivered({type:'delivered',pane:'worker',records:[{seq:10}]});later.resolve({ok:true,queued:true,seq:10});assert.equal(await pending,true);assert.doesNotMatch(early.functions.bubble(message,0),/В очереди/,'a late HTTP response cannot resurrect a delivered marker');
+ const late=deferred<Data>(),switched=ui({fetch:async(path)=>path==='/api/chat'?late.promise:{ok:true}}),saved={role:'me',text:'принято после перехода'},scope=switched.functions.streamScope(),other={id:'reviewer',label:'ревьюер',model:'w1',busy:false};switched.H.panes.push(other);switched.H.active.reviewer='chat-b';switched.S.chat=[saved];switched.H.cur={text:'ответ',tools:[]};const sending=switched.functions.ask(saved.text,switched.functions.sendBinding(),[],saved);switched.S.ui.pane='reviewer';switched.H.pane=other;switched.functions.streamSelect();late.resolve({ok:true,queued:true,seq:11});assert.equal(await sending,false);assert.equal(switched.functions.streamGet(scope).pending.get(11).text,saved.text,'a confirmed late receipt belongs to its original view');switched.functions.streamEnd(scope);assert.ok(switched.functions.streamGet(scope).pending.has(11));switched.functions.queueDelivered({type:'delivered',pane:'worker',chat:'chat-a',records:[{seq:11}]});assert.equal(switched.functions.streamGet(scope),undefined,'delivery clears the hidden view snapshot');
 });
 
 test('TS-36E: only a reply recorded in chat mode carries the discussion chip',()=>{
@@ -245,11 +263,11 @@ for(const mode of ['on','orch'] as const)for(const accepted of [false,true])test
 
 for(const nextModel of ['w2','c1'])test('TS-08 r2/3: actual EventBus → SSE → window takes external start model and keeps it after setting '+nextModel,async t=>{
  const h=await fixture(t),stream=await sse(h.api),gate=deferred(),entered=deferred();t.after(()=>{gate.resolve();stream.close()});await until(()=>stream.raw.includes(': ok'));
- const view=ui();view.H.project=h.dir;let delivered=0;const deliver=()=>{while(delivered<stream.frames.length){const event=stream.frames[delivered++];if(event.type==='state')view.functions.consumeState(event);if(event.pane==='worker')view.functions.hEvent(event)}};
+ const view=ui();view.H.project=h.dir;view.H.active={...h.runtime.project.state.chats.active};view.H.liveStatus={trace:{instanceId:h.runtime.project.trace.instanceId}};let delivered=0;const deliver=()=>{while(delivered<stream.frames.length){const event=stream.frames[delivered++];if(event.type==='state')view.functions.consumeState(event);if(event.pane==='worker')view.functions.hEvent(event)}};
  h.provider.onRun=async(seat,_text,ctx)=>{ctx.modelStarted?.();ctx.publish({type:'delta',text:'first '});entered.resolve();await gate.promise;ctx.publish({type:'delta',text:'second'});ctx.publish({type:'done',model:seat.model,sessionId:null,durationMs:1,usage:{input:1,output:1,cacheRead:0}});return {text:'first second',sessionId:null}};
  const turn=h.runtime.runTurn('worker','started outside this window');await entered.promise;await until(()=>stream.frames.some(e=>e.type==='delta'));deliver();
  const initial=stream.frames.find(e=>e.type==='state'&&e.pane==='worker'&&e.busy);assert.ok(initial);assert.equal(initial.status,'idle');assert.equal(view.H.cur.model,'w1');assert.match(view.functions.curHTML(),/w1/);assert.doesNotMatch(view.functions.curHTML(),/модель не сохранена/);
- const configured=await call(h.api,'/api/panes/worker',{body:{model:nextModel}});assert.equal(configured.body.appliesFrom,'next');await until(()=>stream.frames.some(e=>e.type==='state'&&e.pane==='worker'&&e.model===nextModel));deliver();
+ const configured=await call(h.api,'/api/panes/worker',{body:{model:nextModel}});assert.equal(configured.body.appliesFrom,'next',JSON.stringify(configured.body));await until(()=>stream.frames.some(e=>e.type==='state'&&e.pane==='worker'&&e.model===nextModel));deliver();
  assert.equal(view.H.pane.model,nextModel);assert.equal(view.H.cur.model,'w1');assert.match(view.functions.curHTML(),/w1/);assert.doesNotMatch(view.functions.curHTML(),new RegExp(nextModel));
  gate.resolve();await turn;await until(()=>stream.frames.some(e=>e.type==='done'));deliver();assert.equal(view.H.cur,null);assert.equal(view.S.chat.length,1);assert.equal(view.S.chat[0].model,'w1');assert.equal(view.S.chat[0].text,'first second');
 });
@@ -266,8 +284,8 @@ for(const source of ['carry','digest','carry + digest'])test('129: EventBus → 
  if(source.includes('carry'))h.runtime.registry.get('worker')!.carry='saved earlier conversation';
  const stream=await sse(h.api),first=deferred(),last=deferred(),entered=deferred(),streaming=deferred();
  t.after(()=>{first.resolve();last.resolve();stream.close()});await until(()=>stream.raw.includes(': ok'));
- const view=ui(),busy:boolean[]=[];view.H.project=h.dir;view.sandbox.CX=view.sandbox.window.CX={setBusy:(value:boolean)=>busy.push(value)};
- view.sandbox.selBar=()=>{};
+ const view=ui(),busy:boolean[]=[];view.H.project=h.dir;view.H.active={...h.runtime.project.state.chats.active};view.H.liveStatus={trace:{instanceId:h.runtime.project.trace.instanceId}};view.sandbox.CX=view.sandbox.window.CX={setBusy:(value:boolean)=>busy.push(value)};
+ view.sandbox.selBar=()=>{};view.sandbox.cols=()=>[];
  runInContext(part(live,'  function render(){',"  document.addEventListener('click',e=>{ if(e.target.closest('a[data-demo]'))"),view.context);
  const binding=plain(view.functions.sendBinding()),active:{snapshot:Data|null}={snapshot:null};let delivered=0;
  const deliver=()=>{while(delivered<stream.frames.length){const event=stream.frames[delivered++];

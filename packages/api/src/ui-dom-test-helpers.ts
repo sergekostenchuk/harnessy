@@ -16,6 +16,13 @@ export class DomNode {
  get isConnected():boolean{return this===this.owner||!!this.parentElement?.isConnected}
  get firstElementChild():DomNode|null{return this.children.find(n=>n.tagName!=='#TEXT')??null}
  get firstChild():DomNode|null{return this.children[0]??null}
+ get lastChild():DomNode|null{return this.children.at(-1)??null}
+ get childNodes(){return this.children}
+ get nodeType(){return this.tagName==='#TEXT'?3:1}
+ get data(){return this.text}set data(value:string){this.text=value}
+ appendData(value:string){this.text+=value}
+ getAttributeNames(){return Object.keys(this.attributes)}
+ cloneNode(deep=false){const node=new DomNode(this.tagName,this.owner);node.attributes={...this.attributes};node.dataset={...this.dataset};node.style={...this.style};node.text=this.text;node.value=this.value;if(deep)for(const child of this.children)node.appendChild(child.cloneNode(true));return node}
  get nextElementSibling():DomNode|null {const siblings=this.parentElement?.children.filter(n=>n.tagName!=='#TEXT')??[];return siblings[siblings.indexOf(this)+1]??null}
  get previousElementSibling():DomNode|null {const siblings=this.parentElement?.children.filter(n=>n.tagName!=='#TEXT')??[];return siblings[siblings.indexOf(this)-1]??null}
  get checked(){return this.hasAttribute('checked')}set checked(on:boolean){if(on)this.setAttribute('checked','');else delete this.attributes.checked}
@@ -49,7 +56,7 @@ export class DomNode {
  insertAdjacentHTML(where:string,html:string){const temp=new DomNode('div',this.owner);temp.innerHTML=html;for(const n of [...temp.children]){if(where==='beforeend')this.appendChild(n);else throw Error('unsupported position '+where)}}
  focus(){this.owner.activeElement=this}setSelectionRange(start:number,end:number,direction='none'){this.selectionStart=start;this.selectionEnd=end;this.selectionDirection=direction}
  showModal(){this.setAttribute('open','')}close(){this.removeAttribute('open')}
- offsetWidth=1000;offsetHeight=800;
+ offsetWidth=1000;offsetHeight=800;scrollHeight=0;clientHeight=0;
  getBoundingClientRect(){return {left:0,top:0,width:this.offsetWidth,height:this.offsetHeight}}
  addEventListener(type:string,fn:(e:any)=>any,capture=false){const listeners=this.listeners.get(type)??[];listeners.push({fn,capture});this.listeners.set(type,listeners)}
  removeEventListener(type:string,fn:(e:any)=>any,capture=false){this.listeners.set(type,(this.listeners.get(type)??[]).filter(l=>l.fn!==fn||l.capture!==capture))}
