@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {AntigravityStream,AntigravityUsageState} from './antigravity-stream.ts';
 import {ANTIGRAVITY} from './antigravity.ts';
 import {CliProvider} from './cli/provider.ts';
@@ -127,7 +128,7 @@ for(const status of ['ERROR','CANCELED','INTERRUPTED'])test('260: provider termi
 test('260: incomplete, foreign, malformed or replayed streams cannot produce success',()=>{
  assert.throws(()=>new AntigravityStream().push(result()),{code:'protocol'});
  const d=new AntigravityStream();d.push(init());assert.throws(()=>d.finish(),{code:'transport_lost'});
- for(const value of [result({conversation_id:'other'}),result({status:'WAITING'}),step('tool',1,'ACTIVE',{}),step('agent_response',-1),step('agent_response',1,'ACTIVE',{text_delta:42}),{event:'future'},init()])assert.throws(()=>d.push(value),{code:'protocol'});
+ for(const value of [result({conversation_id:'other'}),result({status:'WAITING'}),step('tool',1,'ACTIVE',{}),step('agent_response',-1),step('agent_response',1,'ACTIVE',{text_delta:42}),init()])assert.throws(()=>d.push(value),{code:'protocol'});
  d.push(step('tool',2,'ACTIVE',{tool_info:{name:'panes.send'}}));assert.throws(()=>d.push(result()),{code:'protocol'});
  d.push(step('tool',2,'DONE',{tool_info:{name:'panes.send'}}));assert.throws(()=>d.push(step('tool',2,'DONE',{tool_info:{name:'panes.send'}})),{code:'protocol'});
  d.push(result());assert.throws(()=>d.push(result()),{code:'protocol'});
@@ -136,4 +137,71 @@ test('260: concurrent decoder instances never mix conversation identities or too
  const a=new AntigravityStream(),b=new AntigravityStream();a.push(init());b.push(init('session-2'));
  a.push(step('agent_response',0,'ACTIVE',{text_delta:'A'}));assert.equal(b.push({event:'result',result:{conversation_id:'session-2',status:'SUCCESS',response:'B'}})[0]!.type,'done');
  assert.equal(a.push(result())[0]!.type,'done');
+});
+
+
+// agy stream-json captured on 2026-10-27 by two permitted calls to
+// gemini-3.8-flash-high. Only conversation_id and the local cwd were replaced.
+// The resumed turn contains a DONE system_message before the assistant answer.
+const recorded=(name:string)=>readFileSync(new URL('./fixtures/antigravity-'+name+'.ndjson',import.meta.url),'utf8');
+test('TS-47.10: the recorded resumed stream accepts system_message without emitting it as an answer',()=>{
+ const d=new AntigravityStream(new AntigravityUsageState(),'recorded-session');
+ const events=recorded('resumed').trim().split('\n').flatMap(line=>d.push(JSON.parse(line)));
+ d.finish();
+ assert.deepEqual(events.map(e=>e.type),['session','delta','delta','done']);
+ assert.equal(events.filter(e=>e.type==='delta').map(e=>e.text).join(''),'готов\n');
+ assert.equal(events.find(e=>e.type==='done')?.text,'готов\n');
+});
+test('TS-47.10: unknown service events cannot supply a session, answer or terminal confirmation',()=>{
+ const d=new AntigravityStream();
+ assert.deepEqual(d.push({event:'future',conversation_id:'other',response:'fake',status:'SUCCESS'}),[]);
+ assert.throws(()=>d.push(result()),{code:'protocol'});
+ d.push(init());
+ assert.deepEqual(d.push({event:'future',result:{conversation_id:'other',status:'SUCCESS',response:'fake'}}),[]);
+ assert.throws(()=>d.finish(),{code:'transport_lost'});
+ assert.equal(d.push(result())[0]!.type,'done');d.finish();
+ assert.deepEqual(d.push({event:'future'}),[]);
+ assert.throws(()=>d.push(result()),{code:'protocol'});
+});
+test('TS-47.10: service steps preserve session, state, shape and replay validation',()=>{
+ assert.throws(()=>new AntigravityStream().push(step('system_message',1)),{code:'protocol'});
+ assert.throws(()=>new AntigravityStream(new AntigravityUsageState(),'other').push(init()),{code:'protocol'});
+ for(const value of [null,[],{}, {event:''},{event:42},{event:'bad\nname'}])assert.throws(()=>new AntigravityStream().push(value),{code:'protocol'});
+ for(const value of [
+  {...step('system_message',1),step_update:{...step('system_message',1).step_update,conversation_id:'other'}},
+  step('system_message',1,'WAITING'),step('system_message',-1),
+  step('system_message',1,'DONE',{text_delta:42}),step('unknown_type',1),
+  {event:'step_update'},{event:'result'},{event:'init'},
+ ]){
+  const d=new AntigravityStream();d.push(init());assert.throws(()=>d.push(value),{code:'protocol'});
+ }
+ const d=new AntigravityStream();d.push(init());
+ assert.deepEqual(d.push(step('system_message',1,'DONE',{text_delta:'service-only'})),[]);
+ assert.throws(()=>d.push(step('system_message',1)),{code:'protocol'});
+ assert.throws(()=>d.push(result({conversation_id:'other'})),{code:'protocol'});
+ assert.throws(()=>d.push(result({status:'WAITING'})),{code:'protocol'});
+ assert.equal(d.push(result())[0]!.type,'done');
+});
+const recordedModels=['gemini-3.8-flash-high','gemini-3.8-flash-medium','gemini-3.8-flash-low','claude-sonnet-4-6','claude-opus-4-6-thinking','gpt-oss-120b-medium'];
+for(const model of recordedModels)test('TS-47.10: CLI fixture fresh/resumed turns for '+model,{timeout:5000},async t=>{
+ const h=fixture(),description={...ANTIGRAVITY,auth:{command:{args:[]},parse:()=>({loggedIn:true})},models:{list:recordedModels.map(id=>({id,label:id})),reason:'recorded stream test'}};
+ let count=0;
+ const provider=new CliProvider(description,{env:{},cwd:'/fixture/project',execute:async(request,_signal,hooks)=>{
+  if(!hooks?.stdout)return {stdout:'{}',stderr:'',code:0,signal:null};
+  assert.equal(request.args[request.args.indexOf('--model')+1],model);
+  assert.ok(request.args.includes('--dangerously-skip-permissions'));
+  const resumed=++count===2;
+  assert.equal(request.args.includes('--conversation'),resumed);
+  if(resumed)assert.equal(request.args[request.args.indexOf('--conversation')+1],'recorded-session');
+  const raw=recorded(resumed?'resumed':'fresh');hooks.started?.();
+  for(let at=0;at<raw.length;at+=13)hooks.stdout(raw.slice(at,at+13));
+  return {stdout:raw,stderr:'',code:0,signal:null};
+ }});t.after(()=>provider.close());
+ const seat={...h.seat,vendor:'antigravity',model,mode:'all' as const,sessionId:null as string|null};
+ assert.equal((await provider.runTurn(seat,'Ответь одним словом: готов. Инструменты и файлы не использовать.',h.ctx)).text,'готов\n');
+ seat.sessionId='recorded-session';
+ assert.equal((await provider.runTurn(seat,'Ответь одним словом: готов. Инструменты и файлы не использовать.',h.ctx)).text,'готов\n');
+ assert.equal(count,2);
+ assert.deepEqual(h.events.filter(e=>e.type==='done').map(e=>e.usage),[{input:2188,output:974,cacheRead:22344},{input:2106,output:445,cacheRead:24141}]);
+ assert.equal(h.events.some(e=>e.type==='tool'||e.type==='toolError'||e.type==='error'),false);
 });

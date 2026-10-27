@@ -34,7 +34,10 @@ export class AntigravityStream {
  started(){if(this.managed)return;this.managed=true;if(this.expected)this.usageState.start(this.expected,this)}
  finished(successful:boolean){if(!this.managed)return;this.managed=false;const id=this.session??this.expected;if(id){if(successful&&this.success)this.usageState.complete(id,this);else this.usageState.fail(id,this)}}
  push(value:unknown):CliEvent[]{
-  if(!record(value)||this.terminal||typeof value.event!=='string')throw fail();
+  if(!record(value)||!nonempty(value.event))throw fail();
+  // Service notifications do not carry answer/tool output or complete a turn.
+  if(!['init','step_update','result'].includes(value.event))return [];
+  if(this.terminal)throw fail();
   if(value.event==='init'){
    if(this.session!==null||!nonempty(value.conversation_id)||this.expected!==null&&this.expected!==value.conversation_id||!record(value.init))throw fail();
    this.session=value.conversation_id;this.usageState.start(this.session,this);return [{type:'session',id:this.session}];
@@ -54,7 +57,7 @@ export class AntigravityStream {
   }
   if(value.event!=='step_update'||!record(value.step_update))throw fail();
   const s=value.step_update,index=s.step_index;
-  if(s.conversation_id!==this.session||!Number.isSafeInteger(index)||(index as number)<0||!['user_input','agent_response','tool','checkpoint'].includes(s.step_type as string)||!['ACTIVE','DONE'].includes(s.state as string)||s.text_delta!==undefined&&typeof s.text_delta!=='string')throw fail();
+  if(s.conversation_id!==this.session||!Number.isSafeInteger(index)||(index as number)<0||!['user_input','agent_response','tool','checkpoint','system_message'].includes(s.step_type as string)||!['ACTIVE','DONE'].includes(s.state as string)||s.text_delta!==undefined&&typeof s.text_delta!=='string')throw fail();
   const previous=this.steps.get(index as number);
   if(previous&&(previous.done||previous.kind!==s.step_type))throw fail();
   const step:Step=previous??{kind:s.step_type as string,done:false},events:CliEvent[]=[];
