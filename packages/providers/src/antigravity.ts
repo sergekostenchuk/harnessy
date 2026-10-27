@@ -1,10 +1,13 @@
-import {AntigravityStream} from './antigravity-stream.ts';
+import {AntigravityStream,AntigravityUsageState} from './antigravity-stream.ts';
 import {ProviderError,record} from './types.ts';
 import type {CliDescriptor,CliProcessResult} from './cli/types.ts';
 
 export const ANTIGRAVITY_UNAVAILABLE='нет изолированного MCP-конфига и политики read/edit/all на ход';
 const invalid=()=>new ProviderError('protocol','Antigravity: неверный ответ метаданных');
 const label=(v:unknown):v is string=>typeof v==='string'&&!!v.trim()&&v.length<=200&&!/[\x00-\x1f\x7f]/.test(v);
+// CliProvider copies the turn descriptor for each provider instance; its state must not leak to another instance.
+const usageStates=new WeakMap<object,AntigravityUsageState>();
+function usageState(turn:object){let state=usageStates.get(turn);if(!state){state=new AntigravityUsageState();usageStates.set(turn,state)}return state}
 // agy 1.2.17: readonly commands return a result envelope and spend zero turns.
 function metadata(r:CliProcessResult,name:string){
  const v:unknown=JSON.parse(r.stdout);
@@ -16,8 +19,8 @@ export const ANTIGRAVITY:CliDescriptor={
  forbiddenEnv:['GEMINI_API_KEY','GOOGLE_API_KEY','GOOGLE_GEMINI_BASE_URL','GOOGLE_APPLICATION_CREDENTIALS','AGY_ADC_AUTH'],
  noHarnessMcp:true,turnReasons:{read:ANTIGRAVITY_UNAVAILABLE,edit:ANTIGRAVITY_UNAVAILABLE},turnNotes:{all:'без инструментов Harnessy'},
  modes:{all:()=>['--dangerously-skip-permissions']},
- turn:{format:'stream-json',command:i=>({args:['--output-format','stream-json','--model',i.seat.model,'-p',i.roleNote+'\n\n'+i.message]}),decoder:()=>{const stream=new AntigravityStream();return v=>stream.push(v)}},
- resume:id=>{if(!/^[A-Za-z0-9_-]{1,128}$/.test(id))throw new ProviderError('session_missing','Antigravity: неверная сессия');return ['--conversation',id]},
+ turn:{format:'stream-json',command:i=>({args:['--output-format','stream-json','--model',i.seat.model,'-p',i.roleNote+'\n\n'+i.message]}),decoder(){const stream=new AntigravityStream(usageState(this));return v=>stream.push(v)}},
+ resume(id){if(!/^[A-Za-z0-9_-]{1,128}$/.test(id))throw new ProviderError('session_missing','Antigravity: неверная сессия');usageState(this.turn).resume(id);return ['--conversation',id]},
  version:{command:{args:['--version']},parse:r=>{const v=r.stdout.trim();if(!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(v))throw invalid();return v}},
  auth:{command:{args:['--output-format','json','-p','/usage']},exitCodes:[0,1],parse:(r:CliProcessResult)=>{
   if(r.code===1&&/^\s*(?:Error:\s*)?authentication required\b/i.test(r.stderr||r.stdout))return {loggedIn:false};
