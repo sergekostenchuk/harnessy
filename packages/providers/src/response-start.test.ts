@@ -25,8 +25,8 @@ for(const type of ['response','delta','done','metadata'] as const)test('22d: CLI
 });
 test('22d: CLI reasoning decoders signal output without exposing thinking',options,()=>{
  for(const kind of ['assistant.reasoning','assistant.reasoning_delta']){
-  const stream=new CopilotStream();assert.deepEqual(stream.push({type:kind,data:{}}),[]);
-  assert.deepEqual(stream.push({type:'session.start',data:{sessionId:'s'}}),[{type:'session',id:'s'},{type:'response'}]);
+  const stream=new CopilotStream();assert.deepEqual(stream.push({type:kind,data:{}}),[{type:'response'}]);
+  assert.deepEqual(stream.push({type:'session.start',data:{sessionId:'s'}}),[{type:'session',id:'s'}]);
   assert.deepEqual(stream.push({type:kind,data:{}}),[{type:'response'}]);
  }
  assert.deepEqual(opencodeStream()({type:'reasoning',sessionID:'s',part:{type:'reasoning',sessionID:'s'}}),[{type:'session',id:'s'},{type:'response'}]);

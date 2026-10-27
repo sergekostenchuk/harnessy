@@ -13,7 +13,11 @@ export class CopilotStream {
   let events:CliEvent[];
   try{events=this.read(v)}catch(error){this.pending=[];throw error}
   if(events.some(e=>e.type==='error')){this.pending=[];return events}
-  if(this.session===null){this.pending.push(...events);return []}
+  if(this.session===null){
+   // Observed model output forbids retry even while its contents await session validation.
+   this.pending.push(...events.filter(e=>e.type!=='response'));
+   return events.some(e=>e.type==='response'||e.type==='delta'&&e.text.length>0)?[{type:'response'}]:[];
+  }
   const pending=this.pending.splice(0);
   if(!pending.length)return events;
   // Establish identity in the common driver before releasing any buffered output.

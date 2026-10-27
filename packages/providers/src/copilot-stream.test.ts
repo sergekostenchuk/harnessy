@@ -37,9 +37,9 @@ const recorded=readFileSync(new URL('./fixtures/copilot-text.ndjson',import.meta
 const frames=()=>recorded.trim().split('\n').map(line=>JSON.parse(line));
 test('TS-47.12: recorded MCP notifications precede a real answer and do not become model output',()=>{
  const stream=new CopilotStream(),events=frames().flatMap(frame=>stream.push(frame));
- assert.deepEqual(events.map(e=>e.type),['session','delta','done']);
- assert.equal(events[1]?.type==='delta'&&events[1].text,'готов');
- assert.deepEqual(events[2],{type:'done',sessionId:frames().at(-1).sessionId,usage:{input:null,output:null,cacheRead:null}});
+ assert.deepEqual(events.map(e=>e.type),['response','session','delta','done']);
+ assert.equal(events[2]?.type==='delta'&&events[2].text,'готов');
+ assert.deepEqual(events[3],{type:'done',sessionId:frames().at(-1).sessionId,usage:{input:null,output:null,cacheRead:null}});
 });
 test('TS-47.12: service notifications cannot establish a session or bypass known event validation',()=>{
  const services=frames().filter(v=>['session.mcp_server_status_changed','session.mcp_servers_loaded','session.tools_updated'].includes(v.type));
@@ -84,12 +84,12 @@ test('TS-47.12: CLI driver replays the actual Copilot stream once and rejects a 
 
 test('TS-47.12 r2: confirmed identity releases buffered events once; failure discards them',()=>{
  const s=new CopilotStream(sid);
- assert.deepEqual(s.push(event('assistant.message_delta',{messageId:'pending',deltaContent:'held'})),[]);
+ assert.deepEqual(s.push(event('assistant.message_delta',{messageId:'pending',deltaContent:'held'})),[{type:'response'}]);
  assert.deepEqual(s.push(event('tool.execution_start',{toolCallId:'held-tool',toolName:'fixture.read'})),[]);
  assert.deepEqual(s.push(event('session.start',{sessionId:sid})),[{type:'session',id:sid},{type:'delta',text:'held'},{type:'tool.call',id:'held-tool',name:'fixture.read',input:undefined}]);
  assert.deepEqual(s.push(event('tool.execution_complete',{toolCallId:'held-tool',success:true,result:'ok'})),[{type:'tool.result',id:'held-tool',outcome:'ok',output:'ok'}]);
  assert.equal(s.push({type:'result',sessionId:sid,exitCode:0})[0]?.type,'done');
- const failed=new CopilotStream(sid);assert.deepEqual(failed.push(event('assistant.message_delta',{messageId:'x',deltaContent:'unconfirmed'})),[]);
+ const failed=new CopilotStream(sid);assert.deepEqual(failed.push(event('assistant.message_delta',{messageId:'x',deltaContent:'unconfirmed'})),[{type:'response'}]);
  assert.deepEqual(failed.push({type:'result',sessionId:sid,exitCode:1}),[{type:'error',code:'turn_failed',text:'Copilot: ход завершился с ошибкой'}]);
  const foreign=new CopilotStream(sid);foreign.push(event('assistant.message_delta',{messageId:'x',deltaContent:'foreign'}));
  assert.throws(()=>foreign.push(event('session.start',{sessionId:'other'})),{code:'protocol'});

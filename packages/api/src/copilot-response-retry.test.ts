@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import {join} from 'node:path';
+import {fixture,FakeProvider} from './test-helpers.ts';
+import {networkRevision} from '../../projects/src/index.ts';
+import {listen,proxy} from '../../runtime/src/network-test-helpers.ts';
+import {CliProvider} from '../../providers/src/cli/provider.ts';
+import {COPILOT} from '../../providers/src/copilot.ts';
+for(const kind of ['text','reasoning','foreign'])test('TS-47.12 r3: no failover after unconfirmed '+kind,{timeout:20000},async t=>{
+ let requests=0,calls=0,signals=0;const published:string[]=[];
+ const bad=http.createServer((q,r)=>{q.resume();requests++;r.writeHead(503);r.end()}),good=http.createServer((q,r)=>{q.resume();r.end('ok')});
+ const pa=await proxy(t,await listen(t,bad)),pb=await proxy(t,await listen(t,good)),fake=new FakeProvider(),h=await fixture(t,{noRepository:true,deps:{providers:{claude:fake}}});
+ const urls=[pa.url,pb.url];
+ await h.runtime.settings.changeNetwork(async c=>{c.migrated=true;urls.forEach((url,i)=>{c.exits['exit-'+i]={id:'exit-'+i,label:'Fixture '+i,type:'proxy',url}});c.chains.claude=['exit-0','exit-1'];(c.policies??={}).claude={mode:'fallback',silenceSeconds:10};return {result:undefined}});
+ const checks=new Map(urls.map((_,i)=>['exit-'+i,{revision:networkRevision(h.runtime.settings.network().exits['exit-'+i])!,checkedAt:Date.now(),ok:true,ip:'192.0.2.'+(i+1),country:'Germany',durationMs:1,state:'checked' as const}]));
+ h.runtime.networkChecks.snapshot=(id,revision)=>{const c=checks.get(id);return c?.revision===revision?structuredClone(c):null};
+ const sid='ab123456-1234-1234-1234-123456789abc';
+ const description={...COPILOT,binary:process.execPath,auth:{command:{args:[]},parse:()=>({loggedIn:true,email:'fixture@github.com'})},models:{list:[{id:'gpt-4.1',label:'Fixture'}],reason:'test'}};
+ const provider=new CliProvider(description,{env:{},cwd:h.dir,stateRoot:join(h.dir,'fixture-states'),execute:async(_req,_signal,hooks)=>{
+  if(!hooks?.stdout)return {stdout:'{}',stderr:'',code:0,signal:null};
+  calls++;hooks.started?.();
+  const early=kind!=='reasoning'?{type:'assistant.message_delta',data:{messageId:'m',deltaContent:'first'}}:{type:'assistant.reasoning_delta',data:{deltaContent:'private reasoning'}};
+  hooks.stdout(JSON.stringify(early)+'\n');
+  if(kind==='foreign')hooks.stdout(JSON.stringify({type:'result',sessionId:'foreign-session',exitCode:0})+'\n');
+  await(await h.runtime.networkRelay.fetch('claude')('http://origin.invalid')).text();
+  hooks.stdout(JSON.stringify({type:'result',sessionId:sid,exitCode:0})+'\n');
+  return {stdout:'',stderr:'',code:0,signal:null};
+ }});t.after(()=>provider.close());
+ fake.onRun=(seat,message,ctx)=>provider.runTurn({...seat,vendor:'copilot',model:'gpt-4.1',mode:'read',cwd:h.dir,sessionId:sid},message,{...ctx,publish:e=>{published.push(e.type);ctx.publish(e)},modelResponded:()=>{signals++;ctx.modelResponded?.()}});
+ await assert.rejects(h.runtime.runTurn('worker','fixture'),{code:kind==='foreign'?'protocol':'network_unavailable'});
+ assert.equal(calls,1,'must not launch a second model attempt after any model output');
+ assert.equal(published.some(type=>['delta','tool','toolError','done'].includes(type)),false,'unconfirmed contents must stay private');
+ assert.equal(signals,1);assert.equal(requests,kind==='foreign'?0:1);assert.equal(pb.connects.length,0);
+});
