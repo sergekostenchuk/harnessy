@@ -21,10 +21,18 @@ test('1/19: golden pins/settings/project/dir/halt/room forms via actual HTTP por
  assert.deepEqual((await call(h.api,'/api/dir?cwd='+encodeURIComponent(h.dir))).body,{ok:true,cwd:h.dir,hasHarness:true});assert.equal((await call(h.api,'/api/dir')).status,400);
  assert.deepEqual((await call(h.api,'/api/project',{body:{path:h.dir}})).body,{ok:true,project:h.dir,changed:false});
  const halt=await call(h.api,'/api/halt',{body:{on:true}});assert.deepEqual(halt.body,{ok:true,halted:true,interrupted:[],pending:{}});
- const room=await call(h.api,'/api/room',{body:{model:'w1',folder:h.dir}});assert.equal(room.status,200);assert.deepEqual(keys(room.body),['ok','pane']);assert.equal(room.body.pane.id,'room');
+ const room=await call(h.api,'/api/room',{body:{model:'w1',folder:h.dir}});assert.equal(room.status,200);assert.deepEqual(keys(room.body),['ok','pane','previousModel']);assert.equal(room.body.pane.id,'room');assert.deepEqual(room.body.pane.settingsBinding,h.runtime.paneBinding('room'));
  const projects=await call(h.api,'/api/projects');assert.equal(projects.body.current,h.dir);assert.equal(projects.body.projects[0].seats,1);assert.equal(projects.body.projects[0].hasTeam,true);
  const unknown=await call(h.api,'/api/context/nope');assert.deepEqual(unknown.body,{ok:false,error:'нет такого места'});assert.equal(unknown.status,404);
  assert.equal((await call(h.api,'/api/context/worker')).body.ok,true);
+});
+
+test('TS-49.2 r3: room receipt binds the previous model and saved model to the active chat and project instance',async t=>{
+ const h=await fixture(t);const first=await call(h.api,'/api/room',{body:{model:'w1',vendor:'claude',folder:true}});assert.equal(first.status,200,first.text);
+ const original=h.runtime.chatsList(OWNER).active.room!;const next=await h.runtime.chatsNew({pane:'room',carry:'none'},OWNER);
+ const changed=await call(h.api,'/api/room',{body:{model:'w2',vendor:'claude',folder:true}});assert.equal(changed.status,200,changed.text);
+ assert.deepEqual(changed.body.previousModel,{model:'w1',vendor:'claude'});assert.deepEqual(changed.body.pane.settingsBinding,h.runtime.paneBinding('room'));assert.equal(changed.body.pane.settingsBinding.project,h.dir);assert.equal(changed.body.pane.settingsBinding.chat,next.chat.id);assert.ok(changed.body.pane.settingsBinding.instanceId);
+ assert.equal((await call(h.api,'/api/chats/'+original)).body.chat.model,'w1');assert.equal((await call(h.api,'/api/chats/'+next.chat.id)).body.chat.model,'w2');
 });
 
 test('TS-43: project chat metadata is owner-only before any registered project is read',async t=>{

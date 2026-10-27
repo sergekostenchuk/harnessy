@@ -235,7 +235,9 @@
     if(leftPage){try{const latest=JSON.parse(localStorage.getItem(KEY)||'null');if(!latest||latest.v!==1)return;if(!latest.modelChanges||typeof latest.modelChanges!=='object'||Array.isArray(latest.modelChanges))latest.modelChanges={};const events=Array.isArray(latest.modelChanges[key])?latest.modelChanges[key]:[];latest.modelChanges[key]=events.concat(event);localStorage.setItem(KEY,JSON.stringify(latest))}catch{}return}
     if(!S.modelChanges||typeof S.modelChanges!=='object'||Array.isArray(S.modelChanges))S.modelChanges={};const events=modelChanges(binding);S.modelChanges[key]=events.concat(event);
     const current=sendBinding(),instance=H.pane?.settingsBinding?.instanceId||H.liveStatus?.trace?.instanceId;
-    if(!binding.fresh&&current.project===binding.project&&current.pane===binding.pane&&current.chat===binding.chat&&(!binding.instance||!instance||binding.instance===instance)){S.chat.push(event);orderChat(S.chat);render()}save(); }
+    // The selected binding can advance before the new history has loaded.
+    // Do not append its receipt to the still-visible previous conversation.
+    if(!binding.fresh&&current.project===binding.project&&current.pane===binding.pane&&current.chat===binding.chat&&(!binding.instance||!instance||binding.instance===instance)&&typeof LOADED!=='undefined'&&LOADED===streamKey(streamScope())){S.chat.push(event);orderChat(S.chat);render()}save(); }
   function bindFreshModelChanges(binding,key){let source;try{source=JSON.parse(key)}catch{return}if(!Array.isArray(source)||source.length!==4||source[3]!=='fresh'||source[0]!==binding.project||source[1]!==binding.pane||!binding.chat||binding.chat===source[2]||!bindingCurrent(binding))return;
     const store=S.modelChanges,events=store&&Array.isArray(store[key])?store[key]:[];if(!events.length)return;const accepted=events.filter(e=>e&&e.src==='model-change'&&typeof e.from==='string'&&typeof e.to==='string'&&typeof e.scope==='string'&&Number.isFinite(e.t));if(!accepted.length)return;
     store[modelChangeKey(binding)]=modelChanges(binding).concat(accepted);delete store[key];S.chat=orderChat(S.chat.concat(accepted));save(); }

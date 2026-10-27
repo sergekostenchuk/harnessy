@@ -366,7 +366,7 @@ function attachmentComposer(view:ReturnType<typeof ui>){
 
 test('81/109: real HTTP setting and send are ordered; launch uses the accepted model',async t=>{
  const h=await fixture(t),view=ui({fetch:async(path,body)=>(await call(h.api,path,{...(body?{body}:{})})).body});
- view.H.project=h.dir;view.H.active.worker=h.runtime.paneBinding('worker').chat;
+ view.H.project=h.dir;view.H.active.worker=h.runtime.paneBinding('worker').chat;view.H.pane.settingsBinding=h.runtime.paneBinding('worker');
  const gate=deferred<Data>(),original=view.sandbox.fetch;
  view.sandbox.fetch=async(path:string,opts?:{body:string})=>path==='/api/panes/worker'?{json:async()=>{await gate.promise;return (await original(path,opts)).json()}}:original(path,opts);
  const setting=view.functions.setSeat({model:'w2'},'Модель'),sending=view.functions.onSend('question',view.ta);await until(()=>view.S.draft==='question');
@@ -377,7 +377,7 @@ test('81/109: real HTTP setting and send are ordered; launch uses the accepted m
 
 test('81/109: Enter and button share a single send while configuration is pending',async t=>{
  const h=await fixture(t),gate=deferred(),view=ui({fetch:async(path,body)=>{if(path==='/api/panes/worker')await gate.promise;return (await call(h.api,path,{...(body?{body}:{})})).body}}),keys:Data={},clicks:Data={};
- view.H.project=h.dir;view.H.active.worker=h.runtime.paneBinding('worker').chat;
+ view.H.project=h.dir;view.H.active.worker=h.runtime.paneBinding('worker').chat;view.H.pane.settingsBinding=h.runtime.paneBinding('worker');
  const ta={value:'question',style:{},focus(){},addEventListener(type:string,fn:(event:Data)=>void){keys[type]=fn}},input={textContent:'Написать',querySelector:()=>null,appendChild(){}},button={style:{},addEventListener(type:string,fn:()=>void){clicks[type]=fn}},box={querySelector:(selector:string)=>selector===':scope > .in'?input:button};
  view.sandbox.document.createElement=()=>ta;const all=view.sandbox.document.querySelectorAll;view.sandbox.document.querySelectorAll=(selector:string)=>selector==='.box'?[box]:all(selector);view.functions.composer();
  const setting=view.functions.setSeat({model:'w2'},'Модель');keys.keydown({key:'Enter',shiftKey:false,isComposing:false,preventDefault(){}});clicks.click();keys.keydown({key:'Enter',preventDefault(){}});
@@ -404,6 +404,7 @@ for(const change of ['project','pane','chat','away-back','pagehide'])test('81/10
 test('81/109: refused setting and edited input never dispatch; multiple choices wait for the latest',async()=>{
  const denied=ui({fetch:async()=>({ok:false,error:'denied'})});denied.functions.setSeat({model:'w2'},'Модель');assert.equal(await denied.functions.onSend('question',denied.ta),false);assert.equal(denied.requests.length,1);assert.equal(denied.ta.value,'question');
  const gates=[deferred<Data>(),deferred<Data>()],view=ui({fetch:async(path,body)=>path==='/api/chat'?{ok:true}:{ok:true,pane:{...view.H.pane,...body},...(await gates[view.requests.length-1]!.promise)}});
+ view.H.pane.settingsBinding={project:view.H.project,instanceId:'instance-a',pane:'worker',chat:'chat-a'};
  const first=view.functions.setSeat({model:'w2'},'Модель'),sending=view.functions.onSend('question',view.ta);await until(()=>view.requests.length===1);const second=view.functions.setSeat({model:'w1'},'Модель');
  gates[0]!.resolve({});await first;await until(()=>view.requests.length===2);assert.equal(view.requests.some(r=>r.path==='/api/chat'),false);view.ta.value='edited';gates[1]!.resolve({});await second;
  assert.equal(await sending,false);assert.equal(view.ta.value,'edited');assert.equal(view.S.draft,'edited');assert.equal(view.requests.length,2);
@@ -418,6 +419,7 @@ test('81/109: current answer keeps its launch label; history uses only saved don
 
 test('TS-49.2: confirmed model event survives history reload only in its original project, place and chat',async()=>{
  const view=ui({fetch:async path=>path.startsWith('/api/chats/')?{chat:{id:path.split('/').at(-1),pane:view.H.pane.id},messages:[{role:'me',text:'hello',ts:1}]}:{ok:true}});
+ await view.functions.loadChat({onboard:false});view.S.chat=[];
  const binding=view.functions.sendBinding();view.functions.recordModelChange(binding,{from:'Fable · Claude',to:'Fable · Codex',scope:'место «воркер»'});
  assert.equal(view.S.chat.length,1);const html=view.functions.bubble(view.S.chat[0],0);assert.match(html,/Fable · Claude/);assert.match(html,/Fable · Codex/);assert.match(html,/место «воркер»/);assert.match(html,/<time /);
  await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.filter((m:Data)=>m.src==='model-change').length,1);await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.filter((m:Data)=>m.src==='model-change').length,1);
@@ -425,6 +427,14 @@ test('TS-49.2: confirmed model event survives history reload only in its origina
  view.H.active.worker='chat-a';view.H.project='/project-b';await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.some((m:Data)=>m.src==='model-change'),false);
  view.H.project='/project-a';view.S.ui.pane='room';view.H.pane=view.H.panes[1];view.H.active.room='chat-a';await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.some((m:Data)=>m.src==='model-change'),false);
  view.S.ui.pane='worker';view.H.pane=view.H.panes[0];await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.filter((m:Data)=>m.src==='model-change').length,1);
+});
+
+test('TS-49.2 r3: a receipt for the selected chat cannot enter the previous feed while history is loading',async()=>{
+ const view=ui({fetch:async path=>path.startsWith('/api/chats/')?{chat:{id:path.split('/').at(-1),pane:view.H.pane.id},messages:[{role:'me',text:path.endsWith('chat-a')?'Сообщение A':'Сообщение B',ts:1}]}:{ok:true}});
+ await view.functions.loadChat({onboard:false});assert.equal(view.S.chat[0].text,'Сообщение A');
+ view.H.active.worker='chat-b';const binding=view.functions.sendBinding();view.functions.recordModelChange(binding,{from:'A',to:'B',scope:'место «воркер»'});
+ assert.equal(view.S.chat.length,1);assert.equal(view.S.chat[0].text,'Сообщение A');
+ await view.functions.loadChat({onboard:false});assert.equal(view.S.chat.some((m:Data)=>m.text==='Сообщение A'),false);assert.equal(view.S.chat.filter((m:Data)=>m.src==='model-change').length,1);
 });
 
 test('TS-49.2: a receipt after pagehide merges into stored state without replacing the newer draft',()=>{
@@ -440,7 +450,7 @@ test('TS-49.2: a new-chat model receipt never enters the previous chat and follo
 });
 
 test('81/109: busy room uses pane setting and explains next-turn application',async()=>{
- const view=ui();view.S.ui.pane='room';view.H.pane=view.H.panes[1];view.H.pane.busy=true;view.sandbox.fetch=async(path:string,opts:{body:string})=>{view.requests.push({path,body:JSON.parse(opts.body)});return {json:async()=>({ok:true,pane:{...view.H.pane,model:'w2'},appliesFrom:'next'})}};
+ const view=ui();view.S.ui.pane='room';view.H.pane=view.H.panes[1];view.H.active.room='room-chat';view.H.pane.settingsBinding={project:view.H.project,instanceId:'instance-a',pane:'room',chat:'room-chat'};view.H.pane.busy=true;view.sandbox.fetch=async(path:string,opts:{body:string})=>{view.requests.push({path,body:JSON.parse(opts.body)});return {json:async()=>({ok:true,pane:{...view.H.pane,model:'w2'},appliesFrom:'next'})}};
  assert.equal(await view.functions.setSeat({model:'w2'},'Модель'),true);assert.equal(view.requests[0]!.path,'/api/panes/room');assert.match(view.toasts.at(-1)!,/применится со следующего хода/);
 });
 
@@ -469,7 +479,7 @@ for(const change of ['pane','project','chat','away-back','pagehide'])test('TS-08
 for(const mode of ['on','orch'] as const)for(const accepted of [false,true])test('TS-08 r2/2: '+mode+' card waits for '+(accepted?'accepted':'refused')+' model setting before sending',async t=>{
  const h=await fixture(t,{seats:directSeats}),history=deferred<Data>(),configuration=deferred(),id=mode==='on'?'worker':'orchestrator',orchChat=(await h.runtime.chatsNew({pane:'orchestrator',carry:'none'},OWNER)).chat.id;
  const view=ui({fetch:async(path,body)=>{if(path==='/api/chats/'+orchChat)return history.promise;if(path==='/api/panes/'+id){await configuration.promise;if(!accepted)return {ok:false,error:'model setting denied'}}return (await call(h.api,path,{...(body?{body}:{})})).body}});
- withOrchestrator(view);view.H.project=h.dir;view.H.active.worker=h.runtime.paneBinding('worker').chat;view.H.active.orchestrator=orchChat;view.S.ui.direct={};view.S.draft='confirmation question';const click=view.direct();let sending:Promise<boolean>,setting:Promise<boolean>;
+ withOrchestrator(view);view.H.project=h.dir;view.H.active.worker=h.runtime.paneBinding('worker').chat;view.H.active.orchestrator=orchChat;for(const pane of view.H.panes.filter((p:Data)=>p.id==='worker'||p.id==='orchestrator'))pane.settingsBinding=h.runtime.paneBinding(pane.id);view.S.ui.direct={};view.S.draft='confirmation question';const click=view.direct();let sending:Promise<boolean>,setting:Promise<boolean>;
  if(mode==='on'){setting=view.functions.setSeat({model:'w2'},'Модель');await until(()=>view.requests.some(r=>r.path==='/api/panes/worker'));sending=click(mode)}
  else {sending=click(mode);await until(()=>view.requests.some(r=>r.path==='/api/chats/'+orchChat));setting=view.functions.setSeat({model:'w2'},'Модель');await until(()=>view.requests.some(r=>r.path==='/api/panes/orchestrator'));history.resolve({messages:[],chat:{model:'w1'}})}
  await immediate();assert.equal(view.requests.filter(r=>r.path==='/api/chat').length,0);assert.equal(h.provider.calls.length,0);assert.equal(view.S.draft,'confirmation question');

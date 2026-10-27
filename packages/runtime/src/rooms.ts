@@ -28,7 +28,11 @@ export function makeRoom(runtime:Runtime,model:string,mode:string,initiator:Init
 }
 export function roomSet(runtime:Runtime,input:{model?:unknown;folder?:unknown;vendor?:unknown},initiator:Initiator) {
  const p=owner(runtime,initiator),model=pythonTrim(String(input.model||'')),mode=input.folder===undefined||pyTruthy(input.folder)?'read':'chat';if(input.vendor!==undefined&&(typeof input.vendor!=='string'||!p.registry.providers.has(input.vendor)))throw new RuntimeError('provider_unknown','Программа отсутствует в каталоге',400);const vendor=typeof input.vendor==='string'?input.vendor:vendorOf(p,model);if(vendor){const models=runtime.validateSelection(vendor,model,mode);if(models)p.registry.models[vendor]=models;}if(!model||!vendor||!p.registry.models[vendor]?.some(m=>m.id===model))throw new RuntimeError('model_unknown','модель не из каталога',400);
- return {ok:true as const,pane:makeRoom(runtime,model,mode,initiator,vendor,mode==='chat')};
+ // roomSet is synchronous: the previous model and the resulting binding refer
+ // to the same active chat that was saved, even if the caller navigated away.
+ const previous=p.registry.get('room'),previousModel=previous?{model:previous.model,vendor:previous.vendor}:null;
+ const pane=makeRoom(runtime,model,mode,initiator,vendor,mode==='chat');
+ return {ok:true as const,pane:{...pane,settingsBinding:runtime.paneBinding('room',p)},previousModel};
 }
 function moveInput(p:ProjectState,source:Chat):Chat {
  const text=transcriptText(source.transcript),carry=text&&!source.carry.endsWith(text)?(source.carry?source.carry+'\n\n':'')+text:source.carry;
