@@ -13,7 +13,7 @@ import {waitWithSignal} from '../cancellation.ts';
 import {executeCli} from './process.ts';
 import {readCliFileMetadata} from './query.ts';
 import {CliStateStore} from './state.ts';
-import type {CliAuth,CliCommand,CliContext,CliDependencies,CliDescriptor,CliEvent,CliMcpServer,CliProbe,CliProcessResult,CliSeat,CliTurnInput} from './types.ts';
+import type {CliAuth,CliCommand,CliContext,CliDecoder,CliDependencies,CliDescriptor,CliEvent,CliMcpServer,CliProbe,CliProcessResult,CliSeat,CliTurnInput} from './types.ts';
 
 const protocol=(text:string)=>new ProviderError('protocol','CLI: '+text);
 const text=(v:unknown):v is string=>typeof v==='string'&&!v.includes('\0');
@@ -95,7 +95,7 @@ export class CliProvider {
   const abort=new AbortController(),signal=AbortSignal.any([original.signal,abort.signal]),ctx={...original,peers:input.peers,env:{...original.env},signal};let release!:()=>void;
   const active={abort,done:new Promise<void>(r=>{release=r})};this.active.set(seat.id,active);
   let sessionId=seat.sessionId,answer='',pending='',pendingText='',directory='',token='',registered=false,terminal=false,result:Extract<CliEvent,{type:'done'}>|null=null,lease:ReturnType<CliStateStore['acquire']>|undefined;
-  let decodeValue:(value:unknown)=>CliEvent[];
+  let decodeValue:CliDecoder|undefined,lifecycleStarted=false,processStarted=false,successful=false;
   const started=Date.now(),calls=new Map<string,string>(),secrets=this.d.forbiddenEnv.map(k=>this.deps.env[k]).filter((v):v is string=>!!v);
   const clean=(s:string)=>[...secrets,token].filter(Boolean).reduce((out,secret)=>out.replaceAll(secret,'[redacted]'),s);
   // Keep a short suffix so credentials split across process chunks cannot leak through deltas.
@@ -118,11 +118,11 @@ export class CliProvider {
     else throw protocol('неизвестное событие');
    }
   };
-  const decode=(value:unknown)=>{try{consume(decodeValue(value))}catch(e){if(e instanceof ProviderError)throw e;throw protocol('неверный вывод провайдера')}};
+  const decode=(value:unknown)=>{try{consume(decodeValue!(value))}catch(e){if(e instanceof ProviderError)throw e;throw protocol('неверный вывод провайдера')}};
   const stream=(chunk:string)=>{if(this.d.turn.format==='text'){delta(chunk);return}if(this.d.turn.format!=='stream-json')return;pending+=chunk;let i:number;while((i=pending.indexOf('\n'))>=0){const line=pending.slice(0,i).trim();pending=pending.slice(i+1);if(line)parse(line)}if(pending.length>1024*1024)throw protocol('строка потока слишком велика')};
   const parse=(raw:string)=>{let v:unknown;try{v=JSON.parse(raw)}catch{throw protocol('неверный JSON потока')}decode(v)};
   try{
-   decodeValue=this.d.turn.decoder?.()??this.d.turn.decode!;
+   decodeValue=this.d.turn.decoder?.(seat.sessionId)??this.d.turn.decode!;
    ctx.setHandle({interrupt:async()=>{abort.abort();await active.done},steer:async()=>{throw new ProviderError('capability_unsupported','CLI не поддерживает вмешательство в активный ход',sessionId)}});
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    const mode=this.d.modes[seat.mode];if(!mode)throw new ProviderError(this.d.state?'capability_unsupported':'mode_unsupported','CLI: режим '+seat.mode+' не поддерживается',sessionId);
@@ -154,7 +154,11 @@ export class CliProvider {
    if(ctx.beforeModel)await waitWithSignal(()=>ctx.beforeModel!({provider:this.vendor,model:seat.model}),signal);
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    lease?.validate(); // No await between the final path check and process creation.
-   const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...stateArgs,...mcpArgs,...sessionArgs],cwd:seat.cwd,env:this.environment({...ctx.env,...configEnv}),timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:stream,started:()=>ctx.modelStarted?.()});
+   // Register the attempt immediately before process creation; no other turn can
+   // observe its counters in the gap before the asynchronous spawn callback.
+   lifecycleStarted=true;decodeValue?.started?.();
+   const onStarted=()=>{if(processStarted)return;processStarted=true;ctx.modelStarted?.()};
+   const exit=await this.deps.execute({...c,binary:this.d.binary,args:[...c.args,...permissions,...resume,...stateArgs,...mcpArgs,...sessionArgs],cwd:seat.cwd,env:this.environment({...ctx.env,...configEnv}),timeoutMs:this.deps.turnTimeoutMs,maxBytes:this.deps.maxBytes},signal,{stdout:chunk=>{onStarted();stream(chunk)},started:onStarted});
    if(signal.aborted)throw new ProviderError('cancelled','ход отменён',sessionId);
    if(exit.code!==0||exit.signal){const failure=this.d.failure?.(exit);throw new ProviderError(failure?.code??'transport_lost',clean(failure?.text??('CLI: процесс завершился '+(exit.signal?'по сигналу '+exit.signal:'с кодом '+exit.code)+(exit.stderr.trim()?': '+safeDiagnostic(clean(exit.stderr)):' · stderr пуст'))),sessionId)}
    if(sessionFile){
@@ -171,9 +175,9 @@ export class CliProvider {
    if(calls.size)throw protocol('нет результата вызванного инструмента');
    delta('',true);
    if(!answer&&done.text){answer=clean(done.text);ctx.publish({type:'delta',text:answer})}
-   await dispose();terminal=true;ctx.publish({type:'done',sessionId,model:seat.model,durationMs:Date.now()-started,usage:usage(done.usage)});return {text:answer,sessionId};
+   await dispose();terminal=true;ctx.publish({type:'done',sessionId,model:seat.model,durationMs:Date.now()-started,usage:usage(done.usage)});successful=true;return {text:answer,sessionId};
   }catch(e){const error=signal.aborted?new ProviderError('cancelled','ход отменён',sessionId):e instanceof ProviderError?new ProviderError(e.code,safeDiagnostic(clean(e.vendorText)),sessionId):protocol('ход не выполнен');if(!terminal){terminal=true;ctx.publish({type:'error',text:error.vendorText})}throw error}
-  finally{abort.abort();try{await dispose()}finally{try{lease?.release()}finally{this.active.delete(seat.id);try{ctx.setHandle(null)}finally{release()}}}}
+  finally{try{if(lifecycleStarted)decodeValue?.finished?.(successful)}finally{abort.abort();try{await dispose()}finally{try{lease?.release()}finally{this.active.delete(seat.id);try{ctx.setHandle(null)}finally{release()}}}}}
  }
  async reset(){const turns=[...this.active.values()];for(const a of turns)a.abort.abort();await Promise.all(turns.map(a=>a.done))}
  async close(){this.closed=true;await this.reset()}

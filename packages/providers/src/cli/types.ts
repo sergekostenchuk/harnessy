@@ -22,6 +22,8 @@ export type CliEvent=
  | {type:'tool.result';id:string;output?:unknown;outcome:NonNullable<ToolTrace['outcome']>;reason?:string}
  | {type:'done';text?:string;sessionId?:string|null;usage?:Usage;durationMs?:number}
  | {type:'error';code:ErrorCode;text:string};
+/** Optional per-process lifecycle hooks; metadata probes do not start a turn. */
+export type CliDecoder=((value:unknown)=>CliEvent[])&{started?():void;finished?(successful:boolean):void};
 export interface CliDescriptor {
  id:string;name:string;binary:string;
  /** Metadata remains available when a safe model execution is not implemented. */
@@ -40,7 +42,7 @@ export interface CliDescriptor {
  /** Explicit flags, with no permissive fallback for a missing mode. */
  modes:Partial<Record<Mode,(input:CliTurnInput)=>string[]>>;
  forbiddenEnv:readonly string[];
- turn:{format:'json'|'stream-json'|'text';command(input:CliTurnInput):CliCommand;decode?(value:unknown):CliEvent[];decoder?():((value:unknown)=>CliEvent[]);sessionFile?:{args(path:string):string[];parse(text:string):string}};
+ turn:{format:'json'|'stream-json'|'text';command(input:CliTurnInput):CliCommand;decode?(value:unknown):CliEvent[];decoder?(sessionId?:string|null):CliDecoder;sessionFile?:{args(path:string):string[];parse(text:string):string}};
  /** Private CLI-owned config/sessions; distinct from the disposable MCP file. */
  state?:{namespace:string;args(directory:string):string[]};
  resume?:((sessionId:string)=>string[]);

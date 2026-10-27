@@ -19,7 +19,7 @@ export const ANTIGRAVITY:CliDescriptor={
  forbiddenEnv:['GEMINI_API_KEY','GOOGLE_API_KEY','GOOGLE_GEMINI_BASE_URL','GOOGLE_APPLICATION_CREDENTIALS','AGY_ADC_AUTH'],
  noHarnessMcp:true,turnReasons:{read:ANTIGRAVITY_UNAVAILABLE,edit:ANTIGRAVITY_UNAVAILABLE},turnNotes:{all:'без инструментов Harnessy'},
  modes:{all:()=>['--dangerously-skip-permissions']},
- turn:{format:'stream-json',command:i=>({args:['--output-format','stream-json','--model',i.seat.model,'-p',i.roleNote+'\n\n'+i.message]}),decoder(){const stream=new AntigravityStream(usageState(this));return v=>stream.push(v)}},
+ turn:{format:'stream-json',command:i=>({args:['--output-format','stream-json','--model',i.seat.model,'-p',i.roleNote+'\n\n'+i.message]}),decoder(sessionId){const stream=new AntigravityStream(usageState(this),sessionId??null);return Object.assign((v:unknown)=>stream.push(v),{started:()=>stream.started(),finished:(ok:boolean)=>stream.finished(ok)})}},
  resume(id){if(!/^[A-Za-z0-9_-]{1,128}$/.test(id))throw new ProviderError('session_missing','Antigravity: неверная сессия');usageState(this.turn).resume(id);return ['--conversation',id]},
  version:{command:{args:['--version']},parse:r=>{const v=r.stdout.trim();if(!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(v))throw invalid();return v}},
  auth:{command:{args:['--output-format','json','-p','/usage']},exitCodes:[0,1],parse:(r:CliProcessResult)=>{
