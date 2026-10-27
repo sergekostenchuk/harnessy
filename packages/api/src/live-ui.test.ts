@@ -42,6 +42,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  async function ask(','  function applyStatus(')+
   part(live,'  function reply(','  function composer(')+
   part(live,'  function composer(','  const SCREENS=')+
+  part(live,'  async function stop(','  const toolLine=')+
   part(live,'  function curHTML(','  function hEvent(')+
   part(live,'  function hEvent(','  const isDirect=')+
   part(live,'  async function loadChat(','  // подключение к движку')+
@@ -53,7 +54,7 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   part(live,'  function closeLAMenus()','  // запись «контекст передан»')+
   '\nconst L={api,configureSetting,bindingCurrent,toast,save,log,hStatus,paneName,refreshStatus};const globalState=S;'+
   '(function(){const S=()=>globalState,seat=()=>H.panes.find(p=>p.id===globalState.ui.pane)||H.pane,cx=()=>globalState.cx;'+part(cx,'  function setSeat(','  function pick(')+'globalThis.setSeat=setSeat;})();'+
-  '\ndrawLive=()=>{if(window.CX&&CX.setBusy)CX.setBusy(!!H.cur)};globalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,curHTML,finish,loadChat,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,streamScope,streamGet,streamEnd,streamSelect,streamHidden,streamClear,selectedBusy,queueDelivered,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw,showOrchestratorOffer,laPath,projectPathValue};',context);
+  '\ndrawLive=()=>{if(window.CX&&CX.setBusy)CX.setBusy(!!H.cur)};globalThis.testing={api,onSend,composer,sendBinding,configureSetting,settingsReady,bindingCurrent,invalidateBinding,ask,stop,curHTML,footerUpdate,finish,loadChat,recoverStoppedTurn,bubble,actsLine,messageTime,fullMessageTime,updateMessageTimes,insertQuote,messageSelection,messageSelectionText,quoteBlock,renumberQuotes,nextQuoteNumber,setSeat,consumeState,hEvent,streamScope,streamGet,streamEnd,streamSelect,streamHidden,streamClear,selectedBusy,queueDelivered,attachmentFiles,attachmentKey,attachmentRefs,attachmentState,attachmentDraw,ownerProfile,profileDraw,chatGuidanceDraw,showOrchestratorOffer,laPath,projectPathValue};',context);
  const functions=(context as Data).testing as Data;
  function journal(){runInContext(part(live,'  let JR=','  // ── «Сейчас» при подключённом движке')+'\nglobalThis.journal={fetch:journalFetch,draw:journalDraw,before:journalBefore,reset:resetJournal,card:jcard,get state(){return JR}};',context);return (context as Data).journal as Data}
  function sidebar(){runInContext(part(live,"  const PROJECT_FOLD_KEY=",'  async function sideChats(')+
@@ -63,6 +64,113 @@ function ui(options:{fetch?:(path:string,body:Data|undefined)=>Promise<Data>;sto
   return (mode:'on'|'orch')=>listener({target:{closest:(selector:string)=>selector==='[data-direct]'?{dataset:{direct:mode}}:null}}) as Promise<boolean>}
  return {H,S,ta,requests,toasts,storage,elements,rows,column,sandbox,context,functions,journal,sidebar,direct,clicks,hidePage:()=>pagehide.forEach(fn=>fn()),showPage:(event:Data)=>Promise.all(pageshow.map(fn=>fn(event))),get rendered(){return rendered}};
 }
+
+test('TS-47.2 F02: receipt and events define one phase; failure has one readable decision card',async()=>{
+ const receipt=deferred<Data>(),view=ui({fetch:async(path)=>path==='/api/chat'?receipt.promise:{ok:true}}),sending=view.functions.ask('проверить',view.functions.sendBinding());
+ assert.match(view.functions.curHTML(),/отправляем/);assert.doesNotMatch(view.functions.curHTML(),/ждём ответа/);
+ receipt.resolve({ok:true});assert.equal(await sending,true);assert.match(view.functions.curHTML(),/ждём ответа/);
+ view.functions.hEvent({type:'tool',name:'Read',detail:'a.txt'});assert.match(view.functions.curHTML(),/выполняет инструменты/);
+ view.functions.hEvent({type:'approval',id:'a',title:'Разрешить запись?',detail:'a.txt'});assert.match(view.functions.curHTML(),/ждёт вашего решения/);
+ view.functions.hEvent({type:'approvalResolved',id:'a',decision:'allow'});view.H.link='lost';assert.match(view.functions.curHTML(),/связь потеряна/);assert.match(view.functions.curHTML(),/последнее: выполняет инструменты/);assert.doesNotMatch(view.functions.curHTML(),/продолжается на сервере/);
+ view.H.link='ok';view.functions.hEvent({type:'delta',text:'Часть ответа'});assert.match(view.functions.curHTML(),/отвечает/);assert.match(view.functions.curHTML(),/первый символ через \d+,\d с/);
+ const waiting={turnInstanceId:'turn-a',status:'uncertain',failure:{code:'turn_failed',reason:'Провайдер отказал',durationMs:42},recordSeqs:[1],queuedSeqs:[],actions:['retry','skip']};
+ view.functions.hEvent({type:'note',warning:'worker:turn-a:uncertain',text:'место ждёт итога хода'});view.functions.hEvent({type:'error',warning:'worker:turn-a:error',message:'Провайдер отказал',code:'turn_failed',waiting});view.functions.hEvent({type:'note',text:'1 запись остались в очереди и уйдут со следующим ходом'});
+ assert.equal(view.S.chat.filter((m:Data)=>m.src==='err'||m.src==='sys').length,0);assert.equal(view.S.chat.filter((m:Data)=>m.src==='live').length,1);assert.equal(view.H.pane.waiting,waiting);
+ const ctx=createContext({networkWaiting:()=>null,paneName:()=> 'Воркер',esc:view.sandbox.esc});runInContext(part(live,'  function waitingControls(','  function showWaiting(')+'globalThis.card=waitingControls;',ctx);const html=(ctx as Data).card(view.H.pane,waiting,view.H.project);assert.match(html,/Провайдер отказал/);assert.match(html,/Повторить/);assert.match(html,/Пропустить/);assert.match(html,/<details><summary>Технические детали<\/summary>turn_failed/);
+ const d=dom('<div class="frame"><div class="status"><span></span><span></span></div></div>');view.sandbox.document=d.document;view.functions.footerUpdate();assert.match(d.document.querySelector('.status span')!.textContent,/ждёт вашего решения/);assert.doesNotMatch(d.document.querySelector('.status span')!.textContent,/готов/);
+ view.H.pane.waiting=null;view.H.cur=null;view.S.chat.push({role:'ai',src:'err',html:'отказ'});view.functions.footerUpdate();assert.match(d.document.querySelector('.status span')!.textContent,/ход не завершён/);assert.doesNotMatch(d.document.querySelector('.status span')!.textContent,/готов/);
+ const queued=ui({fetch:async()=>({ok:true,queued:true})});assert.equal(await queued.functions.ask('в очередь',queued.functions.sendBinding()),true);assert.equal(queued.H.cur,null);
+ const done=ui(),timers:{ms:number;fn:()=>void}[]=[];done.sandbox.setTimeout=(fn:()=>void,ms:number)=>timers.push({fn,ms});done.H.cur={text:'Готовый ответ',tools:[],phase:'write',startedAt:Date.now()-1500};done.functions.hEvent({type:'done',model:'w1'});const message=done.S.chat.at(-1),bubble=done.functions.bubble(message,done.S.chat.length-1);assert.match(bubble,/>завершено</);assert.doesNotMatch(bubble,/class="live-acts"/);
+ const finalDom=dom('<div class="frame cur">'+bubble+'</div>');done.sandbox.document=finalDom.document;const timer=timers.find(t=>t.ms===3000);assert.ok(timer);timer.fn();assert.equal(finalDom.document.querySelector('.live-completion'),null);assert.ok(finalDom.document.querySelector('.live-acts'));message.completedUntil=0;assert.doesNotMatch(done.functions.bubble(message,done.S.chat.length-1),/>завершено</);
+});
+
+test('TS-47.2: stop remains requested until an actual terminal event, including late and failed receipts',async()=>{
+ const reply=deferred<Data>(),view=ui({fetch:async path=>path==='/api/interrupt'?reply.promise:{ok:true}}),timers:{ms:number;fn:()=>void}[]=[];
+ view.sandbox.setTimeout=(fn:()=>void,ms:number)=>timers.push({fn,ms});const turn={text:'ответ',tools:[],phase:'write',startedAt:Date.now(),pane:'worker'};view.H.cur=turn;view.H.pane.busy=true;
+ const stopping=view.functions.stop(),duplicate=view.functions.stop();assert.equal(view.requests.filter(r=>r.path==='/api/interrupt').length,1);reply.resolve({ok:true});await stopping;await duplicate;
+ assert.equal(view.H.cur,turn);assert.match(view.functions.curHTML(),/остановка запрошена/);assert.doesNotMatch(view.functions.curHTML(),/остановлено владельцем/);assert.equal(timers.some(t=>t.ms===4000),false);
+ view.functions.hEvent({type:'error',code:'cancelled',message:'Ход остановлен'});assert.equal(view.H.cur,null);assert.match(view.S.chat.at(-1).html,/Ход остановлен/);
+ const failed=ui({fetch:async()=>({ok:false,error:'<нет связи>'})}),kept={text:'ответ',tools:[],phase:'write',startedAt:Date.now()};failed.H.cur=kept;await failed.functions.stop();assert.equal(failed.H.cur,kept);assert.equal((kept as Data).stopping,undefined);assert.match(failed.toasts.at(-1)!,/Не удалось запросить остановку/);assert.match(failed.toasts.at(-1)!,/&lt;нет связи&gt;/);
+ const lost=ui({fetch:async()=>{throw Error('offline')}}),during={text:'ещё идёт',tools:[],phase:'write',startedAt:Date.now()};lost.H.cur=during;await lost.functions.stop();assert.equal(lost.H.cur,during);assert.equal((during as Data).stopUncertain,true);assert.match(lost.toasts.at(-1)!,/Не удалось подтвердить остановку/);
+ const late=deferred<Data>(),other=ui({fetch:async()=>late.promise}),old={text:'старый',tools:[],phase:'write',startedAt:Date.now()};other.H.cur=old;const pending=other.functions.stop();other.H.cur={text:'новый',tools:[],phase:'write',startedAt:Date.now()};late.resolve({ok:true});await pending;assert.equal(other.H.cur.stopping,undefined);assert.equal(other.toasts.length,0);
+});
+
+test('TS-47.2: reconnect reconciles an interrupted turn only against the same confirmed idle chat',async()=>{
+ const status={project:'/project-a',activeChats:{worker:'chat-a'},panes:[{id:'worker',busy:false}]};
+ const receipt={chat:{id:'chat-a',pane:'worker'},messages:[{role:'me',text:'вопрос',seq:1},{role:'ai',text:'сохранённый итог',seq:2}]};
+ const generation={stream:0,busy:0,epoch:0};
+ const gate=deferred<Data>(),v=ui({fetch:async path=>path==='/api/chats/chat-a'?gate.promise:{records:[]}});v.H.link='ok';v.H.cur={text:'часть',tools:[],stopping:true};const old=v.H.cur,binding=v.functions.sendBinding();v.S.chat=[{role:'me',text:'старый снимок'}];
+ const recovery=v.functions.recoverStoppedTurn(old,binding,status,generation);assert.equal(v.H.cur,old);assert.equal(v.requests.filter(r=>r.path==='/api/chats/chat-a').length,1);gate.resolve(receipt);assert.equal(await recovery,true);assert.equal(v.H.cur,null);assert.deepEqual(v.S.chat.map((m:Data)=>m.text),['вопрос','сохранённый итог']);
+ for(const state of [null,{...status,panes:{}},{...status,panes:[]},{...status,panes:[{id:'worker',busy:true}]},{...status,activeChats:{worker:'chat-b'}},{...status,project:'/other'}]){const w=ui();w.H.link='ok';w.H.cur={text:'часть',tools:[],stopping:true};const cur=w.H.cur;assert.equal(await w.functions.recoverStoppedTurn(cur,w.functions.sendBinding(),state,generation),false);assert.equal(w.H.cur,cur);assert.equal(w.requests.length,0)}
+ for(const reply of [null,{chat:{id:'chat-b',pane:'worker'},messages:[]},{chat:{id:'chat-a',pane:'room'},messages:[]},{chat:{id:'chat-a',pane:'worker'}}]){const w=ui({fetch:async()=>reply as Data});w.H.link='ok';w.H.cur={text:'часть',tools:[],stopping:true};const cur=w.H.cur;assert.equal(await w.functions.recoverStoppedTurn(cur,w.functions.sendBinding(),status,generation),false);assert.equal(w.H.cur,cur)}
+ for(const change of ['turn','project','chat','busy','busy-event','event','disconnect','reconnected']){const hold=deferred<Data>(),w=ui({fetch:async()=>hold.promise});w.H.link='ok';w.H.cur={text:'часть',tools:[],stopping:true};w.S.chat=[{role:'me',text:'не стирать'}];const cur=w.H.cur,pending=w.functions.recoverStoppedTurn(cur,w.functions.sendBinding(),status,generation);
+  if(change==='turn')w.H.cur={text:'новый ход',tools:[]};if(change==='project')w.H.project='/other';if(change==='chat')w.H.active.worker='chat-b';if(change==='busy')w.H.pane.busy=true;if(change==='busy-event'){w.functions.consumeState({pane:'worker',busy:true});w.H.pane.busy=false}if(change==='event')w.H.streamGeneration=1;if(change==='disconnect')w.H.link='lost';if(change==='reconnected')w.H.stopRecoveryEpoch=1;
+  hold.resolve(receipt);assert.equal(await pending,false,change);assert.equal(w.S.chat[0].text,'не стирать',change);assert.ok(w.H.cur,change);if(change==='turn')assert.equal(w.H.cur.text,'новый ход');}
+ const switched=ui({fetch:async()=>({ok:true})});switched.H.link='ok';switched.H.cur={text:'часть',tools:[]};await switched.functions.stop();const interrupted=switched.H.cur,original=interrupted.stopBinding;assert.equal(original.chat,'chat-a');switched.H.active.worker='chat-b';assert.equal(await switched.functions.recoverStoppedTurn(interrupted,original,{...status,activeChats:{worker:'chat-b'}},generation),false);assert.equal(switched.H.cur,interrupted);assert.equal(switched.requests.filter(r=>r.path.startsWith('/api/chats/')).length,0);
+ const late=deferred<Data>(),w=ui({fetch:async path=>path==='/api/interrupt'?late.promise:path==='/api/chats/chat-a'?receipt:{records:[]}});w.H.link='ok';w.H.cur={text:'часть',tools:[]};const pending=w.functions.stop(),turn=w.H.cur;turn.stopRecovery={binding:w.functions.sendBinding(),status,generation};late.resolve({ok:true});await pending;assert.equal(w.H.cur,null);assert.equal(w.S.chat.at(-1).text,'сохранённый итог');
+});
+
+function stopRecoveryUI(fetch:(path:string,body:Data|undefined)=>Promise<Data>){
+ const view=ui({fetch});view.H.link='ok';view.H.cur={text:'часть',tools:[]};view.sandbox.proposalsFetch=async()=>{};view.sandbox.connectionFailed=()=>{view.H.connectionFailed=true};
+ view.sandbox.applyStatus=(st:Data)=>{view.H.project=st.project;view.H.active=st.activeChats;view.H.panes=st.panes;view.H.pane=st.panes.find((p:Data)=>p.id===view.S.ui.pane)||null;view.H.connectionFailed=false};
+ runInContext(part(live,'  async function refreshStatus(','  // лента активного чата')+'\nglobalThis.readRecoveryStatus=refreshStatus;',view.context);
+ runInContext('globalThis.reconnect=(function(){let linkedProject=H.project;const es={};'+part(live,'      es.onerror=()=>{','      hStatus(); }')+'return es;})();',view.context);
+ return {...view,connection:(view.context as Data).reconnect,refresh:(view.context as Data).readRecoveryStatus};
+}
+const stoppedStatus=()=>({project:'/project-a',activeChats:{worker:'chat-a'},panes:[{id:'worker',label:'воркер',busy:false}]});
+const stoppedHistory=()=>({chat:{id:'chat-a',pane:'worker'},messages:[{role:'me',text:'вопрос',seq:1},{role:'ai',text:'подтверждённый итог',seq:2}]});
+
+test('TS-47.2: failed recovery history retries on the next status or history read',async()=>{
+ for(const retry of ['status','history']){let reads=0;const v=stopRecoveryUI(async path=>path==='/api/interrupt'?{ok:true}:path==='/api/status'?stoppedStatus():path==='/api/chats/chat-a'?(++reads===1?{ok:false,code:'unavailable'}:stoppedHistory()):{records:[]});
+  await v.functions.stop();const turn=v.H.cur;v.connection.onerror();await v.connection.onopen();assert.equal(v.H.cur,turn);assert.equal(turn.stopping,true);assert.ok(turn.stopRecovery);assert.equal(reads,1);
+  if(retry==='status')await v.refresh();else await v.functions.loadChat({onboard:false});assert.equal(v.H.cur,null,retry);assert.equal(v.S.chat.at(-1).text,'подтверждённый итог');assert.equal(reads,2);}
+});
+
+test('TS-47.2: failed recovery status retries after a later status or history read',async()=>{
+ for(const retry of ['status','history']){let statuses=0;const v=stopRecoveryUI(async path=>path==='/api/interrupt'?{ok:true}:path==='/api/status'?(++statuses===1?{ok:false,code:'unavailable'}:stoppedStatus()):path==='/api/chats/chat-a'?stoppedHistory():{records:[]});
+  await v.functions.stop();const turn=v.H.cur;v.connection.onerror();await v.connection.onopen();assert.equal(v.H.cur,turn);assert.ok(turn.stopRecovery);assert.equal(v.H.connectionFailed,true);assert.equal(v.requests.filter(r=>r.path==='/api/chats/chat-a').length,0);
+  if(retry==='status')await v.refresh();else await v.functions.loadChat({onboard:false});assert.equal(v.H.cur,null,retry);assert.equal(v.S.chat.at(-1).text,'подтверждённый итог');assert.equal(statuses,2);}
+});
+
+test('TS-47.2: repeated disconnect invalidates an in-flight reconciliation and reconnects again',async()=>{
+ const entered=deferred<void>(),hold=deferred<Data>();let reads=0;const v=stopRecoveryUI(async path=>path==='/api/interrupt'?{ok:true}:path==='/api/status'?stoppedStatus():path==='/api/chats/chat-a'?(++reads===1?(entered.resolve(),hold.promise):stoppedHistory()):{records:[]});
+ await v.functions.stop();const turn=v.H.cur;v.connection.onerror();const first=v.connection.onopen();await entered.promise;v.connection.onerror();hold.resolve(stoppedHistory());await first;
+ assert.equal(v.H.link,'lost');assert.equal(v.H.cur,turn);assert.ok(turn.stopRecovery);assert.equal(v.toasts.filter(text=>text==='Связь восстановлена').length,0);
+ await v.connection.onopen();assert.equal(v.H.link,'ok');assert.equal(v.H.cur,null);assert.equal(v.S.chat.at(-1).text,'подтверждённый итог');assert.equal(reads,2);
+});
+
+test('TS-47.2: recovery retry never clears a newer event or a different chat',async()=>{
+ for(const change of ['event','chat']){let reads=0;const status=stoppedStatus(),v=stopRecoveryUI(async path=>path==='/api/interrupt'?{ok:true}:path==='/api/status'?status:path==='/api/chats/chat-a'?(++reads===1?{ok:false}:stoppedHistory()):{records:[]});
+  await v.functions.stop();const turn=v.H.cur;v.connection.onerror();await v.connection.onopen();if(change==='event')v.functions.hEvent({type:'delta',text:' новый фрагмент'});else{status.activeChats.worker='chat-b';v.H.active.worker='chat-b';v.functions.sendBinding()}
+  await v.refresh();assert.equal(v.H.cur,turn,change);assert.equal(reads,1,change);if(change==='event')assert.match(turn.text,/новый фрагмент/);}
+ const entered=deferred<void>(),late=deferred<Data>();let reads=0;const v=stopRecoveryUI(async path=>path==='/api/interrupt'?{ok:true}:path==='/api/status'?stoppedStatus():path==='/api/chats/chat-a'?(++reads===1?{ok:false}:(entered.resolve(),late.promise)):{records:[]});
+ await v.functions.stop();v.connection.onerror();await v.connection.onopen();const loading=v.functions.loadChat({onboard:false});await entered.promise;v.H.cur={text:'новый ход',tools:[]};late.resolve(stoppedHistory());await loading;assert.equal(v.H.cur.text,'новый ход');assert.equal(v.S.chat.length,0);
+});
+
+for(const uncertain of [false,true])test('TS-47.2: a new accepted turn during '+(uncertain?'uncertain ':'')+'stop recovery has its own stream and interrupt',async()=>{
+ const entered=deferred<void>(),hold=deferred<Data>();let interrupts=0;const v=stopRecoveryUI(async path=>{if(path==='/api/interrupt'){interrupts++;if(uncertain&&interrupts===1)throw Error('response lost');return {ok:true}}return path==='/api/status'?stoppedStatus():path==='/api/chats/chat-a'?(entered.resolve(),hold.promise):path==='/api/chat'?{ok:true}:{records:[]}});
+ v.H.cur.text='старый ответ';await v.functions.stop();const old=v.H.cur;if(uncertain)assert.equal(old.stopUncertain,true);v.connection.onerror();const recovery=v.connection.onopen();await entered.promise;
+ assert.equal(await v.functions.ask('новое сообщение'),true);assert.notEqual(v.H.cur,old);assert.equal(v.H.cur.stopping,undefined);assert.equal(v.H.cur.text,'');
+ v.functions.consumeState({pane:'worker',busy:true});v.functions.hEvent({type:'delta',text:'новый ответ'});hold.resolve(stoppedHistory());await recovery;assert.equal(v.H.cur.text,'новый ответ');assert.equal(v.H.cur.stopping,undefined);
+ await v.functions.stop();assert.equal(interrupts,2);assert.equal(v.H.cur.stopping,true);
+});
+
+test('TS-47.2: a rejected new send retains the unconfirmed old stop recovery',async()=>{
+ const entered=deferred<void>(),hold=deferred<Data>();const v=stopRecoveryUI(async path=>path==='/api/interrupt'?{ok:true}:path==='/api/status'?stoppedStatus():path==='/api/chats/chat-a'?(entered.resolve(),hold.promise):path==='/api/chat'?{ok:false,error:'нет связи'}:{records:[]});
+ await v.functions.stop();const old=v.H.cur;v.connection.onerror();const recovery=v.connection.onopen();await entered.promise;assert.notEqual(await v.functions.ask('новое сообщение'),true);assert.equal(v.H.cur,old);assert.equal(old.stopping,true);assert.ok(old.stopRecovery);hold.resolve(stoppedHistory());await recovery;
+});
+
+test('TS-47.2: history requested before stop cannot confirm a later recovery',async()=>{
+ const started=deferred<void>(),oldHistory=deferred<Data>();let reads=0;const v=stopRecoveryUI(async path=>path==='/api/interrupt'?{ok:true}:path==='/api/status'?stoppedStatus():path==='/api/chats/chat-a'?(++reads===1?(started.resolve(),oldHistory.promise):reads===2?{ok:false}:stoppedHistory()):{records:[]});
+ const oldLoad=v.functions.loadChat({onboard:false});await started.promise;await v.functions.stop();v.connection.onerror();await v.connection.onopen();assert.equal(reads,2);assert.ok(v.H.cur?.stopping);
+ oldHistory.resolve({chat:{id:'chat-a',pane:'worker'},messages:[]});await oldLoad;assert.equal(reads,3);assert.equal(v.H.cur,null);assert.equal(v.S.chat.at(-1).text,'подтверждённый итог');
+});
+
+test('TS-47.2: a lost interrupt receipt remains uncertain and is reconciled after reconnect',async()=>{
+ const v=stopRecoveryUI(async path=>{if(path==='/api/interrupt')throw new TypeError('response lost');if(path==='/api/status')return stoppedStatus();if(path==='/api/chats/chat-a')return stoppedHistory();return {records:[]}});
+ await v.functions.stop();const turn=v.H.cur;assert.equal(turn.stopping,undefined);assert.equal(turn.stopUncertain,true);assert.ok(turn.stopBinding);assert.ok(v.toasts.some(text=>/Не удалось подтвердить/.test(text)));assert.ok(!v.toasts.includes('Остановка запрошена'));
+ v.connection.onerror();await v.connection.onopen();assert.equal(v.H.cur,null);assert.equal(v.S.chat.at(-1).text,'подтверждённый итог');
+});
 
 
 test('TS-36E: sidebar profile uses only the owner name from the engine, never a provider account',()=>{
@@ -99,6 +207,40 @@ test('TS-47.3 r2: a late rejected send clears only its own hidden placeholder',a
 test('TS-47.3 r2: hidden tool failures retain the same reason and details as visible failures',()=>{
  const view=ui(),worker=view.H.pane,peer={id:'reviewer',label:'ревьюер',model:'w1',busy:false},event={type:'toolError',pane:'worker',chat:'chat-a',text:JSON.stringify({error:'Ошибка чтения файла',code:'denied'})};view.H.panes.push(peer);view.H.active.reviewer='chat-b';
  view.functions.hEvent(event);const expected=plain(view.H.cur.tools[0]);view.functions.streamClear();view.S.ui.pane='reviewer';view.H.pane=peer;view.functions.streamSelect();view.functions.streamHidden(event);assert.equal(view.H.cur,null,'the other conversation is not updated');view.S.ui.pane='worker';view.H.pane=worker;view.functions.streamSelect();assert.deepEqual(plain((view.H.cur as Data | null)?.tools[0]),expected);
+});
+
+test('TS-47.2 and TS-47.3: a hidden stream keeps ordered tool groups and phases on return',()=>{
+ const view=ui(),worker=view.H.pane,peer={id:'reviewer',label:'ревьюер',model:'w1',busy:false};view.H.panes.push(peer);view.H.active.reviewer='chat-b';
+ view.functions.hEvent({type:'delta',text:'До инструментов'});view.S.ui.pane='reviewer';view.H.pane=peer;view.functions.streamSelect();
+ view.functions.streamHidden({type:'tool',pane:'worker',chat:'chat-a',name:'Read',detail:'a.txt'});view.functions.streamHidden({type:'toolError',pane:'worker',chat:'chat-a',text:'ошибка'});view.functions.streamHidden({type:'delta',pane:'worker',chat:'chat-a',text:'После инструментов'});
+ view.S.ui.pane='worker';view.H.pane=worker;view.functions.streamSelect();const turn=view.H.cur;assert.equal(turn.phase,'write');assert.deepEqual(plain(turn.parts.map((part:Data)=>part.kind)),['text','tools','text']);assert.equal(turn.parts[1].tools.length,2);assert.equal(turn.parts[1].tools[1].err,true);assert.match(view.functions.curHTML(),/После инструментов/);
+});
+
+test('TS-47.2 r6: message identity survives history rereads but never crosses a binding or sequence',()=>{
+ const view=ui(),message={seq:12,role:'ai',src:'live',pane:'worker',text:'ответ',html:'<p>ответ</p>'},id=(row:Data)=>view.functions.bubble(row,0).match(/data-message-live-id="([^"]+)"/)![1];view.S.chat=[message];const first=id(message);assert.equal(id({...message}),first);
+ assert.notEqual(id({...message,seq:13}),first);assert.notEqual(id({...message,role:'me'}),first);view.H.active.worker='chat-b';assert.notEqual(id({...message}),first);view.H.active.worker='chat-a';view.H.project='/project-b';assert.notEqual(id({...message}),first);view.H.project='/project-a';view.H.liveStatus={trace:{instanceId:'new-instance'}};assert.equal(id({...message}),first,'saved history has the same identity after an engine restart');
+ const pending={...message,seq:undefined};const transient=id(pending);assert.equal(id(pending),transient);view.H.active.worker='chat-b';assert.notEqual(id(pending),transient,'an unsaved object cannot carry disclosure to another chat');view.H.active.worker='chat-a';assert.equal(id(pending),transient);view.H.liveStatus={trace:{instanceId:'another-instance'}};assert.notEqual(id(pending),transient,'an unsaved object cannot carry disclosure to a new engine instance');
+});
+
+test('TS-47.2 r6: history uses final chronological order on its first paint',async()=>{
+ const renders:number[][]=[],view=ui({fetch:async()=>({messages:[{seq:1,role:'ai',text:'позже',ts:20},{seq:2,role:'ai',text:'раньше',ts:10}]})});
+ view.sandbox.render=()=>{if(view.S.chat.length)renders.push(view.S.chat.map((row:Data)=>row.seq))};await view.functions.loadChat({onboard:false});
+ assert.deepEqual(renders,[[2,1]],'history is not temporarily painted in a different order before journal notes');
+});
+
+test('TS-47.2 r6: unknown timestamps never invent a history order',async()=>{
+ const view=ui({fetch:async()=>({messages:[{seq:1,role:'ai',text:'первый',ts:20},{seq:2,role:'ai',text:'время неизвестно'},{seq:3,role:'ai',text:'последний',ts:10}]})});
+ await view.functions.loadChat({onboard:false});assert.deepEqual(plain(view.S.chat.map((row:Data)=>row.seq)),[1,2,3]);
+ await view.functions.loadChat({onboard:false});assert.deepEqual(plain(view.S.chat.map((row:Data)=>row.seq)),[1,2,3]);
+});
+
+test('TS-47.2 r6: rereading the same chat retains its journal notes until refreshed',async()=>{
+ const renders:string[][]=[],view=ui({fetch:async()=>({messages:[{seq:1,role:'ai',text:'один',ts:10},{seq:2,role:'ai',text:'два',ts:30}]})});
+ view.sandbox.render=()=>{if(view.S.chat.length)renders.push(view.S.chat.map((row:Data)=>String(row.attemptId||row.seq)))};await view.functions.loadChat({onboard:false});
+ view.S.chat.splice(1,0,{attemptId:'note-a',role:'ai',src:'sys',text:'решение',html:'решение',t:20000});renders.length=0;
+ await view.functions.loadChat({onboard:false});assert.deepEqual(renders,[['1','note-a','2']]);
+ view.H.active.worker='chat-b';renders.length=0;await view.functions.loadChat({onboard:false});assert.deepEqual(renders,[['1','2']],'notes never cross a conversation');
+ view.H.active.worker='chat-a';await view.functions.loadChat({onboard:false});view.S.chat.splice(1,0,{attemptId:'note-a',role:'ai',src:'sys',text:'решение',html:'решение',t:20000});view.H.project='/project-b';renders.length=0;await view.functions.loadChat({onboard:false});assert.deepEqual(renders,[['1','2']],'notes never cross projects even if the chat id matches');
 });
 
 test('TS-47.3 F06: only a confirmed queued message gets a recipient and a delivery removes its marker',async()=>{
@@ -723,6 +865,14 @@ function turnStatsUI(){
  return {...d,H,S,copied,render:context.render,stats:context.stats};
 }
 const statsUsage={turnId:'12345678-1234-1234-1234-123456789012',model:'claude-test',vendor:'claude',mode:'read',input:50892,cacheRead:779968,output:17413,durationMs:6400,toolCalls:2,stopped:false,contextAfter:{used:68305,window:200000},cost:.031,currency:'USD'};
+test('TS-47.2 history: only a confirmed tool count is shown, without inventing details or ordering',async()=>{
+ const counts=[1,2,5,21,0,null,-1,1.5,'3',Number.MAX_SAFE_INTEGER+1],messages:Data[]=counts.map((toolCalls,i)=>({seq:i+1,role:'ai',text:'Ответ '+i,ts:1,usage:{...statsUsage,toolCalls}}));
+ messages.push({seq:11,role:'peer',text:'Сосед',ts:1,usage:statsUsage},{seq:12,role:'ai',origin:'transferred',text:'Перенос',ts:1,usage:statsUsage},{seq:13,role:'me',text:'Вопрос',ts:1,usage:statsUsage});
+ const view=ui({fetch:async()=>({messages})});await view.functions.loadChat({onboard:false});
+ for(const [i,label] of ['1 инструмент','2 инструмента','5 инструментов','21 инструмент'].entries()){const html=view.S.chat[i].html;assert.match(html,new RegExp(label));assert.match(html,/подробности доступны только в живом ходе/);assert.doesNotMatch(html,/data-live-tool-group|<details|<button/)}
+ for(const m of view.S.chat.slice(4))assert.doesNotMatch(m.html||'',/live-history-tools/);
+ await view.functions.loadChat({onboard:false});assert.equal((view.S.chat[0].html.match(/live-history-tools/g)||[]).length,1);
+});
 test('TS-40 UI: complete, missing and interrupted cards preserve nulls and show real zeroes',async()=>{
  const view=turnStatsUI();view.S.chat=[{role:'ai',src:'live',usage:statsUsage},{role:'ai',src:'live',usage:{...statsUsage,turnId:'22345678-1234-1234-1234-123456789012',model:'codex-test',input:null,output:null,cacheRead:null,cost:null,currency:null,contextAfter:null}},{role:'ai',src:'live',usage:{...statsUsage,turnId:'32345678-1234-1234-1234-123456789012',stopped:true,cacheRead:0,output:611}}];view.render();
  assert.equal(view.document.querySelector('.tstat'),null);await view.document.querySelector('[data-turn-stats="0"]')!.emit('click');let card=view.document.querySelector('.tstat')!;assert.match(card.textContent,/50 892/);assert.match(card.textContent,/94 % входа/);assert.equal(card.querySelectorAll('.ticks i').length,32);
