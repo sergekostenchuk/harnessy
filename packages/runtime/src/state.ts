@@ -13,7 +13,9 @@ export const diskIO:StateIO={read:path=>new TextDecoder('utf-8',{fatal:true}).de
 export interface Receipt {turnInstanceId:string;recordSeqs:number[];effectsPending:boolean;interrupted:boolean;nextSeen:Record<string,number>}
 export type TurnOutcome='ok'|'interrupted'|'error';
 export interface ArtifactRefs {project:string;chat:string;turnInstanceId:string;paths:string[]}
-export interface TranscriptMessage {seq?:number;artifacts?:ArtifactRefs;attachments?:import('@harnessy/journal').AttachmentRef[];role:string;text:string;ts:number;model?:string;outcome?:TurnOutcome;errorCode?:string;origin?:'transferred';[key:string]:unknown}
+export type ObservedToolEvent={type:'tool';name:string;detail:string;status:'unknown';offset:number|null;order:number}|{type:'toolError';reason:string;status:'error';offset:number|null;order:number};
+export interface ToolReceipt {id:string;name:string;status:'ok'|'error';offset:number|null;order:number;reason?:string}
+export interface TranscriptMessage {seq?:number;artifacts?:ArtifactRefs;attachments?:import('@harnessy/journal').AttachmentRef[];role:string;text:string;ts:number;model?:string;outcome?:TurnOutcome;errorCode?:string;origin?:'transferred';toolEvents?:ObservedToolEvent[];toolResults?:ToolReceipt[];[key:string]:unknown}
 // Chat-local identity survives deletion and reload; it is unrelated to journal deliverySeq.
 export function numberTranscript(holder:{transcript:TranscriptMessage[];transcriptSeq?:number}):number {
  let high=holder.transcriptSeq??0,last=0;
@@ -30,7 +32,7 @@ export function artifactPaths(event:{name?:unknown;detail?:unknown},project:stri
  if(typeof event.name!=='string'||!/^(?:Write|Edit|MultiEdit|apply_patch|.*[._](?:write_file|edit_file))$/i.test(event.name)||typeof event.detail!=='string')return [];
  return [...new Set(event.detail.split(', ').map(path=>path.startsWith(project+'/')?path.slice(project.length+1):path.startsWith('./')?path.slice(2):path).filter(path=>path.length<=4096&&!/[\x00-\x1f\x7f\\]/.test(path)&&/^(artifacts|docs)\//.test(path)&&!path.split('/').some(x=>!x||x==='.'||x==='..')&&/\.[a-z\d]{1,12}$/i.test(path)))].slice(0,50);
 }
-export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;vendor?:string|null;outcome:'error';errorCode:string;failure?:import('./turn-failure.ts').TurnFailure;usage?:import('@harnessy/providers').Usage;usageIncomplete?:true;durationMs?:number}
+export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;vendor?:string|null;outcome:'error';errorCode:string;failure?:import('./turn-failure.ts').TurnFailure;usage?:import('@harnessy/providers').Usage;usageIncomplete?:true;durationMs?:number;toolEvents?:ObservedToolEvent[];toolResults?:ToolReceipt[]}
 export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}
 export interface Attempt {turnInstanceId:string;recordSeqs:number[];startedAt:number;deliverySeq?:number;status?:'uncertain';unsent?:{afterSeq:number;failure:import('./turn-failure.ts').TurnFailure}}
 export interface DocumentRef {project:string;path:string}
@@ -139,9 +141,9 @@ export class StateStore {
  if(!pane.transcript.some(m=>object(m.runtime)&&m.runtime.turnInstanceId===result.runtime.turnInstanceId))pane.append(result);
  this.undurable.add(result.runtime.turnInstanceId);this.saveChats(registry);this.undurable.delete(result.runtime.turnInstanceId)
  }
- recordFailedTurn(pane:Pane,registry:Registry,turn:AnalyticalTurn):void {
+ recordFailedTurn(pane:Pane,registry:Registry,turn:AnalyticalTurn,chatId?:string):void {
   if(Object.values(this.chats.chats).some(chat=>chat.turns?.some(t=>t.turnInstanceId===turn.turnInstanceId)||chat.transcript.some(m=>object(m.runtime)&&m.runtime.turnInstanceId===turn.turnInstanceId)))return;
-  const chat=this.activeChat(pane)!;chat.turns=[...(chat.turns??[]),turn];this.saveChats(registry)
+  const chat=chatId?this.chats.chats[chatId]:this.activeChat(pane);if(!chat||chat.pane!==pane.id)throw new RuntimeError('chat_invalid','привязка незавершённого хода не найдена',409);chat.turns=[...(chat.turns??[]),turn];this.saveChats(registry)
  }
  private recoverable(c:Chat):TranscriptMessage[]{const op=c.promotion;return object(op)&&op.target===this.dir&&op.sid===c.pane&&Number.isSafeInteger(op.boundary)?c.transcript.slice(Number(op.boundary)):c.transcript}
  results(pane:Pane):ResultMessage[]{return Object.values(this.chats.chats).filter(c=>c.pane===pane.id).flatMap(c=>this.recoverable(c).filter(m=>m.role==='ai'&&(Object.hasOwn(m,'runtime')||Object.hasOwn(m,'deliverySeq'))) as ResultMessage[])}

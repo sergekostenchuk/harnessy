@@ -12,7 +12,7 @@ import {TraceStore,currentTrace,traceReason,type TraceContext} from './trace.ts'
 import {ProviderOperations} from './provider-operations.ts';
 import {AutopilotDecisionLedger} from './autopilot-decisions.ts';
 import {cancelAutopilotDecision} from './autopilot-cancel.ts';
-import {ProviderCatalog,catalogCacheDirectory,LoginTerminal,builtinEntries,CLI_DESCRIPTORS,cliEntry,ollamaEntry,OLLAMA_URL} from '@harnessy/providers';
+import {ProviderCatalog,catalogCacheDirectory,LoginTerminal,builtinEntries,CLI_DESCRIPTORS,cliEntry,ollamaEntry,OLLAMA_URL,safeDiagnostic} from '@harnessy/providers';
 import {promoteChat,restorePromotions,type PromotionInput} from './promotion.ts';
 import {propose,proposals,confirm,create,createOwnerSeat,proposeOwner,restoreProposals,type ProposalInput,type ProposalRef,type OwnerSeatInput} from './proposals.ts';
 import {reserve,free,waiting,waitingError,locked} from './operations.ts';
@@ -31,7 +31,7 @@ import {execFileSync} from 'node:child_process';
 import {accessSync,chmodSync,lstatSync,mkdtempSync,realpathSync,rmSync,writeFileSync,constants} from 'node:fs';
 import {access,realpath,stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {ensureLineLocked,withPathLock,loadTeam,instructionsFor,canonicalPath,type Vendor} from '@harnessy/team';
 import {ATTACHMENT_MAX_COUNT,Journal,Channel,Policy,JournalError,normalizeAttachments,pythonTrim,type AgentPostInput,type AttachmentRef,type Initiator,type Record_,type DeliveryEntry,type ChannelEvent} from '@harnessy/journal';
@@ -40,7 +40,7 @@ import {digest,roleNote,contextCard,conversationTransfer,transferSettings,transf
 import {ProviderError,type TurnAttachment,type TurnContext,type PeerTools,type SendArgs,type AskArgs,type ReadPaneArgs,type MergeArgs,type AssignRoleArgs} from '@harnessy/providers';
 import {Pane,Registry,validDir} from './pane.ts';
 import {EventBus,type Selector} from './events.ts';
-import {StateStore,diskIO,timestampMessage,artifactPaths,type ResultMessage,type TranscriptMessage} from './state.ts';
+import {StateStore,diskIO,timestampMessage,artifactPaths,type ResultMessage,type TranscriptMessage,type ObservedToolEvent,type ToolReceipt} from './state.ts';
 import {LimitsStore} from './limits.ts';
 import {ProviderLimitsStore} from './provider-limits.ts';
 import {Scopes,ProcessTokens} from './scope.ts';
@@ -514,13 +514,13 @@ export class Runtime {
  // Registered queue claims share the assignment lock; legacy deliveries keep their existing path.
  const prepared=options.entries?.some(({record})=>record.from==='owner'&&record.origin?.startsWith('task-operation:'))?await locked(this,p,prepare):prepare();
  const {automatic,pane,entries,records,injected,artifacts,relayDepth,launchSeat,verifiedAttachments,launchModel,launchEpoch,scope,controller,turn}=prepared;
- let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null,networkTurn:NetworkTurn|undefined,turnAttachments:TurnAttachment[]=verifiedAttachments,cleanupAttachments=()=>{};
+ let success=false,terminalSent=false,launchVendor:Vendor|null=null,transfer:ConversationTransfer|null=null,networkTurn:NetworkTurn|undefined,turnAttachments:TurnAttachment[]=verifiedAttachments,cleanupAttachments=()=>{},turnChatId:string|undefined;const toolEvents:ObservedToolEvent[]=[],toolResults:ToolReceipt[]=[];
  try{
  p.state.startAttempt(pane,{turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),startedAt:this.clock.now(),deliverySeq:turn.deliverySeq});
  if(!validDir(pane.cwd))throw new RuntimeError('cwd_changed','папки нет: '+pane.cwd);const provider=this.provider(turn.vendor),vendor=provider.vendor,epoch=p.processEpoch.get(vendor)??0,sessionEpoch=pane.sessionEpoch;
  launchVendor=vendor;
  ({attachments:turnAttachments,cleanup:cleanupAttachments}=providerAttachments(verifiedAttachments,vendor,p.dir));
- const knowledgeChat=p.state.activeChat(pane,false),knowledge=knowledgeChat?deepFreeze(roleKnowledge(p,knowledgeChat)):null;
+ const knowledgeChat=p.state.activeChat(pane,false),knowledge=knowledgeChat?deepFreeze(roleKnowledge(p,knowledgeChat)):null;turnChatId=(knowledgeChat??p.state.activeChat(pane)!).id;
  const previousKnowledge=[...pane.transcript].reverse().find(m=>m.teamKnowledge)?.teamKnowledge;
  if(previousKnowledge!==undefined&&(!object(previousKnowledge)||previousKnowledge.project!==p.dir||previousKnowledge.chat!==knowledgeChat?.id||!isTeamSnapshot(previousKnowledge.team)))throw new RuntimeError('chat_invalid','снимок команды не соответствует разговору',409);
  const teamText=knowledge?(object(previousKnowledge)?teamKnowledgeChanges(previousKnowledge.team as import('@harnessy/context').TeamMemberKnowledge[],knowledge.team):knowledge.text):'';let teamSaved=false;
@@ -534,8 +534,8 @@ export class Runtime {
  const checkDirectNetwork=()=>{if(options.directOnce){const generation=JSON.parse(options.directOnce).networkGeneration;if(!generation||generation!==this.networkGeneration(pane.vendor))throw new RuntimeError('network_changed','Настройки изменились — решите заново')}};
  const beginNetwork=()=>this.networkRelay.begin(vendor,p.dir+'\0'+id,controller.signal,(text,network)=>{if(!current())return;pane.publish({type:'networkRoute',text,network,chat:p.state.activeChat(pane)!.id,turnInstanceId:scope.turnInstanceId})},!!options.directOnce);
  networkTurn=beginNetwork();
- let attempt=0,earlySession:string|null=null,effected=false,sessionLost=false,toolCalls=0;const failedExits=new Set<string>();
- const ctx:TurnContext={traceTool:(name,args,run)=>{effected=true;return p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId))},traceEvent:event=>{if(event.phase==='call')effected=true;if(current())this.traceProvider(p,id,scope.turnInstanceId,event)},signal:networkTurn.signal,modelResponded:()=>{effected=true},modelStarted:()=>{if(current()){
+ let attempt=0,earlySession:string|null=null,effected=false,sessionLost=false,toolCalls=0,visibleText='',toolOrder=0;const failedExits=new Set<string>();
+ const ctx:TurnContext={traceTool:(name,args,run)=>{effected=true;return p.trace.tool(name,args,run,p.trace.forTurn(scope.turnInstanceId))},traceEvent:event=>{if(event.phase==='call')effected=true;if(current()){this.traceProvider(p,id,scope.turnInstanceId,event);if(!turn.stopRequested&&event.phase==='result'&&event.id&&event.outcome&&['ok','failed','rejected','timeout','cancelled'].includes(event.outcome)){const reason=event.error||event.reason;toolResults.push({id:createHash('sha256').update(scope.turnInstanceId+'\0'+event.id).digest('hex'),name:safeDiagnostic(event.name,{project:p.dir,limit:200}),status:event.outcome==='ok'?'ok':'error',offset:visibleText.length,order:toolOrder++,...(reason&&!/^[a-z][a-z0-9_]*$/.test(reason)?{reason:safeDiagnostic(reason,{project:p.dir,limit:300})}:{})})}}},signal:networkTurn.signal,modelResponded:()=>{effected=true},modelStarted:()=>{if(current()){
   const notices:TranscriptMessage[]=[];
   const teamNotice=knowledge&&teamText&&!teamSaved?{...timestampMessage('peer','[от харнесс] '+teamText,this.clock.now()),teamKnowledge:{project:p.dir,chat:knowledge.chat,team:knowledge.team,turnInstanceId:scope.turnInstanceId}}:null;
   if(teamNotice)notices.push(teamNotice);
@@ -544,7 +544,7 @@ export class Runtime {
   turn.started=true;if(earlySession&&pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch){pane.sessionId=earlySession;p.state.savePanes(p.registry,p.journal);earlySession=null}
  }},publish:event=>{
  if(!current())return;if(event.type==='done'||event.type==='error'){turn.terminal=event.type==='error'?{type:'error',message:turnFailure({message:event.text},p.dir,0).reason,sessionId:pane.sessionId}:event;return}
- if(event.type==='tool')toolCalls++;if(turn.stopRequested)return;if(event.type==='tool'||event.type==='delta'&&event.text.length>0)effected=true;if(event.type==='toolError')event={...event,text:turnFailure({message:event.text},p.dir,0).reason};if(event.type==='tool')for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);if(event.type==='delta')turn.partial+=event.text;p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
+ if(event.type==='tool')toolCalls++;if(turn.stopRequested)return;if(event.type==='tool'||event.type==='delta'&&event.text.length>0)effected=true;if(event.type==='toolError')event={...event,text:turnFailure({message:event.text},p.dir,0).reason};if(event.type==='tool'){for(const path of artifactPaths(event,p.dir))if(artifacts.size<50)artifacts.add(path);toolEvents.push({type:'tool',name:safeDiagnostic(event.name,{project:p.dir,limit:200}),detail:safeDiagnostic(event.detail,{project:p.dir,limit:300}),status:'unknown',offset:visibleText.length,order:toolOrder++})}if(event.type==='toolError')toolEvents.push({type:'toolError',reason:event.text,status:'error',offset:visibleText.length,order:toolOrder++});if(event.type==='delta'){turn.partial+=event.text;visibleText+=event.text}p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.publish(event))
  },askApproval:(title,detail,request)=>{try{this.scopes.assert(scope)}catch{return Promise.resolve(false)}return p.trace.run(p.trace.forTurn(scope.turnInstanceId)!,()=>pane.askApproval(title,detail,undefined,request?.provider===vendor?request:undefined))},session:sid=>{if(!current()||turn.stopRequested||pane.vendor!==vendor||pane.sessionEpoch!==sessionEpoch)return;if(transfer&&!turn.started){earlySession=sid;return}pane.sessionId=sid;p.state.savePanes(p.registry,p.journal)},setHandle:handle=>{
  if(!current())return;turn.handle=handle;pane.handle=handle;if(handle&&turn.stopRequested)this.interruptHandle(p,pane,handle)
  },beforeModel:async()=>{const route=apiRoute(vendor);if(route){const config=this.settings.llmProviders()[route];let local=false;try{local=!!config?.baseURL&&['127.0.0.1','localhost','[::1]'].includes(new URL(config.baseURL).hostname)}catch{}if(!local)await this.networkRelay.prepare(vendor,controller.signal,networkTurn)}else if(vendor!=='ollama'){const relay=await this.networkRelay.prepare(vendor,controller.signal,networkTurn);if(relay&&ctx.env.HARNESS_RELAY_PROXY!==relay.url)throw new NetworkError()}checkDirectNetwork()},env:apiRoute(vendor)||vendor==='ollama'?{}:await this.networkRelay.environment(vendor,controller.signal,networkTurn)??this.connections.proxyEnv(vendor),roleNote:this.roleNote(p,pane),peers:[...p.registry.panes.values()].map(p=>({id:p.id,label:p.label,vendor:p.vendor as Vendor})),tools:new Proxy(this.toolsFor(scope),{get:(target,key)=>{const value=Reflect.get(target,key);return typeof value==='function'?(...args:unknown[])=>{effected=true;return value.apply(target,args)}:value}}),relayDepth:turn.relayDepth,projectDir:p.dir,appUrl:this.deps.appUrl,attachments:turnAttachments,
@@ -571,6 +571,7 @@ export class Runtime {
  const heldError=(turn as ActiveTurn).terminal;if(heldError?.type==='error'&&!interrupted)throw new ProviderError('turn_failed',String(heldError.message||'Причина отказа не получена'));pane.sessionId=pane.vendor===vendor&&pane.sessionEpoch===sessionEpoch?result.sessionId:null;
  for(const m of injected)pane.uncommitted.delete(m);
  const response=timestampMessage('ai',result.text,this.clock.now()) as ResultMessage;response.mode=launchSeat.mode;const held=(turn as ActiveTurn).terminal;
+ if(toolEvents.length)response.toolEvents=toolEvents.map(event=>({...event,offset:visibleText===result.text?event.offset:null}));if(toolResults.length)response.toolResults=toolResults.map(receipt=>({...receipt,offset:visibleText===result.text?receipt.offset:null}));
  if(held?.type==='done'){if(typeof held.model==='string'&&held.model)response.model=held.model;if(object(held.usage))response.usage=structuredClone(held.usage);if(held.usageIncomplete===true)response.usageIncomplete=true;if(typeof held.durationMs==='number'&&Number.isFinite(held.durationMs))response.durationMs=held.durationMs}
  if(!interrupted&&held?.type==='done'&&held.usageIncomplete!==true&&measuredUsage(held.usage)){
   try{await settlement.complete(scope.turnInstanceId)}catch(error){if(!p.closed)p.journal.append({sender:'harness',to:['owner'],kind:'note',origin:'autopilot-owner',text:'Учёт расхода не подтверждён; верхний резерв сохранён'})}
@@ -593,14 +594,15 @@ export class Runtime {
  }catch(e){
  if(options.directOnce&&!p.closed&&!controller.signal.aborted&&JSON.parse(options.directOnce).networkGeneration!==this.networkGeneration(pane.vendor))e=new RuntimeError('network_changed','Настройки изменились — решите заново');
  if(!turn.result){pane.transcript=pane.transcript.filter(m=>!injected.includes(m));for(const m of injected)pane.uncommitted.delete(m);
- if(!turn.started&&!records.length&&!(e instanceof RuntimeError&&e.code==='network_changed')&&!(e instanceof ProviderError&&['network_unavailable','network_country_unverified','network_no_reserve','network_proxy_auth','region_restricted','network_blocked'].includes(e.code))){try{p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
+ const networkFailure=e instanceof RuntimeError&&e.code==='network_changed'||e instanceof ProviderError&&['network_unavailable','network_country_unverified','network_no_reserve','network_proxy_auth','region_restricted','network_blocked'].includes(e.code);
+ if(turn.started||toolEvents.length||toolResults.length||!records.length&&networkFailure)try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:turnFailure(e,p.dir,0).code,...turnMeasurements(turn.terminal),failure:turnFailure(e,p.dir,this.clock.now()-(p.state.attempts[id]?.startedAt??this.clock.now())),...(toolEvents.length?{toolEvents:toolEvents.map(event=>({...event,offset:null}))}:{}),...(toolResults.length?{toolResults:toolResults.map(receipt=>({...receipt,offset:null}))}:{})},turnChatId)}catch(error){p.lineErrors.push(message(error))}
+ if(!turn.started&&!records.length&&!networkFailure){try{p.state.clearAttempt(id)}catch(error){pane.status='uncertain';p.lineErrors.push(message(error))}}
  else if(!turn.started&&records.length){try{if(transfer&&pane.vendor===launchVendor&&pane.sessionEpoch===launchEpoch){pane.sessionId=null;p.state.savePanes(p.registry,p.journal)}
   if(p.state.attempts[id]?.turnInstanceId!==scope.turnInstanceId)p.state.refreshDamage(p.registry);
   p.state.notSent(id,p.journal.lastSeq,turnFailure(e,p.dir,this.clock.now()-(p.state.attempts[id]?.startedAt??this.clock.now())),{turnInstanceId:scope.turnInstanceId,recordSeqs:records.map(r=>r.seq),startedAt:p.state.attempts[id]?.startedAt??this.clock.now(),deliverySeq:turn.deliverySeq});
  }catch(error){p.lineErrors.push(message(error))}pane.status='uncertain';pane.uncertainNote=waitingError(p,pane).message;}
  else {
   // После modelStarted сохраняем прежний uncertain; внутренний отказ сети без записи очереди также сохраняет карточку TS-22c.
-  try{p.state.recordFailedTurn(pane,p.registry,{turnInstanceId:scope.turnInstanceId,ts:this.clock.now()/1000,model:launchModel,vendor:launchVendor,outcome:'error',errorCode:turnFailure(e,p.dir,0).code,...turnMeasurements(turn.terminal),failure:turnFailure(e,p.dir,this.clock.now()-(p.state.attempts[id]?.startedAt??this.clock.now()))})}catch(error){p.lineErrors.push(message(error))}
   try{p.state.uncertain(id)}catch(error){p.lineErrors.push(message(error))}
   pane.status='uncertain';pane.uncertainNote=waitingError(p,pane).message;if(!p.closed)pane.publish({type:'note',text:pane.uncertainNote,warning:this.warningId(p,pane,'uncertain')})}
  }else {pane.status='recovering';pane.recoveryNote='ответ модели сохранён; завершается восстановление доставки';pane.publish({type:'note',text:pane.recoveryNote,warning:this.warningId(p,pane,'recovery')})}

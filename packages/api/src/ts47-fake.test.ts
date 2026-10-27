@@ -42,6 +42,8 @@ test('TS-47.F: real HTTP and SSE deliver the configured tools, answer and durabl
  const chat=h.runtime.chatsList({seat:'owner',trust:'owner'}).active.worker!;
  const messages=(await call(h.api,'/api/chats/'+chat)).body.messages;
  assert.match(messages.at(-1).text,/тестового провайдера/);assert.equal(messages.at(-1).usage.toolCalls,3);
+ assert.deepEqual(messages.at(-1).toolEvents.map((e:any)=>[e.type,e.name,e.status,e.offset]),[['tool','Проверка 1','unknown',0],['tool','Проверка 2','unknown',0],['tool','Проверка 3','unknown',0]]);
+ assert.deepEqual(messages.at(-1).toolResults.map((e:any)=>[e.name,e.status]),[['Проверка 1','ok'],['Проверка 2','ok'],['Проверка 3','ok']]);
 });
 for(const [outcome,code] of [['error','turn_failed'],['lost','transport_lost']] as const)test('TS-47.F: '+outcome+' reaches the window as the correct engine error',async t=>{
  const fake=new ScenarioProvider('claude',{ttftMs:0,outcome,tools:0}),h=await fixture(t,{deps:{providers:{claude:fake}}}),stream=await sse(h.api);t.after(()=>stream.close());

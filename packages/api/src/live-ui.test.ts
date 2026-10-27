@@ -874,6 +874,25 @@ function turnStatsUI(){
  return {...d,H,S,copied,render:context.render,stats:context.stats};
 }
 const statsUsage={turnId:'12345678-1234-1234-1234-123456789012',model:'claude-test',vendor:'claude',mode:'read',input:50892,cacheRead:779968,output:17413,durationMs:6400,toolCalls:2,stopped:false,contextAfter:{used:68305,window:200000},cost:.031,currency:'USD'};
+test('TS-47.6: history replays observed groups, keeps anonymous errors visible and refuses invented positions',async()=>{
+ const tools=[{type:'tool',name:'Read',detail:'<файл>',status:'unknown',offset:3},{type:'toolError',reason:'ошибка',status:'error',offset:3},{type:'tool',name:'Bash',detail:'команда',status:'unknown',offset:8}];
+ const messages:Data[]=[{seq:1,role:'ai',text:'До после!',ts:1,usage:{...statsUsage,toolCalls:2},toolEvents:tools},{seq:2,role:'ai',text:'Старый',ts:1,usage:{...statsUsage,toolCalls:2}},{seq:3,role:'ai',text:'Другой',ts:1,usage:{...statsUsage,toolCalls:1},toolEvents:[{...tools[0],offset:null}]},{seq:4,role:'ai',text:'Повреждён',ts:1,usage:{...statsUsage,toolCalls:1},toolEvents:[{...tools[0],offset:999}]}];
+ const v=ui({fetch:async path=>path==='/api/chats/chat-a'?{chat:{id:'chat-a',pane:'worker'},messages}:{records:[]}});v.sandbox.toolLine=(item:Data)=>v.sandbox.esc(item.text);await v.functions.loadChat({onboard:false});
+ const [observed,legacy,uncertain,invalid]=v.S.chat.map((m:Data)=>m.html);
+ assert.equal((observed.match(/data-live-tool-group=/g)||[]).length,2);assert.match(observed,/&lt;файл&gt;/);assert.match(observed,/ошибка/);assert.doesNotMatch(observed,/подробности доступны только/);
+ assert.ok(observed.indexOf('До ')<observed.indexOf('&lt;файл&gt;'));assert.ok(observed.indexOf('ошибка')<observed.indexOf('после'));assert.ok(observed.indexOf('после')<observed.indexOf('команда'));
+ assert.match(legacy,/подробности доступны только в живом ходе/);assert.match(uncertain,/Положение инструментов относительно текста не подтверждено/);assert.match(invalid,/подробности доступны только в живом ходе/);
+});
+test('TS-47.6 r2: a result-only error remains visible in a collapsed history group',async()=>{
+ const message={seq:1,role:'ai',text:'Готово',ts:1,usage:{...statsUsage,toolCalls:2},toolEvents:[{type:'tool',name:'Edit',detail:'file',status:'unknown',offset:0,order:0},{type:'tool',name:'Edit',detail:'other',status:'unknown',offset:0,order:1}],toolResults:[{id:'receipt-1',name:'fileChange',status:'error',reason:'Не удалось изменить файл',offset:0,order:2}]};
+ const v=ui({fetch:async path=>path==='/api/chats/chat-a'?{chat:{id:'chat-a',pane:'worker'},messages:[message]}:{records:[]}});v.sandbox.toolLine=(item:Data)=>v.sandbox.esc(item.text);await v.functions.loadChat({onboard:false});
+ const html=v.S.chat[0].html,d=dom('<div>'+html+'</div>'),group=d.document.querySelector('.tg')!,details=group.querySelector('details')!;assert.equal(details.hasAttribute('open'),false);assert.match(group.querySelector('.notice')!.textContent,/Квитанция: Не удалось изменить файл/);assert.doesNotMatch(details.textContent,/Не удалось изменить файл/);assert.match(html,/изменял 2/);assert.match(html,/2 действия/);assert.doesNotMatch(html,/3 действия/);
+});
+test('TS-47.6 r2: failed turn evidence belongs to its chat and never becomes a completed answer',async()=>{
+ const failure={turnInstanceId:'failed-turn',outcome:'error',ts:2,toolEvents:[{type:'tool',name:'Read',detail:'file',status:'unknown',offset:null,order:0},{type:'toolError',reason:'Ошибка чтения',status:'error',offset:null,order:1}],toolResults:[{id:'receipt',name:'Read',status:'error',reason:'Ошибка чтения',offset:null,order:2}]};
+ const v=ui({fetch:async path=>path==='/api/chats/chat-a'?{chat:{id:'chat-a',pane:'worker'},messages:[],turns:[failure]}:{chat:{id:'chat-b',pane:'worker'},messages:[]}});v.sandbox.toolLine=(item:Data)=>v.sandbox.esc(item.text);await v.functions.loadChat({onboard:false});assert.equal(v.S.chat.length,1);const m=v.S.chat[0];assert.equal(m.src,'sys');assert.match(m.who,/незавершённого хода/);assert.match(m.html,/Событие: Ошибка чтения/);assert.match(m.html,/Квитанция: Ошибка чтения/);assert.match(m.html,/Положение инструментов относительно текста не подтверждено/);assert.doesNotMatch(m.html,/завершено/);
+ const before=v.functions.bubble(m,0).match(/data-message-live-id="([^"]+)"/)![1];await v.functions.loadChat({onboard:false});const after=v.functions.bubble(v.S.chat[0],0).match(/data-message-live-id="([^"]+)"/)![1];assert.equal(before,after);v.H.active.worker='chat-b';await v.functions.loadChat({onboard:false});assert.equal(v.S.chat.length,0);
+});
 test('TS-47.2 history: only a confirmed tool count is shown, without inventing details or ordering',async()=>{
  const counts=[1,2,5,21,0,null,-1,1.5,'3',Number.MAX_SAFE_INTEGER+1],messages:Data[]=counts.map((toolCalls,i)=>({seq:i+1,role:'ai',text:'Ответ '+i,ts:1,usage:{...statsUsage,toolCalls}}));
  messages.push({seq:11,role:'peer',text:'Сосед',ts:1,usage:statsUsage},{seq:12,role:'ai',origin:'transferred',text:'Перенос',ts:1,usage:statsUsage},{seq:13,role:'me',text:'Вопрос',ts:1,usage:statsUsage});
