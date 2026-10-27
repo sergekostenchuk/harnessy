@@ -1091,7 +1091,10 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
       .tstat .cell span{display:block;font:11px var(--font);color:var(--ink2);margin-top:3px}
       .tstat .ticks{display:flex;gap:2px;margin:6px 14px 10px}.tstat .ticks i{flex:1;height:8px;border-radius:1px;background:var(--line2)}.tstat .ticks i.in{background:var(--ink3)}.tstat .ticks i.cache{background:var(--accent-deep)}.tstat .ticks i.out{background:var(--accent)}
       .tstat .ft{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--line);font:11px var(--font);color:var(--ink2)}.tstat .ft .r{margin-left:auto;display:flex;gap:10px;font:10px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink3)}
+      .tstat .ft button{padding:0;border:0;background:transparent;color:var(--ink2);font:inherit;letter-spacing:inherit;text-align:left;text-transform:inherit;cursor:pointer}.tstat .ft button:hover{color:var(--ink)}.tstat .ft button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
       .tstat .note{padding:10px 14px;font-size:12px;color:var(--ink2);border-top:1px solid var(--line)}.tstat .note b{color:var(--warn);font-weight:500}
+      #turn-stats-spec{min-width:0;max-width:calc(100vw - 40px)}#turn-stats-spec .box{min-width:0}
+      @media(max-width:760px){#turn-stats-spec .two{grid-template-columns:minmax(0,1fr)}.tstat .hd,.tstat .ft{flex-wrap:wrap}.tstat .hd .r,.tstat .ft .r{margin-left:0;flex-wrap:wrap}.tstat .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tstat .cell:nth-child(3){border-left:0;padding-left:0}}
       </style>
       <div class="two tstat-demo">
         <div class="box"><div class="cap2">Иконка в строке действий → карточка хода</div>
@@ -1100,7 +1103,7 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
             <div class="tstat"><div class="hd"><b>Ход · 14</b><span>Claude Sonnet 5.5</span><span class="mode">read</span><span class="r"><span>2 вызова инструментов</span><span>6,4 с</span></span></div>
               <div class="grid"><div class="cell"><small>вход</small><b>50 892</b><span>токенов</span></div><div class="cell"><small>из кэша</small><b>779 968</b><span>94 % входа</span></div><div class="cell"><small>выход</small><b>17 413</b><span>токенов</span></div><div class="cell"><small>стоимость</small><b class="acc">$0,031</b><span>по прайс-листу</span></div></div>
               <div class="ticks" aria-hidden="true"><i class="in"></i><i class="in"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="cache"></i><i class="out"></i><i class="out"></i></div>
-              <div class="ft"><span>Контекст после хода · 68 305 из 200 000</span><span class="r"><button type="button">Скопировать id хода</button><button type="button">Открыть в журнале</button></span></div>
+              <div class="ft"><span>Контекст модели после хода · нет данных</span><span class="r"><button type="button">Скопировать id хода</button><button type="button">Открыть в журнале</button></span></div>
             </div></article></div>
           <p class="conn-note">Иконка — в строке действий сообщения, видна по наведению и у последнего ответа; сумма у иконки — только при известной стоимости. Раскрыта не больше одной карточки на чат. Карточка: заголовок (номер хода, модель, права, вызовы, время), четыре ячейки, тик-полоса долей вход / кэш / выход, подвал с контекстом и ссылкой в журнал. Табличные цифры, тысячи через пробел. Полный скетч — <a href="45-turn-stats.html">45</a>.</p>
         </div>
@@ -1110,12 +1113,27 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
             <div class="note"><b>Провайдер не сообщил расход.</b> Неизвестное — слово «нет данных», не ноль; подписки учитываются в «Расходе и лимитах».</div></div>
           <div class="tstat" style="margin-top:12px"><div class="hd"><b>Ход · 9</b><span>Claude Opus 5.5</span><span class="mode">write</span><span class="r"><span>остановлен владельцем</span><span>12 с</span></span></div>
             <div class="grid"><div class="cell"><small>вход</small><b>12 040</b></div><div class="cell"><small>из кэша</small><b>0</b><span>кэш не использован</span></div><div class="cell"><small>выход</small><b>611</b><span>до остановки</span></div><div class="cell"><small>стоимость</small><b class="acc">$0,046</b><span>списано полностью</span></div></div></div>
-          <p class="conn-note">Данные: сегодня движок хранит расход только последнего хода места (`context.last`); для карточки под каждым ответом сообщению нужна запись `usage` (модель, права, вход, выход, кэш, длительность, вызовы, остановка) и id хода. Вариант Б (постоянная строка под ответом) — переключатель в настройках окна, не по умолчанию.</p>
+          <p class="conn-note">Расход хода доступен в сохранённом usage ответа, если провайдер его сообщил. Вход + кэш + выход — расход, а не прямое измерение окна модели после хода. Отсутствующее значение — «нет данных», не ноль. Вариант Б (постоянная строка под ответом) — переключатель в настройках окна, не по умолчанию.</p>
         </div>
       </div>
     </section>
 
     <section id="context-selection"><h2>Перенос контекста · явный выбор<i></i></h2>
+      <style>
+        #context-selection,#context-uncertain-spec,#role-knowledge-spec{min-width:0;max-width:calc(100vw - 40px)}
+        .ctx51-event{max-width:600px;margin:10px 0;padding:10px 12px;border-left:2px solid var(--accent);border-radius:0 8px 8px 0;background:var(--raised);font:12.5px/1.5 var(--font);color:var(--ink2)}
+        .ctx51-event b{color:var(--ink);font-weight:500}.ctx51-event small{display:block;margin-top:3px;color:var(--ink2);font:11px/1.5 var(--font)}.ctx51-event time{font:10px var(--mono);color:var(--ink3)}
+        .ctx51-trigger{display:inline-flex;align-items:center;gap:7px;cursor:pointer;list-style:none;border:1px solid var(--line2);border-radius:7px;background:var(--raised);padding:6px 9px;color:var(--ink2);font:11px var(--mono)}
+        .ctx51-trigger::-webkit-details-marker,.ctx51-part summary::-webkit-details-marker{display:none}.ctx51-trigger::after{content:'▾';color:var(--ink3)}.ctx51-disclosure[open]>.ctx51-trigger::after{content:'▴'}
+        .ctx51-card{width:min(100%,560px);margin-top:8px;border:1px solid var(--line2);border-radius:12px;background:var(--raised);overflow:hidden}
+        .ctx51-head{padding:14px 16px;border-bottom:1px solid var(--line)}.ctx51-head b{font:500 15px var(--font)}.ctx51-head p{margin:5px 0 0;color:var(--ink2);font:12px/1.5 var(--font)}
+        .ctx51-part{padding:0 16px;border-bottom:1px solid var(--line)}.ctx51-part summary{display:flex;align-items:baseline;gap:12px;padding:10px 0;cursor:pointer;list-style:none;font:500 12.5px/1.4 var(--font)}
+        .ctx51-part summary::before{content:'▸';color:var(--ink3);flex:none}.ctx51-part[open] summary::before{content:'▾'}.ctx51-part summary span{margin-left:auto;color:var(--ink2);font:11px/1.4 var(--font);text-align:right}
+        .ctx51-part p,.ctx51-part ul{margin:0 0 11px 16px;color:var(--ink2);font:12px/1.5 var(--font)}.ctx51-part ul{padding-left:15px}.ctx51-part a{color:var(--accent-hi);overflow-wrap:anywhere}.ctx51-part code{font:11px/1.5 var(--mono);overflow-wrap:anywhere;color:var(--ink2)}
+        .ctx51-estimate{padding:11px 16px;color:var(--ink2);font:11.5px/1.5 var(--font)}.ctx51-estimate b{color:var(--ink);font-weight:500}.ctx51-estimate small{display:block;color:var(--ink2);font:11px/1.5 var(--font)}
+        .ctx51-disclosure summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.ctx51-part a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+        .ctx51-unknown{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:12px;color:var(--ink2);font-size:12px}.ctx51-unknown b{color:var(--ink);font-weight:500}
+      </style>
       <div class="box"><div class="cap2">Макет · ни одного сообщения не выбрано</div>
         <p>Передать контекст → Ревьюер · выбрано <b>0 из 3 сообщений</b> · <b>0 знаков</b></p>
         <div class="rules"><label><input type="checkbox"> Владелец: проверь условия договора.</label><label><input type="checkbox"> Ответ: в пункте 4 указан срок оплаты.</label><label><input type="checkbox"> Владелец: подготовь замечания.</label></div>
@@ -1127,10 +1145,16 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
         <div class="rowx"><button class="btn sm p" type="button">Выбрать сообщения</button><button class="btn sm ghost" type="button">Отмена</button></div>
         <p class="conn-note">Строки достижимы Tab, Space меняет выбор. После отмены или отправки фокус возвращается к действию переноса. На одну передачу — одна квитанция.</p>
       </div>
+      <div class="box"><div class="cap2">Лента · перенос в новую сессию</div>
+        <div class="ctx51-event" data-context-transfer="compressed"><b>Контекст перенесён · сокращён</b> · <time datetime="2026-10-27T10:20:00" title="27 октября 2026, 10:20">10:20</time><small>Дословно 12 из 18 сообщений · часть сообщений или сведений сокращена.</small><small>После переноса ≈ 2 400 токенов · оценка, не токенизатор модели.</small></div>
+        <div class="ctx51-event" data-context-transfer="full"><b>Контекст перенесён</b> · <time datetime="2026-10-27T10:24:00" title="27 октября 2026, 10:24">10:24</time><small>Дословно 4 из 4 сообщений · ≈ 900 токенов после переноса, оценка.</small></div>
+        <div class="ctx51-event" data-context-transfer="failed"><b>Контекст не передан</b> · <time datetime="2026-10-27T10:28:00" title="27 октября 2026, 10:28">10:28</time><small>Не удалось прочитать историю. Объём до и после · нет данных.</small></div>
+        <p class="conn-note">Событие — квитанция contextTransfer после непрерванного завершённого хода. При выключенном переносе: «Контекст не передан · выключен в настройках». Это сокращение перенесённого текста, не событие компакции провайдера. Измерений до/после окна модели нет.</p>
+      </div>
     </section>
 
     <section id="context-uncertain-spec"><h2>Контекст · неизвестное окно<i></i></h2>
-      <div class="box"><div class="cap2">Измерено после хода</div><p><b>161</b> токен · окно модели неизвестно</p><p>Инструкции · 2,6K <small>оценка</small></p><p class="conn-note">Оценки частей не распределяют измеренное общее значение. Если окно или совместимые доли неизвестны, матрицу и проценты частей не показываем.</p></div>
+      <div class="box"><div class="cap2">Расход хода · окно неизвестно</div><p><b>161</b> токен расхода · окно модели: нет данных</p><p>Инструкции · ≈ 2,6K токенов <small>оценка, не токенизатор модели</small></p><p class="conn-note">Расход хода не равен измеренному текущему окну. Оценки частей не распределяют расход. Если окно или совместимые доли неизвестны, матрицу и проценты частей не показываем.</p></div>
     </section>
 
     <section id="composer-add-spec"><h2>Добавить контекст · доступные действия<i></i></h2>
@@ -1154,6 +1178,21 @@ html[data-proto][data-page="chat"] .main>#live-waiting{max-height:min(40vh,360px
       <div class="box"><p>Цель и память проекта, прикреплённые документы и полная вводная участника.</p>
         <p>Оркестратор · создана · чат открыт<br>Юрист · researcher · создана владельцем как researcher<br>Рецензент · reviewer · предложена · чата ещё нет</p>
         <p>У каждой строки: класс, модель, режим и задача. Карточка видна перед первым ходом. Изменения состава приходят в следующий ход роли.</p>
+        <div class="cap2">Состав контекста · раскрывается из существующего индикатора</div>
+        <details class="ctx51-disclosure" open data-context-card>
+          <summary class="ctx51-trigger">контекст · нет данных</summary>
+          <div class="ctx51-card" role="region" aria-label="Состав контекста разговора">
+            <div class="ctx51-head"><b>Контекст разговора</b><p>Окно модели · нет данных. Ниже — сведения Harnessy, не полный снимок окна модели.</p></div>
+            <details class="ctx51-part" open data-context-part="instructions"><summary>Инструкция роли <span>есть</span></summary><p>Файл: <code>.harness/roles/researcher.md</code></p></details>
+            <details class="ctx51-part" open data-context-part="documents"><summary>Выбранные документы <span>2 ссылки</span></summary><ul><li><a href="#role-knowledge-spec">documents/условия.md</a></li><li><a href="#role-knowledge-spec">documents/источники.pdf</a></li></ul><p>Ссылки не подтверждают, что модель прочитала файлы.</p></details>
+            <details class="ctx51-part" open data-context-part="messages"><summary>Сохранённые сообщения <span>18</span></summary><p>В стенограмме разговора; состав окна модели не известен.</p></details>
+            <details class="ctx51-part" open data-context-part="attachments"><summary>Вложения в сообщениях <span>2 изображения</span></summary><p>PNG · JPEG</p></details>
+            <details class="ctx51-part" open data-context-part="digest"><summary>Сводка соседей <span>включена</span></summary><p>До 700 символов на реплику и 6 000 на сводку.</p></details>
+            <div class="ctx51-estimate"><b>Инструкции · ≈ 2 600 токенов</b><small>Оценка текста, не токенизатор модели. Доля окна · нет данных.</small></div>
+          </div>
+        </details>
+        <div class="ctx51-unknown" aria-label="Другие состояния"><span>Инструкция: <b>не найдена</b> · только после проверки</span><span>Инструкция, документы или вложения: <b>нет данных</b></span><span>Сводка соседей: <b>выключена</b></span></div>
+        <p class="conn-note">Список и числа относятся к сохранённым данным выбранного разговора, а не гарантированному составу внутреннего окна провайдера. Названия документов здесь — образцы ссылок. Неизвестное не заменяем нулём и не рисуем долю. Карточка открывается из индикатора; новой постоянной панели нет.</p>
       </div></section>
 
     <section><h2>где стоит<i></i></h2>
