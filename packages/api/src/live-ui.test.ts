@@ -86,7 +86,7 @@ test('TS-51.C: transfer events show estimates, safe reasons and unknown values w
  assert.match(done,/Контекст перенесён · сокращён/);assert.match(done,/Дословно 12 из 18/);assert.match(done,/часть сообщений|Часть сообщений/);assert.match(done,/оценка, не токенизатор модели/);assert.match(done,/&lt;script&gt;/);assert.doesNotMatch(done,/<script>|компакц/i);
  const failed=render('',{enabled:true,failure:{code:'unavailable',reason:'Нет &lt;доступа&gt;'}});assert.match(failed,/data-context-transfer="failed"/);assert.match(failed,/Контекст не передан/);assert.match(failed,/Нет &amp;lt;доступа&amp;gt;/);assert.match(failed,/Объём до и после · нет данных/);assert.doesNotMatch(failed,/≈|перенесён/);
  const unknown=render('',{enabled:true});assert.match(unknown,/Количество сообщений · нет данных/);assert.match(unknown,/объём · нет данных/);assert.doesNotMatch(unknown,/≈ 0/);
- assert.match(render('',{enabled:false}),/Перенос выключен в настройках/);assert.match(style,/\.ctx51-event\.failed\s*\{[^}]*var\(--bad\)/);
+ assert.match(render('',{enabled:false}),/Перенос выключен в настройках/);assert.match(style,/\.ctx51-event\.failed\s*\{[^}]*var\(--bad\)/);assert.doesNotMatch(style,/\.ctx51-event\.failed\s*\{[^}]*bad-fill/);
 });
 
 test('TS-51.C: failed transfer appears with reason from both live event and saved history',async()=>{

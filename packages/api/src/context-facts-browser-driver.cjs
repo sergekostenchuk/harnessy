@@ -13,15 +13,24 @@ app.whenReady().then(async()=>{
  win.webContents.on('console-message',(_event,level,message)=>{if(level>=2)console.error('renderer: '+message)});
  const evaluate=async code=>{try{return await win.webContents.executeJavaScript(code,true)}catch(error){throw Error('Evaluate '+code+': '+error.message)}};
  const wait=async expression=>{for(let n=0;n<200;n++){if(await evaluate('Boolean('+expression+')'))return;await new Promise(resolve=>setTimeout(resolve,50))}throw Error('Timed out: '+expression)};
+ const key=name=>{const code=name==='Space'?' ':name;win.webContents.sendInputEvent({type:'keyDown',keyCode:code});if(name==='Enter'||name==='Space')win.webContents.sendInputEvent({type:'char',keyCode:name==='Enter'?'\r':' '});win.webContents.sendInputEvent({type:'keyUp',keyCode:code})};
  await win.loadURL(base+'/sketches/proto/01-chat.html');
- await wait("window.LIVE?.H.on&&!LIVE.H.snapshotOnly&&!document.documentElement.hasAttribute('data-live-pending')");
+ try{await wait("window.LIVE?.H.on&&!LIVE.H.snapshotOnly&&!document.documentElement.hasAttribute('data-live-pending')")}catch(error){throw Error(error.message+'; boot: '+JSON.stringify(await evaluate("(async()=>({live:!!window.LIVE,on:window.LIVE?.H.on,connected:window.LIVE?.H.connected,failed:window.LIVE?.H.connectionFailed,pane:window.LIVE?.H.pane,selection:window.LIVE?.S.ui.pane,project:window.LIVE?.H.project,snapshot:window.LIVE?.H.snapshotOnly,pending:document.documentElement.hasAttribute('data-live-pending'),status:await fetch('/api/status').then(async r=>({code:r.status,text:(await r.text()).slice(0,600)})).catch(e=>String(e))}))()")))}
  await evaluate("(async()=>{LIVE.S.ui.pane='worker';LIVE.pickPane();LIVE.hStatus();await LIVE.loadChat({onboard:false});dispatchEvent(new Event('live:status'))})()");
  await wait("LIVE.H.pane?.id==='worker'&&document.querySelector('.frame.cur [data-ctx]')&&document.querySelector('[data-context-transfer=compressed]')");
  const event=await evaluate("document.querySelector('[data-context-transfer=compressed]').textContent");if(!event.includes('Дословно 1 из 2')||!event.includes('не токенизатор'))throw Error('Transfer event lost facts: '+event);
+ await evaluate("document.querySelector('[data-context-transfer=compressed] details summary').focus()");key('Enter');await wait("document.querySelector('[data-context-transfer=compressed] details').open");
+ await evaluate("(async()=>{window.__transferBefore=document.querySelector('[data-context-transfer=compressed] details');await LIVE.loadChat({onboard:false})})()");
+ if(!await evaluate("document.querySelector('[data-context-transfer=compressed] details').open&&document.activeElement===document.querySelector('[data-context-transfer=compressed] details summary')"))throw Error('History reread closed or defocused the transfer');
+ key('Enter');await wait("!document.querySelector('[data-context-transfer=compressed] details').open");await evaluate("LIVE.loadChat({onboard:false})");if(await evaluate("document.querySelector('[data-context-transfer=compressed] details').open"))throw Error('History reread reopened a closed transfer');
+ const contrast=await evaluate(`(()=>{const ok=document.querySelector('[data-context-transfer=compressed]'),bad=document.querySelector('[data-context-transfer=failed]'),fg=getComputedStyle(bad.querySelector('small')).color,bg=getComputedStyle(bad).backgroundColor,normal=getComputedStyle(ok).backgroundColor;const rgb=s=>s.match(/[\\d.]+/g).slice(0,3).map(Number).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4}),lum=s=>rgb(s).reduce((v,c,i)=>v+c*[.2126,.7152,.0722][i],0);const a=lum(fg),b=lum(bg);return {fg,bg,normal,ratio:(Math.max(a,b)+.05)/(Math.min(a,b)+.05)}})()`);
+ if(contrast.bg!==contrast.normal||contrast.ratio<4.5)throw Error('Failure contrast/background is wrong: '+JSON.stringify(contrast));
  for(const [width,height] of [[1440,900],[1440,760],[1100,800],[390,844]]){
   win.setContentSize(width,height);await wait(`innerWidth===${width}&&innerHeight===${height}`);await wait(`document.documentElement.hasAttribute('data-m')===${width<760}`);
   await evaluate("document.querySelector('[data-context-transfer=compressed]').scrollIntoView({block:'center'})");await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
   if(process.env.HARNESSY_TEST_SHOTS){const image=await win.webContents.capturePage();fs.writeFileSync(path.join(process.env.HARNESSY_TEST_SHOTS,'event-'+width+'x'+height+'.png'),image.resize({width,height}).toPNG())}
+  await evaluate("document.querySelector('[data-context-transfer=failed]').scrollIntoView({block:'center'})");await evaluate("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
+  if(process.env.HARNESSY_TEST_SHOTS){const image=await win.webContents.capturePage();fs.writeFileSync(path.join(process.env.HARNESSY_TEST_SHOTS,'failed-'+width+'x'+height+'.png'),image.resize({width,height}).toPNG())}
  }
  win.setContentSize(1440,900);await wait('innerWidth===1440&&innerHeight===900');
  await evaluate("(()=>{window.__ctxOpenBinding=LIVE.sendBinding();window.__ctxCloses=[];const close=HX.close;HX.close=function(){window.__ctxCloses.push(new Error().stack);return close.apply(this,arguments)};document.querySelector('.frame.cur [data-ctx]').click()})()");
@@ -29,7 +38,7 @@ app.whenReady().then(async()=>{
  try{await wait("document.querySelector('.ovl.on .panel.open .inner')&&Number(getComputedStyle(document.querySelector('.ovl.on .panel .inner')).opacity)>0.99")}catch(error){throw Error(error.message+'; state: '+JSON.stringify(await evaluate("({overlays:[...document.querySelectorAll('.ovl')].map(o=>({classes:o.className,panel:o.querySelector('.panel')?.className,opacity:getComputedStyle(o.querySelector('.inner')).opacity})),binding:LIVE.sendBinding(),opened:window.__ctxOpenBinding,closes:window.__ctxCloses,instance:LIVE.H.liveStatus?.trace?.instanceId,connected:LIVE.H.on})")))}
  await evaluate("dispatchEvent(new Event('live:status'))");if(!await evaluate("!!document.querySelector('.ovl.on [data-context-parts]')"))throw Error('A status update closed the context card');
  const facts=await evaluate("[...document.querySelectorAll('.ctx51-part summary')].map(n=>n.textContent)");
- if(!facts.some(s=>s.includes('Сохранённые сообщения')&&s.includes('3'))||!facts.some(s=>s.includes('Вложения')&&s.includes('1'))||!facts.some(s=>s.includes('Сводка соседей')&&s.includes('включена')))throw Error('Unexpected facts: '+JSON.stringify(facts));
+ if(!facts.some(s=>s.includes('Сохранённые сообщения')&&s.includes('4'))||!facts.some(s=>s.includes('Вложения')&&s.includes('1'))||!facts.some(s=>s.includes('Сводка соседей')&&s.includes('включена')))throw Error('Unexpected facts: '+JSON.stringify(facts));
  const history=await evaluate("document.querySelector('[data-ctab=history]')?.textContent");if(!history?.includes('2'))throw Error('Expected two saved history messages: '+history);
  await evaluate("document.querySelectorAll('.ctx51-part').forEach(n=>n.open=true)");
  for(const [width,height] of [[1440,900],[1440,760],[1100,800],[390,844]]){
@@ -40,5 +49,10 @@ app.whenReady().then(async()=>{
   if(geometry.left<0||geometry.right>width+1||geometry.pageOverflow||!geometry.panelScroll)throw Error('Card does not fit or scroll at '+width+'x'+height+': '+JSON.stringify(geometry));
   if(process.env.HARNESSY_TEST_SHOTS){const image=await win.webContents.capturePage();fs.writeFileSync(path.join(process.env.HARNESSY_TEST_SHOTS,'context-'+width+'x'+height+'.png'),image.resize({width,height}).toPNG())}
  }
+ await evaluate("(()=>{const d=document.querySelector('[data-context-part=documents]');d.open=true;d.querySelector('a').focus();window.__ctxFetch=window.fetch;window.__ctxInterrupts=0;window.fetch=function(...args){if(String(args[0]).includes('/api/interrupt'))window.__ctxInterrupts++;return window.__ctxFetch.apply(this,args)};LIVE.H.cur={pane:'worker',text:'',tools:[]}})()");
+ key('Escape');await wait("document.querySelector('.ovl:not(.on)')?.inert&&document.activeElement.matches('.frame.cur [data-ctx]')");
+ if(await evaluate("window.__ctxInterrupts!==0||document.activeElement.getAttribute('aria-expanded')!=='false'"))throw Error('Escape interrupted the turn or failed to return focus');
+ await evaluate("LIVE.H.cur=null;window.fetch=window.__ctxFetch;true");key('Tab');if(await evaluate("!!document.activeElement.closest('.ovl:not(.on)')"))throw Error('Tab entered the closed context card');
+ await evaluate("document.querySelector('.frame.cur [data-ctx]').focus()");key('Enter');await wait("document.querySelector('.ovl.on [data-context-parts]')&&!document.querySelector('.ovl.on').inert");key('Escape');await wait("document.querySelector('.ovl:not(.on)')?.inert&&document.activeElement.matches('.frame.cur [data-ctx]')");
  console.log('CONTEXT_BROWSER_OK');win.close();app.quit();
 }).catch(error=>{console.error(error);app.exit(1)});

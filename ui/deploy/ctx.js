@@ -27,7 +27,7 @@
   function paint(c){ if(!L.H.on) return;   // без движка строка состояния остаётся нарисованной (демонстрация на сайте)
     document.querySelectorAll('.frame .status').forEach(st=>{ const sp=st.querySelectorAll(':scope > span'); if(sp.length<2) return;
       const p=L.H.pane; sp[0].innerHTML='<i></i>'+(L.H.halted?'остановлено владельцем':p&&p.busy?'отвечает…':L.H.on?'готов':'движок не подключён');
-      sp[1].classList.add('live-ctx'); sp[1].setAttribute('data-ctx','1'); sp[1].title='Контекст этого чата — открыть карточку';
+      sp[1].classList.add('live-ctx'); sp[1].setAttribute('data-ctx','1'); sp[1].setAttribute('role','button'); sp[1].setAttribute('tabindex','0'); sp[1].setAttribute('aria-haspopup','dialog'); if(!sp[1].hasAttribute('aria-expanded'))sp[1].setAttribute('aria-expanded','false'); sp[1].title='Контекст этого чата — открыть карточку';
       sp[1].textContent=!c?'контекст · нет данных':(windowKnown(c)&&c.pct!=null?'контекст '+c.pct+' %'+(c.measured?'':' · оценка'):'контекст '+fmt(c.used)+' · окно модели неизвестно'); }); }
   // ── карточка
   function matrix(c){ if(!distributionKnown(c))return '<p class="ctx-distribution-note">'+(!windowKnown(c)?'Окно модели неизвестно. ':'')+'Оценки частей показаны отдельно; распределение не определено.</p>'; const cols=40, rows=6, N=cols*rows, parts=c.parts.filter(x=>x.key!=='free'), total=c.window;
@@ -99,11 +99,14 @@
       matrix(c)+'<div class="ctx-legend">'+parts+'</div><div class="ctx-tipbox"></div><div data-context-parts>'+contextParts(null,c)+'</div>'+
       (c.unavailable?'<div class="ctx-empty">История и передачи · нет данных.</div>':'<div class="blk ctx-cont"><div class="t"><span>содержимое</span><span class="ctabs ctx-tabs"><span class="on" data-ctab="history">история · '+c.history.length+'</span><span data-ctab="handoff">переданное · '+c.handoff.length+'</span></span></div><div class="ctx-list">'+list(c,tab)+'</div></div>')+
       '<div class="ctx-foot"><span class="meta">'+L.esc((L.H.project||'').split('/').pop()||'без проекта')+(c.chat&&c.chat.title?' · '+L.esc(c.chat.title.slice(0,40)):'')+' · ход '+c.turns+'</span><span class="btn sm ghost" data-ctx-new>Новый чат без контекста</span><span class="btn sm '+(((c.history||[]).length<6&&(c.pct==null||c.pct<30))?'ghost':'p')+'" data-ctx-compact title="'+(c.unavailable?'Данных об истории нет':((c.history||[]).length<6&&(c.pct==null||c.pct<30))?'истории мало — сжимать есть смысл ближе к пределу окна':'выжимка одним ходом модели, новый чат')+'">Сжать историю</span></div>'; }
+  function trackCardFocus(anchor,inner,binding){const overlay=inner.closest('.ovl');if(!overlay)return;overlay.inert=false;overlay.__contextFocus={anchor,binding,node:inner.querySelector('[data-context-parts]')};anchor.setAttribute('aria-expanded','true');
+    if(!overlay.__contextObserver&&typeof MutationObserver==='function'){overlay.__contextObserver=new MutationObserver(()=>{const open=overlay.classList.contains('on'),state=overlay.__contextFocus,owns=state?.node?.isConnected&&overlay.contains(state.node),returnFocus=!open&&owns&&overlay.contains(document.activeElement);overlay.inert=!open;if(state&&(!open||!owns)){state.anchor.setAttribute('aria-expanded','false');if(returnFocus&&state.anchor.isConnected&&current(state.binding))state.anchor.focus({preventScroll:true});overlay.__contextFocus=null}});overlay.__contextObserver.observe(overlay,{attributes:true,attributeFilter:['class']});overlay.__contextObserver.observe(inner,{childList:true})}
+    inner.querySelector('[data-context-part] summary')?.focus({preventScroll:true}); }
   async function openCard(anchor){ if(!L.H.on||!L.H.pane){ L.toast('Контекст: нет данных — движок не подключён или нет места'); return; } if(!window.HX){ L.toast('Карточки недоступны'); return; }
     const binding=capture();if(!CTX||!current(CTX_BINDING))await refresh();if(!current(binding)||!anchor.isConnected)return;
     const card=CTX&&current(CTX_BINDING)?CTX:{parts:[],history:[],handoff:[],used:null,window:null,pct:null,measured:false,busy:false,turns:'нет данных',unavailable:true};cardBinding=binding;const request=++cardRequest;
     HX.open(anchor,html(card),{w:600,h:640,hide:false}); const inner=anchor.closest('.main').querySelector('.panel .inner'); if(!inner) return;
-    const factsNode=inner.querySelector('[data-context-parts]');cardNode=factsNode;void readFacts(binding).then(facts=>{if(request!==cardRequest||!current(binding)||!factsNode?.isConnected)return;
+    const factsNode=inner.querySelector('[data-context-parts]');cardNode=factsNode;trackCardFocus(anchor,inner,binding);void readFacts(binding).then(facts=>{if(request!==cardRequest||!current(binding)||!factsNode?.isConnected)return;
       const opened=[...factsNode.querySelectorAll('.ctx51-part[open]')].map(node=>node.dataset.contextPart),focused=factsNode.contains(document.activeElement)?document.activeElement.closest('.ctx51-part')?.dataset.contextPart:null;
       factsNode.innerHTML=contextParts(facts,card);factsNode.querySelectorAll('.ctx51-part').forEach(node=>{if(opened.includes(node.dataset.contextPart))node.open=true;if(focused===node.dataset.contextPart)node.querySelector('summary')?.focus()});});
     inner.addEventListener('mouseover',e=>{ const lg=e.target.closest('[data-lk]'), cell=e.target.closest('.ctx-mx i'); const key=lg?lg.dataset.lk:cell?cell.dataset.k:null; const box=inner.querySelector('.ctx-tipbox'); if(!key){ return; }
@@ -115,7 +118,8 @@
         if(carry==='none'&&!confirm('Новый чат без контекста: этот чат закроется, новый начнётся с чистого окна. Продолжить?')) return;
         let r=null; try{ r=await L.api('/api/chats/new',{pane:p.id,carry}); }catch(x){} if(!r||!r.ok){ L.toast('Не вышло: '+L.esc((r&&r.error)||'нет связи')); return; }
         HX.close(); L.log('чат',carry==='summary'?'История сжата: новый чат с выжимкой':'Новый чат без контекста'); L.toast(carry==='summary'?'Новый чат с выжимкой открыт, прежний закрыт':'Новый чат без контекста'); await L.refreshStatus(); await L.loadChat(); refresh(); } }); }
-  document.addEventListener('click',e=>{ const s=e.target.closest('[data-ctx]'); if(!s) return; e.preventDefault(); e.stopPropagation(); openCard(s.closest('.status')||s); });
+  document.addEventListener('click',e=>{ const s=e.target.closest('[data-ctx]'); if(!s) return; e.preventDefault(); e.stopPropagation(); openCard(s); });
+  document.addEventListener('keydown',e=>{const s=e.target.closest('[data-ctx]');if(!s||!['Enter',' '].includes(e.key))return;e.preventDefault();e.stopPropagation();openCard(s)});
   addEventListener('live:status',()=>refresh()); addEventListener('live:done',()=>setTimeout(refresh,300));
   setTimeout(refresh,1200); timer=setInterval(()=>{ if(document.visibilityState==='visible') refresh(); },60000);   // после ходов обновляется по live:done; фоновый опрос — раз в минуту (Kimi UX-6 №131 п.8)
 })();
