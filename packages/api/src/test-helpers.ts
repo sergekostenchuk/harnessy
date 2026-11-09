@@ -9,11 +9,12 @@ export {deferred,until,OWNER,FakeProvider,FakeClock} from '../../runtime/src/tes
 const clientSignals=new WeakMap<Api,AbortSignal>();
 export async function fixture(t:TestContext,options:Parameters<typeof harness>[1]&{router?:RouterSource}={}){
  // Cancel clients before teardown waits for the server, including requests still awaiting headers.
- const clients=new AbortController(),signal=AbortSignal.any([t.signal,clients.signal]);t.after(()=>clients.abort());
+ const clients=new AbortController(),signal=AbortSignal.any([t.signal,clients.signal]);let api:Api|undefined;
+ t.after(async()=>{clients.abort();if(api){clientSignals.delete(api);await api.close()}});
  const codex=new FakeProvider('codex');codex.models=async()=>[{id:'gpt-test',label:'GPT test'}];
  const h=await harness(t,{...options,deps:{...options.deps,providers:{claude:new FakeProvider(),codex,...options.deps?.providers}}});
  const provider=h.deps.providers.claude as FakeProvider,siteDir=join(h.dir,'site');mkdirSync(siteDir);writeFileSync(join(siteDir,'test.js'),'window.test = "готов";');
- const api=createApi({runtime:h.runtime,siteDir,port:0,router:options.router??{models:()=>({ok:false,reason:'списки моделей provider-router не найдены'}),health:async()=>({ok:false,reason:'программа не отвечает на /health'})}});clientSignals.set(api,signal);t.after(()=>clientSignals.delete(api));t.after(()=>api.close());await api.listen();h.deps.appUrl=api.url;
+ api=createApi({runtime:h.runtime,siteDir,port:0,router:options.router??{models:()=>({ok:false,reason:'списки моделей provider-router не найдены'}),health:async()=>({ok:false,reason:'программа не отвечает на /health'})}});clientSignals.set(api,signal);await api.listen();h.deps.appUrl=api.url;
  return {...h,provider,codex,api,siteDir}
 }
 export function noRepositoryFixture(t:TestContext,options:Parameters<typeof fixture>[1]={}){return fixture(t,{...options,noRepository:true})}
@@ -31,6 +32,6 @@ export function call(api:Api,path:string,options:{method?:string;body?:unknown;r
  })}
 export async function sse(api:Api,id='all',options:{signal?:AbortSignal}={}){
  let req!:ClientRequest;const response=await new Promise<IncomingMessage>((resolve,reject)=>{req=clientRequest(api,'/api/events/'+id,{signal:options.signal??clientSignals.get(api)},resolve);req.on('error',reject);req.end()});
- let raw='';const frames:any[]=[];response.on('error',()=>{});response.on('data',chunk=>{raw+=chunk.toString();for(const block of chunk.toString().split('\n\n')){if(block.startsWith('data: '))try{frames.push(JSON.parse(block.slice(6)))}catch{}}});
+ let raw='',pending='';const decoder=new TextDecoder(),frames:any[]=[];response.on('error',()=>{});response.on('data',chunk=>{const text=decoder.decode(chunk,{stream:true});raw+=text;pending+=text;let end;while((end=pending.indexOf('\n\n'))!==-1){const block=pending.slice(0,end);pending=pending.slice(end+2);if(block.startsWith('data: '))try{frames.push(JSON.parse(block.slice(6)))}catch{}}});
  return {req,response,frames,get raw(){return raw},close(){req.destroy();response.destroy()}}
 }

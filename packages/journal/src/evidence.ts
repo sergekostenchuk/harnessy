@@ -5,12 +5,13 @@ import {JournalError} from './types.ts';
 const SECTIONS=['Ran','Skipped','Planned','Manual'];
 // Resolve components in filesystem order: a symlink is followed before a later '..'.
 function realPath(path:string,links={count:0}):{path:string;missing:boolean} {
- const absolute=isAbsolute(path)?path:process.cwd()+sep+path;let current=parse(absolute).root,missing=false;
+ const native=process.platform==='win32'?path.replaceAll('/',sep):path;
+ const absolute=isAbsolute(native)?native:process.cwd()+sep+native;let current=parse(absolute).root,missing=false;
  const parts=absolute.slice(current.length).split(sep);
  for(const part of parts){
  if(!part||part==='.'||part==='..'){
  if(!missing&&!statSync(current).isDirectory())throw new Error('компонент пути не является каталогом');
- if(part==='..')current=dirname(current);continue
+ if(part==='..'){if(missing)throw new Error('missing prefix traversal');current=dirname(current)}continue
  }
  const candidate=current.endsWith(sep)?current+part:current+sep+part;
  try{
@@ -26,9 +27,9 @@ function realPath(path:string,links={count:0}):{path:string;missing:boolean} {
 export function resolveEvidence(projectRoot:string,path:unknown):string|null {
  if(typeof path!=='string'||!pythonTrim(path))return null;
  try{
- const root=realPath(projectRoot).path,raw=isAbsolute(path)?path:root+sep+path,target=realPath(raw),canonical=target.missing?target.path:realpathSync.native(raw),rel=relative(root,canonical);
+ const root=realPath(projectRoot).path,raw=isAbsolute(path)?path:root+sep+path,target=realPath(raw),canonical=target.path,rel=relative(root,canonical);
  if(rel==='..'||rel.startsWith('..'+sep)||isAbsolute(rel))return null;
- // A missing prefix followed by '..' must not make an existing, different file pass.
+ // Missing final paths remain unresolved so callers can create them safely later.
  return target.missing?raw:canonical
  }catch{return null}
 }

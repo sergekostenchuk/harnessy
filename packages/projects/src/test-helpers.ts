@@ -1,9 +1,9 @@
 import {buildTestSite} from '../../api/src/site-test-helpers.ts';
 import {createHash} from 'node:crypto';
-import {lstatSync,mkdtempSync,readFileSync,readdirSync,readlinkSync,rmSync} from 'node:fs';
-import {join,resolve} from 'node:path';
+import {existsSync,lstatSync,mkdtempSync,readFileSync,readdirSync,readlinkSync,rmSync} from 'node:fs';
+import {join,resolve,sep} from 'node:path';
 import {homedir,tmpdir} from 'node:os';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {spawnSync} from 'node:child_process';
 
 export const OWNER_FILE_ENV=['HARNESS_PROJECTS_FILE','HARNESS_LAST_PROJECT_FILE','HARNESS_PINS_FILE','HARNESS_SETTINGS_FILE','HARNESS_CONNECTIONS_FILE'] as const;
@@ -15,7 +15,7 @@ export function ownerFilesSnapshot(home=homedir()):Map<string,string>{
  const result=new Map<string,string>();
  function visit(name:string){const path=join(home,name),stat=lstatSync(path,{bigint:true}),type=stat.isFile()?'file':stat.isDirectory()?'directory':stat.isSymbolicLink()?'symlink':'other';
   const content=stat.isFile()?createHash('sha256').update(readFileSync(path)).digest('hex'):stat.isSymbolicLink()?readlinkSync(path):'';
-  result.set(name,JSON.stringify([type,String(stat.mode),String(stat.mtimeNs),String(stat.ctimeNs),content]));
+  result.set(name.split(sep).join('/'),JSON.stringify([type,String(stat.mode),String(stat.mtimeNs),String(stat.ctimeNs),content]));
   if(stat.isDirectory())for(const child of readdirSync(path).sort())visit(join(name,child));
  }
  for(const name of readdirSync(home).filter(name=>name.startsWith('.harness-')).sort())visit(name);
@@ -32,12 +32,18 @@ export function checkOwnerFiles(run:()=>number,options:{home?:string;mode?:strin
  return code||((!before||!after||changed.length)&&(options.mode??process.env.HARNESS_OWNER_FILES_CHECK)!=='warn'?1:0);
 }
 const ownFile=fileURLToPath(import.meta.url),main=process.argv[1]&&resolve(process.argv[1])===ownFile;
+if(process.platform==='win32'&&!process.env.HARNESSY_TEST_ELECTRON){
+ const electron=fileURLToPath(new URL('../../../ui/desktop/node_modules/electron/dist/electron.exe',import.meta.url));
+ if(existsSync(electron))process.env.HARNESSY_TEST_ELECTRON=electron;
+}
 if(main&&process.argv[2]==='run'){
  // One full run, with isolation installed before test modules load in each worker.
  process.exitCode=checkOwnerFiles(()=>{
-  const build=spawnSync('npm',['run','build'],{stdio:'inherit'});if(build.error)throw build.error;if(build.status!==0)return build.status??1;
+  const npmCli=process.platform==='win32'?process.env.npm_execpath:null;
+  if(process.platform==='win32'&&!npmCli)throw Error('Windows test runner requires npm execpath');
+  const build=spawnSync(npmCli?process.execPath:'npm',[...(npmCli?[npmCli]:[]),'run','build'],{stdio:'inherit'});if(build.error)throw build.error;if(build.status!==0)return build.status??1;
   process.env.HARNESSY_TEST_SITE=buildTestSite();
-  const tests=spawnSync(process.execPath,['--import',ownFile,'--test','packages/*/src/**/*.test.ts'],{stdio:'inherit'});if(tests.error)throw tests.error;return tests.status??1;
+  const tests=spawnSync(process.execPath,['--import',pathToFileURL(ownFile).href,'--test',...(process.platform==='win32'?['--test-reporter=tap','--test-concurrency=1','--test-timeout=120000']:[]),'packages/*/src/**/*.test.ts'],{stdio:'inherit'});if(tests.error)throw tests.error;return tests.status??1;
  });
 }else{
  const directory=mkdtempSync(join(tmpdir(),'harnessy-test-owner-'));

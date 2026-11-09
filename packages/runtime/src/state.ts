@@ -1,16 +1,18 @@
-import {readFileSync,mkdirSync,openSync,fsyncSync,closeSync,renameSync,statSync} from 'node:fs';
-import {dirname,join} from 'node:path';
+import {readFileSync,mkdirSync,openSync,fsyncSync,closeSync,statSync} from 'node:fs';
+import {dirname,isAbsolute,join,relative,sep} from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
-import {atomicWrite} from '@harnessy/team';
+import {atomicWrite,renameWithRetry} from '@harnessy/team';
 import {isConversationMessage} from '@harnessy/context';
 import {compatJson,parseCompat,orderedClone,orderedKeys,pythonTrim,type Journal} from '@harnessy/journal';
 import {object,message,RuntimeError,slice} from './errors.ts';
 import type {Pane,Registry} from './pane.ts';
 import type {Clock} from './types.ts';
 export interface StateIO {read(path:string):string;write(path:string,text:string):void;rename?(from:string,to:string):void}
+// Windows cannot open a directory for fsync; atomicWrite already flushes the file.
+function syncDirectory(path:string){if(process.platform==='win32')return;const fd=openSync(dirname(path),'r');try{fsyncSync(fd)}finally{closeSync(fd)}}
 export const diskIO:StateIO={read:path=>new TextDecoder('utf-8',{fatal:true}).decode(readFileSync(path)),write(path,text){
- mkdirSync(dirname(path),{recursive:true});atomicWrite(path,text);const fd=openSync(dirname(path),'r');try{fsyncSync(fd)}finally{closeSync(fd)}
-},rename(from,to){renameSync(from,to);const fd=openSync(dirname(to),'r');try{fsyncSync(fd)}finally{closeSync(fd)}}};
+ mkdirSync(dirname(path),{recursive:true});atomicWrite(path,text);syncDirectory(path)
+},rename(from,to){renameWithRetry(from,to);syncDirectory(to)}};
 export interface Receipt {turnInstanceId:string;recordSeqs:number[];effectsPending:boolean;interrupted:boolean;nextSeen:Record<string,number>}
 export type TurnOutcome='ok'|'interrupted'|'error';
 export interface ArtifactRefs {project:string;chat:string;turnInstanceId:string;paths:string[]}
@@ -31,7 +33,7 @@ export function numberTranscript(holder:{transcript:TranscriptMessage[];transcri
 // Only paths named by write/edit tools become saved attachments; reads and arbitrary tool text do not.
 export function artifactPaths(event:{name?:unknown;detail?:unknown},project:string):string[]{
  if(typeof event.name!=='string'||!/^(?:Write|Edit|MultiEdit|apply_patch|.*[._](?:write_file|edit_file))$/i.test(event.name)||typeof event.detail!=='string')return [];
- return [...new Set(event.detail.split(', ').map(path=>path.startsWith(project+'/')?path.slice(project.length+1):path.startsWith('./')?path.slice(2):path).filter(path=>path.length<=4096&&!/[\x00-\x1f\x7f\\]/.test(path)&&/^(artifacts|docs)\//.test(path)&&!path.split('/').some(x=>!x||x==='.'||x==='..')&&/\.[a-z\d]{1,12}$/i.test(path)))].slice(0,50);
+ return [...new Set(event.detail.split(', ').map(path=>isAbsolute(path)?relative(project,path).split(sep).join('/'):path.startsWith(project+'/')?path.slice(project.length+1):path.startsWith('./')?path.slice(2):path).filter(path=>path.length<=4096&&!/[\x00-\x1f\x7f\\]/.test(path)&&/^(artifacts|docs)\//.test(path)&&!path.split('/').some(x=>!x||x==='.'||x==='..')&&/\.[a-z\d]{1,12}$/i.test(path)))].slice(0,50);
 }
 export interface AnalyticalTurn {turnInstanceId:string;ts:number;model:string;vendor?:string|null;outcome:'error';errorCode:string;partialText?:string;recordSeqs?:number[];failure?:import('./turn-failure.ts').TurnFailure;usage?:import('@harnessy/providers').Usage;usageIncomplete?:true;durationMs?:number;toolEvents?:ObservedToolEvent[];toolResults?:ToolReceipt[]}
 export interface ResultMessage extends TranscriptMessage {role:'ai';deliverySeq:number;runtime:Receipt}

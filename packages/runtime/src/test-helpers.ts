@@ -2,7 +2,7 @@ import {ProviderCatalog} from '@harnessy/providers';
 import {lstatSync,mkdtempSync,mkdirSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname,isAbsolute,join,relative,sep} from 'node:path';
-import {setImmediate as immediate} from 'node:timers/promises';
+import {setTimeout as delay} from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import {parseCompat,compatJson} from '@harnessy/journal';
 import type {TestContext} from 'node:test';
@@ -12,7 +12,7 @@ import {createRuntime,type Runtime,type RuntimeDeps,type RuntimeActions,type Run
 export const OWNER={seat:'owner',trust:'owner'} as const;
 export const completedActions:RuntimeActions={async ask(){return {ok:true,reply:'ответ',seq:1}},async merge(){return {ok:true,sha:'a'.repeat(40),mergeSha:'b'.repeat(40),branch:'main'}},async assignRole(){return {ok:true,pane:'tester',label:'тестер',model:'w1',mode:'read',mandate:1}},async afterTurn(){return 'completed'},async restorePendingAcks(){},cancelAsks(){}};
 export function deferred<T=void>(){let resolve!:(v:T|PromiseLike<T>)=>void,reject!:(e:unknown)=>void;const promise=new Promise<T>((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject}}
-export async function until(fn:()=>boolean):Promise<void>{for(let i=0;i<200;i++){if(fn())return;await immediate()}throw Error('условие теста не наступило')}
+export async function until(fn:()=>boolean):Promise<void>{const deadline=Date.now()+20_000;while(Date.now()<deadline){if(fn())return;await delay(10)}if(fn())return;throw Error('условие теста не наступило')}
 export class FakeClock implements Clock {time=1791500000125;private seq=0;private timers=new Map<number,{due:number;fn:()=>void}>();now=()=>this.time;setTimeout(fn:()=>void,ms:number){const id=++this.seq;this.timers.set(id,{due:this.time+ms,fn});return id}clearTimeout(id:unknown){this.timers.delete(id as number)}
  advance(ms:number){this.time+=ms;for(const [id,t] of [...this.timers].sort((a,b)=>a[1].due-b[1].due))if(t.due<=this.time&&this.timers.delete(id))t.fn()}
 }
@@ -46,11 +46,11 @@ export function noRepositoryGit(root:string){
 }
 export async function harness(t:TestContext,options:{seats?:string;deps?:Partial<RuntimeDeps>;actions?:RuntimeActions;before?:(dir:string)=>void;noRepository?:boolean}={}){
  if(options.noRepository&&options.deps?.gitops)throw Error('no-repository fixture: custom GitOps conflicts with option');
- const dir=realpathSync(mkdtempSync(join(tmpdir(),'harnessy-runtime-')));mkdirSync(join(dir,'.harness','state'),{recursive:true});
+ const dir=realpathSync.native(mkdtempSync(join(tmpdir(),'harnessy-runtime-')));mkdirSync(join(dir,'.harness','state'),{recursive:true});
  const seats=options.seats??'  worker: {role: executor, vendor: claude, label: воркер, model: w1, mode: read, digest: false}';
  writeFileSync(join(dir,'.harness','team.yaml'),'version: 1\nintegration_branch: main\nseats:\n'+seats+'\n');options.before?.(dir);
  const provider=new FakeProvider(),clock=new FakeClock();const deps:RuntimeDeps={providerCatalog:new ProviderCatalog([]),projectDir:dir,limitsCacheDir:join(dir,'limits-cache'),appUrl:'http://127.0.0.1:9000',providers:{claude:provider},clock,models:{claude:[{id:'w1'},{id:'w2'}],codex:[{id:'c1'}]},connections:new Connections(join(dir,'connections.json')),projectRegistry:new ProjectRegistry({projects:join(dir,'projects.json'),lastProject:join(dir,'last')},{noLast:true}),settings:current=>new Settings(join(dir,'owner-settings.json'),current),pins:(current,meta)=>new Pins(join(dir,'pins.json'),current,meta),...(options.noRepository?{gitops:noRepositoryGit(dir)}:{}),...options.deps};
- const runtime=await createRuntime(deps,options.actions??completedActions);t.after(async()=>{await runtime.close();rmSync(dir,{recursive:true,force:true})});await runtime.idle();return {runtime,provider,clock,dir,deps}
+ const runtime=await createRuntime(deps,options.actions??completedActions);t.after(async()=>{await runtime.close();rmSync(dir,{recursive:true,force:true})});assert.equal(runtime.project.dir,dir,'test fixture must use the runtime project identity');await runtime.idle();return {runtime,provider,clock,dir,deps}
 }
 
 export const failedActions:RuntimeActions={...completedActions,ask:async()=>({ok:false,code:"unavailable",error:"действие недоступно: ask"}),merge:async()=>({ok:false,code:"unavailable",error:"действие недоступно: merge"}),assignRole:async()=>({ok:false,code:"unavailable",error:"действие недоступно: assign_role"}),async afterTurn({pane}){pane.recoveryNote="обработка после хода недоступна в этой сборке";pane.publish({type:"note",text:pane.recoveryNote});return "unavailable"},async restorePendingAcks({project}){if(project.channel.pendingAcks().length){const text="восстановление карточек подтверждения недоступно в этой сборке";if(!project.lineErrors.includes(text))project.lineErrors.push(text);project.owner.publish({type:"error",message:text,sessionId:null})}}};

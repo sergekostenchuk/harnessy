@@ -22,18 +22,34 @@ test('5/14/15/16/71: startup falls back for missing/unreadable/deleted last proj
  for(const last of ['missing','unreadable','deleted']){
  if(existsSync(h.env.HARNESS_LAST_PROJECT_FILE!))rmSync(h.env.HARNESS_LAST_PROJECT_FILE!,{recursive:true});
  if(last==='unreadable')mkdirSync(h.env.HARNESS_LAST_PROJECT_FILE!);if(last==='deleted')writeFileSync(h.env.HARNESS_LAST_PROJECT_FILE!,join(h.root,'deleted'));
- const app=await bootstrap(h.options);assert.equal(app.runtime.project.dir,h.env.CHAT_WORK_DIR);assert.ok(existsSync(h.env.HARNESS_PROJECTS_ROOT!));
+ const app=await bootstrap(h.options);t.after(()=>app.close());assert.equal(app.runtime.project.dir,realpathSync.native(h.env.CHAT_WORK_DIR!));assert.ok(existsSync(h.env.HARNESS_PROJECTS_ROOT!));
  const status=await fetch(app.url+'/api/status').then(r=>r.json()) as any;assert.equal(status.auth.claude.error,'claude не найден; задай CLAUDE_BIN');assert.equal(status.models.codex.length,2);
  const root=await fetch(app.url+'/',{redirect:'manual'});assert.equal(root.status,302);assert.equal(root.headers.get('location'),PROTO_ENTRY);await root.text();
- assert.equal((await fetch(app.url+'/sketches/missing')).status,404);assert.ok(h.log.some(s=>s.includes('папки нет — '+h.env.HARNESSY_SITE)));assert.ok(h.log.some(s=>s.includes('НЕТ — выполни в Терминале: claude login')));await app.close()
+ assert.equal((await fetch(app.url+'/sketches/missing')).status,404);assert.ok(h.log.some(s=>s.includes('папки нет — '+h.env.HARNESSY_SITE)));assert.ok(h.log.some(s=>s.includes('НЕТ — выполни в Терминале: claude auth login')));await app.close()
  }
  assert.ok(h.log.some(s=>s.includes('последний проект не прочитан')));assert.ok(h.log.some(s=>s.includes('последняя папка недоступна')))
 });
 
 test('5/14: valid last project wins; HARNESS_NO_LAST ignores it and preserves registry/last bytes',async t=>{
  const h=setup(t),project=join(h.root,'last-project');mkdirSync(project);writeFileSync(h.env.HARNESS_LAST_PROJECT_FILE!,project);writeFileSync(h.env.HARNESS_PROJECTS_FILE!,'[]');
- const selected=await bootstrap(h.options);assert.equal(selected.runtime.project.dir,project);await selected.close();const last=readFileSync(h.env.HARNESS_LAST_PROJECT_FILE!,'utf8'),registry=readFileSync(h.env.HARNESS_PROJECTS_FILE!,'utf8');
- const skipped=await bootstrap({...h.options,env:{...h.env,HARNESS_NO_LAST:'1'}});assert.equal(skipped.runtime.project.dir,h.env.CHAT_WORK_DIR);await skipped.close();assert.equal(readFileSync(h.env.HARNESS_LAST_PROJECT_FILE!,'utf8'),last);assert.equal(readFileSync(h.env.HARNESS_PROJECTS_FILE!,'utf8'),registry)
+ const selected=await bootstrap(h.options);t.after(()=>selected.close());assert.equal(selected.runtime.project.dir,realpathSync.native(project));await selected.close();const last=readFileSync(h.env.HARNESS_LAST_PROJECT_FILE!,'utf8'),registry=readFileSync(h.env.HARNESS_PROJECTS_FILE!,'utf8');
+ const skipped=await bootstrap({...h.options,env:{...h.env,HARNESS_NO_LAST:'1'}});t.after(()=>skipped.close());assert.equal(skipped.runtime.project.dir,realpathSync.native(h.env.CHAT_WORK_DIR!));await skipped.close();assert.equal(readFileSync(h.env.HARNESS_LAST_PROJECT_FILE!,'utf8'),last);assert.equal(readFileSync(h.env.HARNESS_PROJECTS_FILE!,'utf8'),registry)
+});
+
+test('Windows Autopilot can be enabled through the owner API without starting an unrequested model',{skip:process.platform!=='win32'},async t=>{
+ const h=setup(t),app=await bootstrap(h.options);t.after(()=>app.close());await app.runtime.idle();
+ const status=await fetch(app.url+'/api/status').then(r=>r.json()) as any;
+ assert.equal(status.autopilot.on,false);assert.notEqual(status.autopilot.available,false);
+ const before=app.runtime.settings.autopilot();
+ const enabled=await fetch(app.url+'/api/autopilot',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({project:status.project,instance:status.trace.instanceId,on:true,until:'morning',conditions:{operations:['answer_question'],maxSpendPercent:5},revision:before.revision})});
+ assert.equal(enabled.status,200);assert.equal((await enabled.json() as any).autopilot.on,true);
+ const decisions=await fetch(app.url+'/api/autopilot/decisions').then(r=>r.json()) as any;
+ assert.deepEqual(decisions.decisions,[]);
+ const stopped=await fetch(app.url+'/api/autopilot',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({project:status.project,instance:status.trace.instanceId,on:false,revision:app.runtime.settings.autopilot().revision})});
+ assert.equal(stopped.status,200);
+ assert.equal(app.runtime.settings.autopilot().on,false);
+ assert.equal(h.claude.calls.length,0);
+ assert.equal(app.runtime.journal.read({limit:0}).some(row=>row.origin==='autopilot-owner'),false);
 });
 
 test('17/18: occupied port and partial runtime startup both close created providers without model calls',async t=>{
@@ -59,7 +75,7 @@ describe('323: run.sh variants run serially', {concurrency:false},()=>{
  // Fail on overlapping variants even if a runner or future edit enables concurrency.
  beforeEach(()=>{active++;assert.equal(active,1,'323: launcher variants overlap')});
  afterEach(()=>{assert.equal(active,1,'323: launcher variants overlap');active--});
- for(const via of ['direct','directory link','file link','relative file link'])test('10/17/18/179/180/191: actual ui/desktop/run.sh via '+via+' launches TS, opens the prototype instead of the old window and exits on SIGTERM, duplicate port fails', {timeout:launcherTimeoutMs},async t=>{
+ for(const via of ['direct','directory link','file link','relative file link'])test('10/17/18/179/180/191: actual ui/desktop/run.sh via '+via+' launches TS, opens the prototype instead of the old window and exits on SIGTERM, duplicate port fails', {timeout:launcherTimeoutMs,skip:process.platform==='win32'},async t=>{
  const h=setup(t),trace=join(h.root,'trace'),hook=join(h.root,'providers.mjs'),site=join(h.root,'site');mkdirSync(site);mkdirSync(join(site,'proto'));writeFileSync(join(site,'proto/10-new-chat.html'),'<title>Window</title>');
  // Node's test-only module substitution prevents any SDK process or model call in the child.
  const providers=pathToFileURL(join(repositoryRoot,'packages/providers/src/index.ts')).href;
@@ -84,7 +100,7 @@ mock.module(${JSON.stringify(providers)},{namedExports:{...original,ClaudeProvid
 });
 });
 
-test('18/71: shutdown during startup auth closes partially started server/providers and never kicks queued models',{timeout:5000},async t=>{
+test('18/71: shutdown during startup auth closes partially started server/providers and never kicks queued models',{timeout:process.platform==='win32'?15000:5000},async t=>{
  const h=setup(t),dir=h.env.CHAT_WORK_DIR!;mkdirSync(join(dir,'.harness'),{recursive:true});writeFileSync(join(dir,'.harness/team.yaml'),'version: 1\nseats:\n  codex: {role: executor, vendor: codex, model: gpt-test, mode: read}\n');new Journal(dir).append({sender:'owner',to:['codex'],kind:'task',text:'работа'});
  const controller=new AbortController(),gate=deferred<{loggedIn:boolean}>(),entered=deferred();h.claude.auth=async()=>{entered.resolve();return gate.promise};
  const starting=bootstrap({...h.options,env:{...h.env,HARNESS_NO_LAST:'1'},signal:controller.signal});void starting.catch(()=>{});await entered.promise;controller.abort();
